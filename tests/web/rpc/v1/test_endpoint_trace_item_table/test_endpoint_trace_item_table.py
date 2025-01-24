@@ -2101,6 +2101,71 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
+    def test_offset_pagination(self, setup_teardown: Any) -> None:
+        def make_request(page_token: PageToken) -> TraceItemTableRequest:
+            ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+            hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+            return TraceItemTableRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=Timestamp(seconds=hour_ago),
+                    end_timestamp=ts,
+                    request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                columns=[
+                    Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                        )
+                    )
+                ],
+                order_by=[
+                    TraceItemTableRequest.OrderBy(
+                        column=Column(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                            )
+                        )
+                    )
+                ],
+                limit=5,
+                page_token=page_token,
+            )
+
+        last_timestamp: datetime | None = None
+
+        response = EndpointTraceItemTable().execute(make_request(PageToken(offset=0)))
+
+        assert response.page_token == PageToken(offset=5)
+        assert len(response.column_values) == 1
+        assert response.column_values[0].attribute_name == "sentry.timestamp"
+
+        # check that the timestamps in the results are in strictly increasing order
+        for val in response.column_values[0].results:
+            time = datetime.fromisoformat(val.val_str)
+            if last_timestamp:
+                assert time > last_timestamp
+            else:
+                last_timestamp = time
+
+        assert last_timestamp is not None
+
+        response = EndpointTraceItemTable().execute(make_request(PageToken(offset=5)))
+
+        assert response.page_token == PageToken(offset=10)
+        assert len(response.column_values) == 1
+        assert response.column_values[0].attribute_name == "sentry.timestamp"
+
+        # check that the timestamps in the results are in strictly increasing order
+        # relative to the results from the first page
+        for val in response.column_values[0].results:
+            time = datetime.fromisoformat(val.val_str)
+            assert time > last_timestamp
+
 
 class TestUtils:
     def test_apply_labels_to_columns_backward_compat(self) -> None:
