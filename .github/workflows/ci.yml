@@ -174,7 +174,8 @@ jobs:
             --tag snuba-ci \
             --target testing \
             "${args[@]}" \
-            -o type=docker,dest=/tmp/snuba-ci.tar
+            -o type=docker,dest=/tmp/snuba-ci.tar \
+            .
 
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
