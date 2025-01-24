@@ -202,16 +202,14 @@ class TestTimeSeriesApi(BaseApiTest):
             for secs in range(0, query_duration, granularity_secs)
         ]
 
-        assert response.result_timeseries == sorted(
-            [
-                TimeSeries(
-                    label="count",
-                    buckets=expected_buckets,
-                    group_by_attributes={"region": "global"},
-                    data_points=[
-                        DataPoint(data=300, data_present=True)
-                        for _ in range(len(expected_buckets))
-                    ],
-                ),
-            ],
-        )
+        assert response.result_timeseries == [
+            TimeSeries(
+                label="count",
+                buckets=expected_buckets,
+                group_by_attributes={"region": "global"},
+                data_points=[
+                    DataPoint(data=300, data_present=True)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
