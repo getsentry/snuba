@@ -2102,7 +2102,7 @@ class TestTraceItemTable(BaseApiTest):
             EndpointTraceItemTable().execute(message)
 
     def test_offset_pagination(self, setup_teardown: Any) -> None:
-        def make_request(page_token):
+        def make_request(page_token: PageToken) -> TraceItemTableRequest:
             ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
             hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
             return TraceItemTableRequest(
