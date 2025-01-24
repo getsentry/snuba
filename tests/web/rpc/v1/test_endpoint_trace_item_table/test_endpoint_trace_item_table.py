@@ -269,6 +269,7 @@ class TestTraceItemTable(BaseApiTest):
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
         assert response == expected_response
+        assert False
 
     def test_booleans_and_number_compares_backward_compat(
         self, setup_teardown: Any

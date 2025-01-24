@@ -14,6 +14,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
+from snuba import environment
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -26,6 +27,7 @@ from snuba.query.dsl import column
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
@@ -37,6 +39,7 @@ from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
 )
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
     ExtrapolationContext,
@@ -45,6 +48,12 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
     get_confidence_interval_column,
     get_count_column,
 )
+from clickhouse_driver.errors import Error
+import sentry_sdk
+
+
+metrics = MetricsWrapper(environment.metrics, "endpoint_trace_item_table")
+
 
 
 def _convert_result_timeseries(
@@ -297,11 +306,18 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
 
     def resolve(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
         snuba_request = _build_snuba_request(in_msg)
-        res = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=snuba_request,
-            timer=self._timer,
-        )
+        try:
+            res = run_query(
+                dataset=PluggableDataset(name="eap", all_entities=[]),
+                request=snuba_request,
+                timer=self._timer,
+            )
+        except Error as e:
+            if e.code == 241 or "DB::Exception: Memory limit (for query) exceeded" in e.message:
+                metrics.increment("endpoint_trace_item_table_OOM")
+                sentry_sdk.capture_exception(e)
+            raise BadSnubaRPCRequestException(e.message)
+
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,

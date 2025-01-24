@@ -2,7 +2,9 @@ import uuid
 from collections import defaultdict
 from dataclasses import replace
 from typing import Any, Callable, Dict, Iterable, Sequence
+import sentry_sdk
 
+from clickhouse_driver.errors import Error
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationComparisonFilter,
@@ -18,6 +20,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     ExtrapolationMode,
 )
 
+from snuba import environment
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -31,6 +34,7 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     apply_virtual_columns,
@@ -43,7 +47,7 @@ from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
 )
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException, OOMException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
     ExtrapolationContext,
@@ -54,6 +58,8 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
+
+metrics = MetricsWrapper(environment.metrics, "endpoint_trace_item_table")
 
 
 def aggregation_filter_to_expression(agg_filter: AggregationFilter) -> Expression:
@@ -296,11 +302,18 @@ class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
         snuba_request = _build_snuba_request(in_msg)
-        res = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=snuba_request,
-            timer=self._timer,
-        )
+        try:
+            res = run_query(
+                dataset=PluggableDataset(name="eap", all_entities=[]),
+                request=snuba_request,
+                timer=self._timer,
+            )
+        except Error as e:
+            if e.code == 241 or "DB::Exception: Memory limit (for query) exceeded" in e.message:
+                metrics.increment("endpoint_trace_item_table_OOM")
+                sentry_sdk.capture_exception(e)
+            raise BadSnubaRPCRequestException(e.message)
+
         column_values = _convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
