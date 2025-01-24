@@ -281,7 +281,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 label="avg",
                 buckets=expected_buckets,
                 data_points=[
-                    DataPoint(data=1, data_present=True)
+                    DataPoint(data=1, data_present=True, sample_count=300)
                     for _ in range(len(expected_buckets))
                 ],
             ),
@@ -289,7 +289,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 label="sum",
                 buckets=expected_buckets,
                 data_points=[
-                    DataPoint(data=300, data_present=True)
+                    DataPoint(data=300, data_present=True, sample_count=300)
                     for _ in range(len(expected_buckets))
                 ],
             ),
@@ -362,7 +362,7 @@ class TestTimeSeriesApi(BaseApiTest):
                     buckets=expected_buckets,
                     group_by_attributes={"consumer_group": "a", "environment": "prod"},
                     data_points=[
-                        DataPoint(data=300, data_present=True)
+                        DataPoint(data=300, data_present=True, sample_count=300)
                         for _ in range(len(expected_buckets))
                     ],
                 ),
@@ -371,7 +371,7 @@ class TestTimeSeriesApi(BaseApiTest):
                     buckets=expected_buckets,
                     group_by_attributes={"consumer_group": "z", "environment": "prod"},
                     data_points=[
-                        DataPoint(data=3000, data_present=True)
+                        DataPoint(data=3000, data_present=True, sample_count=300)
                         for _ in range(len(expected_buckets))
                     ],
                 ),
@@ -380,7 +380,7 @@ class TestTimeSeriesApi(BaseApiTest):
                     buckets=expected_buckets,
                     group_by_attributes={"consumer_group": "z", "environment": "dev"},
                     data_points=[
-                        DataPoint(data=30000, data_present=True)
+                        DataPoint(data=30000, data_present=True, sample_count=300)
                         for _ in range(len(expected_buckets))
                     ],
                 ),
@@ -435,7 +435,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 buckets=expected_buckets,
                 group_by_attributes={"group_by_metric": "1.0"},
                 data_points=[
-                    DataPoint(data=300, data_present=True)
+                    DataPoint(data=300, data_present=True, sample_count=300)
                     for _ in range(len(expected_buckets))
                 ],
             )
@@ -493,7 +493,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 label="avg",
                 buckets=expected_buckets,
                 data_points=[
-                    DataPoint(data=1, data_present=True),
+                    DataPoint(data=1, data_present=True, sample_count=1),
                     *[DataPoint() for _ in range(len(expected_buckets) - 1)],
                 ],
             ),
@@ -501,7 +501,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 label="sum",
                 buckets=expected_buckets,
                 data_points=[
-                    DataPoint(data=1, data_present=True),
+                    DataPoint(data=1, data_present=True, sample_count=1),
                     *[DataPoint() for _ in range(len(expected_buckets) - 1)],
                 ],
             ),
@@ -593,7 +593,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 label="avg",
                 buckets=expected_buckets,
                 data_points=[
-                    DataPoint(data=1, data_present=True)
+                    DataPoint(data=1, data_present=True, sample_count=300)
                     for _ in range(len(expected_buckets))
                 ],
             ),
@@ -601,7 +601,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 label="sum",
                 buckets=expected_buckets,
                 data_points=[
-                    DataPoint(data=300, data_present=True)
+                    DataPoint(data=300, data_present=True, sample_count=300)
                     for _ in range(len(expected_buckets))
                 ],
             ),
@@ -654,7 +654,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 label="sum",
                 buckets=expected_buckets,
                 data_points=[
-                    DataPoint(data=300, data_present=True)
+                    DataPoint(data=300, data_present=True, sample_count=300)
                     for _ in range(len(expected_buckets))
                 ],
             )
