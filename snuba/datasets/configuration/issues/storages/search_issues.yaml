@@ -150,7 +150,6 @@ stream_loader:
   processor: SearchIssuesMessageProcessor
   default_topic: generic-events
   commit_log_topic: snuba-generic-events-commit-log
-  dlq_topic: snuba-dead-letter-generic-events
 
 deletion_processors:
   - processor: ColumnFilterProcessor
