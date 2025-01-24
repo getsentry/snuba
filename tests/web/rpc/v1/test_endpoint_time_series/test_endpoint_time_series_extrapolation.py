@@ -423,7 +423,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             BASE_TIME,
             1,
             3600,
-            metrics=[DummyMetric("test_metric", get_value=lambda x: 10000)],
+            metrics=[DummyMetric("test_metric", get_value=lambda x: (x % 120) - 55)],
             measurements=[
                 DummyMeasurement(
                     "client_sample_rate",
@@ -459,15 +459,14 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(0, query_duration, granularity_secs)
         ]
+        expected_sum = sum([((x % 120) - 55) / 0.0001 for x in range(0, 120)])
         assert sorted(response.result_timeseries, key=lambda x: x.label) == [
             TimeSeries(
                 label="sum(test_metric)",
                 buckets=expected_buckets,
                 data_points=[
                     DataPoint(
-                        data=10000
-                        * 120
-                        / 0.0001,  # metric * number of events / sample rate
+                        data=expected_sum,
                         data_present=True,
                         reliability=Reliability.RELIABILITY_LOW,
                         avg_sampling_rate=0.0001,

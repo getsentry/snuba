@@ -82,12 +82,12 @@ NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "sentry.segment_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
     "sentry.segment_name": AttributeKey.Type.TYPE_STRING,
     "sentry.is_segment": AttributeKey.Type.TYPE_BOOLEAN,
-    "sentry.duration_ms": AttributeKey.Type.TYPE_FLOAT,
-    "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_FLOAT,
+    "sentry.duration_ms": AttributeKey.Type.TYPE_DOUBLE,
+    "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_DOUBLE,
     "sentry.retention_days": AttributeKey.Type.TYPE_INT,
     "sentry.name": AttributeKey.Type.TYPE_STRING,
-    "sentry.sampling_weight": AttributeKey.Type.TYPE_FLOAT,
-    "sentry.sampling_factor": AttributeKey.Type.TYPE_FLOAT,
+    "sentry.sampling_weight": AttributeKey.Type.TYPE_DOUBLE,
+    "sentry.sampling_factor": AttributeKey.Type.TYPE_DOUBLE,
     "sentry.timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
     "sentry.start_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
     "sentry.end_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
@@ -124,7 +124,10 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             )
         if attr_key.type == AttributeKey.Type.TYPE_INT:
             return f.CAST(column(attr_key.name[len("sentry.") :]), "Int64", alias=alias)
-        if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
+        if (
+            attr_key.type == AttributeKey.Type.TYPE_FLOAT
+            or attr_key.type == AttributeKey.Type.TYPE_DOUBLE
+        ):
             return f.CAST(
                 column(attr_key.name[len("sentry.") :]), "Float64", alias=alias
             )
@@ -133,7 +136,11 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         )
 
     if attr_key.name in NORMALIZED_COLUMNS:
-        if NORMALIZED_COLUMNS[attr_key.name] == attr_key.type:
+        # the second if statement allows Sentry to send TYPE_FLOAT to Snuba when Snuba still has to be backward compatible with TYPE_FLOATS
+        if NORMALIZED_COLUMNS[attr_key.name] == attr_key.type or (
+            attr_key.type == AttributeKey.Type.TYPE_FLOAT
+            and NORMALIZED_COLUMNS[attr_key.name] == AttributeKey.Type.TYPE_DOUBLE
+        ):
             return column(attr_key.name[len("sentry.") :], alias=attr_key.name)
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as {NORMALIZED_COLUMNS[attr_key.name]}, got {attr_key.type}"
@@ -144,7 +151,10 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         return SubscriptableReference(
             alias=alias, column=column("attr_str"), key=literal(attr_key.name)
         )
-    if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
+    if (
+        attr_key.type == AttributeKey.Type.TYPE_FLOAT
+        or attr_key.type == AttributeKey.Type.TYPE_DOUBLE
+    ):
         return SubscriptableReference(
             alias=alias, column=column("attr_num"), key=literal(attr_key.name)
         )
@@ -284,6 +294,8 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
                 v_expression = literal(v.val_str)
             case "val_float":
                 v_expression = literal(v.val_float)
+            case "val_double":
+                v_expression = literal(v.val_double)
             case "val_int":
                 v_expression = literal(v.val_int)
             case "val_null":
@@ -299,6 +311,10 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             case "val_float_array":
                 v_expression = literals_array(
                     None, list(map(lambda x: literal(x), v.val_float_array.values))
+                )
+            case "val_double_array":
+                v_expression = literals_array(
+                    None, list(map(lambda x: literal(x), v.val_double_array.values))
                 )
             case default:
                 raise NotImplementedError(

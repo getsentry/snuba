@@ -262,6 +262,8 @@ expression: snapshot_payload
     "exception_stacks.value": [
       "Some exception."
     ],
+    "flags.key": [],
+    "flags.value": [],
     "group_id": 124,
     "http_method": null,
     "http_referer": null,

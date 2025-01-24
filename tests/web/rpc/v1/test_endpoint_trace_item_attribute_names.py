@@ -114,7 +114,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
             )
         assert res.attributes == expected
 
-    def test_simple_float(self) -> None:
+    def test_simple_float_backward_compat(self) -> None:
         req = TraceItemAttributeNamesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -139,6 +139,35 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 TraceItemAttributeNamesResponse.Attribute(
                     name=f"b_measurement_{str(i).zfill(3)}",
                     type=AttributeKey.Type.TYPE_FLOAT,
+                )
+            )
+        assert res.attributes == expected
+
+    def test_simple_double(self) -> None:
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            limit=TOTAL_GENERATED_ATTR_PER_TYPE,
+            type=AttributeKey.Type.TYPE_DOUBLE,
+            value_substring_match="",
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        expected = []
+        for i in range(TOTAL_GENERATED_ATTR_PER_TYPE):
+            expected.append(
+                TraceItemAttributeNamesResponse.Attribute(
+                    name=f"b_measurement_{str(i).zfill(3)}",
+                    type=AttributeKey.Type.TYPE_DOUBLE,
                 )
             )
         assert res.attributes == expected

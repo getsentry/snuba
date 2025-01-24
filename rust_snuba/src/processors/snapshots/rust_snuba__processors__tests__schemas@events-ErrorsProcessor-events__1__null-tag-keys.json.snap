@@ -25,6 +25,8 @@ expression: snapshot_payload
     "exception_stacks.mechanism_type": [],
     "exception_stacks.type": [],
     "exception_stacks.value": [],
+    "flags.key": [],
+    "flags.value": [],
     "group_id": 123123123,
     "http_method": null,
     "http_referer": null,
