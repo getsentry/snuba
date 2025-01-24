@@ -23,7 +23,7 @@ jobs:
           args=(
             --tag ghcr.io/getsentry/snuba:latest
             --tag ghcr.io/getsentry/snuba:amd64-latest
-            --cache-to type=registry,ghcr.io/getsentry/snuba:buildcache,mode=max
+            --cache-to type=registry,ref=ghcr.io/getsentry/snuba:buildcache,mode=max
             --push
           )
         else
@@ -33,7 +33,7 @@ jobs:
         docker buildx build \
           --pull \
           --platform linux/amd64 \
-          --cache-from type=registry,ghcr.io/getsentry/snuba:buildcache \
+          --cache-from type=registry,ref=ghcr.io/getsentry/snuba:buildcache \
           --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
           --target application \
           "${args[@]}" \
