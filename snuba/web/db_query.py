@@ -183,6 +183,10 @@ def execute_query(
         robust=robust,
     )
 
+    print("readerrrr", reader)
+
+    print("resultttt", result)
+
     timer.mark("execute")
     stats.update(
         {
