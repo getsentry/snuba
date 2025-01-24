@@ -131,6 +131,41 @@ def gen_message(
     }
 
 
+def write_eap_span(
+    timestamp: datetime,
+    attributes: dict[str, str | float] | None = None,
+    count: int = 1,
+) -> None:
+    """
+    This is a helper function to write a single or multiple eap-spans to the database.
+    It uses gen_message to generate the spans and then writes them to the database.
+
+    Args:
+        timestamp: The timestamp of the span to write.
+        attributes: attributes to go on the span.
+        count: the number of these spans to write.
+    """
+    # convert attributes parameter into measurements and tags (what gen_message expects)
+    measurements = None
+    tags = None
+    if attributes is not None:
+        measurements = {}
+        tags = {}
+        for key, value in attributes.items():
+            if isinstance(value, str):
+                tags[key] = value
+            else:
+                measurements[key] = {"value": value}
+
+    write_raw_unprocessed_events(
+        get_storage(StorageKey("eap_spans")),  # type: ignore
+        [
+            gen_message(timestamp, measurements=measurements, tags=tags)
+            for _ in range(count)
+        ],
+    )
+
+
 BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
     minutes=180
 )
@@ -2165,6 +2200,112 @@ class TestTraceItemTable(BaseApiTest):
         for val in response.column_values[0].results:
             time = datetime.fromisoformat(val.val_str)
             assert time > last_timestamp
+
+    def test_sparse_aggregate(self, setup_teardown: Any) -> None:
+        """
+        This test ensures that when aggregates are done, groups that dont have the attribute being
+        aggregated over are not included in the response.
+
+        ex:
+        this should not return
+        animal_type   |   sum(wing.count)
+        bird          |   64
+        chicken       |   12
+        dog           |   0
+        cat           |   0
+
+        it should instead return
+        animal_type   |   sum(wing.count)
+        bird          |   64
+        chicken       |   12
+
+        because the dog and cat columns dont have attribute "wing.count"
+        """
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"animal_type": "bird", "wing.count": 2}, 10)
+        write_eap_span(span_ts, {"animal_type": "chicken", "wing.count": 2}, 5)
+        write_eap_span(span_ts, {"animal_type": "cat"}, 12)
+        write_eap_span(span_ts, {"animal_type": "dog", "bark.db": 100}, 2)
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="animal_type")
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="animal_type")
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="wing.count"
+                        ),
+                        label="sum(wing.count)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="bark.db"),
+                        label="sum(bark.db)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="animal_type")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="animal_type"
+                        )
+                    )
+                ),
+            ],
+            limit=50,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="animal_type",
+                results=[
+                    AttributeValue(val_str="bird"),
+                    AttributeValue(val_str="chicken"),
+                    AttributeValue(val_str="dog"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(wing.count)",
+                results=[
+                    AttributeValue(val_double=20),
+                    AttributeValue(val_double=10),
+                    AttributeValue(val_double=0),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(bark.db)",
+                results=[
+                    AttributeValue(val_double=0),
+                    AttributeValue(val_double=0),
+                    AttributeValue(val_double=200),
+                ],
+            ),
+        ]
 
 
 class TestUtils:
