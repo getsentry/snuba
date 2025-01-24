@@ -34,6 +34,7 @@ jobs:
           --pull \
           --platform linux/amd64 \
           --cache-from type=registry,ref=ghcr.io/getsentry/snuba:buildcache \
+          --cache-from type=registry,ref=ghcr.io/getsentry/snuba:latest \
           --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
           --target application \
           "${args[@]}" \
