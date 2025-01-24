@@ -2225,7 +2225,7 @@ class TestTraceItemTable(BaseApiTest):
         write_eap_span(span_ts, {"animal_type": "bird", "wing.count": 2}, 10)
         write_eap_span(span_ts, {"animal_type": "chicken", "wing.count": 2}, 5)
         write_eap_span(span_ts, {"animal_type": "cat"}, 12)
-        write_eap_span(span_ts, {"animal_type": "dog"}, 2)
+        write_eap_span(span_ts, {"animal_type": "dog", "bark.db": 100}, 2)
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -2258,6 +2258,14 @@ class TestTraceItemTable(BaseApiTest):
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
                 ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="bark.db"),
+                        label="sum(bark.db)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
             ],
             group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="animal_type")],
             order_by=[
@@ -2278,6 +2286,7 @@ class TestTraceItemTable(BaseApiTest):
                 results=[
                     AttributeValue(val_str="bird"),
                     AttributeValue(val_str="chicken"),
+                    AttributeValue(val_str="dog"),
                 ],
             ),
             TraceItemColumnValues(
@@ -2285,6 +2294,15 @@ class TestTraceItemTable(BaseApiTest):
                 results=[
                     AttributeValue(val_double=20),
                     AttributeValue(val_double=10),
+                    AttributeValue(val_double=0),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(bark.db)",
+                results=[
+                    AttributeValue(val_double=0),
+                    AttributeValue(val_double=0),
+                    AttributeValue(val_double=200),
                 ],
             ),
         ]

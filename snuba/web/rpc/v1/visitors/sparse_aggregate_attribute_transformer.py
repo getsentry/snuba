@@ -2,6 +2,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableR
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AndFilter,
     ExistsFilter,
+    OrFilter,
     TraceItemFilter,
 )
 
@@ -47,13 +48,21 @@ class SparseAggregateAttributeTransformer:
             return self.req
         else:
             # add the exists filters for the agg_keys
-            filters_to_add = [
-                TraceItemFilter(exists_filter=ExistsFilter(key=key)) for key in agg_keys
-            ]
+            filter_to_add = TraceItemFilter(
+                or_filter=OrFilter(
+                    filters=[
+                        TraceItemFilter(exists_filter=ExistsFilter(key=key))
+                        for key in agg_keys
+                    ]
+                )
+            )
             # combine the new filters with the existing one
             if self.req.HasField("filter"):
-                filters_to_add.append(self.req.filter)
-            new_filter = TraceItemFilter(and_filter=AndFilter(filters=filters_to_add))
+                new_filter = TraceItemFilter(
+                    and_filter=AndFilter(filters=[self.req.filter, filter_to_add])
+                )
+            else:
+                new_filter = filter_to_add
 
             new_req = TraceItemTableRequest()
             new_req.CopyFrom(self.req)
