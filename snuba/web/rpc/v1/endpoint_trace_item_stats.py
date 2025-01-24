@@ -213,8 +213,8 @@ class EndpointTraceItemStats(
         # this can easily be ported over to TraceItemStatsRequest. If we expose aggregations,
         # we'll probably want to expose OrderBy too. Order by currently has a loaded
         # meaning in this endpoint. It is both how we order the key-value pair results
-        # in our ClickHouse query and subsequently the attribute keys in the final response.
-        # Since it's we only have a single use case right now, the complication from a
+        # in our ClickHouse query and subsequently, the attribute keys in the final response.
+        # Since we only have a single use case right now, the complication from a
         # user-defined order by is not worth tackling in the first pass.
         aggregation = AttributeAggregation(
             aggregate=Function.FUNCTION_COUNT,
