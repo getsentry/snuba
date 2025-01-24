@@ -1401,7 +1401,11 @@ def get_job_logs(job_id: str) -> Response:
 @application.route("/clickhouse_node_info")
 @check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
 def clickhouse_node_info() -> Response:
-    return make_response(jsonify(get_node_info()), 200)
+    try:
+        node_info = get_node_info()
+        return make_response(jsonify(node_info), 200)
+    except Exception as e:
+        return make_response(jsonify({"error": str(e)}), 500)
 
 
 @application.route("/clickhouse_system_settings")

@@ -27,7 +27,7 @@ pub fn deserialize_message(payload: &[u8]) -> anyhow::Result<(Vec<UptimeMonitorC
         environment: monitor_message.environment,
         uptime_subscription_id: monitor_message.subscription_id,
         uptime_check_id: monitor_message.guid,
-        scheduled_check_time: monitor_message.scheduled_check_time_ms,
+        scheduled_check_time: monitor_message.scheduled_check_time_ms / 1000,
         timestamp: monitor_message.actual_check_time_ms,
         duration_ms: monitor_message.duration_ms.unwrap_or(0),
         region: monitor_message.region.unwrap_or_default(),
@@ -111,8 +111,8 @@ mod tests {
             "environment": "prod",
             "subscription_id": "123e4567-e89b-12d3-a456-426614174000",
             "guid": "550e8400-e29b-41d4-a716-446655440000",
-            "scheduled_check_time_ms": 1702659277,
-            "actual_check_time_ms": 1702659277,
+            "scheduled_check_time_ms": 1702659277000,
+            "actual_check_time_ms": 1702659277000,
             "duration_ms": 100,
             "status": "ok",
             "status_reason": {
@@ -138,13 +138,14 @@ mod tests {
             Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap()
         );
         assert_eq!(monitor_row.duration_ms, 100);
-        assert_eq!(monitor_row.timestamp, 1702659277);
         assert_eq!(monitor_row.region, "global".to_string());
         assert_eq!(monitor_row.check_status, "ok");
         assert_eq!(monitor_row.check_status_reason, "Request successful");
         assert_eq!(monitor_row.http_status_code, Some(200));
         assert_eq!(monitor_row.retention_days, 30);
-        assert_eq!(timestamp, 1702659277.0);
+        assert_eq!(monitor_row.scheduled_check_time, 1702659277);
+        assert_eq!(monitor_row.timestamp, 1702659277000);
+        assert_eq!(timestamp, 1702659277000.0);
     }
 
     #[test]
