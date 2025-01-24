@@ -160,14 +160,20 @@ jobs:
         run: |
           set -euxo pipefail
 
+          args=()
+
           if [ ${{ github.event_name }} = 'push' ]; then
-            args=(
+            args+=(
               --tag ghcr.io/getsentry/snuba-ci:latest
               --cache-to type=registry,ref=ghcr.io/getsentry/snuba-ci:latest,mode=max
               --push
             )
-          else
-            args=()
+          fi
+
+          if [ ${{ github.event.pull_request.head.repo.full_name }} = ${{ github.repository }} ]; then
+            args+=(
+              --cache-to type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }},mode=max
+            )
           fi
 
           docker buildx build \
