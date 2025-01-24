@@ -210,7 +210,7 @@ jobs:
         include:
           - snuba_settings: test
             docker_target: snuba-test
-          - snuba_settings: test_rust
+          - snuba_settings: test
             docker_target: snuba-test-rust
           - snuba_settings: test_distributed
             docker_target: snuba-test
