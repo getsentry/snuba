@@ -15,6 +15,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AndFilter,
     ExistsFilter,
+    OrFilter,
     TraceItemFilter,
 )
 
@@ -81,22 +82,30 @@ def test_basic() -> None:
                 TraceItemFilter(
                     exists_filter=ExistsFilter(
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
-                        )
-                    )
-                ),
-                TraceItemFilter(
-                    exists_filter=ExistsFilter(
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
-                        )
-                    )
-                ),
-                TraceItemFilter(
-                    exists_filter=ExistsFilter(
-                        key=AttributeKey(
                             type=AttributeKey.TYPE_STRING, name="sentry.category"
                         )
+                    )
+                ),
+                TraceItemFilter(
+                    or_filter=OrFilter(
+                        filters=[
+                            TraceItemFilter(
+                                exists_filter=ExistsFilter(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_DOUBLE,
+                                        name="my.float.field",
+                                    )
+                                )
+                            ),
+                            TraceItemFilter(
+                                exists_filter=ExistsFilter(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_DOUBLE,
+                                        name="my.float.field",
+                                    )
+                                )
+                            ),
+                        ]
                     )
                 ),
             ]
