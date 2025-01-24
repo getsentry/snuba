@@ -210,10 +210,12 @@ class EndpointTraceItemStats(
         _validate_limit_keys_by(in_msg)
 
         # Hardcoding the aggregation for now to keep the endpoint simple - although
-        # this can easily be ported over to TraceItemStatsRequest. I don't want to
-        # do that yet, since if we expose aggregations, we'll probably want to expose
-        # OrderBy also and I'm not entirely sure of all the ways we expect to use this
-        # endpoint right now. Both things should be easy to add if we want to.
+        # this can easily be ported over to TraceItemStatsRequest. If we expose aggregations,
+        # we'll probably want to expose OrderBy too. Order by currently has a loaded
+        # meaning in this endpoint. It is both how we order the key-value pair results
+        # in our ClickHouse query and subsequently the attribute keys in the final response.
+        # Since it's we only have a single use case right now, the complication from a
+        # user-defined order by is not worth tackling in the first pass.
         aggregation = AttributeAggregation(
             aggregate=Function.FUNCTION_COUNT,
             key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="sentry.duration_ms"),
