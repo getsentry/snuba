@@ -4,6 +4,8 @@ on:
     branches: [master]
 jobs:
   build:
+    outputs:
+      image_tag: ${{ steps.get_image_tag.image_tag }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -40,8 +42,8 @@ jobs:
           "${args[@]}" \
           .
 
-    - run: |
-        echo 'image_tag=ghcr.io/getsentry/snuba:${{ github.sha }}' >> "$GITHUB_OUTPUT"
+    - id: get_image_tag
+      run: echo 'image_tag=ghcr.io/getsentry/snuba:${{ github.sha }}' >> "$GITHUB_OUTPUT"
 
   publish-to-dockerhub:
     needs: build
