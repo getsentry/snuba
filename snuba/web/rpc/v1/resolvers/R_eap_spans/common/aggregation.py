@@ -625,6 +625,8 @@ def calculate_reliability(
     """
     A reliability check to determine if the sample count is large enough to be reliable and the confidence interval is small enough.
     """
+    if sample_count < sample_count_threshold:
+        return False
 
     return relative_confidence <= confidence_interval_threshold
 
