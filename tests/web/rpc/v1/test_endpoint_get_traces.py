@@ -138,7 +138,7 @@ _SPANS = [
         span_name=(
             "root"
             if i < len(_TRACE_IDS)
-            else f"child {i%len(_TRACE_IDS)+1} of {_SPAN_COUNT//len(_TRACE_IDS)-1}"
+            else f"child {i % len(_TRACE_IDS) + 1} of {_SPAN_COUNT // len(_TRACE_IDS) - 1}"
         ),
         is_segment=i < len(_TRACE_IDS),
     )
@@ -450,8 +450,6 @@ class TestGetTraces(BaseApiTest):
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
         )
-        for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys())):
-            print(start_timestamp, trace_id_per_start_timestamp[start_timestamp])
         assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_data_and_aggregated_fields(self, setup_teardown: Any) -> None:
@@ -522,6 +520,4 @@ class TestGetTraces(BaseApiTest):
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
         )
-        for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys())):
-            print(start_timestamp, trace_id_per_start_timestamp[start_timestamp])
         assert MessageToDict(response) == MessageToDict(expected_response)
