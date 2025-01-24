@@ -33,7 +33,6 @@ jobs:
         docker buildx build \
           --pull \
           --platform linux/amd64 \
-          --cache-from type=registry,ghcr.io/getsentry/snuba:latest \
           --cache-from type=registry,ghcr.io/getsentry/snuba:buildcache \
           --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
           --target application \
