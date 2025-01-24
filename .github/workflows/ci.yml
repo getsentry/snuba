@@ -217,7 +217,6 @@ jobs:
             pytest_addopts: '-m clickhouse_db'
           - snuba_settings: test_distributed_migrations
             docker_target: snuba-test
-            pytest_addopts: '-m clickhouse_db'
           - snuba_settings: test
             docker_target: snuba-test
             pytest_addopts: test_initialization
