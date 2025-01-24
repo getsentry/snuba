@@ -40,9 +40,6 @@ jobs:
           "${args[@]}" \
           .
 
-    - run: |
-        echo 'image_tag=ghcr.io/getsentry/snuba:${{ github.sha }}' >> "$GITHUB_OUTPUT"
-
   publish-to-dockerhub:
     needs: build
     name: Publish Snuba to DockerHub
@@ -53,7 +50,7 @@ jobs:
       - name: Pull the test image
         id: image_pull
         env:
-          IMAGE_URL: ${{ needs.build.outputs.image_tag }}
+          IMAGE_URL: ghcr.io/getsentry/snuba:${{ github.sha }}
         shell: bash
         run: |
           docker pull "$IMAGE_URL"
@@ -72,7 +69,7 @@ jobs:
         shell: bash
         env:
           SHORT_SHA: ${{ steps.short_sha.outputs.sha }}
-          IMAGE_URL: ${{ needs.build.outputs.image_tag }}
+          IMAGE_URL: ghcr.io/getsentry/snuba:${{ github.sha }}
         run: |
           # only login if the password is set
           if [[ "${{ secrets.DOCKER_HUB_RW_TOKEN }}" ]]; then echo "${{ secrets.DOCKER_HUB_RW_TOKEN }}" | docker login --username=sentrybuilder --password-stdin; fi
@@ -97,5 +94,5 @@ jobs:
         uses: getsentry/self-hosted@master
         with:
           project_name: snuba
-          image_url: ${{ needs.build.outputs.image_tag }}
+          image_url: ghcr.io/getsentry/snuba:${{ github.sha }}
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
