@@ -277,7 +277,7 @@ def resolve_storage_config(
 
     table_writer = storage.get_table_writer()
     processor = table_writer.get_stream_loader().get_processor()
-    writer_options = table_writer.get_writer_options()
+    writer_options = dict(table_writer.get_writer_options() or {})
     # Ensure the writer options are strings
     for k, v in writer_options.items():
         writer_options[k] = str(v)
@@ -292,7 +292,7 @@ def resolve_storage_config(
             python_class_name=processor.__class__.__name__,
             python_module=processor.__class__.__module__,
         ),
-        writer_options=dict(writer_options or {}),
+        writer_options=writer_options,
     )
 
 
