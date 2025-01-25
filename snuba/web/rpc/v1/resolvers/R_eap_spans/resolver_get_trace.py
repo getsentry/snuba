@@ -1,4 +1,5 @@
 import uuid
+from operator import attrgetter
 from typing import Any, Dict, Iterable
 
 from google.protobuf.json_format import MessageToDict
@@ -17,6 +18,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
+from snuba.query.dsl import FunctionCall
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, equals, literal
 from snuba.query.logical import Query
@@ -24,6 +26,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
     project_id_and_org_conditions,
     timestamp_in_range_condition,
     treeify_or_and_conditions,
@@ -34,6 +37,8 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverGetTrace
+
+_BUCKET_COUNT = 20
 
 
 def _build_query(request: GetTraceRequest) -> Query:
@@ -50,6 +55,38 @@ def _build_query(request: GetTraceRequest) -> Query:
             ),
         ),
     ]
+    item_conditions = [
+        i for i in request.items if i.item_type == TraceItemType.TRACE_ITEM_TYPE_SPAN
+    ][0]
+
+    if len(item_conditions.attributes) > 0:
+        for attribute_key in item_conditions.attributes:
+            selected_columns.append(
+                SelectedExpression(
+                    name=attribute_key.name,
+                    expression=attribute_key_to_expression(attribute_key),
+                )
+            )
+    else:
+        selected_columns += [
+            SelectedExpression(
+                name="attrs_str",
+                expression=FunctionCall(
+                    "attrs_str",
+                    "mapConcat",
+                    (column(f"attr_str_{i}") for i in range(_BUCKET_COUNT)),
+                ),
+            ),
+            SelectedExpression(
+                name="attrs_num",
+                expression=FunctionCall(
+                    "attrs_num",
+                    "mapConcat",
+                    (column(f"attr_num_{i}") for i in range(_BUCKET_COUNT)),
+                ),
+            ),
+        ]
+
     entity = Entity(
         key=EntityKey("eap_spans"),
         schema=get_entity(EntityKey("eap_spans")).get_data_model(),
@@ -110,50 +147,78 @@ def _build_snuba_request(request: GetTraceRequest) -> SnubaRequest:
     )
 
 
+def _value_to_attribute(key: str, value: Any) -> (AttributeKey, AttributeValue):
+    if isinstance(value, int):
+        return (
+            AttributeKey(
+                name=key,
+                type=AttributeKey.Type.TYPE_INT,
+            ),
+            AttributeValue(
+                val_int=value,
+            ),
+        )
+    elif isinstance(value, float):
+        return (
+            AttributeKey(
+                name=key,
+                type=AttributeKey.Type.TYPE_DOUBLE,
+            ),
+            AttributeValue(
+                val_double=value,
+            ),
+        )
+    elif isinstance(value, str):
+        return (
+            AttributeKey(
+                name=key,
+                type=AttributeKey.Type.TYPE_STRING,
+            ),
+            AttributeValue(
+                val_str=value,
+            ),
+        )
+    else:
+        raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
+
+
 def _convert_results(
     data: Iterable[Dict[str, Any]],
 ) -> list[GetTraceResponse.Item]:
     items: list[GetTraceResponse.Item] = []
 
     for row in data:
-        attributes: list[GetTraceResponse.Item.Attribute] = []
         id = row.pop("id")
+        dt = row.pop("timestamp")
+
         timestamp = Timestamp()
+        timestamp.FromDatetime(dt)
 
-        timestamp.FromDatetime(row.pop("timestamp"))
+        attributes: list[GetTraceResponse.Item.Attribute] = []
 
-        for key, value in row.items():
-            if isinstance(value, int):
-                attribute_type = AttributeKey.Type.TYPE_INT
-                attribute_value = AttributeValue(
-                    val_int=value,
-                )
-            elif isinstance(value, float):
-                attribute_type = AttributeKey.Type.TYPE_FLOAT
-                attribute_value = AttributeValue(
-                    val_float=value,
-                )
-            elif isinstance(value, str):
-                attribute_type = AttributeKey.Type.TYPE_STRING
-                attribute_value = AttributeValue(
-                    val_str=value,
-                )
-            else:
-                raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
-
+        def add_attribute(key: str, value: Any):
+            attribute_key, attribute_value = _value_to_attribute(key, value)
             attributes.append(
                 GetTraceResponse.Item.Attribute(
-                    key=AttributeKey(
-                        name=key,
-                        type=attribute_type,
-                    ),
+                    key=attribute_key,
                     value=attribute_value,
                 )
             )
+
+        for key, value in row.items():
+            if isinstance(value, dict):
+                for k, v in value.items():
+                    add_attribute(k, v)
+            else:
+                add_attribute(key, value)
+
         item = GetTraceResponse.Item(
             id=id,
             timestamp=timestamp,
-            attributes=attributes,
+            attributes=sorted(
+                attributes,
+                key=attrgetter("key.name"),
+            ),
         )
         items.append(item)
 

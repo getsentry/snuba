@@ -1,6 +1,7 @@
 import random
 import uuid
 from datetime import datetime, timedelta, timezone
+from operator import attrgetter
 from typing import Any, Mapping
 
 import pytest
@@ -16,6 +17,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     ResponseMeta,
     TraceItemType,
 )
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -57,13 +59,13 @@ def gen_message(
         "exclusive_time_ms": 0.228,
         "is_segment": is_segment,
         "data": {
-            "sentry.environment": "development",
-            "sentry.release": _RELEASE_TAG,
+            "environment": "development",
+            "release": _RELEASE_TAG,
             "thread.name": "uWSGIWorker1Core0",
             "thread.id": "8522009600",
-            "sentry.segment.name": "/api/0/relays/projectconfigs/",
-            "sentry.sdk.name": "sentry.python.django",
-            "sentry.sdk.version": "2.7.0",
+            "segment.name": "/api/0/relays/projectconfigs/",
+            "sdk.name": "sentry.python.django",
+            "sdk.version": "2.7.0",
             "my.float.field": 101.2,
             "my.int.field": 2000,
             "my.neg.field": -100,
@@ -132,6 +134,57 @@ _SPANS = [
     )
     for i in range(_SPAN_COUNT)
 ]
+
+
+def get_attributes(span: dict[str, Any]) -> list[GetTraceResponse.Item.Attribute]:
+    attributes: list[GetTraceResponse.Item.Attribute] = []
+    for key, value in span.get("measurements", {}).items():
+        attribute_key = AttributeKey(
+            name=key,
+            type=AttributeKey.Type.TYPE_DOUBLE,
+        )
+        attribute_value = AttributeValue(
+            val_double=value["value"],
+        )
+        attributes.append(
+            GetTraceResponse.Item.Attribute(
+                key=attribute_key,
+                value=attribute_value,
+            )
+        )
+
+    for field in {"tags", "sentry_tags", "data"}:
+        for key, value in span.get(field, {}).items():
+            if field == "sentry_tags":
+                key = f"sentry.{key}"
+            if key == "sentry.transaction":
+                continue
+            if isinstance(value, str):
+                attribute_key = AttributeKey(
+                    name=key,
+                    type=AttributeKey.Type.TYPE_STRING,
+                )
+                attribute_value = AttributeValue(
+                    val_str=value,
+                )
+            elif isinstance(value, int) or isinstance(value, float):
+                attribute_key = AttributeKey(
+                    name=key,
+                    type=AttributeKey.Type.TYPE_DOUBLE,
+                )
+                attribute_value = AttributeValue(
+                    val_double=value,
+                )
+            else:
+                continue
+
+            attributes.append(
+                GetTraceResponse.Item.Attribute(
+                    key=attribute_key,
+                    value=attribute_value,
+                )
+            )
+    return attributes
 
 
 @pytest.fixture(autouse=False)
@@ -203,6 +256,71 @@ class TestGetTrace(BaseApiTest):
                         GetTraceResponse.Item(
                             id=span["span_id"],
                             timestamp=timestamp,
+                            attributes=sorted(
+                                get_attributes(span), key=attrgetter("key.name")
+                            ),
+                        )
+                        for timestamp, span in zip(timestamps, _SPANS)
+                    ],
+                ),
+            ],
+        )
+        assert MessageToDict(response) == MessageToDict(expected_response)
+
+    def test_with_specific_attributes(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+        message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    attributes=[
+                        AttributeKey(
+                            name="server_name",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
+                    ],
+                )
+            ],
+        )
+        response = EndpointGetTrace().execute(message)
+        timestamps: list[Timestamp] = []
+        for span in _SPANS:
+            timestamp = Timestamp()
+            timestamp.FromNanoseconds(int(span["start_timestamp_precise"] * 1e6) * 1000)
+            timestamps.append(timestamp)
+
+        expected_response = GetTraceResponse(
+            meta=ResponseMeta(request_id=_REQUEST_ID),
+            trace_id=_TRACE_ID,
+            item_groups=[
+                GetTraceResponse.ItemGroup(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    items=[
+                        GetTraceResponse.Item(
+                            id=span["span_id"],
+                            timestamp=timestamp,
+                            attributes=[
+                                GetTraceResponse.Item.Attribute(
+                                    key=AttributeKey(
+                                        name="server_name",
+                                        type=AttributeKey.Type.TYPE_STRING,
+                                    ),
+                                    value=AttributeValue(
+                                        val_str=_SERVER_NAME,
+                                    ),
+                                ),
+                            ],
                         )
                         for timestamp, span in zip(timestamps, _SPANS)
                     ],
