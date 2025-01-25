@@ -18,9 +18,9 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
-from snuba.query.dsl import FunctionCall
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, equals, literal
+from snuba.query.expressions import FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -74,7 +74,7 @@ def _build_query(request: GetTraceRequest) -> Query:
                 expression=FunctionCall(
                     "attrs_str",
                     "mapConcat",
-                    (column(f"attr_str_{i}") for i in range(_BUCKET_COUNT)),
+                    tuple(column(f"attr_str_{i}") for i in range(_BUCKET_COUNT)),
                 ),
             ),
             SelectedExpression(
@@ -82,7 +82,7 @@ def _build_query(request: GetTraceRequest) -> Query:
                 expression=FunctionCall(
                     "attrs_num",
                     "mapConcat",
-                    (column(f"attr_num_{i}") for i in range(_BUCKET_COUNT)),
+                    tuple(column(f"attr_num_{i}") for i in range(_BUCKET_COUNT)),
                 ),
             ),
         ]
@@ -147,7 +147,7 @@ def _build_snuba_request(request: GetTraceRequest) -> SnubaRequest:
     )
 
 
-def _value_to_attribute(key: str, value: Any) -> (AttributeKey, AttributeValue):
+def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeValue]:
     if isinstance(value, int):
         return (
             AttributeKey(
@@ -196,7 +196,7 @@ def _convert_results(
 
         attributes: list[GetTraceResponse.Item.Attribute] = []
 
-        def add_attribute(key: str, value: Any):
+        def add_attribute(key: str, value: Any) -> None:
             attribute_key, attribute_value = _value_to_attribute(key, value)
             attributes.append(
                 GetTraceResponse.Item.Attribute(

@@ -136,7 +136,7 @@ _SPANS = [
 ]
 
 
-def get_attributes(span: dict[str, Any]) -> list[GetTraceResponse.Item.Attribute]:
+def get_attributes(span: Mapping[str, Any]) -> list[GetTraceResponse.Item.Attribute]:
     attributes: list[GetTraceResponse.Item.Attribute] = []
     for key, value in span.get("measurements", {}).items():
         attribute_key = AttributeKey(
@@ -257,7 +257,8 @@ class TestGetTrace(BaseApiTest):
                             id=span["span_id"],
                             timestamp=timestamp,
                             attributes=sorted(
-                                get_attributes(span), key=attrgetter("key.name")
+                                get_attributes(span),
+                                key=attrgetter("key.name"),
                             ),
                         )
                         for timestamp, span in zip(timestamps, _SPANS)
