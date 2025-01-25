@@ -13,7 +13,7 @@ from arroyo.processing.strategies import MessageRejected
 from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.produce import Produce
 from arroyo.types import BrokerValue, Message, Partition, Topic
-from arroyo.utils.clock import TestingClock
+from arroyo.utils.clock import MockedClock
 from confluent_kafka.admin import AdminClient
 
 from snuba import state
@@ -316,7 +316,7 @@ def test_skip_execution_for_entity() -> None:
 def test_execute_and_produce_result() -> None:
     scheduled_topic = Topic("scheduled-subscriptions-events")
     result_topic = Topic("events-subscriptions-results")
-    clock = TestingClock()
+    clock = MockedClock()
     broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
     broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
     broker.create_topic(scheduled_topic, partitions=1)
@@ -356,7 +356,7 @@ def test_execute_and_produce_result() -> None:
 def test_skip_stale_message() -> None:
     scheduled_topic = Topic("scheduled-subscriptions-events")
     result_topic = Topic("events-subscriptions-results")
-    clock = TestingClock()
+    clock = MockedClock()
     broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
     broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
     broker.create_topic(scheduled_topic, partitions=1)

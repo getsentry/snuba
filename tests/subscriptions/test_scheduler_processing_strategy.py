@@ -11,7 +11,7 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.types import BrokerValue
-from arroyo.utils.clock import TestingClock
+from arroyo.utils.clock import MockedClock
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -544,7 +544,7 @@ def test_produce_scheduled_subscription_message() -> None:
     topic = Topic("scheduled-subscriptions-events")
     partition = Partition(topic, partition_index)
 
-    clock = TestingClock()
+    clock = MockedClock()
     broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
     broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
     broker.create_topic(topic, partitions=1)
@@ -663,7 +663,7 @@ def test_produce_stale_message() -> None:
     topic = Topic("scheduled-subscriptions-events")
     partition = Partition(topic, partition_index)
 
-    clock = TestingClock()
+    clock = MockedClock()
     broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
     broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
     broker.create_topic(topic, partitions=1)
