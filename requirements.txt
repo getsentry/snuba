@@ -4,7 +4,7 @@ black==22.6.0
 blinker==1.5
 click==8.1.7
 clickhouse-driver==0.2.6
-confluent-kafka==2.3.0
+confluent-kafka==2.7.0
 datadog==0.21.0
 devservices==1.0.10
 flake8==7.0.0
