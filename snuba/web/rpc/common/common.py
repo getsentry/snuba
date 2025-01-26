@@ -357,7 +357,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
     if item_filter.HasField("exists_filter"):
         k = item_filter.exists_filter.key
         if k.name in NORMALIZED_COLUMNS.keys():
-            return f.isNotNull(column(k.name))
+            return f.isNotNull(attribute_key_to_expression(k))
         if k.type == AttributeKey.Type.TYPE_STRING:
             return f.mapContains(column("attr_str"), literal(k.name))
         else:
