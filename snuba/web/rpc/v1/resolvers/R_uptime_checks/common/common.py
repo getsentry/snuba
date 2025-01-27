@@ -74,29 +74,23 @@ def treeify_or_and_conditions(query: Query) -> None:
 
 # These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse
 NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
-    "sentry.organization_id": AttributeKey.Type.TYPE_INT,
-    "sentry.project_id": AttributeKey.Type.TYPE_INT,
-    "sentry.service": AttributeKey.Type.TYPE_STRING,
-    "sentry.span_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
-    "sentry.parent_span_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
-    "sentry.segment_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
-    "sentry.segment_name": AttributeKey.Type.TYPE_STRING,
-    "sentry.is_segment": AttributeKey.Type.TYPE_BOOLEAN,
-    "sentry.duration_ms": AttributeKey.Type.TYPE_DOUBLE,
-    "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_DOUBLE,
-    "sentry.retention_days": AttributeKey.Type.TYPE_INT,
-    "sentry.name": AttributeKey.Type.TYPE_STRING,
-    "sentry.sampling_weight": AttributeKey.Type.TYPE_DOUBLE,
-    "sentry.sampling_factor": AttributeKey.Type.TYPE_DOUBLE,
-    "sentry.timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
-    "sentry.start_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
-    "sentry.end_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
+    "organization_id": AttributeKey.Type.TYPE_INT,
+    "project_id": AttributeKey.Type.TYPE_INT,
+    "region": AttributeKey.Type.TYPE_STRING,
+    "environment": AttributeKey.Type.TYPE_STRING,
+    "uptime_subscription_id": AttributeKey.Type.TYPE_STRING,
+    "uptime_check_id": AttributeKey.Type.TYPE_STRING,
+    "duration_ms": AttributeKey.Type.TYPE_INT,
+    "check_status": AttributeKey.Type.TYPE_STRING,
+    "check_status_reason": AttributeKey.Type.TYPE_STRING,
+    "http_status_code": AttributeKey.Type.TYPE_INT,
+    "trace_id": AttributeKey.Type.TYPE_STRING,
+    "retention_days": AttributeKey.Type.TYPE_INT,
 }
 
 TIMESTAMP_COLUMNS: Final[Set[str]] = {
-    "sentry.timestamp",
-    "sentry.start_timestamp",
-    "sentry.end_timestamp",
+    "timestamp",
+    "scheduled_check_time",
 }
 
 
@@ -108,9 +102,10 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         raise BadSnubaRPCRequestException(
             f"attribute key {attr_key.name} must have a type specified"
         )
+
     alias = _build_label_mapping_key(attr_key)
 
-    if attr_key.name == "sentry.trace_id":
+    if attr_key.name == "trace_id":
         if attr_key.type == AttributeKey.Type.TYPE_STRING:
             return f.CAST(column("trace_id"), "String", alias=alias)
         raise BadSnubaRPCRequestException(
@@ -119,63 +114,21 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
     if attr_key.name in TIMESTAMP_COLUMNS:
         if attr_key.type == AttributeKey.Type.TYPE_STRING:
-            return f.CAST(
-                column(attr_key.name[len("sentry.") :]), "String", alias=alias
-            )
+            return f.CAST(column(attr_key.name), "String", alias=alias)
         if attr_key.type == AttributeKey.Type.TYPE_INT:
-            return f.CAST(column(attr_key.name[len("sentry.") :]), "Int64", alias=alias)
+            return f.CAST(column(attr_key.name), "Int64", alias=alias)
         if (
             attr_key.type == AttributeKey.Type.TYPE_FLOAT
             or attr_key.type == AttributeKey.Type.TYPE_DOUBLE
         ):
-            return f.CAST(
-                column(attr_key.name[len("sentry.") :]), "Float64", alias=alias
-            )
+            return f.CAST(column(attr_key.name), "Float64", alias=alias)
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as a string, float, or integer, got {attr_key.type}"
         )
 
     if attr_key.name in NORMALIZED_COLUMNS:
-        # the second if statement allows Sentry to send TYPE_FLOAT to Snuba when Snuba still has to be backward compatible with TYPE_FLOATS
-        if NORMALIZED_COLUMNS[attr_key.name] == attr_key.type or (
-            attr_key.type == AttributeKey.Type.TYPE_FLOAT
-            and NORMALIZED_COLUMNS[attr_key.name] == AttributeKey.Type.TYPE_DOUBLE
-        ):
-            return column(attr_key.name[len("sentry.") :], alias=attr_key.name)
-        raise BadSnubaRPCRequestException(
-            f"Attribute {attr_key.name} must be requested as {NORMALIZED_COLUMNS[attr_key.name]}, got {attr_key.type}"
-        )
+        return column(attr_key.name, alias=attr_key.name)
 
-    # End of special handling, just send to the appropriate bucket
-    if attr_key.type == AttributeKey.Type.TYPE_STRING:
-        return SubscriptableReference(
-            alias=alias, column=column("attr_str"), key=literal(attr_key.name)
-        )
-    if (
-        attr_key.type == AttributeKey.Type.TYPE_FLOAT
-        or attr_key.type == AttributeKey.Type.TYPE_DOUBLE
-    ):
-        return SubscriptableReference(
-            alias=alias, column=column("attr_num"), key=literal(attr_key.name)
-        )
-    if attr_key.type == AttributeKey.Type.TYPE_INT:
-        return f.CAST(
-            SubscriptableReference(
-                alias=None, column=column("attr_num"), key=literal(attr_key.name)
-            ),
-            "Int64",
-            alias=alias,
-        )
-    if attr_key.type == AttributeKey.Type.TYPE_BOOLEAN:
-        return f.CAST(
-            SubscriptableReference(
-                alias=None,
-                column=column("attr_num"),
-                key=literal(attr_key.name),
-            ),
-            "Boolean",
-            alias=alias,
-        )
     raise BadSnubaRPCRequestException(
         f"Attribute {attr_key.name} had an unknown or unset type: {attr_key.type}"
     )
@@ -354,14 +307,11 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             f"Invalid string comparison, unknown op: {item_filter.comparison_filter}"
         )
 
+    print(item_filter)
+
     if item_filter.HasField("exists_filter"):
         k = item_filter.exists_filter.key
-        if k.name in NORMALIZED_COLUMNS.keys():
-            return f.isNotNull(attribute_key_to_expression(k))
-        if k.type == AttributeKey.Type.TYPE_STRING:
-            return f.mapContains(column("attr_str"), literal(k.name))
-        else:
-            return f.mapContains(column("attr_num"), literal(k.name))
+        return f.isNotNull(column(k.name))
 
     return literal(True)
 

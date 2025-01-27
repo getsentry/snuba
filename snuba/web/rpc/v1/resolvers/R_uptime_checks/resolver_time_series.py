@@ -12,7 +12,6 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -27,23 +26,20 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
-from snuba.web.rpc.common.common import (
-    attribute_key_to_expression,
-    base_conditions_and,
-    trace_item_filters_to_expression,
-    treeify_or_and_conditions,
-)
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
-    ExtrapolationContext,
+from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.aggregation import (
     aggregation_to_expression,
-    get_average_sample_rate_column,
-    get_confidence_interval_column,
     get_count_column,
+)
+from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
+    attribute_key_to_expression,
+    base_conditions_and,
+    trace_item_filters_to_expression,
+    treeify_or_and_conditions,
 )
 
 
@@ -146,32 +142,22 @@ def _convert_result_timeseries(
             row_data = result_timeseries_timestamp_to_row.get(timeseries_key, {}).get(
                 bucket.seconds
             )
-            if not row_data:
-                timeseries.data_points.append(DataPoint(data=0, data_present=False))
-            else:
-                extrapolation_context = ExtrapolationContext.from_row(
-                    timeseries.label, row_data
-                )
-                if extrapolation_context.is_data_present:
-                    timeseries.data_points.append(
-                        DataPoint(
-                            data=row_data[timeseries.label],
-                            data_present=True,
-                            avg_sampling_rate=extrapolation_context.average_sample_rate,
-                            sample_count=extrapolation_context.sample_count,
-                            reliability=extrapolation_context.reliability,
-                        )
+            if row_data:
+                timeseries.data_points.append(
+                    DataPoint(
+                        data=row_data[timeseries.label],
+                        data_present=True,
                     )
-                else:
-                    timeseries.data_points.append(DataPoint(data=0, data_present=False))
+                )
+            else:
+                timeseries.data_points.append(DataPoint(data=0, data_present=False))
     return result_timeseries.values()
 
 
 def _build_query(request: TimeSeriesRequest) -> Query:
-    # TODO: This is hardcoded still
     entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+        key=EntityKey("uptime_checks"),
+        schema=get_entity(EntityKey("uptime_checks")).get_data_model(),
         sample=None,
     )
 
@@ -184,27 +170,6 @@ def _build_query(request: TimeSeriesRequest) -> Query:
 
     additional_context_columns = []
     for aggregation in request.aggregations:
-        if (
-            aggregation.extrapolation_mode
-            == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
-        ):
-            confidence_interval_column = get_confidence_interval_column(aggregation)
-            if confidence_interval_column is not None:
-                additional_context_columns.append(
-                    SelectedExpression(
-                        name=confidence_interval_column.alias,
-                        expression=confidence_interval_column,
-                    )
-                )
-
-            average_sample_rate_column = get_average_sample_rate_column(aggregation)
-            additional_context_columns.append(
-                SelectedExpression(
-                    name=average_sample_rate_column.alias,
-                    expression=average_sample_rate_column,
-                )
-            )
-
         count_column = get_count_column(aggregation)
         additional_context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
@@ -236,7 +201,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
                         f.multiply(
                             f.intDiv(
                                 f.minus(
-                                    f.toUnixTimestamp(column("timestamp")),
+                                    f.toUnixTimestamp(column("scheduled_check_time")),
                                     request.meta.start_timestamp.seconds,
                                 ),
                                 request.granularity_secs,
@@ -286,7 +251,7 @@ def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
                 "referrer": request.meta.referrer,
             },
             app_id=AppID("eap"),
-            parent_api="eap_span_samples",
+            parent_api="uptime_check_samples",
         ),
     )
 
@@ -294,7 +259,7 @@ def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
 class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
-        return TraceItemType.TRACE_ITEM_TYPE_SPAN
+        return TraceItemType.TRACE_ITEM_TYPE_UPTIME_CHECK
 
     def resolve(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
         snuba_request = _build_snuba_request(in_msg)

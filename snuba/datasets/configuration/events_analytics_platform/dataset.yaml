@@ -7,3 +7,4 @@ entities:
   - spans_num_attrs
   - spans_str_attrs
   - ourlogs
+  - uptime_checks

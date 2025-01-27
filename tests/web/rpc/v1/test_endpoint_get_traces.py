@@ -520,6 +520,4 @@ class TestGetTraces(BaseApiTest):
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
         )
-        for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys())):
-            print(start_timestamp, trace_id_per_start_timestamp[start_timestamp])
         assert MessageToDict(response) == MessageToDict(expected_response)

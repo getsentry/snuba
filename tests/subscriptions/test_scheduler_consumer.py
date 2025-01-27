@@ -16,7 +16,7 @@ from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.commit import Commit
 from arroyo.errors import ConsumerError
 from arroyo.types import BrokerValue, Partition, Topic
-from arroyo.utils.clock import TestingClock
+from arroyo.utils.clock import MockedClock
 from confluent_kafka.admin import AdminClient
 from py._path.local import LocalPath
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
@@ -297,7 +297,7 @@ def test_tick_time_shift() -> None:
     ],
 )
 def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
-    clock = TestingClock()
+    clock = MockedClock()
     broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
 
     epoch = datetime.fromtimestamp(clock.time())
@@ -432,7 +432,7 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
 
 
 def test_tick_consumer_non_monotonic() -> None:
-    clock = TestingClock()
+    clock = MockedClock()
     broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
 
     epoch = datetime.fromtimestamp(clock.time())
@@ -554,7 +554,7 @@ def test_tick_consumer_non_monotonic() -> None:
 
 
 def test_invalid_commit_log_message(caplog: Any) -> None:
-    clock = TestingClock()
+    clock = MockedClock()
     broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
 
     topic = Topic("messages")
