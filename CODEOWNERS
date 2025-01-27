@@ -13,7 +13,7 @@
 /snuba/datasets/configuration/replays                     @getsentry/replay-backend @getsentry/owners-snuba
 /snuba/datasets/configuration/metrics                     @getsentry/telemetry-experience @getsentry/owners-snuba
 /snuba/datasets/configuration/events_analytics_platform   @getsentry/events-analytics-platform @getsentry/owners-snuba
-snuba/datasets/configuration/events_analytics_platform/storages/uptime_monitor_checks.yaml @getsentry/crons
+
 # rust_snuba
 /rust_snuba @getsentry/owners-snuba
 /rust_snuba/src/processors/replays.rs @getsentry/replay-backend
