@@ -521,3 +521,76 @@ class TestGetTraces(BaseApiTest):
             meta=ResponseMeta(request_id=_REQUEST_ID),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
+
+    def test_with_data_and_aggregated_fields_ignore_case(
+        self, setup_teardown: Any
+    ) -> None:
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+        start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
+        for s in _SPANS:
+            start_timestamp_per_trace_id[s["trace_id"]] = min(
+                start_timestamp_per_trace_id[s["trace_id"]],
+                s["start_timestamp_precise"],
+            )
+        trace_id_per_start_timestamp: dict[float, str] = {
+            timestamp: trace_id
+            for trace_id, timestamp in start_timestamp_per_trace_id.items()
+        }
+        message = GetTracesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            attributes=[
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_START_TIMESTAMP,
+                    type=AttributeKey.TYPE_DOUBLE,
+                ),
+            ],
+            filters=[
+                GetTracesRequest.TraceFilter(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    filter=TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(
+                                name="sentry.op",
+                                type=AttributeKey.TYPE_STRING,
+                            ),
+                            op=ComparisonFilter.OP_EQUALS,
+                            value=AttributeValue(val_str="DB"),
+                            ignore_case=True,
+                        ),
+                    ),
+                ),
+            ],
+        )
+        response = EndpointGetTraces().execute(message)
+        expected_response = GetTracesResponse(
+            traces=[
+                GetTracesResponse.Trace(
+                    attributes=[
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_START_TIMESTAMP,
+                            type=AttributeKey.TYPE_DOUBLE,
+                            value=AttributeValue(
+                                val_double=start_timestamp_per_trace_id[
+                                    trace_id_per_start_timestamp[start_timestamp]
+                                ],
+                            ),
+                        ),
+                    ],
+                )
+                for start_timestamp in reversed(
+                    sorted(trace_id_per_start_timestamp.keys())
+                )
+            ],
+            page_token=PageToken(offset=len(_TRACE_IDS)),
+            meta=ResponseMeta(request_id=_REQUEST_ID),
+        )
+        assert MessageToDict(response) == MessageToDict(expected_response)

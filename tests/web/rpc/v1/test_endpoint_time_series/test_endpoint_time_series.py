@@ -607,6 +607,108 @@ class TestTimeSeriesApi(BaseApiTest):
             ),
         ]
 
+    def test_with_filters_ignore_case(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+            tags={"customer": "bob"},
+        )
+
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 999)],
+            tags={"customer": "alice"},
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_AVG,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="avg",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            filter=TraceItemFilter(
+                and_filter=AndFilter(
+                    filters=[
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="customer"
+                                ),
+                                op=ComparisonFilter.OP_EQUALS,
+                                value=AttributeValue(val_str="bOb"),
+                                ignore_case=True,
+                            )
+                        ),
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="customer"
+                                ),
+                                op=ComparisonFilter.OP_IN,
+                                value=AttributeValue(
+                                    val_str_array=StrArray(values=["bob", "ALICE"])
+                                ),
+                                ignore_case=True,
+                            )
+                        ),
+                    ]
+                )
+            ),
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        # print(response)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
+            TimeSeries(
+                label="avg",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=1, data_present=True, sample_count=300)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+            TimeSeries(
+                label="sum",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=300, data_present=True, sample_count=300)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
+
     def test_with_unaligned_granularities(self) -> None:
         query_offset = 5
         query_duration = 1800 + query_offset
