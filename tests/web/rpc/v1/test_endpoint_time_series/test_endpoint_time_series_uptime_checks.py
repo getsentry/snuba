@@ -213,3 +213,45 @@ class TestTimeSeriesApi(BaseApiTest):
                 ],
             ),
         ]
+
+    def test_random(self) -> None:
+        store_timeseries(
+            datetime.fromisoformat("2025-01-17T23:03:02.220914Z"),
+            1,
+            3600,
+        )
+        from google.protobuf.json_format import Parse
+
+        json_str = """{
+  "meta": {
+    "organizationId": "1",
+    "projectIds": [
+      "1"
+    ],
+    "startTimestamp": "2025-01-13T23:03:02.220914Z",
+    "endTimestamp": "2025-01-27T23:03:02.220929Z",
+    "traceItemName": 4,
+    "traceItemType": "TRACE_ITEM_TYPE_UPTIME_CHECK"
+  },
+  "aggregations": [
+    {
+      "aggregate": "FUNCTION_COUNT",
+      "key": {
+        "type": "TYPE_FLOAT",
+        "name": "uptime_check_id"
+      }
+    }
+  ],
+  "granularitySecs": "3600",
+  "groupBy": [
+    {
+      "type": "TYPE_STRING",
+      "name": "uptime_subscription_id"
+    }
+  ]
+}"""
+        message = Parse(json_str, TimeSeriesRequest())
+        res = self.app.post(
+            "/rpc/EndpointTimeSeries/v1", data=message.SerializeToString()
+        )
+        print(res)

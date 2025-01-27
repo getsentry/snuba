@@ -143,12 +143,15 @@ def _convert_result_timeseries(
                 bucket.seconds
             )
             if row_data:
-                timeseries.data_points.append(
-                    DataPoint(
-                        data=row_data[timeseries.label],
-                        data_present=True,
+                try:
+                    timeseries.data_points.append(
+                        DataPoint(
+                            data=row_data[timeseries.label],
+                            data_present=True,
+                        )
                     )
-                )
+                except Exception as e:
+                    raise e
             else:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
     return result_timeseries.values()
