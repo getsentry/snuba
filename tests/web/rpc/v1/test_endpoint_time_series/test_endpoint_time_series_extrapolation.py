@@ -199,6 +199,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                         data_present=True,
                         reliability=Reliability.RELIABILITY_HIGH,
                         avg_sampling_rate=1,
+                        sample_count=120,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -212,6 +213,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                         data_present=True,
                         reliability=Reliability.RELIABILITY_HIGH,
                         avg_sampling_rate=1,
+                        sample_count=120,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -225,6 +227,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                         data_present=True,
                         reliability=Reliability.RELIABILITY_HIGH,
                         avg_sampling_rate=1,
+                        sample_count=120,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -238,6 +241,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                         data_present=True,
                         reliability=Reliability.RELIABILITY_HIGH,
                         avg_sampling_rate=1,
+                        sample_count=120,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -287,6 +291,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(0, query_duration, granularity_secs)
         ]
+        print(sorted(response.result_timeseries, key=lambda x: x.label))
         assert sorted(response.result_timeseries, key=lambda x: x.label) == [
             TimeSeries(
                 label="sum(test_metric)",
@@ -297,6 +302,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                         data_present=True,
                         reliability=Reliability.RELIABILITY_LOW,
                         avg_sampling_rate=1,
+                        sample_count=120,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -409,6 +415,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                         data_present=True,
                         reliability=Reliability.RELIABILITY_LOW,
                         avg_sampling_rate=0.0001,
+                        sample_count=120,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -470,6 +477,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                         data_present=True,
                         reliability=Reliability.RELIABILITY_LOW,
                         avg_sampling_rate=0.0001,
+                        sample_count=120,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -531,6 +539,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                         data_present=True,
                         reliability=Reliability.RELIABILITY_LOW,
                         avg_sampling_rate=0.0001,
+                        sample_count=120,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -591,6 +600,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                         data_present=True,
                         reliability=Reliability.RELIABILITY_LOW,
                         avg_sampling_rate=0.0001,
+                        sample_count=120,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -653,6 +663,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                         reliability=Reliability.RELIABILITY_LOW,
                         avg_sampling_rate=2
                         / 101,  # weighted average = (1 + 1)/(1/0.01 + 1) = 2/101
+                        sample_count=2,
                     )
                     for _ in range(len(expected_buckets))
                 ],

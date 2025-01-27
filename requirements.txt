@@ -29,7 +29,7 @@ python-rapidjson==1.8
 redis==4.5.4
 sentry-arroyo==2.19.12
 sentry-kafka-schemas==0.1.129
-sentry-protos==0.1.53
+sentry-protos==0.1.55
 sentry-redis-tools==0.3.0
 sentry-relay==0.9.5
 sentry-sdk==2.18.0
