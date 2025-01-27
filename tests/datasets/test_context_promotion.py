@@ -9,6 +9,9 @@ from snuba.pipeline.stages.query_processing import (
 )
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, FunctionCall, Literal, NoopVisitor
+from snuba.query.processors.physical.hexint_column_processor import (
+    HexIntColumnProcessor,
+)
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
@@ -90,6 +93,7 @@ def test_span_id_promotion(
         )
     )
     clickhouse_query = StorageProcessingStage().execute(pipeline_result).data
+    column = Column("_snuba_contexts[trace.span_id]", None, "span_id")
 
     assert isinstance(clickhouse_query, Query)
     # in local and CI there's a table name difference
@@ -100,10 +104,8 @@ def test_span_id_promotion(
         SelectedExpression(
             name="contexts[trace.span_id]",
             # the select converts the span_id into a lowecase hex string
-            expression=FunctionCall(
-                "_snuba_contexts[trace.span_id]",
-                "lower",
-                (FunctionCall(None, "hex", (Column(None, None, "span_id"),)),),
+            expression=HexIntColumnProcessor(columns="span_id")._process_expressions(
+                column
             ),
         )
     ]

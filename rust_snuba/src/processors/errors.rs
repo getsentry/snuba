@@ -162,6 +162,8 @@ type GenericContext = BTreeMap<String, ContextStringify>;
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Contexts {
     #[serde(default)]
+    flags: Option<FlagContext>,
+    #[serde(default)]
     replay: Option<ReplayContext>,
     #[serde(default)]
     trace: Option<TraceContext>,
@@ -181,6 +183,20 @@ struct TraceContext {
     parent_span_id: Option<String>,
     #[serde(flatten)]
     other: GenericContext,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+struct FlagContext {
+    #[serde(default)]
+    values: Option<Vec<Option<FlagContextItem>>>,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+struct FlagContextItem {
+    #[serde(default)]
+    flag: Unicodify,
+    #[serde(default)]
+    result: Unicodify,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -384,6 +400,10 @@ struct ErrorRow {
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
     tags_value: Vec<String>,
+    #[serde(rename = "flags.key")]
+    flags_key: Vec<String>,
+    #[serde(rename = "flags.value")]
+    flags_value: Vec<String>,
     timestamp: u32,
     title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -563,6 +583,21 @@ impl ErrorRow {
             replay_id = Some(rid)
         }
 
+        // Split feature keys and values into two vectors if the context could be parsed.
+        let mut flags_key = Vec::new();
+        let mut flags_value = Vec::new();
+
+        if let Some(ctx) = from_context.flags {
+            if let Some(values) = ctx.values {
+                for item in values.into_iter().flatten() {
+                    if let (Some(k), Some(v)) = (item.flag.0, item.result.0) {
+                        flags_key.push(k);
+                        flags_value.push(v);
+                    }
+                }
+            }
+        };
+
         // Stacktrace.
 
         let exceptions = from
@@ -668,6 +703,8 @@ impl ErrorRow {
             exception_stacks_mechanism_type: stack_mechanism_types,
             exception_stacks_type: stack_types,
             exception_stacks_value: stack_values,
+            flags_key,
+            flags_value,
             group_id: from.group_id,
             http_method: from_request.method.0,
             http_referer,
