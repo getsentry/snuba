@@ -4,9 +4,19 @@ on:
     branches: [master]
 jobs:
   build:
-    outputs:
-      image_tag: ${{ steps.get_image_tag.outputs.image_tag }}
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    runs-on: |-
+      ${{fromJson('{
+        "amd64": "ubuntu-22.04",
+        "arm64": "ubuntu-22.04-arm"
+      }')[matrix.arch] }}
+    env:
+      IMG_VERSIONED: ghcr.io/getsentry/vroom:${{ matrix.arch }}-${{ github.sha }}
+    permissions:
+      contents: read
+      packages: write
     steps:
     - uses: actions/checkout@v4
 
@@ -24,9 +34,7 @@ jobs:
 
         if [ ${{ github.event_name }} = 'push' ]; then
           args+=(
-            --tag ghcr.io/getsentry/snuba:latest
-            --tag ghcr.io/getsentry/snuba:amd64-latest
-            --cache-to type=registry,ref=ghcr.io/getsentry/snuba:buildcache,mode=max
+            --cache-to type=registry,ref=ghcr.io/getsentry/snuba:${{ matrix.arch }}-buildcache,mode=max
             --push
           )
         fi
@@ -41,27 +49,44 @@ jobs:
 
         docker buildx build \
           --pull \
-          --platform linux/amd64 \
-          --cache-from type=registry,ref=ghcr.io/getsentry/snuba:buildcache \
-          --cache-from type=registry,ref=ghcr.io/getsentry/snuba:latest \
-          --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
+          --platform linux/${{ matrix.arch }} \
+          --cache-from type=registry,ref=ghcr.io/getsentry/snuba:${{ matrix.arch }}-buildcache \
+          --tag ghcr.io/getsentry/snuba:${{ matrix.arch }}-${{ github.sha }} \
           --target application \
           "${args[@]}" \
           .
 
-    - id: get_image_tag
-      run: echo 'image_tag=ghcr.io/getsentry/snuba:${{ github.sha }}' >> "$GITHUB_OUTPUT"
+  assemble:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Docker Login
+        run: docker login --username '${{ github.actor }}' --password '${{ secrets.GITHUB_TOKEN }}' ghcr.io
+
+      - name: Assemble Sha Image
+        run: |
+          docker buildx imagetools create -t "ghcr.io/getsentry/snuba:${{ github.sha }}" \
+            "ghcr.io/getsentry/snuba:arm64-${{ github.sha }}" \
+            "ghcr.io/getsentry/snuba:amd64-${{ github.sha }}"
+
+      - name: Assemble Latest Image
+        if: github.ref_name == 'main'
+        run: |
+          docker buildx imagetools create -t "ghcr.io/getsentry/snuba:latest" \
+            "ghcr.io/getsentry/snuba:arm64-${{ github.sha }}" \
+            "ghcr.io/getsentry/snuba:amd64-${{ github.sha }}"
 
   publish-to-dockerhub:
-    needs: build
+    needs: [build, assemble]
     name: Publish Snuba to DockerHub
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4 # v3.1.0
       - name: Pull the test image
         id: image_pull
         env:
-          IMAGE_URL: ${{ needs.build.outputs.image_tag }}
+          IMAGE_URL: ghcr.io/getsentry/snuba:${{ github.sha }}
         shell: bash
         run: |
           docker pull "$IMAGE_URL"
@@ -97,7 +122,7 @@ jobs:
           docker push getsentry/snuba:nightly
 
   self-hosted-end-to-end:
-    needs: build
+    needs: [build, assemble]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -106,5 +131,5 @@ jobs:
         uses: getsentry/self-hosted@master
         with:
           project_name: snuba
-          image_url: ${{ needs.build.outputs.image_tag }}
+          image_url: ghcr.io/getsentry/snuba:${{ github.sha }}
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
