@@ -244,7 +244,11 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             case "val_bool":
                 v_expression: Expression = literal(v.val_bool)
             case "val_str":
-                v_expression = literal(v.val_str)
+                v_expression = (
+                    literal(v.val_str.lower())
+                    if item_filter.comparison_filter.ignore_case
+                    else literal(v.val_str)
+                )
             case "val_float":
                 v_expression = literal(v.val_float)
             case "val_double":
