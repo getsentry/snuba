@@ -23,7 +23,9 @@ _VALID_GRANULARITY_SECS = set(
         15 * 60,
         30 * 60,  # minutes
         1 * 3600,
+        2 * 3600,
         3 * 3600,
+        4 * 3600,
         12 * 3600,
         24 * 3600,  # hours
     ]
@@ -100,6 +102,7 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         )
         _enforce_no_duplicate_labels(in_msg)
         _validate_time_buckets(in_msg)
+
         if in_msg.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
             raise BadSnubaRPCRequestException(
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"

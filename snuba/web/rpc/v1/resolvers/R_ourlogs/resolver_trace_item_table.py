@@ -127,7 +127,6 @@ def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
 def _convert_results(
     request: TraceItemTableRequest, data: Iterable[Dict[str, Any]]
 ) -> list[TraceItemColumnValues]:
-
     converters: Dict[str, Callable[[Any], AttributeValue]] = {}
 
     for column in request.columns:
@@ -179,7 +178,6 @@ class ResolverTraceItemTableOurlogs(ResolverTraceItemTable):
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
         snuba_request = _build_snuba_request(in_msg)
-        print(snuba_request)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
