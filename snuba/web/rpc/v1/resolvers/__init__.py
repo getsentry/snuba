@@ -10,6 +10,10 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeValuesRequest,
     TraceItemAttributeValuesResponse,
 )
+from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
+    TraceItemStatsRequest,
+    TraceItemStatsResponse,
+)
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
     TraceItemTableResponse,
@@ -51,6 +55,14 @@ class ResolverAttributeValues(
     @classmethod
     def endpoint_name(cls) -> str:
         return "AttributeValues"
+
+
+class ResolverTraceItemStats(
+    TraceItemDataResolver[TraceItemStatsRequest, TraceItemStatsResponse]
+):
+    @classmethod
+    def endpoint_name(cls) -> str:
+        return "TraceItemStats"
 
 
 # TODO: Traces, subscriptions

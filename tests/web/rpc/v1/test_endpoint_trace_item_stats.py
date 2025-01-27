@@ -6,11 +6,16 @@ from typing import Any, Mapping
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
-    TraceItemStats,
+    StatsDataPoint,
     TraceItemStatsRequest,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    ComparisonFilter,
+    TraceItemFilter,
+)
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -135,6 +140,7 @@ class TestTraceItemAttributesStats(BaseApiTest):
                 end_timestamp=ts,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
+            types=[TraceItemStatsRequest.Type.TYPE_STATS],
             limit=100,
             limit_keys_by=10,
         )
@@ -160,32 +166,91 @@ class TestTraceItemAttributesStats(BaseApiTest):
                 end_timestamp=ts,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
+            types=[TraceItemStatsRequest.Type.TYPE_STATS],
             limit=100,
             limit_keys_by=10,
         )
         response = EndpointTraceItemStats().execute(message)
-        expected_sdk_name_stats = TraceItemStats(
-            attribute_key="sentry.sdk.name",
-            attribute_type=TraceItemStats.AttributeType.ATTRIBUTE_TYPE_STRING,
+        expected_sdk_name_stats = StatsDataPoint(
+            key=AttributeKey(
+                name="sentry.sdk.name", type=AttributeKey.Type.TYPE_STRING
+            ),
             aggregation="count(span.duration)",
             data=[
-                TraceItemStats.AttributeResults(label="sentry.python.django", value=120)
+                StatsDataPoint.AttributeResults(label="sentry.python.django", value=120)
             ],
         )
 
-        assert expected_sdk_name_stats in response.stats
+        assert response.results[0].HasField("stats")
+        assert expected_sdk_name_stats in response.results[0].stats.data_points
 
-        expected_low_cardinality_stat = TraceItemStats(
-            attribute_key="low_cardinality",
-            attribute_type=TraceItemStats.AttributeType.ATTRIBUTE_TYPE_STRING,
+        expected_low_cardinality_stat = StatsDataPoint(
+            key=AttributeKey(
+                name="low_cardinality", type=AttributeKey.Type.TYPE_STRING
+            ),
             aggregation="count(span.duration)",
             data=[
-                TraceItemStats.AttributeResults(label="0", value=40),
-                TraceItemStats.AttributeResults(label="1", value=40),
-                TraceItemStats.AttributeResults(label="2", value=40),
+                StatsDataPoint.AttributeResults(label="0", value=40),
+                StatsDataPoint.AttributeResults(label="1", value=40),
+                StatsDataPoint.AttributeResults(label="2", value=40),
             ],
         )
-        for stat in response.stats:
-            if stat.attribute_key == "low_cardinality":
+
+        match = False
+        for stat in response.results[0].stats.data_points:
+            if stat.key.name == "low_cardinality":
                 for data in expected_low_cardinality_stat.data:
+                    match = True
                     assert data in stat.data
+
+        assert match
+
+    def test_with_filter(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=3)).timestamp())
+        message = TraceItemStatsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="low_cardinality"
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="0"),
+                )
+            ),
+            types=[TraceItemStatsRequest.Type.TYPE_STATS],
+            limit=100,
+            limit_keys_by=10,
+        )
+        response = EndpointTraceItemStats().execute(message)
+        expected_sdk_name_stats = StatsDataPoint(
+            key=AttributeKey(
+                name="sentry.sdk.name", type=AttributeKey.Type.TYPE_STRING
+            ),
+            aggregation="count(span.duration)",
+            data=[
+                StatsDataPoint.AttributeResults(label="sentry.python.django", value=40)
+            ],
+        )
+
+        assert response.results[0].HasField("stats")
+        assert expected_sdk_name_stats in response.results[0].stats.data_points
+
+        expected_low_cardinality_stats = StatsDataPoint(
+            key=AttributeKey(
+                name="low_cardinality", type=AttributeKey.Type.TYPE_STRING
+            ),
+            aggregation="count(span.duration)",
+            data=[StatsDataPoint.AttributeResults(label="0", value=40)],
+        )
+
+        assert expected_low_cardinality_stats in response.results[0].stats.data_points
