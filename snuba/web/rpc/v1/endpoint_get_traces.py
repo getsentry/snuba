@@ -21,7 +21,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array
+from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -29,6 +29,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
     base_conditions_and,
     project_id_and_org_conditions,
     timestamp_in_range_condition,
@@ -49,6 +50,22 @@ _ATTRIBUTES: dict[
     TraceAttribute.Key.ValueType,
     tuple[str, AttributeKey.Type.ValueType],
 ] = {
+    TraceAttribute.Key.KEY_TRACE_ID: (
+        "trace_id",
+        AttributeKey.Type.TYPE_STRING,
+    ),
+    TraceAttribute.Key.KEY_START_TIMESTAMP: (
+        "trace_start_timestamp",
+        AttributeKey.Type.TYPE_DOUBLE,
+    ),
+    TraceAttribute.Key.KEY_END_TIMESTAMP: (
+        "trace_end_timestamp",
+        AttributeKey.Type.TYPE_DOUBLE,
+    ),
+    TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT: (
+        "total_item_count",
+        AttributeKey.Type.TYPE_INT,
+    ),
     TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT: (
         "filtered_item_count",
         AttributeKey.Type.TYPE_INT,
@@ -57,17 +74,37 @@ _ATTRIBUTES: dict[
         "root_span_name",
         AttributeKey.Type.TYPE_STRING,
     ),
-    TraceAttribute.Key.KEY_START_TIMESTAMP: (
-        "trace_start_timestamp",
-        AttributeKey.Type.TYPE_DOUBLE,
-    ),
-    TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT: (
-        "total_item_count",
+    TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS: (
+        "root_span_duration_ms",
         AttributeKey.Type.TYPE_INT,
     ),
-    TraceAttribute.Key.KEY_TRACE_ID: (
-        "trace_id",
+    TraceAttribute.Key.KEY_ROOT_SPAN_PROJECT_ID: (
+        "root_span_project_id",
+        AttributeKey.Type.TYPE_INT,
+    ),
+    TraceAttribute.Key.KEY_EARLIEST_SPAN_NAME: (
+        "earliest_span_name",
         AttributeKey.Type.TYPE_STRING,
+    ),
+    TraceAttribute.Key.KEY_EARLIEST_SPAN_PROJECT_ID: (
+        "earliest_span_project_id",
+        AttributeKey.Type.TYPE_INT,
+    ),
+    TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS: (
+        "earliest_span_duration_ms",
+        AttributeKey.Type.TYPE_INT,
+    ),
+    TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN: (
+        "earliest_frontend_span",
+        AttributeKey.Type.TYPE_STRING,
+    ),
+    TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_PROJECT_ID: (
+        "earliest_frontend_span_project_id",
+        AttributeKey.Type.TYPE_INT,
+    ),
+    TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_DURATION_MS: (
+        "earliest_frontend_span_duration_ms",
+        AttributeKey.Type.TYPE_INT,
     ),
 }
 
@@ -99,38 +136,74 @@ def _attribute_to_expression(
     trace_attribute: TraceAttribute,
     *conditions: Expression,
 ) -> Expression:
-    if trace_attribute.key == TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT:
-        return f.count(
-            alias=_ATTRIBUTES[trace_attribute.key][0],
-        )
-    if trace_attribute.key == TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT:
-        return f.countIf(
-            *conditions,
-            alias=_ATTRIBUTES[trace_attribute.key][0],
-        )
-    if trace_attribute.key == TraceAttribute.Key.KEY_START_TIMESTAMP:
-        attribute = _ATTRIBUTES[trace_attribute.key]
-        return f.cast(
-            f.min(column("start_timestamp")),
-            _TYPES_TO_CLICKHOUSE[attribute[1]][0],
-            alias=_ATTRIBUTES[trace_attribute.key][0],
-        )
-    if trace_attribute.key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
-        # TODO: Change to return the root span name instead of the trace's first span's name.
-        return f.argMin(
-            column("name"),
+    def _get_root_span_attribute(attribute_name: str) -> Expression:
+        return f.argMinIf(
+            column(attribute_name),
             column("start_timestamp"),
-            alias=_ATTRIBUTES[trace_attribute.key][0],
+            f.equals(column("parent_span_id"), literal(0)),
+            alias=alias,
         )
-    if trace_attribute.key in _ATTRIBUTES:
-        attribute = _ATTRIBUTES[trace_attribute.key]
-        return f.cast(
-            column(attribute[0]),
-            _TYPES_TO_CLICKHOUSE[attribute[1]][0],
-            alias=attribute[0],
+
+    def _get_earliest_span_attribute(attribute_name: str) -> Expression:
+        return f.argMinIf(
+            column(attribute_name),
+            column("start_timestamp"),
+            alias=alias,
         )
+
+    def _get_earliest_frontend_span_attribute(attribute_name: str) -> Expression:
+        span_op = attribute_key_to_expression(
+            AttributeKey(name="span.op", type=AttributeKey.Type.TYPE_STRING)
+        )
+        return f.argMinIf(
+            column(attribute_name),
+            column("start_timestamp"),
+            or_cond(
+                f.equals(span_op, literal("pageload")),
+                f.equals(span_op, literal("navigation")),
+            ),
+            alias=alias,
+        )
+
+    key = trace_attribute.key
+    if key in _ATTRIBUTES:
+        attribute_name, attribute_type = _ATTRIBUTES[key]
+        clickhouse_type = _TYPES_TO_CLICKHOUSE[attribute_type][0]
+        alias = attribute_name
+
+        if key == TraceAttribute.Key.KEY_START_TIMESTAMP:
+            return f.cast(
+                f.min(column("start_timestamp")), clickhouse_type, alias=alias
+            )
+        elif key == TraceAttribute.Key.KEY_END_TIMESTAMP:
+            return f.cast(f.max(column("end_timestamp")), clickhouse_type, alias=alias)
+        elif key == TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT:
+            return f.count(alias=alias)
+        elif key == TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT:
+            return f.countIf(*conditions, alias=alias)
+        elif key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
+            return _get_root_span_attribute("name")
+        elif key == TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS:
+            return _get_root_span_attribute("duration_ms")
+        elif key == TraceAttribute.Key.KEY_ROOT_SPAN_PROJECT_ID:
+            return _get_root_span_attribute("project_id")
+        elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_NAME:
+            return _get_earliest_span_attribute("name")
+        elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_PROJECT_ID:
+            return _get_earliest_span_attribute("project_id")
+        elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS:
+            return _get_earliest_span_attribute("duration_ms")
+        elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN:
+            return _get_earliest_frontend_span_attribute("name")
+        elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_PROJECT_ID:
+            return _get_earliest_frontend_span_attribute("project_id")
+        elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_DURATION_MS:
+            return _get_earliest_frontend_span_attribute("duration_ms")
+        else:
+            return f.cast(column(attribute_name), clickhouse_type, alias=alias)
+
     raise BadSnubaRPCRequestException(
-        f"{trace_attribute.key} had an unknown or unset type: {trace_attribute.type}"
+        f"{key} had an unknown or unset type: {trace_attribute.type}"
     )
 
 
