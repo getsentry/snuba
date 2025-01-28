@@ -616,7 +616,7 @@ class TestTimeSeriesApi(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
-            tags={"customer": "bob"},
+            tags={"customer": "bOb"},
         )
 
         store_spans_timeseries(
@@ -624,7 +624,7 @@ class TestTimeSeriesApi(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 999)],
-            tags={"customer": "alice"},
+            tags={"customer": "aLiCe"},
         )
 
         message = TimeSeriesRequest(
@@ -663,7 +663,7 @@ class TestTimeSeriesApi(BaseApiTest):
                                     type=AttributeKey.TYPE_STRING, name="customer"
                                 ),
                                 op=ComparisonFilter.OP_EQUALS,
-                                value=AttributeValue(val_str="bOb"),
+                                value=AttributeValue(val_str="BoB"),
                                 ignore_case=True,
                             )
                         ),
@@ -674,7 +674,7 @@ class TestTimeSeriesApi(BaseApiTest):
                                 ),
                                 op=ComparisonFilter.OP_IN,
                                 value=AttributeValue(
-                                    val_str_array=StrArray(values=["bob", "ALICE"])
+                                    val_str_array=StrArray(values=["BOB", "AlIcE"])
                                 ),
                                 ignore_case=True,
                             )
