@@ -102,16 +102,7 @@ class Migration(migration.CodeMigration):
     blocking = True
 
     def forwards_global(self) -> Sequence[operations.RunPython]:
-        return [
-            operations.RunPython(
-                func=fix_order_by, description="Sync project ID colum for onpremise"
-            ),
-        ]
+        return []
 
     def backwards_global(self) -> Sequence[operations.RunPython]:
-        return [
-            operations.RunPython(
-                func=ensure_drop_temporary_tables,
-                description="Ensure temporary tables created by the migration are dropped",
-            )
-        ]
+        return []
