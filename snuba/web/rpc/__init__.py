@@ -1,9 +1,11 @@
 import os
+from datetime import timedelta
 from typing import Generic, List, Tuple, Type, TypeVar, cast, final
 
 import sentry_sdk
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
+from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
@@ -24,6 +26,8 @@ from snuba.web.rpc.common.exceptions import (
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
+
+MAXIMUM_TIME_RANGE_IN_DAYS = 30
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -117,6 +121,14 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             span.description = self.config_key()
         self.__before_execute(in_msg)
         error = None
+        meta = getattr(in_msg, "meta", None)
+        if meta:
+            start = meta.start_timestamp.ToDatetime()
+            end = meta.end_timestamp.ToDatetime()
+            if (end - start).days > 30:
+                timestamp = Timestamp()
+                timestamp.FromDatetime(end - timedelta(days=MAXIMUM_TIME_RANGE_IN_DAYS))
+                in_msg.meta.start_timestamp.CopyFrom(timestamp)
         try:
             out = self._execute(in_msg)
         except Exception as e:
