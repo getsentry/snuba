@@ -125,7 +125,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         if meta:
             start = meta.start_timestamp.ToDatetime()
             end = meta.end_timestamp.ToDatetime()
-            if (end - start).days > 30:
+            if (end - start).days > MAXIMUM_TIME_RANGE_IN_DAYS:
                 timestamp = Timestamp()
                 timestamp.FromDatetime(end - timedelta(days=MAXIMUM_TIME_RANGE_IN_DAYS))
                 in_msg.meta.start_timestamp.CopyFrom(timestamp)
