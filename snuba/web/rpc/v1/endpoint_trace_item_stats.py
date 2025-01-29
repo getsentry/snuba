@@ -44,9 +44,9 @@ class EndpointTraceItemStats(
         )
 
         for requested_type in in_msg.stats_types:
-            if requested_type.HasField("attributes_distribution"):
+            if requested_type.HasField("attribute_distributions"):
                 if (
-                    requested_type.attributes_distribution.max_buckets
+                    requested_type.attribute_distributions.max_buckets
                     > MAX_LIMIT_KEYS_BY
                 ):
                     raise BadSnubaRPCRequestException(

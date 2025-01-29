@@ -5,8 +5,8 @@ from typing import Any, Dict, Iterable, Tuple
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     AttributeDistribution,
-    AttributesDistribution,
-    AttributesDistributionRequest,
+    AttributeDistributions,
+    AttributeDistributionsRequest,
     TraceItemStatsRequest,
     TraceItemStatsResponse,
     TraceItemStatsResult,
@@ -72,7 +72,6 @@ def _transform_results(
         attr_value = row["attr_value"]
         default = AttributeDistribution(
             attribute_name=attr_key,
-            aggregation=COUNT_LABEL,
         )
         res.setdefault((attr_key, COUNT_LABEL), default).buckets.append(
             AttributeDistribution.Bucket(label=attr_value, value=row[COUNT_LABEL])
@@ -108,7 +107,7 @@ def _build_attr_distribution_snuba_request(
 
 
 def _build_attr_distribution_query(
-    in_msg: TraceItemStatsRequest, distributions_params: AttributesDistributionRequest
+    in_msg: TraceItemStatsRequest, distributions_params: AttributeDistributionsRequest
 ):
     entity = Entity(
         key=EntityKey("eap_spans"),
@@ -178,8 +177,8 @@ def _build_attr_distribution_query(
             columns=[attrs_string_keys],
         ),
         limit=(
-            distributions_params.limit
-            if distributions_params.limit > 0
+            distributions_params.max_attributes
+            if distributions_params.max_attributes > 0
             else _DEFAULT_ROW_LIMIT
         ),
     )
@@ -196,9 +195,9 @@ class ResolverTraceItemStatsEAPSpans(ResolverTraceItemStats):
         results = []
         for requested_type in in_msg.stats_types:
             result = TraceItemStatsResult()
-            if requested_type.HasField("attributes_distribution"):
+            if requested_type.HasField("attribute_distributions"):
                 query = _build_attr_distribution_query(
-                    in_msg, requested_type.attributes_distribution
+                    in_msg, requested_type.attribute_distributions
                 )
                 treeify_or_and_conditions(query)
                 snuba_request = _build_attr_distribution_snuba_request(in_msg, query)
@@ -210,8 +209,8 @@ class ResolverTraceItemStatsEAPSpans(ResolverTraceItemStats):
                 )
 
                 attributes = _transform_results(query_res.result.get("data", []))
-                result.attributes_distribution.CopyFrom(
-                    AttributesDistribution(attributes=attributes)
+                result.attribute_distributions.CopyFrom(
+                    AttributeDistributions(attributes=attributes)
                 )
 
             results.append(result)

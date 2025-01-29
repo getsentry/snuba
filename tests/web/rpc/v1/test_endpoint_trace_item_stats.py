@@ -7,7 +7,7 @@ import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     AttributeDistribution,
-    AttributesDistributionRequest,
+    AttributeDistributionsRequest,
     StatsType,
     TraceItemStatsRequest,
 )
@@ -144,8 +144,8 @@ class TestTraceItemAttributesStats(BaseApiTest):
             ),
             stats_types=[
                 StatsType(
-                    attributes_distribution=AttributesDistributionRequest(
-                        max_buckets=10, limit=100
+                    attribute_distributions=AttributeDistributionsRequest(
+                        max_buckets=10, max_attributes=100
                     )
                 )
             ],
@@ -174,8 +174,8 @@ class TestTraceItemAttributesStats(BaseApiTest):
             ),
             stats_types=[
                 StatsType(
-                    attributes_distribution=AttributesDistributionRequest(
-                        max_buckets=10, limit=100
+                    attribute_distributions=AttributeDistributionsRequest(
+                        max_buckets=10, max_attributes=100
                     )
                 )
             ],
@@ -183,21 +183,19 @@ class TestTraceItemAttributesStats(BaseApiTest):
         response = EndpointTraceItemStats().execute(message)
         expected_sdk_name_stats = AttributeDistribution(
             attribute_name="sentry.sdk.name",
-            aggregation="count()",
             buckets=[
                 AttributeDistribution.Bucket(label="sentry.python.django", value=120)
             ],
         )
 
-        assert response.results[0].HasField("attributes_distribution")
+        assert response.results[0].HasField("attribute_distributions")
         assert (
             expected_sdk_name_stats
-            in response.results[0].attributes_distribution.attributes
+            in response.results[0].attribute_distributions.attributes
         )
 
         expected_low_cardinality_stat = AttributeDistribution(
             attribute_name="low_cardinality",
-            aggregation="count()",
             buckets=[
                 AttributeDistribution.Bucket(label="0", value=40),
                 AttributeDistribution.Bucket(label="1", value=40),
@@ -206,7 +204,7 @@ class TestTraceItemAttributesStats(BaseApiTest):
         )
 
         match = False
-        for stat in response.results[0].attributes_distribution.attributes:
+        for stat in response.results[0].attribute_distributions.attributes:
             if stat.attribute_name == "low_cardinality":
                 for bucket in expected_low_cardinality_stat.buckets:
                     match = True
@@ -238,8 +236,8 @@ class TestTraceItemAttributesStats(BaseApiTest):
             ),
             stats_types=[
                 StatsType(
-                    attributes_distribution=AttributesDistributionRequest(
-                        max_buckets=10, limit=100
+                    attribute_distributions=AttributeDistributionsRequest(
+                        max_buckets=10, max_attributes=100
                     )
                 )
             ],
@@ -247,25 +245,23 @@ class TestTraceItemAttributesStats(BaseApiTest):
         response = EndpointTraceItemStats().execute(message)
         expected_sdk_name_stats = AttributeDistribution(
             attribute_name="sentry.sdk.name",
-            aggregation="count()",
             buckets=[
                 AttributeDistribution.Bucket(label="sentry.python.django", value=40)
             ],
         )
 
-        assert response.results[0].HasField("attributes_distribution")
+        assert response.results[0].HasField("attribute_distributions")
         assert (
             expected_sdk_name_stats
-            in response.results[0].attributes_distribution.attributes
+            in response.results[0].attribute_distributions.attributes
         )
 
         expected_low_cardinality_stats = AttributeDistribution(
             attribute_name="low_cardinality",
-            aggregation="count()",
             buckets=[AttributeDistribution.Bucket(label="0", value=40)],
         )
 
         assert (
             expected_low_cardinality_stats
-            in response.results[0].attributes_distribution.attributes
+            in response.results[0].attribute_distributions.attributes
         )
