@@ -28,6 +28,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -594,3 +595,53 @@ class TestGetTraces(BaseApiTest):
             meta=ResponseMeta(request_id=_REQUEST_ID),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
+
+    def test_with_data_and_aggregated_fields_ignore_case_on_non_strings_error(
+        self, setup_teardown: Any
+    ) -> None:
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+        start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
+        for s in _SPANS:
+            start_timestamp_per_trace_id[s["trace_id"]] = min(
+                start_timestamp_per_trace_id[s["trace_id"]],
+                s["start_timestamp_precise"],
+            )
+
+        message = GetTracesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            attributes=[
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_START_TIMESTAMP,
+                    type=AttributeKey.TYPE_DOUBLE,
+                ),
+            ],
+            filters=[
+                GetTracesRequest.TraceFilter(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    filter=TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(
+                                name="my.float.field",
+                                type=AttributeKey.TYPE_DOUBLE,
+                            ),
+                            op=ComparisonFilter.OP_EQUALS,
+                            value=AttributeValue(val_double=0.123),
+                            ignore_case=True,
+                        ),
+                    ),
+                ),
+            ],
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="Cannot ignore case on non-string values"
+        ):
+            EndpointGetTraces().execute(message)
