@@ -256,7 +256,7 @@ def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
     )
 
 
-class ResolverTimeSeriesUptimeChecks(ResolverTimeSeries):
+class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
         return TraceItemType.TRACE_ITEM_TYPE_UPTIME_CHECK
