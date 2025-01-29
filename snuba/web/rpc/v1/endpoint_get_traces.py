@@ -140,12 +140,12 @@ def _attribute_to_expression(
         return f.argMinIf(
             column(attribute_name),
             column("start_timestamp"),
-            f.equals(column("parent_span_id"), literal(0)),
+            f.equals(column("parent_span_id"), literal("0" * 16)),
             alias=alias,
         )
 
     def _get_earliest_span_attribute(attribute_name: str) -> Expression:
-        return f.argMinIf(
+        return f.argMin(
             column(attribute_name),
             column("start_timestamp"),
             alias=alias,
@@ -153,7 +153,7 @@ def _attribute_to_expression(
 
     def _get_earliest_frontend_span_attribute(attribute_name: str) -> Expression:
         span_op = attribute_key_to_expression(
-            AttributeKey(name="span.op", type=AttributeKey.Type.TYPE_STRING)
+            AttributeKey(name="sentry.op", type=AttributeKey.Type.TYPE_STRING)
         )
         return f.argMinIf(
             column(attribute_name),

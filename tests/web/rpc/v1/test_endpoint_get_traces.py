@@ -52,6 +52,7 @@ def gen_message(
     span_op: str = "http.server",
     span_name: str = "root",
     is_segment: bool = False,
+    parent_span_id: str = "0" * 16,
 ) -> Mapping[str, Any]:
     measurements = measurements or {}
     tags = tags or {}
@@ -64,6 +65,7 @@ def gen_message(
         "event_id": uuid.uuid4().hex,
         "exclusive_time_ms": 0.228,
         "is_segment": is_segment,
+        "parent_span_id": parent_span_id,
         "data": {
             "sentry.environment": "development",
             "sentry.release": _RELEASE_TAG,
@@ -134,13 +136,14 @@ _SPANS = [
     gen_message(
         dt=_BASE_TIME + timedelta(minutes=i),
         trace_id=_TRACE_IDS[i % len(_TRACE_IDS)],
-        span_op="http.server" if i < len(_TRACE_IDS) else "db",
+        span_op="navigation" if i < len(_TRACE_IDS) else "db",
         span_name=(
             "root"
             if i < len(_TRACE_IDS)
             else f"child {i % len(_TRACE_IDS) + 1} of {_SPAN_COUNT // len(_TRACE_IDS) - 1}"
         ),
         is_segment=i < len(_TRACE_IDS),
+        parent_span_id="0" * 16 if i < len(_TRACE_IDS) else "1" * 16,
     )
     for i in range(_SPAN_COUNT)
 ]
@@ -342,10 +345,15 @@ class TestGetTraces(BaseApiTest):
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
+        end_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 0)
         for s in _SPANS:
             start_timestamp_per_trace_id[s["trace_id"]] = min(
                 start_timestamp_per_trace_id[s["trace_id"]],
                 s["start_timestamp_precise"],
+            )
+            end_timestamp_per_trace_id[s["trace_id"]] = max(
+                end_timestamp_per_trace_id[s["trace_id"]],
+                int(s["end_timestamp_precise"] * 1e6) / 1e6,
             )
         trace_id_per_start_timestamp: dict[float, str] = {
             timestamp: trace_id
@@ -368,7 +376,11 @@ class TestGetTraces(BaseApiTest):
                 ),
                 TraceAttribute(
                     key=TraceAttribute.Key.KEY_START_TIMESTAMP,
-                    type=AttributeKey.TYPE_FLOAT,
+                    type=AttributeKey.TYPE_DOUBLE,
+                ),
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_END_TIMESTAMP,
+                    type=AttributeKey.TYPE_DOUBLE,
                 ),
                 TraceAttribute(
                     key=TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT,
@@ -381,6 +393,38 @@ class TestGetTraces(BaseApiTest):
                 TraceAttribute(
                     key=TraceAttribute.Key.KEY_ROOT_SPAN_NAME,
                     type=AttributeKey.TYPE_STRING,
+                ),
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS,
+                    type=AttributeKey.TYPE_INT,
+                ),
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_ROOT_SPAN_PROJECT_ID,
+                    type=AttributeKey.TYPE_INT,
+                ),
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_EARLIEST_SPAN_NAME,
+                    type=AttributeKey.TYPE_STRING,
+                ),
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_EARLIEST_SPAN_PROJECT_ID,
+                    type=AttributeKey.TYPE_INT,
+                ),
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS,
+                    type=AttributeKey.TYPE_INT,
+                ),
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN,
+                    type=AttributeKey.TYPE_STRING,
+                ),
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_PROJECT_ID,
+                    type=AttributeKey.TYPE_INT,
+                ),
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_DURATION_MS,
+                    type=AttributeKey.TYPE_INT,
                 ),
             ],
             filters=[
@@ -421,6 +465,15 @@ class TestGetTraces(BaseApiTest):
                             ),
                         ),
                         TraceAttribute(
+                            key=TraceAttribute.Key.KEY_END_TIMESTAMP,
+                            type=AttributeKey.TYPE_DOUBLE,
+                            value=AttributeValue(
+                                val_double=end_timestamp_per_trace_id[
+                                    trace_id_per_start_timestamp[start_timestamp]
+                                ],
+                            ),
+                        ),
+                        TraceAttribute(
                             key=TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT,
                             type=AttributeKey.TYPE_INT,
                             value=AttributeValue(
@@ -439,6 +492,62 @@ class TestGetTraces(BaseApiTest):
                             type=AttributeKey.TYPE_STRING,
                             value=AttributeValue(
                                 val_str="root",
+                            ),
+                        ),
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS,
+                            type=AttributeKey.TYPE_INT,
+                            value=AttributeValue(
+                                val_int=1000,
+                            ),
+                        ),
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_ROOT_SPAN_PROJECT_ID,
+                            type=AttributeKey.TYPE_INT,
+                            value=AttributeValue(
+                                val_int=1,
+                            ),
+                        ),
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_EARLIEST_SPAN_NAME,
+                            type=AttributeKey.TYPE_STRING,
+                            value=AttributeValue(
+                                val_str="root",
+                            ),
+                        ),
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_EARLIEST_SPAN_PROJECT_ID,
+                            type=AttributeKey.TYPE_INT,
+                            value=AttributeValue(
+                                val_int=1,
+                            ),
+                        ),
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS,
+                            type=AttributeKey.TYPE_INT,
+                            value=AttributeValue(
+                                val_int=1000,
+                            ),
+                        ),
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN,
+                            type=AttributeKey.TYPE_STRING,
+                            value=AttributeValue(
+                                val_str="root",
+                            ),
+                        ),
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_PROJECT_ID,
+                            type=AttributeKey.TYPE_INT,
+                            value=AttributeValue(
+                                val_int=1,
+                            ),
+                        ),
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_DURATION_MS,
+                            type=AttributeKey.TYPE_INT,
+                            value=AttributeValue(
+                                val_int=1000,
                             ),
                         ),
                     ],
