@@ -264,9 +264,13 @@ def _convert_results(
     for row in data:
         for column_name, value in row.items():
             if column_name in converters.keys():
-                res[column_name].results.append(converters[column_name](value))
-                res[column_name].attribute_name = column_name
                 extrapolation_context = ExtrapolationContext.from_row(column_name, row)
+                res[column_name].results.append(
+                    converters[column_name](value)
+                    if extrapolation_context.is_data_present
+                    else AttributeValue(is_null=True)
+                )
+                res[column_name].attribute_name = column_name
                 if extrapolation_context.is_extrapolated:
                     res[column_name].reliabilities.append(
                         extrapolation_context.reliability

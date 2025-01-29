@@ -390,49 +390,101 @@ def get_extrapolated_function(
     function_map_sample_weighted: dict[
         Function.ValueType, CurriedFunctionCall | FunctionCall
     ] = {
-        Function.FUNCTION_SUM: f.sum(
-            f.multiply(field, f.multiply(sign_column, sampling_weight_column)),
-            **alias_dict,
-        ),
-        Function.FUNCTION_AVERAGE: f.divide(
-            f.sum(f.multiply(field, f.multiply(sign_column, sampling_weight_column))),
+        Function.FUNCTION_SUM: f.round(
             f.sumIf(
-                f.multiply(sign_column, sampling_weight_column),
+                f.multiply(field, f.multiply(sign_column, sampling_weight_column)),
                 get_field_existence_expression(aggregation),
+                **alias_dict,
             ),
-            **alias_dict,
+            _FLOATING_POINT_PRECISION,
         ),
-        Function.FUNCTION_AVG: f.divide(
-            f.sum(f.multiply(field, f.multiply(sign_column, sampling_weight_column))),
-            f.sumIf(
-                f.multiply(sign_column, sampling_weight_column),
-                get_field_existence_expression(aggregation),
+        Function.FUNCTION_AVERAGE: f.round(
+            f.divide(
+                f.sumIf(
+                    f.multiply(field, f.multiply(sign_column, sampling_weight_column)),
+                    get_field_existence_expression(aggregation),
+                ),
+                f.sumIf(
+                    f.multiply(sign_column, sampling_weight_column),
+                    get_field_existence_expression(aggregation),
+                ),
+                **alias_dict,
             ),
-            **alias_dict,
+            _FLOATING_POINT_PRECISION,
+        ),
+        Function.FUNCTION_AVG: f.round(
+            f.divide(
+                f.sumIf(
+                    f.multiply(field, f.multiply(sign_column, sampling_weight_column)),
+                    get_field_existence_expression(aggregation),
+                ),
+                f.sumIf(
+                    f.multiply(sign_column, sampling_weight_column),
+                    get_field_existence_expression(aggregation),
+                ),
+                **alias_dict,
+            ),
+            _FLOATING_POINT_PRECISION,
         ),
         Function.FUNCTION_COUNT: f.sumIf(
             f.multiply(sign_column, sampling_weight_column),
             get_field_existence_expression(aggregation),
             **alias_dict,
         ),
-        Function.FUNCTION_P50: cf.quantileTDigestWeighted(0.5)(
-            field, sampling_weight_column, **alias_dict
+        Function.FUNCTION_P50: f.round(
+            cf.quantileTDigestWeightedIf(0.5)(
+                field,
+                sampling_weight_column,
+                get_field_existence_expression(aggregation),
+                **alias_dict,
+            ),
+            _FLOATING_POINT_PRECISION,
         ),
-        Function.FUNCTION_P75: cf.quantileTDigestWeighted(0.75)(
-            field, sampling_weight_column, **alias_dict
+        Function.FUNCTION_P75: f.round(
+            cf.quantileTDigestWeightedIf(0.75)(
+                field,
+                sampling_weight_column,
+                get_field_existence_expression(aggregation),
+                **alias_dict,
+            ),
+            _FLOATING_POINT_PRECISION,
         ),
-        Function.FUNCTION_P90: cf.quantileTDigestWeighted(0.9)(
-            field, sampling_weight_column, **alias_dict
+        Function.FUNCTION_P90: f.round(
+            cf.quantileTDigestWeightedIf(0.9)(
+                field,
+                sampling_weight_column,
+                get_field_existence_expression(aggregation),
+                **alias_dict,
+            ),
+            _FLOATING_POINT_PRECISION,
         ),
-        Function.FUNCTION_P95: cf.quantileTDigestWeighted(0.95)(
-            field, sampling_weight_column, **alias_dict
+        Function.FUNCTION_P95: f.round(
+            cf.quantileTDigestWeightedIf(0.95)(
+                field,
+                sampling_weight_column,
+                get_field_existence_expression(aggregation),
+                **alias_dict,
+            ),
+            _FLOATING_POINT_PRECISION,
         ),
-        Function.FUNCTION_P99: cf.quantileTDigestWeighted(0.99)(
-            field, sampling_weight_column, **alias_dict
+        Function.FUNCTION_P99: f.round(
+            cf.quantileTDigestWeightedIf(0.99)(
+                field,
+                sampling_weight_column,
+                get_field_existence_expression(aggregation),
+                **alias_dict,
+            ),
+            _FLOATING_POINT_PRECISION,
         ),
-        Function.FUNCTION_MAX: f.max(field, **alias_dict),
-        Function.FUNCTION_MIN: f.min(field, **alias_dict),
-        Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
+        Function.FUNCTION_MAX: f.maxIf(
+            field, get_field_existence_expression(aggregation), **alias_dict
+        ),
+        Function.FUNCTION_MIN: f.minIf(
+            field, get_field_existence_expression(aggregation), **alias_dict
+        ),
+        Function.FUNCTION_UNIQ: f.uniqIf(
+            field, get_field_existence_expression(aggregation), **alias_dict
+        ),
     }
 
     return function_map_sample_weighted.get(aggregation.aggregate)
@@ -637,13 +689,19 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
     alias_dict = {"alias": alias} if alias else {}
     function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
         Function.FUNCTION_SUM: f.round(
-            f.sum(f.multiply(field, sign_column)),
+            f.sumIf(
+                f.multiply(field, sign_column),
+                get_field_existence_expression(aggregation),
+            ),
             _FLOATING_POINT_PRECISION,
             **alias_dict,
         ),
         Function.FUNCTION_AVERAGE: f.round(
             f.divide(
-                f.sum(f.multiply(field, sign_column)),
+                f.sumIf(
+                    f.multiply(field, sign_column),
+                    get_field_existence_expression(aggregation),
+                ),
                 f.sumIf(sign_column, get_field_existence_expression(aggregation)),
             ),
             _FLOATING_POINT_PRECISION,
@@ -655,26 +713,71 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
             **alias_dict,
         ),
         Function.FUNCTION_P50: f.round(
-            cf.quantile(0.5)(field), _FLOATING_POINT_PRECISION, **alias_dict
+            cf.quantileIf(0.5)(
+                field,
+                get_field_existence_expression(aggregation),
+            ),
+            _FLOATING_POINT_PRECISION,
+            **alias_dict,
         ),
         Function.FUNCTION_P75: f.round(
-            cf.quantile(0.75)(field), _FLOATING_POINT_PRECISION, **alias_dict
+            cf.quantileIf(0.75)(
+                field,
+                get_field_existence_expression(aggregation),
+            ),
+            _FLOATING_POINT_PRECISION,
+            **alias_dict,
         ),
         Function.FUNCTION_P90: f.round(
-            cf.quantile(0.9)(field), _FLOATING_POINT_PRECISION, **alias_dict
+            cf.quantileIf(0.9)(
+                field,
+                get_field_existence_expression(aggregation),
+            ),
+            _FLOATING_POINT_PRECISION,
+            **alias_dict,
         ),
         Function.FUNCTION_P95: f.round(
-            cf.quantile(0.95)(field), _FLOATING_POINT_PRECISION, **alias_dict
+            cf.quantileIf(0.95)(
+                field,
+                get_field_existence_expression(aggregation),
+            ),
+            _FLOATING_POINT_PRECISION,
+            **alias_dict,
         ),
         Function.FUNCTION_P99: f.round(
-            cf.quantile(0.99)(field), _FLOATING_POINT_PRECISION, **alias_dict
+            cf.quantileIf(0.99)(
+                field,
+                get_field_existence_expression(aggregation),
+            ),
+            _FLOATING_POINT_PRECISION,
+            **alias_dict,
         ),
         Function.FUNCTION_AVG: f.round(
-            f.avg(field), _FLOATING_POINT_PRECISION, **alias_dict
+            f.divide(
+                f.sumIf(
+                    f.multiply(field, sign_column),
+                    get_field_existence_expression(aggregation),
+                ),
+                f.sumIf(sign_column, get_field_existence_expression(aggregation)),
+            ),
+            _FLOATING_POINT_PRECISION,
+            **alias_dict,
         ),
-        Function.FUNCTION_MAX: f.max(field, **alias_dict),
-        Function.FUNCTION_MIN: f.min(field, **alias_dict),
-        Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
+        Function.FUNCTION_MAX: f.maxIf(
+            field,
+            get_field_existence_expression(aggregation),
+            **alias_dict,
+        ),
+        Function.FUNCTION_MIN: f.minIf(
+            field,
+            get_field_existence_expression(aggregation),
+            **alias_dict,
+        ),
+        Function.FUNCTION_UNIQ: f.uniqIf(
+            field,
+            get_field_existence_expression(aggregation),
+            **alias_dict,
+        ),
     }
 
     if (

@@ -73,21 +73,6 @@ query_processors:
       time_parse_columns:
         - start_timestamp
         - end_timestamp
-  - processor: OptionalAttributeAggregationTransformer
-    args:
-      attribute_column_names:
-        - attr_num
-      aggregation_names:
-        - sum
-        - count
-        - avg
-        - avgWeighted
-        - max
-        - min
-        - uniq
-      curried_aggregation_names:
-        - quantile
-        - quantileTDigestWeighted
   - processor: HashBucketFunctionTransformer
     args:
       hash_bucket_names:
