@@ -100,9 +100,9 @@ def test_metrics() -> None:
     ]
 
     metric_names_to_metric = {m.name: m for m in metrics_backend.calls}  # type: ignore
-    assert metric_names_to_metric["rpc.endpoint_timing"].value == pytest.approx(
+    assert metric_names_to_metric["rpc.endpoint_timing"].value == pytest.approx(  # type: ignore
         MyRPC.duration_millis, rel=10
-    )  # type: ignore
+    )
     assert metric_names_to_metric["rpc.request_success"].value == 1  # type: ignore
 
 
@@ -218,14 +218,14 @@ def gen_message(
 def test_trim_time_range() -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
     write_raw_unprocessed_events(
-        spans_storage,
+        spans_storage,  # type: ignore
         [
             gen_message(
                 dt=_BASE_TIME - timedelta(days=i),
             )
             for i in range(90)
         ],
-    )  # type: ignore
+    )
     ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
     ninety_days_before = Timestamp(
         seconds=int((_BASE_TIME - timedelta(days=90)).timestamp())
