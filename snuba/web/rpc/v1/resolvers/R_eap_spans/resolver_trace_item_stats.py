@@ -4,19 +4,14 @@ from typing import Any, Dict, Iterable, Tuple
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
-    StatsDataPoint,
-    TraceItemResult,
-    TraceItemStats,
+    AttributeDistribution,
+    AttributesDistribution,
+    AttributesDistributionRequest,
     TraceItemStatsRequest,
     TraceItemStatsResponse,
+    TraceItemStatsResult,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeAggregation,
-    AttributeKey,
-    ExtrapolationMode,
-    Function,
-)
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -25,7 +20,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
-from snuba.query.dsl import arrayJoin, column, tupleElement
+from snuba.query.dsl import arrayJoin, column, count, tupleElement
 from snuba.query.expressions import FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -43,18 +38,16 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.v1.endpoint_get_traces import _DEFAULT_ROW_LIMIT
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
-    aggregation_to_expression,
-)
 
 MAX_LIMIT_KEYS_BY = 50
 DEFAULT_LIMIT_KEYS_BY = 5
 
+COUNT_LABEL = "count()"
+
 
 def _transform_results(
-    aggregation: AttributeAggregation,
     results: Iterable[Dict[str, Any]],
-) -> Iterable[StatsDataPoint]:
+) -> Iterable[AttributeDistribution]:
 
     # Maintain the order of keys, so it is in descending order
     # of most prevelant key-value pair. Say the following data
@@ -72,25 +65,23 @@ def _transform_results(
     #   {"attribute_key": "server_name", "data": [{"label":"DW9H09PDFM.local", "value": 90}]},
     #   {"attribute_key": "messaging.system", "data": [{"label":"redis", "value": 20}]},
     # ]
-    res: OrderedDict[Tuple[str, str], Iterable[StatsDataPoint]] = OrderedDict()
-
-    label = aggregation.label
+    res: OrderedDict[Tuple[str, str], Iterable[AttributeDistribution]] = OrderedDict()
 
     for row in results:
         attr_key = row["attr_key"]
         attr_value = row["attr_value"]
-        default = StatsDataPoint(
-            key=AttributeKey(name=attr_key, type=AttributeKey.Type.TYPE_STRING),
-            aggregation=label,
+        default = AttributeDistribution(
+            attribute_name=attr_key,
+            aggregation=COUNT_LABEL,
         )
-        res.setdefault((attr_key, label), default).data.append(
-            StatsDataPoint.AttributeResults(label=attr_value, value=row[label])
+        res.setdefault((attr_key, COUNT_LABEL), default).buckets.append(
+            AttributeDistribution.Bucket(label=attr_value, value=row[COUNT_LABEL])
         )
 
     return list(res.values())
 
 
-def _build_stats_snuba_request(
+def _build_attr_distribution_snuba_request(
     request: TraceItemStatsRequest, query: Query
 ) -> SnubaRequest:
     query_settings = (
@@ -116,8 +107,8 @@ def _build_stats_snuba_request(
     )
 
 
-def _build_stats_query(
-    in_msg: TraceItemStatsRequest, aggregation: AttributeAggregation
+def _build_attr_distribution_query(
+    in_msg: TraceItemStatsRequest, distributions_params: AttributesDistributionRequest
 ):
     entity = Entity(
         key=EntityKey("eap_spans"),
@@ -141,6 +132,13 @@ def _build_stats_query(
         Literal(None, 2),
     )
 
+    # Hardcoding the aggregation for now to keep the endpoint simple - although
+    # this can easily be ported over to TraceItemStatsRequest. If we expose aggregations,
+    # we'll probably want to expose OrderBy too. Order by currently has a loaded
+    # meaning in this endpoint. It is both how we order the key-value pair results
+    # in our ClickHouse query and subsequently, the attribute keys in the final response.
+    # Since we only have a single use case right now, the complication from a
+    # user-defined order by is not worth tackling in the first pass.
     selected_columns = [
         SelectedExpression(
             name="attr_key",
@@ -151,8 +149,8 @@ def _build_stats_query(
             expression=attrs_string_values,
         ),
         SelectedExpression(
-            name=aggregation.label,
-            expression=aggregation_to_expression(aggregation),
+            name=COUNT_LABEL,
+            expression=count(alias="_count"),
         ),
     ]
 
@@ -168,7 +166,7 @@ def _build_stats_query(
         order_by=[
             OrderBy(
                 direction=OrderByDirection.DESC,
-                expression=aggregation_to_expression(aggregation),
+                expression=count(),
             ),
         ],
         groupby=[
@@ -176,10 +174,14 @@ def _build_stats_query(
             attrs_string_values,
         ],
         limitby=LimitBy(
-            limit=in_msg.limit_keys_by,
+            limit=distributions_params.max_buckets,
             columns=[attrs_string_keys],
         ),
-        limit=in_msg.limit if in_msg.limit > 0 else _DEFAULT_ROW_LIMIT,
+        limit=(
+            distributions_params.limit
+            if distributions_params.limit > 0
+            else _DEFAULT_ROW_LIMIT
+        ),
     )
 
     return query
@@ -191,36 +193,28 @@ class ResolverTraceItemStatsEAPSpans(ResolverTraceItemStats):
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TraceItemStatsRequest) -> TraceItemStatsResponse:
-        # Hardcoding the aggregation for now to keep the endpoint simple - although
-        # this can easily be ported over to TraceItemStatsRequest. If we expose aggregations,
-        # we'll probably want to expose OrderBy too. Order by currently has a loaded
-        # meaning in this endpoint. It is both how we order the key-value pair results
-        # in our ClickHouse query and subsequently, the attribute keys in the final response.
-        # Since we only have a single use case right now, the complication from a
-        # user-defined order by is not worth tackling in the first pass.
-        aggregation = AttributeAggregation(
-            aggregate=Function.FUNCTION_COUNT,
-            key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="sentry.duration_ms"),
-            label="count(span.duration)",
-            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
-        )
+        results = []
+        for requested_type in in_msg.stats_types:
+            result = TraceItemStatsResult()
+            if requested_type.HasField("attributes_distribution"):
+                query = _build_attr_distribution_query(
+                    in_msg, requested_type.attributes_distribution
+                )
+                treeify_or_and_conditions(query)
+                snuba_request = _build_attr_distribution_snuba_request(in_msg, query)
 
-        stats = TraceItemResult()
-        if TraceItemStatsRequest.Type.TYPE_STATS in in_msg.types:
-            query = _build_stats_query(in_msg, aggregation)
-            treeify_or_and_conditions(query)
-            snuba_request = _build_stats_snuba_request(in_msg, query)
+                query_res = run_query(
+                    dataset=PluggableDataset(name="eap", all_entities=[]),
+                    request=snuba_request,
+                    timer=self._timer,
+                )
 
-            results = run_query(
-                dataset=PluggableDataset(name="eap", all_entities=[]),
-                request=snuba_request,
-                timer=self._timer,
-            )
+                data_points = _transform_results(query_res.result.get("data", []))
+                result.attributes_distribution.CopyFrom(
+                    AttributesDistribution(attributes=data_points)
+                )
 
-            data_points = _transform_results(
-                aggregation, results.result.get("data", [])
-            )
-            stats.stats.CopyFrom(TraceItemStats(data_points=data_points))
+            results.append(result)
 
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
@@ -228,10 +222,6 @@ class ResolverTraceItemStatsEAPSpans(ResolverTraceItemStats):
             [],
             [self._timer],
         )
-
-        results = []
-        if TraceItemStatsRequest.Type.TYPE_STATS in in_msg.types:
-            results.append(stats)
 
         return TraceItemStatsResponse(
             results=results,

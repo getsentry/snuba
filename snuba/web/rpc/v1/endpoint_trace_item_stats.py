@@ -43,12 +43,17 @@ class EndpointTraceItemStats(
             uuid.uuid4()
         )
 
-        if in_msg.limit_keys_by > MAX_LIMIT_KEYS_BY:
-            raise BadSnubaRPCRequestException(
-                f"Max allowd limit keys by is {MAX_LIMIT_KEYS_BY}."
-            )
+        for requested_type in in_msg.stats_types:
+            if requested_type.HasField("attributes_distribution"):
+                if (
+                    requested_type.attributes_distribution.max_buckets
+                    > MAX_LIMIT_KEYS_BY
+                ):
+                    raise BadSnubaRPCRequestException(
+                        f"Max allowed buckets is {MAX_LIMIT_KEYS_BY}."
+                    )
 
-        if not in_msg.types:
+        if not in_msg.stats_types:
             raise BadSnubaRPCRequestException("Please specify at least one stats type.")
 
         if in_msg.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
