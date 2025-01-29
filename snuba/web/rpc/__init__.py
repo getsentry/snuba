@@ -131,7 +131,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             if (end - start).days > MAXIMUM_TIME_RANGE_IN_DAYS:
                 timestamp = Timestamp()
                 timestamp.FromDatetime(end - timedelta(days=MAXIMUM_TIME_RANGE_IN_DAYS))
-                in_msg.meta.start_timestamp.CopyFrom(timestamp)  # type: ignore
+                in_msg.meta.start_timestamp.CopyFrom(timestamp)
         try:
             out = self._execute(in_msg)
         except Exception as e:
