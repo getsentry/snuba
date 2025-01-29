@@ -209,9 +209,9 @@ class ResolverTraceItemStatsEAPSpans(ResolverTraceItemStats):
                     timer=self._timer,
                 )
 
-                data_points = _transform_results(query_res.result.get("data", []))
+                attributes = _transform_results(query_res.result.get("data", []))
                 result.attributes_distribution.CopyFrom(
-                    AttributesDistribution(attributes=data_points)
+                    AttributesDistribution(attributes=attributes)
                 )
 
             results.append(result)
