@@ -121,10 +121,13 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             span.description = self.config_key()
         self.__before_execute(in_msg)
         error = None
-        meta = getattr(in_msg, "meta", None)
-        if meta:
-            start = meta.start_timestamp.ToDatetime()
-            end = meta.end_timestamp.ToDatetime()
+        if (
+            hasattr(in_msg, "meta")
+            and hasattr(in_msg.meta, "start_timestamp")
+            and hasattr(in_msg.meta, "end_timestamp")
+        ):
+            start = in_msg.meta.start_timestamp.ToDatetime()
+            end = in_msg.meta.end_timestamp.ToDatetime()
             if (end - start).days > MAXIMUM_TIME_RANGE_IN_DAYS:
                 timestamp = Timestamp()
                 timestamp.FromDatetime(end - timedelta(days=MAXIMUM_TIME_RANGE_IN_DAYS))
