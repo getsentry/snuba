@@ -2,6 +2,7 @@ use anyhow::Context;
 use chrono::DateTime;
 use seq_macro::seq;
 use serde::{Deserialize, Serialize};
+use std::cmp::max;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -42,7 +43,10 @@ pub fn process_message(
     let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
     let mut span: EAPSpan = msg.into();
 
-    span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
+    span.retention_days = Some(max(
+        enforce_retention(span.retention_days, &config.env_config),
+        30,
+    ));
 
     InsertBatch::from_rows([span], origin_timestamp)
 }
