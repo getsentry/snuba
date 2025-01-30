@@ -29,6 +29,7 @@ Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
 
 MAXIMUM_TIME_RANGE_IN_DAYS = 30
+_TIME_PERIOD_DAYS_BUCKETS = [1, 7, 14, 30, 90]
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -65,9 +66,6 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def resolve(self, in_msg: Tin) -> Tout:
         raise NotImplementedError
-
-
-_TIME_PERIOD_BUCKETS = [1, 7, 14, 30, 90]
 
 
 class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -145,7 +143,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def __before_execute(self, in_msg: Tin) -> None:
         self._timer.mark("rpc_start")
-        self._timer.set_tags(self.__extract_request_tags(in_msg))
+        self._timer.update_tags(self.__extract_request_tags(in_msg))
         self._before_execute(in_msg)
 
     def __extract_request_tags(self, in_msg: Tin) -> dict[str, str]:
@@ -161,7 +159,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             delta = (end - start).days
             tags[
                 "time_period"
-            ] = f"<={_TIME_PERIOD_BUCKETS[bisect_left(_TIME_PERIOD_BUCKETS, delta)]}"
+            ] = f"<={_TIME_PERIOD_DAYS_BUCKETS[bisect_left(_TIME_PERIOD_DAYS_BUCKETS, delta)]}"
 
         if hasattr(meta, "referrer"):
             tags["referrer"] = meta.referrer
