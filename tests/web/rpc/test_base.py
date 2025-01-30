@@ -1,11 +1,27 @@
 import time
-from typing import Type
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any, Mapping, Type
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
+    Column,
+    TraceItemTableRequest,
+)
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
-from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
+from snuba.web.rpc import (
+    MAXIMUM_TIME_RANGE_IN_DAYS,
+    RPCEndpoint,
+    list_all_endpoint_names,
+)
+from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.backends.metrics import TestingMetricsBackend
+from tests.helpers import write_raw_unprocessed_events
 
 
 class RPCException(Exception):
@@ -83,7 +99,9 @@ def test_metrics() -> None:
     ]
 
     metric_names_to_metric = {m.name: m for m in metrics_backend.calls}  # type: ignore
-    assert metric_names_to_metric["rpc.endpoint_timing"].value == pytest.approx(MyRPC.duration_millis, rel=10)  # type: ignore
+    assert metric_names_to_metric["rpc.endpoint_timing"].value == pytest.approx(  # type: ignore
+        MyRPC.duration_millis, rel=10
+    )
     assert metric_names_to_metric["rpc.request_success"].value == 1  # type: ignore
 
 
@@ -107,3 +125,73 @@ def test_list_all_endpoint_names() -> None:
     assert isinstance(endpoint_names, list)
     assert ("MyRPC", "v1") in endpoint_names
     assert ("ErrorRPC", "v1") in endpoint_names
+
+
+_BASE_TIME = datetime.now(tz=UTC).replace(
+    minute=0,
+    second=0,
+    microsecond=0,
+)
+
+
+def gen_message(
+    dt: datetime,
+) -> Mapping[str, Any]:
+    return {
+        "description": "/api/0/relays/projectconfigs/",
+        "duration_ms": 152,
+        "event_id": "d826225de75d42d6b2f01b957d51f18f",
+        "exclusive_time_ms": 0.228,
+        "is_segment": True,
+        "organization_id": 1,
+        "origin": "auto.http.django",
+        "project_id": 1,
+        "received": 1721319572.877828,
+        "retention_days": 90,
+        "segment_id": "8873a98879faf06d",
+        "span_id": "123456781234567D",
+        "trace_id": uuid.uuid4().hex,
+        "start_timestamp_ms": int(dt.timestamp() * 1000),
+        "start_timestamp_precise": dt.timestamp(),
+        "end_timestamp_precise": dt.timestamp() + 1,
+    }
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_trim_time_range() -> None:
+    spans_storage = get_storage(StorageKey("eap_spans"))
+    write_raw_unprocessed_events(
+        spans_storage,  # type: ignore
+        [
+            gen_message(
+                dt=_BASE_TIME - timedelta(days=i),
+            )
+            for i in range(90)
+        ],
+    )
+    ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+    ninety_days_before = Timestamp(
+        seconds=int((_BASE_TIME - timedelta(days=90)).timestamp())
+    )
+    message = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            organization_id=1,
+            cogs_category="something",
+            referrer="something",
+            start_timestamp=ninety_days_before,
+            end_timestamp=ts,
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[
+            Column(
+                key=AttributeKey(
+                    type=AttributeKey.TYPE_DOUBLE,
+                    name="sentry.duration_ms",
+                ),
+            )
+        ],
+    )
+    response = EndpointTraceItemTable().execute(message)
+    assert len(response.column_values[0].results) == MAXIMUM_TIME_RANGE_IN_DAYS
