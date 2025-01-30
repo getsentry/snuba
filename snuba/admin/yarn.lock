@@ -1219,12 +1219,12 @@
   resolved "https://registry.yarnpkg.com/@mantine/hooks/-/hooks-6.0.21.tgz#bc009d8380ad18455b90f3ddaf484de16a13da95"
   integrity sha512-sYwt5wai25W6VnqHbS5eamey30/HD5dNXaZuaVEAJ2i2bBv8C0cCiczygMDpAFiSYdXoSMRr/SZ2CrrPTzeNew==
 
-"@mantine/prism@^6.0.15":
-  version "6.0.15"
-  resolved "https://registry.npmjs.org/@mantine/prism/-/prism-6.0.15.tgz"
-  integrity sha512-NvctDHwAzwAEeszc6VleUYxhJR4MrKjplx9cZ0w3eCmyWHgJPvrLxcnZBSi8fHRRAHKNjtLdbPhIySOM9n2i8w==
+"@mantine/prism@^6.0.21":
+  version "6.0.22"
+  resolved "https://registry.yarnpkg.com/@mantine/prism/-/prism-6.0.22.tgz#06499a3f00c6b5a0440de3beb1fb59310a244f88"
+  integrity sha512-EW3SCmRzg2MlfJPAxkHXFLYMoPdmRp2EhCxqTcgCEeKwSk4TLlLF39aAjFtk2B+rtiqWlA/7Kh7YrhOZ78TdpA==
   dependencies:
-    "@mantine/utils" "6.0.15"
+    "@mantine/utils" "6.0.22"
     prism-react-renderer "^1.2.1"
 
 "@mantine/styles@6.0.21":
@@ -1235,22 +1235,22 @@
     clsx "1.1.1"
     csstype "3.0.9"
 
-"@mantine/tiptap@^6.0.15":
-  version "6.0.15"
-  resolved "https://registry.npmjs.org/@mantine/tiptap/-/tiptap-6.0.15.tgz"
-  integrity sha512-vOyxg3yQJ6XeEgiMGiezKlEwNiONV47snbXhs+pi1wJLvLBiZTPvtE2nntgbT4M7H91HjAS/Q2aHgbEOrN1eYA==
+"@mantine/tiptap@^6.0.21":
+  version "6.0.22"
+  resolved "https://registry.yarnpkg.com/@mantine/tiptap/-/tiptap-6.0.22.tgz#f72991c985d65b37c8ba975ca217be17fbd66da4"
+  integrity sha512-Mh+0sP15QCr01e2XenEmqtDoLleN26ksgsatTt+y8zy+ouGcDWfUH1IYe0yIewkA3H0U6grIiWfZcYHT59vLKg==
   dependencies:
-    "@mantine/utils" "6.0.15"
-
-"@mantine/utils@6.0.15":
-  version "6.0.15"
-  resolved "https://registry.npmjs.org/@mantine/utils/-/utils-6.0.15.tgz"
-  integrity sha512-iVaobFQTCQWG6SRi3im0/nONKCtGRPobG7bXn9GiIT96E4t7uTPglQpo/ZktDrF1XCL8CO/HoQmks4A2iXuMFw==
+    "@mantine/utils" "6.0.22"
 
 "@mantine/utils@6.0.21":
   version "6.0.21"
   resolved "https://registry.yarnpkg.com/@mantine/utils/-/utils-6.0.21.tgz#6185506e91cba3e308aaa8ea9ababc8e767995d6"
   integrity sha512-33RVDRop5jiWFao3HKd3Yp7A9mEq4HAJxJPTuYm1NkdqX6aTKOQK7wT8v8itVodBp+sb4cJK6ZVdD1UurK/txQ==
+
+"@mantine/utils@6.0.22":
+  version "6.0.22"
+  resolved "https://registry.yarnpkg.com/@mantine/utils/-/utils-6.0.22.tgz#7eace697084e2bc5a831eb0fd7cbbc04cc1b0354"
+  integrity sha512-RSKlNZvxhMCkOFZ6slbYvZYbWjHUM+PxDQnupIOxIdsTZQQjx/BFfrfJ7kQFOP+g7MtpOds8weAetEs5obwMOQ==
 
 "@popperjs/core@^2.11.6", "@popperjs/core@^2.9.0":
   version "2.11.7"
