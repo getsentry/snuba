@@ -174,3 +174,82 @@ class TestTraceItemTable(BaseApiTest):
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
+
+    def test_with_offset(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = Timestamp(
+            seconds=int((BASE_TIME - timedelta(hours=10000)).timestamp())
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=hour_ago,
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_UPTIME_CHECK,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING,
+                        name="region",
+                    ),
+                ),
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING,
+                        name="trace_id",
+                    )
+                ),
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_INT,
+                        name="scheduled_check_time",
+                    )
+                ),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_INT,
+                            name="scheduled_check_time",
+                        )
+                    ),
+                ),
+            ],
+            limit=5,
+            page_token=PageToken(offset=5),  # Start from the 6th item
+        )
+        response = EndpointTraceItemTable().execute(message)
+        checks = list(
+            sorted(_UPTIME_CHECKS, key=itemgetter("scheduled_check_time_ms"))
+        )[
+            5:10
+        ]  # Get items 6-10
+
+        expected_response = TraceItemTableResponse(
+            column_values=[
+                TraceItemColumnValues(
+                    attribute_name="region",
+                    results=[AttributeValue(val_str=c["region"]) for c in checks],
+                ),
+                TraceItemColumnValues(
+                    attribute_name="trace_id",
+                    results=[AttributeValue(val_str=c["trace_id"]) for c in checks],
+                ),
+                TraceItemColumnValues(
+                    attribute_name="scheduled_check_time",
+                    results=[
+                        AttributeValue(val_int=int(c["scheduled_check_time_ms"] / 1e3))
+                        for c in checks
+                    ],
+                ),
+            ],
+            page_token=PageToken(offset=10),
+            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+        )
+        assert MessageToDict(response) == MessageToDict(expected_response)
