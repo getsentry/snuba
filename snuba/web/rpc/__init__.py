@@ -30,6 +30,7 @@ Tout = TypeVar("Tout", bound=ProtobufMessage)
 
 MAXIMUM_TIME_RANGE_IN_DAYS = 30
 _TIME_PERIOD_DAYS_BUCKETS = [1, 7, 14, 30, 90]
+_BUCKETS_COUNT = len(_TIME_PERIOD_DAYS_BUCKETS)
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -157,9 +158,12 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             start = meta.start_timestamp.ToDatetime()
             end = meta.end_timestamp.ToDatetime()
             delta = (end - start).days
-            tags[
-                "time_period"
-            ] = f"<={_TIME_PERIOD_DAYS_BUCKETS[bisect_left(_TIME_PERIOD_DAYS_BUCKETS, delta)]}"
+            bucket = bisect_left(_TIME_PERIOD_DAYS_BUCKETS, delta)
+            tags["time_period"] = (
+                f"<={_TIME_PERIOD_DAYS_BUCKETS[bucket]}"
+                if bucket < _BUCKETS_COUNT
+                else f">{_TIME_PERIOD_DAYS_BUCKETS[_BUCKETS_COUNT - 1]}"
+            )
 
         if hasattr(meta, "referrer"):
             tags["referrer"] = meta.referrer
