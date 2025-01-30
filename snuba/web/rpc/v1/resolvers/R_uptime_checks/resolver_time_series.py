@@ -31,10 +31,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
-from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.aggregation import (
-    aggregation_to_expression,
-    get_count_column,
-)
+from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
 from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
@@ -168,13 +165,6 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         for aggregation in request.aggregations
     ]
 
-    additional_context_columns = []
-    for aggregation in request.aggregations:
-        count_column = get_count_column(aggregation)
-        additional_context_columns.append(
-            SelectedExpression(name=count_column.alias, expression=count_column)
-        )
-
     groupby_columns = [
         SelectedExpression(
             name=attr_key.name, expression=attribute_key_to_expression(attr_key)
@@ -214,7 +204,6 @@ def _build_query(request: TimeSeriesRequest) -> Query:
             ),
             *aggregation_columns,
             *groupby_columns,
-            *additional_context_columns,
         ],
         granularity=request.granularity_secs,
         condition=base_conditions_and(

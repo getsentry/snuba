@@ -38,7 +38,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
+from snuba.web.rpc.v1.resolvers.common.aggregation import (
     ExtrapolationContext,
     aggregation_to_expression,
     get_average_sample_rate_column,

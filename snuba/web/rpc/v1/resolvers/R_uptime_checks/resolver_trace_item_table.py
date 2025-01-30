@@ -1,7 +1,6 @@
 import uuid
-from collections import defaultdict
 from dataclasses import replace
-from typing import Any, Callable, Dict, Iterable, Sequence
+from typing import Sequence
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
@@ -12,7 +11,6 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -34,9 +32,8 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
-from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.aggregation import (
-    aggregation_to_expression,
-)
+from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
+from snuba.web.rpc.v1.resolvers.common.trace_item_table import _convert_results
 from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
     apply_virtual_columns,
     attribute_key_to_expression,
@@ -195,47 +192,6 @@ def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
             app_id=AppID("eap"),
             parent_api="uptime_check_samples",
         ),
-    )
-
-
-def _convert_results(
-    request: TraceItemTableRequest, data: Iterable[Dict[str, Any]]
-) -> list[TraceItemColumnValues]:
-    converters: Dict[str, Callable[[Any], AttributeValue]] = {}
-
-    for column in request.columns:
-        if column.HasField("key"):
-            if column.key.type == AttributeKey.TYPE_BOOLEAN:
-                converters[column.label] = lambda x: AttributeValue(val_bool=bool(x))
-            elif column.key.type == AttributeKey.TYPE_STRING:
-                converters[column.label] = lambda x: AttributeValue(val_str=str(x))
-            elif column.key.type == AttributeKey.TYPE_INT:
-                converters[column.label] = lambda x: AttributeValue(val_int=int(x))
-            elif column.key.type == AttributeKey.TYPE_FLOAT:
-                converters[column.label] = lambda x: AttributeValue(val_float=float(x))
-            elif column.key.type == AttributeKey.TYPE_DOUBLE:
-                converters[column.label] = lambda x: AttributeValue(val_double=float(x))
-        elif column.HasField("aggregation"):
-            converters[column.label] = lambda x: AttributeValue(val_double=float(x))
-        else:
-            raise BadSnubaRPCRequestException(
-                "column is neither an attribute or aggregation"
-            )
-
-    res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
-    for row in data:
-        for column_name, value in row.items():
-            if column_name in converters.keys():
-                res[column_name].results.append(converters[column_name](value))
-                res[column_name].attribute_name = column_name
-
-    column_ordering = {column.label: i for i, column in enumerate(request.columns)}
-
-    return list(
-        # we return the columns in the order they were requested
-        sorted(
-            res.values(), key=lambda c: column_ordering.__getitem__(c.attribute_name)
-        )
     )
 
 
