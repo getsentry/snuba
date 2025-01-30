@@ -298,11 +298,11 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             )
 
         if v.is_null:
-            v_expression = literal(None)
+            v_expression: Expression = literal(None)
         else:
             match value_type:
                 case "val_bool":
-                    v_expression: Expression = literal(v.val_bool)
+                    v_expression = literal(v.val_bool)
                 case "val_str":
                     v_expression = literal(v.val_str)
                 case "val_float":
