@@ -108,7 +108,7 @@ def _build_attr_distribution_snuba_request(
 
 def _build_attr_distribution_query(
     in_msg: TraceItemStatsRequest, distributions_params: AttributeDistributionsRequest
-):
+) -> Query:
     entity = Entity(
         key=EntityKey("eap_spans"),
         schema=get_entity(EntityKey("eap_spans")).get_data_model(),
