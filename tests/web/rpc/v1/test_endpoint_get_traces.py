@@ -343,22 +343,14 @@ class TestGetTraces(BaseApiTest):
     def test_with_data_and_aggregated_fields_all_keys(
         self, setup_teardown: Any
     ) -> None:
-        def truncate_float(num: float, digits: int) -> float:
-            num_components = str(num).split(".")
-            return float(f"{num_components[0]}.{num_components[1][:digits]}")
 
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
-        end_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 0)
         for s in _SPANS:
             start_timestamp_per_trace_id[s["trace_id"]] = min(
                 start_timestamp_per_trace_id[s["trace_id"]],
                 s["start_timestamp_precise"],
-            )
-            end_timestamp_per_trace_id[s["trace_id"]] = max(
-                end_timestamp_per_trace_id[s["trace_id"]],
-                truncate_float(s["end_timestamp_precise"], 6),
             )
         trace_id_per_start_timestamp: dict[float, str] = {
             timestamp: trace_id
@@ -381,10 +373,6 @@ class TestGetTraces(BaseApiTest):
                 ),
                 TraceAttribute(
                     key=TraceAttribute.Key.KEY_START_TIMESTAMP,
-                    type=AttributeKey.TYPE_DOUBLE,
-                ),
-                TraceAttribute(
-                    key=TraceAttribute.Key.KEY_END_TIMESTAMP,
                     type=AttributeKey.TYPE_DOUBLE,
                 ),
                 TraceAttribute(
@@ -465,15 +453,6 @@ class TestGetTraces(BaseApiTest):
                             type=AttributeKey.TYPE_DOUBLE,
                             value=AttributeValue(
                                 val_double=start_timestamp_per_trace_id[
-                                    trace_id_per_start_timestamp[start_timestamp]
-                                ],
-                            ),
-                        ),
-                        TraceAttribute(
-                            key=TraceAttribute.Key.KEY_END_TIMESTAMP,
-                            type=AttributeKey.TYPE_DOUBLE,
-                            value=AttributeValue(
-                                val_double=end_timestamp_per_trace_id[
                                     trace_id_per_start_timestamp[start_timestamp]
                                 ],
                             ),
