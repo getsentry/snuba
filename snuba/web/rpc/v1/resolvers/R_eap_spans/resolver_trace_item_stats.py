@@ -65,7 +65,7 @@ def _transform_results(
     #   {"attribute_key": "server_name", "data": [{"label":"DW9H09PDFM.local", "value": 90}]},
     #   {"attribute_key": "messaging.system", "data": [{"label":"redis", "value": 20}]},
     # ]
-    res: OrderedDict[Tuple[str, str], Iterable[AttributeDistribution]] = OrderedDict()
+    res: OrderedDict[Tuple[str, str], AttributeDistribution] = OrderedDict()
 
     for row in results:
         attr_key = row["attr_key"]
