@@ -12,17 +12,13 @@ jobs:
         "amd64": "ubuntu-22.04",
         "arm64": "ubuntu-22.04-arm"
       }')[matrix.arch] }}
-    env:
-      IMG_VERSIONED: ghcr.io/getsentry/vroom:${{ matrix.arch }}-${{ github.sha }}
     permissions:
       contents: read
       packages: write
     steps:
     - uses: actions/checkout@v4
 
-    - run: docker login --username '${{ github.actor }}' --password-stdin ghcr.io <<< "$GHCR_TOKEN"
-      env:
-        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - run: docker login --username '${{ github.actor }}' --password '${{ github.token }}' ghcr.io
 
     - run: docker buildx create --driver docker-container --use
 
@@ -62,7 +58,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Docker Login
-        run: docker login --username '${{ github.actor }}' --password '${{ secrets.GITHUB_TOKEN }}' ghcr.io
+        run: docker login --username '${{ github.actor }}' --password '${{ github.token }}' ghcr.io
 
       - name: Assemble Sha Image
         run: |
@@ -71,7 +67,7 @@ jobs:
             "ghcr.io/getsentry/snuba:amd64-${{ github.sha }}"
 
       - name: Assemble Latest Image
-        if: github.ref_name == 'main'
+        if: github.ref_name == 'master' && github.event_name != 'pull_request'
         run: |
           docker buildx imagetools create -t "ghcr.io/getsentry/snuba:latest" \
             "ghcr.io/getsentry/snuba:arm64-${{ github.sha }}" \
@@ -102,7 +98,7 @@ jobs:
             echo "sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           fi
       - name: Push built docker image
-        if: ${{ (github.ref_name == 'master') }}
+        if: github.ref_name == 'master' && github.event_name != 'pull_request'
         shell: bash
         env:
           SHORT_SHA: ${{ steps.short_sha.outputs.sha }}
