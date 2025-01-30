@@ -27,6 +27,16 @@ from snuba.query.expressions import Expression, FunctionCall, SubscriptableRefer
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
+def _check_non_string_values_cannot_ignore_case(
+    comparison_filter: ComparisonFilter,
+) -> None:
+    if comparison_filter.ignore_case and (
+        comparison_filter.value.WhichOneof("value") != "val_str"
+        and comparison_filter.value.WhichOneof("value") != "val_str_array"
+    ):
+        raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
+
+
 def truncate_request_meta_to_day(meta: RequestMeta) -> None:
     # some tables store timestamp as toStartOfDay(x) in UTC, so if you request 4PM - 8PM on a specific day, nada
     # this changes a request from 4PM - 8PM to a request from midnight today to 8PM tomorrow UTC.
@@ -322,9 +332,19 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
                 )
 
         if op == ComparisonFilter.OP_EQUALS:
-            return f.equals(k_expression, v_expression)
+            _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
+            return (
+                f.equals(f.lower(k_expression), f.lower(v_expression))
+                if item_filter.comparison_filter.ignore_case
+                else f.equals(k_expression, v_expression)
+            )
         if op == ComparisonFilter.OP_NOT_EQUALS:
-            return f.notEquals(k_expression, v_expression)
+            _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
+            return (
+                f.notEquals(f.lower(k_expression), f.lower(v_expression))
+                if item_filter.comparison_filter.ignore_case
+                else f.notEquals(k_expression, v_expression)
+            )
         if op == ComparisonFilter.OP_LIKE:
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
@@ -346,8 +366,22 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
         if op == ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
             return f.greaterOrEquals(k_expression, v_expression)
         if op == ComparisonFilter.OP_IN:
+            _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
+            if item_filter.comparison_filter.ignore_case:
+                k_expression = f.lower(k_expression)
+                v_expression = literals_array(
+                    None,
+                    list(map(lambda x: literal(x.lower()), v.val_str_array.values)),
+                )
             return in_cond(k_expression, v_expression)
         if op == ComparisonFilter.OP_NOT_IN:
+            _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
+            if item_filter.comparison_filter.ignore_case:
+                k_expression = f.lower(k_expression)
+                v_expression = literals_array(
+                    None,
+                    list(map(lambda x: literal(x.lower()), v.val_str_array.values)),
+                )
             return not_cond(in_cond(k_expression, v_expression))
 
         raise BadSnubaRPCRequestException(
