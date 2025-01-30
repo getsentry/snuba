@@ -298,7 +298,7 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
-        if in_msg.HasField("expressions"):
+        if len(in_msg.expressions) > 0:
             raise BadSnubaRPCRequestException("expressions field not yet implemented")
 
         snuba_request = _build_snuba_request(in_msg)
