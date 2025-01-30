@@ -31,6 +31,9 @@ class Timer:
     def __diff_ms(self, start: float, end: float) -> int:
         return int((end - start) * 1000)
 
+    def set_tags(self, tags: Mapping[str, str]) -> None:
+        self.__tags.update(tags)
+
     def get_duration_group(self) -> str:
         if self.__data is None:
             return "unknown"

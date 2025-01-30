@@ -1,4 +1,5 @@
 import os
+from bisect import bisect_left
 from datetime import timedelta
 from typing import Generic, List, Tuple, Type, TypeVar, cast, final
 
@@ -64,6 +65,9 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def resolve(self, in_msg: Tin) -> Tout:
         raise NotImplementedError
+
+
+_TIME_PERIOD_BUCKETS = [1, 7, 14, 30, 90]
 
 
 class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -141,7 +145,28 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def __before_execute(self, in_msg: Tin) -> None:
         self._timer.mark("rpc_start")
+        self._timer.set_tags(self.__extract_request_tags(in_msg))
         self._before_execute(in_msg)
+
+    def __extract_request_tags(self, in_msg: Tin) -> dict[str, str]:
+        if not hasattr(in_msg, "meta"):
+            return {}
+
+        meta = in_msg.meta
+        tags = {}
+
+        if hasattr(meta, "start_timestamp") and hasattr(meta, "end_timestamp"):
+            start = meta.start_timestamp.ToDatetime()
+            end = meta.end_timestamp.ToDatetime()
+            delta = (end - start).days
+            tags[
+                "time_period"
+            ] = f"<={_TIME_PERIOD_BUCKETS[bisect_left(_TIME_PERIOD_BUCKETS, delta)]}"
+
+        if hasattr(meta, "referrer"):
+            tags["referrer"] = meta.referrer
+
+        return tags
 
     def _before_execute(self, in_msg: Tin) -> None:
         """Override this for any pre-processing/logging before the _execute method"""
