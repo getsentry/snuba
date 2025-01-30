@@ -340,9 +340,13 @@ class TestGetTraces(BaseApiTest):
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
-    def test_with_data_and_aggregated_fields_backward_compat(
+    def test_with_data_and_aggregated_fields_all_keys(
         self, setup_teardown: Any
     ) -> None:
+        def truncate_float(num: float, digits: int) -> float:
+            num_components = str(num).split(".")
+            return float(f"{num_components[0]}.{num_components[1][:digits]}")
+
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
@@ -354,7 +358,7 @@ class TestGetTraces(BaseApiTest):
             )
             end_timestamp_per_trace_id[s["trace_id"]] = max(
                 end_timestamp_per_trace_id[s["trace_id"]],
-                int(s["end_timestamp_precise"] * 1e6) / 1e6,
+                truncate_float(s["end_timestamp_precise"], 6),
             )
         trace_id_per_start_timestamp: dict[float, str] = {
             timestamp: trace_id
