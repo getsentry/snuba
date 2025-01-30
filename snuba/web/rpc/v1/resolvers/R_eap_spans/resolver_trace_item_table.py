@@ -7,6 +7,7 @@ from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationComparisonFilter,
     AggregationFilter,
+    Column,
     TraceItemColumnValues,
     TraceItemTableRequest,
     TraceItemTableResponse,
@@ -128,6 +129,72 @@ def _convert_order_by(
     return res
 
 
+def _get_reliability_context_columns(column: Column) -> list[SelectedExpression]:
+    """
+    extrapolated aggregates need to request extra columns to calculate the reliability of the result.
+    this function returns the list of columns that need to be requested.
+    """
+    if not column.HasField("aggregation"):
+        return []
+
+    if (
+        column.aggregation.extrapolation_mode
+        == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
+    ):
+        context_columns = []
+        confidence_interval_column = get_confidence_interval_column(column.aggregation)
+        if confidence_interval_column is not None:
+            context_columns.append(
+                SelectedExpression(
+                    name=confidence_interval_column.alias,
+                    expression=confidence_interval_column,
+                )
+            )
+
+        average_sample_rate_column = get_average_sample_rate_column(column.aggregation)
+        count_column = get_count_column(column.aggregation)
+        context_columns.append(
+            SelectedExpression(
+                name=average_sample_rate_column.alias,
+                expression=average_sample_rate_column,
+            )
+        )
+        context_columns.append(
+            SelectedExpression(name=count_column.alias, expression=count_column)
+        )
+        return context_columns
+    return []
+
+
+def _column_to_expression(column: Column) -> Expression:
+    """
+    Given a column protobuf object, translates it into a Expression object and returns it.
+    """
+    if column.HasField("key"):
+        return attribute_key_to_expression(column.key)
+    elif column.HasField("aggregation"):
+        function_expr = aggregation_to_expression(column.aggregation)
+        # aggregation label may not be set and the column label takes priority anyways.
+        function_expr = replace(function_expr, alias=column.label)
+        return function_expr
+    elif column.HasField("formula"):
+        op_to_expr = {
+            Column.BinaryFormula.OP_ADD: f.add,
+            Column.BinaryFormula.OP_SUBTRACT: f.subtract,
+            Column.BinaryFormula.OP_MULTIPLY: f.multiply,
+            Column.BinaryFormula.OP_DIVIDE: f.divide,
+        }
+        return op_to_expr[column.formula.op](
+            _column_to_expression(column.formula.left),
+            _column_to_expression(column.formula.right),
+        )
+
+    else:
+        raise BadSnubaRPCRequestException(
+            "Column is not one of: aggregate, attribute key, or formula"
+        )
+
+
 def _build_query(request: TraceItemTableRequest) -> Query:
     # TODO: This is hardcoded still
     entity = Entity(
@@ -138,54 +205,15 @@ def _build_query(request: TraceItemTableRequest) -> Query:
 
     selected_columns = []
     for column in request.columns:
-        if column.HasField("key"):
-            key_col = attribute_key_to_expression(column.key)
-            # The key_col expression alias may differ from the column label. That is okay
-            # the attribute key name is used in the groupby, the column label is just the name of
-            # the returned attribute value
-            selected_columns.append(
-                SelectedExpression(name=column.label, expression=key_col)
+        # The key_col expression alias may differ from the column label. That is okay
+        # the attribute key name is used in the groupby, the column label is just the name of
+        # the returned attribute value
+        selected_columns.append(
+            SelectedExpression(
+                name=column.label, expression=_column_to_expression(column)
             )
-        elif column.HasField("aggregation"):
-            function_expr = aggregation_to_expression(column.aggregation)
-            # aggregation label may not be set and the column label takes priority anyways.
-            function_expr = replace(function_expr, alias=column.label)
-            selected_columns.append(
-                SelectedExpression(name=column.label, expression=function_expr)
-            )
-
-            if (
-                column.aggregation.extrapolation_mode
-                == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
-            ):
-                confidence_interval_column = get_confidence_interval_column(
-                    column.aggregation
-                )
-                if confidence_interval_column is not None:
-                    selected_columns.append(
-                        SelectedExpression(
-                            name=confidence_interval_column.alias,
-                            expression=confidence_interval_column,
-                        )
-                    )
-
-                average_sample_rate_column = get_average_sample_rate_column(
-                    column.aggregation
-                )
-                count_column = get_count_column(column.aggregation)
-                selected_columns.append(
-                    SelectedExpression(
-                        name=average_sample_rate_column.alias,
-                        expression=average_sample_rate_column,
-                    )
-                )
-                selected_columns.append(
-                    SelectedExpression(name=count_column.alias, expression=count_column)
-                )
-        else:
-            raise BadSnubaRPCRequestException(
-                "Column is neither an aggregate or an attribute"
-            )
+        )
+        selected_columns.extend(_get_reliability_context_columns(column))
 
     res = Query(
         from_clause=entity,
