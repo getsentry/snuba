@@ -29,6 +29,7 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
+from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
     attribute_key_to_expression,
 )
@@ -124,44 +125,6 @@ def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
     )
 
 
-def _convert_results(
-    request: TraceItemTableRequest, data: Iterable[Dict[str, Any]]
-) -> list[TraceItemColumnValues]:
-    converters: Dict[str, Callable[[Any], AttributeValue]] = {}
-
-    for column in request.columns:
-        if column.HasField("key"):
-            if column.key.type == AttributeKey.TYPE_BOOLEAN:
-                converters[column.label] = lambda x: AttributeValue(val_bool=bool(x))
-            elif column.key.type == AttributeKey.TYPE_STRING:
-                converters[column.label] = lambda x: AttributeValue(val_str=str(x))
-            elif column.key.type == AttributeKey.TYPE_INT:
-                converters[column.label] = lambda x: AttributeValue(val_int=int(x))
-            elif (
-                column.key.type == AttributeKey.TYPE_FLOAT
-                or column.key.type == AttributeKey.Type.TYPE_DOUBLE
-            ):
-                converters[column.label] = lambda x: AttributeValue(val_float=float(x))
-        else:
-            raise BadSnubaRPCRequestException("column is not an attribute")
-
-    res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
-    for row in data:
-        for column_name, value in row.items():
-            if column_name in converters.keys():
-                res[column_name].results.append(converters[column_name](value))
-                res[column_name].attribute_name = column_name
-
-    column_ordering = {column.label: i for i, column in enumerate(request.columns)}
-
-    return list(
-        # we return the columns in the order they were requested
-        sorted(
-            res.values(), key=lambda c: column_ordering.__getitem__(c.attribute_name)
-        )
-    )
-
-
 def _get_page_token(
     request: TraceItemTableRequest, response: list[TraceItemColumnValues]
 ) -> PageToken:
@@ -183,7 +146,7 @@ class ResolverTraceItemTableOurlogs(ResolverTraceItemTable):
             request=snuba_request,
             timer=self._timer,
         )
-        column_values = _convert_results(in_msg, res.result.get("data", []))
+        column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,

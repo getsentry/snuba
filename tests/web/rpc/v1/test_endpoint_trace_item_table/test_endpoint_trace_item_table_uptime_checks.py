@@ -20,6 +20,12 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     TraceItemType,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    ComparisonFilter,
+    ExistsFilter,
+    OrFilter,
+    TraceItemFilter,
+)
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -30,9 +36,7 @@ from tests.helpers import write_raw_unprocessed_events
 _TRACE_ID = uuid.uuid4().hex
 
 
-def gen_message(
-    dt: datetime,
-) -> Mapping[str, Any]:
+def gen_message(dt: datetime, status_code: int | None = 200) -> Mapping[str, Any]:
     return {
         "organization_id": 1,
         "project_id": 1,
@@ -49,11 +53,11 @@ def gen_message(
             "type": "success",
             "description": "Some",
         },
-        "http_status_code": 200,
+        "http_status_code": status_code,
         "trace_id": _TRACE_ID,
         "request_info": {
             "request_type": "GET",
-            "http_status_code": 200,
+            "http_status_code": status_code,
         },
     }
 
@@ -174,3 +178,66 @@ class TestTraceItemTable(BaseApiTest):
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
+
+    def test_with_null_status_code(self) -> None:
+        uptime_checks = [
+            gen_message(BASE_TIME - timedelta(minutes=i), status_code=None)
+            for i in range(200)
+        ]
+
+        uptime_checks_storage = get_storage(StorageKey("uptime_monitor_checks"))
+        write_raw_unprocessed_events(uptime_checks_storage, uptime_checks)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = Timestamp(
+            seconds=int((BASE_TIME - timedelta(hours=10000)).timestamp())
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=hour_ago,
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_UPTIME_CHECK,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_INT,
+                        name="http_status_code",
+                    ),
+                ),
+            ],
+            limit=10,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        print(response)
+        # checks = list(
+        #    sorted(_UPTIME_CHECKS, key=itemgetter("scheduled_check_time_ms"))
+        # )[:10]
+
+        # expected_response = TraceItemTableResponse(
+        #    column_values=[
+        #        TraceItemColumnValues(
+        #            attribute_name="region",
+        #            results=[AttributeValue(val_str=c["region"]) for c in checks],
+        #        ),
+        #        TraceItemColumnValues(
+        #            attribute_name="trace_id",
+        #            results=[AttributeValue(val_str=c["trace_id"]) for c in checks],
+        #        ),
+        #        TraceItemColumnValues(
+        #            attribute_name="scheduled_check_time",
+        #            results=[
+        #                AttributeValue(val_int=int(c["scheduled_check_time_ms"] / 1e3))
+        #                for c in checks
+        #            ],
+        #        ),
+        #    ],
+        #    page_token=PageToken(offset=10),
+        #    meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+        # )
+        # assert MessageToDict(response) == MessageToDict(expected_response)
