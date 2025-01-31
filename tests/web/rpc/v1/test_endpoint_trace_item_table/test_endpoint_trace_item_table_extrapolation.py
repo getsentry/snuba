@@ -7,22 +7,28 @@ import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
+    TraceItemColumnValues,
     TraceItemTableRequest,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
+    AttributeValue,
     ExtrapolationMode,
     Function,
     Reliability,
 )
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
+from tests.web.rpc.v1.test_endpoint_trace_item_table.test_endpoint_trace_item_table import (
+    write_eap_span,
+)
 
 _RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
 _SERVER_NAME = "D23CXQ4GK2.local"
@@ -708,3 +714,73 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert measurement_reliabilities == [
             Reliability.RELIABILITY_LOW,
         ]  # low reliability due to low sample count
+
+    def test_formula(self) -> None:
+        """
+        This test ensures that formulas work with extrapolation.
+        Reliabilities will not be returned.
+        """
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"kyles_measurement": 6, "server_sample_rate": 0.5}, 10)
+        write_eap_span(span_ts, {"kyles_measurement": 7, "server_sample_rate": 0.2}, 2)
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_DOUBLE, name="kyles_measurement"
+                    )
+                )
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="kyles_measurement",
+                                ),
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                            ),
+                            label="sum(kyles_measurement)",
+                        ),
+                        right=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="kyles_measurement",
+                                ),
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                            ),
+                            label="count(kyles_measurement)",
+                        ),
+                    ),
+                    label="sum(kyles_measurement) / count(kyles_measurement)",
+                ),
+            ],
+            limit=1,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="sum(kyles_measurement) / count(kyles_measurement)",
+                results=[
+                    AttributeValue(val_double=(190 / 30)),
+                ],
+            ),
+        ]
