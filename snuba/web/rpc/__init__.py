@@ -29,8 +29,15 @@ Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
 
 MAXIMUM_TIME_RANGE_IN_DAYS = 30
-_TIME_PERIOD_DAYS_BUCKETS = [1, 7, 14, 30, 90]
-_BUCKETS_COUNT = len(_TIME_PERIOD_DAYS_BUCKETS)
+_TIME_PERIOD_HOURS_BUCKETS = [
+    1,
+    24,
+    7 * 24,
+    14 * 24,
+    30 * 24,
+    90 * 24,
+]
+_BUCKETS_COUNT = len(_TIME_PERIOD_HOURS_BUCKETS)
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -143,8 +150,8 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         return self.__after_execute(in_msg, out, error)
 
     def __before_execute(self, in_msg: Tin) -> None:
-        self._timer.mark("rpc_start")
         self._timer.update_tags(self.__extract_request_tags(in_msg))
+        self._timer.mark("rpc_start")
         self._before_execute(in_msg)
 
     def __extract_request_tags(self, in_msg: Tin) -> dict[str, str]:
@@ -157,13 +164,18 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         if hasattr(meta, "start_timestamp") and hasattr(meta, "end_timestamp"):
             start = meta.start_timestamp.ToDatetime()
             end = meta.end_timestamp.ToDatetime()
-            delta = (end - start).days
-            bucket = bisect_left(_TIME_PERIOD_DAYS_BUCKETS, delta)
-            tags["time_period"] = (
-                f"<={_TIME_PERIOD_DAYS_BUCKETS[bucket]}"
-                if bucket < _BUCKETS_COUNT
-                else f">{_TIME_PERIOD_DAYS_BUCKETS[_BUCKETS_COUNT - 1]}"
-            )
+            delta_in_hours = int((end - start).total_seconds() / 3600)
+            bucket = bisect_left(_TIME_PERIOD_HOURS_BUCKETS, delta_in_hours)
+            if delta_in_hours == 1:
+                tags["time_period"] = "<= 1 hour"
+            elif delta_in_hours <= 24:
+                tags["time_period"] = "<= 1 day"
+            else:
+                tags["time_period"] = (
+                    f"<= {_TIME_PERIOD_HOURS_BUCKETS[bucket] // 24} days"
+                    if bucket < _BUCKETS_COUNT
+                    else f"> {_TIME_PERIOD_HOURS_BUCKETS[_BUCKETS_COUNT - 1] // 24} days"
+                )
 
         if hasattr(meta, "referrer"):
             tags["referrer"] = meta.referrer
@@ -184,10 +196,16 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            self.metrics.increment("request_error")
+            self.metrics.increment(
+                "request_error",
+                tags=self._timer.tags,
+            )
             raise error
         else:
-            self.metrics.increment("request_success")
+            self.metrics.increment(
+                "request_success",
+                tags=self._timer.tags,
+            )
         return res
 
     def _after_execute(
