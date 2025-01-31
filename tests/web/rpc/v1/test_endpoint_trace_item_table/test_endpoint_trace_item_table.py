@@ -2307,6 +2307,70 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    def test_formula(self, setup_teardown: Any) -> None:
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"kyles_measurement": 6}, 10)
+        write_eap_span(span_ts, {"kyles_measurement": 7}, 2)
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_DOUBLE, name="kyles_measurement"
+                    )
+                )
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="kyles_measurement",
+                                ),
+                            ),
+                            label="sum(kyles_measurement)",
+                        ),
+                        right=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="kyles_measurement",
+                                ),
+                            ),
+                            label="count(kyles_measurement)",
+                        ),
+                    ),
+                    label="sum(kyles_measurement) / count(kyles_measurement)",
+                ),
+            ],
+            limit=1,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="sum(kyles_measurement) / count(kyles_measurement)",
+                results=[
+                    AttributeValue(val_double=(74 / 12)),
+                ],
+            ),
+        ]
+
 
 class TestUtils:
     def test_apply_labels_to_columns_backward_compat(self) -> None:
