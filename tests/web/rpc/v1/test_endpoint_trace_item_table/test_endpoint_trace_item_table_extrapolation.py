@@ -722,7 +722,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         """
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_span(span_ts, {"kyles_measurement": 6, "server_sample_rate": 0.5}, 10)
-        write_eap_span(span_ts, {"kyles_measurement": 7, "server_sample_rate": 0.2}, 2)
+        write_eap_span(span_ts, {"kyles_measurement": 7}, 2)
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -780,7 +780,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="sum(kyles_measurement) / count(kyles_measurement)",
                 results=[
-                    AttributeValue(val_double=(190 / 30)),
+                    AttributeValue(val_double=(134 / 22)),
                 ],
             ),
         ]
