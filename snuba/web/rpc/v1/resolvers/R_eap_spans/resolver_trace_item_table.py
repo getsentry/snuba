@@ -187,6 +187,7 @@ def _column_to_expression(column: Column) -> Expression:
         return op_to_expr[column.formula.op](
             _column_to_expression(column.formula.left),
             _column_to_expression(column.formula.right),
+            alias=column.label,
         )
 
     else:
@@ -283,9 +284,11 @@ def _convert_results(
                 converters[column.label] = lambda x: AttributeValue(val_double=float(x))
         elif column.HasField("aggregation"):
             converters[column.label] = lambda x: AttributeValue(val_double=float(x))
+        elif column.HasField("formula"):
+            converters[column.label] = lambda x: AttributeValue(val_double=float(x))
         else:
             raise BadSnubaRPCRequestException(
-                "column is neither an attribute or aggregation"
+                "column is not one of: attribute, aggregation, or formula"
             )
 
     res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
