@@ -46,7 +46,7 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_confidence_interval_column,
     get_count_column,
 )
-from snuba.web.rpc.v1.resolvers.common.trace_item_table import _convert_results
+from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
     SparseAggregateAttributeTransformer,
 )
@@ -255,7 +255,7 @@ class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
             request=snuba_request,
             timer=self._timer,
         )
-        column_values = _convert_results(in_msg, res.result.get("data", []))
+        column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,

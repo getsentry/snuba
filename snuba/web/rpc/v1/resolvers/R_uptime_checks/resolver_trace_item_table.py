@@ -33,7 +33,7 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
-from snuba.web.rpc.v1.resolvers.common.trace_item_table import _convert_results
+from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
     apply_virtual_columns,
     attribute_key_to_expression,
@@ -216,7 +216,7 @@ class ResolverTraceItemTableUptimeChecks(ResolverTraceItemTable):
             request=snuba_request,
             timer=self._timer,
         )
-        column_values = _convert_results(in_msg, res.result.get("data", []))
+        column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,

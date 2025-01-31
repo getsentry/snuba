@@ -11,7 +11,7 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
 
 
-def _convert_results(
+def convert_results(
     request: TraceItemTableRequest, data: Iterable[Dict[str, Any]]
 ) -> list[TraceItemColumnValues]:
     converters: Dict[str, Callable[[Any], AttributeValue]] = {}
@@ -41,7 +41,7 @@ def _convert_results(
             if column_name in converters.keys():
                 extrapolation_context = ExtrapolationContext.from_row(column_name, row)
                 res[column_name].attribute_name = column_name
-                if value is None or not extrapolation_context.is_data_present:
+                if value is None:
                     res[column_name].results.append(AttributeValue(is_null=True))
                 else:
                     res[column_name].results.append(converters[column_name](value))
