@@ -2307,7 +2307,11 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
-    def test_formula(self, setup_teardown: Any) -> None:
+    def test_agg_formula(self, setup_teardown: Any) -> None:
+        """
+        ensures formulas of aggregates work
+        ex sum(my_attribute) / count(my_attribute)
+        """
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_span(span_ts, {"kyles_measurement": 6}, 10)
         write_eap_span(span_ts, {"kyles_measurement": 7}, 2)
@@ -2367,6 +2371,93 @@ class TestTraceItemTable(BaseApiTest):
                 attribute_name="sum(kyles_measurement) / count(kyles_measurement)",
                 results=[
                     AttributeValue(val_double=(74 / 12)),
+                ],
+            ),
+        ]
+
+    def test_non_agg_formula(self, setup_teardown: Any) -> None:
+        """
+        ensures formulas of non-aggregates work
+        ex: my_attribute + my_other_attribute
+        """
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"kyles_measurement": -1, "my_other_attribute": 1}, 4)
+        write_eap_span(span_ts, {"kyles_measurement": 3, "my_other_attribute": 2}, 2)
+        write_eap_span(span_ts, {"kyles_measurement": 10, "my_other_attribute": 3}, 1)
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_DOUBLE, name="kyles_measurement"
+                    )
+                )
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_ADD,
+                        left=Column(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_DOUBLE, name="kyles_measurement"
+                            )
+                        ),
+                        right=Column(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_DOUBLE, name="my_other_attribute"
+                            )
+                        ),
+                    ),
+                    label="kyles_measurement + my_other_attribute",
+                ),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        formula=Column.BinaryFormula(
+                            op=Column.BinaryFormula.OP_ADD,
+                            left=Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="kyles_measurement",
+                                )
+                            ),
+                            right=Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="my_other_attribute",
+                                )
+                            ),
+                        ),
+                        label="kyles_measurement + my_other_attribute",
+                    )
+                ),
+            ],
+            limit=50,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="kyles_measurement + my_other_attribute",
+                results=[
+                    AttributeValue(val_double=0),
+                    AttributeValue(val_double=0),
+                    AttributeValue(val_double=0),
+                    AttributeValue(val_double=0),
+                    AttributeValue(val_double=5),
+                    AttributeValue(val_double=5),
+                    AttributeValue(val_double=13),
                 ],
             ),
         ]
