@@ -47,9 +47,6 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
-from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
-    SparseAggregateAttributeTransformer,
-)
 
 _DEFAULT_ROW_LIMIT = 10_000
 
