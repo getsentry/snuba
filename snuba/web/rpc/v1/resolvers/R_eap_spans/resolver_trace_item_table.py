@@ -52,9 +52,6 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
     get_confidence_interval_column,
     get_count_column,
 )
-from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
-    SparseAggregateAttributeTransformer,
-)
 
 _DEFAULT_ROW_LIMIT = 10_000
 
@@ -294,22 +291,12 @@ def _get_page_token(
     return PageToken(offset=request.page_token.offset + num_rows)
 
 
-def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
-    """
-    This function is for initial processing and transformation of the request after recieving it.
-    It is similar to the query processor step of the snql pipeline.
-    """
-    return SparseAggregateAttributeTransformer(request).transform()
-
-
 class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
-        in_msg = _transform_request(in_msg)
-
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
