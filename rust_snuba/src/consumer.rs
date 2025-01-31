@@ -235,7 +235,13 @@ pub fn consumer_impl(
 
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
 
-    let rebalance_delay_secs = rebalancing::get_rebalance_delay_secs(consumer_group);
+    let mut rebalance_delay_secs = consumer_config
+        .raw_topic
+        .quantized_rebalance_consumer_group_delay_secs;
+    let config_rebalance_delay_secs = rebalancing::get_rebalance_delay_secs(consumer_group);
+    if let Some(secs) = config_rebalance_delay_secs {
+        rebalance_delay_secs = Some(secs);
+    }
     if let Some(secs) = rebalance_delay_secs {
         rebalancing::delay_kafka_rebalance(secs)
     }
