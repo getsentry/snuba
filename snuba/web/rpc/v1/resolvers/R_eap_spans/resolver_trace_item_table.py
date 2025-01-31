@@ -52,9 +52,6 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
     get_confidence_interval_column,
     get_count_column,
 )
-from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
-    SparseAggregateAttributeTransformer,
-)
 
 _DEFAULT_ROW_LIMIT = 10_000
 
@@ -132,9 +129,6 @@ def _convert_order_by(
 
 
 def _build_query(request: TraceItemTableRequest) -> Query:
-    # this is similar to the query processor step of the snql pipeline
-    request = SparseAggregateAttributeTransformer(request).transform()
-
     # TODO: This is hardcoded still
     entity = Entity(
         key=EntityKey("eap_spans"),

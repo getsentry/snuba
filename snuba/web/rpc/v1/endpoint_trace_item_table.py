@@ -11,6 +11,9 @@ from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
+from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
+    SparseAggregateAttributeTransformer,
+)
 
 _GROUP_BY_DISALLOWED_COLUMNS = ["timestamp"]
 
@@ -69,6 +72,14 @@ def _validate_order_by(in_msg: TraceItemTableRequest) -> None:
         )
 
 
+def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
+    """
+    This function is for initial processing and transformation of the request after recieving it.
+    It is similar to the query processor step of the snql pipeline.
+    """
+    return SparseAggregateAttributeTransformer(request).transform()
+
+
 class EndpointTraceItemTable(
     RPCEndpoint[TraceItemTableRequest, TraceItemTableResponse]
 ):
@@ -103,5 +114,8 @@ class EndpointTraceItemTable(
             raise BadSnubaRPCRequestException(
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
             )
+
+        in_msg = _transform_request(in_msg)
+
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)
