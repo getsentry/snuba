@@ -205,8 +205,6 @@ class ClickhousePool(object):
                     else:
                         result_data = query_execute()
 
-                    print("result_dataaaa", result_data, with_column_types)
-
                     profile_data = ClickhouseProfile(
                         bytes=conn.last_query.profile_info.bytes or 0,
                         progress_bytes=conn.last_query.progress.bytes or 0,
@@ -518,8 +516,6 @@ class NativeDriverReader(Reader):
         query_id = None
         if "query_id" in settings:
             query_id = settings.pop("query_id")
-
-        print("isrobust???", self.__client.execute)
 
         execute_func = (
             self.__client.execute_robust if robust is True else self.__client.execute

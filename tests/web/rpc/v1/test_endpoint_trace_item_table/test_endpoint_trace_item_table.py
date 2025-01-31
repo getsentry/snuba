@@ -2,8 +2,10 @@ import random
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Mapping
+from unittest.mock import patch
 
 import pytest
+from clickhouse_driver.errors import ServerException
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
@@ -41,6 +43,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1 import endpoint_trace_item_table
 from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
     _apply_labels_to_columns,
@@ -185,6 +188,53 @@ class TestTraceItemTable(BaseApiTest):
             error_proto.ParseFromString(response.data)
         assert response.status_code == 200, error_proto
 
+    def test_OOM(self) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                    )
+                )
+            ],
+            limit=10,
+        )
+        with patch(
+            "clickhouse_driver.client.Client.execute",
+            side_effect=ServerException(
+                "DB::Exception: Received from snuba-events-analytics-platform-1-1:1111. DB::Exception: Memory limit (for query) exceeded: would use 1.11GiB (attempt to allocate chunk of 111111 bytes), maximum: 1.11 GiB. Blahblahblahblahblahblahblah",
+                code=241,
+            ),
+        ), patch.object(
+            endpoint_trace_item_table.metrics, "increment"
+        ) as metrics_mock, patch(
+            "snuba.web.rpc.v1.endpoint_trace_item_table.sentry_sdk.capture_exception"
+        ) as sentry_sdk_mock:
+            with pytest.raises(BadSnubaRPCRequestException) as e:
+                EndpointTraceItemTable().execute(message)
+            assert "DB::Exception: Memory limit (for query) exceeded" in str(e.value)
+            metrics_mock.assert_called_once_with("endpoint_trace_item_table_OOM")
+            sentry_sdk_mock.assert_called_once()
+
     def test_errors_without_type(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
@@ -269,7 +319,6 @@ class TestTraceItemTable(BaseApiTest):
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
         assert response == expected_response
-        assert False
 
     def test_booleans_and_number_compares_backward_compat(
         self, setup_teardown: Any
