@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, TypedDict, cast
+from typing import Any, Mapping, NotRequired, TypedDict, cast
 
 from snuba.reader import Column, Result, Row, transform_rows
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
@@ -11,6 +11,7 @@ class QueryExtraData(TypedDict):
     stats: Mapping[str, Any]
     sql: str
     experiments: Mapping[str, Any]
+    code: NotRequired[int]
 
 
 class QueryException(SerializableException):

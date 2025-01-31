@@ -302,7 +302,6 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
             request=snuba_request,
             timer=self._timer,
         )
-
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,

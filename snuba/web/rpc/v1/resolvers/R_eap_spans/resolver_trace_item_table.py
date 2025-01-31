@@ -301,7 +301,6 @@ class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
             request=snuba_request,
             timer=self._timer,
         )
-
         column_values = _convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
