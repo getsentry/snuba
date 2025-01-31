@@ -178,6 +178,12 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=None,
     help="Optional timeout for batch writer client connecting and sending request to Clickhouse",
 )
+@click.option(
+    "--quantized-rebalance-consumer-group-delay-secs",
+    type=int,
+    default=None,
+    help="Quantized rebalancing means that during deploys, rebalancing is triggered across all pods within a consumer group at the same time. The value is used by the pods to align their group join/leave activity to some multiple of the delay",
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -208,7 +214,8 @@ def rust_consumer(
     stop_at_timestamp: Optional[int],
     batch_write_timeout_ms: Optional[int],
     mutations_mode: bool,
-    max_dlq_buffer_length: Optional[int]
+    max_dlq_buffer_length: Optional[int],
+    quantized_rebalance_consumer_group_delay_secs: Optional[int],
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -228,6 +235,7 @@ def rust_consumer(
         queued_min_messages=queued_min_messages,
         slice_id=slice_id,
         group_instance_id=group_instance_id,
+        quantized_rebalance_consumer_group_delay_secs=quantized_rebalance_consumer_group_delay_secs,
     )
 
     consumer_config_raw = json.dumps(asdict(consumer_config))
