@@ -385,12 +385,15 @@ def get_extrapolated_function(
 ) -> CurriedFunctionCall | FunctionCall | None:
     sampling_weight_column = column("sampling_weight")
     field = attribute_key_to_expression(aggregation.key)
+    alias = aggregation.label if aggregation.label else None
+    alias_dict = {"alias": alias} if alias else {}
     function_map_sample_weighted: dict[
         Function.ValueType, CurriedFunctionCall | FunctionCall
     ] = {
         Function.FUNCTION_SUM: f.sumIfOrNull(
             f.multiply(field, f.multiply(sign_column, sampling_weight_column)),
             get_field_existence_expression(aggregation),
+            **alias_dict,
         ),
         Function.FUNCTION_AVERAGE: f.divide(
             f.sumIfOrNull(
@@ -401,6 +404,7 @@ def get_extrapolated_function(
                 f.multiply(sign_column, sampling_weight_column),
                 get_field_existence_expression(aggregation),
             ),
+            **alias_dict,
         ),
         Function.FUNCTION_AVG: f.divide(
             f.sumIfOrNull(
@@ -411,44 +415,53 @@ def get_extrapolated_function(
                 f.multiply(sign_column, sampling_weight_column),
                 get_field_existence_expression(aggregation),
             ),
+            **alias_dict,
         ),
         Function.FUNCTION_COUNT: f.sumIfOrNull(
             f.multiply(sign_column, sampling_weight_column),
             get_field_existence_expression(aggregation),
+            **alias_dict,
         ),
         Function.FUNCTION_P50: cf.quantileTDigestWeightedIfOrNull(0.5)(
             field,
             sampling_weight_column,
             get_field_existence_expression(aggregation),
+            **alias_dict,
         ),
         Function.FUNCTION_P75: cf.quantileTDigestWeightedIfOrNull(0.75)(
             field,
             sampling_weight_column,
             get_field_existence_expression(aggregation),
+            **alias_dict,
         ),
         Function.FUNCTION_P90: cf.quantileTDigestWeightedIfOrNull(0.9)(
             field,
             sampling_weight_column,
             get_field_existence_expression(aggregation),
+            **alias_dict,
         ),
         Function.FUNCTION_P95: cf.quantileTDigestWeightedIfOrNull(0.95)(
             field,
             sampling_weight_column,
             get_field_existence_expression(aggregation),
+            **alias_dict,
         ),
         Function.FUNCTION_P99: cf.quantileTDigestWeightedIfOrNull(0.99)(
             field,
             sampling_weight_column,
             get_field_existence_expression(aggregation),
+            **alias_dict,
         ),
         Function.FUNCTION_MAX: f.maxIfOrNull(
-            field, get_field_existence_expression(aggregation)
+            field, get_field_existence_expression(aggregation), **alias_dict
         ),
         Function.FUNCTION_MIN: f.minIfOrNull(
-            field, get_field_existence_expression(aggregation)
+            field, get_field_existence_expression(aggregation), **alias_dict
         ),
         Function.FUNCTION_UNIQ: f.uniqIfOrNull(
-            field, get_field_existence_expression(aggregation)
+            field,
+            get_field_existence_expression(aggregation),
+            **alias_dict,
         ),
     }
 
@@ -719,10 +732,14 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         agg_func_expr = get_extrapolated_function(aggregation)
     else:
         agg_func_expr = function_map.get(aggregation.aggregate)
+        if agg_func_expr is not None:
+            agg_func_expr = f.round(
+                agg_func_expr, _FLOATING_POINT_PRECISION, **alias_dict
+            )
 
     if agg_func_expr is None:
         raise BadSnubaRPCRequestException(
             f"Aggregation not specified for {aggregation.key.name}"
         )
 
-    return f.round(agg_func_expr, _FLOATING_POINT_PRECISION, **alias_dict)
+    return agg_func_expr
