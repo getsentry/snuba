@@ -297,39 +297,40 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
                 "comparison does not have a right hand side"
             )
 
-        match value_type:
-            case "val_bool":
-                v_expression: Expression = literal(v.val_bool)
-            case "val_str":
-                v_expression = literal(v.val_str)
-            case "val_float":
-                v_expression = literal(v.val_float)
-            case "val_double":
-                v_expression = literal(v.val_double)
-            case "val_int":
-                v_expression = literal(v.val_int)
-            case "val_null":
-                v_expression = literal(None)
-            case "val_str_array":
-                v_expression = literals_array(
-                    None, list(map(lambda x: literal(x), v.val_str_array.values))
-                )
-            case "val_int_array":
-                v_expression = literals_array(
-                    None, list(map(lambda x: literal(x), v.val_int_array.values))
-                )
-            case "val_float_array":
-                v_expression = literals_array(
-                    None, list(map(lambda x: literal(x), v.val_float_array.values))
-                )
-            case "val_double_array":
-                v_expression = literals_array(
-                    None, list(map(lambda x: literal(x), v.val_double_array.values))
-                )
-            case default:
-                raise NotImplementedError(
-                    f"translation of AttributeValue type {default} is not implemented"
-                )
+        if v.is_null:
+            v_expression: Expression = literal(None)
+        else:
+            match value_type:
+                case "val_bool":
+                    v_expression = literal(v.val_bool)
+                case "val_str":
+                    v_expression = literal(v.val_str)
+                case "val_float":
+                    v_expression = literal(v.val_float)
+                case "val_double":
+                    v_expression = literal(v.val_double)
+                case "val_int":
+                    v_expression = literal(v.val_int)
+                case "val_str_array":
+                    v_expression = literals_array(
+                        None, list(map(lambda x: literal(x), v.val_str_array.values))
+                    )
+                case "val_int_array":
+                    v_expression = literals_array(
+                        None, list(map(lambda x: literal(x), v.val_int_array.values))
+                    )
+                case "val_float_array":
+                    v_expression = literals_array(
+                        None, list(map(lambda x: literal(x), v.val_float_array.values))
+                    )
+                case "val_double_array":
+                    v_expression = literals_array(
+                        None, list(map(lambda x: literal(x), v.val_double_array.values))
+                    )
+                case default:
+                    raise NotImplementedError(
+                        f"translation of AttributeValue type {default} is not implemented"
+                    )
 
         if op == ComparisonFilter.OP_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
