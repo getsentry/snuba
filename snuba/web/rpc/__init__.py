@@ -1,4 +1,5 @@
 import os
+from bisect import bisect_left
 from datetime import timedelta
 from typing import Generic, List, Tuple, Type, TypeVar, cast, final
 
@@ -28,6 +29,15 @@ Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
 
 MAXIMUM_TIME_RANGE_IN_DAYS = 30
+_TIME_PERIOD_HOURS_BUCKETS = [
+    1,
+    24,
+    7 * 24,
+    14 * 24,
+    30 * 24,
+    90 * 24,
+]
+_BUCKETS_COUNT = len(_TIME_PERIOD_HOURS_BUCKETS)
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -140,8 +150,37 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         return self.__after_execute(in_msg, out, error)
 
     def __before_execute(self, in_msg: Tin) -> None:
+        self._timer.update_tags(self.__extract_request_tags(in_msg))
         self._timer.mark("rpc_start")
         self._before_execute(in_msg)
+
+    def __extract_request_tags(self, in_msg: Tin) -> dict[str, str]:
+        if not hasattr(in_msg, "meta"):
+            return {}
+
+        meta = in_msg.meta
+        tags = {}
+
+        if hasattr(meta, "start_timestamp") and hasattr(meta, "end_timestamp"):
+            start = meta.start_timestamp.ToDatetime()
+            end = meta.end_timestamp.ToDatetime()
+            delta_in_hours = int((end - start).total_seconds() / 3600)
+            bucket = bisect_left(_TIME_PERIOD_HOURS_BUCKETS, delta_in_hours)
+            if delta_in_hours == 1:
+                tags["time_period"] = "<= 1 hour"
+            elif delta_in_hours <= 24:
+                tags["time_period"] = "<= 1 day"
+            else:
+                tags["time_period"] = (
+                    f"<= {_TIME_PERIOD_HOURS_BUCKETS[bucket] // 24} days"
+                    if bucket < _BUCKETS_COUNT
+                    else f"> {_TIME_PERIOD_HOURS_BUCKETS[_BUCKETS_COUNT - 1] // 24} days"
+                )
+
+        if hasattr(meta, "referrer"):
+            tags["referrer"] = meta.referrer
+
+        return tags
 
     def _before_execute(self, in_msg: Tin) -> None:
         """Override this for any pre-processing/logging before the _execute method"""
@@ -157,10 +196,16 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            self.metrics.increment("request_error")
+            self.metrics.increment(
+                "request_error",
+                tags=self._timer.tags,
+            )
             raise error
         else:
-            self.metrics.increment("request_success")
+            self.metrics.increment(
+                "request_success",
+                tags=self._timer.tags,
+            )
         return res
 
     def _after_execute(
