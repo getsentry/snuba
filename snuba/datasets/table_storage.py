@@ -343,6 +343,9 @@ class TableWriter:
         """
         return self.__replacer_processor
 
+    def get_writer_options(self) -> ClickhouseWriterOptions:
+        return self.__writer_options
+
     def __update_writer_options(
         self,
         options: ClickhouseWriterOptions = None,
