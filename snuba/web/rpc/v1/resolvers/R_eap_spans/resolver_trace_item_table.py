@@ -126,6 +126,13 @@ def _convert_order_by(
                     expression=aggregation_to_expression(x.column.aggregation),
                 )
             )
+        elif x.column.HasField("formula"):
+            res.append(
+                OrderBy(
+                    direction=direction,
+                    expression=_formula_to_expression(x.column.formula),
+                )
+            )
     return res
 
 
@@ -166,6 +173,19 @@ def _get_reliability_context_columns(column: Column) -> list[SelectedExpression]
     return []
 
 
+def _formula_to_expression(formula: Column.BinaryFormula) -> Expression:
+    op_to_expr = {
+        Column.BinaryFormula.OP_ADD: f.plus,
+        Column.BinaryFormula.OP_SUBTRACT: f.minus,
+        Column.BinaryFormula.OP_MULTIPLY: f.multiply,
+        Column.BinaryFormula.OP_DIVIDE: f.divide,
+    }
+    return op_to_expr[formula.op](
+        _column_to_expression(formula.left),
+        _column_to_expression(formula.right),
+    )
+
+
 def _column_to_expression(column: Column) -> Expression:
     """
     Given a column protobuf object, translates it into a Expression object and returns it.
@@ -178,18 +198,9 @@ def _column_to_expression(column: Column) -> Expression:
         function_expr = replace(function_expr, alias=column.label)
         return function_expr
     elif column.HasField("formula"):
-        op_to_expr = {
-            Column.BinaryFormula.OP_ADD: f.add,
-            Column.BinaryFormula.OP_SUBTRACT: f.subtract,
-            Column.BinaryFormula.OP_MULTIPLY: f.multiply,
-            Column.BinaryFormula.OP_DIVIDE: f.divide,
-        }
-        return op_to_expr[column.formula.op](
-            _column_to_expression(column.formula.left),
-            _column_to_expression(column.formula.right),
-            alias=column.label,
-        )
-
+        formula_expr = _formula_to_expression(column.formula)
+        formula_expr = replace(formula_expr, alias=column.label)
+        return formula_expr
     else:
         raise BadSnubaRPCRequestException(
             "Column is not one of: aggregate, attribute key, or formula"
