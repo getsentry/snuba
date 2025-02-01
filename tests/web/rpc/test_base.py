@@ -205,13 +205,14 @@ _REFERRER = "something"
 @pytest.mark.parametrize(
     "hours, expected_time_bucket",
     [
-        (1, "<= 1 hour"),
-        (24, "<= 1 day"),
-        (3 * 24, "<= 7 days"),
-        (11 * 24, "<= 14 days"),
-        (22 * 24, "<= 30 days"),
-        (90 * 24, "<= 90 days"),
-        (99 * 24, "> 90 days"),
+        (0.5, "lte_1_hour"),
+        (1, "lte_1_hour"),
+        (24, "lte_1_day"),
+        (3 * 24, "lte_7_days"),
+        (11 * 24, "lte_14_days"),
+        (22 * 24, "lte_30_days"),
+        (90 * 24, "lte_90_days"),
+        (99 * 24, "gt_90_days"),
     ],
 )
 def test_tagged_metrics(hours: int, expected_time_bucket: str) -> None:

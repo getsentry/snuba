@@ -164,17 +164,17 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         if hasattr(meta, "start_timestamp") and hasattr(meta, "end_timestamp"):
             start = meta.start_timestamp.ToDatetime()
             end = meta.end_timestamp.ToDatetime()
-            delta_in_hours = int((end - start).total_seconds() / 3600)
+            delta_in_hours = (end - start).total_seconds() / 3600
             bucket = bisect_left(_TIME_PERIOD_HOURS_BUCKETS, delta_in_hours)
-            if delta_in_hours == 1:
-                tags["time_period"] = "<= 1 hour"
+            if delta_in_hours <= 1:
+                tags["time_period"] = "lte_1_hour"
             elif delta_in_hours <= 24:
-                tags["time_period"] = "<= 1 day"
+                tags["time_period"] = "lte_1_day"
             else:
                 tags["time_period"] = (
-                    f"<= {_TIME_PERIOD_HOURS_BUCKETS[bucket] // 24} days"
+                    f"lte_{_TIME_PERIOD_HOURS_BUCKETS[bucket] // 24}_days"
                     if bucket < _BUCKETS_COUNT
-                    else f"> {_TIME_PERIOD_HOURS_BUCKETS[_BUCKETS_COUNT - 1] // 24} days"
+                    else f"gt_{_TIME_PERIOD_HOURS_BUCKETS[_BUCKETS_COUNT - 1] // 24}_days"
                 )
 
         if hasattr(meta, "referrer"):
