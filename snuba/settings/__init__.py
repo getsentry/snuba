@@ -97,7 +97,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "ca_certs": os.environ.get("CLICKHOUSE_CA_CERTS"),
         "verify": os.environ.get("CLICKHOUSE_VERIFY"),
         "storage_sets": {
-            "cdc",
             "discover",
             "events",
             "events_ro",
