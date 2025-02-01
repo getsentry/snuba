@@ -164,9 +164,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         if hasattr(meta, "start_timestamp") and hasattr(meta, "end_timestamp"):
             start = meta.start_timestamp.ToDatetime()
             end = meta.end_timestamp.ToDatetime()
-            delta_in_hours = int((end - start).total_seconds() / 3600)
+            delta_in_hours = (end - start).total_seconds() / 3600
             bucket = bisect_left(_TIME_PERIOD_HOURS_BUCKETS, delta_in_hours)
-            if delta_in_hours == 1:
+            if delta_in_hours <= 1:
                 tags["time_period"] = "lte_1_hour"
             elif delta_in_hours <= 24:
                 tags["time_period"] = "lte_1_day"
