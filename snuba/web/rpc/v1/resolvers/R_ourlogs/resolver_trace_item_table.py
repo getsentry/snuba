@@ -78,7 +78,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
             )
         else:
             raise BadSnubaRPCRequestException(
-                "requested attribute is not a column (aggregation not supported for logs)"
+                "requested attribute is not a column (aggregation and formulanot supported for logs)"
             )
 
     res = Query(
