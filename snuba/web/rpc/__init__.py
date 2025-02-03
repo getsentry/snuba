@@ -198,7 +198,12 @@ def run_rpc_handler(
 
     try:
         return cast(ProtobufMessage, endpoint.execute(deserialized_protobuf))
-    except (RPCRequestException, QueryException) as e:
+    except RPCRequestException as e:
+        return convert_rpc_exception_to_proto(e)
+    except QueryException as e:
+        if "code" in e.extra_data and e.extra["code"] == 241:
+            endpoint.metrics.increment("OOM_query")
+            sentry_sdk.capture_exception(e)
         return convert_rpc_exception_to_proto(e)
     except Exception as e:
         sentry_sdk.capture_exception(e)

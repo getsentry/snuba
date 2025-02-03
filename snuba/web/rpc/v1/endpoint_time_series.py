@@ -2,16 +2,12 @@ import math
 import uuid
 from typing import Type
 
-import sentry_sdk
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
-from snuba import environment
-from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
@@ -35,8 +31,6 @@ _VALID_GRANULARITY_SECS = set(
 
 # MAX 5 minute granularity over 7 days
 _MAX_BUCKETS_IN_REQUEST = 2016
-
-metrics = MetricsWrapper(environment.metrics, "endpoint_time_series")
 
 
 def _enforce_no_duplicate_labels(request: TimeSeriesRequest) -> None:
@@ -111,12 +105,4 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
             )
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
-        try:
-            return resolver.resolve(in_msg)
-        except QueryException as e:
-            if e.extra[
-                "code"
-            ] == 241 or "DB::Exception: Memory limit (for query) exceeded" in str(e):
-                metrics.increment("endpoint_trace_item_table_OOM")
-                sentry_sdk.capture_exception(e)
-            raise BadSnubaRPCRequestException(str(e))
+        return resolver.resolve(in_msg)

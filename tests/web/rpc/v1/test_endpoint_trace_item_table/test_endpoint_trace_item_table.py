@@ -2,7 +2,7 @@ import random
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Mapping
-from unittest.mock import patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from clickhouse_driver.errors import ServerException
@@ -42,8 +42,8 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.web.rpc import RPCEndpoint, run_rpc_handler
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1 import endpoint_trace_item_table
 from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
     _apply_labels_to_columns,
@@ -188,7 +188,7 @@ class TestTraceItemTable(BaseApiTest):
             error_proto.ParseFromString(response.data)
         assert response.status_code == 200, error_proto
 
-    def test_OOM(self) -> None:
+    def test_OOM(self, monkeypatch: Any) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
         message = TraceItemTableRequest(
@@ -218,22 +218,25 @@ class TestTraceItemTable(BaseApiTest):
             ],
             limit=10,
         )
+        metrics_mock = MagicMock()
+        monkeypatch.setattr(RPCEndpoint, "metrics", property(lambda x: metrics_mock))
         with patch(
             "clickhouse_driver.client.Client.execute",
             side_effect=ServerException(
                 "DB::Exception: Received from snuba-events-analytics-platform-1-1:1111. DB::Exception: Memory limit (for query) exceeded: would use 1.11GiB (attempt to allocate chunk of 111111 bytes), maximum: 1.11 GiB. Blahblahblahblahblahblahblah",
                 code=241,
             ),
-        ), patch.object(
-            endpoint_trace_item_table.metrics, "increment"
-        ) as metrics_mock, patch(
-            "snuba.web.rpc.v1.endpoint_trace_item_table.sentry_sdk.capture_exception"
-        ) as sentry_sdk_mock:
-            with pytest.raises(BadSnubaRPCRequestException) as e:
-                EndpointTraceItemTable().execute(message)
-            assert "DB::Exception: Memory limit (for query) exceeded" in str(e.value)
-            metrics_mock.assert_called_once_with("endpoint_trace_item_table_OOM")
+        ), patch("snuba.web.rpc.sentry_sdk.capture_exception") as sentry_sdk_mock:
+            resp = run_rpc_handler(
+                "EndpointTraceItemTable", "v1", message.SerializeToString()
+            )
+            assert isinstance(resp, ErrorProto)
+            assert "DB::Exception: Memory limit (for query) exceeded" in str(
+                resp.message
+            )
+
             sentry_sdk_mock.assert_called_once()
+            assert metrics_mock.increment.call_args_list.count(call("OOM_query")) == 1
 
     def test_errors_without_type(self) -> None:
         ts = Timestamp()
