@@ -195,3 +195,59 @@ def test_trim_time_range() -> None:
     )
     response = EndpointTraceItemTable().execute(message)
     assert len(response.column_values[0].results) == MAXIMUM_TIME_RANGE_IN_DAYS
+
+
+_REFERRER = "something"
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+@pytest.mark.parametrize(
+    "hours, expected_time_bucket",
+    [
+        (0.5, "lte_1_hour"),
+        (1, "lte_1_hour"),
+        (24, "lte_1_day"),
+        (3 * 24, "lte_7_days"),
+        (11 * 24, "lte_14_days"),
+        (22 * 24, "lte_30_days"),
+        (90 * 24, "lte_90_days"),
+        (99 * 24, "gt_90_days"),
+    ],
+)
+def test_tagged_metrics(hours: int, expected_time_bucket: str) -> None:
+    end_timestamp = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+    start_timestamp = Timestamp(
+        seconds=int((_BASE_TIME - timedelta(hours=hours)).timestamp())
+    )
+    message = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            organization_id=1,
+            cogs_category="something",
+            referrer=_REFERRER,
+            start_timestamp=start_timestamp,
+            end_timestamp=end_timestamp,
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[
+            Column(
+                key=AttributeKey(
+                    type=AttributeKey.TYPE_DOUBLE,
+                    name="sentry.duration_ms",
+                ),
+            )
+        ],
+    )
+    metrics_backend = TestingMetricsBackend()
+    EndpointTraceItemTable(metrics_backend=metrics_backend).execute(message)
+    metric_tags = [m.tags for m in metrics_backend.calls]
+    assert metric_tags == [
+        {
+            "endpoint_name": "EndpointTraceItemTable",
+            "version": "v1",
+            "time_period": expected_time_bucket,
+            "referrer": _REFERRER,
+        }
+        for _ in range(len(metrics_backend.calls))
+    ]
