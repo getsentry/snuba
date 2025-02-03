@@ -119,9 +119,18 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         error = None
         try:
             out = self._execute(in_msg)
-        except Exception as e:
+        except QueryException as e:
+            if (
+                "error_code" in e.extra["stats"]
+                and e.extra["stats"]["error_code"] == 241
+            ):
+                self.metrics.increment("OOM_query")
+                sentry_sdk.capture_exception(e)
             out = self.response_class()()
             error = e
+        except Exception as e:
+            out = self.response_class()()
+            error = e  # type: ignore
         return self.__after_execute(in_msg, out, error)
 
     def __before_execute(self, in_msg: Tin) -> None:
@@ -198,12 +207,7 @@ def run_rpc_handler(
 
     try:
         return cast(ProtobufMessage, endpoint.execute(deserialized_protobuf))
-    except RPCRequestException as e:
-        return convert_rpc_exception_to_proto(e)
-    except QueryException as e:
-        if "error_code" in e.extra["stats"] and e.extra["stats"]["error_code"] == 241:
-            endpoint.metrics.increment("OOM_query")
-            sentry_sdk.capture_exception(e)
+    except (RPCRequestException, QueryException) as e:
         return convert_rpc_exception_to_proto(e)
     except Exception as e:
         sentry_sdk.capture_exception(e)

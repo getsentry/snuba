@@ -13,7 +13,6 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error
-from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
@@ -31,7 +30,8 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc import RPCEndpoint, run_rpc_handler
+from snuba.web import QueryException
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_time_series import (
     EndpointTimeSeries,
@@ -794,13 +794,9 @@ class TestTimeSeriesApi(BaseApiTest):
                 code=241,
             ),
         ), patch("snuba.web.rpc.sentry_sdk.capture_exception") as sentry_sdk_mock:
-            resp = run_rpc_handler(
-                "EndpointTimeSeries", "v1", message.SerializeToString()
-            )
-            assert isinstance(resp, ErrorProto)
-            assert "DB::Exception: Memory limit (for query) exceeded" in str(
-                resp.message
-            )
+            with pytest.raises(QueryException) as e:
+                EndpointTimeSeries().execute(message)
+            assert "DB::Exception: Memory limit (for query) exceeded" in str(e.value)
 
             sentry_sdk_mock.assert_called_once()
             assert metrics_mock.increment.call_args_list.count(call("OOM_query")) == 1
