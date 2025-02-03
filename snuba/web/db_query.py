@@ -509,17 +509,6 @@ def _raw_query(
             error_code=error_code,
             triggered_rate_limiter=str(trigger_rate_limiter),
         )
-        if error_code == 241:
-            raise QueryException.from_args(
-                cause.__class__.__name__,
-                str(cause),
-                {
-                    "stats": stats,
-                    "sql": sql,
-                    "experiments": clickhouse_query.get_experiments(),
-                    "code": 241,
-                },
-            ) from cause
         raise QueryException.from_args(
             # This exception needs to have the message of the cause in it for sentry
             # to pick it up properly

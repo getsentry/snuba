@@ -201,7 +201,7 @@ def run_rpc_handler(
     except RPCRequestException as e:
         return convert_rpc_exception_to_proto(e)
     except QueryException as e:
-        if "code" in e.extra_data and e.extra["code"] == 241:
+        if "error_code" in e.extra["stats"] and e.extra["stats"]["error_code"] == 241:
             endpoint.metrics.increment("OOM_query")
             sentry_sdk.capture_exception(e)
         return convert_rpc_exception_to_proto(e)
