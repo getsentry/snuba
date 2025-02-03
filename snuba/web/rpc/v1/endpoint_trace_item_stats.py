@@ -11,9 +11,6 @@ from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 
-MAX_LIMIT_KEYS_BY = 100
-DEFAULT_LIMIT_KEYS_BY = 10
-
 
 class EndpointTraceItemStats(
     RPCEndpoint[TraceItemStatsRequest, TraceItemStatsResponse]
@@ -42,16 +39,6 @@ class EndpointTraceItemStats(
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )
-
-        for requested_type in in_msg.stats_types:
-            if requested_type.HasField("attribute_distributions"):
-                if (
-                    requested_type.attribute_distributions.max_buckets
-                    > MAX_LIMIT_KEYS_BY
-                ):
-                    raise BadSnubaRPCRequestException(
-                        f"Max allowed buckets is {MAX_LIMIT_KEYS_BY}."
-                    )
 
         if not in_msg.stats_types:
             raise BadSnubaRPCRequestException("Please specify at least one stats type.")

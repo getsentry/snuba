@@ -36,11 +36,12 @@ from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
 )
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_traces import _DEFAULT_ROW_LIMIT
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 
-MAX_LIMIT_KEYS_BY = 50
-DEFAULT_LIMIT_KEYS_BY = 5
+MAX_BUCKETS = 100
+DEFAULT_BUCKETS = 10
 
 COUNT_LABEL = "count()"
 
@@ -50,21 +51,7 @@ def _transform_results(
 ) -> Iterable[AttributeDistribution]:
 
     # Maintain the order of keys, so it is in descending order
-    # of most prevelant key-value pair. Say the following data
-    # is returned:
-    # data = [
-    #   ('sdk.name', 'python', 100),
-    #   ('server_name', 'DW9H09PDFM.local', 80),
-    #   ('sdk.name', 'javascript', 50),
-    #   ('messaging.system', 'redis', 20)
-    # ]
-    #
-    # the order returned will be
-    # [
-    #   {"attribute_key": "sdk.name", "data": [{"label":"python", "value": 100}, {"label":"javascript", "value": 50}]},
-    #   {"attribute_key": "server_name", "data": [{"label":"DW9H09PDFM.local", "value": 90}]},
-    #   {"attribute_key": "messaging.system", "data": [{"label":"redis", "value": 20}]},
-    # ]
+    # of most prevelant key-value pair.
     res: OrderedDict[Tuple[str, str], AttributeDistribution] = OrderedDict()
 
     for row in results:
@@ -115,8 +102,6 @@ def _build_attr_distribution_query(
         sample=None,
     )
 
-    # TODO: Add this use case to hash_bucket_functions.py?
-    # TODO: Support arrayjoin_optimizer?
     concat_attr_maps = FunctionCall(
         alias="attr_str_concat",
         function_name="mapConcat",
@@ -131,13 +116,6 @@ def _build_attr_distribution_query(
         Literal(None, 2),
     )
 
-    # Hardcoding the aggregation for now to keep the endpoint simple - although
-    # this can easily be ported over to TraceItemStatsRequest. If we expose aggregations,
-    # we'll probably want to expose OrderBy too. Order by currently has a loaded
-    # meaning in this endpoint. It is both how we order the key-value pair results
-    # in our ClickHouse query and subsequently, the attribute keys in the final response.
-    # Since we only have a single use case right now, the complication from a
-    # user-defined order by is not worth tackling in the first pass.
     selected_columns = [
         SelectedExpression(
             name="attr_key",
@@ -173,7 +151,11 @@ def _build_attr_distribution_query(
             attrs_string_values,
         ],
         limitby=LimitBy(
-            limit=distributions_params.max_buckets,
+            limit=(
+                distributions_params.max_buckets
+                if distributions_params.max_buckets > 0
+                else DEFAULT_BUCKETS
+            ),
             columns=[attrs_string_keys],
         ),
         limit=(
@@ -196,6 +178,11 @@ class ResolverTraceItemStatsEAPSpans(ResolverTraceItemStats):
         for requested_type in in_msg.stats_types:
             result = TraceItemStatsResult()
             if requested_type.HasField("attribute_distributions"):
+                if requested_type.attribute_distributions.max_buckets > MAX_BUCKETS:
+                    raise BadSnubaRPCRequestException(
+                        f"Max allowed buckets is {MAX_BUCKETS}."
+                    )
+
                 query = _build_attr_distribution_query(
                     in_msg, requested_type.attribute_distributions
                 )
