@@ -318,3 +318,21 @@ class IndexSizes(SystemQuery):
     join table_sizes on table_sizes.table = dsi.table
     order by usize desc
     """
+
+
+class ExceptionQueries(SystemQuery):
+    """
+    Queries that have raised exceptions
+    """
+
+    sql = """
+    SELECT
+        query_id,
+        event_time,
+        query,
+        exception,
+        exception_code
+    FROM system.query_log
+    WHERE exception_code != 0
+    ORDER BY event_time DESC
+    """
