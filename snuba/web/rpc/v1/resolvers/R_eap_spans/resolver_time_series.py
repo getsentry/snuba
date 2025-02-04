@@ -5,21 +5,27 @@ from typing import Any, Dict, Iterable
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import DataPoint
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
-    DataPoint,
+    Expression as ProtoExpression,
+)
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeries,
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeAggregation,
+    ExtrapolationMode,
+)
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import Expression, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
@@ -47,6 +53,13 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
 )
+
+OP_TO_EXPR = {
+    ProtoExpression.BinaryFormula.OP_ADD: f.plus,
+    ProtoExpression.BinaryFormula.OP_SUBTRACT: f.minus,
+    ProtoExpression.BinaryFormula.OP_MULTIPLY: f.multiply,
+    ProtoExpression.BinaryFormula.OP_DIVIDE: f.divide,
+}
 
 
 def _convert_result_timeseries(
@@ -169,23 +182,22 @@ def _convert_result_timeseries(
     return result_timeseries.values()
 
 
-def _build_query(request: TimeSeriesRequest) -> Query:
-    # TODO: This is hardcoded still
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
-
-    aggregation_columns = [
-        SelectedExpression(
-            name=aggregation.label, expression=aggregation_to_expression(aggregation)
-        )
-        for aggregation in request.aggregations
-    ]
+def _get_reliability_context_columns(
+    expressions: Iterable[ProtoExpression] | Iterable[AttributeAggregation],
+) -> list[SelectedExpression]:
+    # TODO: this reliability logic ignores formulas, meaning formulas dont support reliability
+    aggregates = []
+    for e in expressions:
+        if isinstance(e, AttributeAggregation):
+            aggregates.append(e)
+        else:
+            # ProtoExpression
+            if e.WhichOneof("expression") == "aggregation":
+                assert isinstance(e, AttributeAggregation)
+                aggregates.append(e)
 
     additional_context_columns = []
-    for aggregation in request.aggregations:
+    for aggregation in aggregates:
         if (
             aggregation.extrapolation_mode
             == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
@@ -210,6 +222,55 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         count_column = get_count_column(aggregation)
         additional_context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
+        )
+    return additional_context_columns
+
+
+def _proto_expression_to_ast_expression(expr: ProtoExpression) -> Expression:
+    match expr.WhichOneof("expression"):
+        case "aggregation":
+            return aggregation_to_expression(expr.aggregation)
+        case "formula":
+            return OP_TO_EXPR[expr.formula.op](
+                _proto_expression_to_ast_expression(expr.formula.left),
+                _proto_expression_to_ast_expression(expr.formula.right),
+            )
+        case default:
+            raise ValueError(f"Unknown expression type: {default}")
+
+
+def _build_query(request: TimeSeriesRequest) -> Query:
+    # TODO: This is hardcoded still
+    entity = Entity(
+        key=EntityKey("eap_spans"),
+        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+        sample=None,
+    )
+
+    if len(request.aggregations) > 0:
+        # we use request.aggregations, deprecated
+        aggregation_columns = [
+            SelectedExpression(
+                name=aggregation.label,
+                expression=aggregation_to_expression(aggregation),
+            )
+            for aggregation in request.aggregations
+        ]
+    else:
+        # we use request.expressions, replaces request.aggregations
+        for expr in request.expressions:
+            SelectedExpression(
+                name=expr.label,
+                expression=_proto_expression_to_ast_expression(expr),
+            )
+
+    if len(request.aggregations) > 0:
+        additional_context_columns = _get_reliability_context_columns(
+            request.aggregations
+        )
+    else:
+        additional_context_columns = _get_reliability_context_columns(
+            request.expressions
         )
 
     groupby_columns = [
