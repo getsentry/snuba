@@ -253,6 +253,17 @@ def _convert_results(
                 value=_TYPES_TO_CLICKHOUSE[type][1](value),
                 type=type,
             )
+        if not request.attributes:
+            for attr in _ATTRIBUTES.keys():
+                value = row[_ATTRIBUTES[attr][0]]
+                type = _ATTRIBUTES[attr][1]
+                values[attr] = TraceAttribute(
+                    key=attr,
+                    value=_TYPES_TO_CLICKHOUSE[type][1](value),
+                    type=type,
+                )
+            column_ordering = {attr: i for i, attr in enumerate(_ATTRIBUTES)}
+
         res.append(
             GetTracesResponse.Trace(
                 # we return the columns in the order they were requested
@@ -426,6 +437,18 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     ),
                 )
             )
+
+        if not request.attributes:
+            start_timestamp_requested = True  #
+            for attr in _ATTRIBUTES.keys():
+                selected_columns.append(
+                    SelectedExpression(
+                        name=_ATTRIBUTES[attr][0],
+                        expression=_attribute_to_expression(
+                            TraceAttribute(key=attr), trace_item_filters_expression
+                        ),
+                    )
+                )
 
         # Since we're always ordering by start_timestamp, we need to request
         # the field unless it's already been requested.

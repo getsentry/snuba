@@ -29,9 +29,12 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
+from snuba.web.rpc.v1.endpoint_get_traces import _ATTRIBUTES, EndpointGetTraces
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
+from tests.web.rpc.v1.test_endpoint_trace_item_table.test_endpoint_trace_item_table import (
+    write_eap_span,
+)
 
 _RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
 _SERVER_NAME = "D23CXQ4GK2.local"
@@ -239,6 +242,31 @@ class TestGetTraces(BaseApiTest):
             meta=ResponseMeta(request_id=_REQUEST_ID),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
+
+    def test_return_all_attributes_if_request_doesnt_specify_attributes(self) -> None:
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()) - 10)
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+        write_eap_span(_BASE_TIME, {"bruh": "bruh"})
+
+        message = GetTracesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+        )
+        response = EndpointGetTraces().execute(message)
+        expected_attributes = set(_ATTRIBUTES.keys())
+        response_attributes = set()  # attribute.key for attribute in response.traces
+        for trace in response.traces:
+            for attribute in trace.attributes:
+                response_attributes.add(attribute.key)
+
+        assert expected_attributes == response_attributes
 
     def test_with_data_and_limit(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
