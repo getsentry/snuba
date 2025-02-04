@@ -159,7 +159,7 @@ snql_grammar = Grammar(
     select_columns       = selected_expression space* comma
     selected_expression  = space* (aliased_tag_column / aliased_subscriptable / aliased_column_name / low_pri_arithmetic)
 
-    arrayjoin_entity     = tag_column / subscriptable / simple_term
+    arrayjoin_entity     = tag_column / flag_column / subscriptable / simple_term
     arrayjoin_optional   = (space* comma space* arrayjoin_entity)*
 
     group_list            = group_columns* (selected_expression)
@@ -173,7 +173,7 @@ snql_grammar = Grammar(
     low_pri_tuple         = low_pri_op space* high_pri_arithmetic
     high_pri_tuple        = high_pri_op space* arithmetic_term
 
-    arithmetic_term       = space* (function_call / tag_column / subscriptable / simple_term / parenthesized_arithm)
+    arithmetic_term       = space* (function_call / tag_column / flag_column / subscriptable / simple_term / parenthesized_arithm)
     parenthesized_arithm  = open_paren low_pri_arithmetic close_paren
 
     low_pri_op            = "+" / "-"
@@ -184,7 +184,7 @@ snql_grammar = Grammar(
     function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space+ "AS" space+ (quoted_alias_literal / alias_literal))?
     lambda                = open_paren space* identifier (comma space* identifier)* space* close_paren space* arrow space* function_call
 
-    aliased_tag_column    = tag_column space+ "AS" space+ (quoted_alias_literal / alias_literal)
+    aliased_tag_column    = (tag_column / flag_column) space+ "AS" space+ (quoted_alias_literal / alias_literal)
     aliased_subscriptable = subscriptable space+ "AS" space+ (quoted_alias_literal / alias_literal)
     aliased_column_name   = column_name space+ "AS" space+ (quoted_alias_literal / alias_literal)
 
@@ -202,6 +202,7 @@ snql_grammar = Grammar(
     subscriptable         = column_name open_square (column_name/tag_name) close_square
     column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.:@/]*"
     tag_column            = (entity_alias dot)? "tags" open_square tag_name close_square
+    flag_column           = (entity_alias dot)? "flags" open_square tag_name close_square
     tag_name              = ~r"[^\[\]]*"
     identifier            = backtick ~r"[a-zA-Z_][a-zA-Z0-9_]*" backtick
     function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
@@ -467,6 +468,10 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return visit_column_name(node, visited_children)
 
     def visit_tag_column(self, node: Node, visited_children: Iterable[Any]) -> Column:
+        x = visit_column_name(node, visited_children)
+        return x
+
+    def visit_flag_column(self, node: Node, visited_children: Iterable[Any]) -> Column:
         x = visit_column_name(node, visited_children)
         return x
 
