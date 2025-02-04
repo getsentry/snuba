@@ -86,6 +86,30 @@ def _build_query(request: GetTraceRequest) -> Query:
                 ),
             ),
         ]
+        selected_columns.extend(
+            [
+                SelectedExpression(name=col_name, expression=column(col_name))
+                for col_name in [
+                    "organization_id",
+                    "project_id",
+                    "service",
+                    "trace_id",
+                    "span_id",
+                    "parent_span_id",
+                    "segment_id",
+                    "segment_name",
+                    "is_segment",
+                    "_sort_timestamp",
+                    "start_timestamp",
+                    "end_timestamp",
+                    "duration_micro",
+                    "exclusive_time_micro",
+                    "name",
+                    "sampling_factor",
+                    "sampling_weight",
+                ]
+            ]
+        )
 
     entity = Entity(
         key=EntityKey("eap_spans"),
