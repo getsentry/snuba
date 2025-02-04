@@ -144,6 +144,10 @@ def _build_query(request: TraceItemTableRequest) -> Query:
             selected_columns.append(
                 SelectedExpression(name=column.label, expression=function_expr)
             )
+        elif column.HasField("formula"):
+            raise BadSnubaRPCRequestException(
+                "formulas are not supported for uptime checks"
+            )
         else:
             raise BadSnubaRPCRequestException(
                 "Column is neither an aggregate or an attribute"
