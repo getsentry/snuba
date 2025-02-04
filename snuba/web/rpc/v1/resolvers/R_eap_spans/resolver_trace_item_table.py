@@ -27,7 +27,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, literal, or_cond
+from snuba.query.dsl import and_cond, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -137,7 +137,7 @@ def _convert_order_by(
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=literal(x.column.label),
+                    expression=_formula_to_expression(x.column.formula),
                 )
             )
     return res
@@ -180,6 +180,13 @@ def _get_reliability_context_columns(column: Column) -> list[SelectedExpression]
     return []
 
 
+def _formula_to_expression(formula: Column.BinaryFormula) -> Expression:
+    return OP_TO_EXPR[formula.op](
+        _column_to_expression(formula.left),
+        _column_to_expression(formula.right),
+    )
+
+
 def _column_to_expression(column: Column) -> Expression:
     """
     Given a column protobuf object, translates it into a Expression object and returns it.
@@ -192,10 +199,7 @@ def _column_to_expression(column: Column) -> Expression:
         function_expr = replace(function_expr, alias=column.label)
         return function_expr
     elif column.HasField("formula"):
-        formula_expr = OP_TO_EXPR[column.formula.op](
-            _column_to_expression(column.formula.left),
-            _column_to_expression(column.formula.right),
-        )
+        formula_expr = _formula_to_expression(column.formula)
         formula_expr = replace(formula_expr, alias=column.label)
         return formula_expr
     else:
