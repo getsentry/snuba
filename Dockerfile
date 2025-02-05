@@ -26,6 +26,7 @@ RUN set -ex; \
         make \
         g++ \
         gnupg \
+        protobuf-compiler \
     '; \
     runtimeDeps=' \
         curl \
