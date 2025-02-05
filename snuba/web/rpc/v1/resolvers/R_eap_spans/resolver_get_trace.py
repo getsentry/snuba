@@ -42,6 +42,21 @@ from snuba.web.rpc.v1.resolvers import ResolverGetTrace
 _BUCKET_COUNT = 20
 
 
+NORMALIZED_COLUMNS_TO_INCLUDE = [
+    col.name
+    for col in get_entity(EntityKey("eap_spans")).get_data_model().columns
+    if col.name
+    not in [
+        "retention_days",
+        "sign",
+        "attr_str",
+        "attr_num",
+        "span_id",
+        "timestamp",
+    ]
+]
+
+
 def _build_query(request: GetTraceRequest) -> Query:
     selected_columns: list[SelectedExpression] = [
         SelectedExpression(
@@ -87,21 +102,12 @@ def _build_query(request: GetTraceRequest) -> Query:
                 ),
             ),
         ]
-        columns_to_exclude = [
-            "retention_days",
-            "sign",
-            "attr_str",
-            "attr_num",
-            "span_id",
-            "timestamp",
-        ]
         selected_columns.extend(
             [
                 SelectedExpression(
-                    name=col.name, expression=column(col.name, alias=col.name)
+                    name=col_name, expression=column(col_name, alias=col_name)
                 )
-                for col in get_entity(EntityKey("eap_spans")).get_data_model().columns
-                if col.name not in columns_to_exclude
+                for col_name in NORMALIZED_COLUMNS_TO_INCLUDE
             ]
         )
 
