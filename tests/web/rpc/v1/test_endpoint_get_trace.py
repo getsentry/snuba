@@ -19,6 +19,8 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_get_trace import EndpointGetTrace
@@ -35,24 +37,17 @@ _BASE_TIME = datetime.now(tz=timezone.utc).replace(
 ) - timedelta(minutes=180)
 _SPAN_COUNT = 120
 _REQUEST_ID = uuid.uuid4().hex
-_NORMALIZED_FIELDS = [
-    "organization_id",
-    "project_id",
-    "service",
-    "trace_id",
-    "span_id",
-    "parent_span_id",
-    "segment_id",
-    "segment_name",
-    "is_segment",
-    "_sort_timestamp",
-    "start_timestamp",
-    "end_timestamp",
-    "duration_micro",
-    "exclusive_time_micro",
-    "name",
-    "sampling_factor",
-    "sampling_weight",
+_NORMALIZED_FIELDS_TO_EXCLUDE = [
+    "retention_days",
+    "sign",
+    "attr_str",
+    "attr_num",
+    "timestamp",
+]
+_NORMALIZED_FIELDS_TO_INCLUDE = [
+    col.name
+    for col in get_entity(EntityKey("eap_spans")).get_data_model().columns
+    if col.name not in _NORMALIZED_FIELDS_TO_EXCLUDE
 ]
 
 
@@ -286,20 +281,22 @@ class TestGetTrace(BaseApiTest):
             ],
         )
 
+        breakpoint()
+
         assert list(
             [
                 attribute
                 for attribute in response.item_groups[0].items[0].attributes
-                if attribute.key.name not in _NORMALIZED_FIELDS
+                if attribute.key.name not in _NORMALIZED_FIELDS_TO_INCLUDE
             ]
         ) == list(expected_response.item_groups[0].items[0].attributes)
         assert set(
             [
                 attribute.key.name
                 for attribute in response.item_groups[0].items[0].attributes
-                if attribute.key.name in _NORMALIZED_FIELDS
+                if attribute.key.name in _NORMALIZED_FIELDS_TO_INCLUDE
             ]
-        ) == set(_NORMALIZED_FIELDS)
+        ) == set(_NORMALIZED_FIELDS_TO_INCLUDE)
 
     def test_with_specific_attributes(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))

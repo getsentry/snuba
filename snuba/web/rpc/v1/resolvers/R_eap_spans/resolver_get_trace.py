@@ -87,32 +87,19 @@ def _build_query(request: GetTraceRequest) -> Query:
                 ),
             ),
         ]
+        columns_to_exclude = ["retention_days", "sign", "attr_str", "attr_num"]
+        # print("bruhhhh", get_entity(EntityKey("eap_spans")).get_data_model().columns)
         selected_columns.extend(
             [
                 SelectedExpression(
-                    name=col_name, expression=column(col_name, alias=col_name)
+                    name=col.name, expression=column(col.name, alias=col.name)
                 )
-                for col_name in [
-                    "organization_id",
-                    "project_id",
-                    "service",
-                    "trace_id",
-                    "span_id",
-                    "parent_span_id",
-                    "segment_id",
-                    "segment_name",
-                    "is_segment",
-                    "_sort_timestamp",
-                    "start_timestamp",
-                    "end_timestamp",
-                    "duration_micro",
-                    "exclusive_time_micro",
-                    "name",
-                    "sampling_factor",
-                    "sampling_weight",
-                ]
+                for col in get_entity(EntityKey("eap_spans")).get_data_model().columns
+                if col.name not in columns_to_exclude
             ]
         )
+
+        print("bruhh", selected_columns)
 
     entity = Entity(
         key=EntityKey("eap_spans"),
