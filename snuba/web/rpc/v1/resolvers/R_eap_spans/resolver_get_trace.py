@@ -87,7 +87,14 @@ def _build_query(request: GetTraceRequest) -> Query:
                 ),
             ),
         ]
-        columns_to_exclude = ["retention_days", "sign", "attr_str", "attr_num"]
+        columns_to_exclude = [
+            "retention_days",
+            "sign",
+            "attr_str",
+            "attr_num",
+            "span_id",
+            "timestamp",
+        ]
         selected_columns.extend(
             [
                 SelectedExpression(

@@ -42,6 +42,7 @@ _NORMALIZED_FIELDS_TO_EXCLUDE = [
     "sign",
     "attr_str",
     "attr_num",
+    "span_id",
     "timestamp",
 ]
 _NORMALIZED_FIELDS_TO_INCLUDE = [
