@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from operator import attrgetter
 from typing import Any, Dict, Iterable
 
@@ -39,6 +40,21 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverGetTrace
 
 _BUCKET_COUNT = 20
+
+
+NORMALIZED_COLUMNS_TO_INCLUDE = [
+    col.name
+    for col in get_entity(EntityKey("eap_spans")).get_data_model().columns
+    if col.name
+    not in [
+        "retention_days",
+        "sign",
+        "attr_str",
+        "attr_num",
+        "span_id",
+        "timestamp",
+    ]
+]
 
 
 def _build_query(request: GetTraceRequest) -> Query:
@@ -86,6 +102,14 @@ def _build_query(request: GetTraceRequest) -> Query:
                 ),
             ),
         ]
+        selected_columns.extend(
+            [
+                SelectedExpression(
+                    name=col_name, expression=column(col_name, alias=col_name)
+                )
+                for col_name in NORMALIZED_COLUMNS_TO_INCLUDE
+            ]
+        )
 
     entity = Entity(
         key=EntityKey("eap_spans"),
@@ -176,6 +200,16 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             AttributeValue(
                 val_str=value,
+            ),
+        )
+    elif isinstance(value, datetime):
+        return (
+            AttributeKey(
+                name=key,
+                type=AttributeKey.Type.TYPE_DOUBLE,
+            ),
+            AttributeValue(
+                val_double=value.timestamp(),
             ),
         )
     else:
