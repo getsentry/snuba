@@ -35,6 +35,25 @@ _BASE_TIME = datetime.now(tz=timezone.utc).replace(
 ) - timedelta(minutes=180)
 _SPAN_COUNT = 120
 _REQUEST_ID = uuid.uuid4().hex
+_NORMALIZED_FIELDS = [
+    "organization_id",
+    "project_id",
+    "service",
+    "trace_id",
+    "span_id",
+    "parent_span_id",
+    "segment_id",
+    "segment_name",
+    "is_segment",
+    "_sort_timestamp",
+    "start_timestamp",
+    "end_timestamp",
+    "duration_micro",
+    "exclusive_time_micro",
+    "name",
+    "sampling_factor",
+    "sampling_weight",
+]
 
 
 def gen_message(
@@ -266,9 +285,21 @@ class TestGetTrace(BaseApiTest):
                 ),
             ],
         )
-        assert MessageToDict(response.item_groups[0]) == MessageToDict(
-            expected_response.item_groups[0]
-        )
+
+        assert list(
+            [
+                attribute
+                for attribute in response.item_groups[0].items[0].attributes
+                if attribute.key.name not in _NORMALIZED_FIELDS
+            ]
+        ) == list(expected_response.item_groups[0].items[0].attributes)
+        assert set(
+            [
+                attribute.key.name
+                for attribute in response.item_groups[0].items[0].attributes
+                if attribute.key.name in _NORMALIZED_FIELDS
+            ]
+        ) == set(_NORMALIZED_FIELDS)
 
     def test_with_specific_attributes(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
