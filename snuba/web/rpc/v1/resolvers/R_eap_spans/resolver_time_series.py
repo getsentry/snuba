@@ -44,7 +44,6 @@ from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
 )
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
     ExtrapolationContext,
@@ -60,6 +59,18 @@ OP_TO_EXPR = {
     ProtoExpression.BinaryFormula.OP_MULTIPLY: f.multiply,
     ProtoExpression.BinaryFormula.OP_DIVIDE: f.divide,
 }
+
+
+def _get_aggregation_labels(expr: ProtoExpression) -> set[str]:
+    match expr.WhichOneof("expression"):
+        case "aggregation":
+            return set([expr.aggregation.label])
+        case "formula":
+            return _get_aggregation_labels(expr.formula.left) | _get_aggregation_labels(
+                expr.formula.right
+            )
+        case default:
+            raise ValueError(f"Unknown expression type: {default}")
 
 
 def _convert_result_timeseries(
@@ -107,7 +118,10 @@ def _convert_result_timeseries(
 
     # to convert the results, need to know which were the groupby columns and which ones
     # were aggregations
-    aggregation_labels = set([agg.label for agg in request.aggregations])
+    aggregation_labels = set()
+    for expr in request.expressions:
+        aggregation_labels |= _get_aggregation_labels(expr)
+
     group_by_labels = set([attr.name for attr in request.group_by])
 
     # create a mapping with (all the group by attribute key,val pairs as strs, label name)
@@ -193,8 +207,7 @@ def _get_reliability_context_columns(
         else:
             # ProtoExpression
             if e.WhichOneof("expression") == "aggregation":
-                assert isinstance(e, AttributeAggregation)
-                aggregates.append(e)
+                aggregates.append(e.aggregation)
 
     additional_context_columns = []
     for aggregation in aggregates:
@@ -258,11 +271,13 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         ]
     else:
         # we use request.expressions, replaces request.aggregations
-        for expr in request.expressions:
+        aggregation_columns = [
             SelectedExpression(
                 name=expr.label,
                 expression=_proto_expression_to_ast_expression(expr),
             )
+            for expr in request.expressions
+        ]
 
     if len(request.aggregations) > 0:
         additional_context_columns = _get_reliability_context_columns(
@@ -360,9 +375,7 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
-        if len(in_msg.expressions) > 0:
-            raise BadSnubaRPCRequestException("expressions field not yet implemented")
-
+        assert len(in_msg.aggregations) == 0
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
