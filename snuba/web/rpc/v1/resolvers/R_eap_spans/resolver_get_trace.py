@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from operator import attrgetter
 from typing import Any, Dict, Iterable
 
@@ -88,7 +89,9 @@ def _build_query(request: GetTraceRequest) -> Query:
         ]
         selected_columns.extend(
             [
-                SelectedExpression(name=col_name, expression=column(col_name))
+                SelectedExpression(
+                    name=col_name, expression=column(col_name, alias=col_name)
+                )
                 for col_name in [
                     "organization_id",
                     "project_id",
@@ -192,14 +195,14 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
                 val_double=value,
             ),
         )
-    elif isinstance(value, str):
+    elif isinstance(value, str) or isinstance(value, datetime):
         return (
             AttributeKey(
                 name=key,
                 type=AttributeKey.Type.TYPE_STRING,
             ),
             AttributeValue(
-                val_str=value,
+                val_str=str(value),
             ),
         )
     else:

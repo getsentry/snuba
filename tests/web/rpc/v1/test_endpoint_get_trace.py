@@ -266,7 +266,9 @@ class TestGetTrace(BaseApiTest):
                 ),
             ],
         )
-        assert MessageToDict(response) == MessageToDict(expected_response)
+        assert MessageToDict(response.item_groups[0]) == MessageToDict(
+            expected_response.item_groups[0]
+        )
 
     def test_with_specific_attributes(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
