@@ -55,6 +55,7 @@ serde_with = "3.8.1"
 seq-macro = "0.3"
 sentry_arroyo = "2.19.11"
 regex = "1.11.1"
+tonic = "0.12.3"
 
 
 [dev-dependencies]
