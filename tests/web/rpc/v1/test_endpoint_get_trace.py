@@ -281,8 +281,6 @@ class TestGetTrace(BaseApiTest):
             ],
         )
 
-        breakpoint()
-
         assert list(
             [
                 attribute

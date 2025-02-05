@@ -88,7 +88,6 @@ def _build_query(request: GetTraceRequest) -> Query:
             ),
         ]
         columns_to_exclude = ["retention_days", "sign", "attr_str", "attr_num"]
-        # print("bruhhhh", get_entity(EntityKey("eap_spans")).get_data_model().columns)
         selected_columns.extend(
             [
                 SelectedExpression(
@@ -98,8 +97,6 @@ def _build_query(request: GetTraceRequest) -> Query:
                 if col.name not in columns_to_exclude
             ]
         )
-
-        print("bruhh", selected_columns)
 
     entity = Entity(
         key=EntityKey("eap_spans"),
@@ -182,14 +179,24 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
                 val_double=value,
             ),
         )
-    elif isinstance(value, str) or isinstance(value, datetime):
+    elif isinstance(value, str):
         return (
             AttributeKey(
                 name=key,
                 type=AttributeKey.Type.TYPE_STRING,
             ),
             AttributeValue(
-                val_str=str(value),
+                val_str=value,
+            ),
+        )
+    elif isinstance(value, datetime):
+        return (
+            AttributeKey(
+                name=key,
+                type=AttributeKey.Type.TYPE_DOUBLE,
+            ),
+            AttributeValue(
+                val_double=value.timestamp(),
             ),
         )
     else:
