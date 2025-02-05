@@ -7,6 +7,7 @@ from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     DataPoint,
+    Expression,
     TimeSeries,
     TimeSeriesRequest,
     TimeSeriesResponse,
@@ -31,6 +32,7 @@ from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
 )
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
 from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
@@ -38,6 +40,18 @@ from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
     base_conditions_and,
     treeify_or_and_conditions,
 )
+
+
+def _get_aggregation_labels(expr: Expression) -> set[str]:
+    match expr.WhichOneof("expression"):
+        case "aggregation":
+            return set([expr.aggregation.label])
+        case "formula":
+            return _get_aggregation_labels(expr.formula.left) | _get_aggregation_labels(
+                expr.formula.right
+            )
+        case default:
+            raise ValueError(f"Unknown expression type: {default}")
 
 
 def _convert_result_timeseries(
@@ -85,7 +99,10 @@ def _convert_result_timeseries(
 
     # to convert the results, need to know which were the groupby columns and which ones
     # were aggregations
-    aggregation_labels = set([agg.label for agg in request.aggregations])
+    aggregation_labels = set()
+    for expr in request.expressions:
+        aggregation_labels |= _get_aggregation_labels(expr)
+
     group_by_labels = set([attr.name for attr in request.group_by])
 
     # create a mapping with (all the group by attribute key,val pairs as strs, label name)
@@ -158,16 +175,37 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         sample=None,
     )
 
-    aggregation_columns = [
-        SelectedExpression(
-            name=aggregation.label,
-            expression=aggregation_to_expression(
-                aggregation,
-                attribute_key_to_expression(aggregation.key),
-            ),
-        )
-        for aggregation in request.aggregations
-    ]
+    aggregation_columns = []
+    for expr in request.expressions:
+        match expr.WhichOneof("expression"):
+            case "aggregation":
+                aggregation_columns.append(
+                    SelectedExpression(
+                        name=expr.aggregation.label,
+                        expression=aggregation_to_expression(expr.aggregation),
+                    )
+                )
+            case "formula":
+                raise BadSnubaRPCRequestException(
+                    "formulas are not supported for uptime checks"
+                )
+            case default:
+                raise BadSnubaRPCRequestException(f"Unknown expression type: {default}")
+
+    additional_context_columns = []
+    for expr in request.expressions:
+        match expr.WhichOneof("expression"):
+            case "aggregation":
+                count_column = get_count_column(expr.aggregation)
+                additional_context_columns.append(
+                    SelectedExpression(name=count_column.alias, expression=count_column)
+                )
+            case "formula":
+                raise BadSnubaRPCRequestException(
+                    "formulas are not supported for uptime checks"
+                )
+            case default:
+                raise BadSnubaRPCRequestException(f"Unknown expression type: {default}")
 
     groupby_columns = [
         SelectedExpression(
