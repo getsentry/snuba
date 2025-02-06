@@ -126,7 +126,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=self.storage_set_key,
                 table_name=self.dist_table_name,
                 engine=table_engines.Distributed(
-                    # TODO: should this have a sharding key??
                     local_table_name=self.local_table_name,
                     sharding_key=None,
                 ),
