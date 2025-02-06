@@ -3,7 +3,9 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
 from snuba.query.expressions import SubscriptableReference
-from snuba.web.rpc.common.common import attribute_key_to_expression
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+    attribute_key_to_expression,
+)
 
 
 class TestCommon:
@@ -93,7 +95,7 @@ class TestCommon:
                 column=column("attr_num"),
                 key=literal("derp"),
             ),
-            "Int64",
+            "Nullable(Int64)",
             alias="derp_TYPE_INT",
         )
 
@@ -105,6 +107,6 @@ class TestCommon:
                 column=column("attr_num"),
                 key=literal("derp"),
             ),
-            "Boolean",
+            "Nullable(Boolean)",
             alias="derp_TYPE_BOOLEAN",
         )

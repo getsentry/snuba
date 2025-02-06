@@ -28,7 +28,6 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
-    attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
@@ -37,14 +36,16 @@ from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
 )
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
+from snuba.web.rpc.v1.resolvers.common.aggregation import (
     ExtrapolationContext,
     aggregation_to_expression,
     get_average_sample_rate_column,
     get_confidence_interval_column,
     get_count_column,
+)
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+    attribute_key_to_expression,
 )
 
 
@@ -254,7 +255,10 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         ],
         granularity=request.granularity_secs,
         condition=base_conditions_and(
-            request.meta, trace_item_filters_to_expression(request.filter)
+            request.meta,
+            trace_item_filters_to_expression(
+                request.filter, attribute_key_to_expression
+            ),
         ),
         groupby=[
             column("time_slot"),
@@ -298,9 +302,6 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
-        if len(in_msg.expressions) > 0:
-            raise BadSnubaRPCRequestException("expressions field not yet implemented")
-
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
