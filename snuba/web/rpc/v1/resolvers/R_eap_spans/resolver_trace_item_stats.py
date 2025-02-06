@@ -39,6 +39,9 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_traces import _DEFAULT_ROW_LIMIT
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+    attribute_key_to_expression,
+)
 
 MAX_BUCKETS = 100
 DEFAULT_BUCKETS = 10
@@ -131,7 +134,9 @@ def _build_attr_distribution_query(
         ),
     ]
 
-    trace_item_filters_expression = trace_item_filters_to_expression(in_msg.filter)
+    trace_item_filters_expression = trace_item_filters_to_expression(
+        in_msg.filter, attribute_key_to_expression
+    )
 
     query = Query(
         from_clause=entity,

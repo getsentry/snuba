@@ -29,7 +29,6 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
-    attribute_key_to_expression,
     base_conditions_and,
     project_id_and_org_conditions,
     timestamp_in_range_condition,
@@ -41,6 +40,9 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+    attribute_key_to_expression,
+)
 
 _DEFAULT_ROW_LIMIT = 10_000
 _BUFFER_WINDOW = 2 * 3600  # 2 hours
@@ -350,6 +352,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> dict[str, int]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
+            attribute_key_to_expression,
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(
@@ -410,6 +413,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> list[GetTracesResponse.Trace]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
+            attribute_key_to_expression,
         )
 
         selected_columns: list[SelectedExpression] = []

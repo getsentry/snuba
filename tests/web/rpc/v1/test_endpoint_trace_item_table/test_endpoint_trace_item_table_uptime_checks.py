@@ -32,6 +32,7 @@ _TRACE_ID = uuid.uuid4().hex
 
 def gen_message(
     dt: datetime,
+    overrides: Mapping[str, Any] = {},
 ) -> Mapping[str, Any]:
     return {
         "organization_id": 1,
@@ -55,6 +56,7 @@ def gen_message(
             "request_type": "GET",
             "http_status_code": 200,
         },
+        **overrides,
     }
 
 
@@ -253,3 +255,49 @@ class TestTraceItemTable(BaseApiTest):
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_nonexistent_attribute() -> None:
+    _UPTIME_CHECKS = [
+        gen_message(
+            BASE_TIME - timedelta(minutes=30),
+            {
+                "http_status_code": None,
+                "request_info": {"request_type": "GET", "http_status_code": None},
+            },
+        )
+        for i in range(50)
+    ]
+    write_raw_unprocessed_events(get_storage(StorageKey("uptime_monitor_checks")), _UPTIME_CHECKS)  # type: ignore
+    ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+    hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
+    message = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1, 2, 3],
+            organization_id=1,
+            cogs_category="something",
+            referrer="something",
+            start_timestamp=hour_ago,
+            end_timestamp=ts,
+            request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_UPTIME_CHECK,
+        ),
+        columns=[
+            Column(
+                key=AttributeKey(
+                    type=AttributeKey.TYPE_INT,
+                    name="http_status_code",
+                ),
+            ),
+        ],
+        limit=50,
+    )
+    response = EndpointTraceItemTable().execute(message)
+    assert response.column_values == [
+        TraceItemColumnValues(
+            attribute_name="http_status_code",
+            results=[AttributeValue(is_null=True) for _ in range(50)],
+        ),
+    ]

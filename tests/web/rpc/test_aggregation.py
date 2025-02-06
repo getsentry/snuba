@@ -9,7 +9,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
+from snuba.web.rpc.v1.resolvers.common.aggregation import (
     CUSTOM_COLUMN_PREFIX,
     CustomColumnInformation,
     ExtrapolationContext,

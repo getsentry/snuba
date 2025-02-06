@@ -27,7 +27,6 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
-    attribute_key_to_expression,
     project_id_and_org_conditions,
     timestamp_in_range_condition,
     treeify_or_and_conditions,
@@ -38,6 +37,9 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverGetTrace
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+    attribute_key_to_expression,
+)
 
 _BUCKET_COUNT = 20
 

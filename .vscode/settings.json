@@ -67,4 +67,5 @@
   "python.testing.pytestArgs": ["tests"],
   "python.analysis.autoImportCompletions": true,
   "mypy-type-checker.args": ["--strict"]
+
 }
