@@ -1,17 +1,17 @@
-from typing import List, Sequence
+from typing import Any, List, Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
-from snuba.utils.schemas import Column, Date, Float, Int, Map, String, UInt
+from snuba.utils.schemas import Column, ColumnType, Date, Float, Int, Map, String, UInt
 
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 local_table_name = "eap_items_1_local"
 dist_table_name = "eap_items_1_dist"
 num_attr_buckets = 20
 
-_TYPES = {
+_TYPES: dict[str, ColumnType[Any]] = {
     "string": String(),
     "bool": Int(8),
     "int64": Int(64),
