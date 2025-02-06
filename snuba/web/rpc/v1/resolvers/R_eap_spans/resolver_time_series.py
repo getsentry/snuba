@@ -262,33 +262,15 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         sample=None,
     )
 
-    if len(request.aggregations) > 0:
-        # we use request.aggregations, deprecated
-        aggregation_columns = [
-            SelectedExpression(
-                name=aggregation.label,
-                expression=aggregation_to_expression(aggregation),
-            )
-            for aggregation in request.aggregations
-        ]
-    else:
-        # we use request.expressions, replaces request.aggregations
-        aggregation_columns = [
-            SelectedExpression(
-                name=expr.label,
-                expression=_proto_expression_to_ast_expression(expr),
-            )
-            for expr in request.expressions
-        ]
+    aggregation_columns = [
+        SelectedExpression(
+            name=expr.label,
+            expression=_proto_expression_to_ast_expression(expr),
+        )
+        for expr in request.expressions
+    ]
 
-    if len(request.aggregations) > 0:
-        additional_context_columns = _get_reliability_context_columns(
-            request.aggregations
-        )
-    else:
-        additional_context_columns = _get_reliability_context_columns(
-            request.expressions
-        )
+    additional_context_columns = _get_reliability_context_columns(request.expressions)
 
     groupby_columns = [
         SelectedExpression(
@@ -380,7 +362,10 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
+        # aggregations field is deprecated, it gets converted to request.expressions
+        # if the user passes it in
         assert len(in_msg.aggregations) == 0
+
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
