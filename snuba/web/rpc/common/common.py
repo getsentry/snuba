@@ -167,9 +167,18 @@ def trace_item_filters_to_expression(
                 "Invalid trace item filter, empty 'not' clause"
             )
         elif len(filters) == 1:
-            return not_cond(trace_item_filters_to_expression(filters[0]))
+            return not_cond(
+                trace_item_filters_to_expression(
+                    filters[0], attribute_key_to_expression
+                )
+            )
         return not_cond(
-            and_cond(*(trace_item_filters_to_expression(x) for x in filters))
+            and_cond(
+                *(
+                    trace_item_filters_to_expression(x, attribute_key_to_expression)
+                    for x in filters
+                )
+            )
         )
 
     if item_filter.HasField("comparison_filter"):
