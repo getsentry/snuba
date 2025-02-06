@@ -2,8 +2,10 @@ import random
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Mapping
+from unittest.mock import MagicMock, call, patch
 
 import pytest
+from clickhouse_driver.errors import ServerException
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
@@ -34,12 +36,15 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     ExistsFilter,
+    NotFilter,
     OrFilter,
     TraceItemFilter,
 )
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.web import QueryException
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
@@ -219,6 +224,52 @@ class TestTraceItemTable(BaseApiTest):
         if response.status_code != 200:
             error_proto.ParseFromString(response.data)
         assert response.status_code == 200, error_proto
+
+    def test_OOM(self, monkeypatch: Any) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                    )
+                )
+            ],
+            limit=10,
+        )
+        metrics_mock = MagicMock()
+        monkeypatch.setattr(RPCEndpoint, "metrics", property(lambda x: metrics_mock))
+        with patch(
+            "clickhouse_driver.client.Client.execute",
+            side_effect=ServerException(
+                "DB::Exception: Received from snuba-events-analytics-platform-1-1:1111. DB::Exception: Memory limit (for query) exceeded: would use 1.11GiB (attempt to allocate chunk of 111111 bytes), maximum: 1.11 GiB. Blahblahblahblahblahblahblah",
+                code=241,
+            ),
+        ), patch("snuba.web.rpc.sentry_sdk.capture_exception") as sentry_sdk_mock:
+            with pytest.raises(QueryException) as e:
+                EndpointTraceItemTable().execute(message)
+            assert "DB::Exception: Memory limit (for query) exceeded" in str(e.value)
+
+            sentry_sdk_mock.assert_called_once()
+            assert metrics_mock.increment.call_args_list.count(call("OOM_query")) == 1
 
     def test_errors_without_type(self) -> None:
         ts = Timestamp()
@@ -2304,6 +2355,203 @@ class TestTraceItemTable(BaseApiTest):
                     AttributeValue(val_double=0),
                     AttributeValue(val_double=200),
                 ],
+            ),
+        ]
+
+    def test_agg_formula(self, setup_teardown: Any) -> None:
+        """
+        ensures formulas of aggregates work
+        ex sum(my_attribute) / count(my_attribute)
+        """
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"kyles_measurement": 6}, 10)
+        write_eap_span(span_ts, {"kyles_measurement": 7}, 2)
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_DOUBLE, name="kyles_measurement"
+                    )
+                )
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="kyles_measurement",
+                                ),
+                            ),
+                            label="sum(kyles_measurement)",
+                        ),
+                        right=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="kyles_measurement",
+                                ),
+                            ),
+                            label="count(kyles_measurement)",
+                        ),
+                    ),
+                    label="sum(kyles_measurement) / count(kyles_measurement)",
+                ),
+            ],
+            limit=1,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="sum(kyles_measurement) / count(kyles_measurement)",
+                results=[
+                    AttributeValue(val_double=(74 / 12)),
+                ],
+            ),
+        ]
+
+    def test_non_agg_formula(self, setup_teardown: Any) -> None:
+        """
+        ensures formulas of non-aggregates work
+        ex: my_attribute + my_other_attribute
+        """
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"kyles_measurement": -1, "my_other_attribute": 1}, 4)
+        write_eap_span(span_ts, {"kyles_measurement": 3, "my_other_attribute": 2}, 2)
+        write_eap_span(span_ts, {"kyles_measurement": 10, "my_other_attribute": 3}, 1)
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_DOUBLE, name="kyles_measurement"
+                    )
+                )
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_ADD,
+                        left=Column(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_DOUBLE, name="kyles_measurement"
+                            )
+                        ),
+                        right=Column(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_DOUBLE, name="my_other_attribute"
+                            )
+                        ),
+                    ),
+                    label="kyles_measurement + my_other_attribute",
+                ),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        formula=Column.BinaryFormula(
+                            op=Column.BinaryFormula.OP_ADD,
+                            left=Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="kyles_measurement",
+                                )
+                            ),
+                            right=Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="my_other_attribute",
+                                )
+                            ),
+                        ),
+                        label="kyles_measurement + my_other_attribute",
+                    )
+                ),
+            ],
+            limit=50,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="kyles_measurement + my_other_attribute",
+                results=[
+                    AttributeValue(val_double=0),
+                    AttributeValue(val_double=0),
+                    AttributeValue(val_double=0),
+                    AttributeValue(val_double=0),
+                    AttributeValue(val_double=5),
+                    AttributeValue(val_double=5),
+                    AttributeValue(val_double=13),
+                ],
+            ),
+        ]
+
+    def test_not_filter(setup_teardown: Any) -> None:
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"attr1": "value1"}, 10)
+        write_eap_span(span_ts, {"attr1": "value1", "attr2": "value2"}, 10)
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="attr1")),
+            ],
+            filter=TraceItemFilter(
+                not_filter=NotFilter(
+                    filters=[
+                        TraceItemFilter(
+                            exists_filter=ExistsFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="attr2"
+                                )
+                            )
+                        )
+                    ]
+                )
+            ),
+            limit=50,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="attr1",
+                results=[AttributeValue(val_str="value1") for _ in range(10)],
             ),
         ]
 

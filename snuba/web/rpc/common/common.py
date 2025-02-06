@@ -285,6 +285,18 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             return trace_item_filters_to_expression(filters[0])
         return or_cond(*(trace_item_filters_to_expression(x) for x in filters))
 
+    if item_filter.HasField("not_filter"):
+        filters = item_filter.not_filter.filters
+        if len(filters) == 0:
+            raise BadSnubaRPCRequestException(
+                "Invalid trace item filter, empty 'not' clause"
+            )
+        elif len(filters) == 1:
+            return not_cond(trace_item_filters_to_expression(filters[0]))
+        return not_cond(
+            and_cond(*(trace_item_filters_to_expression(x) for x in filters))
+        )
+
     if item_filter.HasField("comparison_filter"):
         k = item_filter.comparison_filter.key
         k_expression = attribute_key_to_expression(k)
