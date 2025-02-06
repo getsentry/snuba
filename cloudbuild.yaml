@@ -13,7 +13,7 @@ steps:
         "-f",
         "./Dockerfile",
       ]
-    timeout: 12000s
+    timeout: 2400s
 
   # Pull docker image again, so we can get build info.
   # https://github.com/GoogleCloudPlatform/cloud-builders-community/issues/212#issuecomment-1478828752
