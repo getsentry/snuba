@@ -643,17 +643,17 @@ def aggregation_to_expression(
             field,
             get_field_existence_expression(field),
         ),
-        Function.FUNCTION_AVERAGE: f.avgIf(
+        Function.FUNCTION_AVERAGE: f.avgIfOrNull(
             field, get_field_existence_expression(field)
         ),
-        Function.FUNCTION_COUNT: f.countIf(
+        Function.FUNCTION_COUNT: f.countIfOrNull(
             field, get_field_existence_expression(field)
         ),
         Function.FUNCTION_P50: cf.quantileIfOrNull(0.5)(
             field,
             get_field_existence_expression(field),
         ),
-        Function.FUNCTION_P75: cf.quantileIf(0.75)(
+        Function.FUNCTION_P75: cf.quantileIfOrNull(0.75)(
             field,
             get_field_existence_expression(field),
         ),
@@ -669,7 +669,9 @@ def aggregation_to_expression(
             field,
             get_field_existence_expression(field),
         ),
-        Function.FUNCTION_AVG: f.avgIf(field, get_field_existence_expression(field)),
+        Function.FUNCTION_AVG: f.avgIfOrNull(
+            field, get_field_existence_expression(field)
+        ),
         Function.FUNCTION_MAX: f.maxIfOrNull(
             field,
             get_field_existence_expression(field),
