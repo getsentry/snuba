@@ -4,7 +4,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
-from snuba.utils.schemas import Column, ColumnType, Date, Float, Int, Map, String, UInt
+from snuba.utils.schemas import Array, Column, ColumnType, Date, Map, String, UInt
 
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 local_table_name = "eap_items_1_local"
@@ -12,16 +12,15 @@ dist_table_name = "eap_items_1_dist"
 num_attr_buckets = 20
 
 _TYPES: dict[str, ColumnType[Any]] = {
-    "string": String(),
-    "bool": Int(8),
-    "int64": Int(64),
-    "float64": Float(64),
+    "string": Map(String(), String()),
+    "bool": Array(String()),
+    "int64": Array(String()),
+    "float64": Array(String()),
 }
 
 
 _attr_columns = [
-    Column(f"attrs_{type_name}", Map(String(), type_spec))
-    for type_name, type_spec in _TYPES.items()
+    Column(f"attrs_{type_name}", type_spec) for type_name, type_spec in _TYPES.items()
 ]
 
 
@@ -35,16 +34,19 @@ columns: List[Column[Modifiers]] = [
 ]
 
 
-MV_QUERY = """
+_attr_num_names = ", ".join([f"mapKeys(attr_num_{i})" for i in range(20)])
+
+
+MV_QUERY = f"""
 SELECT
     project_id,
     'span',
     toDate(_sort_timestamp) AS date,
     retention_days as retention_days,
     mapConcat(attr_str_0, attr_str_1, attr_str_2, attr_str_3, attr_str_4, attr_str_5, attr_str_6, attr_str_7, attr_str_8, attr_str_9, attr_str_10, attr_str_11, attr_str_12, attr_str_13, attr_str_14, attr_str_15, attr_str_16, attr_str_17, attr_str_18, attr_str_19) AS attrs_string, -- `attrs_string` Map(String, String),
-    map() AS attrs_bool, -- bool
-    map() AS attrs_int64, -- int64
-    mapConcat(attr_num_0, attr_num_1, attr_num_2, attr_num_3, attr_num_4, attr_num_5, attr_num_6, attr_num_7, attr_num_8, attr_num_9, attr_num_10, attr_num_11, attr_num_12, attr_num_13, attr_num_14, attr_num_15, attr_num_16, attr_num_17, attr_num_18, attr_num_19) AS attrs_float64, -- float
+    array() AS attrs_bool, -- bool
+    array() AS attrs_int64, -- int64
+    arrayConcat({_attr_num_names}) AS attrs_float64, -- float
     -- a hash of all the attribute key,val pairs of the item in sorted order
     -- this lets us deduplicate rows with merges
     cityHash64(mapSort(
