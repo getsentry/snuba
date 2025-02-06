@@ -150,4 +150,20 @@ class Migration(migration.ClickhouseNodeMigration):
         return create_table_ops + materialized_view_ops
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
-        return []
+        return [
+            operations.DropTable(
+                storage_set=self.storage_set_key,
+                table_name=self.mv_name,
+                target=OperationTarget.LOCAL,
+            ),
+            operations.DropTable(
+                storage_set=self.storage_set_key,
+                table_name=self.local_table_name,
+                target=OperationTarget.LOCAL,
+            ),
+            operations.DropTable(
+                storage_set=self.storage_set_key,
+                table_name=self.dist_table_name,
+                target=OperationTarget.DISTRIBUTED,
+            ),
+        ]
