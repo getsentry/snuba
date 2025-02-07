@@ -36,6 +36,7 @@ test_data = [
     (("IPv6", "", "", ""), IPv6()),
     (("String", "", "", ""), String()),
     (("UInt32", "", "", ""), UInt(32)),
+    (("UInt128", "", "", ""), UInt(128)),
     (("UUID", "", "", ""), UUID()),
     # Aggregate functions
     (

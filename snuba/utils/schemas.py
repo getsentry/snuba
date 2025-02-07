@@ -175,7 +175,9 @@ class Column(Generic[TModifiers]):
 
     @staticmethod
     def to_columns(
-        columns: Sequence[Union[Column[TModifiers], tuple[str, ColumnType[TModifiers]]]]
+        columns: Sequence[
+            Union[Column[TModifiers], tuple[str, ColumnType[TModifiers]]]
+        ],
     ) -> Sequence[Column[TModifiers]]:
         return [Column(*col) if not isinstance(col, Column) else col for col in columns]
 
@@ -582,7 +584,7 @@ class FixedString(ColumnType[TModifiers]):
 class UInt(ColumnType[TModifiers]):
     def __init__(self, size: int, modifiers: Optional[TModifiers] = None) -> None:
         super().__init__(modifiers)
-        assert size in (8, 16, 32, 64)
+        assert size in (8, 16, 32, 64, 128)
         self.size = size
 
     def _repr_content(self) -> str:
@@ -608,7 +610,7 @@ class UInt(ColumnType[TModifiers]):
 class Int(ColumnType[TModifiers]):
     def __init__(self, size: int, modifiers: Optional[TModifiers] = None) -> None:
         super().__init__(modifiers)
-        assert size in (8, 16, 32, 64)
+        assert size in (8, 16, 32, 64, 128)
         self.size = size
 
     def _repr_content(self) -> str:
