@@ -2345,14 +2345,14 @@ class TestTraceItemTable(BaseApiTest):
                 results=[
                     AttributeValue(val_double=20),
                     AttributeValue(val_double=10),
-                    AttributeValue(val_double=0),
+                    AttributeValue(is_null=True),
                 ],
             ),
             TraceItemColumnValues(
                 attribute_name="sum(bark.db)",
                 results=[
-                    AttributeValue(val_double=0),
-                    AttributeValue(val_double=0),
+                    AttributeValue(is_null=True),
+                    AttributeValue(is_null=True),
                     AttributeValue(val_double=200),
                 ],
             ),
@@ -2552,6 +2552,45 @@ class TestTraceItemTable(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="attr1",
                 results=[AttributeValue(val_str="value1") for _ in range(10)],
+            ),
+        ]
+
+    def test_nonexistent_attribute(setup_teardown: Any) -> None:
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"animal_type": "duck"}, 10)
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="nonexistent_string"
+                    )
+                ),
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_INT, name="nonexistent_int")
+                ),
+            ],
+            limit=50,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="nonexistent_string",
+                results=[AttributeValue(is_null=True) for _ in range(10)],
+            ),
+            TraceItemColumnValues(
+                attribute_name="nonexistent_int",
+                results=[AttributeValue(is_null=True) for _ in range(10)],
             ),
         ]
 
