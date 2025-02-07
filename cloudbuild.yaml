@@ -13,7 +13,7 @@ steps:
         "-f",
         "./Dockerfile",
       ]
-    timeout: 2400s
+    timeout: 1200s
 
   # Pull docker image again, so we can get build info.
   # https://github.com/GoogleCloudPlatform/cloud-builders-community/issues/212#issuecomment-1478828752
@@ -27,4 +27,4 @@ images: [
 timeout: 2640s
 options:
   # We need more memory for Webpack builds & e2e self-hosted tests
-  machineType: "E2_HIGHCPU_32"
+  machineType: "E2_HIGHCPU_8"
