@@ -11,6 +11,7 @@ from snuba.clickhouse.columns import (
     UUID,
     AggregateFunction,
     Array,
+    Bool,
     ColumnType,
     Date,
     DateTime,
@@ -35,7 +36,7 @@ grammar = Grammar(
     # datetime64 needs to be before basic_type to not be parsed as DateTime
     primitive        = datetime64 / basic_type / uint / int / float / fixedstring / enum
     # DateTime must come before Date
-    basic_type       = "DateTime" / "Date" / "IPv4" / "IPv6" / "String" / "UUID"
+    basic_type       = "DateTime" / "Date" / "IPv4" / "IPv6" / "String" / "UUID" / "Bool"
     uint             = "UInt" uint_size
     int              = "Int" uint_size
     uint_size        = "8" / "16" / "32" / "64" / "128"
@@ -82,6 +83,7 @@ def merge_modifiers(
 
 
 _TYPES: dict[str, type[ColumnType[MigrationModifiers]]] = {
+    "Bool": Bool,
     "Date": Date,
     "DateTime": DateTime,
     "IPv4": IPv4,

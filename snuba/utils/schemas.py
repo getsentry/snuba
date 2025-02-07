@@ -852,3 +852,23 @@ class ColumnValidator:
                 f"Invalid value {el} for column type {tuple_column.types[i]}"
             )
         return True
+
+
+class Bool(ColumnType[TModifiers]):
+    def __init__(self, modifiers: Optional[TModifiers] = None) -> None:
+        super().__init__(modifiers)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.get_modifiers() == cast(Int[TModifiers], other).get_modifiers()
+        )
+
+    def _for_schema_impl(self) -> str:
+        return "Bool"
+
+    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Bool[TModifiers]:
+        return Bool(modifiers=modifiers)
+
+    def get_raw(self) -> Bool[TModifiers]:
+        return Bool()
