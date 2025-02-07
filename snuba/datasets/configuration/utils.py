@@ -20,6 +20,7 @@ from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.utils.schemas import (
     UUID,
     AggregateFunction,
+    Bool,
     ColumnType,
     FixedString,
     Int,
@@ -75,6 +76,7 @@ SIMPLE_COLUMN_TYPES: dict[str, Type[ColumnType[SchemaModifiers]]] = {
     "UUID": UUID,
     "IPv4": IPv4,
     "IPv6": IPv6,
+    "Bool": Bool,
 }
 
 
