@@ -6,7 +6,7 @@ click==8.1.7
 clickhouse-driver==0.2.6
 confluent-kafka==2.7.0
 datadog==0.21.0
-devservices==1.0.12
+devservices==1.0.14
 flake8==7.0.0
 Flask==2.2.5
 google-cloud-storage==2.18.0
@@ -29,7 +29,7 @@ python-rapidjson==1.8
 redis==4.5.4
 sentry-arroyo==2.19.12
 sentry-kafka-schemas==0.1.129
-sentry-protos==0.1.55
+sentry-protos==0.1.58
 sentry-redis-tools==0.3.0
 sentry-relay==0.9.5
 sentry-sdk==2.18.0
