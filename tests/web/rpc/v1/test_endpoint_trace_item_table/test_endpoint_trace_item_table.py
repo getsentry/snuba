@@ -36,6 +36,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     ExistsFilter,
+    NotFilter,
     OrFilter,
     TraceItemFilter,
 )
@@ -2509,6 +2510,48 @@ class TestTraceItemTable(BaseApiTest):
                     AttributeValue(val_double=5),
                     AttributeValue(val_double=13),
                 ],
+            ),
+        ]
+
+    def test_not_filter(setup_teardown: Any) -> None:
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"attr1": "value1"}, 10)
+        write_eap_span(span_ts, {"attr1": "value1", "attr2": "value2"}, 10)
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="attr1")),
+            ],
+            filter=TraceItemFilter(
+                not_filter=NotFilter(
+                    filters=[
+                        TraceItemFilter(
+                            exists_filter=ExistsFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="attr2"
+                                )
+                            )
+                        )
+                    ]
+                )
+            ),
+            limit=50,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="attr1",
+                results=[AttributeValue(val_str="value1") for _ in range(10)],
             ),
         ]
 
