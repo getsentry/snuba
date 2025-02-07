@@ -42,16 +42,16 @@ from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
 )
 
 
-def _get_aggregation_labels(expr: Expression) -> set[str]:
+def _get_aggregation_label(expr: Expression) -> set[str]:
     match expr.WhichOneof("expression"):
         case "aggregation":
-            return set([expr.aggregation.label])
+            return expr.aggregation.label
         case "formula":
-            return _get_aggregation_labels(expr.formula.left) | _get_aggregation_labels(
-                expr.formula.right
+            raise BadSnubaRPCRequestException(
+                "formulas are not supported for uptime checks"
             )
         case default:
-            raise ValueError(f"Unknown expression type: {default}")
+            raise BadSnubaRPCRequestException(f"Unknown expression type: {default}")
 
 
 def _convert_result_timeseries(
@@ -99,9 +99,9 @@ def _convert_result_timeseries(
 
     # to convert the results, need to know which were the groupby columns and which ones
     # were aggregations
-    aggregation_labels = set()
-    for expr in request.expressions:
-        aggregation_labels |= _get_aggregation_labels(expr)
+    aggregation_labels = set(
+        [_get_aggregation_label(expr) for expr in request.expressions]
+    )
 
     group_by_labels = set([attr.name for attr in request.group_by])
 
@@ -182,23 +182,11 @@ def _build_query(request: TimeSeriesRequest) -> Query:
                 aggregation_columns.append(
                     SelectedExpression(
                         name=expr.aggregation.label,
-                        expression=aggregation_to_expression(expr.aggregation),
+                        expression=aggregation_to_expression(
+                            expr.aggregation,
+                            attribute_key_to_expression(expr.aggregation.key),
+                        ),
                     )
-                )
-            case "formula":
-                raise BadSnubaRPCRequestException(
-                    "formulas are not supported for uptime checks"
-                )
-            case default:
-                raise BadSnubaRPCRequestException(f"Unknown expression type: {default}")
-
-    additional_context_columns = []
-    for expr in request.expressions:
-        match expr.WhichOneof("expression"):
-            case "aggregation":
-                count_column = get_count_column(expr.aggregation)
-                additional_context_columns.append(
-                    SelectedExpression(name=count_column.alias, expression=count_column)
                 )
             case "formula":
                 raise BadSnubaRPCRequestException(
