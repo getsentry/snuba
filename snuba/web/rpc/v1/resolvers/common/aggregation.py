@@ -154,13 +154,6 @@ class PercentileExtrapolationContext(ExtrapolationContext):
     granularity: float
     width: float
 
-    @property
-    def is_extrapolated(self) -> bool:
-        # We infer if a column is extrapolated or not by the presence of the
-        # confidence interval. It will be present for extrapolated aggregates
-        # but not for non-extrapolated aggregates and scalars.
-        return self.confidence_interval is not None
-
     @cached_property
     def reliability(self) -> Reliability.ValueType:
         if not self.is_extrapolated or not self.is_data_present:
