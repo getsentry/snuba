@@ -106,7 +106,7 @@ def _convert_result_timeseries(
 
     # to convert the results, need to know which were the groupby columns and which ones
     # were aggregations
-    aggregation_labels = [expr.label for expr in request.expressions]
+    aggregation_labels = set([expr.label for expr in request.expressions])
 
     group_by_labels = set([attr.name for attr in request.group_by])
 

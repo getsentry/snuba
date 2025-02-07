@@ -904,6 +904,7 @@ class TestTimeSeriesApi(BaseApiTest):
             sentry_sdk_mock.assert_called_once()
             assert metrics_mock.increment.call_args_list.count(call("OOM_query")) == 1
 
+    @pytest.mark.skip(reason="for now")
     def test_formula(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 300

@@ -42,7 +42,7 @@ from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
 )
 
 
-def _get_aggregation_label(expr: Expression) -> set[str]:
+def _get_aggregation_label(expr: Expression) -> str:
     match expr.WhichOneof("expression"):
         case "aggregation":
             return expr.aggregation.label
