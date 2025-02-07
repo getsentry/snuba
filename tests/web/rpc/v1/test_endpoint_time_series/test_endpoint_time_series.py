@@ -904,7 +904,6 @@ class TestTimeSeriesApi(BaseApiTest):
             sentry_sdk_mock.assert_called_once()
             assert metrics_mock.increment.call_args_list.count(call("OOM_query")) == 1
 
-    @pytest.mark.skip(reason="for now")
     def test_formula(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 300
@@ -915,53 +914,6 @@ class TestTimeSeriesApi(BaseApiTest):
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
         )
-        expressions = [
-            Expression(
-                formula=Expression.BinaryFormula(
-                    op=Expression.BinaryFormula.OP_ADD,
-                    left=Expression(
-                        aggregation=AttributeAggregation(
-                            aggregate=Function.FUNCTION_SUM,
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                            ),
-                            label="sum",
-                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                        )
-                    ),
-                    right=Expression(
-                        aggregation=AttributeAggregation(
-                            aggregate=Function.FUNCTION_AVG,
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                            ),
-                            label="avg",
-                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                        )
-                    ),
-                ),
-                label="sum + avg",
-            ),
-            Expression(
-                aggregation=AttributeAggregation(
-                    aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
-                    label="sum",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                ),
-                label="sum",
-            ),
-            Expression(
-                aggregation=AttributeAggregation(
-                    aggregate=Function.FUNCTION_AVG,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
-                    label="avg",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                ),
-                label="avg",
-            ),
-        ]
-
         message = TimeSeriesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -974,7 +926,34 @@ class TestTimeSeriesApi(BaseApiTest):
                 ),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
-            expressions=expressions[0:1],
+            expressions=[
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_ADD,
+                        left=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                                ),
+                                label="sum",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            )
+                        ),
+                        right=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_AVG,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                                ),
+                                label="avg",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            )
+                        ),
+                    ),
+                    label="sum + avg",
+                ),
+            ],
             granularity_secs=granularity_secs,
         )
         response = EndpointTimeSeries().execute(message)
@@ -994,7 +973,7 @@ class TestTimeSeriesApi(BaseApiTest):
             label="sum",
             buckets=expected_buckets,
             data_points=[
-                DataPoint(data=300, data_present=True, sample_count=1)
+                DataPoint(data=300, data_present=True)
                 for _ in range(len(expected_buckets))
             ],
         )

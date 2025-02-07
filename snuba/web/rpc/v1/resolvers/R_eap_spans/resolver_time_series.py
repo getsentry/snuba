@@ -167,7 +167,7 @@ def _convert_result_timeseries(
                 extrapolation_context = ExtrapolationContext.from_row(
                     timeseries.label, row_data
                 )
-                if extrapolation_context.is_data_present:
+                if row_data.get(timeseries.label, None) is not None:
                     timeseries.data_points.append(
                         DataPoint(
                             data=row_data[timeseries.label],
