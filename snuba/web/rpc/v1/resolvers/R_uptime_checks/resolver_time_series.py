@@ -26,19 +26,16 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
+from snuba.web.rpc.common.common import trace_item_filters_to_expression
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
-from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.aggregation import (
-    aggregation_to_expression,
-    get_count_column,
-)
+from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
 from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
-    trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
 
@@ -163,17 +160,14 @@ def _build_query(request: TimeSeriesRequest) -> Query:
 
     aggregation_columns = [
         SelectedExpression(
-            name=aggregation.label, expression=aggregation_to_expression(aggregation)
+            name=aggregation.label,
+            expression=aggregation_to_expression(
+                aggregation,
+                attribute_key_to_expression(aggregation.key),
+            ),
         )
         for aggregation in request.aggregations
     ]
-
-    additional_context_columns = []
-    for aggregation in request.aggregations:
-        count_column = get_count_column(aggregation)
-        additional_context_columns.append(
-            SelectedExpression(name=count_column.alias, expression=count_column)
-        )
 
     groupby_columns = [
         SelectedExpression(
@@ -214,11 +208,13 @@ def _build_query(request: TimeSeriesRequest) -> Query:
             ),
             *aggregation_columns,
             *groupby_columns,
-            *additional_context_columns,
         ],
         granularity=request.granularity_secs,
         condition=base_conditions_and(
-            request.meta, trace_item_filters_to_expression(request.filter)
+            request.meta,
+            trace_item_filters_to_expression(
+                request.filter, attribute_key_to_expression
+            ),
         ),
         groupby=[
             column("time_slot"),
