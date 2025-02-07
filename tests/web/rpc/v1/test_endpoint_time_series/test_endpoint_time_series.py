@@ -9,6 +9,7 @@ from clickhouse_driver.errors import ServerException
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     DataPoint,
+    Expression,
     TimeSeries,
     TimeSeriesRequest,
 )
@@ -902,6 +903,118 @@ class TestTimeSeriesApi(BaseApiTest):
 
             sentry_sdk_mock.assert_called_once()
             assert metrics_mock.increment.call_args_list.count(call("OOM_query")) == 1
+
+    def test_formula(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+        expressions = [
+            Expression(
+                formula=Expression.BinaryFormula(
+                    op=Expression.BinaryFormula.OP_ADD,
+                    left=Expression(
+                        aggregation=AttributeAggregation(
+                            aggregate=Function.FUNCTION_SUM,
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                            ),
+                            label="sum",
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        )
+                    ),
+                    right=Expression(
+                        aggregation=AttributeAggregation(
+                            aggregate=Function.FUNCTION_AVG,
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                            ),
+                            label="avg",
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        )
+                    ),
+                ),
+                label="sum + avg",
+            ),
+            Expression(
+                aggregation=AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+                label="sum",
+            ),
+            Expression(
+                aggregation=AttributeAggregation(
+                    aggregate=Function.FUNCTION_AVG,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="avg",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+                label="avg",
+            ),
+        ]
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=expressions[0:1],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        expected_avg_timeseries = TimeSeries(
+            label="avg",
+            buckets=expected_buckets,
+            data_points=[
+                DataPoint(data=1, data_present=True, sample_count=300)
+                for _ in range(len(expected_buckets))
+            ],
+        )
+        expected_sum_timeseries = TimeSeries(
+            label="sum",
+            buckets=expected_buckets,
+            data_points=[
+                DataPoint(data=300, data_present=True, sample_count=1)
+                for _ in range(len(expected_buckets))
+            ],
+        )
+        expected_formula_timeseries = TimeSeries(
+            label="sum + avg",
+            buckets=expected_buckets,
+            data_points=[
+                DataPoint(
+                    data=sum_datapoint.data + avg_datapoint.data,
+                    data_present=True,
+                    sample_count=sum_datapoint.sample_count,
+                )
+                for sum_datapoint, avg_datapoint in zip(
+                    expected_sum_timeseries.data_points,
+                    expected_avg_timeseries.data_points,
+                )
+            ],
+        )
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
+            expected_formula_timeseries
+        ]
 
 
 class TestUtils:

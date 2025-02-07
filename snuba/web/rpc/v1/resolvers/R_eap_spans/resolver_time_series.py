@@ -1,5 +1,6 @@
 import uuid
 from collections import defaultdict
+from dataclasses import replace
 from datetime import datetime
 from typing import Any, Dict, Iterable
 
@@ -15,10 +16,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeAggregation,
-    ExtrapolationMode,
-)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -28,7 +26,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column
+from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -46,6 +44,7 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     ExtrapolationContext,
+    _get_count_column_alias,
     aggregation_to_expression,
     get_average_sample_rate_column,
     get_confidence_interval_column,
@@ -61,18 +60,6 @@ OP_TO_EXPR = {
     ProtoExpression.BinaryFormula.OP_MULTIPLY: f.multiply,
     ProtoExpression.BinaryFormula.OP_DIVIDE: f.divide,
 }
-
-
-def _get_aggregation_labels(expr: ProtoExpression) -> set[str]:
-    match expr.WhichOneof("expression"):
-        case "aggregation":
-            return set([expr.aggregation.label])
-        case "formula":
-            return _get_aggregation_labels(expr.formula.left) | _get_aggregation_labels(
-                expr.formula.right
-            )
-        case default:
-            raise ValueError(f"Unknown expression type: {default}")
 
 
 def _convert_result_timeseries(
@@ -120,9 +107,7 @@ def _convert_result_timeseries(
 
     # to convert the results, need to know which were the groupby columns and which ones
     # were aggregations
-    aggregation_labels = set()
-    for expr in request.expressions:
-        aggregation_labels |= _get_aggregation_labels(expr)
+    aggregation_labels = [expr.label for expr in request.expressions]
 
     group_by_labels = set([attr.name for attr in request.group_by])
 
@@ -199,19 +184,21 @@ def _convert_result_timeseries(
 
 
 def _get_reliability_context_columns(
-    expressions: Iterable[ProtoExpression] | Iterable[AttributeAggregation],
+    expressions: Iterable[ProtoExpression],
 ) -> list[SelectedExpression]:
     # TODO: this reliability logic ignores formulas, meaning formulas dont support reliability
+    additional_context_columns = []
+
     aggregates = []
     for e in expressions:
-        if isinstance(e, AttributeAggregation):
-            aggregates.append(e)
+        if e.WhichOneof("expression") == "aggregation":
+            aggregates.append(e.aggregation)
         else:
-            # ProtoExpression
-            if e.WhichOneof("expression") == "aggregation":
-                aggregates.append(e.aggregation)
+            count_column = literal(1, alias=_get_count_column_alias(e.label))
+            additional_context_columns.append(
+                SelectedExpression(name=count_column.alias, expression=count_column)
+            )
 
-    additional_context_columns = []
     for aggregation in aggregates:
         if (
             aggregation.extrapolation_mode
@@ -246,10 +233,12 @@ def _proto_expression_to_ast_expression(expr: ProtoExpression) -> Expression:
         case "aggregation":
             return aggregation_to_expression(expr.aggregation)
         case "formula":
-            return OP_TO_EXPR[expr.formula.op](
+            formula_expr = OP_TO_EXPR[expr.formula.op](
                 _proto_expression_to_ast_expression(expr.formula.left),
                 _proto_expression_to_ast_expression(expr.formula.right),
             )
+            formula_expr = replace(formula_expr, alias=expr.label)
+            return formula_expr
         case default:
             raise ValueError(f"Unknown expression type: {default}")
 
