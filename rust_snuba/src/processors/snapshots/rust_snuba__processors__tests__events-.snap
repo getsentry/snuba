@@ -4,13 +4,6 @@ expression: diff
 ---
 [
     Change {
-        path: ".<anyOf:0>.2.data.contexts.<anyOf:0>",
-        change: PropertyAdd {
-            lhs_additional_properties: true,
-            added: "flags",
-        },
-    },
-    Change {
         path: ".<anyOf:0>.2.data.contexts.<anyOf:0>.trace.<anyOf:0>",
         change: PropertyAdd {
             lhs_additional_properties: true,
