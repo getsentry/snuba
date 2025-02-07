@@ -26,7 +26,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal
+from snuba.query.dsl import column
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -44,7 +44,6 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     ExtrapolationContext,
-    _get_count_column_alias,
     aggregation_to_expression,
     get_average_sample_rate_column,
     get_confidence_interval_column,
@@ -186,18 +185,14 @@ def _convert_result_timeseries(
 def _get_reliability_context_columns(
     expressions: Iterable[ProtoExpression],
 ) -> list[SelectedExpression]:
-    # TODO: this reliability logic ignores formulas, meaning formulas dont support reliability
+    # this reliability logic ignores formulas, meaning formulas may not properly support reliability
     additional_context_columns = []
 
     aggregates = []
     for e in expressions:
         if e.WhichOneof("expression") == "aggregation":
+            # ignore formulas
             aggregates.append(e.aggregation)
-        else:
-            count_column = literal(1, alias=_get_count_column_alias(e.label))
-            additional_context_columns.append(
-                SelectedExpression(name=count_column.alias, expression=count_column)
-            )
 
     for aggregation in aggregates:
         if (

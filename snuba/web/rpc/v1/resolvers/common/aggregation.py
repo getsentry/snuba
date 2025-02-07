@@ -291,10 +291,10 @@ def get_average_sample_rate_column(aggregation: AttributeAggregation) -> Express
     )
 
 
-def _get_count_column_alias(original_alias: str) -> str:
+def _get_count_column_alias(aggregation: AttributeAggregation) -> str:
     return CustomColumnInformation(
         custom_column_id="count",
-        referenced_column=original_alias,
+        referenced_column=aggregation.label,
         metadata={},
     ).to_alias()
 
