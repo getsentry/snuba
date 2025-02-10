@@ -35,27 +35,37 @@ columns: List[Column[Modifiers]] = [
     ),
 ]
 
-_TYPES = {
-    "string": String(),
-    "float64": Float(64),
-}
-
-for name in {"string", "float64"}:
-    columns.extend(
-        [
-            Column(
-                f"attributes_{name}_{i}",
-                Map(
-                    String(),
-                    _TYPES[name],
-                    modifiers=Modifiers(
-                        codecs=["ZSTD(1)"],
-                    ),
+columns.extend(
+    [
+        Column(
+            f"attributes_string_{i}",
+            Map(
+                String(),
+                String(),
+                modifiers=Modifiers(
+                    codecs=["ZSTD(1)"],
                 ),
-            )
-            for i in range(num_attr_buckets)
-        ]
-    )
+            ),
+        )
+        for i in range(num_attr_buckets)
+    ]
+)
+
+columns.extend(
+    [
+        Column(
+            f"attributes_float64_{i}",
+            Map(
+                String(),
+                Float(64),
+                modifiers=Modifiers(
+                    codecs=["ZSTD(1)"],
+                ),
+            ),
+        )
+        for i in range(num_attr_buckets)
+    ]
+)
 
 
 indices: Sequence[AddIndicesData] = [
