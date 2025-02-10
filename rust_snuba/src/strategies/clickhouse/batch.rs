@@ -70,7 +70,7 @@ impl BatchFactory {
             }
         }
 
-        let url = format!("http://{hostname}:{http_port}?{query_params}");
+        let url = format!("http://{hostname}:{http_port}/query?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
         let client = if let Some(timeout_duration) = batch_write_timeout {
