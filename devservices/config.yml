@@ -25,7 +25,7 @@ x-sentry-service-config:
 
 services:
   clickhouse:
-    image: ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:23.8.11.29.altinitystable
+    image: ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:24.8.11.51285.altinitystable
     ulimits:
       nofile:
         soft: 262144
