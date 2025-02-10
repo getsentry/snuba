@@ -27,10 +27,7 @@ columns: List[Column[Modifiers]] = [
         "attributes_bool",
         Map(
             String(),
-            Map(
-                String(),
-                Bool(),
-            ),
+            Bool(),
         ),
     ),
     Column(
