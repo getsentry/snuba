@@ -4,9 +4,9 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import AddIndicesData, OperationTarget, SqlOperation
-from snuba.utils.schemas import Bool, Column, DateTime, Float, Int, Map, String, UInt
+from snuba.utils.schemas import Column, DateTime, Float, Map, String, UInt
 
-storage_set_name = StorageSetKey.itemS_ANALYTICS_PLATFORM
+storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 local_table_name = "eap_items_1_local"
 dist_table_name = "eap_items_1_dist"
 num_attr_buckets = 20
@@ -18,25 +18,33 @@ columns: List[Column[Modifiers]] = [
     Column("timestamp", DateTime(Modifiers(codecs=["DoubleDelta", "ZSTD(1)"]))),
     Column("trace_id", UInt(128)),
     Column("item_id", UInt(128)),
+    Column("sampling_weight", UInt(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
     Column(
         "retention_days",
         UInt(16, modifiers=Modifiers(codecs=["T64", "ZSTD(1)"])),
     ),
-    Column("sampling_weight", UInt(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
+    Column(
+        "attributes_metadata",
+        Map(
+            String(low_cardinality=True),
+            Map(
+                String(),
+                String(),
+            ),
+        ),
+    ),
 ]
 
 _TYPES = {
     "string": String(),
-    "bool": Bool(),
-    "int64": Int(64),
     "float64": Float(64),
 }
 
-for name in {"string", "bool", "int64", "float64"}:
+for name in {"string", "float64"}:
     columns.extend(
         [
             Column(
-                f"attr_{name}_{i}",
+                f"attributes_{name}_{i}",
                 Map(String(), _TYPES[name], modifiers=Modifiers(codecs=["ZSTD(1)"])),
             )
             for i in range(num_attr_buckets)
@@ -64,7 +72,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    primary_key="(organization_id, project_id, item_type, timestamp)",
+                    primary_key="(organization_id, project_id, item_type, timestamp, trace_id)",
                     order_by="(organization_id, project_id, item_type, timestamp, trace_id, item_id)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": "8192"},
@@ -79,7 +87,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 engine=table_engines.Distributed(
                     local_table_name=local_table_name,
-                    sharding_key="cityHash64(reinterpretAsUInt128(trace_id))",
+                    sharding_key="cityHash64(trace_id)",
                 ),
                 target=OperationTarget.DISTRIBUTED,
             ),
