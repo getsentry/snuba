@@ -4,7 +4,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import AddIndicesData, OperationTarget, SqlOperation
-from snuba.utils.schemas import Column, DateTime, Float, Map, String, UInt
+from snuba.utils.schemas import Bool, Column, DateTime, Float, Int, Map, String, UInt
 
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 local_table_name = "eap_items_1_local"
@@ -24,12 +24,22 @@ columns: List[Column[Modifiers]] = [
         UInt(16, modifiers=Modifiers(codecs=["T64", "ZSTD(1)"])),
     ),
     Column(
-        "attributes_metadata",
+        "attributes_bool",
         Map(
             String(),
             Map(
                 String(),
+                Bool(),
+            ),
+        ),
+    ),
+    Column(
+        "attributes_int64",
+        Map(
+            String(),
+            Map(
                 String(),
+                Int(64),
             ),
         ),
     ),
