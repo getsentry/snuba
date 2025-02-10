@@ -43,15 +43,11 @@ class ExtrapolationContext(ABC):
     confidence_interval: Any
     average_sample_rate: float
     sample_count: int
+    is_extrapolated: bool
 
     @property
     def is_data_present(self) -> bool:
         return self.sample_count > 0
-
-    @property
-    @abstractmethod
-    def is_extrapolated(self) -> bool:
-        raise NotImplementedError
 
     @property
     @abstractmethod
@@ -64,6 +60,7 @@ class ExtrapolationContext(ABC):
         row_data: Dict[str, Any],
     ) -> ExtrapolationContext:
         value = row_data[column_label]
+        is_extrapolated = False
 
         confidence_interval = None
         average_sample_rate = 0
@@ -88,6 +85,7 @@ class ExtrapolationContext(ABC):
                 continue
 
             if custom_column_information.custom_column_id == "confidence_interval":
+                is_extrapolated = True
                 confidence_interval = col_value
 
                 is_percentile = custom_column_information.metadata.get(
@@ -116,6 +114,7 @@ class ExtrapolationContext(ABC):
                 percentile=percentile,
                 granularity=granularity,
                 width=width,
+                is_extrapolated=is_extrapolated,
             )
 
         return GenericExtrapolationContext(
@@ -123,18 +122,12 @@ class ExtrapolationContext(ABC):
             confidence_interval=confidence_interval,
             average_sample_rate=average_sample_rate,
             sample_count=sample_count,
+            is_extrapolated=is_extrapolated,
         )
 
 
 @dataclass(frozen=True)
 class GenericExtrapolationContext(ExtrapolationContext):
-    @property
-    def is_extrapolated(self) -> bool:
-        # We infer if a column is extrapolated or not by the presence of the
-        # confidence interval. It will be present for extrapolated aggregates
-        # but not for non-extrapolated aggregates and scalars.
-        return self.confidence_interval is not None
-
     @cached_property
     def reliability(self) -> Reliability.ValueType:
         if not self.is_extrapolated or not self.is_data_present:
@@ -160,13 +153,6 @@ class PercentileExtrapolationContext(ExtrapolationContext):
     percentile: float
     granularity: float
     width: float
-
-    @property
-    def is_extrapolated(self) -> bool:
-        # We infer if a column is extrapolated or not by the presence of the
-        # confidence interval. It will be present for extrapolated aggregates
-        # but not for non-extrapolated aggregates and scalars.
-        return self.confidence_interval is not None
 
     @cached_property
     def reliability(self) -> Reliability.ValueType:
