@@ -9,7 +9,7 @@ from snuba.utils.schemas import Bool, Column, DateTime, Float, Int, Map, String,
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 local_table_name = "eap_items_1_local"
 dist_table_name = "eap_items_1_dist"
-num_attr_buckets = 20
+num_attr_buckets = 40
 
 columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
