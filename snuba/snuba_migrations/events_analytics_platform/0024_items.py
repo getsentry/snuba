@@ -37,10 +37,7 @@ columns: List[Column[Modifiers]] = [
         "attributes_int64",
         Map(
             String(),
-            Map(
-                String(),
-                Int(64),
-            ),
+            Int(64),
         ),
     ),
 ]
