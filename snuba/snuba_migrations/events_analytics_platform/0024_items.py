@@ -26,7 +26,7 @@ columns: List[Column[Modifiers]] = [
     Column(
         "attributes_metadata",
         Map(
-            String(low_cardinality=True),
+            String(),
             Map(
                 String(),
                 String(),
@@ -45,7 +45,13 @@ for name in {"string", "float64"}:
         [
             Column(
                 f"attributes_{name}_{i}",
-                Map(String(), _TYPES[name], modifiers=Modifiers(codecs=["ZSTD(1)"])),
+                Map(
+                    String(),
+                    _TYPES[name],
+                    modifiers=Modifiers(
+                        codecs=["ZSTD(1)"],
+                    ),
+                ),
             )
             for i in range(num_attr_buckets)
         ]
