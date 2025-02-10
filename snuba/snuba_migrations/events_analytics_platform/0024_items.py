@@ -4,7 +4,17 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import AddIndicesData, OperationTarget, SqlOperation
-from snuba.utils.schemas import Bool, Column, DateTime, Float, Int, Map, String, UInt
+from snuba.utils.schemas import (
+    UUID,
+    Bool,
+    Column,
+    DateTime,
+    Float,
+    Int,
+    Map,
+    String,
+    UInt,
+)
 
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 local_table_name = "eap_items_1_local"
@@ -16,7 +26,7 @@ columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("item_type", UInt(8)),
     Column("timestamp", DateTime(Modifiers(codecs=["DoubleDelta", "ZSTD(1)"]))),
-    Column("trace_id", UInt(128)),
+    Column("trace_id", UUID()),
     Column("item_id", UInt(128)),
     Column("sampling_weight", UInt(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
     Column(
@@ -107,7 +117,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 engine=table_engines.Distributed(
                     local_table_name=local_table_name,
-                    sharding_key="cityHash64(trace_id)",
+                    sharding_key="cityHash64(reinterpretAsUInt128(trace_id))",
                 ),
                 target=OperationTarget.DISTRIBUTED,
             ),
