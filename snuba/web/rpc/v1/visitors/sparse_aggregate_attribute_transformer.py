@@ -24,7 +24,7 @@ class SparseAggregateAttributeTransformer:
         bird          |   64
         chicken       |   12
 
-    why? because the columns for chicken and bird don't have the attribute "wing.count"
+    why? because the columns for dog and cat don't have the attribute "wing.count"
     but by default it sets it to 0 when the attribute is not present.
 
     This class tranforms TraceItemTableRequest adding a filter `hasAttribute("wing.count")`
@@ -43,6 +43,8 @@ class SparseAggregateAttributeTransformer:
         for column in self.req.columns:
             if column.WhichOneof("column") == "aggregation":
                 agg_keys.append(column.aggregation.key)
+            if column.WhichOneof("column") == "conditional_aggregation":
+                agg_keys.append(column.conditional_aggregation.key)
 
         if len(agg_keys) == 0:
             return self.req

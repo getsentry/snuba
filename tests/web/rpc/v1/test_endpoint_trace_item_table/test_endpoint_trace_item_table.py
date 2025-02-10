@@ -8,6 +8,9 @@ import pytest
 from clickhouse_driver.errors import ServerException
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
+    AttributeConditionalAggregation,
+)
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationAndFilter,
     AggregationComparisonFilter,
@@ -1752,6 +1755,91 @@ class TestTraceItemTable(BaseApiTest):
                 results=[
                     AttributeValue(val_double=1214.4),
                     AttributeValue(val_double=3036),
+                ],
+            ),
+        ]
+        assert False
+
+    def test_conditional_aggregation_in_select(self, setup_teardown: Any) -> None:
+        """
+        This test sums only if the traceitem contains kylestag = val2
+        """
+
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = (
+            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
+            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(4)]
+            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(3)]
+        )
+        write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                ),
+                Column(
+                    conditional_aggregation=AttributeConditionalAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
+                        ),
+                        label="sum(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        filter=TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="kylestag"
+                                ),
+                                op=ComparisonFilter.OP_EQUALS,
+                                value=AttributeValue(val_str="val2"),
+                            )
+                        ),
+                    ),
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                    )
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        print("responseee", response)
+        breakpoint()
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="kylestag",
+                results=[
+                    AttributeValue(val_str="val1"),
+                    AttributeValue(val_str="val2"),
+                    AttributeValue(val_str="val3"),
+                    AttributeValue(is_null=True),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(my.float.field)",
+                results=[
+                    AttributeValue(is_null=True),
+                    AttributeValue(val_double=404.8),
+                    AttributeValue(is_null=True),
+                    AttributeValue(is_null=True),
                 ],
             ),
         ]

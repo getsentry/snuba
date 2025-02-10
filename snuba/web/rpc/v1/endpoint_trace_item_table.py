@@ -26,6 +26,9 @@ def _apply_labels_to_columns(in_msg: TraceItemTableRequest) -> TraceItemTableReq
         if column.HasField("key"):
             column.label = column.key.name
 
+        elif column.HasField("conditional_aggregation"):
+            column.label = column.conditional_aggregation.label
+
         elif column.HasField("aggregation"):
             column.label = column.aggregation.label
 
@@ -43,7 +46,13 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
         [c.key.name for c in in_msg.columns if c.HasField("key")]
     )
     grouped_by_columns = set([c.name for c in in_msg.group_by])
-    aggregation_present = any([c for c in in_msg.columns if c.HasField("aggregation")])
+    aggregation_present = any(
+        [
+            c
+            for c in in_msg.columns
+            if (c.HasField("aggregation") or c.HasField("conditional_aggregation"))
+        ]
+    )
     if non_aggregted_columns != grouped_by_columns and aggregation_present:
         raise BadSnubaRPCRequestException(
             f"Non aggregated columns should be in group_by. non_aggregated_columns: {non_aggregted_columns}, grouped_by_columns: {grouped_by_columns}"
