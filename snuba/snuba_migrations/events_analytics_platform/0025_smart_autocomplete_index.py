@@ -103,6 +103,12 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             # --- Str attrs -----
+            operations.DropColumn(
+                storage_set=self.storage_set_key,
+                table_name=self.dist_table_name,
+                column_name=self.str_hash_map_col,
+                target=operations.OperationTarget.DISTRIBUTED,
+            ),
             operations.DropIndex(
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,
@@ -115,13 +121,13 @@ class Migration(migration.ClickhouseNodeMigration):
                 column_name=self.str_hash_map_col,
                 target=operations.OperationTarget.LOCAL,
             ),
+            # --- Num attrs -----
             operations.DropColumn(
                 storage_set=self.storage_set_key,
                 table_name=self.dist_table_name,
-                column_name=self.str_hash_map_col,
+                column_name=self.float_hash_map_col,
                 target=operations.OperationTarget.DISTRIBUTED,
             ),
-            # --- Num attrs -----
             operations.DropIndex(
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,
@@ -133,11 +139,5 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=self.local_table_name,
                 column_name=self.float_hash_map_col,
                 target=operations.OperationTarget.LOCAL,
-            ),
-            operations.DropColumn(
-                storage_set=self.storage_set_key,
-                table_name=self.dist_table_name,
-                column_name=self.float_hash_map_col,
-                target=operations.OperationTarget.DISTRIBUTED,
             ),
         ]
