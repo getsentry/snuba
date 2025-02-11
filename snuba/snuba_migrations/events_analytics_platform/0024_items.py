@@ -102,7 +102,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    primary_key="(organization_id, project_id, item_type, timestamp, trace_id)",
+                    primary_key="(organization_id, project_id, item_type, timestamp)",
                     order_by="(organization_id, project_id, item_type, timestamp, trace_id, item_id)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": "8192"},
