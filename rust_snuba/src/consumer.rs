@@ -46,6 +46,7 @@ pub fn consumer(
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
     max_dlq_buffer_length: Option<usize>,
+    custom_envoy_request_timeout: Option<u64>,
 ) -> usize {
     py.allow_threads(|| {
         consumer_impl(
@@ -65,6 +66,7 @@ pub fn consumer(
             batch_write_timeout_ms,
             mutations_mode,
             max_dlq_buffer_length,
+            custom_envoy_request_timeout,
         )
     })
 }
@@ -87,6 +89,7 @@ pub fn consumer_impl(
     batch_write_timeout_ms: Option<u64>,
     mutations_mode: bool,
     max_dlq_buffer_length: Option<usize>,
+    custom_envoy_request_timeout: Option<u64>,
 ) -> usize {
     setup_logging();
 
@@ -281,6 +284,7 @@ pub fn consumer_impl(
             accountant_topic_config: consumer_config.accountant_topic,
             stop_at_timestamp,
             batch_write_timeout,
+            custom_envoy_request_timeout,
         };
 
         StreamProcessor::with_kafka(config, factory, topic, dlq_policy)
