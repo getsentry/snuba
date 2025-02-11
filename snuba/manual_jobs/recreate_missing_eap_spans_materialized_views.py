@@ -10,7 +10,7 @@ materialized_views = [
 ]
 
 
-class CopyEAPTables(Job):
+class RecreateMissingEAPSpansMaterializedViews(Job):
     def __init__(self, job_spec: JobSpec) -> None:
         super().__init__(job_spec)
 
