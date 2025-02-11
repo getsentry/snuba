@@ -14,17 +14,15 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
+from snuba.query.dsl import Functions as f
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.web.rpc.common.common import base_conditions_and
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
 )
-from snuba.web.rpc.v1.resolvers.common.aggregation import (
-    aggregation_to_expression,
-)
-from snuba.query.dsl import Functions as f
 
 
 class TraceItemTableRequestVisitor(ABC):
