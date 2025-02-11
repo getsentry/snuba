@@ -374,17 +374,6 @@ def test_db_query_success() -> None:
                 "quota_unit": NO_UNITS,
                 "suggestion": NO_SUGGESTION,
             },
-            "BytesScannedWindowAllocationPolicy": {
-                "can_run": True,
-                "max_threads": 10,
-                "explanation": {"storage_key": "StorageKey.ERRORS_RO"},
-                "is_throttled": False,
-                "throttle_threshold": 10000000,
-                "rejection_threshold": MAX_THRESHOLD,
-                "quota_used": 0,
-                "quota_unit": "bytes",
-                "suggestion": "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API",
-            },
         },
     }
 
