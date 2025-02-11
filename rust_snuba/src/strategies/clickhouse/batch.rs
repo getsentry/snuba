@@ -60,11 +60,12 @@ impl BatchFactory {
             "X-ClickHouse-Database",
             HeaderValue::from_str(database).unwrap(),
         );
-        headers.insert(
-            "x-envoy-upstream-rq-per-try-timeout-ms",
-            HeaderValue::from_str(&custom_envoy_request_timeout.unwrap_or(10000).to_string())
-                .unwrap(),
-        );
+        if let Some(custom_envoy_request_timeout) = custom_envoy_request_timeout {
+            headers.insert(
+                "x-envoy-upstream-rq-per-try-timeout-ms",
+                HeaderValue::from_str(&custom_envoy_request_timeout.to_string()).unwrap(),
+            );
+        }
 
         let mut query_params = String::new();
         query_params.push_str("load_balancing=in_order&insert_distributed_sync=1");
