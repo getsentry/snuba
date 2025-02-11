@@ -41,7 +41,7 @@ columns: List[Column[Modifiers]] = [
         ),
     ),
     Column(
-        "attributes_int64",
+        "attributes_int",
         Map(
             String(),
             Int(64),
@@ -68,7 +68,7 @@ columns.extend(
 columns.extend(
     [
         Column(
-            f"attributes_float64_{i}",
+            f"attributes_float_{i}",
             Map(
                 String(),
                 Float(64),
