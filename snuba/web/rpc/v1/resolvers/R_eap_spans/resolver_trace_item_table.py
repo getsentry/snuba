@@ -131,15 +131,6 @@ def _convert_order_by(
                     expression=aggregation_to_expression(x.column.aggregation),
                 )
             )
-        elif x.column.HasField("conditional_aggregation"):
-            res.append(
-                OrderBy(
-                    direction=direction,
-                    expression=aggregation_to_expression(
-                        x.column.conditional_aggregation
-                    ),
-                )
-            )
         elif x.column.HasField("formula"):
             res.append(
                 OrderBy(
