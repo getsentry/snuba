@@ -67,7 +67,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,
                 column=Column(
-                    name=self.str_hash_map_col,
+                    name=self.float_hash_map_col,
                     type=Array(
                         UInt(64),
                         Modifiers(materialized=get_array_vals_hash("attrs_float64")),
@@ -80,7 +80,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=self.storage_set_key,
                 table_name=self.dist_table_name,
                 column=Column(
-                    self.str_hash_map_col,
+                    self.float_hash_map_col,
                     type=Array(
                         UInt(64),
                         Modifiers(materialized=get_array_vals_hash("attrs_float64")),
@@ -125,13 +125,13 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropColumn(
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,
-                column_name=self.str_hash_map_col,
+                column_name=self.float_hash_map_col,
                 target=operations.OperationTarget.LOCAL,
             ),
             operations.DropColumn(
                 storage_set=self.storage_set_key,
                 table_name=self.dist_table_name,
-                column_name=self.str_hash_map_col,
+                column_name=self.float_hash_map_col,
                 target=operations.OperationTarget.DISTRIBUTED,
             ),
             operations.DropIndex(
