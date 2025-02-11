@@ -311,6 +311,7 @@ mod tests {
             "",
             true,
             None,
+            None,
         );
 
         let mut batch = factory.new_batch();
