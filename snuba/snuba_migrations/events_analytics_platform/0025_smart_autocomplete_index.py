@@ -17,8 +17,8 @@ class Migration(migration.ClickhouseNodeMigration):
     dist_table_name = "eap_trace_item_attrs_dist"
     mv_name = "eap_trace_item_attrs_mv"
 
-    str_hash_map_col = "_str_attr_keys_hash_map"
-    float_hash_map_col = "_float64_attr_keys_hash_map"
+    str_hash_map_col = "_str_attr_keys_hashes"
+    float_hash_map_col = "_float64_attr_keys_hashes"
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
