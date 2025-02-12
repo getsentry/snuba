@@ -1821,8 +1821,6 @@ class TestTraceItemTable(BaseApiTest):
             ],
         )
         response = EndpointTraceItemTable().execute(message)
-        print("responseee", response)
-        breakpoint()
         assert response.column_values == [
             TraceItemColumnValues(
                 attribute_name="kylestag",
