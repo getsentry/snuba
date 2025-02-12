@@ -19,7 +19,7 @@ class RecreateMissingEAPSpansMaterializedViews(Job):
 
         for storage_node in cluster.get_local_nodes():
             connection = cluster.get_node_connection(
-                ClickhouseClientSettings.CLEANUP,
+                ClickhouseClientSettings.MIGRATE,
                 storage_node,
             )
             for query in materialized_views:
