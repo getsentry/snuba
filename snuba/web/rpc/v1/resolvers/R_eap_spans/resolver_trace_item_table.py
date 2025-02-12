@@ -146,9 +146,7 @@ def _get_reliability_context_columns(column: Column) -> list[SelectedExpression]
     extrapolated aggregates need to request extra columns to calculate the reliability of the result.
     this function returns the list of columns that need to be requested.
     """
-    if not (
-        column.HasField("aggregation") or column.HasField("conditional_aggregation")
-    ):
+    if not (column.HasField("conditional_aggregation")):
         return []
 
     if (
@@ -195,11 +193,6 @@ def _column_to_expression(column: Column) -> Expression:
         return attribute_key_to_expression(column.key)
     elif column.HasField("conditional_aggregation"):
         function_expr = aggregation_to_expression(column.conditional_aggregation)
-        # aggregation label may not be set and the column label takes priority anyways.
-        function_expr = replace(function_expr, alias=column.label)
-        return function_expr
-    elif column.HasField("aggregation"):
-        function_expr = aggregation_to_expression(column.aggregation)
         # aggregation label may not be set and the column label takes priority anyways.
         function_expr = replace(function_expr, alias=column.label)
         return function_expr

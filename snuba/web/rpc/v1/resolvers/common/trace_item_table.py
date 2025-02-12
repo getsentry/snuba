@@ -28,9 +28,7 @@ def convert_results(
                 converters[column.label] = lambda x: AttributeValue(val_float=float(x))
             elif column.key.type == AttributeKey.TYPE_DOUBLE:
                 converters[column.label] = lambda x: AttributeValue(val_double=float(x))
-        elif column.HasField("aggregation") or column.HasField(
-            "conditional_aggregation"
-        ):
+        elif column.HasField("conditional_aggregation"):
             converters[column.label] = lambda x: AttributeValue(val_double=float(x))
         elif column.HasField("formula"):
             converters[column.label] = lambda x: AttributeValue(val_double=float(x))

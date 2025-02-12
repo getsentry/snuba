@@ -1758,7 +1758,6 @@ class TestTraceItemTable(BaseApiTest):
                 ],
             ),
         ]
-        assert False
 
     def test_conditional_aggregation_in_select(self, setup_teardown: Any) -> None:
         """

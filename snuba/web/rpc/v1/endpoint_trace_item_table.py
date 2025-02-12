@@ -1,12 +1,17 @@
 import uuid
 from typing import Type
 
+from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
+    AttributeConditionalAggregation,
+)
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
 
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -29,9 +34,6 @@ def _apply_labels_to_columns(in_msg: TraceItemTableRequest) -> TraceItemTableReq
         elif column.HasField("conditional_aggregation"):
             column.label = column.conditional_aggregation.label
 
-        elif column.HasField("aggregation"):
-            column.label = column.aggregation.label
-
     for column in in_msg.columns:
         _apply_label_to_column(column)
 
@@ -47,11 +49,7 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
     )
     grouped_by_columns = set([c.name for c in in_msg.group_by])
     aggregation_present = any(
-        [
-            c
-            for c in in_msg.columns
-            if (c.HasField("aggregation") or c.HasField("conditional_aggregation"))
-        ]
+        [c for c in in_msg.columns if c.HasField("conditional_aggregation")]
     )
     if non_aggregted_columns != grouped_by_columns and aggregation_present:
         raise BadSnubaRPCRequestException(
@@ -87,6 +85,27 @@ def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
     It is similar to the query processor step of the snql pipeline.
     """
     return SparseAggregateAttributeTransformer(request).transform()
+
+
+def convert_to_conditional_aggregation(in_msg: TraceItemTableRequest) -> None:
+    for column in in_msg.columns:
+        if column.HasField("aggregation"):
+            aggregation = column.aggregation
+            column.conditional_aggregation.CopyFrom(
+                AttributeConditionalAggregation(
+                    aggregate=aggregation.aggregate,
+                    key=column.key,
+                    label=column.label,
+                    extrapolation_mode=aggregation.extrapolation_mode,
+                    filter=TraceItemFilter(  # I needed a filter that will always evaluate to literal(true)
+                        exists_filter=ExistsFilter(
+                            key=AttributeKey(
+                                type=AttributeKey.Type.TYPE_INT, name="organization_id"
+                            )
+                        )
+                    ),
+                )
+            )
 
 
 class EndpointTraceItemTable(
@@ -125,6 +144,7 @@ class EndpointTraceItemTable(
             )
 
         in_msg = _transform_request(in_msg)
+        convert_to_conditional_aggregation(in_msg)
 
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)

@@ -41,8 +41,6 @@ class SparseAggregateAttributeTransformer:
         # get all the keys that are used in aggregates
         agg_keys = []
         for column in self.req.columns:
-            if column.WhichOneof("column") == "aggregation":
-                agg_keys.append(column.aggregation.key)
             if column.WhichOneof("column") == "conditional_aggregation":
                 agg_keys.append(column.conditional_aggregation.key)
 
