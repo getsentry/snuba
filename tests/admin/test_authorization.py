@@ -9,13 +9,6 @@ from flask.testing import FlaskClient
 from snuba.admin.auth_roles import ROLES
 
 
-@pytest.fixture
-def admin_api() -> FlaskClient:
-    from snuba.admin.views import application
-
-    return application.test_client()
-
-
 @pytest.mark.redis_db
 def test_tools(admin_api: FlaskClient) -> None:
     response = admin_api.get("/tools")
@@ -28,9 +21,7 @@ def test_tools(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 @patch("snuba.admin.auth.DEFAULT_ROLES", [ROLES["ProductTools"]])
-def test_product_tools_role(
-    admin_api: FlaskClient,
-) -> None:
+def test_product_tools_role(admin_api: FlaskClient) -> None:
     response = admin_api.get("/tools")
     assert response.status_code == 200
     data = json.loads(response.data)
