@@ -163,6 +163,73 @@ class TestGenericMetricsApiSets(BaseApiTest):
         assert data["data"][0]["tag_key"] == 112358
         assert data["data"][1]["tag_key"] == 132134
 
+    def test_retrieve_tag_values(self, test_entity: str) -> None:
+        entity_name = f"{test_entity}_meta_tag_values"
+        query_str = f"""MATCH ({entity_name})
+                    SELECT tag_value
+                    BY tag_value
+                    WHERE project_id = {self.project_id}
+                    AND metric_id = {self.metric_ids[0]}
+                    AND tag_key = 112358
+                    AND timestamp >= toDateTime('{self.start_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.end_time.isoformat()}')
+                    ORDER BY tag_value ASC
+                    """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data["data"]) == 4, data
+        assert data["data"][0]["tag_value"] == "dev"
+        assert data["data"][1]["tag_value"] == "prod"
+        assert data["data"][2]["tag_value"] == "staging"
+        assert data["data"][3]["tag_value"] == "test"
+
+    def test_retrieve_tag_values_with_count(self, test_entity: str) -> None:
+        entity_name = f"{test_entity}_meta_tag_values"
+        query_str = f"""MATCH ({entity_name})
+                    SELECT tag_value, sum(count) AS rank
+                    BY tag_value
+                    WHERE project_id = {self.project_id}
+                    AND metric_id = {self.metric_ids[0]}
+                    AND tag_key = 112358
+                    AND timestamp >= toDateTime('{self.start_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.end_time.isoformat()}')
+                    ORDER BY tag_value ASC
+                    """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "generic_metrics",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data["data"]) == 4, data
+
+        # in tests, only the counters table populates the count field
+        if test_entity == "generic_metrics_counters":
+            values = [12.0, 12.0, 8.0, 8.0]
+        else:
+            values = [0.0] * 4
+
+        assert data["data"][0] == {"tag_value": "dev", "rank": values[0]}
+        assert data["data"][1] == {"tag_value": "prod", "rank": values[1]}
+        assert data["data"][2] == {"tag_value": "staging", "rank": values[2]}
+        assert data["data"][3] == {"tag_value": "test", "rank": values[3]}
+
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
