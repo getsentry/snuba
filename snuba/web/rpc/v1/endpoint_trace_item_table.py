@@ -94,13 +94,14 @@ def convert_to_conditional_aggregation(in_msg: TraceItemTableRequest) -> None:
             column.conditional_aggregation.CopyFrom(
                 AttributeConditionalAggregation(
                     aggregate=aggregation.aggregate,
-                    key=column.key,
-                    label=column.label,
+                    key=aggregation.key,
+                    label=aggregation.label,
                     extrapolation_mode=aggregation.extrapolation_mode,
                     filter=TraceItemFilter(  # I needed a filter that will always evaluate to literal(true)
                         exists_filter=ExistsFilter(
                             key=AttributeKey(
-                                type=AttributeKey.Type.TYPE_INT, name="organization_id"
+                                type=AttributeKey.Type.TYPE_INT,
+                                name="sentry.organization_id",
                             )
                         )
                     ),
@@ -131,9 +132,12 @@ class EndpointTraceItemTable(
         return TraceItemTableResponse
 
     def _execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
+        convert_to_conditional_aggregation(in_msg)
         in_msg = _apply_labels_to_columns(in_msg)
         _validate_select_and_groupby(in_msg)
+        # print("in_msg_after_validate_select_and_grop_by", in_msg)
         _validate_order_by(in_msg)
+        # print("in_msg_after_validate_order_by", in_msg)
 
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
@@ -144,7 +148,8 @@ class EndpointTraceItemTable(
             )
 
         in_msg = _transform_request(in_msg)
-        convert_to_conditional_aggregation(in_msg)
+
+        print("in_msg_after_transform_request", in_msg)
 
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)
