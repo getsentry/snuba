@@ -10,8 +10,6 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
 
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -88,7 +86,7 @@ def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
 
 
 def convert_to_conditional_aggregation(in_msg: TraceItemTableRequest) -> None:
-    for column in in_msg.columns:
+    def _convert(column: Column) -> None:
         if column.HasField("aggregation"):
             aggregation = column.aggregation
             column.conditional_aggregation.CopyFrom(
@@ -97,16 +95,17 @@ def convert_to_conditional_aggregation(in_msg: TraceItemTableRequest) -> None:
                     key=aggregation.key,
                     label=aggregation.label,
                     extrapolation_mode=aggregation.extrapolation_mode,
-                    filter=TraceItemFilter(  # I needed a filter that will always evaluate to literal(true)
-                        exists_filter=ExistsFilter(
-                            key=AttributeKey(
-                                type=AttributeKey.Type.TYPE_INT,
-                                name="sentry.organization_id",
-                            )
-                        )
-                    ),
                 )
             )
+
+        if column.HasField("formula"):
+            _convert(column.formula.left)
+            _convert(column.formula.right)
+
+    for column in in_msg.columns:
+        _convert(column)
+    for ob in in_msg.order_by:
+        _convert(ob.column)
 
 
 class EndpointTraceItemTable(
@@ -135,9 +134,7 @@ class EndpointTraceItemTable(
         convert_to_conditional_aggregation(in_msg)
         in_msg = _apply_labels_to_columns(in_msg)
         _validate_select_and_groupby(in_msg)
-        # print("in_msg_after_validate_select_and_grop_by", in_msg)
         _validate_order_by(in_msg)
-        # print("in_msg_after_validate_order_by", in_msg)
 
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
@@ -148,8 +145,6 @@ class EndpointTraceItemTable(
             )
 
         in_msg = _transform_request(in_msg)
-
-        print("in_msg_after_transform_request", in_msg)
 
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)

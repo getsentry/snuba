@@ -332,7 +332,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             limit=5,
         )
         response = EndpointTraceItemTable().execute(message)
-        print("responseeeeee", response)
         measurement_sum = [v.val_double for v in response.column_values[0].results][0]
         measurement_avg = [v.val_double for v in response.column_values[1].results][0]
         measurement_count_custom_measurement = [
