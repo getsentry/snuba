@@ -27,7 +27,7 @@ Enabling Local Mode
 In your local ``server.py``, set ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``
 to False. This is the default setting, so configuration is already
 set up for local mode migrations. Start up the corresponding ClickHouse
-container (``sentry devservices up clickhouse``).
+container (``devservices up clickhouse``).
 
 Now, run migrations as expected (``snuba migrations migrate --force``).
 
@@ -36,7 +36,7 @@ Enabling Distributed Mode
 ============================
 
 In your local ``server.py``, set ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``
-to True. Start up the corresponding ClickHouse container (``sentry devservices up clickhouse``).
+to True. Start up the corresponding ClickHouse container (``devservices up clickhouse``).
 Make sure that the Zookeeper container is also running; without it, distributed migrations
 will not work properly.
 
