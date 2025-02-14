@@ -1,42 +1,62 @@
 ---
 source: src/processors/eap_items.rs
-expression: span
+expression: item
 ---
 {
   "attributes_bool": {
     "my.false.bool.field": false,
-    "my.true.bool.field": true
+    "my.true.bool.field": true,
+    "sentry.is_segment": true
   },
   "attributes_float_1": {
-    "my.neg.float.field": -101.2
+    "my.true.bool.field": 1.0
   },
-  "attributes_float_11": {
-    "num_of_spans": 50.0
+  "attributes_float_14": {
+    "my.int.field": 2000.0
   },
   "attributes_float_17": {
     "my.float.field": 101.2
   },
+  "attributes_float_21": {
+    "my.neg.float.field": -101.2
+  },
+  "attributes_float_25": {
+    "sentry.exclusive_time_ms": 0.228,
+    "sentry.start_timestamp_precise": 1721319572.616648
+  },
+  "attributes_float_26": {
+    "sentry.is_segment": 1.0
+  },
+  "attributes_float_31": {
+    "num_of_spans": 50.0
+  },
+  "attributes_float_4": {
+    "sentry.end_timestamp_precise": 1721319572.768806
+  },
+  "attributes_float_5": {
+    "my.neg.field": -100.0,
+    "sentry.duration_ms": 152.0
+  },
+  "attributes_float_6": {
+    "my.false.bool.field": 0.0
+  },
+  "attributes_float_7": {
+    "sentry.received": 1721319572.877828
+  },
   "attributes_int": {
     "my.int.field": 2000,
-    "my.neg.field": -100
+    "my.neg.field": -100,
+    "sentry.duration_ms": 152
   },
   "attributes_string_0": {
-    "relay_protocol_version": "3",
-    "sentry.transaction": "/api/0/relays/projectconfigs/"
-  },
-  "attributes_string_1": {
-    "sentry.thread.name": "uWSGIWorker1Core0"
-  },
-  "attributes_string_10": {
-    "sentry.sdk.version": "2.7.0"
+    "relay_protocol_version": "3"
   },
   "attributes_string_11": {
-    "sentry.platform": "python",
-    "sentry.transaction.method": "POST",
-    "sentry.user": "ip:127.0.0.1"
+    "sentry.segment_id": "8873a98879faf06d",
+    "sentry.transaction.method": "POST"
   },
   "attributes_string_12": {
-    "relay_use_post_or_schedule_rejected": "version",
+    "sentry.event_id": "d826225de75d42d6b2f01b957d51f18f",
     "server_name": "D23CXQ4GK2.local"
   },
   "attributes_string_14": {
@@ -55,31 +75,54 @@ expression: span
   "attributes_string_19": {
     "sentry.op": "http.server"
   },
-  "attributes_string_3": {
-    "sentry.profile_id": "56c7d1401ea14ad7b4ac86de46baebae",
-    "sentry.thread.id": "8522009600"
+  "attributes_string_20": {
+    "sentry.transaction": "/api/0/relays/projectconfigs/"
   },
-  "attributes_string_4": {
+  "attributes_string_21": {
+    "sentry.thread.name": "uWSGIWorker1Core0"
+  },
+  "attributes_string_23": {
+    "sentry.profile_id": "56c7d1401ea14ad7b4ac86de46baebae"
+  },
+  "attributes_string_24": {
     "thread.id": "8522009600"
   },
-  "attributes_string_5": {
+  "attributes_string_25": {
     "http.status_code": "200",
     "sentry.release": "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b",
     "sentry.sdk.name": "sentry.python.django",
     "sentry.transaction.op": "http.server"
   },
-  "attributes_string_6": {
-    "relay_id": "88888888-4444-4444-8444-cccccccccccc",
-    "thread.name": "uWSGIWorker1Core0"
+  "attributes_string_26": {
+    "relay_id": "88888888-4444-4444-8444-cccccccccccc"
   },
-  "attributes_string_7": {
+  "attributes_string_27": {
     "sentry.trace.status": "ok"
   },
-  "attributes_string_8": {
+  "attributes_string_28": {
     "sentry.category": "http"
   },
-  "attributes_string_9": {
+  "attributes_string_29": {
     "sentry.environment": "development"
+  },
+  "attributes_string_3": {
+    "sentry.thread.id": "8522009600"
+  },
+  "attributes_string_30": {
+    "sentry.sdk.version": "2.7.0"
+  },
+  "attributes_string_31": {
+    "sentry.platform": "python",
+    "sentry.user": "ip:127.0.0.1"
+  },
+  "attributes_string_32": {
+    "relay_use_post_or_schedule_rejected": "version"
+  },
+  "attributes_string_38": {
+    "sentry.description": "/api/0/relays/projectconfigs/"
+  },
+  "attributes_string_6": {
+    "thread.name": "uWSGIWorker1Core0"
   },
   "item_id": 9832388815107059821,
   "item_type": 1,
@@ -87,6 +130,6 @@ expression: span
   "project_id": 1,
   "retention_days": 90,
   "sampling_weight": 50,
-  "timestamp": 1721319572616,
+  "timestamp": 3332654216,
   "trace_id": "d099bf9a-d5a1-43cf-8f83-a98081d0ed3b"
 }

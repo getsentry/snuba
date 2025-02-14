@@ -16,7 +16,7 @@ use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 macro_rules! seq_attrs {
     ($($tt:tt)*) => {
-        seq!(N in 0..20 {
+        seq!(N in 0..40 {
             $($tt)*
         });
     }
@@ -89,10 +89,18 @@ impl AttributeMap {
     }
 
     pub fn insert_bool(&mut self, k: String, v: bool) {
+        // double write as float and bool
+        if v {
+            self.insert_float(k.clone(), 1.0);
+        } else {
+            self.insert_float(k.clone(), 0.0);
+        }
         self.attributes_bool.insert(k, v);
     }
 
     pub fn insert_int(&mut self, k: String, v: i64) {
+        // double write as float and int
+        self.insert_float(k.clone(), v as f64);
         self.attributes_int.insert(k, v);
     }
 }
@@ -102,7 +110,7 @@ pub(crate) struct PrimaryKey {
     pub organization_id: u64,
     pub project_id: u64,
     pub item_type: u8,
-    pub timestamp: u64,
+    pub timestamp: u32,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -142,8 +150,8 @@ impl From<FromSpanMessage> for EAPItem {
             primary_key: PrimaryKey {
                 organization_id: from.organization_id,
                 project_id: from.project_id,
-                item_type: 1, // hardcoding "span" as type 1
-                timestamp: from.start_timestamp_ms,
+                item_type: 1, // hardcoding "span" as type
+                timestamp: from.start_timestamp_ms as u32,
             },
             trace_id: from.trace_id,
             item_id,
@@ -154,12 +162,59 @@ impl From<FromSpanMessage> for EAPItem {
         };
 
         {
+            if let Some(description) = from.description {
+                res.attributes
+                    .insert_str("sentry.description".to_string(), description);
+            }
+
+            // insert int double writes as float and int
+            res.attributes
+                .insert_int("sentry.duration_ms".to_string(), from.duration_ms as i64);
+
+            res.attributes.insert_float(
+                "sentry.end_timestamp_precise".to_string(),
+                from.end_timestamp_precise,
+            );
+
+            if let Some(event_id) = from.event_id {
+                res.attributes.insert_str(
+                    "sentry.event_id".to_string(),
+                    event_id.as_simple().to_string(),
+                );
+            }
+
+            res.attributes.insert_float(
+                "sentry.exclusive_time_ms".to_string(),
+                from.exclusive_time_ms,
+            );
+
+            res.attributes
+                .insert_bool("sentry.is_segment".to_string(), from.is_segment);
+
+            if let Some(parent_span_id) = from.parent_span_id {
+                res.attributes
+                    .insert_str("sentry.parent_span_id".to_string(), parent_span_id);
+            }
+
             if let Some(profile_id) = from.profile_id {
                 res.attributes.insert_str(
                     "sentry.profile_id".to_owned(),
                     profile_id.as_simple().to_string(),
                 );
             }
+
+            res.attributes
+                .insert_float("sentry.received".to_string(), from.received);
+
+            if let Some(segment_id) = from.segment_id {
+                res.attributes
+                    .insert_str("sentry.segment_id".to_string(), segment_id);
+            }
+
+            res.attributes.insert_float(
+                "sentry.start_timestamp_precise".to_string(),
+                from.start_timestamp_precise,
+            );
 
             if let Some(sentry_tags) = from.sentry_tags {
                 for (k, v) in sentry_tags {
@@ -202,16 +257,18 @@ impl From<FromSpanMessage> for EAPItem {
                                 res.attributes
                                     .insert_int(k, number.as_i64().unwrap_or_default());
                             } else if number.is_u64() {
-                                // as_i64() will return None if the u64 is too large
+                                // as_i64() will return None if the u64 is too large to fit in i64
                                 res.attributes
                                     .insert_int(k, number.as_i64().unwrap_or_default());
                             } else {
-                                // it should be a float
                                 res.attributes
-                                    .insert_float(k, number.as_f64().unwrap_or_default())
+                                    .insert_float(k, number.as_f64().unwrap_or_default());
                             }
                         }
-                        Value::Bool(b) => res.attributes.insert_bool(k, b),
+                        Value::Bool(b) => {
+                            // insert_bool double writes as a bool and float
+                            res.attributes.insert_bool(k.clone(), b);
+                        }
                         _ => (),
                     }
                 }
