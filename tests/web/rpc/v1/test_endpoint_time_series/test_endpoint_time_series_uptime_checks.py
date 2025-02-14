@@ -74,8 +74,7 @@ def store_timeseries(
         dt = start_datetime + timedelta(seconds=secs)
         messages.append(gen_message(dt))
     uptime_checks_storage = get_storage(StorageKey("uptime_monitor_checks"))
-    write_raw_unprocessed_events(
-        uptime_checks_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(uptime_checks_storage, messages)  # type: ignore
 
 
 @pytest.mark.clickhouse_db
