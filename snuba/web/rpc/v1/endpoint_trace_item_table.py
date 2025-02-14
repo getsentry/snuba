@@ -1,7 +1,11 @@
 import uuid
 from typing import Type
 
+from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
+    AttributeConditionalAggregation,
+)
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
+    AggregationFilter,
     Column,
     TraceItemTableRequest,
     TraceItemTableResponse,
@@ -26,8 +30,8 @@ def _apply_labels_to_columns(in_msg: TraceItemTableRequest) -> TraceItemTableReq
         if column.HasField("key"):
             column.label = column.key.name
 
-        elif column.HasField("aggregation"):
-            column.label = column.aggregation.label
+        elif column.HasField("conditional_aggregation"):
+            column.label = column.conditional_aggregation.label
 
     for column in in_msg.columns:
         _apply_label_to_column(column)
@@ -43,7 +47,9 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
         [c.key.name for c in in_msg.columns if c.HasField("key")]
     )
     grouped_by_columns = set([c.name for c in in_msg.group_by])
-    aggregation_present = any([c for c in in_msg.columns if c.HasField("aggregation")])
+    aggregation_present = any(
+        [c for c in in_msg.columns if c.HasField("conditional_aggregation")]
+    )
     if non_aggregted_columns != grouped_by_columns and aggregation_present:
         raise BadSnubaRPCRequestException(
             f"Non aggregated columns should be in group_by. non_aggregated_columns: {non_aggregted_columns}, grouped_by_columns: {grouped_by_columns}"
@@ -80,6 +86,51 @@ def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
     return SparseAggregateAttributeTransformer(request).transform()
 
 
+def convert_to_conditional_aggregation(in_msg: TraceItemTableRequest) -> None:
+    def _convert(input: Column | AggregationFilter) -> None:
+        if isinstance(input, Column):
+            if input.HasField("aggregation"):
+                aggregation = input.aggregation
+                input.conditional_aggregation.CopyFrom(
+                    AttributeConditionalAggregation(
+                        aggregate=aggregation.aggregate,
+                        key=aggregation.key,
+                        label=aggregation.label,
+                        extrapolation_mode=aggregation.extrapolation_mode,
+                    )
+                )
+
+            if input.HasField("formula"):
+                _convert(input.formula.left)
+                _convert(input.formula.right)
+
+        if isinstance(input, AggregationFilter):
+            if input.HasField("and_filter"):
+                for aggregation_filter in input.and_filter.filters:
+                    _convert(aggregation_filter)
+            if input.HasField("or_filter"):
+                for aggregation_filter in input.or_filter.filters:
+                    _convert(aggregation_filter)
+            if input.HasField("comparison_filter"):
+                if input.comparison_filter.HasField("aggregation"):
+                    aggregation = input.comparison_filter.aggregation
+                    input.comparison_filter.conditional_aggregation.CopyFrom(
+                        AttributeConditionalAggregation(
+                            aggregate=aggregation.aggregate,
+                            key=aggregation.key,
+                            label=aggregation.label,
+                            extrapolation_mode=aggregation.extrapolation_mode,
+                        )
+                    )
+
+    for column in in_msg.columns:
+        _convert(column)
+    for ob in in_msg.order_by:
+        _convert(ob.column)
+    if in_msg.HasField("aggregation_filter"):
+        _convert(in_msg.aggregation_filter)
+
+
 class EndpointTraceItemTable(
     RPCEndpoint[TraceItemTableRequest, TraceItemTableResponse]
 ):
@@ -103,6 +154,7 @@ class EndpointTraceItemTable(
         return TraceItemTableResponse
 
     def _execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
+        convert_to_conditional_aggregation(in_msg)
         in_msg = _apply_labels_to_columns(in_msg)
         _validate_select_and_groupby(in_msg)
         _validate_order_by(in_msg)

@@ -80,7 +80,9 @@ def aggregation_filter_to_expression(agg_filter: AggregationFilter) -> Expressio
                     f"Unsupported aggregation filter op: {AggregationComparisonFilter.Op.Name(agg_filter.comparison_filter.op)}"
                 )
             return op_expr(
-                aggregation_to_expression(agg_filter.comparison_filter.aggregation),
+                aggregation_to_expression(
+                    agg_filter.comparison_filter.conditional_aggregation
+                ),
                 agg_filter.comparison_filter.val,
             )
         case "and_filter":
@@ -124,11 +126,13 @@ def _convert_order_by(
                     expression=attribute_key_to_expression(x.column.key),
                 )
             )
-        elif x.column.HasField("aggregation"):
+        elif x.column.HasField("conditional_aggregation"):
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=aggregation_to_expression(x.column.aggregation),
+                    expression=aggregation_to_expression(
+                        x.column.conditional_aggregation
+                    ),
                 )
             )
         elif x.column.HasField("formula"):
@@ -146,15 +150,17 @@ def _get_reliability_context_columns(column: Column) -> list[SelectedExpression]
     extrapolated aggregates need to request extra columns to calculate the reliability of the result.
     this function returns the list of columns that need to be requested.
     """
-    if not column.HasField("aggregation"):
+    if not (column.HasField("conditional_aggregation")):
         return []
 
     if (
-        column.aggregation.extrapolation_mode
+        column.conditional_aggregation.extrapolation_mode
         == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
     ):
         context_columns = []
-        confidence_interval_column = get_confidence_interval_column(column.aggregation)
+        confidence_interval_column = get_confidence_interval_column(
+            column.conditional_aggregation
+        )
         if confidence_interval_column is not None:
             context_columns.append(
                 SelectedExpression(
@@ -163,8 +169,10 @@ def _get_reliability_context_columns(column: Column) -> list[SelectedExpression]
                 )
             )
 
-        average_sample_rate_column = get_average_sample_rate_column(column.aggregation)
-        count_column = get_count_column(column.aggregation)
+        average_sample_rate_column = get_average_sample_rate_column(
+            column.conditional_aggregation
+        )
+        count_column = get_count_column(column.conditional_aggregation)
         context_columns.append(
             SelectedExpression(
                 name=average_sample_rate_column.alias,
@@ -191,8 +199,8 @@ def _column_to_expression(column: Column) -> Expression:
     """
     if column.HasField("key"):
         return attribute_key_to_expression(column.key)
-    elif column.HasField("aggregation"):
-        function_expr = aggregation_to_expression(column.aggregation)
+    elif column.HasField("conditional_aggregation"):
+        function_expr = aggregation_to_expression(column.conditional_aggregation)
         # aggregation label may not be set and the column label takes priority anyways.
         function_expr = replace(function_expr, alias=column.label)
         return function_expr
