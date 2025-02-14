@@ -22,7 +22,7 @@ in ``~/.sentry/sentry.conf.py``::
 
 And then use::
 
-    sentry devservices up --exclude=snuba
+    devservices up --exclude=snuba
 
 Note that Snuba assumes that everything is running on UTC time. Otherwise
 you may experience issues with timezone mismatches.

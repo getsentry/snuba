@@ -179,6 +179,12 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Optional timeout for batch writer client connecting and sending request to Clickhouse",
 )
 @click.option(
+    "--custom-envoy-request-timeout",
+    type=int,
+    default=None,
+    help="Optional request timeout value for Snuba -> Envoy -> Clickhouse connection",
+)
+@click.option(
     "--quantized-rebalance-consumer-group-delay-secs",
     type=int,
     default=None,
@@ -216,6 +222,7 @@ def rust_consumer(
     mutations_mode: bool,
     max_dlq_buffer_length: Optional[int],
     quantized_rebalance_consumer_group_delay_secs: Optional[int],
+    custom_envoy_request_timeout: Optional[int],
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -236,6 +243,7 @@ def rust_consumer(
         slice_id=slice_id,
         group_instance_id=group_instance_id,
         quantized_rebalance_consumer_group_delay_secs=quantized_rebalance_consumer_group_delay_secs,
+        custom_envoy_request_timeout=custom_envoy_request_timeout,
     )
 
     consumer_config_raw = json.dumps(asdict(consumer_config))
@@ -269,6 +277,7 @@ def rust_consumer(
         stop_at_timestamp,
         batch_write_timeout_ms,
         max_dlq_buffer_length,
+        custom_envoy_request_timeout,
     )
 
     sys.exit(exitcode)

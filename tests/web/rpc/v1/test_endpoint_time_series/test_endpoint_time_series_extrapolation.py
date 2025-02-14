@@ -7,6 +7,7 @@ import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     DataPoint,
+    Expression,
     TimeSeries,
     TimeSeriesRequest,
 )
@@ -664,6 +665,87 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                         avg_sampling_rate=2
                         / 101,  # weighted average = (1 + 1)/(1/0.01 + 1) = 2/101
                         sample_count=2,
+                    )
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
+
+    def test_formula(self) -> None:
+        # store a a test metric with a value of 1, every second for an hour
+        granularity_secs = 120
+        query_duration = 3600
+        sample_rate = 0.5
+        metric_value = 10
+        store_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("my_test_metric", get_value=lambda x: metric_value)],
+            measurements=[
+                DummyMeasurement(
+                    "client_sample_rate",
+                    get_value=lambda s: sample_rate,
+                )
+            ],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_ADD,
+                        left=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_FLOAT, name="my_test_metric"
+                                ),
+                                label="sum(test_metric)",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                            )
+                        ),
+                        right=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_FLOAT, name="my_test_metric"
+                                ),
+                                label="sum(test_metric)",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                            )
+                        ),
+                    ),
+                    label="sum + sum",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        expected_sum_plus_sum = (granularity_secs * metric_value * 2) / sample_rate
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
+            TimeSeries(
+                label="sum + sum",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(
+                        data=expected_sum_plus_sum,
+                        data_present=True,
                     )
                     for _ in range(len(expected_buckets))
                 ],

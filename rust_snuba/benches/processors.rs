@@ -99,6 +99,7 @@ fn create_factory(
         },
         stop_at_timestamp: None,
         batch_write_timeout: None,
+        custom_envoy_request_timeout: None,
     };
     Box::new(factory)
 }
