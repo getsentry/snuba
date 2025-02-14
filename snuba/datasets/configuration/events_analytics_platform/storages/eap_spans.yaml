@@ -6,7 +6,7 @@ storage:
   key: eap_spans
   set_key: events_analytics_platform
 
-readiness_state: partial
+readiness_state: complete
 
 schema:
   columns:
