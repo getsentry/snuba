@@ -80,7 +80,9 @@ def aggregation_filter_to_expression(agg_filter: AggregationFilter) -> Expressio
                     f"Unsupported aggregation filter op: {AggregationComparisonFilter.Op.Name(agg_filter.comparison_filter.op)}"
                 )
             return op_expr(
-                aggregation_to_expression(agg_filter.comparison_filter.aggregation),
+                aggregation_to_expression(
+                    agg_filter.comparison_filter.conditional_aggregation
+                ),
                 agg_filter.comparison_filter.val,
             )
         case "and_filter":
@@ -152,11 +154,13 @@ def _get_reliability_context_columns(column: Column) -> list[SelectedExpression]
         return []
 
     if (
-        column.aggregation.extrapolation_mode
+        column.conditional_aggregation.extrapolation_mode
         == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
     ):
         context_columns = []
-        confidence_interval_column = get_confidence_interval_column(column.aggregation)
+        confidence_interval_column = get_confidence_interval_column(
+            column.conditional_aggregation
+        )
         if confidence_interval_column is not None:
             context_columns.append(
                 SelectedExpression(
@@ -165,8 +169,10 @@ def _get_reliability_context_columns(column: Column) -> list[SelectedExpression]
                 )
             )
 
-        average_sample_rate_column = get_average_sample_rate_column(column.aggregation)
-        count_column = get_count_column(column.aggregation)
+        average_sample_rate_column = get_average_sample_rate_column(
+            column.conditional_aggregation
+        )
+        count_column = get_count_column(column.conditional_aggregation)
         context_columns.append(
             SelectedExpression(
                 name=average_sample_rate_column.alias,

@@ -34,6 +34,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeValue,
     ExtrapolationMode,
     Function,
+    Reliability,
     VirtualColumnContext,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
@@ -1841,6 +1842,111 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    def test_rachel(self) -> None:
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = [
+            gen_message(
+                msg_timestamp, measurements={"client_sample_rate": {"value": 0.1}}
+            ),
+            gen_message(
+                msg_timestamp, measurements={"client_sample_rate": {"value": 0.85}}
+            ),
+        ]
+        write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_factor"
+                        ),
+                        label="avg_sample(sampling_rate)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                    label="avg_sample(sampling_rate)",
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.duration_ms"
+                        ),
+                        label="count()",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    ),
+                    label="count()",
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_MIN,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_factor"
+                        ),
+                        label="min(sampling_rate)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    ),
+                    label="min(sampling_rate)",
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.duration_ms"
+                        ),
+                        label="count_sample()",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    ),
+                    label="count_sample()",
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        print(response.column_values)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="avg_sample(sampling_rate)",
+                results=[
+                    AttributeValue(val_double=0.475),
+                ],
+                reliabilities=[Reliability.RELIABILITY_LOW],
+            ),
+            TraceItemColumnValues(
+                attribute_name="count()",
+                results=[
+                    AttributeValue(val_double=11),
+                ],
+                reliabilities=[Reliability.RELIABILITY_LOW],
+            ),
+            TraceItemColumnValues(
+                attribute_name="min(sampling_rate)",
+                results=[
+                    AttributeValue(val_double=0.1),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="count_sample()",
+                results=[
+                    AttributeValue(val_double=11),
+                ],
+                reliabilities=[Reliability.RELIABILITY_LOW],
+            ),
+        ]
+
     def test_aggregation_filter_and_or_backward_compat(
         self, setup_teardown: Any
     ) -> None:
@@ -2685,7 +2791,7 @@ class TestUtils:
         message = TraceItemTableRequest(
             columns=[
                 Column(
-                    conditional_aggregation=AttributeConditionalAggregation(
+                    aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
                             type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
@@ -2695,7 +2801,7 @@ class TestUtils:
                     )
                 ),
                 Column(
-                    conditional_aggregation=AttributeConditionalAggregation(
+                    aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
                             type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
@@ -2717,7 +2823,7 @@ class TestUtils:
         message = TraceItemTableRequest(
             columns=[
                 Column(
-                    conditional_aggregation=AttributeConditionalAggregation(
+                    aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
                             type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
@@ -2727,7 +2833,7 @@ class TestUtils:
                     )
                 ),
                 Column(
-                    conditional_aggregation=AttributeConditionalAggregation(
+                    aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
                             type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
