@@ -1,13 +1,15 @@
 from datetime import UTC, datetime
 
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
+    AttributeConditionalAggregation,
+)
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeAggregation,
     AttributeKey,
     ExtrapolationMode,
     Function,
@@ -44,7 +46,7 @@ def test_basic() -> None:
         columns=[
             Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
             Column(
-                aggregation=AttributeAggregation(
+                conditional_aggregation=AttributeConditionalAggregation(
                     aggregate=Function.FUNCTION_MAX,
                     key=AttributeKey(
                         type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
@@ -54,7 +56,7 @@ def test_basic() -> None:
                 ),
             ),
             Column(
-                aggregation=AttributeAggregation(
+                conditional_aggregation=AttributeConditionalAggregation(
                     aggregate=Function.FUNCTION_AVG,
                     key=AttributeKey(
                         type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
@@ -76,6 +78,7 @@ def test_basic() -> None:
     )
     transformed = SparseAggregateAttributeTransformer(req).transform()
     # filter was set properly
+    print(transformed.filter)
     assert transformed.filter == TraceItemFilter(
         and_filter=AndFilter(
             filters=[
