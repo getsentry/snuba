@@ -5,6 +5,7 @@ from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
+    AggregationComparisonFilter,
     AggregationFilter,
     Column,
     TraceItemTableRequest,
@@ -87,18 +88,23 @@ def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
 
 
 def convert_to_conditional_aggregation(in_msg: TraceItemTableRequest) -> None:
+    def _add_conditional_aggregation(
+        input: Column | AggregationComparisonFilter,
+    ) -> None:
+        aggregation = input.aggregation
+        input.conditional_aggregation.CopyFrom(
+            AttributeConditionalAggregation(
+                aggregate=aggregation.aggregate,
+                key=aggregation.key,
+                label=aggregation.label,
+                extrapolation_mode=aggregation.extrapolation_mode,
+            )
+        )
+
     def _convert(input: Column | AggregationFilter) -> None:
         if isinstance(input, Column):
             if input.HasField("aggregation"):
-                aggregation = input.aggregation
-                input.conditional_aggregation.CopyFrom(
-                    AttributeConditionalAggregation(
-                        aggregate=aggregation.aggregate,
-                        key=aggregation.key,
-                        label=aggregation.label,
-                        extrapolation_mode=aggregation.extrapolation_mode,
-                    )
-                )
+                _add_conditional_aggregation(input)
 
             if input.HasField("formula"):
                 _convert(input.formula.left)
@@ -113,15 +119,7 @@ def convert_to_conditional_aggregation(in_msg: TraceItemTableRequest) -> None:
                     _convert(aggregation_filter)
             if input.HasField("comparison_filter"):
                 if input.comparison_filter.HasField("aggregation"):
-                    aggregation = input.comparison_filter.aggregation
-                    input.comparison_filter.conditional_aggregation.CopyFrom(
-                        AttributeConditionalAggregation(
-                            aggregate=aggregation.aggregate,
-                            key=aggregation.key,
-                            label=aggregation.label,
-                            extrapolation_mode=aggregation.extrapolation_mode,
-                        )
-                    )
+                    _add_conditional_aggregation(input.comparison_filter)
 
     for column in in_msg.columns:
         _convert(column)
