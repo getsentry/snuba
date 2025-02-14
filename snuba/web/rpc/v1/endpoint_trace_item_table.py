@@ -5,6 +5,7 @@ from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
+    AggregationFilter,
     Column,
     TraceItemTableRequest,
     TraceItemTableResponse,
@@ -86,26 +87,48 @@ def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
 
 
 def convert_to_conditional_aggregation(in_msg: TraceItemTableRequest) -> None:
-    def _convert(column: Column) -> None:
-        if column.HasField("aggregation"):
-            aggregation = column.aggregation
-            column.conditional_aggregation.CopyFrom(
-                AttributeConditionalAggregation(
-                    aggregate=aggregation.aggregate,
-                    key=aggregation.key,
-                    label=aggregation.label,
-                    extrapolation_mode=aggregation.extrapolation_mode,
+    def _convert(input: Column | AggregationFilter) -> None:
+        if isinstance(input, Column):
+            if input.HasField("aggregation"):
+                aggregation = input.aggregation
+                input.conditional_aggregation.CopyFrom(
+                    AttributeConditionalAggregation(
+                        aggregate=aggregation.aggregate,
+                        key=aggregation.key,
+                        label=aggregation.label,
+                        extrapolation_mode=aggregation.extrapolation_mode,
+                    )
                 )
-            )
 
-        if column.HasField("formula"):
-            _convert(column.formula.left)
-            _convert(column.formula.right)
+            if input.HasField("formula"):
+                _convert(input.formula.left)
+                _convert(input.formula.right)
+
+        if isinstance(input, AggregationFilter):
+            if input.HasField("and_filter"):
+                for aggregation_filter in input.and_filter.filters:
+                    _convert(aggregation_filter)
+            if input.HasField("or_filter"):
+                for aggregation_filter in input.or_filter.filters:
+                    _convert(aggregation_filter)
+            if input.HasField("comparison_filter"):
+                if input.comparison_filter.HasField("aggregation"):
+                    aggregation = input.comparison_filter.aggregation
+                    input.comparison_filter.conditional_aggregation.CopyFrom(
+                        AttributeConditionalAggregation(
+                            aggregate=aggregation.aggregate,
+                            key=aggregation.key,
+                            label=aggregation.label,
+                            extrapolation_mode=aggregation.extrapolation_mode,
+                        )
+                    )
 
     for column in in_msg.columns:
         _convert(column)
     for ob in in_msg.order_by:
         _convert(ob.column)
+    if in_msg.HasField("aggregation_filter"):
+        _convert(in_msg.aggregation_filter)
 
 
 class EndpointTraceItemTable(

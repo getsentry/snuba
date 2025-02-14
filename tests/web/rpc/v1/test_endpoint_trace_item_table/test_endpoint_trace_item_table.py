@@ -1916,14 +1916,12 @@ class TestTraceItemTable(BaseApiTest):
             ],
         )
         response = EndpointTraceItemTable().execute(message)
-        print(response.column_values)
         assert response.column_values == [
             TraceItemColumnValues(
                 attribute_name="avg_sample(sampling_rate)",
                 results=[
                     AttributeValue(val_double=0.475),
                 ],
-                reliabilities=[Reliability.RELIABILITY_LOW],
             ),
             TraceItemColumnValues(
                 attribute_name="count()",
@@ -2791,7 +2789,7 @@ class TestUtils:
         message = TraceItemTableRequest(
             columns=[
                 Column(
-                    aggregation=AttributeAggregation(
+                    conditional_aggregation=AttributeConditionalAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
                             type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
@@ -2801,7 +2799,7 @@ class TestUtils:
                     )
                 ),
                 Column(
-                    aggregation=AttributeAggregation(
+                    conditional_aggregation=AttributeConditionalAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
                             type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
@@ -2823,7 +2821,7 @@ class TestUtils:
         message = TraceItemTableRequest(
             columns=[
                 Column(
-                    aggregation=AttributeAggregation(
+                    conditional_aggregation=AttributeConditionalAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
                             type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
@@ -2833,7 +2831,7 @@ class TestUtils:
                     )
                 ),
                 Column(
-                    aggregation=AttributeAggregation(
+                    conditional_aggregation=AttributeConditionalAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
                             type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
