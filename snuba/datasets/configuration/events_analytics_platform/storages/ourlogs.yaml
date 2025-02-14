@@ -6,7 +6,7 @@ storage:
   key: ourlogs
   set_key: events_analytics_platform
 
-readiness_state: complete
+readiness_state: limited
 
 schema:
   columns:
