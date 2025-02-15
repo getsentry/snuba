@@ -1,5 +1,36 @@
 # Changelog
 
+## 25.2.0
+
+### Various fixes & improvements
+
+- feat(uptime): Add incident_status column to uptime_monitor_checks (#6886) by @evanpurkhiser
+- chore(eap): Enable all storages in every region (#6884) by @phacops
+- cleanup(gen-metrics): remove meta_tag_values_mv (#6882) by @onewland
+- Revert "Revert "remove generic_metrics/*/distributions_meta_tag_value… (#6883) by @onewland
+- chore(docs): update references to devservices (#6881) by @shellmayr
+- Revert "remove generic_metrics/*/distributions_meta_tag_values (#6878)" (2dea1189) by @getsentry-bot
+- remove generic_metrics/*/distributions_meta_tag_values (#6878) by @onewland
+- fix(snuba-admin): stop crashing when turning off profile events (#6879) by @volokluev
+- chore(eap): Restore missing materialized views (#6877) by @phacops
+- feat(eap): Add hash map of attribute keys to the items table (#6876) by @phacops
+- migrate(smart-autocomplete): Add a hashmap optimization + BF index to smart autocomplete table (#6875) by @volokluev
+- feat(consumer): add flag for custom envoy request timeout (#6874) by @onewland
+- fix(eap): Bad circular import in endpoint get traces (#6873) by @Zylphrex
+- chore: Upgrade clickhouse-driver to 0.2.9 (#6869) by @phacops
+- feat: eap support formulas in timeseries endpoint (#6854) by @kylemumma
+- feat(eap): Add a table to store items (#6850) by @phacops
+- feat(capman): Remove BytesScannedWindowAllocationPolicy from errors_ro (#6866) by @volokluev
+- fix(eap): reliabilities should be updated even when value is null (#6863) by @davidtsuk
+- Revert "cleanup(smart_autocomplete): remove smart autocomplete mv (#6867)" (0bdf9a9a) by @getsentry-bot
+- cleanup(smart_autocomplete): remove smart autocomplete mv (#6867) by @volokluev
+- fix: bump sentry kafka schema (#6864) by @JoshFerge
+- feat: Add a Bool column type (#6861) by @phacops
+- feat: Allow to use 128 bits integers (#6862) by @phacops
+- chore: bump sentry-kafka-schemas (#6857) by @JoshFerge
+
+_Plus 76 more_
+
 ## 25.1.0
 
 ### Various fixes & improvements
