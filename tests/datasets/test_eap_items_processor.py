@@ -2,7 +2,6 @@ from datetime import datetime
 
 import pytest
 
-
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.eap_items_processor import EAPItemsProcessor
 from snuba.processor import InsertBatch
