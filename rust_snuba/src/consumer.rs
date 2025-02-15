@@ -336,8 +336,9 @@ pub fn process_message(
 ) -> PyResult<(Option<PyInsert>, Option<PyReplacement>)> {
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
-    let func = processors::get_processing_function(name)
-        .ok_or(SnubaRustError::new_err("processor not found"))?;
+    let func = processors::get_processing_function(name).ok_or(SnubaRustError::new_err(
+        format!("processor '{}' not found", name),
+    ))?;
 
     let payload = KafkaPayload::new(None, None, Some(value));
     let timestamp = DateTime::<Utc>::from_timestamp_millis(millis_since_epoch).unwrap_or_default();
