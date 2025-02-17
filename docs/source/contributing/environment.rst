@@ -82,7 +82,8 @@ and, in another terminal::
     cd ../sentry
     git checkout master
     git pull
-    devservices up --exclude=snuba
+    devservices up
+    docker stop snuba-snuba-1 snuba-clickhouse-1
 
 This will get the most recent version of Sentry on master, and bring up all snuba's dependencies.
 
