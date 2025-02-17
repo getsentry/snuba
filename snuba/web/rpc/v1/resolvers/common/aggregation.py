@@ -138,12 +138,7 @@ class GenericExtrapolationContext(ExtrapolationContext):
             if self.value != 0
             else float("inf")
         )
-        is_reliable = calculate_reliability(
-            relative_confidence,
-            self.sample_count,
-            CONFIDENCE_INTERVAL_THRESHOLD,
-        )
-        if is_reliable:
+        if relative_confidence <= CONFIDENCE_INTERVAL_THRESHOLD:
             return Reliability.RELIABILITY_HIGH
         return Reliability.RELIABILITY_LOW
 
@@ -174,12 +169,7 @@ class PercentileExtrapolationContext(ExtrapolationContext):
             self.value / ci_lower if ci_lower != 0 else float("inf"),
             ci_upper / self.value if self.value != 0 else float("inf"),
         )
-        is_reliable = calculate_reliability(
-            relative_confidence,
-            self.sample_count,
-            CONFIDENCE_INTERVAL_THRESHOLD,
-        )
-        if is_reliable:
+        if relative_confidence <= CONFIDENCE_INTERVAL_THRESHOLD:
             return Reliability.RELIABILITY_HIGH
         return Reliability.RELIABILITY_LOW
 
@@ -601,21 +591,6 @@ def _calculate_approximate_ci_percentile_levels(
     lower_index = n * p - z_value * math.sqrt(n * p * (1 - p))
     upper_index = 1 + n * p + z_value * math.sqrt(n * p * (1 - p))
     return (lower_index / n, upper_index / n)
-
-
-def calculate_reliability(
-    relative_confidence: float,
-    sample_count: int,
-    confidence_interval_threshold: float,
-    sample_count_threshold: int = 100,
-) -> bool:
-    """
-    A reliability check to determine if the sample count is large enough to be reliable and the confidence interval is small enough.
-    """
-    if sample_count < sample_count_threshold:
-        return False
-
-    return relative_confidence <= confidence_interval_threshold
 
 
 def aggregation_to_expression(
