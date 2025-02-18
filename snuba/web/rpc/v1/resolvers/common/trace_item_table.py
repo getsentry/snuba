@@ -44,14 +44,14 @@ def convert_results(
                 extrapolation_context = ExtrapolationContext.from_row(column_name, row)
                 res[column_name].attribute_name = column_name
                 if value is None:
-
                     res[column_name].results.append(AttributeValue(is_null=True))
                 else:
                     res[column_name].results.append(converters[column_name](value))
-                    if extrapolation_context.is_extrapolated:
-                        res[column_name].reliabilities.append(
-                            extrapolation_context.reliability
-                        )
+
+                if extrapolation_context.is_extrapolated:
+                    res[column_name].reliabilities.append(
+                        extrapolation_context.reliability
+                    )
 
     column_ordering = {column.label: i for i, column in enumerate(request.columns)}
 

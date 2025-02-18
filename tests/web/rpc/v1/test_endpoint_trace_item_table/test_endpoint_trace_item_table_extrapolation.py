@@ -881,3 +881,105 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 ],
             ),
         ]
+
+    def test_aggregation_with_nulls(self) -> None:
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        start = BASE_TIME
+        messages_a = [
+            gen_message(
+                start - timedelta(minutes=i),
+                measurements={
+                    "custom_measurement": {"value": 1},
+                    "server_sample_rate": {"value": 1.0},
+                },
+                tags={"custom_tag": "a"},
+            )
+            for i in range(5)
+        ]
+        messages_b = [
+            gen_message(
+                start - timedelta(minutes=i),
+                measurements={
+                    "custom_measurement2": {"value": 1},
+                    "server_sample_rate": {"value": 1.0},
+                },
+                tags={"custom_tag": "b"},
+            )
+            for i in range(5)
+        ]
+        write_raw_unprocessed_events(spans_storage, messages_a + messages_b)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="custom_tag")
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
+                        ),
+                        label="sum(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement2"
+                        ),
+                        label="sum(custom_measurement2)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+            ],
+            group_by=[
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="custom_tag"),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="custom_tag"
+                        )
+                    ),
+                ),
+            ],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="custom_tag",
+                results=[AttributeValue(val_str="a"), AttributeValue(val_str="b")],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(custom_measurement)",
+                results=[AttributeValue(val_double=5), AttributeValue(is_null=True)],
+                reliabilities=[
+                    Reliability.RELIABILITY_LOW,
+                    Reliability.RELIABILITY_UNSPECIFIED,
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(custom_measurement2)",
+                results=[AttributeValue(is_null=True), AttributeValue(val_double=5)],
+                reliabilities=[
+                    Reliability.RELIABILITY_UNSPECIFIED,
+                    Reliability.RELIABILITY_LOW,
+                ],
+            ),
+        ]

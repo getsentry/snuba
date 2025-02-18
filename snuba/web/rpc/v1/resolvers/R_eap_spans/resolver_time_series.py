@@ -1,12 +1,16 @@
 import uuid
 from collections import defaultdict
+from dataclasses import replace
 from datetime import datetime
 from typing import Any, Dict, Iterable
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import DataPoint
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
-    DataPoint,
+    Expression as ProtoExpression,
+)
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeries,
     TimeSeriesRequest,
     TimeSeriesResponse,
@@ -23,6 +27,7 @@ from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
+from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -47,6 +52,13 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
 )
+
+OP_TO_EXPR = {
+    ProtoExpression.BinaryFormula.OP_ADD: f.plus,
+    ProtoExpression.BinaryFormula.OP_SUBTRACT: f.minus,
+    ProtoExpression.BinaryFormula.OP_MULTIPLY: f.multiply,
+    ProtoExpression.BinaryFormula.OP_DIVIDE: f.divide,
+}
 
 
 def _convert_result_timeseries(
@@ -94,7 +106,8 @@ def _convert_result_timeseries(
 
     # to convert the results, need to know which were the groupby columns and which ones
     # were aggregations
-    aggregation_labels = set([agg.label for agg in request.aggregations])
+    aggregation_labels = set([expr.label for expr in request.expressions])
+
     group_by_labels = set([attr.name for attr in request.group_by])
 
     # create a mapping with (all the group by attribute key,val pairs as strs, label name)
@@ -154,7 +167,7 @@ def _convert_result_timeseries(
                 extrapolation_context = ExtrapolationContext.from_row(
                     timeseries.label, row_data
                 )
-                if extrapolation_context.is_data_present:
+                if row_data.get(timeseries.label, None) is not None:
                     timeseries.data_points.append(
                         DataPoint(
                             data=row_data[timeseries.label],
@@ -169,23 +182,19 @@ def _convert_result_timeseries(
     return result_timeseries.values()
 
 
-def _build_query(request: TimeSeriesRequest) -> Query:
-    # TODO: This is hardcoded still
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
-
-    aggregation_columns = [
-        SelectedExpression(
-            name=aggregation.label, expression=aggregation_to_expression(aggregation)
-        )
-        for aggregation in request.aggregations
-    ]
-
+def _get_reliability_context_columns(
+    expressions: Iterable[ProtoExpression],
+) -> list[SelectedExpression]:
+    # this reliability logic ignores formulas, meaning formulas may not properly support reliability
     additional_context_columns = []
-    for aggregation in request.aggregations:
+
+    aggregates = []
+    for e in expressions:
+        if e.WhichOneof("expression") == "aggregation":
+            # ignore formulas
+            aggregates.append(e.aggregation)
+
+    for aggregation in aggregates:
         if (
             aggregation.extrapolation_mode
             == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
@@ -211,6 +220,41 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         additional_context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
         )
+    return additional_context_columns
+
+
+def _proto_expression_to_ast_expression(expr: ProtoExpression) -> Expression:
+    match expr.WhichOneof("expression"):
+        case "aggregation":
+            return aggregation_to_expression(expr.aggregation)
+        case "formula":
+            formula_expr = OP_TO_EXPR[expr.formula.op](
+                _proto_expression_to_ast_expression(expr.formula.left),
+                _proto_expression_to_ast_expression(expr.formula.right),
+            )
+            formula_expr = replace(formula_expr, alias=expr.label)
+            return formula_expr
+        case default:
+            raise ValueError(f"Unknown expression type: {default}")
+
+
+def _build_query(request: TimeSeriesRequest) -> Query:
+    # TODO: This is hardcoded still
+    entity = Entity(
+        key=EntityKey("eap_spans"),
+        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+        sample=None,
+    )
+
+    aggregation_columns = [
+        SelectedExpression(
+            name=expr.label,
+            expression=_proto_expression_to_ast_expression(expr),
+        )
+        for expr in request.expressions
+    ]
+
+    additional_context_columns = _get_reliability_context_columns(request.expressions)
 
     groupby_columns = [
         SelectedExpression(
@@ -302,6 +346,10 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
+        # aggregations field is deprecated, it gets converted to request.expressions
+        # if the user passes it in
+        assert len(in_msg.aggregations) == 0
+
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),

@@ -18,6 +18,7 @@ schema:
     { name: http_status_code, type: UInt, args: { size: 16, schema_modifiers: [nullable] } },
     { name: trace_id, type: UUID },
     { name: retention_days, type: UInt, args: { size: 16 } },
+    { name: incident_status, type: UInt, args: { size: 16 } },
   ]
 
 storages:

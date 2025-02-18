@@ -3,6 +3,7 @@ import uuid
 from typing import Type
 
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
+    Expression,
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
@@ -75,6 +76,19 @@ def _validate_time_buckets(request: TimeSeriesRequest) -> None:
         )
 
 
+def _convert_aggregations_to_expressions(
+    request: TimeSeriesRequest,
+) -> TimeSeriesRequest:
+    if len(request.aggregations) > 0:
+        new_req = TimeSeriesRequest()
+        new_req.CopyFrom(request)
+        new_req.ClearField("aggregations")
+        for agg in request.aggregations:
+            new_req.expressions.append(Expression(aggregation=agg, label=agg.label))
+        return new_req
+    return request
+
+
 class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
     @classmethod
     def version(cls) -> str:
@@ -107,5 +121,6 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
             raise BadSnubaRPCRequestException(
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
             )
+        in_msg = _convert_aggregations_to_expressions(in_msg)
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)
