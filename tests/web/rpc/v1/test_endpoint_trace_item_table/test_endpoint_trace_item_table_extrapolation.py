@@ -244,7 +244,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
     def test_aggregation_on_attribute_column(self) -> None:
         spans_storage = get_storage(StorageKey("eap_spans"))
         start = BASE_TIME
-        # tags = {"custom_tag": "blah"}
         messages_w_measurement = [
             gen_message(
                 start - timedelta(minutes=i),

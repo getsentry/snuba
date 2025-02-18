@@ -78,7 +78,6 @@ def test_basic() -> None:
     )
     transformed = SparseAggregateAttributeTransformer(req).transform()
     # filter was set properly
-    print(transformed.filter)
     assert transformed.filter == TraceItemFilter(
         and_filter=AndFilter(
             filters=[
