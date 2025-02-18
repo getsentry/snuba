@@ -42,6 +42,7 @@ pub fn deserialize_message(payload: &[u8]) -> anyhow::Result<(Vec<UptimeMonitorC
             .http_status_code,
         trace_id: monitor_message.trace_id,
         retention_days: monitor_message.retention_days,
+        incident_status: monitor_message.incident_status,
     }];
     Ok((rows, monitor_message.actual_check_time_ms as f64))
 }
@@ -63,6 +64,7 @@ struct UptimeMonitorCheckMessage<'a> {
     status_reason: Option<CheckStatusReason<'a>>,
     trace_id: Uuid,
     request_info: Option<RequestInfo>,
+    incident_status: u16,
 }
 #[derive(Debug, Deserialize, Default)]
 pub struct RequestInfo {
@@ -95,6 +97,7 @@ pub struct UptimeMonitorCheckRow<'a> {
     http_status_code: Option<u16>,
     trace_id: Uuid,
     retention_days: u16,
+    incident_status: u16,
 }
 
 #[cfg(test)]
@@ -121,6 +124,7 @@ mod tests {
             },
             "http_status_code": 200,
             "trace_id": "550e8400-e29b-41d4-a716-446655440000",
+            "incident_status": 0,
             "request_info": {
                 "request_type": "GET",
                 "http_status_code": 200
@@ -145,6 +149,7 @@ mod tests {
         assert_eq!(monitor_row.retention_days, 30);
         assert_eq!(monitor_row.scheduled_check_time, 1702659277);
         assert_eq!(monitor_row.timestamp, 1702659277000);
+        assert_eq!(monitor_row.incident_status, 0);
         assert_eq!(timestamp, 1702659277000.0);
     }
 
@@ -165,6 +170,7 @@ mod tests {
             "status_reason": null,
             "http_status_code": 200,
             "trace_id": "550e8400-e29b-41d4-a716-446655440000",
+            "incident_status": 0,
             "request_info": {
                 "request_type": "GET",
                 "http_status_code": 200
@@ -188,6 +194,7 @@ mod tests {
         assert_eq!(monitor_row.check_status_reason, "");
         assert_eq!(monitor_row.http_status_code, Some(200));
         assert_eq!(monitor_row.retention_days, 30);
+        assert_eq!(monitor_row.incident_status, 0);
         assert_eq!(timestamp, 1702659277.0);
     }
 }

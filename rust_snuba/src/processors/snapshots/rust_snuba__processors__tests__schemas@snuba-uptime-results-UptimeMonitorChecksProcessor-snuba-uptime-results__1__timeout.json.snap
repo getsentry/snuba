@@ -1,6 +1,6 @@
 ---
 source: src/processors/mod.rs
-description: "{\n  \"guid\": \"54afc7ed9c53491481919c931f75bae1\",\n  \"subscription_id\": \"5421b5df80744113a6b57014f01a3a42\",\n  \"status\": \"failure\",\n  \"status_reason\": {\n    \"type\": \"timeout\",\n    \"description\": \"Check timed out\"\n  },\n  \"trace_id\": \"947efba02dac463b9c1d886a44bafc94\",\n  \"span_id\": \"58e84098e63f42e1\",\n  \"scheduled_check_time_ms\": 1717614062978,\n  \"actual_check_time_ms\": 1717614068008,\n  \"duration_ms\": 100,\n  \"request_info\": {\n    \"request_type\": \"HEAD\",\n    \"http_status_code\": null\n  },\n  \"organization_id\": 123,\n  \"project_id\": 456,\n  \"retention_days\": 90,\n  \"region_slug\": \"us-east-1\"\n}\n"
+description: "{\n  \"guid\": \"54afc7ed9c53491481919c931f75bae1\",\n  \"subscription_id\": \"5421b5df80744113a6b57014f01a3a42\",\n  \"status\": \"failure\",\n  \"status_reason\": {\n    \"type\": \"timeout\",\n    \"description\": \"Check timed out\"\n  },\n  \"trace_id\": \"947efba02dac463b9c1d886a44bafc94\",\n  \"span_id\": \"58e84098e63f42e1\",\n  \"scheduled_check_time_ms\": 1717614062978,\n  \"actual_check_time_ms\": 1717614068008,\n  \"duration_ms\": 100,\n  \"request_info\": {\n    \"request_type\": \"HEAD\",\n    \"http_status_code\": null\n  },\n  \"organization_id\": 123,\n  \"project_id\": 456,\n  \"retention_days\": 90,\n  \"incident_status\": 0\n}\n"
 expression: snapshot_payload
 ---
 [
@@ -10,6 +10,7 @@ expression: snapshot_payload
     "duration_ms": 100,
     "environment": null,
     "http_status_code": null,
+    "incident_status": 0,
     "organization_id": 123,
     "project_id": 456,
     "region": "",
