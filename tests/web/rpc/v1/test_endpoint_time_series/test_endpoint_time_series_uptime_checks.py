@@ -47,7 +47,6 @@ def gen_message(
         },
         "http_status_code": 200,
         "trace_id": _TRACE_ID,
-        "incident_status": 0,
         "request_info": {
             "request_type": "GET",
             "http_status_code": 200,
@@ -194,7 +193,6 @@ class TestTimeSeriesApi(BaseApiTest):
             ],
             group_by=[
                 AttributeKey(type=AttributeKey.TYPE_STRING, name="region"),
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="incident_status"),
             ],
             granularity_secs=granularity_secs,
         )
@@ -208,7 +206,7 @@ class TestTimeSeriesApi(BaseApiTest):
             TimeSeries(
                 label="count",
                 buckets=expected_buckets,
-                group_by_attributes={"region": "global", "incident_status": "0"},
+                group_by_attributes={"region": "global"},
                 data_points=[
                     DataPoint(data=300, data_present=True)
                     for _ in range(len(expected_buckets))
