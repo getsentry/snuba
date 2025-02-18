@@ -1,13 +1,19 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.eap_items_processor import EAPItemsProcessor
+from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertBatch
 from tests.datasets.test_spans_processor import get_span_event
+from tests.helpers import write_processed_messages
+from tests.web.rpc.v1.test_endpoint_trace_item_table.test_endpoint_trace_item_table import (
+    gen_message,
+)
 
-span_in_topic = {
+topic_span = {
     "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
     "duration_ms": 10000,
     "exclusive_time_ms": 10000,
@@ -45,24 +51,17 @@ span_in_topic = {
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-class TestSpansProcessor:
-    def test_required_clickhouse_columns_are_present(self) -> None:
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+class TestEAPItemsProcessor:
+    def test_can_write_to_storage(self) -> None:
+        now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+        topic_span = gen_message(now)
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=now)
+        result = EAPItemsProcessor().process_message(topic_span, meta)
+        assert isinstance(result, InsertBatch)
+        write_processed_messages(
+            get_writable_storage(StorageKey("eap_items")),
+            [result],
         )
-        actual_result = EAPItemsProcessor().process_message(span_in_topic, meta)
-        assert isinstance(actual_result, InsertBatch)
-        rows = actual_result.rows
-        expected_result = []
-        # expected_result = message.build_result(meta)
-        assert len(rows) == len(expected_result)
-
-        for index in range(len(rows)):
-            assert set(rows[index]) - set(expected_result[index]) == set()
-            assert set(expected_result[index]) - set(rows[index]) == set()
-
-        for index in range(len(rows)):
-            assert len(rows[index]) == len(expected_result[index])
 
     def test_exact_results(self) -> None:
         message = get_span_event()
