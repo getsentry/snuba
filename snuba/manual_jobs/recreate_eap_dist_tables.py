@@ -54,7 +54,7 @@ class RecreateEAPDistTables(Job):
                 connection.execute(query=statement)
 
             for table_name in tables:
-                statement = "RENAME TABLE {table_name} TO old_{table_name}, new_{table_name} TO {table_name}"
+                statement = f"RENAME TABLE {table_name} TO old_{table_name}, new_{table_name} TO {table_name}"
                 logger.info("Rename table: {statement}")
                 connection.execute(query=statement)
 
