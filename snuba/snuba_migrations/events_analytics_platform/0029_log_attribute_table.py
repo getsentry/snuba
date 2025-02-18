@@ -36,7 +36,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("attr_key", String(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
         Column("attr_value", String(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
         Column(
-            "start_of_day_timestamp",
+            "timestamp",
             DateTime(modifiers=Modifiers(codecs=["DoubleDelta", "ZSTD(1)"])),
         ),
         Column("retention_days", UInt(16)),
@@ -53,7 +53,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("attr_min_value", SimpleAggregateFunction("min", [Float(64)])),
         Column("attr_max_value", SimpleAggregateFunction("max", [Float(64)])),
         Column(
-            "start_of_day_timestamp",
+            "timestamp",
             DateTime(modifiers=Modifiers(codecs=["DoubleDelta", "ZSTD(1)"])),
         ),
         Column("retention_days", UInt(16)),
@@ -100,7 +100,7 @@ SELECT
     project_id,
     attrs.1 as attr_key,
     attrs.2 as attr_value,
-    toStartOfDay(_sort_timestamp) AS start_of_day_timestamp,
+    toStartOfDay(timestamp) AS timestamp,
     retention_days,
     1 AS count
 FROM ourlogs_3_local
@@ -155,7 +155,7 @@ SELECT
     attrs.1 as attr_key,
     attrs.2 as attr_min_value,
     attrs.2 as attr_max_value,
-    toStartOfDay(_sort_timestamp) AS timestamp,
+    toStartOfDay(timestamp) AS timestamp,
     retention_days,
     1 AS count
 FROM ourlogs_3_local
