@@ -137,7 +137,7 @@ GROUP BY
                 storage_set=self.storage_set_key,
                 table_name=self.num_dist_table,
                 engine=table_engines.Distributed(
-                    local_table_name=self.new_num_local_table, sharding_key=None
+                    local_table_name=self.num_local_table, sharding_key=None
                 ),
                 columns=self.num_columns,
                 target=OperationTarget.DISTRIBUTED,
