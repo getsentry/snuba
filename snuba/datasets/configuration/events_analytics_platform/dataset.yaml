@@ -8,3 +8,4 @@ entities:
   - spans_str_attrs
   - ourlogs
   - uptime_checks
+  - eap_items

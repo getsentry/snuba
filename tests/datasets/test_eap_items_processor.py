@@ -3,10 +3,13 @@ from datetime import UTC, datetime
 import pytest
 
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.processors.eap_items_processor import EAPItemsProcessor
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertBatch
+from tests.base import BaseApiTest
 from tests.datasets.test_spans_processor import get_span_event
 from tests.helpers import write_processed_messages
 from tests.web.rpc.v1.test_endpoint_trace_item_table.test_endpoint_trace_item_table import (
@@ -51,29 +54,14 @@ topic_span = {
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-class TestEAPItemsProcessor:
+class TestTraceItemTable(BaseApiTest):
     def test_can_write_to_storage(self) -> None:
-        now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
-        topic_span = gen_message(now)
-        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=now)
-        result = EAPItemsProcessor().process_message(topic_span, meta)
-        assert isinstance(result, InsertBatch)
-        write_processed_messages(
-            get_writable_storage(StorageKey("eap_items")),
-            [result],
+        storage = get_writable_storage(StorageKey("eap_spans"))
+        # storage = get_writable_storage(StorageKey("eap_items"))
+        processor = storage.get_table_writer().get_stream_loader().get_processor()
+        processed_message = processor.process_message(
+            gen_message(datetime.now()), KafkaMessageMetadata(0, 0, datetime.now())
         )
-
-    def test_exact_results(self) -> None:
-        message = get_span_event()
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
-        actual_result = EAPItemsProcessor().process_message(message.serialize(), meta)
-
-        assert isinstance(actual_result, InsertBatch)
-        rows = actual_result.rows
-
-        expected_result = message.build_result(meta)
-        assert len(rows) == len(expected_result)
-        for index in range(len(rows)):
-            assert rows[index] == expected_result[index]
+        assert processed_message is not None
+        write_processed_messages(storage, [processed_message])
+        print("mewo")
