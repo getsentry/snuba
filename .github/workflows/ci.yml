@@ -437,7 +437,7 @@ jobs:
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       name: Checkout repository
-    - uses: getsentry/action-validate-devservices-config@6477ef1e9c96e456bfad726006e731f89fcd81db
+    - uses: getsentry/action-validate-devservices-config@02a078d1280293e6598cabfbd318a01609c12c83
       name: Validate devservices config
       with:
         requirements-file-path: requirements.txt
