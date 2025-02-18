@@ -52,6 +52,7 @@ def gen_message(
         },
         "http_status_code": 200,
         "trace_id": _TRACE_ID,
+        "incident_status": 0,
         "request_info": {
             "request_type": "GET",
             "http_status_code": 200,
