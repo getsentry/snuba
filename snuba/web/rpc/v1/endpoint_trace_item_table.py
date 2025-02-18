@@ -89,13 +89,22 @@ def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
 
 def convert_to_conditional_aggregation(in_msg: TraceItemTableRequest) -> None:
     """
-    This function adds the equivalent conditional aggregation for every aggregation in each Column or AggregationFilter. We don't add the filter field so outside code logic will set the default condition to true. The purpose of this function is to "transform" every AttributeAggregation to AttributeConditionalAggregation in order to avoid code fragmentation
+    Up to this point we support aggregation, but now we want to support conditional aggregation, which only aggregates
+    if the field satisfies the condition: https://clickhouse.com/docs/en/sql-reference/aggregate-functions/combinators#-if
+
+    For messages that don't have conditional aggregation, this function replaces the aggregation with a conditional aggregation,
+    where the filter is null, and every field is the same. This allows code elsewhere to set the default condition to always
+    be true.
+
+    The reason we do this "transformation" is to avoid code fragmentation down the line, where we constantly have to check
+    if the request contains `AttributeAggregation` or `AttributeConditionalAggregation`
     """
 
     def _add_conditional_aggregation(
         input: Column | AggregationComparisonFilter,
     ) -> None:
         aggregation = input.aggregation
+        input.ClearField("aggregation")
         input.conditional_aggregation.CopyFrom(
             AttributeConditionalAggregation(
                 aggregate=aggregation.aggregate,
