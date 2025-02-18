@@ -2798,12 +2798,6 @@ def _build_sum_attribute_aggregation_column_with_name(name: str) -> Column:
 
 def _build_sum_attribute_conditional_aggregation_column_with_name(name: str) -> Column:
     return Column(
-        aggregation=AttributeAggregation(
-            aggregate=Function.FUNCTION_SUM,
-            key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name=name),
-            label="sum(" + name + ")",
-            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-        ),
         conditional_aggregation=AttributeConditionalAggregation(
             aggregate=Function.FUNCTION_SUM,
             key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name=name),

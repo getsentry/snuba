@@ -88,6 +88,10 @@ def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
 
 
 def convert_to_conditional_aggregation(in_msg: TraceItemTableRequest) -> None:
+    """
+    This function adds the equivalent conditional aggregation for every aggregation in each Column or AggregationFilter. We don't add the filter field so outside code logic will set the default condition to true. The purpose of this function is to "transform" every AttributeAggregation to AttributeConditionalAggregation in order to avoid code fragmentation
+    """
+
     def _add_conditional_aggregation(
         input: Column | AggregationComparisonFilter,
     ) -> None:
