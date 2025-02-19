@@ -13,8 +13,6 @@ STORAGE_KEYS = [
     StorageKey.DISCOVER,
     StorageKey.ERRORS,
     StorageKey.ERRORS_RO,
-    StorageKey.GROUPEDMESSAGES,
-    StorageKey.GROUPASSIGNEES,
     StorageKey.METRICS_COUNTERS,
     StorageKey.ORG_METRICS_COUNTERS,
     StorageKey.METRICS_DISTRIBUTIONS,
