@@ -35,6 +35,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     ExtrapolationMode,
     Function,
     Reliability,
+    StrArray,
     VirtualColumnContext,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
@@ -120,7 +121,6 @@ def gen_message(
         },
         "span_id": "123456781234567D",
         "tags": {
-            "http.status_code": "200",
             "relay_endpoint_version": "3",
             "relay_id": "88888888-4444-4444-8444-cccccccccccc",
             "relay_no_cache": "False",
@@ -261,13 +261,16 @@ class TestTraceItemTable(BaseApiTest):
         )
         metrics_mock = MagicMock()
         monkeypatch.setattr(RPCEndpoint, "metrics", property(lambda x: metrics_mock))
-        with patch(
-            "clickhouse_driver.client.Client.execute",
-            side_effect=ServerException(
-                "DB::Exception: Received from snuba-events-analytics-platform-1-1:1111. DB::Exception: Memory limit (for query) exceeded: would use 1.11GiB (attempt to allocate chunk of 111111 bytes), maximum: 1.11 GiB. Blahblahblahblahblahblahblah",
-                code=241,
+        with (
+            patch(
+                "clickhouse_driver.client.Client.execute",
+                side_effect=ServerException(
+                    "DB::Exception: Received from snuba-events-analytics-platform-1-1:1111. DB::Exception: Memory limit (for query) exceeded: would use 1.11GiB (attempt to allocate chunk of 111111 bytes), maximum: 1.11 GiB. Blahblahblahblahblahblahblah",
+                    code=241,
+                ),
             ),
-        ), patch("snuba.web.rpc.sentry_sdk.capture_exception") as sentry_sdk_mock:
+            patch("snuba.web.rpc.sentry_sdk.capture_exception") as sentry_sdk_mock,
+        ):
             with pytest.raises(QueryException) as e:
                 EndpointTraceItemTable().execute(message)
             assert "DB::Exception: Memory limit (for query) exceeded" in str(e.value)
@@ -1161,7 +1164,9 @@ class TestTraceItemTable(BaseApiTest):
         messages_no_measurement = [
             gen_message(start - timedelta(minutes=i), tags=tags) for i in range(120)
         ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+        write_raw_unprocessed_events(
+            spans_storage, messages_w_measurement + messages_no_measurement
+        )  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -1209,7 +1214,9 @@ class TestTraceItemTable(BaseApiTest):
         messages_no_measurement = [
             gen_message(start - timedelta(minutes=i), tags=tags) for i in range(120)
         ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+        write_raw_unprocessed_events(
+            spans_storage, messages_w_measurement + messages_no_measurement
+        )  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -1400,7 +1407,6 @@ class TestTraceItemTable(BaseApiTest):
         EndpointTraceItemTable().execute(err_msg)
 
     def test_same_column_name(self) -> None:
-
         dt = BASE_TIME - timedelta(minutes=5)
         spans_storage = get_storage(StorageKey("eap_spans"))
         messages = [
@@ -2780,6 +2786,83 @@ class TestTraceItemTable(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="nonexistent_int",
                 results=[AttributeValue(is_null=True) for _ in range(10)],
+            ),
+        ]
+
+    def test_calculate_http_response_rate(self) -> None:
+        for i in range(9):
+            span_ts = BASE_TIME - timedelta(seconds=i + 1)
+            write_eap_span(span_ts, {"http.status_code": "200"}, 10)
+        for i in range(10):
+            span_ts = BASE_TIME - timedelta(seconds=i + 1)
+            write_eap_span(span_ts, {"http.status_code": "502"}, 1)
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=12)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    label="http_response_rate_5",
+                    formula=Column.BinaryFormula(
+                        left=Column(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    name="http.status_code",
+                                    type=AttributeKey.TYPE_STRING,
+                                ),
+                                filter=TraceItemFilter(
+                                    comparison_filter=ComparisonFilter(
+                                        key=AttributeKey(
+                                            name="http.status_code",
+                                            type=AttributeKey.TYPE_STRING,
+                                        ),
+                                        op=ComparisonFilter.OP_IN,
+                                        value=AttributeValue(
+                                            val_str_array=StrArray(
+                                                values=[
+                                                    "500",
+                                                    "502",
+                                                    "504",
+                                                ],
+                                            ),
+                                        ),
+                                    )
+                                ),
+                                label="error_request_count",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            ),
+                        ),
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        right=Column(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    name="http.status_code",
+                                    type=AttributeKey.TYPE_STRING,
+                                ),
+                                label="total_request_count",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            ),
+                        ),
+                    ),
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="http_response_rate_5",
+                results=[AttributeValue(val_double=0.1)],
             ),
         ]
 
