@@ -24,6 +24,7 @@ def main(context: dict[str, str]) -> int:
     print(f"syncing venv with {requirements}...")
     venv.sync(reporoot, venv_dir, requirements, editable_paths, bins)
 
+    print("running make develop...")
     os.system("make develop")
 
     # start colima if it's not already running
