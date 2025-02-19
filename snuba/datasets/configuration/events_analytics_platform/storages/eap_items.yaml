@@ -218,14 +218,11 @@ query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: UUIDColumnProcessor
     args:
-      columns: [transaction_id, trace_id, profile_id]
-  - processor: HexIntColumnProcessor
-    args:
-      columns: [span_id, parent_span_id, segment_id]
+      columns: [trace_id]
   - processor: PrewhereProcessor
     args:
       prewhere_candidates:
-        [span_id, trace_id, segment_name]
+        [trace_id]
   - processor: TupleUnaliaser
   - processor: ClickhouseSettingsOverride
     args:

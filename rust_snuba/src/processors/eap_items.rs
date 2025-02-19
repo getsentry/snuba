@@ -27,23 +27,12 @@ pub fn process_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    if let Some(headers) = payload.headers() {
-        if let Some(ingest_in_eap) = headers.get("ingest_in_eap") {
-            if ingest_in_eap == b"false" {
-                return Ok(InsertBatch::skip());
-            }
-        }
-    }
-
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
     let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
     let mut span: EAPItem = msg.into();
 
-    span.retention_days = Some(max(
-        enforce_retention(span.retention_days, &config.env_config),
-        30,
-    ));
+    span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
 
     InsertBatch::from_rows([span], origin_timestamp)
 }
@@ -90,11 +79,7 @@ impl AttributeMap {
 
     pub fn insert_bool(&mut self, k: String, v: bool) {
         // double write as float and bool
-        if v {
-            self.insert_float(k.clone(), 1.0);
-        } else {
-            self.insert_float(k.clone(), 0.0);
-        }
+        self.insert_float(k.clone(), v as u8 as f64);
         self.attributes_bool.insert(k, v);
     }
 
@@ -151,7 +136,7 @@ impl From<FromSpanMessage> for EAPItem {
                 organization_id: from.organization_id,
                 project_id: from.project_id,
                 item_type: 1, // hardcoding "span" as type
-                timestamp: from.start_timestamp_ms as u32,
+                timestamp: (from.start_timestamp_ms / 1000) as u32,
             },
             trace_id: from.trace_id,
             item_id,
