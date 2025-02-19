@@ -44,7 +44,7 @@ class RecreateEAPDistTables(Job):
     def execute(self, logger: JobLogger) -> None:
         cluster = get_cluster(StorageSetKey.EVENTS_ANALYTICS_PLATFORM)
 
-        for storage_node in cluster.get_local_nodes():
+        for storage_node in cluster.get_distributed_nodes():
             connection = cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE,
                 storage_node,
