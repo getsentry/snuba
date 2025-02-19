@@ -130,6 +130,6 @@ expression: item
   "project_id": 1,
   "retention_days": 90,
   "sampling_weight": 50,
-  "timestamp": 3332654216,
+  "timestamp": 1721319572,
   "trace_id": "d099bf9a-d5a1-43cf-8f83-a98081d0ed3b"
 }
