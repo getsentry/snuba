@@ -1165,8 +1165,9 @@ class TestTraceItemTable(BaseApiTest):
             gen_message(start - timedelta(minutes=i), tags=tags) for i in range(120)
         ]
         write_raw_unprocessed_events(
-            spans_storage, messages_w_measurement + messages_no_measurement
-        )  # type: ignore
+            spans_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -1215,8 +1216,9 @@ class TestTraceItemTable(BaseApiTest):
             gen_message(start - timedelta(minutes=i), tags=tags) for i in range(120)
         ]
         write_raw_unprocessed_events(
-            spans_storage, messages_w_measurement + messages_no_measurement
-        )  # type: ignore
+            spans_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
