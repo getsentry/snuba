@@ -12,6 +12,8 @@ use serde::de::{MapAccess, Visitor};
 use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
+use seq_macro::seq;
+use std::collections::HashMap;
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 pub(crate) struct FromLogMessage {
@@ -107,64 +109,137 @@ pub fn process_message(
         (msg.observed_timestamp_nanos / 1_000_000_000) as i64,
         (msg.observed_timestamp_nanos % 1_000_000_000) as u32,
     );
-    let mut ourlog: Ourlog = msg.into();
+    let mut item: EAPItem = msg.into();
 
-    ourlog.retention_days = enforce_retention(Some(ourlog.retention_days), &config.env_config);
+    item.retention_days = enforce_retention(Some(item.retention_days), &config.env_config);
 
-    InsertBatch::from_rows([ourlog], origin_timestamp)
+    InsertBatch::from_rows([item], origin_timestamp)
+}
+
+macro_rules! seq_attrs {
+    ($($tt:tt)*) => {
+        seq!(N in 0..40 {
+            $($tt)*
+        });
+    }
+}
+
+seq_attrs! {
+#[derive(Debug, Default, Serialize)]
+pub(crate) struct AttributeMap {
+    attributes_bool: BTreeMap<String, bool>,
+    attributes_int: BTreeMap<String, i64>,
+
+    #(
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_string_~N: HashMap<String, String>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_float_~N: HashMap<String, f64>,
+    )*
+}
+}
+
+impl AttributeMap {
+    pub fn insert_str(&mut self, k: String, v: String) {
+        seq_attrs! {
+            let str_buckets = [
+                #(
+                &mut self.attributes_string_~N,
+                )*
+            ];
+        };
+
+        str_buckets
+            [(crate::processors::eap_spans::fnv_1a(k.as_bytes()) as usize) % str_buckets.len()]
+        .insert(k, v);
+    }
+
+    pub fn insert_float(&mut self, k: String, v: f64) {
+        seq_attrs! {
+            let num_buckets = [
+                #(
+                &mut self.attributes_float_~N,
+                )*
+            ];
+        }
+
+        num_buckets
+            [(crate::processors::eap_spans::fnv_1a(k.as_bytes()) as usize) % num_buckets.len()]
+        .insert(k, v);
+    }
+
+    pub fn insert_int(&mut self, k: String, v: i64) {
+        self.attributes_int.insert(k, v);
+    }
+
+    pub fn insert_bool(&mut self, k: String, v: bool) {
+        self.attributes_bool.insert(k, v);
+    }
 }
 
 #[derive(Debug, Default, Serialize)]
-struct Ourlog {
+struct EAPItem {
     organization_id: u64,
     project_id: u64,
-    trace_id: Uuid,
-    span_id: u64,
-    severity_text: String,
-    severity_number: u8,
-    retention_days: u16,
+    item_type: u8,
     timestamp: u64,
-    body: String,
-    attr_string: BTreeMap<String, String>,
-    attr_int: BTreeMap<String, i64>,
-    attr_double: BTreeMap<String, f64>,
-    attr_bool: BTreeMap<String, bool>,
+    trace_id: Uuid,
+    item_id: u128,
+    sampling_weight: u64,
+    retention_days: u16,
+    #[serde(flatten)]
+    attributes: AttributeMap,
 }
 
-impl From<FromLogMessage> for Ourlog {
-    fn from(from: FromLogMessage) -> Ourlog {
+impl From<FromLogMessage> for EAPItem {
+    fn from(from: FromLogMessage) -> EAPItem {
         let mut res = Self {
             organization_id: from.organization_id,
             project_id: from.project_id,
+            item_type: 3, // TRACE_ITEM_TYPE_LOG
+            item_id: u128::from_be_bytes(
+                *Uuid::new_v7(uuid::Timestamp::from_unix(
+                    uuid::NoContext,
+                    from.timestamp_nanos / 1_000_000_000,
+                    (from.timestamp_nanos % 1_000_000_000) as u32,
+                ))
+                .as_bytes(),
+            ),
             trace_id: from.trace_id.unwrap_or_default(),
-            span_id: from
-                .span_id
-                .map_or(0, |s| u64::from_str_radix(&s, 16).unwrap_or(0)),
-            severity_text: from.severity_text.unwrap_or_else(|| "INFO".into()),
-            severity_number: from.severity_number.unwrap_or_default(),
             retention_days: from.retention_days,
             timestamp: from.timestamp_nanos,
-            body: from.body,
-            attr_string: BTreeMap::new(),
-            attr_int: BTreeMap::new(),
-            attr_double: BTreeMap::new(),
-            attr_bool: BTreeMap::new(),
+            ..Default::default()
         };
+        res.attributes.insert_str(
+            "sentry.severity_text".to_string(),
+            from.severity_text.unwrap_or_else(|| "INFO".into()),
+        );
+        res.attributes.insert_int(
+            "sentry.severity_number".to_string(),
+            from.severity_number.unwrap_or_default().into(),
+        );
+        res.attributes
+            .insert_str("sentry.body".to_string(), from.body);
+        if let Some(span_id) = from.span_id {
+            res.attributes
+                .insert_str("sentry.span_id".to_string(), span_id)
+        }
 
         if let Some(attributes) = from.attributes {
             for (k, v) in attributes {
                 match v {
                     FromAttribute::String(s) => {
-                        res.attr_string.insert(k, s);
+                        res.attributes.insert_str(k, s);
                     }
                     FromAttribute::Int(i) => {
-                        res.attr_int.insert(k, i);
+                        res.attributes.insert_int(k, i);
                     }
                     FromAttribute::Double(d) => {
-                        res.attr_double.insert(k, d);
+                        res.attributes.insert_float(k, d);
                     }
                     FromAttribute::Bool(b) => {
-                        res.attr_bool.insert(k, b);
+                        res.attributes.insert_bool(k, b);
                     }
                 }
             }
