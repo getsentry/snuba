@@ -5,6 +5,9 @@ from typing import Any, Mapping
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
+    AttributeConditionalAggregation,
+)
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemColumnValues,
@@ -19,7 +22,11 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Function,
     Reliability,
 )
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    ComparisonFilter,
+    ExistsFilter,
+    TraceItemFilter,
+)
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -237,7 +244,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
     def test_aggregation_on_attribute_column(self) -> None:
         spans_storage = get_storage(StorageKey("eap_spans"))
         start = BASE_TIME
-        tags = {"custom_tag": "blah"}
         messages_w_measurement = [
             gen_message(
                 start - timedelta(minutes=i),
@@ -249,12 +255,11 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                         "value": 1.0 / (2**i)
                     },  # this results in sampling weights of 1, 2, 4, 8, and 16
                 },
-                tags=tags,
             )
             for i in range(5)
         ]
         messages_no_measurement = [
-            gen_message(start - timedelta(minutes=i), tags=tags) for i in range(5)
+            gen_message(start - timedelta(minutes=i)) for i in range(5)
         ]
         write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
 
@@ -347,6 +352,98 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         )  # weighted count (all events have duration) - 5*1 + 1 + 2 + 4 + 8 + 16
         assert abs(measurement_p90 - 4) < 0.01  # weighted p90 - 4
 
+    def test_conditional_aggregation_on_attribute_column(self) -> None:
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        start = BASE_TIME
+        messages_w_measurement = [
+            gen_message(
+                start - timedelta(minutes=i),
+                measurements={
+                    "custom_measurement": {
+                        "value": i
+                    },  # this results in values of 0, 1, 2, 3, and 4
+                    "server_sample_rate": {
+                        "value": 1.0 / (2**i)
+                    },  # this results in sampling weights of 1, 2, 4, 8, and 16
+                },
+                tags={"is_i_divisible_by_2": str(i % 2 == 0)},
+            )
+            for i in range(5)
+        ]
+        messages_no_measurement = [
+            gen_message(start - timedelta(minutes=i), tags={"custom_tag": "blah"})
+            for i in range(5)
+        ]
+        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    conditional_aggregation=AttributeConditionalAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
+                        ),
+                        label="sum(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                        filter=TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING,
+                                    name="is_i_divisible_by_2",
+                                ),
+                                op=ComparisonFilter.OP_EQUALS,
+                                value=AttributeValue(val_str="True"),
+                            )
+                        ),
+                    )
+                ),
+                Column(
+                    conditional_aggregation=AttributeConditionalAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
+                        ),
+                        label="avg(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                        filter=TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING,
+                                    name="is_i_divisible_by_2",
+                                ),
+                                op=ComparisonFilter.OP_EQUALS,
+                                value=AttributeValue(val_str="False"),
+                            )
+                        ),
+                    )
+                ),
+            ],
+            order_by=[],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        measurement_sum = [v.val_double for v in response.column_values[0].results][0]
+        measurement_avg = [v.val_double for v in response.column_values[1].results][
+            0
+        ]  # weighted sum - 0*1 + 1*2 + 2*4 + 3*8 + 4*16
+
+        assert measurement_sum == 72  # weighted sum - 0*1 + 2*4 + 4*16
+        assert (
+            abs(measurement_avg - 2.6) < 0.000001
+        )  # weighted average - (1*2 + 3*8) / (2+8)
+
     def test_count_reliability_backward_compat(self) -> None:
         spans_storage = get_storage(StorageKey("eap_spans"))
         start = BASE_TIME
@@ -402,9 +499,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             0
         ]
         assert measurement_count == 5
-        assert (
-            measurement_reliability == Reliability.RELIABILITY_LOW
-        )  # low reliability due to low sample count
+        assert measurement_reliability == Reliability.RELIABILITY_HIGH
 
     def test_count_reliability(self) -> None:
         spans_storage = get_storage(StorageKey("eap_spans"))
@@ -461,9 +556,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             0
         ]
         assert measurement_count == 5
-        assert (
-            measurement_reliability == Reliability.RELIABILITY_LOW
-        )  # low reliability due to low sample count
+        assert measurement_reliability == Reliability.RELIABILITY_HIGH
 
     def test_count_reliability_with_group_by_backward_compat(self) -> None:
         spans_storage = get_storage(StorageKey("eap_spans"))
@@ -578,17 +671,13 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         measurement_counts = [v.val_double for v in response.column_values[3].results]
         measurement_reliabilities = [v for v in response.column_values[3].reliabilities]
         assert measurement_counts == [5]
-        assert measurement_reliabilities == [
-            Reliability.RELIABILITY_LOW,
-        ]  # low reliability due to low sample count
+        assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
         measurement_p90s = [v.val_double for v in response.column_values[4].results]
         measurement_reliabilities = [v for v in response.column_values[4].reliabilities]
         assert len(measurement_p90s) == 1
         assert measurement_p90s[0] == 4
-        assert measurement_reliabilities == [
-            Reliability.RELIABILITY_LOW,
-        ]  # low reliability due to low sample count
+        assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
     def test_count_reliability_with_group_by(self) -> None:
         spans_storage = get_storage(StorageKey("eap_spans"))
@@ -703,17 +792,13 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         measurement_counts = [v.val_double for v in response.column_values[3].results]
         measurement_reliabilities = [v for v in response.column_values[3].reliabilities]
         assert measurement_counts == [5]
-        assert measurement_reliabilities == [
-            Reliability.RELIABILITY_LOW,
-        ]  # low reliability due to low sample count
+        assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
         measurement_p90s = [v.val_double for v in response.column_values[4].results]
         measurement_reliabilities = [v for v in response.column_values[4].reliabilities]
         assert len(measurement_p90s) == 1
         assert measurement_p90s[0] == 4
-        assert measurement_reliabilities == [
-            Reliability.RELIABILITY_LOW,
-        ]  # low reliability due to low sample count
+        assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
     def test_formula(self) -> None:
         """
@@ -873,7 +958,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 attribute_name="sum(custom_measurement)",
                 results=[AttributeValue(val_double=5), AttributeValue(is_null=True)],
                 reliabilities=[
-                    Reliability.RELIABILITY_LOW,
+                    Reliability.RELIABILITY_HIGH,
                     Reliability.RELIABILITY_UNSPECIFIED,
                 ],
             ),
@@ -882,7 +967,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 results=[AttributeValue(is_null=True), AttributeValue(val_double=5)],
                 reliabilities=[
                     Reliability.RELIABILITY_UNSPECIFIED,
-                    Reliability.RELIABILITY_LOW,
+                    Reliability.RELIABILITY_HIGH,
                 ],
             ),
         ]

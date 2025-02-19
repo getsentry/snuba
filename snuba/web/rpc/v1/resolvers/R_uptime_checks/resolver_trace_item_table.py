@@ -115,13 +115,15 @@ def _convert_order_by(
                     expression=attribute_key_to_expression(x.column.key),
                 )
             )
-        elif x.column.HasField("aggregation"):
+        elif x.column.HasField("conditional_aggregation"):
             res.append(
                 OrderBy(
                     direction=direction,
                     expression=aggregation_to_expression(
-                        x.column.aggregation,
-                        attribute_key_to_expression(x.column.aggregation.key),
+                        x.column.conditional_aggregation,
+                        attribute_key_to_expression(
+                            x.column.conditional_aggregation.key
+                        ),
                     ),
                 )
             )
@@ -145,10 +147,10 @@ def _build_query(request: TraceItemTableRequest) -> Query:
             selected_columns.append(
                 SelectedExpression(name=column.label, expression=key_col)
             )
-        elif column.HasField("aggregation"):
+        elif column.HasField("conditional_aggregation"):
             function_expr = aggregation_to_expression(
-                column.aggregation,
-                attribute_key_to_expression(column.aggregation.key),
+                column.conditional_aggregation,
+                attribute_key_to_expression(column.conditional_aggregation.key),
             )
             # aggregation label may not be set and the column label takes priority anyways.
             function_expr = replace(function_expr, alias=column.label)

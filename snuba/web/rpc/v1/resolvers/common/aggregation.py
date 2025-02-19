@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Dict, List, Optional
 
+from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
+    AttributeConditionalAggregation,
+)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     ExtrapolationMode,
@@ -16,9 +19,12 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column
+from snuba.query.dsl import and_cond, column, literal
 from snuba.query.expressions import CurriedFunctionCall, Expression, FunctionCall
-from snuba.web.rpc.common.common import get_field_existence_expression
+from snuba.web.rpc.common.common import (
+    get_field_existence_expression,
+    trace_item_filters_to_expression,
+)
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
@@ -35,6 +41,17 @@ CONFIDENCE_INTERVAL_THRESHOLD = 1.5
 CUSTOM_COLUMN_PREFIX = "__snuba_custom_column__"
 
 _FLOATING_POINT_PRECISION = 9
+
+
+def _get_condition_in_aggregation(
+    aggregation: AttributeAggregation | AttributeConditionalAggregation,
+) -> Expression:
+    condition_in_aggregation: Expression = literal(True)
+    if isinstance(aggregation, AttributeConditionalAggregation):
+        condition_in_aggregation = trace_item_filters_to_expression(
+            aggregation.filter, attribute_key_to_expression
+        )
+    return condition_in_aggregation
 
 
 @dataclass(frozen=True)
@@ -138,12 +155,7 @@ class GenericExtrapolationContext(ExtrapolationContext):
             if self.value != 0
             else float("inf")
         )
-        is_reliable = calculate_reliability(
-            relative_confidence,
-            self.sample_count,
-            CONFIDENCE_INTERVAL_THRESHOLD,
-        )
-        if is_reliable:
+        if relative_confidence <= CONFIDENCE_INTERVAL_THRESHOLD:
             return Reliability.RELIABILITY_HIGH
         return Reliability.RELIABILITY_LOW
 
@@ -174,12 +186,7 @@ class PercentileExtrapolationContext(ExtrapolationContext):
             self.value / ci_lower if ci_lower != 0 else float("inf"),
             ci_upper / self.value if self.value != 0 else float("inf"),
         )
-        is_reliable = calculate_reliability(
-            relative_confidence,
-            self.sample_count,
-            CONFIDENCE_INTERVAL_THRESHOLD,
-        )
-        if is_reliable:
+        if relative_confidence <= CONFIDENCE_INTERVAL_THRESHOLD:
             return Reliability.RELIABILITY_HIGH
         return Reliability.RELIABILITY_LOW
 
@@ -233,7 +240,8 @@ class CustomColumnInformation:
 
 
 def get_attribute_confidence_interval_alias(
-    aggregation: AttributeAggregation, additional_metadata: dict[str, str] = {}
+    aggregation: AttributeAggregation | AttributeConditionalAggregation,
+    additional_metadata: dict[str, str] = {},
 ) -> str | None:
     function_alias_map = {
         Function.FUNCTION_COUNT: "count",
@@ -260,24 +268,32 @@ def get_attribute_confidence_interval_alias(
     return None
 
 
-def get_average_sample_rate_column(aggregation: AttributeAggregation) -> Expression:
+def get_average_sample_rate_column(
+    aggregation: AttributeAggregation | AttributeConditionalAggregation,
+) -> Expression:
     alias = CustomColumnInformation(
         custom_column_id="average_sample_rate",
         referenced_column=aggregation.label,
         metadata={},
     ).to_alias()
     field = attribute_key_to_expression(aggregation.key)
+    condition_in_aggregation = _get_condition_in_aggregation(aggregation)
     return f.divide(
-        f.countIf(field, get_field_existence_expression(field)),
+        f.countIf(
+            field,
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
+        ),
         f.sumIf(
             sampling_weight_column,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         alias=alias,
     )
 
 
-def _get_count_column_alias(aggregation: AttributeAggregation) -> str:
+def _get_count_column_alias(
+    aggregation: AttributeAggregation | AttributeConditionalAggregation,
+) -> str:
     return CustomColumnInformation(
         custom_column_id="count",
         referenced_column=aggregation.label,
@@ -285,11 +301,16 @@ def _get_count_column_alias(aggregation: AttributeAggregation) -> str:
     ).to_alias()
 
 
-def get_count_column(aggregation: AttributeAggregation) -> Expression:
+def get_count_column(
+    aggregation: AttributeAggregation | AttributeConditionalAggregation,
+) -> Expression:
     field = attribute_key_to_expression(aggregation.key)
     return f.countIf(
         field,
-        get_field_existence_expression(field),
+        and_cond(
+            get_field_existence_expression(field),
+            _get_condition_in_aggregation(aggregation),
+        ),
         alias=_get_count_column_alias(aggregation),
     )
 
@@ -313,7 +334,7 @@ def _get_possible_percentiles(
 
 
 def _get_possible_percentiles_expression(
-    aggregation: AttributeAggregation,
+    aggregation: AttributeAggregation | AttributeConditionalAggregation,
     percentile: float,
     granularity: float = 0.005,
     width: float = 0.1,
@@ -342,86 +363,99 @@ def _get_possible_percentiles_expression(
 
 
 def get_extrapolated_function(
-    aggregation: AttributeAggregation,
+    aggregation: AttributeAggregation | AttributeConditionalAggregation,
     field: Expression,
 ) -> CurriedFunctionCall | FunctionCall | None:
     sampling_weight_column = column("sampling_weight")
     alias = aggregation.label if aggregation.label else None
     alias_dict = {"alias": alias} if alias else {}
+    condition_in_aggregation = _get_condition_in_aggregation(aggregation)
     function_map_sample_weighted: dict[
         Function.ValueType, CurriedFunctionCall | FunctionCall
     ] = {
         Function.FUNCTION_SUM: f.sumIfOrNull(
             f.multiply(field, sampling_weight_column),
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_AVERAGE: f.divide(
             f.sumIfOrNull(
                 f.multiply(field, sampling_weight_column),
-                get_field_existence_expression(field),
+                and_cond(
+                    get_field_existence_expression(field), condition_in_aggregation
+                ),
             ),
             f.sumIfOrNull(
                 sampling_weight_column,
-                get_field_existence_expression(field),
+                and_cond(
+                    get_field_existence_expression(field), condition_in_aggregation
+                ),
             ),
             **alias_dict,
         ),
         Function.FUNCTION_AVG: f.divide(
             f.sumIfOrNull(
                 f.multiply(field, sampling_weight_column),
-                get_field_existence_expression(field),
+                and_cond(
+                    get_field_existence_expression(field), condition_in_aggregation
+                ),
             ),
             f.sumIfOrNull(
                 sampling_weight_column,
-                get_field_existence_expression(field),
+                and_cond(
+                    get_field_existence_expression(field), condition_in_aggregation
+                ),
             ),
             **alias_dict,
         ),
         Function.FUNCTION_COUNT: f.sumIfOrNull(
             sampling_weight_column,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P50: cf.quantileTDigestWeightedIfOrNull(0.5)(
             field,
             sampling_weight_column,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P75: cf.quantileTDigestWeightedIfOrNull(0.75)(
             field,
             sampling_weight_column,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P90: cf.quantileTDigestWeightedIfOrNull(0.9)(
             field,
             sampling_weight_column,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P95: cf.quantileTDigestWeightedIfOrNull(0.95)(
             field,
             sampling_weight_column,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P99: cf.quantileTDigestWeightedIfOrNull(0.99)(
             field,
             sampling_weight_column,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_MAX: f.maxIfOrNull(
-            field, get_field_existence_expression(field), **alias_dict
+            field,
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
+            **alias_dict,
         ),
         Function.FUNCTION_MIN: f.minIfOrNull(
-            field, get_field_existence_expression(field), **alias_dict
+            field,
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
+            **alias_dict,
         ),
         Function.FUNCTION_UNIQ: f.uniqIfOrNull(
             field,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
     }
@@ -430,7 +464,7 @@ def get_extrapolated_function(
 
 
 def get_confidence_interval_column(
-    aggregation: AttributeAggregation,
+    aggregation: AttributeAggregation | AttributeConditionalAggregation,
 ) -> Expression | None:
     """
     Returns the expression for calculating the upper confidence limit for a given aggregation. If the aggregation cannot be extrapolated, returns None.
@@ -440,6 +474,8 @@ def get_confidence_interval_column(
     field = attribute_key_to_expression(aggregation.key)
     alias = get_attribute_confidence_interval_alias(aggregation)
     alias_dict = {"alias": alias} if alias else {}
+
+    condition_in_aggregation = _get_condition_in_aggregation(aggregation)
 
     function_map_confidence_interval = {
         # confidence interval = Z \cdot \sqrt{-log{(\frac{\sum_{i=1}^n \frac{1}{w_i}}{n})} \cdot \sum_{i=1}^n w_i^2 - w_i}
@@ -462,7 +498,10 @@ def get_confidence_interval_column(
                             f.multiply(sampling_weight_column, sampling_weight_column),
                             sampling_weight_column,
                         ),
-                        get_field_existence_expression(field),
+                        and_cond(
+                            get_field_existence_expression(field),
+                            condition_in_aggregation,
+                        ),
                     ),
                 )
             ),
@@ -490,7 +529,10 @@ def get_confidence_interval_column(
                                     sampling_weight_column,
                                     f.multiply(field, field),
                                 ),
-                                get_field_existence_expression(field),
+                                and_cond(
+                                    get_field_existence_expression(field),
+                                    condition_in_aggregation,
+                                ),
                             ),
                             f.divide(
                                 f.multiply(
@@ -500,7 +542,10 @@ def get_confidence_interval_column(
                                     ),
                                     f.sumIf(
                                         f.multiply(sampling_weight_column, field),
-                                        get_field_existence_expression(field),
+                                        and_cond(
+                                            get_field_existence_expression(field),
+                                            condition_in_aggregation,
+                                        ),
                                     ),
                                 ),
                                 column(f"{alias}_N"),
@@ -509,10 +554,19 @@ def get_confidence_interval_column(
                         f.multiply(
                             f.sumIf(
                                 sampling_weight_column,
-                                get_field_existence_expression(field),
+                                and_cond(
+                                    get_field_existence_expression(field),
+                                    condition_in_aggregation,
+                                ),
                                 alias=f"{alias}_N",
                             ),
-                            f.countIf(field, get_field_existence_expression(field)),
+                            f.countIf(
+                                field,
+                                and_cond(
+                                    get_field_existence_expression(field),
+                                    condition_in_aggregation,
+                                ),
+                            ),
                         ),
                     )
                 ),
@@ -539,17 +593,26 @@ def get_confidence_interval_column(
                                 sampling_weight_column,
                                 f.multiply(field, field),
                             ),
-                            get_field_existence_expression(field),
+                            and_cond(
+                                get_field_existence_expression(field),
+                                condition_in_aggregation,
+                            ),
                         ),
                         f.divide(
                             f.multiply(
                                 f.sumIf(
                                     f.multiply(sampling_weight_column, field),
-                                    get_field_existence_expression(field),
+                                    and_cond(
+                                        get_field_existence_expression(field),
+                                        condition_in_aggregation,
+                                    ),
                                 ),
                                 f.sumIf(
                                     f.multiply(sampling_weight_column, field),
-                                    get_field_existence_expression(field),
+                                    and_cond(
+                                        get_field_existence_expression(field),
+                                        condition_in_aggregation,
+                                    ),
                                 ),
                             ),
                             column(f"{alias}_N"),
@@ -558,10 +621,19 @@ def get_confidence_interval_column(
                     f.multiply(
                         f.sumIf(
                             sampling_weight_column,
-                            get_field_existence_expression(field),
+                            and_cond(
+                                get_field_existence_expression(field),
+                                condition_in_aggregation,
+                            ),
                             alias=f"{alias}_N",
                         ),
-                        f.countIf(field, get_field_existence_expression(field)),
+                        f.countIf(
+                            field,
+                            and_cond(
+                                get_field_existence_expression(field),
+                                condition_in_aggregation,
+                            ),
+                        ),
                     ),
                 )
             ),
@@ -603,72 +675,62 @@ def _calculate_approximate_ci_percentile_levels(
     return (lower_index / n, upper_index / n)
 
 
-def calculate_reliability(
-    relative_confidence: float,
-    sample_count: int,
-    confidence_interval_threshold: float,
-    sample_count_threshold: int = 100,
-) -> bool:
-    """
-    A reliability check to determine if the sample count is large enough to be reliable and the confidence interval is small enough.
-    """
-    if sample_count < sample_count_threshold:
-        return False
-
-    return relative_confidence <= confidence_interval_threshold
-
-
 def aggregation_to_expression(
-    aggregation: AttributeAggregation, field: Expression | None = None
+    aggregation: AttributeAggregation | AttributeConditionalAggregation,
+    field: Expression | None = None,
 ) -> Expression:
     field = field or attribute_key_to_expression(aggregation.key)
     alias = aggregation.label if aggregation.label else None
     alias_dict = {"alias": alias} if alias else {}
+    condition_in_aggregation = _get_condition_in_aggregation(aggregation)
     function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
         Function.FUNCTION_SUM: f.sumIfOrNull(
             field,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         Function.FUNCTION_AVERAGE: f.avgIfOrNull(
-            field, get_field_existence_expression(field)
+            field,
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         Function.FUNCTION_COUNT: f.countIfOrNull(
-            field, get_field_existence_expression(field)
+            field,
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         Function.FUNCTION_P50: cf.quantileIfOrNull(0.5)(
             field,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         Function.FUNCTION_P75: cf.quantileIfOrNull(0.75)(
             field,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         Function.FUNCTION_P90: cf.quantileIfOrNull(0.9)(
             field,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         Function.FUNCTION_P95: cf.quantileIfOrNull(0.95)(
             field,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         Function.FUNCTION_P99: cf.quantileIfOrNull(0.99)(
             field,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         Function.FUNCTION_AVG: f.avgIfOrNull(
-            field, get_field_existence_expression(field)
+            field,
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         Function.FUNCTION_MAX: f.maxIfOrNull(
             field,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         Function.FUNCTION_MIN: f.minIfOrNull(
             field,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         Function.FUNCTION_UNIQ: f.uniqIfOrNull(
             field,
-            get_field_existence_expression(field),
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
     }
 
