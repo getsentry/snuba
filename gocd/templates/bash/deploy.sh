@@ -49,10 +49,14 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="spans-exp-static-off" \
   --container-name="dlq-consumer" \
   --container-name="group-attributes-consumer" \
-  --container-name="metrics-summaries-consumer" \
   --container-name="eap-spans-consumer" \
   --container-name="eap-mutations-consumer" \
   --container-name="eap-spans-profiled-consumer" \
+  --container-name="eap-spans-subscriptions-scheduler" \
+  --container-name="eap-spans-subscriptions-executor" \
+  --container-name="uptime-results-consumer" \
+  --container-name="lw-deletions-search-issues-consumer" \
+  --container-name="eap-logs-consumer" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --label-selector="${LABEL_SELECTOR}" \
   --image="us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \

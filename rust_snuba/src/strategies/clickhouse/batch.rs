@@ -1,7 +1,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
-use rust_arroyo::gauge;
-use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use sentry_arroyo::gauge;
+use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use std::mem;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::{channel, Sender};
@@ -43,9 +43,9 @@ impl BatchFactory {
         clickhouse_password: &str,
         async_inserts: bool,
         batch_write_timeout: Option<Duration>,
-        max_bytes_before_external_group_by: Option<usize>,
+        custom_envoy_request_timeout: Option<u64>,
     ) -> Self {
-        let mut headers = HeaderMap::with_capacity(5);
+        let mut headers = HeaderMap::with_capacity(6);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
         headers.insert(
@@ -60,6 +60,12 @@ impl BatchFactory {
             "X-ClickHouse-Database",
             HeaderValue::from_str(database).unwrap(),
         );
+        if let Some(custom_envoy_request_timeout) = custom_envoy_request_timeout {
+            headers.insert(
+                "x-envoy-upstream-rq-per-try-timeout-ms",
+                HeaderValue::from_str(&custom_envoy_request_timeout.to_string()).unwrap(),
+            );
+        }
 
         let mut query_params = String::new();
         query_params.push_str("load_balancing=in_order&insert_distributed_sync=1");
@@ -69,12 +75,6 @@ impl BatchFactory {
             if async_inserts_allowed == Some("1".to_string()) {
                 query_params.push_str("&async_insert=1&wait_for_async_insert=1");
             }
-        }
-
-        if let Some(max_bytes_before_external_group_by) = max_bytes_before_external_group_by {
-            let mut query_segment: String = "&max_bytes_before_external_group_by=".to_owned();
-            query_segment.push_str(&max_bytes_before_external_group_by.to_string());
-            query_params.push_str(&query_segment)
         }
 
         let url = format!("http://{hostname}:{http_port}?{query_params}");
@@ -312,42 +312,6 @@ mod tests {
             true,
             None,
             None,
-        );
-
-        let mut batch = factory.new_batch();
-
-        batch
-            .write_rows(&RowData::from_encoded_rows(vec![
-                br#"{"hello": "world"}"#.to_vec()
-            ]))
-            .unwrap();
-
-        concurrency.handle().block_on(batch.finish()).unwrap();
-
-        mock.assert();
-    }
-
-    #[test]
-    fn test_write_with_external_groupby() {
-        crate::testutils::initialize_python();
-        let server = MockServer::start();
-        let mock = server.mock(|when, then| {
-            when.method(POST).path("/").body("{\"hello\": \"world\"}\n");
-            then.status(200).body("hi");
-        });
-
-        let concurrency = ConcurrencyConfig::new(1);
-        let factory = BatchFactory::new(
-            &server.host(),
-            server.port(),
-            "testtable",
-            "testdb",
-            &concurrency,
-            "default",
-            "",
-            true,
-            None,
-            Some(500_000),
         );
 
         let mut batch = factory.new_batch();

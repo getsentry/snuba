@@ -56,6 +56,7 @@ pub struct TopicConfig {
     pub logical_topic_name: String,
     #[serde(deserialize_with = "deserialize_broker_config")]
     pub broker_config: BrokerConfig,
+    pub quantized_rebalance_consumer_group_delay_secs: Option<u64>,
 }
 
 type RawBrokerConfig = HashMap<String, Value>;
@@ -118,7 +119,7 @@ impl Default for EnvConfig {
             dogstatsd_port: None,
             default_retention_days: 90,
             lower_retention_days: 30,
-            valid_retention_days: [30, 90].iter().cloned().collect(),
+            valid_retention_days: [30, 60, 90].iter().cloned().collect(),
             record_cogs: false,
             ddm_metrics_sample_rate: 0.0,
             project_stacktrace_blacklist: Vec::new(),

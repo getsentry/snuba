@@ -1,8 +1,8 @@
-use rust_arroyo::counter;
-use rust_arroyo::processing::strategies::run_task_in_threads::{
+use sentry_arroyo::counter;
+use sentry_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, TaskRunner,
 };
-use rust_arroyo::types::Message;
+use sentry_arroyo::types::Message;
 use serde::Serialize;
 use std::time::Duration;
 
@@ -211,6 +211,7 @@ struct MutationRow {
 #[cfg(test)]
 mod tests {
     use std::env;
+    use std::time::{SystemTime, UNIX_EPOCH};
     use uuid::Uuid;
 
     use crate::mutations::parser::Update;
@@ -284,7 +285,11 @@ mod tests {
         let mut update = Update::default();
 
         let organization_id = 69;
-        let _sort_timestamp = 1727466947;
+        let curr_time_unix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+        let _sort_timestamp = curr_time_unix as u32; //TODO year 2038 problem
         let trace_id = Uuid::parse_str("deadbeef-dead-beef-dead-beefdeadbeef").unwrap();
         let span_id = 16045690984833335023;
 
@@ -299,7 +304,7 @@ mod tests {
         // build the mutation batch
         batch.0.insert(primary_key.clone(), update);
 
-        let test_client = ClickhouseTestClient::new("eap_spans".to_string())
+        let test_client = ClickhouseTestClient::new("eap_spans_2".to_string())
             .await
             .unwrap();
 

@@ -118,6 +118,17 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 *COMMON_RUST_CONSUMER_DEV_OPTIONS,
             ],
         ),
+        (
+            "ourlogs-consumer",
+            [
+                "snuba",
+                "rust-consumer",
+                "--storage=ourlogs",
+                "--consumer-group=ourlogs_group",
+                "--use-rust-processor",
+                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+            ],
+        ),
     ]
 
     if settings.SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV:
@@ -428,6 +439,16 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 ],
             ),
             (
+                "profile_chunks",
+                [
+                    "snuba",
+                    "rust-consumer",
+                    "--storage=profile_chunks",
+                    "--consumer-group=profile_chunks_group",
+                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                ],
+            ),
+            (
                 "functions",
                 [
                     "snuba",
@@ -477,6 +498,24 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=group_attributes",
                     "--consumer-group=group_attributes_group",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                ],
+            ),
+        ]
+
+    if settings.ENABLE_LW_DELETIONS_CONSUMER:
+        daemons += [
+            (
+                "lw-deletions-consumer",
+                [
+                    "snuba",
+                    "lw-deletions-consumer",
+                    "--storage=search_issues",
+                    "--consumer-group=search_issues_deletes_group",
+                    "--max-rows-batch-size=10",
+                    "--max-batch-time-ms=1000",
+                    "--auto-offset-reset=latest",
+                    "--no-strict-offset-reset",
+                    "--log-level=debug",
                 ],
             ),
         ]

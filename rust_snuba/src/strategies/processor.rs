@@ -1,15 +1,16 @@
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use chrono::{DateTime, Utc};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::counter;
-use rust_arroyo::processing::strategies::run_task_in_threads::{
+use regex::Regex;
+use sentry::{Hub, SentryFutureExt};
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::counter;
+use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use rust_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
-use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
-use sentry::{Hub, SentryFutureExt};
+use sentry_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
+use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
 use crate::config::ProcessorConfig;
@@ -79,7 +80,7 @@ pub fn make_rust_processor(
 
     Box::new(RunTaskInThreads::new(
         next_step,
-        Box::new(task_runner),
+        task_runner,
         concurrency,
         Some("process_message"),
     ))
@@ -153,7 +154,7 @@ pub fn make_rust_processor_with_replacements(
 
     Box::new(RunTaskInThreads::new(
         next_step,
-        Box::new(task_runner),
+        task_runner,
         concurrency,
         Some("process_message"),
     ))
@@ -216,6 +217,8 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
         let Some(payload) = kafka_payload.payload() else {
             return Err(maybe_err);
         };
+
+        record_message_stats(payload);
 
         self.process_payload(msg).map_err(|error| {
             counter!("invalid_message");
@@ -335,13 +338,37 @@ fn _validate_schema(
     }
 }
 
+static IP_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    let ipv4 = r"(?x)(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.
+                  (?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.
+                  (?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.
+                  (?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])";
+
+    Regex::new(ipv4).unwrap()
+});
+
+fn record_message_stats(payload: &[u8]) {
+    // for context see INC-984 -- the idea is to have a canary metric for whenever we inadvertently
+    // start ingesting much more PII into our systems. this does not prevent PII leakage but might
+    // improve our response time to the leak.
+    if let Ok(string) = std::str::from_utf8(payload) {
+        if IP_REGEX.is_match(string) {
+            counter!("message_stats.has_ipv4_pattern", 1, "outcome" => "true");
+        } else {
+            counter!("message_stats.has_ipv4_pattern", 1, "outcome" => "false");
+        }
+    } else {
+        counter!("message_stats.has_ipv4_pattern", 1, "outcome" => "invalid_payload");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     use chrono::Utc;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
-    use rust_arroyo::types::{Message, Partition, Topic};
+    use sentry_arroyo::backends::kafka::types::KafkaPayload;
+    use sentry_arroyo::types::{Message, Partition, Topic};
 
     use crate::types::InsertBatch;
     use crate::Noop;
@@ -385,5 +412,28 @@ mod tests {
 
         strategy.submit(message).unwrap(); // Does not error
         let _ = strategy.join(None);
+    }
+
+    #[test]
+    fn test_ip_addresses() {
+        let test_cases = [
+            ("192.168.0.1", true),
+            ("255.255.255.255", true),
+            ("0.0.0.0", true),
+            ("2001:0db8:85a3:0000:0000:8a2e:0370:7334", false), // Valid IPv6, but we don't handle IPv6 yet
+            ("::1", false),
+            ("fe80::1%lo0", false),
+            ("invalid192.168.0.1", true),
+            ("invalid", false),
+        ];
+
+        for (address, is_ipv4) in test_cases {
+            assert_eq!(
+                IP_REGEX.is_match(address),
+                is_ipv4,
+                "{} failed IPv4 validation",
+                address
+            );
+        }
     }
 }

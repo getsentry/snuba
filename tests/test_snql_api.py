@@ -73,6 +73,9 @@ class TestSnQLApi(BaseApiTest):
         self.project_id = self.event["project_id"]
         self.org_id = self.event["organization_id"]
         self.group_id = self.event["group_id"]
+        self.event["data"]["contexts"]["flags"] = {
+            "values": [{"flag": "flag-name", "result": True}]
+        }
         self.skew = timedelta(minutes=180)
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
@@ -1502,6 +1505,31 @@ class TestSnQLApi(BaseApiTest):
         )
         # platform is not nullable but can be cast to nullable
         assert "cast(platform, 'Nullable(String)') AS _snuba_platform" in data["sql"]
+
+    def test_query_flags(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT flags[flag-name]
+                    WHERE project_id = {self.project_id}
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    LIMIT 1""",
+                    "referrer": "myreferrer",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+        assert data["stats"]["consistent"]
+        assert data["data"] == [{"flags[flag-name]": "true"}]
 
 
 @pytest.mark.clickhouse_db

@@ -162,7 +162,16 @@ class Cluster(ABC, Generic[TWriterOptions]):
 ClickhouseWriterOptions = Optional[Mapping[str, Any]]
 
 
-CacheKey = Tuple[ClickhouseNode, ClickhouseClientSettings, str, str, str]
+CacheKey = Tuple[
+    ClickhouseNode,
+    ClickhouseClientSettings,
+    str,
+    str,
+    str,
+    bool,
+    Optional[str],
+    Optional[bool],
+]
 
 
 class ConnectionCache:
@@ -177,10 +186,22 @@ class ConnectionCache:
         user: str,
         password: str,
         database: str,
+        secure: bool,
+        ca_certs: Optional[str],
+        verify: Optional[bool],
     ) -> ClickhousePool:
         with self.__lock:
             settings, timeout = client_settings.value
-            cache_key = (node, client_settings, user, password, database)
+            cache_key = (
+                node,
+                client_settings,
+                user,
+                password,
+                database,
+                secure,
+                ca_certs,
+                verify,
+            )
             if cache_key not in self.__cache:
                 self.__cache[cache_key] = ClickhousePool(
                     node.host_name,
@@ -190,6 +211,9 @@ class ConnectionCache:
                     database,
                     client_settings=settings,
                     send_receive_timeout=timeout,
+                    secure=secure,
+                    ca_certs=ca_certs,
+                    verify=verify,
                 )
 
             return self.__cache[cache_key]
@@ -226,6 +250,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         password: str,
         database: str,
         http_port: int,
+        secure: bool,
+        ca_certs: Optional[str],
+        verify: Optional[bool],
         storage_sets: Set[str],
         single_node: bool,
         # The cluster name and distributed cluster name only apply if single_node is set to False
@@ -246,6 +273,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__password = password
         self.__database = database
         self.__http_port = http_port
+        self.__secure = secure
+        self.__ca_certs = ca_certs
+        self.__verify = verify
         self.__single_node = single_node
         self.__cluster_name = cluster_name
         self.__distributed_cluster_name = distributed_cluster_name
@@ -290,6 +320,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__user,
             self.__password,
             self.__database,
+            self.__secure,
+            self.__ca_certs,
+            self.__verify,
         )
 
     def get_deleter(self) -> Reader:
@@ -331,6 +364,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             block_connections=self.__block_connections,
             user=self.__user,
             password=self.__password,
+            secure=self.__secure,
+            ca_certs=self.__ca_certs,
+            verify=self.__verify,
             metrics=metrics,
             statement=insert_statement.with_database(self.__database),
             encoding=encoding,
@@ -390,7 +426,8 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             ClickhouseNode(*host)
             for host in self.get_query_connection(ClickhouseClientSettings.QUERY)
             .execute(
-                f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}"
+                f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}",
+                retryable=True,
             )
             .results
         ]
@@ -413,6 +450,9 @@ CLUSTERS = [
         password=cluster.get("password", ""),
         database=cluster.get("database", "default"),
         http_port=cluster["http_port"],
+        secure=cluster.get("secure", False),
+        ca_certs=cluster.get("ca_certs", None),
+        verify=cluster.get("verify", False),
         storage_sets=cluster["storage_sets"],
         single_node=cluster["single_node"],
         cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
@@ -459,6 +499,9 @@ def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
         password=cluster.get("password", ""),
         database=cluster.get("database", "default"),
         http_port=cluster["http_port"],
+        secure=cluster.get("secure", False),
+        ca_certs=cluster.get("ca_certs", None),
+        verify=cluster.get("verify", False),
         storage_sets={
             storage_tuple[0] for storage_tuple in cluster["storage_set_slices"]
         },

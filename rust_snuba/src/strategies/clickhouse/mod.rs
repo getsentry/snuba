@@ -1,14 +1,14 @@
 use std::cell::RefCell;
 use std::time::{Duration, SystemTime};
 
-use rust_arroyo::processing::strategies::run_task_in_threads::{
+use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use rust_arroyo::processing::strategies::{
+use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
-use rust_arroyo::types::Message;
-use rust_arroyo::{counter, timer};
+use sentry_arroyo::types::Message;
+use sentry_arroyo::{counter, timer};
 
 use crate::strategies::clickhouse::batch::HttpBatch;
 use crate::types::BytesInsertBatch;
@@ -63,18 +63,18 @@ impl TaskRunner<BytesInsertBatch<HttpBatch>, BytesInsertBatch<()>, anyhow::Error
     }
 }
 
-pub struct ClickhouseWriterStep {
-    inner: RunTaskInThreads<BytesInsertBatch<HttpBatch>, BytesInsertBatch<()>, anyhow::Error>,
+pub struct ClickhouseWriterStep<N> {
+    inner: RunTaskInThreads<BytesInsertBatch<HttpBatch>, BytesInsertBatch<()>, anyhow::Error, N>,
 }
 
-impl ClickhouseWriterStep {
-    pub fn new<N>(next_step: N, concurrency: &ConcurrencyConfig) -> Self
-    where
-        N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
-    {
+impl<N> ClickhouseWriterStep<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
+{
+    pub fn new(next_step: N, concurrency: &ConcurrencyConfig) -> Self {
         let inner = RunTaskInThreads::new(
             next_step,
-            Box::new(ClickhouseWriter::new()),
+            ClickhouseWriter::new(),
             concurrency,
             Some("clickhouse"),
         );
@@ -83,7 +83,10 @@ impl ClickhouseWriterStep {
     }
 }
 
-impl ProcessingStrategy<BytesInsertBatch<HttpBatch>> for ClickhouseWriterStep {
+impl<N> ProcessingStrategy<BytesInsertBatch<HttpBatch>> for ClickhouseWriterStep<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>>,
+{
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }

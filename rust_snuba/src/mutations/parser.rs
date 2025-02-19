@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::counter;
-use rust_arroyo::processing::strategies::run_task_in_threads::{
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::counter;
+use sentry_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, TaskRunner,
 };
-use rust_arroyo::types::Message;
+use sentry_arroyo::types::Message;
 
 use schemars::JsonSchema;
 use sentry::Hub;

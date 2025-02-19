@@ -1,7 +1,7 @@
 use std::{thread::sleep, time::Duration};
 
 use chrono::{TimeDelta, Utc};
-use rust_arroyo::{
+use sentry_arroyo::{
     processing::strategies::{MessageRejected, SubmitError},
     types::Message,
 };

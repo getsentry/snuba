@@ -58,7 +58,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "events_analytics_platform",
             "group_attributes",
             "generic_metrics_gauges",
-            "metrics_summaries",
             "profile_chunks",
         },
         "single_node": False,

@@ -13,6 +13,10 @@ from scripts import copy_tables
             "ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/transactions-{shard}/transactions_local', '{replica}')",
             "/clickhouse/tables/transactions-{shard}/transactions_local",
         ),
+        (
+            "ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/transactions-{shard}/transactions_2_CAPITAL_local', '{replica}')",
+            "/clickhouse/tables/transactions-{shard}/transactions_2_CAPITAL_local",
+        ),
     ],
 )
 def test_copy_tables_regex(table_statement: str, expected_match: str) -> None:

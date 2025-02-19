@@ -2,22 +2,22 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use rust_arroyo::backends::kafka::config::KafkaConfig;
-use rust_arroyo::backends::kafka::producer::KafkaProducer;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
-use rust_arroyo::processing::strategies::healthcheck::HealthCheck;
-use rust_arroyo::processing::strategies::reduce::Reduce;
-use rust_arroyo::processing::strategies::run_task_in_threads::{
+use sentry::{Hub, SentryFutureExt};
+use sentry_arroyo::backends::kafka::config::KafkaConfig;
+use sentry_arroyo::backends::kafka::producer::KafkaProducer;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::processing::strategies::commit_offsets::CommitOffsets;
+use sentry_arroyo::processing::strategies::healthcheck::HealthCheck;
+use sentry_arroyo::processing::strategies::reduce::Reduce;
+use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskInThreads,
 };
-use rust_arroyo::processing::strategies::run_task_in_threads::{
+use sentry_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, TaskRunner,
 };
-use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
-use rust_arroyo::types::Message;
-use rust_arroyo::types::{Partition, Topic};
-use sentry::{Hub, SentryFutureExt};
+use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
+use sentry_arroyo::types::Message;
+use sentry_arroyo::types::{Partition, Topic};
 use sentry_kafka_schemas::Schema;
 
 use crate::config;
@@ -57,7 +57,7 @@ pub struct ConsumerStrategyFactory {
     pub accountant_topic_config: config::TopicConfig,
     pub stop_at_timestamp: Option<i64>,
     pub batch_write_timeout: Option<Duration>,
-    pub max_bytes_before_external_group_by: Option<usize>,
+    pub custom_envoy_request_timeout: Option<u64>,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
@@ -103,10 +103,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             };
 
         // Write to clickhouse
-        let next_step = Box::new(ClickhouseWriterStep::new(
-            next_step,
-            &self.clickhouse_concurrency,
-        ));
+        let next_step = ClickhouseWriterStep::new(next_step, &self.clickhouse_concurrency);
 
         let next_step = SetJoinTimeout::new(next_step, None);
 
@@ -121,7 +118,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             &self.storage_config.clickhouse_cluster.password,
             self.async_inserts,
             self.batch_write_timeout,
-            self.max_bytes_before_external_group_by,
+            self.custom_envoy_request_timeout,
         );
 
         let accumulator = Arc::new(
@@ -175,7 +172,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     false,
                 );
 
-                return make_rust_processor_with_replacements(
+                make_rust_processor_with_replacements(
                     replacements_step,
                     func,
                     &self.logical_topic_name,
@@ -185,7 +182,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                         env_config: self.env_config.clone(),
                     },
                     self.stop_at_timestamp,
-                );
+                )
             }
             (true, Some(processors::ProcessingFunctionType::ProcessingFunction(func))) => {
                 make_rust_processor(
@@ -210,19 +207,17 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 let schema = get_schema(&self.logical_topic_name, self.enforce_schema);
 
                 Box::new(RunTaskInThreads::new(
-                    Box::new(
-                        PythonTransformStep::new(
-                            next_step,
-                            self.storage_config.message_processor.clone(),
-                            self.processing_concurrency.concurrency,
-                            self.python_max_queue_depth,
-                        )
-                        .unwrap(),
-                    ),
-                    Box::new(SchemaValidator {
+                    PythonTransformStep::new(
+                        next_step,
+                        self.storage_config.message_processor.clone(),
+                        self.processing_concurrency.concurrency,
+                        self.python_max_queue_depth,
+                    )
+                    .unwrap(),
+                    SchemaValidator {
                         schema,
                         enforce_schema: self.enforce_schema,
-                    }),
+                    },
                     &self.processing_concurrency,
                     Some("validate_schema"),
                 ))

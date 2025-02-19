@@ -305,21 +305,14 @@ def test_db_query_success() -> None:
 
     assert stats["quota_allowance"] == {
         "summary": {
-            "threads_used": 5,
-            "is_successful": False,
+            "threads_used": 10,
+            "is_successful": True,
             "is_rejected": False,
-            "is_throttled": True,
+            "is_throttled": False,
             "rejection_storage_key": None,
-            "throttle_storage_key": "StorageKey.ERRORS_RO",
+            "throttle_storage_key": None,
             "rejected_by": {},
-            "throttled_by": {
-                "policy": "BytesScannedRejectingPolicy",
-                "quota_used": 1560000000000,
-                "quota_unit": "bytes",
-                "suggestion": "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API",
-                "throttle_threshold": 1706666666666,
-                "storage_key": "StorageKey.ERRORS_RO",
-            },
+            "throttled_by": {},
         },
         "details": {
             "ReferrerGuardRailPolicy": {
@@ -355,17 +348,17 @@ def test_db_query_success() -> None:
             },
             "BytesScannedRejectingPolicy": {
                 "can_run": True,
-                "max_threads": 5,
+                "max_threads": 10,
                 "explanation": {
-                    "reason": "within_limit but throttled",
+                    "reason": "within_limit",
                     "storage_key": "StorageKey.ERRORS_RO",
                 },
-                "is_throttled": True,
+                "is_throttled": False,
                 "throttle_threshold": 1706666666666,
                 "rejection_threshold": 2560000000000,
                 "quota_used": 1560000000000,
                 "quota_unit": "bytes",
-                "suggestion": "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API",
+                "suggestion": "no_suggestion",
             },
             "CrossOrgQueryAllocationPolicy": {
                 "can_run": True,
@@ -380,17 +373,6 @@ def test_db_query_success() -> None:
                 "quota_used": 0,
                 "quota_unit": NO_UNITS,
                 "suggestion": NO_SUGGESTION,
-            },
-            "BytesScannedWindowAllocationPolicy": {
-                "can_run": True,
-                "max_threads": 10,
-                "explanation": {"storage_key": "StorageKey.ERRORS_RO"},
-                "is_throttled": False,
-                "throttle_threshold": 10000000,
-                "rejection_threshold": MAX_THRESHOLD,
-                "quota_used": 0,
-                "quota_unit": "bytes",
-                "suggestion": "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API",
             },
         },
     }
@@ -1021,7 +1003,7 @@ def test_db_query_ignore_consistent() -> None:
         robust=False,
     )
     assert result.extra["stats"]["consistent"] is False
-    assert result.extra["stats"]["max_threads"] == 5
+    assert result.extra["stats"]["max_threads"] == 10
 
 
 @pytest.mark.clickhouse_db

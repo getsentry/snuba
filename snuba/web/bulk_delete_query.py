@@ -20,12 +20,14 @@ from snuba.query.dsl import literal
 from snuba.query.exceptions import InvalidQueryException, NoRowsToDeleteException
 from snuba.query.expressions import Expression
 from snuba.reader import Result
+from snuba.state import get_str_config
 from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 from snuba.web.delete_query import (
+    ConditionsType,
     DeletesNotEnabledError,
     _construct_condition,
     _enforce_max_rows,
@@ -35,8 +37,6 @@ from snuba.web.delete_query import (
 
 metrics = MetricsWrapper(environment.metrics, "snuba.delete")
 logger = logging.getLogger(__name__)
-
-ConditionsType = Mapping[str, Sequence[str | int | float]]
 
 
 class DeleteQueryMessage(TypedDict):
@@ -209,9 +209,14 @@ def delete_from_tables(
     if highest_rows_to_delete == 0:
         return result
 
+    storage_name = storage.get_storage_key().value
+    project_id = attribution_info.tenant_ids.get("project_id")
+    if project_id and should_use_killswitch(storage_name, str(project_id)):
+        return result
+
     delete_query: DeleteQueryMessage = {
         "rows_to_delete": highest_rows_to_delete,
-        "storage_name": storage.get_storage_key().value,
+        "storage_name": storage_name,
         "conditions": conditions,
         "tenant_ids": attribution_info.tenant_ids,
     }
@@ -219,9 +224,16 @@ def delete_from_tables(
     return result
 
 
-def construct_or_conditions(conditions: Sequence[Dict[str, Any]]) -> Expression:
+def construct_or_conditions(conditions: Sequence[ConditionsType]) -> Expression:
     """
     Combines multiple AND conditions: (equals(project_id, 1) AND in(group_id, (2, 3, 4, 5))
     into OR conditions for a bulk delete
     """
     return combine_or_conditions([_construct_condition(cond) for cond in conditions])
+
+
+def should_use_killswitch(storage_name: str, project_id: str) -> bool:
+    killswitch_config = get_str_config(
+        f"lw_deletes_killswitch_{storage_name}", default=""
+    )
+    return project_id in killswitch_config if killswitch_config else False

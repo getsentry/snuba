@@ -73,26 +73,13 @@ query_processors:
       time_parse_columns:
         - start_timestamp
         - end_timestamp
-  - processor: OptionalAttributeAggregationTransformer
-    args:
-      attribute_column_names:
-        - attr_num
-      aggregation_names:
-        - sum
-        - count
-        - avg
-        - max
-        - min
-        - uniq
-      curried_aggregation_names:
-        - quantile
   - processor: HashBucketFunctionTransformer
     args:
       hash_bucket_names:
         - attr_str
         - attr_num
 
-validate_data_model: error
+validate_data_model: do_nothing # in order to reference aliased columns, we shouldn't validate columns purely based on the entity schema
 validators:
   - validator: EntityRequiredColumnValidator
     args:

@@ -3,17 +3,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::TimeDelta;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
-use rust_arroyo::processing::strategies::healthcheck::HealthCheck;
-use rust_arroyo::processing::strategies::reduce::Reduce;
-use rust_arroyo::processing::strategies::run_task::RunTask;
-use rust_arroyo::processing::strategies::run_task_in_threads::{
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::processing::strategies::commit_offsets::CommitOffsets;
+use sentry_arroyo::processing::strategies::healthcheck::HealthCheck;
+use sentry_arroyo::processing::strategies::reduce::Reduce;
+use sentry_arroyo::processing::strategies::run_task::RunTask;
+use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskInThreads,
 };
-use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
-use rust_arroyo::types::Message;
-use rust_arroyo::types::{Partition, Topic};
+use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
+use sentry_arroyo::types::Message;
+use sentry_arroyo::types::Partition;
 
 use crate::config;
 use crate::metrics::global_tags::set_global_tag;
@@ -25,20 +25,11 @@ use crate::mutations::synchronize::Synchronizer;
 
 pub struct MutConsumerStrategyFactory {
     pub storage_config: config::StorageConfig,
-    pub env_config: config::EnvConfig,
-    pub logical_topic_name: String,
     pub max_batch_size: usize,
     pub max_batch_time: Duration,
     pub processing_concurrency: ConcurrencyConfig,
     pub clickhouse_concurrency: ConcurrencyConfig,
-    pub async_inserts: bool,
-    pub python_max_queue_depth: Option<usize>,
-    pub use_rust_processor: bool,
     pub health_check_file: Option<String>,
-    pub enforce_schema: bool,
-    pub physical_consumer_group: String,
-    pub physical_topic_name: Topic,
-    pub accountant_topic_config: config::TopicConfig,
     pub batch_write_timeout: Option<Duration>,
 }
 
@@ -54,8 +45,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
         let next_step = CommitOffsets::new(Duration::from_secs(1));
 
         let next_step = RunTaskInThreads::new(
-            Box::new(next_step),
-            Box::new(ClickhouseWriter::new(
+            next_step,
+            ClickhouseWriter::new(
                 &self.storage_config.clickhouse_cluster.host,
                 self.storage_config.clickhouse_cluster.http_port,
                 &self.storage_config.clickhouse_table_name,
@@ -63,7 +54,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
                 &self.storage_config.clickhouse_cluster.user,
                 &self.storage_config.clickhouse_cluster.password,
                 self.batch_write_timeout,
-            )),
+            ),
             &self.clickhouse_concurrency,
             Some("clickhouse"),
         );
@@ -95,14 +86,14 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
         );
 
         let next_step = RunTaskInThreads::new(
-            Box::new(next_step),
-            Box::new(MutationParser),
+            next_step,
+            MutationParser,
             &self.processing_concurrency,
             Some("parse"),
         );
 
         let mut synchronizer = Synchronizer {
-            min_delay: TimeDelta::hours(48),
+            min_delay: TimeDelta::hours(1),
         };
 
         let next_step = RunTask::new(move |m| synchronizer.process_message(m), next_step);

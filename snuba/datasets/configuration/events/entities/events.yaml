@@ -50,6 +50,24 @@ schema:
         },
     },
     {
+      name: flags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [{ name: key, type: String }, { name: value, type: String }],
+        },
+    },
+    {
+      name: _flags_hash_map,
+      type: Array,
+      args:
+        {
+          schema_modifiers: [readonly],
+          inner_type: { type: UInt, args: { size: 64 } },
+        },
+    },
+    {
       name: contexts,
       type: Nested,
       args:
@@ -77,11 +95,6 @@ schema:
     { name: deleted, type: UInt, args: { size: 8 } },
     { name: group_id, type: UInt, args: { size: 64 } },
     { name: primary_hash, type: UUID },
-    {
-      name: hierarchical_hashes,
-      type: Array,
-      args: { inner_type: { type: UUID } },
-    },
     { name: received, type: DateTime },
     { name: message, type: String },
     { name: title, type: String },
@@ -302,6 +315,18 @@ storages:
             from_col_name: tags_value
             to_function_name: arrayJoin
             to_function_column: tags.value
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: flags_key
+            to_function_name: arrayJoin
+            to_function_column: flags.key
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: flags_value
+            to_function_name: arrayJoin
+            to_function_column: flags.value
       subscriptables:
         - mapper: SubscriptableMapper
           args:
@@ -317,6 +342,14 @@ storages:
             from_column_name: contexts
             to_nested_col_table: null
             to_nested_col_name: contexts
+            value_subcolumn_name: value
+            nullable: false
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: flags
+            to_nested_col_table: null
+            to_nested_col_name: flags
             value_subcolumn_name: value
             nullable: false
   - storage: errors
@@ -413,6 +446,18 @@ storages:
             from_col_name: tags_value
             to_function_name: arrayJoin
             to_function_column: tags.value
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: flags_key
+            to_function_name: arrayJoin
+            to_function_column: flags.key
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: flags_value
+            to_function_name: arrayJoin
+            to_function_column: flags.value
       subscriptables:
         - mapper: SubscriptableMapper
           args:
@@ -428,6 +473,14 @@ storages:
             from_column_name: contexts
             to_nested_col_table: null
             to_nested_col_name: contexts
+            value_subcolumn_name: value
+            nullable: false
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: flags
+            to_nested_col_table: null
+            to_nested_col_name: flags
             value_subcolumn_name: value
             nullable: false
 storage_selector:

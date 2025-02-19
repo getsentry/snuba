@@ -2,11 +2,12 @@ use anyhow::Context;
 use chrono::DateTime;
 use seq_macro::seq;
 use serde::{Deserialize, Serialize};
+use std::cmp::max;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
 use schemars::JsonSchema;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde_json::Value;
 
 use crate::config::ProcessorConfig;
@@ -40,9 +41,12 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
     let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
-    let mut span: EAPSpan = msg.try_into()?;
+    let mut span: EAPSpan = msg.into();
 
-    span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
+    span.retention_days = Some(max(
+        enforce_retention(span.retention_days, &config.env_config),
+        30,
+    ));
 
     InsertBatch::from_rows([span], origin_timestamp)
 }
@@ -189,6 +193,13 @@ impl From<FromSpanMessage> for EAPSpan {
         };
 
         {
+            if let Some(profile_id) = from.profile_id {
+                res.attributes.insert_str(
+                    "sentry.profile_id".to_owned(),
+                    profile_id.as_simple().to_string(),
+                );
+            }
+
             if let Some(sentry_tags) = from.sentry_tags {
                 for (k, v) in sentry_tags {
                     if k == "transaction" {
@@ -217,7 +228,7 @@ impl From<FromSpanMessage> for EAPSpan {
 
             // lower precision to compensate floating point errors
             res.sampling_factor = (res.sampling_factor * 1e9).round() / 1e9;
-            res.sampling_weight = (1.0 / res.sampling_factor) as u64;
+            res.sampling_weight = (1.0 / res.sampling_factor).round() as u64;
 
             if let Some(data) = from.data {
                 for (k, v) in data {
@@ -283,6 +294,7 @@ mod tests {
             "value": 0.2
         }
     },
+    "profile_id": "56c7d1401ea14ad7b4ac86de46baebae",
     "organization_id": 1,
     "origin": "auto.http.django",
     "project_id": 1,
@@ -346,7 +358,7 @@ mod tests {
     #[test]
     fn test_serialization() {
         let msg: FromSpanMessage = serde_json::from_slice(SPAN_KAFKA_MESSAGE.as_bytes()).unwrap();
-        let span: EAPSpan = msg.try_into().unwrap();
+        let span: EAPSpan = msg.into();
         insta::with_settings!({sort_maps => true}, {
             insta::assert_json_snapshot!(span)
         });

@@ -93,6 +93,9 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
         "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
+        "secure": os.environ.get("CLICKHOUSE_SECURE", "False").lower() in ("true", "1"),
+        "ca_certs": os.environ.get("CLICKHOUSE_CA_CERTS"),
+        "verify": os.environ.get("CLICKHOUSE_VERIFY"),
         "storage_sets": {
             "cdc",
             "discover",
@@ -115,7 +118,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "events_analytics_platform",
             "group_attributes",
             "generic_metrics_gauges",
-            "metrics_summaries",
             "profile_chunks",
         },
         "single_node": True,
@@ -353,6 +355,9 @@ ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
 ENABLE_GROUP_ATTRIBUTES_CONSUMER = os.environ.get(
     "ENABLE_GROUP_ATTRIBUTES_CONSUMER", False
 )
+
+# Enable lw deletions consumer (search issues only for now)
+ENABLE_LW_DELETIONS_CONSUMER = os.environ.get("ENABLE_LW_DELETIONS_CONSUMER", False)
 
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs to
 # avoid spilling over to the next day.

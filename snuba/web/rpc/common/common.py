@@ -1,13 +1,8 @@
 from datetime import datetime, timedelta
-from typing import Final, Mapping, Sequence, Set
+from typing import Callable
 
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeAggregation,
-    AttributeKey,
-    Function,
-    VirtualColumnContext,
-)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
@@ -15,20 +10,28 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
-from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import (
-    _CurriedFunctionCall,
-    _FunctionCall,
     and_cond,
     column,
     in_cond,
     literal,
     literals_array,
+    not_cond,
     or_cond,
 )
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+
+
+def _check_non_string_values_cannot_ignore_case(
+    comparison_filter: ComparisonFilter,
+) -> None:
+    if comparison_filter.ignore_case and (
+        comparison_filter.value.WhichOneof("value") != "val_str"
+        and comparison_filter.value.WhichOneof("value") != "val_str_array"
+    ):
+        raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
 
 
 def truncate_request_meta_to_day(meta: RequestMeta) -> None:
@@ -76,195 +79,28 @@ def treeify_or_and_conditions(query: Query) -> None:
     query.transform_expressions(transform)
 
 
-def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
-    function_map: dict[Function.ValueType, _CurriedFunctionCall | _FunctionCall] = {
-        Function.FUNCTION_SUM: f.sum,
-        Function.FUNCTION_AVERAGE: f.avg,
-        Function.FUNCTION_COUNT: f.count,
-        Function.FUNCTION_P50: cf.quantile(0.5),
-        Function.FUNCTION_P90: cf.quantile(0.9),
-        Function.FUNCTION_P95: cf.quantile(0.95),
-        Function.FUNCTION_P99: cf.quantile(0.99),
-        Function.FUNCTION_AVG: f.avg,
-        Function.FUNCTION_MAX: f.max,
-        Function.FUNCTION_MIN: f.min,
-        Function.FUNCTION_UNIQ: f.uniq,
-    }
+def add_existence_check_to_subscriptable_references(query: Query) -> None:
+    def transform(exp: Expression) -> Expression:
+        if not isinstance(exp, SubscriptableReference):
+            return exp
 
-    agg_func = function_map.get(aggregation.aggregate)
-    if agg_func is None:
-        raise BadSnubaRPCRequestException(
-            f"Aggregation not specified for {aggregation.key.name}"
-        )
-    field = attribute_key_to_expression(aggregation.key)
-    alias = aggregation.label if aggregation.label else None
-    alias_dict = {"alias": alias} if alias else {}
-    return agg_func(field, **alias_dict)
-
-
-# These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse
-NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
-    "sentry.organization_id": AttributeKey.Type.TYPE_INT,
-    "sentry.project_id": AttributeKey.Type.TYPE_INT,
-    "sentry.service": AttributeKey.Type.TYPE_STRING,
-    "sentry.span_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
-    "sentry.parent_span_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
-    "sentry.segment_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
-    "sentry.segment_name": AttributeKey.Type.TYPE_STRING,
-    "sentry.is_segment": AttributeKey.Type.TYPE_BOOLEAN,
-    "sentry.duration_ms": AttributeKey.Type.TYPE_FLOAT,
-    "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_FLOAT,
-    "sentry.retention_days": AttributeKey.Type.TYPE_INT,
-    "sentry.name": AttributeKey.Type.TYPE_STRING,
-    "sentry.sample_weight": AttributeKey.Type.TYPE_FLOAT,
-    "sentry.timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
-    "sentry.start_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
-    "sentry.end_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
-}
-
-TIMESTAMP_COLUMNS: Final[Set[str]] = {
-    "sentry.timestamp",
-    "sentry.start_timestamp",
-    "sentry.end_timestamp",
-}
-
-
-def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
-    if attr_key.type == AttributeKey.Type.TYPE_UNSPECIFIED:
-        raise BadSnubaRPCRequestException(
-            f"attribute key {attr_key.name} must have a type specified"
-        )
-    alias = attr_key.name
-
-    if attr_key.name == "sentry.trace_id":
-        if attr_key.type == AttributeKey.Type.TYPE_STRING:
-            return f.CAST(column("trace_id"), "String", alias=alias)
-        raise BadSnubaRPCRequestException(
-            f"Attribute {attr_key.name} must be requested as a string, got {attr_key.type}"
-        )
-
-    if attr_key.name in TIMESTAMP_COLUMNS:
-        if attr_key.type == AttributeKey.Type.TYPE_STRING:
-            return f.CAST(
-                column(attr_key.name[len("sentry.") :]), "String", alias=alias
-            )
-        if attr_key.type == AttributeKey.Type.TYPE_INT:
-            return f.CAST(column(attr_key.name[len("sentry.") :]), "Int64", alias=alias)
-        if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
-            return f.CAST(
-                column(attr_key.name[len("sentry.") :]), "Float64", alias=alias
-            )
-        raise BadSnubaRPCRequestException(
-            f"Attribute {attr_key.name} must be requested as a string, float, or integer, got {attr_key.type}"
-        )
-
-    if attr_key.name in NORMALIZED_COLUMNS:
-        if NORMALIZED_COLUMNS[attr_key.name] == attr_key.type:
-            return column(attr_key.name[len("sentry.") :], alias=attr_key.name)
-        raise BadSnubaRPCRequestException(
-            f"Attribute {attr_key.name} must be requested as {NORMALIZED_COLUMNS[attr_key.name]}, got {attr_key.type}"
-        )
-
-    # End of special handling, just send to the appropriate bucket
-    if attr_key.type == AttributeKey.Type.TYPE_STRING:
-        return SubscriptableReference(
-            alias=alias, column=column("attr_str"), key=literal(attr_key.name)
-        )
-    if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
-        return SubscriptableReference(
-            alias=alias, column=column("attr_num"), key=literal(attr_key.name)
-        )
-    if attr_key.type == AttributeKey.Type.TYPE_INT:
-        return f.CAST(
-            SubscriptableReference(
-                alias=alias,
-                column=column("attr_num"),
-                key=literal(attr_key.name),
+        return FunctionCall(
+            alias=exp.alias,
+            function_name="if",
+            parameters=(
+                f.mapContains(exp.column, exp.key),
+                SubscriptableReference(None, exp.column, exp.key),
+                literal(None),
             ),
-            "Int64",
         )
-    if attr_key.type == AttributeKey.Type.TYPE_BOOLEAN:
-        return f.CAST(
-            SubscriptableReference(
-                alias=alias,
-                column=column("attr_num"),
-                key=literal(attr_key.name),
-            ),
-            "Boolean",
-        )
-    raise BadSnubaRPCRequestException(
-        f"Attribute {attr_key.name} had an unknown or unset type: {attr_key.type}"
-    )
+
+    query.transform_expressions(transform)
 
 
-def apply_virtual_columns(
-    query: Query, virtual_column_contexts: Sequence[VirtualColumnContext]
-) -> None:
-    """Injects virtual column mappings into the clickhouse query. Works with NORMALIZED_COLUMNS on the table or
-    dynamic columns in attr_str
-
-    attr_num not supported because mapping on floats is a bad idea
-
-    Example:
-
-        SELECT
-          project_name AS `project_name`,
-          attr_str['release'] AS `release`,
-          attr_str['sentry.sdk.name'] AS `sentry.sdk.name`,
-        ... rest of query
-
-        contexts:
-            [   {from_column_name: project_id, to_column_name: project_name, value_map: {1: "sentry", 2: "snuba"}} ]
-
-
-        Query will be transformed into:
-
-        SELECT
-        -- see the project name column transformed and the value mapping injected
-          transform( CAST( project_id, 'String'), array( '1', '2'), array( 'sentry', 'snuba'), 'unknown') AS `project_name`,
-        --
-          attr_str['release'] AS `release`,
-          attr_str['sentry.sdk.name'] AS `sentry.sdk.name`,
-        ... rest of query
-
-    """
-
-    if not virtual_column_contexts:
-        return
-
-    mapped_column_to_context = {c.to_column_name: c for c in virtual_column_contexts}
-
-    def transform_expressions(expression: Expression) -> Expression:
-        # virtual columns will show up as `attr_str[virtual_column_name]` or `attr_num[virtual_column_name]`
-        if not isinstance(expression, SubscriptableReference):
-            return expression
-
-        if expression.column.column_name != "attr_str":
-            return expression
-        context = mapped_column_to_context.get(str(expression.key.value))
-        if context:
-            attribute_expression = attribute_key_to_expression(
-                AttributeKey(
-                    name=context.from_column_name,
-                    type=NORMALIZED_COLUMNS.get(
-                        context.from_column_name, AttributeKey.TYPE_STRING
-                    ),
-                )
-            )
-            return f.transform(
-                f.CAST(attribute_expression, "String"),
-                literals_array(None, [literal(k) for k in context.value_map.keys()]),
-                literals_array(None, [literal(v) for v in context.value_map.values()]),
-                literal("unknown"),
-                alias=context.to_column_name,
-            )
-
-        return expression
-
-    query.transform_expressions(transform_expressions)
-
-
-def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression:
+def trace_item_filters_to_expression(
+    item_filter: TraceItemFilter,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
     This maps those filters into an expression which can be used in a WHERE clause
@@ -275,9 +111,16 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
         filters = item_filter.and_filter.filters
         if len(filters) == 0:
             return literal(True)
-        if len(filters) == 1:
-            return trace_item_filters_to_expression(filters[0])
-        return and_cond(*(trace_item_filters_to_expression(x) for x in filters))
+        elif len(filters) == 1:
+            return trace_item_filters_to_expression(
+                filters[0], attribute_key_to_expression
+            )
+        return and_cond(
+            *(
+                trace_item_filters_to_expression(x, attribute_key_to_expression)
+                for x in filters
+            )
+        )
 
     if item_filter.HasField("or_filter"):
         filters = item_filter.or_filter.filters
@@ -285,9 +128,58 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             raise BadSnubaRPCRequestException(
                 "Invalid trace item filter, empty 'or' clause"
             )
-        if len(filters) == 1:
-            return trace_item_filters_to_expression(filters[0])
-        return or_cond(*(trace_item_filters_to_expression(x) for x in filters))
+        elif len(filters) == 1:
+            return trace_item_filters_to_expression(
+                filters[0], attribute_key_to_expression
+            )
+        return or_cond(
+            *(
+                trace_item_filters_to_expression(x, attribute_key_to_expression)
+                for x in filters
+            )
+        )
+
+    if item_filter.HasField("not_filter"):
+        filters = item_filter.not_filter.filters
+        if len(filters) == 0:
+            raise BadSnubaRPCRequestException(
+                "Invalid trace item filter, empty 'not' clause"
+            )
+        elif len(filters) == 1:
+            return not_cond(
+                trace_item_filters_to_expression(
+                    filters[0], attribute_key_to_expression
+                )
+            )
+        return not_cond(
+            and_cond(
+                *(
+                    trace_item_filters_to_expression(x, attribute_key_to_expression)
+                    for x in filters
+                )
+            )
+        )
+
+    if item_filter.HasField("not_filter"):
+        filters = item_filter.not_filter.filters
+        if len(filters) == 0:
+            raise BadSnubaRPCRequestException(
+                "Invalid trace item filter, empty 'not' clause"
+            )
+        elif len(filters) == 1:
+            return not_cond(
+                trace_item_filters_to_expression(
+                    filters[0], attribute_key_to_expression
+                )
+            )
+        return not_cond(
+            and_cond(
+                *(
+                    trace_item_filters_to_expression(x, attribute_key_to_expression)
+                    for x in filters
+                )
+            )
+        )
 
     if item_filter.HasField("comparison_filter"):
         k = item_filter.comparison_filter.key
@@ -301,17 +193,55 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
                 "comparison does not have a right hand side"
             )
 
-        v_expression = {
-            "val_bool": literal(v.val_bool),
-            "val_str": literal(v.val_str),
-            "val_float": literal(v.val_float),
-            "val_int": literal(v.val_int),
-        }[value_type]
+        if v.is_null:
+            v_expression: Expression = literal(None)
+        else:
+            match value_type:
+                case "val_bool":
+                    v_expression = literal(v.val_bool)
+                case "val_str":
+                    v_expression = literal(v.val_str)
+                case "val_float":
+                    v_expression = literal(v.val_float)
+                case "val_double":
+                    v_expression = literal(v.val_double)
+                case "val_int":
+                    v_expression = literal(v.val_int)
+                case "val_str_array":
+                    v_expression = literals_array(
+                        None, list(map(lambda x: literal(x), v.val_str_array.values))
+                    )
+                case "val_int_array":
+                    v_expression = literals_array(
+                        None, list(map(lambda x: literal(x), v.val_int_array.values))
+                    )
+                case "val_float_array":
+                    v_expression = literals_array(
+                        None, list(map(lambda x: literal(x), v.val_float_array.values))
+                    )
+                case "val_double_array":
+                    v_expression = literals_array(
+                        None, list(map(lambda x: literal(x), v.val_double_array.values))
+                    )
+                case default:
+                    raise NotImplementedError(
+                        f"translation of AttributeValue type {default} is not implemented"
+                    )
 
         if op == ComparisonFilter.OP_EQUALS:
-            return f.equals(k_expression, v_expression)
+            _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
+            return (
+                f.equals(f.lower(k_expression), f.lower(v_expression))
+                if item_filter.comparison_filter.ignore_case
+                else f.equals(k_expression, v_expression)
+            )
         if op == ComparisonFilter.OP_NOT_EQUALS:
-            return f.notEquals(k_expression, v_expression)
+            _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
+            return (
+                f.notEquals(f.lower(k_expression), f.lower(v_expression))
+                if item_filter.comparison_filter.ignore_case
+                else f.notEquals(k_expression, v_expression)
+            )
         if op == ComparisonFilter.OP_LIKE:
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
@@ -332,19 +262,33 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             return f.greater(k_expression, v_expression)
         if op == ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
             return f.greaterOrEquals(k_expression, v_expression)
+        if op == ComparisonFilter.OP_IN:
+            _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
+            if item_filter.comparison_filter.ignore_case:
+                k_expression = f.lower(k_expression)
+                v_expression = literals_array(
+                    None,
+                    list(map(lambda x: literal(x.lower()), v.val_str_array.values)),
+                )
+            return in_cond(k_expression, v_expression)
+        if op == ComparisonFilter.OP_NOT_IN:
+            _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
+            if item_filter.comparison_filter.ignore_case:
+                k_expression = f.lower(k_expression)
+                v_expression = literals_array(
+                    None,
+                    list(map(lambda x: literal(x.lower()), v.val_str_array.values)),
+                )
+            return not_cond(in_cond(k_expression, v_expression))
 
         raise BadSnubaRPCRequestException(
             f"Invalid string comparison, unknown op: {item_filter.comparison_filter}"
         )
 
     if item_filter.HasField("exists_filter"):
-        k = item_filter.exists_filter.key
-        if k.name in NORMALIZED_COLUMNS.keys():
-            return f.isNotNull(column(k.name))
-        if k.type == AttributeKey.Type.TYPE_STRING:
-            return f.mapContains(column("attr_str"), literal(k.name))
-        else:
-            return f.mapContains(column("attr_num"), literal(k.name))
+        return get_field_existence_expression(
+            attribute_key_to_expression(item_filter.exists_filter.key)
+        )
 
     return literal(True)
 
@@ -389,3 +333,44 @@ def base_conditions_and(meta: RequestMeta, *other_exprs: Expression) -> Expressi
         ),
         *other_exprs,
     )
+
+
+def convert_filter_offset(filter_offset: TraceItemFilter) -> Expression:
+    if not filter_offset.HasField("comparison_filter"):
+        raise TypeError("filter_offset needs to be a comparison filter")
+    if filter_offset.comparison_filter.op != ComparisonFilter.OP_GREATER_THAN:
+        raise TypeError("filter_offset must use the greater than comparison")
+
+    k_expression = column(filter_offset.comparison_filter.key.name)
+    v = filter_offset.comparison_filter.value
+    value_type = v.WhichOneof("value")
+    if value_type != "val_str":
+        raise BadSnubaRPCRequestException("please provide a string for filter offset")
+
+    return f.greater(k_expression, literal(v.val_str))
+
+
+def get_field_existence_expression(field: Expression) -> Expression:
+    def get_subscriptable_field(field: Expression) -> SubscriptableReference | None:
+        """
+        Check if the field is a subscriptable reference or a function call with a subscriptable reference as the first parameter to handle the case
+        where the field is casting a subscriptable reference (e.g. for integers). If so, return the subscriptable reference.
+        """
+        if isinstance(field, SubscriptableReference):
+            return field
+        elif isinstance(field, FunctionCall) and len(field.parameters) > 0:
+            if len(field.parameters) > 0 and isinstance(
+                field.parameters[0], SubscriptableReference
+            ):
+                return field.parameters[0]
+
+        return None
+
+    subscriptable_field = get_subscriptable_field(field)
+    if subscriptable_field is not None:
+        return f.mapContains(subscriptable_field.column, subscriptable_field.key)
+
+    if isinstance(field, FunctionCall) and field.function_name == "arrayElement":
+        return f.mapContains(field.parameters[0], field.parameters[1])
+
+    return f.isNotNull(field)
