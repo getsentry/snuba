@@ -2,7 +2,6 @@ use anyhow::Context;
 use chrono::DateTime;
 use seq_macro::seq;
 use serde::Serialize;
-use std::cmp::max;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -127,10 +126,12 @@ fn fnv_1a(input: &[u8]) -> u32 {
 
 impl From<FromSpanMessage> for EAPItem {
     fn from(from: FromSpanMessage) -> EAPItem {
-        let item_id = u128::from_str_radix(&from.span_id, 16).expect(&format!(
-            "Failed to parse span_id into u128. span_id: {}",
-            from.span_id
-        ));
+        let item_id = u128::from_str_radix(&from.span_id, 16).unwrap_or_else(|_| {
+            panic!(
+                "Failed to parse span_id into u128. span_id: {}",
+                from.span_id
+            )
+        });
         let mut res = Self {
             primary_key: PrimaryKey {
                 organization_id: from.organization_id,
