@@ -160,6 +160,10 @@ mod tests {
                     settings.add_redaction(".*.message_timestamp", "<event timestamp>");
                 }
 
+                if *topic_name == "snuba-ourlogs" {
+                    settings.add_redaction(".*.item_id", "<item ID>") //UUID7 has timestamp in it
+                }
+
                 settings.set_description(std::str::from_utf8(example.payload()).unwrap());
                 let _guard = settings.bind_to_scope();
 
