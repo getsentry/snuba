@@ -1,6 +1,6 @@
 use anyhow::Context;
 use chrono::DateTime;
-use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::{de, Deserialize, Deserializer};
 use std::collections::BTreeMap;
 use std::fmt;
 use uuid::Uuid;
@@ -10,10 +10,9 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::de::{MapAccess, Visitor};
 
 use crate::config::ProcessorConfig;
+use crate::processors::eap_items::{EAPItem, PrimaryKey};
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
-use seq_macro::seq;
-use std::collections::HashMap;
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 pub(crate) struct FromLogMessage {
@@ -111,7 +110,7 @@ pub fn process_message(
     );
     let mut item: EAPItem = msg.into();
 
-    item.retention_days = enforce_retention(Some(item.retention_days), &config.env_config);
+    item.retention_days = Some(enforce_retention(item.retention_days, &config.env_config));
 
     InsertBatch::from_rows([item], origin_timestamp)
 }
@@ -124,80 +123,17 @@ macro_rules! seq_attrs {
     }
 }
 
-seq_attrs! {
-#[derive(Debug, Default, Serialize)]
-pub(crate) struct AttributeMap {
-    attributes_bool: BTreeMap<String, bool>,
-    attributes_int: BTreeMap<String, i64>,
-
-    #(
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attributes_string_~N: HashMap<String, String>,
-
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attributes_float_~N: HashMap<String, f64>,
-    )*
-}
-}
-
-impl AttributeMap {
-    pub fn insert_str(&mut self, k: String, v: String) {
-        seq_attrs! {
-            let str_buckets = [
-                #(
-                &mut self.attributes_string_~N,
-                )*
-            ];
-        };
-
-        str_buckets
-            [(crate::processors::eap_spans::fnv_1a(k.as_bytes()) as usize) % str_buckets.len()]
-        .insert(k, v);
-    }
-
-    pub fn insert_float(&mut self, k: String, v: f64) {
-        seq_attrs! {
-            let num_buckets = [
-                #(
-                &mut self.attributes_float_~N,
-                )*
-            ];
-        }
-
-        num_buckets
-            [(crate::processors::eap_spans::fnv_1a(k.as_bytes()) as usize) % num_buckets.len()]
-        .insert(k, v);
-    }
-
-    pub fn insert_int(&mut self, k: String, v: i64) {
-        self.attributes_int.insert(k, v);
-    }
-
-    pub fn insert_bool(&mut self, k: String, v: bool) {
-        self.attributes_bool.insert(k, v);
-    }
-}
-
-#[derive(Debug, Default, Serialize)]
-struct EAPItem {
-    organization_id: u64,
-    project_id: u64,
-    item_type: u8,
-    timestamp: u64,
-    trace_id: Uuid,
-    item_id: u128,
-    sampling_weight: u64,
-    retention_days: u16,
-    #[serde(flatten)]
-    attributes: AttributeMap,
-}
-
 impl From<FromLogMessage> for EAPItem {
     fn from(from: FromLogMessage) -> EAPItem {
         let mut res = Self {
-            organization_id: from.organization_id,
-            project_id: from.project_id,
-            item_type: 3, // TRACE_ITEM_TYPE_LOG
+            primary_key: PrimaryKey {
+                organization_id: from.organization_id,
+                project_id: from.project_id,
+                item_type: 3, // TRACE_ITEM_TYPE_LOG
+                timestamp: (from.timestamp_nanos / 1_000_000_000) as u32,
+            },
+
+            trace_id: from.trace_id.unwrap_or_default(),
             item_id: u128::from_be_bytes(
                 *Uuid::new_v7(uuid::Timestamp::from_unix(
                     uuid::NoContext,
@@ -206,10 +142,9 @@ impl From<FromLogMessage> for EAPItem {
                 ))
                 .as_bytes(),
             ),
-            trace_id: from.trace_id.unwrap_or_default(),
-            retention_days: from.retention_days,
-            timestamp: from.timestamp_nanos,
-            ..Default::default()
+            sampling_weight: 1,
+            retention_days: Some(from.retention_days),
+            attributes: Default::default(),
         };
         res.attributes.insert_str(
             "sentry.severity_text".to_string(),
