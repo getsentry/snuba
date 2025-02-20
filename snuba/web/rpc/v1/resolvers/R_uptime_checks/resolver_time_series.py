@@ -44,8 +44,8 @@ from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
 
 def _get_aggregation_label(expr: Expression) -> str:
     match expr.WhichOneof("expression"):
-        case "aggregation":
-            return expr.aggregation.label
+        case "conditional_aggregation":
+            return expr.conditional_aggregation.label
         case "formula":
             raise BadSnubaRPCRequestException(
                 "formulas are not supported for uptime checks"
@@ -178,13 +178,15 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     aggregation_columns = []
     for expr in request.expressions:
         match expr.WhichOneof("expression"):
-            case "aggregation":
+            case "conditional_aggregation":
                 aggregation_columns.append(
                     SelectedExpression(
-                        name=expr.aggregation.label,
+                        name=expr.conditional_aggregation.label,
                         expression=aggregation_to_expression(
-                            expr.aggregation,
-                            attribute_key_to_expression(expr.aggregation.key),
+                            expr.conditional_aggregation,
+                            attribute_key_to_expression(
+                                expr.conditional_aggregation.key
+                            ),
                         ),
                     )
                 )

@@ -7,6 +7,9 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 from clickhouse_driver.errors import ServerException
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
+    AttributeConditionalAggregation,
+)
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     DataPoint,
     Expression,
@@ -236,6 +239,109 @@ class TestTimeSeriesApi(BaseApiTest):
         if response.status_code != 200:
             error.ParseFromString(response.data)
         assert response.status_code == 400, (error.message, error.details)
+
+    def test_rachel(self) -> None:
+        # store a test metric with a value of 1, for ever even second of one hour
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: int(x % 2 == 0))],
+        )
+
+        test_metric_attribute_key = AttributeKey(
+            type=AttributeKey.TYPE_FLOAT, name="test_metric"
+        )
+        test_metric_is_one_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=test_metric_attribute_key,
+                op=ComparisonFilter.OP_EQUALS,
+                value=AttributeValue(val_int=1),
+            )
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_ADD,
+                        left=Expression(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=test_metric_attribute_key,
+                                label="sum",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                                filter=test_metric_is_one_filter,
+                            )
+                        ),
+                        right=Expression(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_AVG,
+                                key=test_metric_attribute_key,
+                                label="avg",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                                filter=test_metric_is_one_filter,
+                            )
+                        ),
+                    ),
+                    label="sum + avg",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+
+        expected_avg_timeseries = TimeSeries(
+            label="avg",
+            buckets=expected_buckets,
+            data_points=[
+                DataPoint(data=1, data_present=True, sample_count=150)
+                for _ in range(len(expected_buckets))
+            ],
+        )
+        expected_sum_timeseries = TimeSeries(
+            label="sum",
+            buckets=expected_buckets,
+            data_points=[
+                DataPoint(data=150, data_present=True)
+                for _ in range(len(expected_buckets))
+            ],
+        )
+        expected_formula_timeseries = TimeSeries(
+            label="sum + avg",
+            buckets=expected_buckets,
+            data_points=[
+                DataPoint(
+                    data=sum_datapoint.data + avg_datapoint.data,
+                    data_present=True,
+                    sample_count=sum_datapoint.sample_count,
+                )
+                for sum_datapoint, avg_datapoint in zip(
+                    expected_sum_timeseries.data_points,
+                    expected_avg_timeseries.data_points,
+                )
+            ],
+        )
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
+            expected_formula_timeseries
+        ]
 
     def test_sum(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
