@@ -115,14 +115,6 @@ pub fn process_message(
     InsertBatch::from_rows([item], origin_timestamp)
 }
 
-macro_rules! seq_attrs {
-    ($($tt:tt)*) => {
-        seq!(N in 0..40 {
-            $($tt)*
-        });
-    }
-}
-
 impl From<FromLogMessage> for EAPItem {
     fn from(from: FromLogMessage) -> EAPItem {
         let mut res = Self {

@@ -126,7 +126,7 @@ struct EAPSpan {
     attributes: AttributeMap,
 }
 
-pub(crate) fn fnv_1a(input: &[u8]) -> u32 {
+fn fnv_1a(input: &[u8]) -> u32 {
     const FNV_1A_PRIME: u32 = 16777619;
     const FNV_1A_OFFSET_BASIS: u32 = 2166136261;
 
