@@ -102,18 +102,13 @@ SELECT
     item_type,
     attrs.1 as attr_key,
     attrs.2 as attr_value,
-    toStartOfDay(_sort_timestamp) AS timestamp,
+    toStartOfDay(timestamp) AS timestamp,
     retention_days,
     1 AS count
 FROM eap_items_1_local
 LEFT ARRAY JOIN
     arrayConcat(
-        {", ".join(f"CAST(attr_str_{n}, 'Array(Tuple(String, String))')" for n in range(ITEM_ATTRIBUTE_BUCKETS))},
-        array(
-            tuple('sentry.service', `service`),
-            tuple('sentry.segment_name', `segment_name`),
-            tuple('sentry.name', `name`)
-        )
+        {", ".join(f"CAST(attributes_string_{n}, 'Array(Tuple(String, String))')" for n in range(ITEM_ATTRIBUTE_BUCKETS))}
     ) AS attrs
 GROUP BY
     organization_id,
@@ -164,16 +159,13 @@ SELECT
     attrs.1 as attr_key,
     attrs.2 as attr_min_value,
     attrs.2 as attr_max_value,
-    toStartOfDay(_sort_timestamp) AS timestamp,
+    toStartOfDay(timestamp) AS timestamp,
     retention_days,
     1 AS count
-FROM eap_spans_2_local
+FROM eap_items_1_local
 LEFT ARRAY JOIN
     arrayConcat(
-        {",".join(f"CAST(attr_num_{n}, 'Array(Tuple(String, Float64))')" for n in range(ITEM_ATTRIBUTE_BUCKETS))},
-        array(
-            tuple('sentry.duration_ms', duration_micro / 1000)
-        )
+        {",".join(f"CAST(attributes_float_{n}, 'Array(Tuple(String, Float64))')" for n in range(ITEM_ATTRIBUTE_BUCKETS))}
     ) AS attrs
 GROUP BY
     organization_id,
