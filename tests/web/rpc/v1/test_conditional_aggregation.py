@@ -27,26 +27,6 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 )
 
 
-def _build_sum_attribute_aggregation_with_label(label: str) -> AttributeAggregation:
-    return AttributeAggregation(
-        aggregate=Function.FUNCTION_SUM,
-        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name=label),
-        label="sum(" + label + ")",
-        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-    )
-
-
-def _build_sum_attribute_conditional_aggregation_with_label(
-    label: str,
-) -> AttributeConditionalAggregation:
-    return AttributeConditionalAggregation(
-        aggregate=Function.FUNCTION_SUM,
-        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name=label),
-        label="sum(" + label + ")",
-        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-    )
-
-
 def _build_sum_attribute_aggregation_column_with_name(name: str) -> Column:
     return Column(
         aggregation=AttributeAggregation(
@@ -112,15 +92,55 @@ _UNIMPORTANT_REQUEST_META = RequestMeta(
 )
 
 
-def test_convert_aggregation_to_conditional_aggregation_in_select() -> None:
-    message = TraceItemTableRequest(
-        meta=_UNIMPORTANT_REQUEST_META,
-        columns=[
+class TestEndpointTraceItemTableRequest:
+    def test_convert_aggregation_to_conditional_aggregation_in_select(self) -> None:
+        message = TraceItemTableRequest(
+            meta=_UNIMPORTANT_REQUEST_META,
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="doesntmatter")
+                ),
+                _build_sum_attribute_aggregation_column_with_name("column_1"),
+                _build_sum_attribute_aggregation_column_with_name("column_2"),
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            formula=Column.BinaryFormula(
+                                op=Column.BinaryFormula.OP_MULTIPLY,
+                                left=Column(
+                                    formula=Column.BinaryFormula(
+                                        op=Column.BinaryFormula.OP_ADD,
+                                        left=_build_sum_attribute_aggregation_column_with_name(
+                                            "add_1"
+                                        ),
+                                        right=_build_sum_attribute_aggregation_column_with_name(
+                                            "add_2"
+                                        ),
+                                    ),
+                                    label="sum(add_1) + sum(add_2)",
+                                ),
+                                right=_build_sum_attribute_aggregation_column_with_name(
+                                    "mult_2"
+                                ),
+                            ),
+                            label="(sum(add_1) + sum(add_2)) * sum(mult_2)",
+                        ),
+                        right=_build_sum_attribute_aggregation_column_with_name(
+                            "divide_2"
+                        ),
+                    ),
+                    label="((sum(add_1) + sum(add_2)) * sum(mult_2)) / sum(divide_2)",
+                ),
+            ],
+        )
+        convert_to_conditional_aggregation(message)
+        assert message.columns == [
             Column(
                 key=AttributeKey(type=AttributeKey.TYPE_STRING, name="doesntmatter")
             ),
-            _build_sum_attribute_aggregation_column_with_name("column_1"),
-            _build_sum_attribute_aggregation_column_with_name("column_2"),
+            _build_sum_attribute_conditional_aggregation_column_with_name("column_1"),
+            _build_sum_attribute_conditional_aggregation_column_with_name("column_2"),
             Column(
                 formula=Column.BinaryFormula(
                     op=Column.BinaryFormula.OP_DIVIDE,
@@ -130,87 +150,83 @@ def test_convert_aggregation_to_conditional_aggregation_in_select() -> None:
                             left=Column(
                                 formula=Column.BinaryFormula(
                                     op=Column.BinaryFormula.OP_ADD,
-                                    left=_build_sum_attribute_aggregation_column_with_name(
+                                    left=_build_sum_attribute_conditional_aggregation_column_with_name(
                                         "add_1"
                                     ),
-                                    right=_build_sum_attribute_aggregation_column_with_name(
+                                    right=_build_sum_attribute_conditional_aggregation_column_with_name(
                                         "add_2"
                                     ),
                                 ),
                                 label="sum(add_1) + sum(add_2)",
                             ),
-                            right=_build_sum_attribute_aggregation_column_with_name(
+                            right=_build_sum_attribute_conditional_aggregation_column_with_name(
                                 "mult_2"
                             ),
                         ),
                         label="(sum(add_1) + sum(add_2)) * sum(mult_2)",
                     ),
-                    right=_build_sum_attribute_aggregation_column_with_name("divide_2"),
+                    right=_build_sum_attribute_conditional_aggregation_column_with_name(
+                        "divide_2"
+                    ),
                 ),
                 label="((sum(add_1) + sum(add_2)) * sum(mult_2)) / sum(divide_2)",
             ),
-        ],
-    )
-    convert_to_conditional_aggregation(message)
-    assert message.columns == [
-        Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="doesntmatter")),
-        _build_sum_attribute_conditional_aggregation_column_with_name("column_1"),
-        _build_sum_attribute_conditional_aggregation_column_with_name("column_2"),
-        Column(
-            formula=Column.BinaryFormula(
-                op=Column.BinaryFormula.OP_DIVIDE,
-                left=Column(
-                    formula=Column.BinaryFormula(
-                        op=Column.BinaryFormula.OP_MULTIPLY,
-                        left=Column(
-                            formula=Column.BinaryFormula(
-                                op=Column.BinaryFormula.OP_ADD,
-                                left=_build_sum_attribute_conditional_aggregation_column_with_name(
-                                    "add_1"
-                                ),
-                                right=_build_sum_attribute_conditional_aggregation_column_with_name(
-                                    "add_2"
-                                ),
+        ]
+
+    def test_convert_aggregation_to_conditional_aggregation_in_order_by(self) -> None:
+        # this is not a valid message because none of the columns in `order_by` are in `select`, but it's fine because we're just testing convert_to_conditional_aggregation
+        message = TraceItemTableRequest(
+            meta=_UNIMPORTANT_REQUEST_META,
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=_build_sum_attribute_aggregation_column_with_name("column_1")
+                ),
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        formula=Column.BinaryFormula(
+                            op=Column.BinaryFormula.OP_DIVIDE,
+                            left=_build_sum_attribute_aggregation_column_with_name(
+                                "column_1"
                             ),
-                            label="sum(add_1) + sum(add_2)",
+                            right=Column(
+                                formula=Column.BinaryFormula(
+                                    op=Column.BinaryFormula.OP_ADD,
+                                    left=_build_sum_attribute_aggregation_column_with_name(
+                                        "column_2"
+                                    ),
+                                    right=_build_sum_attribute_aggregation_column_with_name(
+                                        "column_3"
+                                    ),
+                                ),
+                                label="sum(column_2) + sum(column_3)",
+                            ),
                         ),
-                        right=_build_sum_attribute_conditional_aggregation_column_with_name(
-                            "mult_2"
-                        ),
-                    ),
-                    label="(sum(add_1) + sum(add_2)) * sum(mult_2)",
+                        label="sum(column_1) / (sum(column_2) + sum(column_3))",
+                    )
                 ),
-                right=_build_sum_attribute_conditional_aggregation_column_with_name(
-                    "divide_2"
-                ),
-            ),
-            label="((sum(add_1) + sum(add_2)) * sum(mult_2)) / sum(divide_2)",
-        ),
-    ]
-
-
-def test_convert_aggregation_to_conditional_aggregation_in_order_by() -> None:
-    # this is not a valid message because none of the columns in `order_by` are in `select`, but it's fine because we're just testing convert_to_conditional_aggregation
-    message = TraceItemTableRequest(
-        meta=_UNIMPORTANT_REQUEST_META,
-        order_by=[
+            ],
+        )
+        convert_to_conditional_aggregation(message)
+        assert message.order_by == [
             TraceItemTableRequest.OrderBy(
-                column=_build_sum_attribute_aggregation_column_with_name("column_1")
+                column=_build_sum_attribute_conditional_aggregation_column_with_name(
+                    "column_1"
+                )
             ),
             TraceItemTableRequest.OrderBy(
                 column=Column(
                     formula=Column.BinaryFormula(
                         op=Column.BinaryFormula.OP_DIVIDE,
-                        left=_build_sum_attribute_aggregation_column_with_name(
+                        left=_build_sum_attribute_conditional_aggregation_column_with_name(
                             "column_1"
                         ),
                         right=Column(
                             formula=Column.BinaryFormula(
                                 op=Column.BinaryFormula.OP_ADD,
-                                left=_build_sum_attribute_aggregation_column_with_name(
+                                left=_build_sum_attribute_conditional_aggregation_column_with_name(
                                     "column_2"
                                 ),
-                                right=_build_sum_attribute_aggregation_column_with_name(
+                                right=_build_sum_attribute_conditional_aggregation_column_with_name(
                                     "column_3"
                                 ),
                             ),
@@ -220,179 +236,217 @@ def test_convert_aggregation_to_conditional_aggregation_in_order_by() -> None:
                     label="sum(column_1) / (sum(column_2) + sum(column_3))",
                 )
             ),
-        ],
-    )
-    convert_to_conditional_aggregation(message)
-    assert message.order_by == [
-        TraceItemTableRequest.OrderBy(
-            column=_build_sum_attribute_conditional_aggregation_column_with_name(
-                "column_1"
-            )
-        ),
-        TraceItemTableRequest.OrderBy(
-            column=Column(
-                formula=Column.BinaryFormula(
-                    op=Column.BinaryFormula.OP_DIVIDE,
-                    left=_build_sum_attribute_conditional_aggregation_column_with_name(
-                        "column_1"
-                    ),
-                    right=Column(
-                        formula=Column.BinaryFormula(
-                            op=Column.BinaryFormula.OP_ADD,
-                            left=_build_sum_attribute_conditional_aggregation_column_with_name(
-                                "column_2"
-                            ),
-                            right=_build_sum_attribute_conditional_aggregation_column_with_name(
+        ]
+
+    def test_convert_aggregation_to_conditional_aggregation_in_having(self) -> None:
+        message = TraceItemTableRequest(
+            meta=_UNIMPORTANT_REQUEST_META,
+            aggregation_filter=AggregationFilter(
+                and_filter=AggregationAndFilter(
+                    filters=[
+                        AggregationFilter(
+                            comparison_filter=_build_avg_aggregation_comparison_filter_with_name(
                                 "column_3"
-                            ),
+                            )
                         ),
-                        label="sum(column_2) + sum(column_3)",
-                    ),
-                ),
-                label="sum(column_1) / (sum(column_2) + sum(column_3))",
-            )
-        ),
-    ]
-
-
-def test_convert_aggregation_to_conditional_aggregation_in_having() -> None:
-    message = TraceItemTableRequest(
-        meta=_UNIMPORTANT_REQUEST_META,
-        aggregation_filter=AggregationFilter(
-            and_filter=AggregationAndFilter(
-                filters=[
-                    AggregationFilter(
-                        comparison_filter=_build_avg_aggregation_comparison_filter_with_name(
-                            "column_3"
-                        )
-                    ),
-                    AggregationFilter(
-                        and_filter=AggregationAndFilter(
-                            filters=[
-                                AggregationFilter(
-                                    or_filter=AggregationOrFilter(
-                                        filters=[
-                                            AggregationFilter(
-                                                comparison_filter=_build_avg_aggregation_comparison_filter_with_name(
-                                                    "column_4"
-                                                )
-                                            ),
-                                            AggregationFilter(
-                                                comparison_filter=_build_avg_aggregation_comparison_filter_with_name(
-                                                    "column_5"
-                                                )
-                                            ),
-                                        ]
-                                    )
-                                ),
-                                AggregationFilter(
-                                    comparison_filter=_build_avg_aggregation_comparison_filter_with_name(
-                                        "column_6"
-                                    )
-                                ),
-                            ]
-                        )
-                    ),
-                ]
-            )
-        ),
-    )
-    convert_to_conditional_aggregation(message)
-    assert (
-        message.aggregation_filter
-        == AggregationFilter(  # same filter on both sides of the and
-            and_filter=AggregationAndFilter(
-                filters=[
-                    AggregationFilter(
-                        comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
-                            "column_3"
-                        )
-                    ),
-                    AggregationFilter(
-                        and_filter=AggregationAndFilter(
-                            filters=[
-                                AggregationFilter(
-                                    or_filter=AggregationOrFilter(
-                                        filters=[
-                                            AggregationFilter(
-                                                comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
-                                                    "column_4"
-                                                )
-                                            ),
-                                            AggregationFilter(
-                                                comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
-                                                    "column_5"
-                                                )
-                                            ),
-                                        ]
-                                    )
-                                ),
-                                AggregationFilter(
-                                    comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
-                                        "column_6"
-                                    )
-                                ),
-                            ]
-                        )
-                    ),
-                ]
+                        AggregationFilter(
+                            and_filter=AggregationAndFilter(
+                                filters=[
+                                    AggregationFilter(
+                                        or_filter=AggregationOrFilter(
+                                            filters=[
+                                                AggregationFilter(
+                                                    comparison_filter=_build_avg_aggregation_comparison_filter_with_name(
+                                                        "column_4"
+                                                    )
+                                                ),
+                                                AggregationFilter(
+                                                    comparison_filter=_build_avg_aggregation_comparison_filter_with_name(
+                                                        "column_5"
+                                                    )
+                                                ),
+                                            ]
+                                        )
+                                    ),
+                                    AggregationFilter(
+                                        comparison_filter=_build_avg_aggregation_comparison_filter_with_name(
+                                            "column_6"
+                                        )
+                                    ),
+                                ]
+                            )
+                        ),
+                    ]
+                )
+            ),
+        )
+        convert_to_conditional_aggregation(message)
+        assert (
+            message.aggregation_filter
+            == AggregationFilter(  # same filter on both sides of the and
+                and_filter=AggregationAndFilter(
+                    filters=[
+                        AggregationFilter(
+                            comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
+                                "column_3"
+                            )
+                        ),
+                        AggregationFilter(
+                            and_filter=AggregationAndFilter(
+                                filters=[
+                                    AggregationFilter(
+                                        or_filter=AggregationOrFilter(
+                                            filters=[
+                                                AggregationFilter(
+                                                    comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
+                                                        "column_4"
+                                                    )
+                                                ),
+                                                AggregationFilter(
+                                                    comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
+                                                        "column_5"
+                                                    )
+                                                ),
+                                            ]
+                                        )
+                                    ),
+                                    AggregationFilter(
+                                        comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
+                                            "column_6"
+                                        )
+                                    ),
+                                ]
+                            )
+                        ),
+                    ]
+                )
             )
         )
-    )
 
+    def test_convert_aggregation_to_conditional_aggregation_in_all_of_select_and_order_by_and_having(
+        self,
+    ) -> None:
+        message = TraceItemTableRequest(
+            meta=_UNIMPORTANT_REQUEST_META,
+            columns=[
+                _build_sum_attribute_aggregation_column_with_name("column_1"),
+                _build_sum_attribute_aggregation_column_with_name("column_2"),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=_build_sum_attribute_aggregation_column_with_name("column_3")
+                ),
+                TraceItemTableRequest.OrderBy(
+                    column=_build_sum_attribute_aggregation_column_with_name("column_4")
+                ),
+            ],
+            aggregation_filter=AggregationFilter(
+                comparison_filter=_build_avg_aggregation_comparison_filter_with_name(
+                    "column_5"
+                )
+            ),
+        )
 
-def test_convert_aggregation_to_conditional_aggregation_in_all_of_select_and_order_by_and_having() -> None:
-    message = TraceItemTableRequest(
-        meta=_UNIMPORTANT_REQUEST_META,
-        columns=[
-            _build_sum_attribute_aggregation_column_with_name("column_1"),
-            _build_sum_attribute_aggregation_column_with_name("column_2"),
-        ],
-        order_by=[
+        convert_to_conditional_aggregation(message)
+        assert message.columns == [
+            _build_sum_attribute_conditional_aggregation_column_with_name("column_1"),
+            _build_sum_attribute_conditional_aggregation_column_with_name("column_2"),
+        ]
+        assert message.order_by == [
             TraceItemTableRequest.OrderBy(
-                column=_build_sum_attribute_aggregation_column_with_name("column_3")
+                column=_build_sum_attribute_conditional_aggregation_column_with_name(
+                    "column_3"
+                )
             ),
             TraceItemTableRequest.OrderBy(
-                column=_build_sum_attribute_aggregation_column_with_name("column_4")
+                column=_build_sum_attribute_conditional_aggregation_column_with_name(
+                    "column_4"
+                )
             ),
-        ],
-        aggregation_filter=AggregationFilter(
-            comparison_filter=_build_avg_aggregation_comparison_filter_with_name(
+        ]
+        assert message.aggregation_filter == AggregationFilter(
+            comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
                 "column_5"
             )
-        ),
-    )
-
-    convert_to_conditional_aggregation(message)
-    assert message.columns == [
-        _build_sum_attribute_conditional_aggregation_column_with_name("column_1"),
-        _build_sum_attribute_conditional_aggregation_column_with_name("column_2"),
-    ]
-    assert message.order_by == [
-        TraceItemTableRequest.OrderBy(
-            column=_build_sum_attribute_conditional_aggregation_column_with_name(
-                "column_3"
-            )
-        ),
-        TraceItemTableRequest.OrderBy(
-            column=_build_sum_attribute_conditional_aggregation_column_with_name(
-                "column_4"
-            )
-        ),
-    ]
-    assert message.aggregation_filter == AggregationFilter(
-        comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
-            "column_5"
         )
+
+
+def _build_sum_attribute_aggregation_with_label(label: str) -> AttributeAggregation:
+    return AttributeAggregation(
+        aggregate=Function.FUNCTION_SUM,
+        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name=label),
+        label="sum(" + label + ")",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
     )
 
 
-def test_convert_aggregation_to_conditional_aggregation_in_expression() -> None:
-    message = TimeSeriesRequest(
-        meta=_UNIMPORTANT_REQUEST_META,
-        expressions=[
+def _build_sum_attribute_conditional_aggregation_with_label(
+    label: str,
+) -> AttributeConditionalAggregation:
+    return AttributeConditionalAggregation(
+        aggregate=Function.FUNCTION_SUM,
+        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name=label),
+        label="sum(" + label + ")",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+    )
+
+
+class TestTimeSeriesRequest:
+    def test_convert_aggregation_to_conditional_aggregation_in_expression(self) -> None:
+        message = TimeSeriesRequest(
+            meta=_UNIMPORTANT_REQUEST_META,
+            expressions=[
+                Expression(
+                    aggregation=_build_sum_attribute_aggregation_with_label(
+                        "doenstmatter1"
+                    )
+                ),
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_DIVIDE,
+                        left=Expression(
+                            formula=Expression.BinaryFormula(
+                                op=Expression.BinaryFormula.OP_DIVIDE,
+                                left=Expression(
+                                    aggregation=_build_sum_attribute_aggregation_with_label(
+                                        "doenstmatter2"
+                                    )
+                                ),
+                                right=Expression(
+                                    aggregation=_build_sum_attribute_aggregation_with_label(
+                                        "doenstmatter3"
+                                    )
+                                ),
+                            ),
+                            label="sum(doesntmatter2) / sum(doesntmatter3)",
+                        ),
+                        right=Expression(
+                            formula=Expression.BinaryFormula(
+                                op=Expression.BinaryFormula.OP_DIVIDE,
+                                left=Expression(
+                                    aggregation=_build_sum_attribute_aggregation_with_label(
+                                        "doenstmatter4"
+                                    )
+                                ),
+                                right=Expression(
+                                    aggregation=_build_sum_attribute_aggregation_with_label(
+                                        "doenstmatter5"
+                                    )
+                                ),
+                            ),
+                            label="sum(doesntmatter4) / sum(doesntmatter5)",
+                        ),
+                    ),
+                    label="(sum(doesntmatter2) / sum(doesntmatter3)) / (sum(doesntmatter4) / sum(doesntmatter5))",
+                ),
+            ],
+        )
+        convert_to_conditional_aggregation(message)
+        assert message.expressions == [
             Expression(
-                aggregation=_build_sum_attribute_aggregation_with_label("doenstmatter1")
+                conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
+                    "doenstmatter1"
+                )
             ),
             Expression(
                 formula=Expression.BinaryFormula(
@@ -401,12 +455,12 @@ def test_convert_aggregation_to_conditional_aggregation_in_expression() -> None:
                         formula=Expression.BinaryFormula(
                             op=Expression.BinaryFormula.OP_DIVIDE,
                             left=Expression(
-                                aggregation=_build_sum_attribute_aggregation_with_label(
+                                conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
                                     "doenstmatter2"
                                 )
                             ),
                             right=Expression(
-                                aggregation=_build_sum_attribute_aggregation_with_label(
+                                conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
                                     "doenstmatter3"
                                 )
                             ),
@@ -417,12 +471,12 @@ def test_convert_aggregation_to_conditional_aggregation_in_expression() -> None:
                         formula=Expression.BinaryFormula(
                             op=Expression.BinaryFormula.OP_DIVIDE,
                             left=Expression(
-                                aggregation=_build_sum_attribute_aggregation_with_label(
+                                conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
                                     "doenstmatter4"
                                 )
                             ),
                             right=Expression(
-                                aggregation=_build_sum_attribute_aggregation_with_label(
+                                conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
                                     "doenstmatter5"
                                 )
                             ),
@@ -432,51 +486,4 @@ def test_convert_aggregation_to_conditional_aggregation_in_expression() -> None:
                 ),
                 label="(sum(doesntmatter2) / sum(doesntmatter3)) / (sum(doesntmatter4) / sum(doesntmatter5))",
             ),
-        ],
-    )
-    convert_to_conditional_aggregation(message)
-    assert message.expressions == [
-        Expression(
-            conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
-                "doenstmatter1"
-            )
-        ),
-        Expression(
-            formula=Expression.BinaryFormula(
-                op=Expression.BinaryFormula.OP_DIVIDE,
-                left=Expression(
-                    formula=Expression.BinaryFormula(
-                        op=Expression.BinaryFormula.OP_DIVIDE,
-                        left=Expression(
-                            conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
-                                "doenstmatter2"
-                            )
-                        ),
-                        right=Expression(
-                            conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
-                                "doenstmatter3"
-                            )
-                        ),
-                    ),
-                    label="sum(doesntmatter2) / sum(doesntmatter3)",
-                ),
-                right=Expression(
-                    formula=Expression.BinaryFormula(
-                        op=Expression.BinaryFormula.OP_DIVIDE,
-                        left=Expression(
-                            conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
-                                "doenstmatter4"
-                            )
-                        ),
-                        right=Expression(
-                            conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
-                                "doenstmatter5"
-                            )
-                        ),
-                    ),
-                    label="sum(doesntmatter4) / sum(doesntmatter5)",
-                ),
-            ),
-            label="(sum(doesntmatter2) / sum(doesntmatter3)) / (sum(doesntmatter4) / sum(doesntmatter5))",
-        ),
-    ]
+        ]
