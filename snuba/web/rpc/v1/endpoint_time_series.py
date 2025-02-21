@@ -11,10 +11,10 @@ from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.endpoint_trace_item_table import (
+from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
+from snuba.web.rpc.v1.resolvers.common.aggregation import (
     convert_to_conditional_aggregation,
 )
-from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 
 _VALID_GRANULARITY_SECS = set(
     [

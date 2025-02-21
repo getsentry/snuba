@@ -2,6 +2,10 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
+    Expression,
+    TimeSeriesRequest,
+)
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationAndFilter,
     AggregationComparisonFilter,
@@ -18,9 +22,29 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Function,
 )
 
-from snuba.web.rpc.v1.endpoint_trace_item_table import (
+from snuba.web.rpc.v1.resolvers.common.aggregation import (
     convert_to_conditional_aggregation,
 )
+
+
+def _build_sum_attribute_aggregation_with_label(label: str) -> AttributeAggregation:
+    return AttributeAggregation(
+        aggregate=Function.FUNCTION_SUM,
+        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name=label),
+        label="sum(" + label + ")",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+    )
+
+
+def _build_sum_attribute_conditional_aggregation_with_label(
+    label: str,
+) -> AttributeConditionalAggregation:
+    return AttributeConditionalAggregation(
+        aggregate=Function.FUNCTION_SUM,
+        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name=label),
+        label="sum(" + label + ")",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+    )
 
 
 def _build_sum_attribute_aggregation_column_with_name(name: str) -> Column:
@@ -77,21 +101,20 @@ def _build_avg_conditional_aggregation_comparison_filter_with_name(
     )
 
 
-def _build_unimportant_request_meta() -> RequestMeta:
-    return RequestMeta(
-        project_ids=[1, 2, 3],
-        organization_id=1,
-        cogs_category="something",
-        referrer="something",
-        start_timestamp=Timestamp(seconds=1),
-        end_timestamp=Timestamp(seconds=2),
-        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-    )
+_UNIMPORTANT_REQUEST_META = RequestMeta(
+    project_ids=[1, 2, 3],
+    organization_id=1,
+    cogs_category="something",
+    referrer="something",
+    start_timestamp=Timestamp(seconds=1),
+    end_timestamp=Timestamp(seconds=2),
+    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+)
 
 
 def test_convert_aggregation_to_conditional_aggregation_in_select() -> None:
     message = TraceItemTableRequest(
-        meta=_build_unimportant_request_meta(),
+        meta=_UNIMPORTANT_REQUEST_META,
         columns=[
             Column(
                 key=AttributeKey(type=AttributeKey.TYPE_STRING, name="doesntmatter")
@@ -169,7 +192,7 @@ def test_convert_aggregation_to_conditional_aggregation_in_select() -> None:
 def test_convert_aggregation_to_conditional_aggregation_in_order_by() -> None:
     # this is not a valid message because none of the columns in `order_by` are in `select`, but it's fine because we're just testing convert_to_conditional_aggregation
     message = TraceItemTableRequest(
-        meta=_build_unimportant_request_meta(),
+        meta=_UNIMPORTANT_REQUEST_META,
         order_by=[
             TraceItemTableRequest.OrderBy(
                 column=_build_sum_attribute_aggregation_column_with_name("column_1")
@@ -234,7 +257,7 @@ def test_convert_aggregation_to_conditional_aggregation_in_order_by() -> None:
 
 def test_convert_aggregation_to_conditional_aggregation_in_having() -> None:
     message = TraceItemTableRequest(
-        meta=_build_unimportant_request_meta(),
+        meta=_UNIMPORTANT_REQUEST_META,
         aggregation_filter=AggregationFilter(
             and_filter=AggregationAndFilter(
                 filters=[
@@ -320,7 +343,7 @@ def test_convert_aggregation_to_conditional_aggregation_in_having() -> None:
 
 def test_convert_aggregation_to_conditional_aggregation_in_all_of_select_and_order_by_and_having() -> None:
     message = TraceItemTableRequest(
-        meta=_build_unimportant_request_meta(),
+        meta=_UNIMPORTANT_REQUEST_META,
         columns=[
             _build_sum_attribute_aggregation_column_with_name("column_1"),
             _build_sum_attribute_aggregation_column_with_name("column_2"),
@@ -362,3 +385,98 @@ def test_convert_aggregation_to_conditional_aggregation_in_all_of_select_and_ord
             "column_5"
         )
     )
+
+
+def test_convert_aggregation_to_conditional_aggregation_in_expression() -> None:
+    message = TimeSeriesRequest(
+        meta=_UNIMPORTANT_REQUEST_META,
+        expressions=[
+            Expression(
+                aggregation=_build_sum_attribute_aggregation_with_label("doenstmatter1")
+            ),
+            Expression(
+                formula=Expression.BinaryFormula(
+                    op=Expression.BinaryFormula.OP_DIVIDE,
+                    left=Expression(
+                        formula=Expression.BinaryFormula(
+                            op=Expression.BinaryFormula.OP_DIVIDE,
+                            left=Expression(
+                                aggregation=_build_sum_attribute_aggregation_with_label(
+                                    "doenstmatter2"
+                                )
+                            ),
+                            right=Expression(
+                                aggregation=_build_sum_attribute_aggregation_with_label(
+                                    "doenstmatter3"
+                                )
+                            ),
+                        ),
+                        label="sum(doesntmatter2) / sum(doesntmatter3)",
+                    ),
+                    right=Expression(
+                        formula=Expression.BinaryFormula(
+                            op=Expression.BinaryFormula.OP_DIVIDE,
+                            left=Expression(
+                                aggregation=_build_sum_attribute_aggregation_with_label(
+                                    "doenstmatter4"
+                                )
+                            ),
+                            right=Expression(
+                                aggregation=_build_sum_attribute_aggregation_with_label(
+                                    "doenstmatter5"
+                                )
+                            ),
+                        ),
+                        label="sum(doesntmatter4) / sum(doesntmatter5)",
+                    ),
+                ),
+                label="(sum(doesntmatter2) / sum(doesntmatter3)) / (sum(doesntmatter4) / sum(doesntmatter5))",
+            ),
+        ],
+    )
+    convert_to_conditional_aggregation(message)
+    assert message.expressions == [
+        Expression(
+            conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
+                "doenstmatter1"
+            )
+        ),
+        Expression(
+            formula=Expression.BinaryFormula(
+                op=Expression.BinaryFormula.OP_DIVIDE,
+                left=Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_DIVIDE,
+                        left=Expression(
+                            conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
+                                "doenstmatter2"
+                            )
+                        ),
+                        right=Expression(
+                            conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
+                                "doenstmatter3"
+                            )
+                        ),
+                    ),
+                    label="sum(doesntmatter2) / sum(doesntmatter3)",
+                ),
+                right=Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_DIVIDE,
+                        left=Expression(
+                            conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
+                                "doenstmatter4"
+                            )
+                        ),
+                        right=Expression(
+                            conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(
+                                "doenstmatter5"
+                            )
+                        ),
+                    ),
+                    label="sum(doesntmatter4) / sum(doesntmatter5)",
+                ),
+            ),
+            label="(sum(doesntmatter2) / sum(doesntmatter3)) / (sum(doesntmatter4) / sum(doesntmatter5))",
+        ),
+    ]
