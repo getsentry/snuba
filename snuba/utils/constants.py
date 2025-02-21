@@ -12,6 +12,9 @@ GRANULARITIES_AVAILABLE = (10, 60, 60 * 60, 24 * 60 * 60)
 # This will affect migrations and querying.
 ATTRIBUTE_BUCKETS = 20
 
+# number of buckets in eap_items_1_local table
+ITEM_ATTRIBUTE_BUCKETS = 40
+
 # Maximum number of attempts to fetch profile events
 PROFILE_EVENTS_MAX_ATTEMPTS = (
     4  # Will result in ~23 seconds total wait time with exponential backoff
