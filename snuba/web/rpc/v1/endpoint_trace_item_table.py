@@ -156,7 +156,8 @@ def convert_to_conditional_aggregation(
             _convert(in_msg.aggregation_filter)
 
     if isinstance(in_msg, TimeSeriesRequest):
-        _convert(in_msg.expressions)
+        for expression in in_msg.expressions:
+            _convert(expression)
 
 
 class EndpointTraceItemTable(

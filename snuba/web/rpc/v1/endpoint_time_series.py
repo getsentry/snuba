@@ -2,9 +2,6 @@ import math
 import uuid
 from typing import Type
 
-from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
-    AttributeConditionalAggregation,
-)
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     Expression,
     TimeSeriesRequest,
@@ -14,6 +11,9 @@ from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.endpoint_trace_item_table import (
+    convert_to_conditional_aggregation,
+)
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 
 _VALID_GRANULARITY_SECS = set(
@@ -92,32 +92,6 @@ def _convert_aggregations_to_expressions(
     return request
 
 
-def _convert_to_conditional_aggregation(in_msg: TimeSeriesRequest) -> None:
-    def _add_conditional_aggregation(
-        input: Expression,
-    ) -> None:
-        aggregation = input.aggregation
-        input.ClearField("aggregation")
-        input.conditional_aggregation.CopyFrom(
-            AttributeConditionalAggregation(
-                aggregate=aggregation.aggregate,
-                key=aggregation.key,
-                label=aggregation.label,
-                extrapolation_mode=aggregation.extrapolation_mode,
-            )
-        )
-
-    def _convert(input: Expression) -> None:
-        if input.HasField("aggregation"):
-            _add_conditional_aggregation(input)
-        if input.HasField("formula"):
-            _convert(input.formula.left)
-            _convert(input.formula.right)
-
-    for expression in in_msg.expressions:
-        _convert(expression)
-
-
 class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
     @classmethod
     def version(cls) -> str:
@@ -151,6 +125,6 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
             )
         in_msg = _convert_aggregations_to_expressions(in_msg)
-        _convert_to_conditional_aggregation(in_msg)
+        convert_to_conditional_aggregation(in_msg)
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)
