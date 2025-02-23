@@ -10,16 +10,6 @@ from typing import Any, Dict, List, Optional
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
-from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
-    Expression as TimeSeriesExpression,
-)
-from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
-from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
-    AggregationComparisonFilter,
-    AggregationFilter,
-    Column,
-    TraceItemTableRequest,
-)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     ExtrapolationMode,
@@ -247,75 +237,6 @@ class CustomColumnInformation:
             metadata[key] = value
 
         return CustomColumnInformation(column_type, referenced_column, metadata)
-
-
-def convert_to_conditional_aggregation(
-    in_msg: TraceItemTableRequest | TimeSeriesRequest,
-) -> None:
-    """
-    Up to this point we support aggregation, but now we want to support conditional aggregation, which only aggregates
-    if the field satisfies the condition: https://clickhouse.com/docs/en/sql-reference/aggregate-functions/combinators#-if
-
-    For messages that don't have conditional aggregation, this function replaces the aggregation with a conditional aggregation,
-    where the filter is null, and every field is the same. This allows code elsewhere to set the default condition to always
-    be true.
-
-    The reason we do this "transformation" is to avoid code fragmentation down the line, where we constantly have to check
-    if the request contains `AttributeAggregation` or `AttributeConditionalAggregation`
-    """
-
-    def _add_conditional_aggregation(
-        input: Column | AggregationComparisonFilter | TimeSeriesExpression,
-    ) -> None:
-        aggregation = input.aggregation
-        input.ClearField("aggregation")
-        input.conditional_aggregation.CopyFrom(
-            AttributeConditionalAggregation(
-                aggregate=aggregation.aggregate,
-                key=aggregation.key,
-                label=aggregation.label,
-                extrapolation_mode=aggregation.extrapolation_mode,
-            )
-        )
-
-    def _convert(input: Column | AggregationFilter | TimeSeriesExpression) -> None:
-        if isinstance(input, Column):
-            if input.HasField("aggregation"):
-                _add_conditional_aggregation(input)
-
-            if input.HasField("formula"):
-                _convert(input.formula.left)
-                _convert(input.formula.right)
-
-        if isinstance(input, AggregationFilter):
-            if input.HasField("and_filter"):
-                for aggregation_filter in input.and_filter.filters:
-                    _convert(aggregation_filter)
-            if input.HasField("or_filter"):
-                for aggregation_filter in input.or_filter.filters:
-                    _convert(aggregation_filter)
-            if input.HasField("comparison_filter"):
-                if input.comparison_filter.HasField("aggregation"):
-                    _add_conditional_aggregation(input.comparison_filter)
-
-        if isinstance(input, TimeSeriesExpression):
-            if input.HasField("aggregation"):
-                _add_conditional_aggregation(input)
-            if input.HasField("formula"):
-                _convert(input.formula.left)
-                _convert(input.formula.right)
-
-    if isinstance(in_msg, TraceItemTableRequest):
-        for col in in_msg.columns:
-            _convert(col)
-        for ob in in_msg.order_by:
-            _convert(ob.column)
-        if in_msg.HasField("aggregation_filter"):
-            _convert(in_msg.aggregation_filter)
-
-    if isinstance(in_msg, TimeSeriesRequest):
-        for expression in in_msg.expressions:
-            _convert(expression)
 
 
 def get_attribute_confidence_interval_alias(

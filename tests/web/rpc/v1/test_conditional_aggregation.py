@@ -22,8 +22,10 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Function,
 )
 
-from snuba.web.rpc.v1.resolvers.common.aggregation import (
-    convert_to_conditional_aggregation,
+from snuba.web.rpc.proto_component import (
+    AggregationToConditionalAggregationVisitor,
+    TimeSeriesRequestWrapper,
+    TraceItemTableRequestWrapper,
 )
 
 
@@ -134,7 +136,12 @@ class TestEndpointTraceItemTableRequest:
                 ),
             ],
         )
-        convert_to_conditional_aggregation(message)
+        aggregation_to_conditional_aggregation_visitor = (
+            AggregationToConditionalAggregationVisitor()
+        )
+        message_wrapper = TraceItemTableRequestWrapper(message)
+        message_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
+
         assert message.columns == [
             Column(
                 key=AttributeKey(type=AttributeKey.TYPE_STRING, name="doesntmatter")
@@ -206,7 +213,12 @@ class TestEndpointTraceItemTableRequest:
                 ),
             ],
         )
-        convert_to_conditional_aggregation(message)
+        aggregation_to_conditional_aggregation_visitor = (
+            AggregationToConditionalAggregationVisitor()
+        )
+        message_wrapper = TraceItemTableRequestWrapper(message)
+        message_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
+
         assert message.order_by == [
             TraceItemTableRequest.OrderBy(
                 column=_build_sum_attribute_conditional_aggregation_column_with_name(
@@ -280,7 +292,12 @@ class TestEndpointTraceItemTableRequest:
                 )
             ),
         )
-        convert_to_conditional_aggregation(message)
+        aggregation_to_conditional_aggregation_visitor = (
+            AggregationToConditionalAggregationVisitor()
+        )
+        message_wrapper = TraceItemTableRequestWrapper(message)
+        message_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
+
         assert (
             message.aggregation_filter
             == AggregationFilter(  # same filter on both sides of the and
@@ -346,8 +363,12 @@ class TestEndpointTraceItemTableRequest:
                 )
             ),
         )
+        aggregation_to_conditional_aggregation_visitor = (
+            AggregationToConditionalAggregationVisitor()
+        )
+        message_wrapper = TraceItemTableRequestWrapper(message)
+        message_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
 
-        convert_to_conditional_aggregation(message)
         assert message.columns == [
             _build_sum_attribute_conditional_aggregation_column_with_name("column_1"),
             _build_sum_attribute_conditional_aggregation_column_with_name("column_2"),
@@ -441,7 +462,12 @@ class TestTimeSeriesRequest:
                 ),
             ],
         )
-        convert_to_conditional_aggregation(message)
+        aggregation_to_conditional_aggregation_visitor = (
+            AggregationToConditionalAggregationVisitor()
+        )
+        message_wrapper = TimeSeriesRequestWrapper(message)
+        message_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
+
         assert message.expressions == [
             Expression(
                 conditional_aggregation=_build_sum_attribute_conditional_aggregation_with_label(

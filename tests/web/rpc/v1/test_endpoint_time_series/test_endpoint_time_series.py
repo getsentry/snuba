@@ -240,7 +240,7 @@ class TestTimeSeriesApi(BaseApiTest):
             error.ParseFromString(response.data)
         assert response.status_code == 400, (error.message, error.details)
 
-    def test_rachel(self) -> None:
+    def test_conditional_aggregation(self) -> None:
         # store a test metric with a value of 1, for ever even second of one hour
         granularity_secs = 300
         query_duration = 60 * 30

@@ -11,10 +11,11 @@ from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
-from snuba.web.rpc.v1.resolvers.common.aggregation import (
-    convert_to_conditional_aggregation,
+from snuba.web.rpc.proto_component import (
+    AggregationToConditionalAggregationVisitor,
+    TimeSeriesRequestWrapper,
 )
+from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 
 _VALID_GRANULARITY_SECS = set(
     [
@@ -125,6 +126,10 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
             )
         in_msg = _convert_aggregations_to_expressions(in_msg)
-        convert_to_conditional_aggregation(in_msg)
+        aggregation_to_conditional_aggregation_visitor = (
+            AggregationToConditionalAggregationVisitor()
+        )
+        in_msg_wrapper = TimeSeriesRequestWrapper(in_msg)
+        in_msg_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)

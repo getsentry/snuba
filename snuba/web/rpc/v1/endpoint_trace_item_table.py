@@ -10,10 +10,11 @@ from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
-from snuba.web.rpc.v1.resolvers.common.aggregation import (
-    convert_to_conditional_aggregation,
+from snuba.web.rpc.proto_component import (
+    AggregationToConditionalAggregationVisitor,
+    TraceItemTableRequestWrapper,
 )
+from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
     SparseAggregateAttributeTransformer,
 )
@@ -108,7 +109,12 @@ class EndpointTraceItemTable(
         return TraceItemTableResponse
 
     def _execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
-        convert_to_conditional_aggregation(in_msg)
+        aggregation_to_conditional_aggregation_visitor = (
+            AggregationToConditionalAggregationVisitor()
+        )
+        in_msg_wrapper = TraceItemTableRequestWrapper(in_msg)
+        in_msg_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
+
         in_msg = _apply_labels_to_columns(in_msg)
         _validate_select_and_groupby(in_msg)
         _validate_order_by(in_msg)
