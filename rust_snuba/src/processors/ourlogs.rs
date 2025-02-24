@@ -1,6 +1,6 @@
 use anyhow::Context;
 use chrono::DateTime;
-use serde::{de, Deserialize, Deserializer};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
 use uuid::Uuid;
@@ -10,7 +10,6 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::de::{MapAccess, Visitor};
 
 use crate::config::ProcessorConfig;
-use crate::processors::eap_items::{EAPItem, PrimaryKey};
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
@@ -108,65 +107,64 @@ pub fn process_message(
         (msg.observed_timestamp_nanos / 1_000_000_000) as i64,
         (msg.observed_timestamp_nanos % 1_000_000_000) as u32,
     );
-    let mut item: EAPItem = msg.into();
+    let mut ourlog: Ourlog = msg.into();
 
-    item.retention_days = Some(enforce_retention(item.retention_days, &config.env_config));
+    ourlog.retention_days = enforce_retention(Some(ourlog.retention_days), &config.env_config);
 
-    InsertBatch::from_rows([item], origin_timestamp)
+    InsertBatch::from_rows([ourlog], origin_timestamp)
 }
 
-impl From<FromLogMessage> for EAPItem {
-    fn from(from: FromLogMessage) -> EAPItem {
-        let mut res = Self {
-            primary_key: PrimaryKey {
-                organization_id: from.organization_id,
-                project_id: from.project_id,
-                item_type: 3, // TRACE_ITEM_TYPE_LOG
-                timestamp: (from.timestamp_nanos / 1_000_000_000) as u32,
-            },
+#[derive(Debug, Default, Serialize)]
+struct Ourlog {
+    organization_id: u64,
+    project_id: u64,
+    trace_id: Uuid,
+    span_id: u64,
+    severity_text: String,
+    severity_number: u8,
+    retention_days: u16,
+    timestamp: u64,
+    body: String,
+    attr_string: BTreeMap<String, String>,
+    attr_int: BTreeMap<String, i64>,
+    attr_double: BTreeMap<String, f64>,
+    attr_bool: BTreeMap<String, bool>,
+}
 
+impl From<FromLogMessage> for Ourlog {
+    fn from(from: FromLogMessage) -> Ourlog {
+        let mut res = Self {
+            organization_id: from.organization_id,
+            project_id: from.project_id,
             trace_id: from.trace_id.unwrap_or_default(),
-            item_id: u128::from_be_bytes(
-                *Uuid::new_v7(uuid::Timestamp::from_unix(
-                    uuid::NoContext,
-                    from.timestamp_nanos / 1_000_000_000,
-                    (from.timestamp_nanos % 1_000_000_000) as u32,
-                ))
-                .as_bytes(),
-            ),
-            sampling_weight: 1,
-            retention_days: Some(from.retention_days),
-            attributes: Default::default(),
+            span_id: from
+                .span_id
+                .map_or(0, |s| u64::from_str_radix(&s, 16).unwrap_or(0)),
+            severity_text: from.severity_text.unwrap_or_else(|| "INFO".into()),
+            severity_number: from.severity_number.unwrap_or_default(),
+            retention_days: from.retention_days,
+            timestamp: from.timestamp_nanos,
+            body: from.body,
+            attr_string: BTreeMap::new(),
+            attr_int: BTreeMap::new(),
+            attr_double: BTreeMap::new(),
+            attr_bool: BTreeMap::new(),
         };
-        res.attributes.insert_str(
-            "sentry.severity_text".to_string(),
-            from.severity_text.unwrap_or_else(|| "INFO".into()),
-        );
-        res.attributes.insert_int(
-            "sentry.severity_number".to_string(),
-            from.severity_number.unwrap_or_default().into(),
-        );
-        res.attributes
-            .insert_str("sentry.body".to_string(), from.body);
-        if let Some(span_id) = from.span_id {
-            res.attributes
-                .insert_str("sentry.span_id".to_string(), span_id)
-        }
 
         if let Some(attributes) = from.attributes {
             for (k, v) in attributes {
                 match v {
                     FromAttribute::String(s) => {
-                        res.attributes.insert_str(k, s);
+                        res.attr_string.insert(k, s);
                     }
                     FromAttribute::Int(i) => {
-                        res.attributes.insert_int(k, i);
+                        res.attr_int.insert(k, i);
                     }
                     FromAttribute::Double(d) => {
-                        res.attributes.insert_float(k, d);
+                        res.attr_double.insert(k, d);
                     }
                     FromAttribute::Bool(b) => {
-                        res.attributes.insert_bool(k, b);
+                        res.attr_bool.insert(k, b);
                     }
                 }
             }

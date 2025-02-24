@@ -123,7 +123,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             [
                 "snuba",
                 "rust-consumer",
-                "--storage=eap_items_log",
+                "--storage=ourlogs",
                 "--consumer-group=ourlogs_group",
                 "--use-rust-processor",
                 *COMMON_RUST_CONSUMER_DEV_OPTIONS,
