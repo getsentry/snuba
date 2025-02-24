@@ -256,8 +256,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         if not isinstance(key.value, str):
             return None
 
-        num_attribute_buckets = self.num_attribute_buckets
-        bucket_idx = fnv_1a(key.value.encode("utf-8")) % num_attribute_buckets
+        bucket_idx = fnv_1a(key.value.encode("utf-8")) % self.num_attribute_buckets
         return arrayElement(
             expression.alias,
             ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
