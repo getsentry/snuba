@@ -16,87 +16,8 @@ schema:
     { name: attributes_bool, type: Map, args: { key: { type: String }, value: { type: Bool } } },
     { name: attributes_int, type: Map, args: { key: { type: String }, value: { type: Int, args: { size: 64 } } } },
 
-    { name: attributes_string_0, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_1, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_2, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_3, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_4, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_5, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_6, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_7, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_8, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_9, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_10, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_11, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_12, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_13, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_14, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_15, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_16, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_17, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_18, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_19, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_20, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_21, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_22, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_23, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_24, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_25, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_26, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_27, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_28, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_29, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_30, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_31, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_32, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_33, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_34, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_35, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_36, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_37, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_38, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_string_39, type: Map, args: { key: { type: String }, value: { type: String } } },
-    { name: attributes_float_0, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_1, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_2, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_3, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_4, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_5, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_6, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_7, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_8, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_9, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_10, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_11, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_12, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_13, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_14, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_15, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_16, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_17, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_18, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_19, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_20, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_21, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_22, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_23, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_24, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_25, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_26, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_27, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_28, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_29, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_30, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_31, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_32, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_33, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_34, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_35, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_36, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_37, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_38, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: attributes_float_39, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-
+    { name: attributes_string, type: Map, args: { key: { type: String }, value: { type: String } } },
+    { name: attributes_float, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
     { name: _hash_map_string_0, type: Array, args: { inner_type: { type: UInt, args: { size: 64 } } } },
     { name: _hash_map_string_1, type: Array, args: { inner_type: { type: UInt, args: { size: 64 } } } },
     { name: _hash_map_string_2, type: Array, args: { inner_type: { type: UInt, args: { size: 64 } } } },
@@ -182,11 +103,33 @@ schema:
 storages:
   - storage: eap_items
     is_writable: true
+    translation_mappers:
+      subscriptables:
+        - mapper: SubscriptableHashBucketMapper
+          args:
+            from_column_table: null
+            from_column_name: attributes_string
+            to_col_table: null
+            to_col_name: attributes_string
+            num_attribute_buckets: 40
+        - mapper: SubscriptableHashBucketMapper
+          args:
+            from_column_table: null
+            from_column_name: attributes_float
+            to_col_table: null
+            to_col_name: attributes_float
+            num_attribute_buckets: 40
 
 storage_selector:
   selector: DefaultQueryStorageSelector
 
-query_processors: []
+query_processors:
+  - processor: HashBucketFunctionTransformer
+    args:
+      hash_bucket_names:
+        - attributes_string
+        - attributes_float
+      num_attribute_buckets: 40
 
 validators: []
 
