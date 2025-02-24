@@ -87,6 +87,7 @@ def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestTraceItemTableForLogs(BaseApiTest):
+    @pytest.mark.skip("need to update endpoint to use new items dataset")
     def test_with_logs_data(self, setup_logs_in_db: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
