@@ -28,7 +28,19 @@ class ColumnWrapper(ProtoWrapper):
         self.column = column
 
     def accept(self, visitor: ProtoVisitor) -> None:
-        visitor.visit_column(self)
+        visitor.visit(self)
+
+        if self.column.HasField("formula"):
+            ColumnWrapper(self.column.formula.left).accept(visitor)
+            ColumnWrapper(self.column.formula.right).accept(visitor)
+
+
+class AggregationComparisonFilterWrapper(ProtoWrapper):
+    def __init__(self, aggregation_comparison_filter: AggregationComparisonFilter):
+        self.aggregation_comparison_filter = aggregation_comparison_filter
+
+    def accept(self, visitor):
+        visitor.visit(self)
 
 
 class AggregationFilterWrapper(ProtoWrapper):
@@ -36,7 +48,18 @@ class AggregationFilterWrapper(ProtoWrapper):
         self.aggregation_filter = aggregation_filter
 
     def accept(self, visitor: ProtoVisitor) -> None:
-        visitor.visit_aggregation_filter(self)
+        if self.aggregation_filter.HasField("comparison_filter"):
+            AggregationComparisonFilterWrapper(
+                self.aggregation_filter.comparison_filter
+            ).accept(visitor)
+
+        if self.aggregation_filter.HasField("and_filter"):
+            for agg_filter in self.aggregation_filter.and_filter.filters:
+                AggregationFilterWrapper(agg_filter).accept(visitor)
+
+        if self.aggregation_filter.HasField("or_filter"):
+            for agg_filter in self.aggregation_filter.or_filter.filters:
+                AggregationFilterWrapper(agg_filter).accept(visitor)
 
 
 class TimeSeriesExpressionWrapper(ProtoWrapper):
@@ -44,7 +67,16 @@ class TimeSeriesExpressionWrapper(ProtoWrapper):
         self.time_series_expression = time_series_expression
 
     def accept(self, visitor: ProtoVisitor) -> None:
-        visitor.visit_time_series_expression(self)
+        if self.time_series_expression.HasField("aggregation"):
+            visitor.visit(TimeSeriesExpressionWrapper(self.time_series_expression))
+
+        if self.time_series_expression.HasField("formula"):
+            TimeSeriesExpressionWrapper(
+                self.time_series_expression.formula.left
+            ).accept(visitor)
+            TimeSeriesExpressionWrapper(
+                self.time_series_expression.formula.right
+            ).accept(visitor)
 
 
 class TraceItemTableRequestWrapper(ProtoWrapper):
@@ -52,7 +84,14 @@ class TraceItemTableRequestWrapper(ProtoWrapper):
         self.trace_item_table_request = trace_item_table_request
 
     def accept(self, visitor: ProtoVisitor) -> None:
-        visitor.visit_trace_item_table_request(self)
+        for col in self.trace_item_table_request.columns:
+            ColumnWrapper(col).accept(visitor)
+        for ob in self.trace_item_table_request.order_by:
+            ColumnWrapper(ob.column).accept(visitor)
+        if self.trace_item_table_request.HasField("aggregation_filter"):
+            AggregationFilterWrapper(
+                self.trace_item_table_request.aggregation_filter
+            ).accept(visitor)
 
 
 class TimeSeriesRequestWrapper(ProtoWrapper):
@@ -60,44 +99,14 @@ class TimeSeriesRequestWrapper(ProtoWrapper):
         self.time_series_request = time_series_request
 
     def accept(self, visitor: ProtoVisitor) -> None:
-        visitor.visit_time_series_request(self)
+        for expression in self.time_series_request.expressions:
+            TimeSeriesExpressionWrapper(expression).accept(visitor)
 
 
 class ProtoVisitor(ABC):
     @abstractmethod
-    def visit_column(self, exp: ColumnWrapper) -> None:
+    def visit(self, exp: ProtoWrapper) -> None:
         pass
-
-    @abstractmethod
-    def visit_aggregation_filter(self, exp: AggregationFilterWrapper) -> None:
-        pass
-
-    @abstractmethod
-    def visit_time_series_expression(self, exp: TimeSeriesExpressionWrapper) -> None:
-        pass
-
-    @abstractmethod
-    def visit_trace_item_table_request(self, exp: TraceItemTableRequestWrapper) -> None:
-        pass
-
-    @abstractmethod
-    def visit_time_series_request(self, exp: TimeSeriesRequestWrapper) -> None:
-        pass
-
-
-def _convert_aggregation_to_conditional_aggregation(
-    input: Column | AggregationComparisonFilter | TimeSeriesExpression,
-) -> None:
-    aggregation = input.aggregation
-    input.ClearField("aggregation")
-    input.conditional_aggregation.CopyFrom(
-        AttributeConditionalAggregation(
-            aggregate=aggregation.aggregate,
-            key=aggregation.key,
-            label=aggregation.label,
-            extrapolation_mode=aggregation.extrapolation_mode,
-        )
-    )
 
 
 class AggregationToConditionalAggregationVisitor(ProtoVisitor):
@@ -111,56 +120,28 @@ class AggregationToConditionalAggregationVisitor(ProtoVisitor):
     if the request contains `AttributeAggregation` or `AttributeConditionalAggregation`
     """
 
-    def visit_time_series_request(self, exp: TimeSeriesRequestWrapper) -> None:
-        time_series_request = exp.time_series_request
-        for expression in time_series_request.expressions:
-            TimeSeriesExpressionWrapper(expression).accept(self)
+    def visit(
+        self,
+        input: ProtoWrapper,
+    ) -> None:
+        proto: Column | AggregationComparisonFilter | TimeSeriesExpression = None  # type: ignore
+        if isinstance(input, ColumnWrapper):
+            proto = input.column
 
-    def visit_column(self, exp: ColumnWrapper) -> None:
-        column = exp.column
-        if column.HasField("aggregation"):
-            _convert_aggregation_to_conditional_aggregation(column)
+        if isinstance(input, AggregationComparisonFilterWrapper):
+            proto = input.aggregation_comparison_filter
 
-        if column.HasField("formula"):
-            ColumnWrapper(column.formula.left).accept(self)
-            ColumnWrapper(column.formula.right).accept(self)
+        if isinstance(input, TimeSeriesExpressionWrapper):
+            proto = input.time_series_expression
 
-    def visit_aggregation_filter(self, exp: AggregationFilterWrapper) -> None:
-        aggregation_filter = exp.aggregation_filter
-        if aggregation_filter.HasField("comparison_filter"):
-            if aggregation_filter.comparison_filter.HasField("aggregation"):
-                _convert_aggregation_to_conditional_aggregation(
-                    aggregation_filter.comparison_filter
+        if proto.HasField("aggregation"):
+            aggregation = proto.aggregation
+            proto.ClearField("aggregation")
+            proto.conditional_aggregation.CopyFrom(
+                AttributeConditionalAggregation(
+                    aggregate=aggregation.aggregate,
+                    key=aggregation.key,
+                    label=aggregation.label,
+                    extrapolation_mode=aggregation.extrapolation_mode,
                 )
-
-        if aggregation_filter.HasField("and_filter"):
-            for agg_filter in aggregation_filter.and_filter.filters:
-                AggregationFilterWrapper(agg_filter).accept(self)
-
-        if aggregation_filter.HasField("or_filter"):
-            for agg_filter in aggregation_filter.or_filter.filters:
-                AggregationFilterWrapper(agg_filter).accept(self)
-
-    def visit_time_series_expression(self, exp: TimeSeriesExpressionWrapper) -> None:
-        time_series_expression = exp.time_series_expression
-        if time_series_expression.HasField("aggregation"):
-            _convert_aggregation_to_conditional_aggregation(time_series_expression)
-
-        if time_series_expression.HasField("formula"):
-            TimeSeriesExpressionWrapper(time_series_expression.formula.left).accept(
-                self
             )
-            TimeSeriesExpressionWrapper(time_series_expression.formula.right).accept(
-                self
-            )
-
-    def visit_trace_item_table_request(self, exp: TraceItemTableRequestWrapper) -> None:
-        trace_item_table_request = exp.trace_item_table_request
-        for col in trace_item_table_request.columns:
-            ColumnWrapper(col).accept(self)
-        for ob in trace_item_table_request.order_by:
-            ColumnWrapper(ob.column).accept(self)
-        if trace_item_table_request.HasField("aggregation_filter"):
-            AggregationFilterWrapper(
-                trace_item_table_request.aggregation_filter
-            ).accept(self)
