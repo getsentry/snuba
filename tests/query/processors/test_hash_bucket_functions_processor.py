@@ -14,7 +14,6 @@ from snuba.query.processors.logical.hash_bucket_functions import (
     HashBucketFunctionTransformer,
 )
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.utils.constants import ATTRIBUTE_BUCKETS
 
 test_data = [
     (
@@ -51,7 +50,7 @@ test_data = [
                             FunctionCall(
                                 None, "mapKeys", (Column(None, None, f"attr_str_{i}"),)
                             )
-                            for i in range(ATTRIBUTE_BUCKETS)
+                            for i in range(5)
                         ),
                     ),
                 ),
@@ -108,7 +107,7 @@ test_data = [
                                 "mapValues",
                                 (Column(None, None, f"attr_str_{i}"),),
                             )
-                            for i in range(ATTRIBUTE_BUCKETS)
+                            for i in range(5)
                         ),
                     ),
                 ),
@@ -175,7 +174,7 @@ test_data = [
                                     "mapValues",
                                     (Column(None, None, f"attr_str_{i}"),),
                                 )
-                                for i in range(ATTRIBUTE_BUCKETS)
+                                for i in range(5)
                             ),
                         )
                     ),
