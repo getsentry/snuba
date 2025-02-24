@@ -127,8 +127,8 @@ query_processors:
   - processor: HashBucketFunctionTransformer
     args:
       hash_bucket_names:
-        - attr_str
-        - attr_num
+        - attributes_string
+        - attributes_float
       num_attribute_buckets: 40
 
 validators: []
