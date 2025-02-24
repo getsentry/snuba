@@ -101,10 +101,20 @@ def _convert_aggregation_to_conditional_aggregation(
 
 
 class AggregationToConditionalAggregationVisitor(ProtoVisitor):
+    """
+    We support aggregation, but now we want to support conditional aggregation for the insights team, which only aggregates
+    if the field satisfies the condition: https://clickhouse.com/docs/en/sql-reference/aggregate-functions/combinators#-if.
+    For messages that don't have conditional aggregation, this function replaces the aggregation with a conditional aggregation,
+    where the filter is null, and every field is the same. This allows code elsewhere to set the default condition to always
+    be true.
+    The reason we do this "transformation" is to avoid code fragmentation down the line, where we constantly have to check
+    if the request contains `AttributeAggregation` or `AttributeConditionalAggregation`
+    """
+
     def visit_time_series_request(self, exp: TimeSeriesRequestWrapper) -> None:
         time_series_request = exp.time_series_request
         for expression in time_series_request.expressions:
-            self.visit_time_series_expression(TimeSeriesExpressionWrapper(expression))
+            TimeSeriesExpressionWrapper(expression).accept(self)
 
     def visit_column(self, exp: ColumnWrapper) -> None:
         column = exp.column
@@ -112,8 +122,8 @@ class AggregationToConditionalAggregationVisitor(ProtoVisitor):
             _convert_aggregation_to_conditional_aggregation(column)
 
         if column.HasField("formula"):
-            self.visit_column(ColumnWrapper(column.formula.left))
-            self.visit_column(ColumnWrapper(column.formula.right))
+            ColumnWrapper(column.formula.left).accept(self)
+            ColumnWrapper(column.formula.right).accept(self)
 
     def visit_aggregation_filter(self, exp: AggregationFilterWrapper) -> None:
         aggregation_filter = exp.aggregation_filter
@@ -125,11 +135,11 @@ class AggregationToConditionalAggregationVisitor(ProtoVisitor):
 
         if aggregation_filter.HasField("and_filter"):
             for agg_filter in aggregation_filter.and_filter.filters:
-                self.visit_aggregation_filter(AggregationFilterWrapper(agg_filter))
+                AggregationFilterWrapper(agg_filter).accept(self)
 
         if aggregation_filter.HasField("or_filter"):
             for agg_filter in aggregation_filter.or_filter.filters:
-                self.visit_aggregation_filter(AggregationFilterWrapper(agg_filter))
+                AggregationFilterWrapper(agg_filter).accept(self)
 
     def visit_time_series_expression(self, exp: TimeSeriesExpressionWrapper) -> None:
         time_series_expression = exp.time_series_expression
@@ -137,20 +147,20 @@ class AggregationToConditionalAggregationVisitor(ProtoVisitor):
             _convert_aggregation_to_conditional_aggregation(time_series_expression)
 
         if time_series_expression.HasField("formula"):
-            self.visit_time_series_expression(
-                TimeSeriesExpressionWrapper(time_series_expression.formula.left)
+            TimeSeriesExpressionWrapper(time_series_expression.formula.left).accept(
+                self
             )
-            self.visit_time_series_expression(
-                TimeSeriesExpressionWrapper(time_series_expression.formula.right)
+            TimeSeriesExpressionWrapper(time_series_expression.formula.right).accept(
+                self
             )
 
     def visit_trace_item_table_request(self, exp: TraceItemTableRequestWrapper) -> None:
         trace_item_table_request = exp.trace_item_table_request
         for col in trace_item_table_request.columns:
-            self.visit_column(ColumnWrapper(col))
+            ColumnWrapper(col).accept(self)
         for ob in trace_item_table_request.order_by:
-            self.visit_column(ColumnWrapper(ob.column))
+            ColumnWrapper(ob.column).accept(self)
         if trace_item_table_request.HasField("aggregation_filter"):
-            self.visit_aggregation_filter(
-                AggregationFilterWrapper(trace_item_table_request.aggregation_filter)
-            )
+            AggregationFilterWrapper(
+                trace_item_table_request.aggregation_filter
+            ).accept(self)
