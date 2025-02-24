@@ -4,7 +4,6 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
-from snuba.utils.constants import ATTRIBUTE_BUCKETS
 from snuba.utils.hashes import fnv_1a
 
 
@@ -25,8 +24,10 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
     def __init__(
         self,
         hash_bucket_names: Sequence[str],
+        num_attribute_buckets: int,
     ):
         self.hash_bucket_names = hash_bucket_names
+        self.num_attribute_buckets = num_attribute_buckets
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def transform_map_keys_and_values_expression(exp: Expression) -> Expression:
@@ -61,7 +62,7 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
                             ),
                         ),
                     )
-                    for i in range(ATTRIBUTE_BUCKETS)
+                    for i in range(self.num_attribute_buckets)
                 ),
             )
 
@@ -86,7 +87,7 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
             if not isinstance(key, Literal) or not isinstance(key.value, str):
                 return exp
 
-            bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
+            bucket_idx = fnv_1a(key.value.encode("utf-8")) % self.num_attribute_buckets
             return FunctionCall(
                 alias=exp.alias,
                 function_name=exp.function_name,

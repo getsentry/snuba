@@ -25,7 +25,6 @@ from snuba.query.matchers import (
     Param,
     String,
 )
-from snuba.utils.constants import ATTRIBUTE_BUCKETS
 from snuba.utils.hashes import fnv_1a
 
 
@@ -239,6 +238,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
     from_column_name: str
     to_col_table: Optional[str]
     to_col_name: str
+    num_attribute_buckets: int
 
     def attempt_map(
         self,
@@ -256,7 +256,8 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         if not isinstance(key.value, str):
             return None
 
-        bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
+        num_attribute_buckets = self.num_attribute_buckets
+        bucket_idx = fnv_1a(key.value.encode("utf-8")) % num_attribute_buckets
         return arrayElement(
             expression.alias,
             ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
