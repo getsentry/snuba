@@ -69,8 +69,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=self.str_local_table,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set_key,
-                    primary_key="(organization_id, attr_key)",
-                    order_by="(organization_id, attr_key, item_type, attr_value, project_id, timestamp, retention_days)",
+                    primary_key="(organization_id, project_id, timestamp, item_type, attr_key)",
+                    order_by="(organization_id, project_id, timestamp, item_type, attr_key, attr_value, retention_days)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={
                         "index_granularity": self.granularity,
@@ -102,7 +102,7 @@ SELECT
     item_type,
     attrs.1 as attr_key,
     attrs.2 as attr_value,
-    toStartOfDay(timestamp) AS timestamp,
+    toStartOfWeek(timestamp) AS timestamp,
     retention_days,
     1 AS count
 FROM eap_items_1_local
@@ -125,8 +125,8 @@ GROUP BY
                 table_name=self.num_local_table,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set_key,
-                    primary_key="(organization_id, attr_key)",
-                    order_by="(organization_id, attr_key, item_type, timestamp, project_id, retention_days)",
+                    primary_key="(organization_id, project_id, timestamp, item_type, attr_key)",
+                    order_by="(organization_id, project_id, timestamp, item_type, attr_key, retention_days)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={
                         "index_granularity": self.granularity,
@@ -159,7 +159,7 @@ SELECT
     attrs.1 as attr_key,
     attrs.2 as attr_min_value,
     attrs.2 as attr_max_value,
-    toStartOfDay(timestamp) AS timestamp,
+    toStartOfWeek(timestamp) AS timestamp,
     retention_days,
     1 AS count
 FROM eap_items_1_local
