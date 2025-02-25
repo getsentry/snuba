@@ -25,6 +25,14 @@ test_data = [
                     FunctionCall("alias", "mapKeys", (Column(None, None, "attr_str"),)),
                 ),
                 SelectedExpression(
+                    "arrayElement",
+                    FunctionCall(
+                        None,
+                        "arrayElement",
+                        (Column(None, None, "attr_str"), literal("blah")),
+                    ),
+                ),
+                SelectedExpression(
                     "unrelated",
                     Column(None, None, "column2"),
                 ),
@@ -52,6 +60,14 @@ test_data = [
                             )
                             for i in range(5)
                         ),
+                    ),
+                ),
+                SelectedExpression(
+                    "arrayElement",
+                    FunctionCall(
+                        None,
+                        "arrayElement",
+                        (Column(None, None, "attr_str_2"), literal("blah")),
                     ),
                 ),
                 SelectedExpression(
