@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 import pytest
 
+from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -16,6 +17,7 @@ from snuba.query.conditions import (
     in_condition,
 )
 from snuba.query.data_source.simple import Entity
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -184,3 +186,21 @@ def test_tenant_ids(
     )
     assert request.referrer == expected_referrer
     assert request.attribution_info.tenant_ids == expected_tenant_ids
+
+
+@pytest.mark.redis_db
+def test_disabled_dataset() -> None:
+    state.set_config("snql_disabled_dataset__events", True)
+    dataset = get_dataset("events")
+    schema = RequestSchema.build(HTTPQuerySettings)
+
+    with pytest.raises(InvalidQueryException):
+        build_request(
+            {},
+            parse_snql_query,
+            HTTPQuerySettings,
+            schema,
+            dataset,
+            Timer("test"),
+            "my_request",
+        )
