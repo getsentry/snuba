@@ -189,7 +189,7 @@ def test_tenant_ids(
 
 
 @pytest.mark.redis_db
-def test_disabled_dataset():
+def test_disabled_dataset() -> None:
     state.set_config("snql_disabled_dataset__events", True)
     dataset = get_dataset("events")
     schema = RequestSchema.build(HTTPQuerySettings)
