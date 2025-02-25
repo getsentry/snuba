@@ -56,7 +56,7 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="eap-spans-subscriptions-executor" \
   --container-name="uptime-results-consumer" \
   --container-name="lw-deletions-search-issues-consumer" \
-  --container-name="eap-logs-consumer" \
+  --container-name="eap-items-log-consumer" \
   --container-name="eap-items-span-consumer" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --label-selector="${LABEL_SELECTOR}" \

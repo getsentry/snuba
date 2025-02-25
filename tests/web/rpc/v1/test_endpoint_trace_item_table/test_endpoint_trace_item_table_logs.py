@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Union
 
@@ -51,10 +52,13 @@ def gen_log_message(
     return {
         "organization_id": 1,
         "project_id": 1,
-        "retention_days": 90,
         "timestamp_nanos": int(dt.timestamp() * 1e9),
         "observed_timestamp_nanos": int(dt.timestamp() * 1e9),
+        "retention_days": 90,
         "body": body,
+        "trace_id": str(uuid.uuid4()),
+        "sampling_weight": 1,
+        "span_id": "123456781234567D",
         "attributes": attributes,
     }
 
@@ -66,7 +70,7 @@ BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timed
 
 @pytest.fixture(autouse=False)
 def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
-    logs_storage = get_storage(StorageKey("ourlogs"))
+    logs_storage = get_storage(StorageKey("eap_items_log"))
     messages = []
     for i in range(120):
         messages.append(

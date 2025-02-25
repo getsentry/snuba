@@ -62,8 +62,8 @@ def _convert_order_by(
 
 def _build_query(request: TraceItemTableRequest) -> Query:
     entity = Entity(
-        key=EntityKey("ourlogs"),
-        schema=get_entity(EntityKey("ourlogs")).get_data_model(),
+        key=EntityKey("eap_items"),
+        schema=get_entity(EntityKey("eap_items")).get_data_model(),
         sample=None,
     )
 

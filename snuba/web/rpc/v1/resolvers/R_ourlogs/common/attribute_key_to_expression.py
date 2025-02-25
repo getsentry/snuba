@@ -11,10 +11,6 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "sentry.organization_id": AttributeKey.Type.TYPE_INT,
     "sentry.project_id": AttributeKey.Type.TYPE_INT,
-    "sentry.span_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
-    "sentry.severity_text": AttributeKey.Type.TYPE_STRING,
-    "sentry.severity_number": AttributeKey.Type.TYPE_INT,
-    "sentry.body": AttributeKey.Type.TYPE_STRING,
 }
 
 TIMESTAMP_COLUMNS: Final[Set[str]] = {
@@ -32,6 +28,13 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     if attr_key.name == "sentry.trace_id":
         if attr_key.type == AttributeKey.Type.TYPE_STRING:
             return f.CAST(column("trace_id"), "String", alias=alias)
+        raise BadSnubaRPCRequestException(
+            f"Attribute {attr_key.name} must be requested as a string, got {attr_key.type}"
+        )
+
+    if attr_key.name == "sentry.item_id":
+        if attr_key.type == AttributeKey.Type.TYPE_STRING:
+            return f.hex(column("item_id"), alias=alias)
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as a string, got {attr_key.type}"
         )
@@ -61,16 +64,20 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     # End of special handling, just send to the appropriate bucket
     if attr_key.type == AttributeKey.Type.TYPE_STRING:
         return f.arrayElement(
-            column("attr_string"), literal(attr_key.name), alias=alias
+            column("attributes_string"), literal(attr_key.name), alias=alias
         )
     if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
         return f.arrayElement(
-            column("attr_double"), literal(attr_key.name), alias=alias
+            column("attributes_float"), literal(attr_key.name), alias=alias
         )
     if attr_key.type == AttributeKey.Type.TYPE_INT:
-        return f.arrayElement(column("attr_int"), literal(attr_key.name), alias=alias)
+        return f.arrayElement(
+            column("attributes_int"), literal(attr_key.name), alias=alias
+        )
     if attr_key.type == AttributeKey.Type.TYPE_BOOLEAN:
-        return f.arrayElement(column("attr_bool"), literal(attr_key.name), alias=alias)
+        return f.arrayElement(
+            column("attributes_bool"), literal(attr_key.name), alias=alias
+        )
     raise BadSnubaRPCRequestException(
         f"Attribute {attr_key.name} had an unknown or unset type: {attr_key.type}"
     )
