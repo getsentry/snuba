@@ -376,6 +376,7 @@ jobs:
               tests/sentry/uptime/endpoints/test_project_uptime_alert_check_index.py \
               tests/sentry/uptime/endpoints/test_organization_uptime_stats.py \
               tests/snuba/api/endpoints/test_organization_events_stats_span_indexed.py \
+              tests/snuba/api/endpoints/test_organization_events_ourlogs.py \
               tests/snuba/api/endpoints/test_organization_events_stats_mep.py \
               tests/sentry/sentry_metrics/querying \
               tests/snuba/test_snql_snuba.py \
