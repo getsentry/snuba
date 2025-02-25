@@ -84,8 +84,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=self.local_table_name,
                 engine=table_engines.ReplacingMergeTree(
                     storage_set=self.storage_set_key,
-                    primary_key="(organization_id, project_id, date, key_hash)",
-                    order_by="(organization_id, project_id, date, key_hash, retention_days)",
+                    primary_key="(organization_id, project_id, date, item_type, key_hash)",
+                    order_by="(organization_id, project_id, date, item_type, key_hash, retention_days)",
                     partition_by="(retention_days, toMonday(date))",
                     ttl="date + toIntervalDay(retention_days)",
                 ),
