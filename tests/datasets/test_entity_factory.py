@@ -19,7 +19,6 @@ ENTITY_KEYS = [
     EntityKey.SPANS_STR_ATTRS,
     EntityKey.GROUPASSIGNEE,
     EntityKey.GROUPEDMESSAGE,
-    EntityKey.OURLOGS,
     EntityKey.OUTCOMES,
     EntityKey.OUTCOMES_RAW,
     EntityKey.SEARCH_ISSUES,
@@ -54,6 +53,7 @@ ENTITY_KEYS = [
     EntityKey.GENERIC_METRICS_COUNTERS_META_TAG_VALUES,
     EntityKey.UPTIME_CHECKS,
     EntityKey.EAP_ITEMS,
+    EntityKey.EAP_ITEMS_LOG,
 ]
 
 

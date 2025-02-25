@@ -66,7 +66,9 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
                 ),
             )
 
-        def transform_map_contains_expression(exp: Expression) -> Expression:
+        def transform_map_contains_and_array_element_expression(
+            exp: Expression,
+        ) -> Expression:
             if not isinstance(exp, FunctionCall):
                 return exp
 
@@ -80,7 +82,7 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
             if column.column_name not in self.hash_bucket_names:
                 return exp
 
-            if exp.function_name != "mapContains":
+            if exp.function_name not in ("mapContains", "arrayElement"):
                 return exp
 
             key = exp.parameters[1]
@@ -98,4 +100,4 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
             )
 
         query.transform_expressions(transform_map_keys_and_values_expression)
-        query.transform_expressions(transform_map_contains_expression)
+        query.transform_expressions(transform_map_contains_and_array_element_expression)

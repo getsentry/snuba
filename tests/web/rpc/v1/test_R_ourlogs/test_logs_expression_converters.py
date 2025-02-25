@@ -50,23 +50,22 @@ class TestOurlogsExpressionConverters:
 
     def test_normalized_col(self) -> None:
         for col in [
-            "sentry.span_id",
-            "sentry.severity_text",
-            "sentry.body",
+            "sentry.organization_id",
+            "sentry.project_id",
         ]:
             assert attribute_key_to_expression(
                 AttributeKey(
-                    type=AttributeKey.TYPE_STRING,
+                    type=AttributeKey.TYPE_INT,
                     name=col,
                 ),
             ) == column(col[len("sentry.") :], alias=col)
 
     def test_attr_buckets(self) -> None:
         for (typ, col) in [
-            (AttributeKey.TYPE_STRING, "attr_string"),
-            (AttributeKey.TYPE_FLOAT, "attr_double"),
-            (AttributeKey.TYPE_INT, "attr_int"),
-            (AttributeKey.TYPE_BOOLEAN, "attr_bool"),
+            (AttributeKey.TYPE_STRING, "attributes_string"),
+            (AttributeKey.TYPE_FLOAT, "attributes_float"),
+            (AttributeKey.TYPE_INT, "attributes_int"),
+            (AttributeKey.TYPE_BOOLEAN, "attributes_bool"),
         ]:
             assert attribute_key_to_expression(
                 AttributeKey(
@@ -115,14 +114,16 @@ class TestOurlogsExpressionConverters:
             None,
             "and",
             (
-                f.mapContains(column("attr_string"), literal("hello")),
-                f.mapContains(column("attr_int"), literal("two")),
+                f.mapContains(column("attributes_string"), literal("hello")),
+                f.mapContains(column("attributes_int"), literal("two")),
                 FunctionCall(
                     None,
                     "in",
                     (
                         f.arrayElement(
-                            column("attr_int"), literal("world"), alias="world_TYPE_INT"
+                            column("attributes_int"),
+                            literal("world"),
+                            alias="world_TYPE_INT",
                         ),
                         f.array(literal(1), literal(2), literal(3)),
                     ),

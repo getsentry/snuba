@@ -98,17 +98,17 @@ pub(crate) struct PrimaryKey {
 }
 
 #[derive(Debug, Default, Serialize)]
-struct EAPItem {
+pub(crate) struct EAPItem {
     #[serde(flatten)]
-    primary_key: PrimaryKey,
+    pub(crate) primary_key: PrimaryKey,
 
-    trace_id: Uuid,
-    item_id: u128,
-    sampling_weight: u64,
-    retention_days: Option<u16>,
+    pub(crate) trace_id: Uuid,
+    pub(crate) item_id: u128,
+    pub(crate) sampling_weight: u64,
+    pub(crate) retention_days: Option<u16>,
 
     #[serde(flatten)]
-    attributes: AttributeMap,
+    pub(crate) attributes: AttributeMap,
 }
 
 fn fnv_1a(input: &[u8]) -> u32 {
