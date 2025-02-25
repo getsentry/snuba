@@ -16,6 +16,8 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import column
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -68,14 +70,14 @@ def _build_query(request: TraceItemTableRequest) -> Query:
     )
 
     selected_columns = []
-    for column in request.columns:
-        if column.HasField("key"):
-            key_col = attribute_key_to_expression(column.key)
+    for col in request.columns:
+        if col.HasField("key"):
+            key_col = attribute_key_to_expression(col.key)
             # The key_col expression alias may differ from the column label. That is okay
             # the attribute key name is used in the groupby, the column label is just the name of
             # the returned attribute value
             selected_columns.append(
-                SelectedExpression(name=column.label, expression=key_col)
+                SelectedExpression(name=col.label, expression=key_col)
             )
         else:
             raise BadSnubaRPCRequestException(
@@ -87,6 +89,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         selected_columns=selected_columns,
         condition=base_conditions_and(
             request.meta,
+            f.equals(column("item_type"), TraceItemType.TRACE_ITEM_TYPE_LOG),
             trace_item_filters_to_expression(
                 request.filter, attribute_key_to_expression
             ),
