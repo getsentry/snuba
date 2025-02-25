@@ -190,9 +190,9 @@ def _get_reliability_context_columns(
 
     aggregates = []
     for e in expressions:
-        if e.WhichOneof("expression") == "aggregation":
+        if e.WhichOneof("expression") == "conditional_aggregation":
             # ignore formulas
-            aggregates.append(e.aggregation)
+            aggregates.append(e.conditional_aggregation)
 
     for aggregation in aggregates:
         if (
@@ -225,8 +225,8 @@ def _get_reliability_context_columns(
 
 def _proto_expression_to_ast_expression(expr: ProtoExpression) -> Expression:
     match expr.WhichOneof("expression"):
-        case "aggregation":
-            return aggregation_to_expression(expr.aggregation)
+        case "conditional_aggregation":
+            return aggregation_to_expression(expr.conditional_aggregation)
         case "formula":
             formula_expr = OP_TO_EXPR[expr.formula.op](
                 _proto_expression_to_ast_expression(expr.formula.left),
