@@ -59,7 +59,7 @@ SELECT
     organization_id AS organization_id,
     project_id AS project_id,
     item_type as item_type,
-    toDate(timestamp) AS date,
+    toMonday(timestamp) AS date,
     retention_days as retention_days,
     arrayConcat({_attr_str_names}) AS attributes_string,
     arrayConcat({_attr_num_names}) AS attributes_float
@@ -85,7 +85,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 engine=table_engines.ReplacingMergeTree(
                     storage_set=self.storage_set_key,
                     primary_key="(organization_id, project_id, date, key_hash)",
-                    order_by="(organization_id, project_id, date, key_hash)",
+                    order_by="(organization_id, project_id, date, key_hash, retention_days)",
                     partition_by="(retention_days, toMonday(date))",
                     ttl="date + toIntervalDay(retention_days)",
                 ),
