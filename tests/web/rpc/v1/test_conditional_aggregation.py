@@ -22,7 +22,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Function,
 )
 
-from snuba.web.rpc.proto_component import (
+from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     TimeSeriesRequestWrapper,
     TraceItemTableRequestWrapper,

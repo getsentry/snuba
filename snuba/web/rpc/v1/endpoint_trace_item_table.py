@@ -10,7 +10,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.proto_component import (
+from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     TraceItemTableRequestWrapper,
 )
