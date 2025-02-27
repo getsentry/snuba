@@ -41,9 +41,9 @@ def gen_log_message(
             }
         elif isinstance(v, float):
             attributes[k] = {"double_value": v}
-        elif isinstance(v, float):
+        elif isinstance(v, str):
             attributes[k] = {
-                "double_value": v,
+                "string_value": v,
             }
 
     return {
@@ -143,7 +143,7 @@ class TestTraceItemDetails(BaseApiTest):
         )
         log_id = logs[0].results[0].val_str
 
-        EndpointTraceItemDetails().execute(
+        res = EndpointTraceItemDetails().execute(
             TraceItemDetailsRequest(
                 meta=RequestMeta(
                     project_ids=[1],
@@ -159,4 +159,13 @@ class TestTraceItemDetails(BaseApiTest):
             )
         )
 
-    # TODO(colin): once we use EAP items topic + control ID generation, add a 'item exists' test
+        assert set(x.name for x in res.attributes) == {
+            "sentry.body",
+            "sentry.span_id",
+            "sentry.severity_text",
+            "sentry.severity_number",
+            "bool_tag",
+            "double_tag",
+            "int_tag",
+            "str_tag",
+        }

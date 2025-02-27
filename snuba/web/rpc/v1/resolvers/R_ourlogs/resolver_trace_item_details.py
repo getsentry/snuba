@@ -127,29 +127,20 @@ def _convert_results(
     dt = row.pop("timestamp")
     timestamp = Timestamp()
     timestamp.FromSeconds(dt)
-
     attrs = []
-    for key, value in row.items():
-        if isinstance(value, bool):
-            attrs.append(
-                TraceItemDetailsAttribute(
-                    name=key, value=AttributeValue(val_bool=value)
-                )
-            )
-        elif isinstance(value, str):
-            attrs.append(
-                TraceItemDetailsAttribute(name=key, value=AttributeValue(val_str=value))
-            )
-        elif isinstance(value, float):
-            attrs.append(
-                TraceItemDetailsAttribute(
-                    name=key, value=AttributeValue(val_float=value)
-                )
-            )
-        elif isinstance(value, int):
-            attrs.append(
-                TraceItemDetailsAttribute(name=key, value=AttributeValue(val_int=value))
-            )
+
+    for k, v in row["attributes_string"].items():
+        attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_str=v)))
+    for k, v in row["attributes_float"].items():
+        attrs.append(
+            TraceItemDetailsAttribute(name=k, value=AttributeValue(val_float=v))
+        )
+    for k, v in row["attributes_int"].items():
+        attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_int=v)))
+    for k, v in row["attributes_bool"].items():
+        attrs.append(
+            TraceItemDetailsAttribute(name=k, value=AttributeValue(val_bool=v))
+        )
 
     return item_id, timestamp, attrs
 
