@@ -7,13 +7,18 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_details_pb2 import (
     TraceItemDetailsRequest,
 )
+from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
+    Column,
+    TraceItemTableRequest,
+)
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc import RPCRequestException
 from snuba.web.rpc.v1.endpoint_trace_item_details import EndpointTraceItemDetails
+from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -83,7 +88,7 @@ def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestTraceItemDetails(BaseApiTest):
-    def test_not_found(self) -> None:
+    def test_not_found(self, setup_logs_in_db: Any) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
         message = TraceItemDetailsRequest(
@@ -107,15 +112,16 @@ class TestTraceItemDetails(BaseApiTest):
             error_proto.ParseFromString(response.data)
         assert response.status_code == 404, error_proto
 
-    def test_endpoint(self) -> None:
+    def test_endpoint(self, setup_logs_in_db: Any) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
 
-        with pytest.raises(RPCRequestException):
-            EndpointTraceItemDetails().execute(
-                TraceItemDetailsRequest(
+        logs = (
+            EndpointTraceItemTable()
+            .execute(
+                TraceItemTableRequest(
                     meta=RequestMeta(
-                        project_ids=[1, 2, 3],
+                        project_ids=[1],
                         organization_id=1,
                         cogs_category="something",
                         referrer="something",
@@ -124,8 +130,33 @@ class TestTraceItemDetails(BaseApiTest):
                         request_id=_REQUEST_ID,
                         trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
                     ),
-                    item_id="00000",
+                    columns=[
+                        Column(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_STRING, name="sentry.item_id"
+                            )
+                        )
+                    ],
                 )
             )
+            .column_values
+        )
+        log_id = logs[0].results[0].val_str
+
+        EndpointTraceItemDetails().execute(
+            TraceItemDetailsRequest(
+                meta=RequestMeta(
+                    project_ids=[1],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=Timestamp(seconds=0),
+                    end_timestamp=ts,
+                    request_id=_REQUEST_ID,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                ),
+                item_id=log_id,
+            )
+        )
 
     # TODO(colin): once we use EAP items topic + control ID generation, add a 'item exists' test

@@ -53,7 +53,9 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
     res = Query(
         from_clause=entity,
         selected_columns=[
-            SelectedExpression("timestamp", column("timestamp", alias="timestamp")),
+            SelectedExpression(
+                "timestamp", f.toUnixTimestamp(column("timestamp"), alias="timestamp")
+            ),
             SelectedExpression(
                 "hex_item_id", f.hex(column("item_id"), alias="hex_item_id")
             ),
@@ -81,7 +83,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
         condition=base_conditions_and(
             request.meta,
             f.equals(column("item_type"), TraceItemType.TRACE_ITEM_TYPE_LOG),
-            f.equals(column("item_id"), int(request.item_id, 16)),
+            f.equals(f.hex(column("item_id")), request.item_id),  # TODO bad perf maybe
             trace_item_filters_to_expression(
                 request.filter, attribute_key_to_expression
             ),
@@ -124,7 +126,7 @@ def _convert_results(
     item_id = row.pop("hex_item_id")
     dt = row.pop("timestamp")
     timestamp = Timestamp()
-    timestamp.FromDatetime(dt)
+    timestamp.FromSeconds(dt)
 
     attrs = []
     for key, value in row.items():
