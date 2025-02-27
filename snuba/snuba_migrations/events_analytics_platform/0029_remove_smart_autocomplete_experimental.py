@@ -105,17 +105,11 @@ class Migration(migration.ClickhouseNodeMigration):
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
     granularity = "8192"
 
-    local_table_name = "eap_trace_item_attrs_local"
     dist_table_name = "eap_trace_item_attrs_dist"
     mv_name = "eap_trace_item_attrs_mv"
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
         return [
-            operations.DropTable(
-                storage_set=self.storage_set_key,
-                table_name=self.mv_name,
-                target=OperationTarget.LOCAL,
-            ),
             operations.DropTable(
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,
@@ -130,19 +124,6 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
         create_table_ops = [
-            operations.CreateTable(
-                storage_set=self.storage_set_key,
-                table_name=self.local_table_name,
-                engine=table_engines.ReplacingMergeTree(
-                    storage_set=self.storage_set_key,
-                    primary_key="(project_id, date, key_val_hash)",
-                    order_by="(project_id, date, key_val_hash)",
-                    partition_by="(retention_days, toMonday(date))",
-                    ttl="date + toIntervalDay(retention_days)",
-                ),
-                columns=columns,
-                target=OperationTarget.LOCAL,
-            ),
             operations.CreateTable(
                 storage_set=self.storage_set_key,
                 table_name=self.dist_table_name,
