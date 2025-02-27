@@ -19,18 +19,17 @@ columns: List[Column[Modifiers]] = [
         UInt(16),
     ),
     Column(
-        "attributes_string_hash",
+        "attribute_keys_hash",
         Array(
-            UInt(64), Modifiers(materialized=get_array_vals_hash("attributes_string"))
+            UInt(64),
+            Modifiers(
+                materialized=get_array_vals_hash(
+                    "arrayConcat(attributes_string, attributes_float)"
+                )
+            ),
         ),
     ),
     Column("attributes_string", Array(String())),
-    Column(
-        "attributes_float_hash",
-        Array(
-            UInt(64), Modifiers(materialized=get_array_vals_hash("attributes_float"))
-        ),
-    ),
     Column("attributes_float", Array(String())),
     # a hash of all the attribute keys of the item in sorted order
     # this lets us deduplicate rows with merges
@@ -108,17 +107,8 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddIndex(
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,
-                index_name="bf_attributes_string_hash",
-                index_expression="attributes_string_hash",
-                index_type="bloom_filter",
-                granularity=1,
-                target=operations.OperationTarget.LOCAL,
-            ),
-            operations.AddIndex(
-                storage_set=self.storage_set_key,
-                table_name=self.local_table_name,
-                index_name="bf_attributes_float_hash",
-                index_expression="attributes_float_hash",
+                index_name="bf_attribute_keys_hash",
+                index_expression="attribute_keys_hash",
                 index_type="bloom_filter",
                 granularity=1,
                 target=operations.OperationTarget.LOCAL,
