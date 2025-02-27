@@ -1,12 +1,7 @@
 import uuid
 from typing import Type
 
-from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
-    AttributeConditionalAggregation,
-)
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
-    AggregationComparisonFilter,
-    AggregationFilter,
     Column,
     TraceItemTableRequest,
     TraceItemTableResponse,
@@ -15,6 +10,10 @@ from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.proto_visitor import (
+    AggregationToConditionalAggregationVisitor,
+    TraceItemTableRequestWrapper,
+)
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
     SparseAggregateAttributeTransformer,
@@ -87,61 +86,6 @@ def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
     return SparseAggregateAttributeTransformer(request).transform()
 
 
-def convert_to_conditional_aggregation(in_msg: TraceItemTableRequest) -> None:
-    """
-    Up to this point we support aggregation, but now we want to support conditional aggregation, which only aggregates
-    if the field satisfies the condition: https://clickhouse.com/docs/en/sql-reference/aggregate-functions/combinators#-if
-
-    For messages that don't have conditional aggregation, this function replaces the aggregation with a conditional aggregation,
-    where the filter is null, and every field is the same. This allows code elsewhere to set the default condition to always
-    be true.
-
-    The reason we do this "transformation" is to avoid code fragmentation down the line, where we constantly have to check
-    if the request contains `AttributeAggregation` or `AttributeConditionalAggregation`
-    """
-
-    def _add_conditional_aggregation(
-        input: Column | AggregationComparisonFilter,
-    ) -> None:
-        aggregation = input.aggregation
-        input.ClearField("aggregation")
-        input.conditional_aggregation.CopyFrom(
-            AttributeConditionalAggregation(
-                aggregate=aggregation.aggregate,
-                key=aggregation.key,
-                label=aggregation.label,
-                extrapolation_mode=aggregation.extrapolation_mode,
-            )
-        )
-
-    def _convert(input: Column | AggregationFilter) -> None:
-        if isinstance(input, Column):
-            if input.HasField("aggregation"):
-                _add_conditional_aggregation(input)
-
-            if input.HasField("formula"):
-                _convert(input.formula.left)
-                _convert(input.formula.right)
-
-        if isinstance(input, AggregationFilter):
-            if input.HasField("and_filter"):
-                for aggregation_filter in input.and_filter.filters:
-                    _convert(aggregation_filter)
-            if input.HasField("or_filter"):
-                for aggregation_filter in input.or_filter.filters:
-                    _convert(aggregation_filter)
-            if input.HasField("comparison_filter"):
-                if input.comparison_filter.HasField("aggregation"):
-                    _add_conditional_aggregation(input.comparison_filter)
-
-    for column in in_msg.columns:
-        _convert(column)
-    for ob in in_msg.order_by:
-        _convert(ob.column)
-    if in_msg.HasField("aggregation_filter"):
-        _convert(in_msg.aggregation_filter)
-
-
 class EndpointTraceItemTable(
     RPCEndpoint[TraceItemTableRequest, TraceItemTableResponse]
 ):
@@ -165,7 +109,12 @@ class EndpointTraceItemTable(
         return TraceItemTableResponse
 
     def _execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
-        convert_to_conditional_aggregation(in_msg)
+        aggregation_to_conditional_aggregation_visitor = (
+            AggregationToConditionalAggregationVisitor()
+        )
+        in_msg_wrapper = TraceItemTableRequestWrapper(in_msg)
+        in_msg_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
+
         in_msg = _apply_labels_to_columns(in_msg)
         _validate_select_and_groupby(in_msg)
         _validate_order_by(in_msg)
