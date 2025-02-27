@@ -72,9 +72,9 @@ class Migration(migration.ClickhouseNodeMigration):
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
     granularity = "8192"
 
-    local_table_name = "eap_item_attrs_1_local"
-    dist_table_name = "eap_item_attrs_1_dist"
-    mv_name = "eap_item_attrs_1_mv"
+    local_table_name = "eap_item_co_occurring_attrs_1_local"
+    dist_table_name = "eap_item_co_occurring_attrs_1_dist"
+    mv_name = "eap_item_co_occurring_attrs_1_mv"
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
         create_table_ops = [
