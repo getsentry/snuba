@@ -113,7 +113,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return [
             operations.DropTable(
                 storage_set=self.storage_set_key,
-                table_name=self.local_table_name,
+                table_name=self.mv_name,
                 target=OperationTarget.LOCAL,
             ),
             operations.DropTable(
