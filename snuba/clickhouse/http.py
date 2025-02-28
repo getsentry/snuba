@@ -312,9 +312,13 @@ class HTTPBatchWriter(BatchWriter[bytes]):
                 port,
                 ca_certs=ca_certs,
                 cert_reqs="REQUIRED" if verify else "CERT_NONE",
+                maxsize=max_connections,
+                block=block_connections,
             )
         else:
-            self.__pool = HTTPConnectionPool(host, port)
+            self.__pool = HTTPConnectionPool(
+                host, port, maxsize=max_connections, block=block_connections
+            )
         self.__executor = ThreadPoolExecutor()
         self.__metrics = metrics
 
