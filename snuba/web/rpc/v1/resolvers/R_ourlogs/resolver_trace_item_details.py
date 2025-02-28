@@ -19,7 +19,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column
+from snuba.query.dsl import column, literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -83,7 +83,10 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
         condition=base_conditions_and(
             request.meta,
             f.equals(column("item_type"), TraceItemType.TRACE_ITEM_TYPE_LOG),
-            f.equals(f.hex(column("item_id")), request.item_id),  # TODO bad perf maybe
+            f.equals(
+                column("item_id"),
+                f.reinterpretAsUInt128(f.reverse(f.unhex(literal(request.item_id)))),
+            ),
             trace_item_filters_to_expression(
                 request.filter, attribute_key_to_expression
             ),
