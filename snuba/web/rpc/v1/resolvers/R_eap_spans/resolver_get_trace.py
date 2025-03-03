@@ -223,9 +223,18 @@ def _convert_results(
 ) -> list[GetTraceResponse.Item]:
     items: list[GetTraceResponse.Item] = []
 
+
     for row in data:
         id = row.pop("id")
-        dt = row.pop("timestamp")
+        dt_str = row.pop("timestamp")
+        
+        # Convert string timestamp to datetime object
+        if isinstance(dt_str, str):
+            # Strip quotes if present
+            clean_dt_str = dt_str.strip("'")
+            dt = datetime.strptime(clean_dt_str, '%Y-%m-%d %H:%M:%S.%f')
+        else:
+            dt = dt_str
 
         timestamp = Timestamp()
         timestamp.FromDatetime(dt)
