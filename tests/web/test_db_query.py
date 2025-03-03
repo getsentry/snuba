@@ -318,6 +318,7 @@ def test_db_query_success() -> None:
             "ReferrerGuardRailPolicy": {
                 "can_run": True,
                 "max_threads": 10,
+                "max_bytes_to_read": 0,
                 "explanation": {
                     "reason": "within limit",
                     "policy": "referrer_guard_rail_policy",
@@ -334,6 +335,7 @@ def test_db_query_success() -> None:
             "ConcurrentRateLimitAllocationPolicy": {
                 "can_run": True,
                 "max_threads": 10,
+                "max_bytes_to_read": 0,
                 "explanation": {
                     "reason": "within limit",
                     "overrides": {},
@@ -349,6 +351,7 @@ def test_db_query_success() -> None:
             "BytesScannedRejectingPolicy": {
                 "can_run": True,
                 "max_threads": 10,
+                "max_bytes_to_read": 0,
                 "explanation": {
                     "reason": "within_limit",
                     "storage_key": "StorageKey.ERRORS_RO",
@@ -362,6 +365,7 @@ def test_db_query_success() -> None:
             },
             "CrossOrgQueryAllocationPolicy": {
                 "can_run": True,
+                "max_bytes_to_read": 0,
                 "max_threads": 10,
                 "explanation": {
                     "reason": "pass_through",
@@ -544,6 +548,7 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
                 "ThrottleAllocationPolicy1": {
                     "can_run": True,
                     "max_threads": 1,
+                    "max_bytes_to_read": 0,
                     "explanation": {
                         "reason": "ThrottleAllocationPolicy1 throttles all queries",
                         "storage_key": "StorageKey.DOESNTMATTER",
@@ -558,6 +563,7 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
                 "ThrottleAllocationPolicy2": {
                     "can_run": True,
                     "max_threads": 2,
+                    "max_bytes_to_read": 0,
                     "explanation": {
                         "reason": "ThrottleAllocationPolicy2 throttles all queries",
                         "storage_key": "StorageKey.DOESNTMATTER",
@@ -676,6 +682,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             "details": {
                 "RejectAllocationPolicy": {
                     "can_run": False,
+                    "max_bytes_to_read": 0,
                     "explanation": {
                         "reason": "policy rejects all queries",
                         "storage_key": "StorageKey.DOESNTMATTER",
@@ -922,6 +929,7 @@ def test_allocation_policy_updates_quota() -> None:
                     "storage_key": "StorageKey.DOESNTMATTER",
                 },
                 "is_throttled": False,
+                "max_bytes_to_read": 0,
                 "throttle_threshold": MAX_QUERIES_TO_RUN,
                 "rejection_threshold": MAX_QUERIES_TO_RUN,
                 "quota_used": queries_run,
