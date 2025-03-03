@@ -478,7 +478,7 @@ def get_confidence_interval_column(
     condition_in_aggregation = _get_condition_in_aggregation(aggregation)
 
     function_map_confidence_interval = {
-        # confidence interval = Z \cdot \sqrt{-log{(\frac{\sum_{i=1}^n \frac{1}{w_i}}{n})} \cdot \sum_{i=1}^n w_i^2 - w_i}
+        # confidence interval = Z \cdot \sqrt{\sum_{i=1}^n w_i^2 - w_i}
         #        ┌─────────────────────────┐
         #        │      ₙ
         #        │      ⎲  1
@@ -491,23 +491,20 @@ def get_confidence_interval_column(
         Function.FUNCTION_COUNT: f.multiply(
             z_value,
             f.sqrt(
-                f.multiply(
-                    f.negate(f.log(get_average_sample_rate_column(aggregation))),
-                    f.sumIf(
-                        f.minus(
-                            f.multiply(sampling_weight_column, sampling_weight_column),
-                            sampling_weight_column,
-                        ),
-                        and_cond(
-                            get_field_existence_expression(field),
-                            condition_in_aggregation,
-                        ),
+                f.sumIf(
+                    f.minus(
+                        f.multiply(sampling_weight_column, sampling_weight_column),
+                        sampling_weight_column,
                     ),
-                )
+                    and_cond(
+                        get_field_existence_expression(field),
+                        condition_in_aggregation,
+                    ),
+                ),
             ),
             **alias_dict,
         ),
-        # confidence interval = N * Z * \sqrt{\frac{\sum_{i=1}^n w_ix_i^2 - \frac{(\sum_{i=1}^n w_ix_i)^2}{N}}{n * N}}
+        # confidence interval = Z \cdot \sqrt{\sum_{i=1}^n x_i^2 \cdot (w_i^2 - w_i)}
         #              ┌────────────────────────────┐
         #              │              ₙ
         #              │              ⎲
@@ -518,62 +515,25 @@ def get_confidence_interval_column(
         # N * Z *    ╲ │────────────────────────────
         #             ╲│              n * N
         Function.FUNCTION_SUM: f.multiply(
-            column(f"{alias}_N"),
-            f.multiply(
-                z_value,
-                f.sqrt(
-                    f.divide(
+            z_value,
+            f.sqrt(
+                f.sumIf(
+                    f.multiply(
+                        f.multiply(field, field),
                         f.minus(
-                            f.sumIf(
-                                f.multiply(
-                                    sampling_weight_column,
-                                    f.multiply(field, field),
-                                ),
-                                and_cond(
-                                    get_field_existence_expression(field),
-                                    condition_in_aggregation,
-                                ),
-                            ),
-                            f.divide(
-                                f.multiply(
-                                    f.sumIf(
-                                        f.multiply(sampling_weight_column, field),
-                                        get_field_existence_expression(field),
-                                    ),
-                                    f.sumIf(
-                                        f.multiply(sampling_weight_column, field),
-                                        and_cond(
-                                            get_field_existence_expression(field),
-                                            condition_in_aggregation,
-                                        ),
-                                    ),
-                                ),
-                                column(f"{alias}_N"),
-                            ),
+                            f.multiply(sampling_weight_column, sampling_weight_column),
+                            sampling_weight_column,
                         ),
-                        f.multiply(
-                            f.sumIf(
-                                sampling_weight_column,
-                                and_cond(
-                                    get_field_existence_expression(field),
-                                    condition_in_aggregation,
-                                ),
-                                alias=f"{alias}_N",
-                            ),
-                            f.countIf(
-                                field,
-                                and_cond(
-                                    get_field_existence_expression(field),
-                                    condition_in_aggregation,
-                                ),
-                            ),
-                        ),
-                    )
+                    ),
+                    and_cond(
+                        get_field_existence_expression(field),
+                        condition_in_aggregation,
+                    ),
                 ),
             ),
             **alias_dict,
         ),
-        # confidence interval = Z * \sqrt{\frac{\sum_{i=1}^n w_ix_i^2 - \frac{(\sum_{i=1}^n w_ix_i)^2}{N}}{n * N}}
+        # confidence interval = Z * \sqrt{\frac{\sum_{i=1}^n x_i^2 \cdot (w_i^2 - w_i)}{N^2}}
         #          ┌────────────────────────────┐
         #          │              ₙ
         #          │              ⎲
@@ -587,35 +547,19 @@ def get_confidence_interval_column(
             z_value,
             f.sqrt(
                 f.divide(
-                    f.minus(
-                        f.sumIf(
-                            f.multiply(
+                    f.sumIf(
+                        f.multiply(
+                            f.multiply(field, field),
+                            f.minus(
+                                f.multiply(
+                                    sampling_weight_column, sampling_weight_column
+                                ),
                                 sampling_weight_column,
-                                f.multiply(field, field),
-                            ),
-                            and_cond(
-                                get_field_existence_expression(field),
-                                condition_in_aggregation,
                             ),
                         ),
-                        f.divide(
-                            f.multiply(
-                                f.sumIf(
-                                    f.multiply(sampling_weight_column, field),
-                                    and_cond(
-                                        get_field_existence_expression(field),
-                                        condition_in_aggregation,
-                                    ),
-                                ),
-                                f.sumIf(
-                                    f.multiply(sampling_weight_column, field),
-                                    and_cond(
-                                        get_field_existence_expression(field),
-                                        condition_in_aggregation,
-                                    ),
-                                ),
-                            ),
-                            column(f"{alias}_N"),
+                        and_cond(
+                            get_field_existence_expression(field),
+                            condition_in_aggregation,
                         ),
                     ),
                     f.multiply(
@@ -627,13 +571,7 @@ def get_confidence_interval_column(
                             ),
                             alias=f"{alias}_N",
                         ),
-                        f.countIf(
-                            field,
-                            and_cond(
-                                get_field_existence_expression(field),
-                                condition_in_aggregation,
-                            ),
-                        ),
+                        column(f"{alias}_N"),
                     ),
                 )
             ),
