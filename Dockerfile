@@ -87,11 +87,11 @@ COPY ./rust_snuba/Cargo.toml ./rust_snuba/Cargo.toml
 COPY ./rust_snuba/rust-toolchain.toml ./rust_snuba/rust-toolchain.toml
 COPY ./rust_snuba/Cargo.lock ./rust_snuba/Cargo.lock
 COPY ./scripts/rust-dummy-build.sh ./scripts/rust-dummy-build.sh
-RUN set -ex; cd ./rust_snuba/; rustup show active-toolchain || rustup toolchain install
 
 RUN set -ex; \
     sh scripts/rust-dummy-build.sh; \
     cd ./rust_snuba/; \
+    rustup show active-toolchain || rustup toolchain install; \
     maturin build --release --compatibility linux --locked
 
 FROM build_rust_snuba_base AS build_rust_snuba
