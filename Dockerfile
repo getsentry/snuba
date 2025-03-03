@@ -79,8 +79,6 @@ RUN set -ex; \
     echo '[registries.crates-io]' >> ~/.cargo/config; \
     echo 'protocol = "sparse"' >> ~/.cargo/config
 
-RUN set -ex; rustup toolchain install
-
 ENV PATH="/root/.cargo/bin/:${PATH}"
 
 FROM build_rust_snuba_base AS build_rust_snuba_deps
@@ -89,6 +87,7 @@ COPY ./rust_snuba/Cargo.toml ./rust_snuba/Cargo.toml
 COPY ./rust_snuba/rust-toolchain.toml ./rust_snuba/rust-toolchain.toml
 COPY ./rust_snuba/Cargo.lock ./rust_snuba/Cargo.lock
 COPY ./scripts/rust-dummy-build.sh ./scripts/rust-dummy-build.sh
+RUN set -ex; rustup toolchain install 
 
 RUN set -ex; \
     sh scripts/rust-dummy-build.sh; \
