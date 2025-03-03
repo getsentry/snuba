@@ -100,6 +100,7 @@ COPY --from=build_rust_snuba_deps /usr/src/snuba/rust_snuba/target/ ./rust_snuba
 COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
     cd ./rust_snuba/; \
+    rustup show active-toolchain || rustup toolchain install; \
     maturin build --release --compatibility linux --locked
 
 # Install nodejs and yarn and build the admin UI
