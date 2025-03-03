@@ -15,7 +15,7 @@ class Migration(migration.ClickhouseNodeMigration):
     This migration creates a table meant to store just the attributes seen in a particular org.
 
     * attr_type can either be "string" or "float"
-    * attr_value is null for float attributes
+    * attr_value is always an empty string for float attributes
     """
 
     blocking = False
@@ -36,9 +36,7 @@ class Migration(migration.ClickhouseNodeMigration):
             DateTime(modifiers=Modifiers(codecs=["DoubleDelta", "ZSTD(1)"])),
         ),
         Column("retention_days", UInt(16)),
-        Column(
-            "attr_value", String(modifiers=Modifiers(codecs=["ZSTD(1)"], nullable=True))
-        ),
+        Column("attr_value", String(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
     ]
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
@@ -88,7 +86,7 @@ FROM eap_items_1_local
 LEFT ARRAY JOIN
     arrayConcat(
         {", ".join(f"arrayMap(x -> tuple(x.1, x.2, 'string'), CAST(attributes_string_{n}, 'Array(Tuple(String, String))'))" for n in range(ITEM_ATTRIBUTE_BUCKETS))},
-        {",".join(f"arrayMap(x -> tuple(x, Null, 'float'), mapKeys(attributes_float_{n}))" for n in range(ITEM_ATTRIBUTE_BUCKETS))}
+        {",".join(f"arrayMap(x -> tuple(x, '', 'float'), mapKeys(attributes_float_{n}))" for n in range(ITEM_ATTRIBUTE_BUCKETS))}
     ) AS attrs
 GROUP BY
     organization_id,
