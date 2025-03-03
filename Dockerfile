@@ -87,6 +87,7 @@ COPY ./rust_snuba/Cargo.toml ./rust_snuba/Cargo.toml
 COPY ./rust_snuba/rust-toolchain.toml ./rust_snuba/rust-toolchain.toml
 COPY ./rust_snuba/Cargo.lock ./rust_snuba/Cargo.lock
 COPY ./scripts/rust-dummy-build.sh ./scripts/rust-dummy-build.sh
+RUN set -ex; cd ./rust_snuba/; rustup show active-toolchain 
 RUN set -ex; cd ./rust_snuba/; rustup install
 
 RUN set -ex; \
