@@ -141,7 +141,8 @@ def _convert_results(
     if (val := row.pop("trace_id")) is not None:
         attrs.append(
             TraceItemDetailsAttribute(
-                name="sentry.trace_id", value=AttributeValue(val_str=val)
+                name="sentry.trace_id",
+                value=AttributeValue(val_str=str(uuid.UUID(val))),
             )
         )
     if (val := row.pop("organization_id")) is not None:
