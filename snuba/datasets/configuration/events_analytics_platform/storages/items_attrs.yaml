@@ -19,8 +19,8 @@ schema:
       { name: attr_type, type: String, args: { schema_modifiers: [low_cardinality] } },
       { name: timestamp, type: DateTime },
       { name: retention_days, type: UInt, args: { size: 16 } },
-      # attr_value is null for 'float' attr_type
-      { name: attr_value, type: String, args: { schema_modifiers: [nullable] } },
+      # attr_value is always an empty string for 'float' attr_type
+      { name: attr_value, type: String },
     ]
   local_table_name: items_attrs_1_local
   dist_table_name: items_attrs_1_dist
