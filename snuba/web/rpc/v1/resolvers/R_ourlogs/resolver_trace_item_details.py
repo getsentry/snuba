@@ -59,6 +59,12 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             SelectedExpression(
                 "hex_item_id", f.hex(column("item_id"), alias="hex_item_id")
             ),
+            SelectedExpression("trace_id", column("trace_id", alias="trace_id")),
+            SelectedExpression(
+                "organization_id", column("organization_id", alias="organization_id")
+            ),
+            SelectedExpression("project_id", column("project_id", alias="project_id")),
+            SelectedExpression("item_type", column("item_type", alias="item_type")),
             SelectedExpression(
                 "attributes_string",
                 f.mapConcat(
@@ -131,6 +137,31 @@ def _convert_results(
     timestamp = Timestamp()
     timestamp.FromSeconds(dt)
     attrs = []
+
+    if (val := row.pop("trace_id")) is not None:
+        attrs.append(
+            TraceItemDetailsAttribute(
+                name="sentry.trace_id", value=AttributeValue(val_str=val)
+            )
+        )
+    if (val := row.pop("organization_id")) is not None:
+        attrs.append(
+            TraceItemDetailsAttribute(
+                name="sentry.organization_id", value=AttributeValue(val_int=val)
+            )
+        )
+    if (val := row.pop("project_id")) is not None:
+        attrs.append(
+            TraceItemDetailsAttribute(
+                name="sentry.project_id", value=AttributeValue(val_int=val)
+            )
+        )
+    if (val := row.pop("item_type")) is not None:
+        attrs.append(
+            TraceItemDetailsAttribute(
+                name="sentry.item_type", value=AttributeValue(val_int=val)
+            )
+        )
 
     for k, v in row["attributes_string"].items():
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_str=v)))
