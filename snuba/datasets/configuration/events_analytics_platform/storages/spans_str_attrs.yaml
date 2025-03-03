@@ -51,6 +51,10 @@ query_processors:
     args:
       columns: [trace_id]
   - processor: TupleUnaliaser
+  - processor: ClickhouseSettingsOverride
+    args:
+      settings:
+        max_execution_time: 30
 
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
