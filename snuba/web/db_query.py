@@ -479,12 +479,18 @@ def _raw_query(
         trigger_rate_limiter = None
         status = None
         request_status = get_request_status(cause)
+
+        calculated_cause = cause
         if isinstance(cause, RateLimitExceeded):
             status = QueryStatus.RATE_LIMITED
             trigger_rate_limiter = cause.extra_data.get("scope", "")
         elif isinstance(cause, ClickhouseError):
             error_code = cause.code
             status = get_query_status_from_error_codes(error_code)
+            if error_code == ErrorCodes.TOO_MANY_BYTES:
+                calculated_cause = RateLimitExceeded(
+                    "Query scanned more than the allocated amount of bytes"
+                )
 
             with configure_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
@@ -519,7 +525,7 @@ def _raw_query(
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
             },
-        ) from cause
+        ) from calculated_cause
     else:
         stats = update_with_status(
             status=QueryStatus.SUCCESS,

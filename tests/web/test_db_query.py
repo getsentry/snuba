@@ -1069,3 +1069,94 @@ def test_cache_metrics_with_simple_readthrough() -> None:
                 mock.call.increment("cache_hit_simple", tags={"dataset": "events"}),
             ]
         )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_policy_sets_max_bytes_to_read() -> None:
+    class MaxBytesPolicy(AllocationPolicy):
+        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+            return []
+
+        def _get_quota_allowance(
+            self, tenant_ids: dict[str, str | int], query_id: str
+        ) -> QuotaAllowance:
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=10,
+                explanation={},
+                is_throttled=True,
+                throttle_threshold=420,
+                rejection_threshold=42069,
+                quota_used=123,
+                quota_unit="concurrent_queries",
+                suggestion=NO_SUGGESTION,
+                max_bytes_to_read=1,
+            )
+
+        def _update_quota_balance(
+            self,
+            tenant_ids: dict[str, str | int],
+            query_id: str,
+            result_or_error: QueryResultOrError,
+        ) -> None:
+            pass
+
+    query, storage, attribution_info = _build_test_query(
+        "count(distinct(project_id))",
+        [
+            MaxBytesPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+        ],
+    )
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+    settings = HTTPQuerySettings()
+    db_query(
+        clickhouse_query=query,
+        query_settings=settings,
+        attribution_info=attribution_info,
+        dataset_name="events",
+        query_metadata_list=query_metadata_list,
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    )
+
+    assert stats["quota_allowance"] == {
+        "details": {
+            "MaxBytesPolicy": {
+                "can_run": True,
+                "explanation": {"storage_key": "StorageKey.DOESNTMATTER"},
+                "is_throttled": True,
+                "max_bytes_to_read": 1,
+                "max_threads": 10,
+                "quota_unit": "concurrent_queries",
+                "quota_used": 123,
+                "rejection_threshold": 42069,
+                "suggestion": "no_suggestion",
+                "throttle_threshold": 420,
+            }
+        },
+        "summary": {
+            "is_rejected": False,
+            "is_successful": False,
+            "is_throttled": True,
+            "max_bytes_to_read": 1,
+            "rejected_by": {},
+            "rejection_storage_key": None,
+            "threads_used": 10,
+            "throttle_storage_key": "StorageKey.DOESNTMATTER",
+            "throttled_by": {
+                "policy": "MaxBytesPolicy",
+                "quota_unit": "concurrent_queries",
+                "quota_used": 123,
+                "storage_key": "StorageKey.DOESNTMATTER",
+                "suggestion": "no_suggestion",
+                "throttle_threshold": 420,
+            },
+        },
+    }
