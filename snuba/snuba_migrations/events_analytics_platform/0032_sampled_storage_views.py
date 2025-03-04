@@ -109,8 +109,6 @@ indices: Sequence[AddIndicesData] = [
     )
 ]
 
-columns_str = ",".join(c.name for c in columns)
-
 
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 
