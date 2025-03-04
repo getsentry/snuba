@@ -55,7 +55,7 @@ jobs:
   publish-to-dockerhub:
     needs: build
     name: Publish Snuba to DockerHub
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4 # v3.1.0
       - name: Pull the test image
