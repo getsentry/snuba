@@ -136,7 +136,7 @@ def _build_query(request: GetTraceRequest) -> Query:
                 FunctionCall(
                     "trace_id",
                     "toUUID",
-                    literal(request.trace_id),
+                    (literal(request.trace_id),),
                 ),
             ),
         ),

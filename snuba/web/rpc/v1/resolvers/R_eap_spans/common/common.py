@@ -54,7 +54,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             return FunctionCall(
                 alias,
                 "toUUID",
-                column("trace_id"),
+                (column("trace_id"),),
             )
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as a string, got {attr_key.type}"
