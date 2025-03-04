@@ -479,12 +479,18 @@ def _raw_query(
         trigger_rate_limiter = None
         status = None
         request_status = get_request_status(cause)
+
+        calculated_cause = cause
         if isinstance(cause, RateLimitExceeded):
             status = QueryStatus.RATE_LIMITED
             trigger_rate_limiter = cause.extra_data.get("scope", "")
         elif isinstance(cause, ClickhouseError):
             error_code = cause.code
             status = get_query_status_from_error_codes(error_code)
+            if error_code == ErrorCodes.TOO_MANY_BYTES:
+                calculated_cause = RateLimitExceeded(
+                    "Query scanned more than the allocated amount of bytes"
+                )
 
             with configure_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
@@ -519,7 +525,7 @@ def _raw_query(
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
             },
-        ) from cause
+        ) from calculated_cause
     else:
         stats = update_with_status(
             status=QueryStatus.SUCCESS,
@@ -849,11 +855,23 @@ def _apply_allocation_policies_quota(
             key: quota_allowance.to_dict()
             for key, quota_allowance in quota_allowances.items()
         }
+
         stats["quota_allowance"] = {}
         stats["quota_allowance"]["details"] = allowance_dicts
 
         summary: dict[str, Any] = {}
         summary["threads_used"] = min_threads_across_policies
+
+        max_bytes_to_read = min(
+            [qa.max_bytes_to_read for qa in quota_allowances.values()],
+            key=lambda mb: float("inf") if mb == 0 else mb,
+        )
+        if max_bytes_to_read != 0:
+            query_settings.push_clickhouse_setting(
+                "max_bytes_to_read", max_bytes_to_read
+            )
+            summary["max_bytes_to_read"] = max_bytes_to_read
+
         _populate_query_status(
             summary, rejection_quota_and_policy, throttle_quota_and_policy
         )
@@ -878,6 +896,6 @@ def _apply_allocation_policies_quota(
                 "successful_query",
                 tags={"storage_key": allocation_policies[0].storage_key.value},
             )
-        max_threads = min(quota_allowances.values()).max_threads
+        max_threads = min_threads_across_policies
         span.set_data("max_threads", max_threads)
         query_settings.set_resource_quota(ResourceQuota(max_threads=max_threads))

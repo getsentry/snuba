@@ -293,3 +293,48 @@ def test_does_not_throttle_and_then_throttles(
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     assert allowance.is_throttled == True
     assert allowance.max_threads == MAX_THREAD_NUMBER // 2
+
+
+@pytest.mark.redis_db
+def test_limit_bytes_read(
+    policy: BytesScannedRejectingPolicy,
+) -> None:
+    tenant_ids = {
+        "project_id": 4505240668733440,
+        "referrer": "api.trace-explorer.stats",
+    }
+    scan_limit = 20000000000
+    threads_throttle_divider = 2
+    max_bytes_to_read_scan_limit_divider = 100
+    policy.set_config_value("threads_throttle_divider", threads_throttle_divider)
+    policy.set_config_value("bytes_throttle_divider", 100)
+    policy.set_config_value("limit_bytes_instead_of_rejecting", 1)
+    policy.set_config_value(
+        "max_bytes_to_read_scan_limit_divider", max_bytes_to_read_scan_limit_divider
+    )
+
+    policy.set_config_value(
+        "referrer_all_projects_scan_limit_override",
+        scan_limit,
+        {"referrer": "api.trace-explorer.stats"},
+    )
+
+    _configure_policy(policy)
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": scan_limit}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
+            ),
+            error=None,
+        ),
+    )
+
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.is_throttled
+    assert allowance.max_threads == MAX_THREAD_NUMBER // threads_throttle_divider
+    assert allowance.max_bytes_to_read == int(
+        scan_limit / max_bytes_to_read_scan_limit_divider
+    )

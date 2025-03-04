@@ -32,6 +32,35 @@ from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import override_entity_column_validator, write_unprocessed_events
 
 
+class MaxBytesPolicy123(AllocationPolicy):
+    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        return []
+
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(
+            can_run=True,
+            max_threads=0,
+            max_bytes_to_read=1,
+            explanation={},
+            is_throttled=True,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        return
+
+
 class RejectAllocationPolicy123(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return []
@@ -1306,6 +1335,39 @@ class TestSnQLApi(BaseApiTest):
             in data["sql"]
         )
 
+    def test_allocation_policy_max_bytes_to_read(self) -> None:
+        with patch(
+            "snuba.web.db_query._get_allocation_policies",
+            return_value=[
+                MaxBytesPolicy123(StorageKey("doesntmatter"), ["a", "b", "c"], {})
+            ],
+        ):
+            response = self.post(
+                "/discover/snql",
+                data=json.dumps(
+                    {
+                        "query": f"""MATCH (discover_events )
+                        SELECT count() AS count BY project_id, tags[custom_tag]
+                        WHERE type != 'transaction' AND project_id = {self.project_id}
+                        AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        ORDER BY count ASC
+                        LIMIT 1000""",
+                        "referrer": "myreferrer",
+                        "turbo": False,
+                        "consistent": True,
+                        "debug": True,
+                        "tenant_ids": {"referrer": "r", "organization_id": 123},
+                    }
+                ),
+            )
+            assert response.status_code == 429
+
+            assert (
+                response.json["error"]["message"]
+                == "Query scanned more than the allocated amount of bytes"
+            )
+
     def test_allocation_policy_violation(self) -> None:
         with patch(
             "snuba.web.db_query._get_allocation_policies",
@@ -1342,12 +1404,13 @@ class TestSnQLApi(BaseApiTest):
                             "storage_key": "StorageKey.DOESNTMATTER",
                         },
                         "is_throttled": False,
-                        "throttle_threshold": MAX_THRESHOLD,
-                        "rejection_threshold": MAX_THRESHOLD,
+                        "throttle_threshold": 1000000000000,
+                        "rejection_threshold": 1000000000000,
                         "quota_used": 0,
-                        "quota_unit": NO_UNITS,
-                        "suggestion": NO_SUGGESTION,
-                    },
+                        "quota_unit": "no_units",
+                        "suggestion": "no_suggestion",
+                        "max_bytes_to_read": 0,
+                    }
                 },
                 "summary": {
                     "threads_used": 0,
@@ -1367,10 +1430,6 @@ class TestSnQLApi(BaseApiTest):
                     "throttled_by": {},
                 },
             }
-
-            print("info")
-            print(info)
-
             assert (
                 response.json["error"]["message"]
                 == f"Query on could not be run due to allocation policies, info: {info}"
