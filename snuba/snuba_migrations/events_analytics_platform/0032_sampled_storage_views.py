@@ -112,10 +112,6 @@ indices: Sequence[AddIndicesData] = [
 columns_str = ",".join(c.name for c in columns)
 
 
-MV_QUERY_TEMPLATE = """
-    SELECT {columns_str} FROM eap_items_1_local WHERE cityHash64(trace_id) % {sample_rate} == 0
-"""
-
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 
 
@@ -125,14 +121,13 @@ class Migration(migration.ClickhouseNodeMigration):
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
     granularity = "8192"
 
-    sampling_tiers = {"1": 8, "2": 8**2, "3": 8**3}
+    sampling_rates = [8, 8**2, 8**3]
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
         ops = []
-        for sampling_tier, sample_rate in self.sampling_tiers.items():
-            local_table_name = f"eap_items_1_tier_{sampling_tier}_local"
-            dist_table_name = f"eap_items_1_tier_{sampling_tier}_dist"
-            mv_name = f"eap_items_1_tier_{sampling_tier}_mv"
+        for sample_rate in self.sampling_rates:
+            local_table_name = f"eap_items_1_downsample_{sample_rate}_local"
+            dist_table_name = f"eap_items_1_downsample_{sample_rate}_dist"
 
             ops.extend(
                 [
@@ -166,34 +161,18 @@ class Migration(migration.ClickhouseNodeMigration):
                         indices=indices,
                         target=OperationTarget.LOCAL,
                     ),
-                    operations.CreateMaterializedView(
-                        storage_set=self.storage_set_key,
-                        view_name=mv_name,
-                        columns=columns,
-                        destination_table_name=local_table_name,
-                        target=OperationTarget.LOCAL,
-                        query=MV_QUERY_TEMPLATE.format(
-                            columns_str=columns_str, sample_rate=sample_rate
-                        ),
-                    ),
                 ]
             )
         return ops
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
         ops = []
-        for sampling_tier in self.sampling_tiers:
-            local_table_name = f"eap_items_1_tier_{sampling_tier}_local"
-            dist_table_name = f"eap_items_1_tier_{sampling_tier}_dist"
-            mv_name = f"eap_items_1_tier_{sampling_tier}_mv"
+        for sample_rate in self.sampling_rates:
+            local_table_name = f"eap_items_1_downsample_{sample_rate}_local"
+            dist_table_name = f"eap_items_1_downsample_{sample_rate}_dist"
 
             ops.extend(
                 [
-                    operations.DropTable(
-                        storage_set=self.storage_set_key,
-                        table_name=mv_name,
-                        target=OperationTarget.LOCAL,
-                    ),
                     operations.DropTable(
                         storage_set=self.storage_set_key,
                         table_name=local_table_name,
