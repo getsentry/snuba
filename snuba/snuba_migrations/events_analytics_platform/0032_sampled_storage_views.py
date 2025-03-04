@@ -4,7 +4,7 @@ from snuba.clickhouse.columns import Array, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.operations import AddIndicesData, OperationTarget, SqlOperation
+from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.utils.schemas import UUID, Bool, DateTime, Float, Int, Map, String
 
 num_attr_buckets = 40
@@ -100,16 +100,6 @@ columns.extend(
 )
 
 
-indices: Sequence[AddIndicesData] = [
-    AddIndicesData(
-        name="bf_trace_id",
-        expression="trace_id",
-        type="bloom_filter",
-        granularity=1,
-    )
-]
-
-
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 
 
@@ -152,12 +142,6 @@ class Migration(migration.ClickhouseNodeMigration):
                             sharding_key="cityHash64(reinterpretAsUInt128(trace_id))",
                         ),
                         target=OperationTarget.DISTRIBUTED,
-                    ),
-                    operations.AddIndices(
-                        storage_set=storage_set_name,
-                        table_name=local_table_name,
-                        indices=indices,
-                        target=OperationTarget.LOCAL,
                     ),
                 ]
             )
