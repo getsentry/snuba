@@ -64,9 +64,6 @@ columns.extend(
             hash_map_column_name("string", i),
             Array(
                 UInt(64),
-                Modifiers(
-                    materialized=f"arrayMap(k -> cityHash64(k), mapKeys(attributes_string_{i}))",
-                ),
             ),
         )
         for i in range(num_attr_buckets)
@@ -96,9 +93,6 @@ columns.extend(
             hash_map_column_name("float", i),
             Array(
                 UInt(64),
-                Modifiers(
-                    materialized=f"arrayMap(k -> cityHash64(k), mapKeys(attributes_float_{i}))",
-                ),
             ),
         )
         for i in range(num_attr_buckets)
@@ -115,9 +109,11 @@ indices: Sequence[AddIndicesData] = [
     )
 ]
 
+columns_str = ",".join(c.name for c in columns)
+
 
 MV_QUERY_TEMPLATE = """
-    SELECT * FROM eap_items_1_local WHERE cityHash64(trace_id) % {sample_rate} == 0
+    SELECT {columns_str} FROM eap_items_1_local WHERE cityHash64(trace_id) % {sample_rate} == 0
 """
 
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
@@ -176,7 +172,9 @@ class Migration(migration.ClickhouseNodeMigration):
                         columns=columns,
                         destination_table_name=local_table_name,
                         target=OperationTarget.LOCAL,
-                        query=MV_QUERY_TEMPLATE.format(sample_rate=sample_rate),
+                        query=MV_QUERY_TEMPLATE.format(
+                            columns_str=columns_str, sample_rate=sample_rate
+                        ),
                     ),
                 ]
             )
