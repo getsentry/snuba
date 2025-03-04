@@ -144,7 +144,7 @@ class Migration(migration.ClickhouseNodeMigration):
                             primary_key="(organization_id, project_id, item_type, timestamp)",
                             order_by="(organization_id, project_id, item_type, timestamp, trace_id, item_id)",
                             partition_by="(retention_days, toMonday(timestamp))",
-                            settings={"index_granularity": "8192"},
+                            settings={"index_granularity": self.granularity},
                             storage_set=storage_set_name,
                             ttl="timestamp + toIntervalDay(retention_days)",
                         ),
@@ -182,7 +182,7 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
         ops = []
-        for sampling_tier, _ in self.sampling_tiers.items():
+        for sampling_tier in self.sampling_tiers:
             local_table_name = f"eap_items_1_tier_{sampling_tier}_local"
             dist_table_name = f"eap_items_1_tier_{sampling_tier}_dist"
             mv_name = f"eap_items_1_tier_{sampling_tier}_mv"
