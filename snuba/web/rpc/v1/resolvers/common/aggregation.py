@@ -540,11 +540,16 @@ def _get_ci_avg(
     confidence interval = (\\frac{t + err_t}{c - err_c} - \\frac{t - err_t}{c + err_c}) \cdot 0.5
 
      t + err_t   t - err_t
-    (───────── - ─────────) ⋅0.5
+    (───────── - ─────────) ⋅ 0.5
      c - err_c   c + err_c
 
     where t is the estimated sum, c is the estimated count, and err_* are the
     confidence intervals for the sum and count respectively.
+
+    This uses the 97.5% confidence interval for the sum and count and computes
+    the spread between the individually computed upper and the lower bounds:
+    max_sum / min_count - min_sum / max_count. Then, we use half of this range
+    as the confidence interval for average.
     """
 
     field = attribute_key_to_expression(aggregation.key)
