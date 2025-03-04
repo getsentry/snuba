@@ -1404,12 +1404,13 @@ class TestSnQLApi(BaseApiTest):
                             "storage_key": "StorageKey.DOESNTMATTER",
                         },
                         "is_throttled": False,
-                        "throttle_threshold": MAX_THRESHOLD,
-                        "rejection_threshold": MAX_THRESHOLD,
+                        "throttle_threshold": 1000000000000,
+                        "rejection_threshold": 1000000000000,
                         "quota_used": 0,
-                        "quota_unit": NO_UNITS,
-                        "suggestion": NO_SUGGESTION,
-                    },
+                        "quota_unit": "no_units",
+                        "suggestion": "no_suggestion",
+                        "max_bytes_to_read": 0,
+                    }
                 },
                 "summary": {
                     "threads_used": 0,
@@ -1429,7 +1430,6 @@ class TestSnQLApi(BaseApiTest):
                     "throttled_by": {},
                 },
             }
-
             assert (
                 response.json["error"]["message"]
                 == f"Query on could not be run due to allocation policies, info: {info}"
