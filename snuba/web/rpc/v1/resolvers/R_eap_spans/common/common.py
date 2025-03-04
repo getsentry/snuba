@@ -8,7 +8,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 from snuba.query import Query
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal, literals_array
-from snuba.query.expressions import Expression, SubscriptableReference
+from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 # These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse
@@ -51,7 +51,11 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
     if attr_key.name == "sentry.trace_id":
         if attr_key.type == AttributeKey.Type.TYPE_STRING:
-            return f.CAST(column("trace_id"), "String", alias=alias)
+            return FunctionCall(
+                alias,
+                "toUUID",
+                column("trace_id"),
+            )
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as a string, got {attr_key.type}"
         )

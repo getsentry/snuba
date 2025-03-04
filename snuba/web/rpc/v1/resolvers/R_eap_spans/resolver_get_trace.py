@@ -133,7 +133,11 @@ def _build_query(request: GetTraceRequest) -> Query:
                     "String",
                     alias="trace_id",
                 ),
-                literal(request.trace_id),
+                FunctionCall(
+                    "trace_id",
+                    "toUUID",
+                    literal(request.trace_id),
+                ),
             ),
         ),
         order_by=[
