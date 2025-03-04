@@ -134,9 +134,9 @@ class Migration(migration.ClickhouseNodeMigration):
     def forwards_ops(self) -> Sequence[SqlOperation]:
         ops = []
         for sampling_tier, sample_rate in self.sampling_tiers.items():
-            local_table_name = f"eap_items_1_{sampling_tier}_local"
-            dist_table_name = f"eap_items_1_{sampling_tier}_dist"
-            mv_name = f"eap_items_1_{sampling_tier}_mv"
+            local_table_name = f"eap_items_1_tier_{sampling_tier}_local"
+            dist_table_name = f"eap_items_1_tier_{sampling_tier}_dist"
+            mv_name = f"eap_items_1_tier_{sampling_tier}_mv"
 
             ops.extend(
                 [
@@ -185,9 +185,9 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_ops(self) -> Sequence[SqlOperation]:
         ops = []
         for sampling_tier, _ in self.sampling_tiers.items():
-            local_table_name = f"eap_items_1_{sampling_tier}_local"
-            dist_table_name = f"eap_items_1_{sampling_tier}_dist"
-            mv_name = f"eap_items_1_{sampling_tier}_mv"
+            local_table_name = f"eap_items_1_tier_{sampling_tier}_local"
+            dist_table_name = f"eap_items_1_tier_{sampling_tier}_dist"
+            mv_name = f"eap_items_1_tier_{sampling_tier}_mv"
 
             ops.extend(
                 [
