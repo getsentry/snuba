@@ -216,9 +216,6 @@ allocation_policies:
 
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
-  - processor: UUIDColumnProcessor
-    args:
-      columns: [trace_id]
   - processor: PrewhereProcessor
     args:
       prewhere_candidates:
