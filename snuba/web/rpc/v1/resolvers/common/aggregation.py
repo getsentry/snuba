@@ -569,24 +569,23 @@ def _get_ci_avg(
         alias=f"{alias}__count",
     )
 
-    return f.multiply(
-        f.minus(
-            f.divide(
-                f.plus(
-                    expr_sum,
-                    _get_ci_sum(aggregation, f"{alias}__sum_err", Z_VALUE_P975),
+    expr_sum_err = _get_ci_sum(aggregation, f"{alias}__sum_err", Z_VALUE_P975)
+    expr_count_err = _get_ci_count(aggregation, f"{alias}__count_err", Z_VALUE_P975)
+
+    return f.divide(
+        f.abs(
+            f.minus(
+                f.divide(
+                    f.plus(expr_sum, expr_sum_err),
+                    f.minus(expr_count, expr_count_err),
                 ),
-                f.minus(
-                    expr_count,
-                    _get_ci_count(aggregation, f"{alias}__count_err", Z_VALUE_P975),
+                f.divide(
+                    f.minus(column(f"{alias}__sum"), column(f"{alias}__sum_err")),
+                    f.plus(column(f"{alias}__count"), column(f"{alias}__count_err")),
                 ),
-            ),
-            f.divide(
-                f.minus(column(f"{alias}__sum"), column(f"{alias}__sum_err")),
-                f.minus(column(f"{alias}__count"), column(f"{alias}__count_err")),
             ),
         ),
-        0.5,
+        2,
         **alias_dict,
     )
 
