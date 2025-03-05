@@ -40,7 +40,7 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
     "sentry.end_timestamp",
 }
 
-COLLUMN_PREFIX: str = "sentry."
+COLUMN_PREFIX: str = "sentry."
 
 NORMALIZED_COLUMNS_EAP_ITEMS: Final[
     Mapping[str, Sequence[AttributeKey.Type.ValueType]]
@@ -109,7 +109,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
             )
 
         return f.CAST(
-            column(attr_key.name[len(COLLUMN_PREFIX) :]),
+            column(attr_key.name[len(COLUMN_PREFIX) :]),
             PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
             alias=alias,
         )
