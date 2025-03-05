@@ -116,6 +116,7 @@ BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timed
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
+    items_storage = get_storage(StorageKey("eap_items"))
     start = BASE_TIME
     messages = [
         gen_message(
@@ -125,6 +126,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
         for i in range(120)
     ]
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
 @pytest.mark.clickhouse_db

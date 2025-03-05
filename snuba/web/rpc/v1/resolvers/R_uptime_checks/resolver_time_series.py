@@ -184,9 +184,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
                         name=expr.conditional_aggregation.label,
                         expression=aggregation_to_expression(
                             expr.conditional_aggregation,
-                            attribute_key_to_expression(
-                                expr.conditional_aggregation.key
-                            ),
+                            attribute_key_to_expression,
                         ),
                     )
                 )
