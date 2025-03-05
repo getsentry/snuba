@@ -77,8 +77,8 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
 
 
 def use_eap_items_table(request_meta: RequestMeta) -> bool:
-    if request_meta.referrer.startswith("force_use_eap_items_table"):
-        return True
+    if request_meta.referrer.startswith("force_use_eap_spans_table"):
+        return False
 
     use_eap_items_table_start_timestamp_seconds = state.get_int_config(
         "use_eap_items_table_start_timestamp_seconds"
