@@ -125,3 +125,11 @@ class TestCommon:
         assert not use_eap_items_table(
             RequestMeta(start_timestamp=Timestamp(seconds=9))
         )
+
+        snuba_set_config("use_eap_items_table", False)
+        assert use_eap_items_table(
+            RequestMeta(
+                start_timestamp=Timestamp(seconds=5),
+                referrer="force_use_eap_items_table.test",
+            )
+        )

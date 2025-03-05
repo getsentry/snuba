@@ -45,18 +45,18 @@ COLUMN_PREFIX: str = "sentry."
 NORMALIZED_COLUMNS_EAP_ITEMS: Final[
     Mapping[str, Sequence[AttributeKey.Type.ValueType]]
 ] = {
-    "sentry.organization_id": [AttributeKey.Type.TYPE_INT],
-    "sentry.project_id": [AttributeKey.Type.TYPE_INT],
-    "sentry.timestamp": [
+    f"{COLUMN_PREFIX}organization_id": [AttributeKey.Type.TYPE_INT],
+    f"{COLUMN_PREFIX}project_id": [AttributeKey.Type.TYPE_INT],
+    f"{COLUMN_PREFIX}timestamp": [
         AttributeKey.Type.TYPE_FLOAT,
         AttributeKey.Type.TYPE_DOUBLE,
         AttributeKey.Type.TYPE_INT,
         AttributeKey.Type.TYPE_STRING,
     ],
-    "sentry.trace_id": [
+    f"{COLUMN_PREFIX}trace_id": [
         AttributeKey.Type.TYPE_STRING
     ],  # this gets converted from a uuid to a string in a storage processor
-    "sentry.item_id": [AttributeKey.Type.TYPE_STRING],
+    f"{COLUMN_PREFIX}item_id": [AttributeKey.Type.TYPE_STRING],
 }
 
 PROTO_TYPE_TO_CLICKHOUSE_TYPE: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
@@ -77,6 +77,9 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
 
 
 def use_eap_items_table(request_meta: RequestMeta) -> bool:
+    if request_meta.referrer.startswith("force_use_eap_items_table"):
+        return True
+
     use_eap_items_table_start_timestamp_seconds = state.get_int_config(
         "use_eap_items_table_start_timestamp_seconds"
     )
@@ -115,11 +118,26 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
         )
 
     if attr_key.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
-        return SubscriptableReference(
-            column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
-            key=literal(attr_key.name),
-            alias=alias,
-        )
+        if attr_key.type == AttributeKey.Type.TYPE_BOOLEAN:
+            return f.CAST(
+                SubscriptableReference(
+                    column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
+                    key=literal(attr_key.name),
+                    alias=alias,
+                ),
+                "Nullable(Boolean)",
+                alias=alias,
+            )
+        elif attr_key.type == AttributeKey.Type.TYPE_INT:
+            return f.CAST(
+                SubscriptableReference(
+                    column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
+                    key=literal(attr_key.name),
+                    alias=alias,
+                ),
+                "Nullable(Int64)",
+                alias=alias,
+            )
 
     raise BadSnubaRPCRequestException(
         f"Attribute {attr_key.name} has an unknown type: {AttributeKey.Type.Name(attr_key.type)}"

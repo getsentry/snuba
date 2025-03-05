@@ -12,6 +12,7 @@ from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
+    AttributeKey,
     ExtrapolationMode,
     Function,
     Reliability,
@@ -42,7 +43,7 @@ _FLOATING_POINT_PRECISION = 9
 
 def _get_condition_in_aggregation(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[Any], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> Expression:
     condition_in_aggregation: Expression = literal(True)
     if isinstance(aggregation, AttributeConditionalAggregation):
@@ -268,7 +269,7 @@ def get_attribute_confidence_interval_alias(
 
 def get_average_sample_rate_column(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[Any], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> Expression:
     alias = CustomColumnInformation(
         custom_column_id="average_sample_rate",
@@ -304,7 +305,7 @@ def _get_count_column_alias(
 
 def get_count_column(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[Any], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> Expression:
     field = attribute_key_to_expression(aggregation.key)
     return f.countIf(
@@ -338,7 +339,7 @@ def _get_possible_percentiles(
 def _get_possible_percentiles_expression(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
     percentile: float,
-    attribute_key_to_expression: Callable[[Any], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
     granularity: float = 0.005,
     width: float = 0.1,
 ) -> Expression:
@@ -368,7 +369,7 @@ def _get_possible_percentiles_expression(
 def get_extrapolated_function(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
     field: Expression,
-    attribute_key_to_expression: Callable[[Any], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> CurriedFunctionCall | FunctionCall | None:
     sampling_weight_column = column("sampling_weight")
     alias = aggregation.label if aggregation.label else None
@@ -471,7 +472,7 @@ def get_extrapolated_function(
 
 def get_confidence_interval_column(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[Any], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> Expression | None:
     """
     Returns the expression for calculating the upper confidence limit for a given aggregation. If the aggregation cannot be extrapolated, returns None.
@@ -702,7 +703,7 @@ def _calculate_approximate_ci_percentile_levels(
 
 def aggregation_to_expression(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[Any], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> Expression:
     field = attribute_key_to_expression(aggregation.key)
     alias = aggregation.label if aggregation.label else None
