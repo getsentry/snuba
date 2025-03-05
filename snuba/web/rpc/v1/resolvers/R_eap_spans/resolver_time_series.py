@@ -243,16 +243,21 @@ def _get_reliability_context_columns(
     return additional_context_columns
 
 
-def _proto_expression_to_ast_expression(expr: ProtoExpression) -> Expression:
+def _proto_expression_to_ast_expression(
+    expr: ProtoExpression, request_meta: RequestMeta
+) -> Expression:
     match expr.WhichOneof("expression"):
         case "conditional_aggregation":
             return aggregation_to_expression(
-                expr.conditional_aggregation, attribute_key_to_expression
+                expr.conditional_aggregation,
+                attribute_key_to_expression_eap_items
+                if use_eap_items_table(request_meta)
+                else attribute_key_to_expression,
             )
         case "formula":
             formula_expr = OP_TO_EXPR[expr.formula.op](
-                _proto_expression_to_ast_expression(expr.formula.left),
-                _proto_expression_to_ast_expression(expr.formula.right),
+                _proto_expression_to_ast_expression(expr.formula.left, request_meta),
+                _proto_expression_to_ast_expression(expr.formula.right, request_meta),
             )
             formula_expr = replace(formula_expr, alias=expr.label)
             return formula_expr
@@ -278,7 +283,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     aggregation_columns = [
         SelectedExpression(
             name=expr.label,
-            expression=_proto_expression_to_ast_expression(expr),
+            expression=_proto_expression_to_ast_expression(expr, request.meta),
         )
         for expr in request.expressions
     ]

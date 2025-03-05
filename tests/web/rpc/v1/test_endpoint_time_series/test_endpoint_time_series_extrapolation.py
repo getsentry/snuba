@@ -764,6 +764,8 @@ class TestTimeSeriesApiWithExtrapolationEAPItems(TestTimeSeriesApiWithExtrapolat
     """
 
     @pytest.fixture(autouse=True)
-    def use_readonly_table(self, snuba_set_config: SnubaSetConfig) -> None:
+    def use_eap_items_table(
+        self, snuba_set_config: SnubaSetConfig, redis_db: None
+    ) -> None:
         snuba_set_config("use_eap_items_table", True)
         snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)

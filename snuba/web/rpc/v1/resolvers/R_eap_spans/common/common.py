@@ -53,7 +53,9 @@ NORMALIZED_COLUMNS_EAP_ITEMS: Final[
         AttributeKey.Type.TYPE_INT,
         AttributeKey.Type.TYPE_STRING,
     ],
-    "sentry.trace_id": [AttributeKey.Type.TYPE_STRING],
+    "sentry.trace_id": [
+        AttributeKey.Type.TYPE_STRING
+    ],  # this gets converted from a uuid to a string in a storage processor
     "sentry.item_id": [AttributeKey.Type.TYPE_STRING],
 }
 
