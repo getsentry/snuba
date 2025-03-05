@@ -15,7 +15,7 @@ class TestCommon:
                 type=AttributeKey.TYPE_STRING,
                 name="sentry.trace_id",
             ),
-        ) == f.toUUID(column("trace_id"), alias="sentry.trace_id_TYPE_STRING")
+        ) == f.CAST(column("trace_id"), "String", alias="sentry.trace_id_TYPE_STRING")
 
     def test_timestamp_columns(self) -> None:
         for col in [

@@ -343,6 +343,7 @@ class TestGetTraces(BaseApiTest):
     def test_with_data_and_aggregated_fields_all_keys(
         self, setup_teardown: Any
     ) -> None:
+
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
