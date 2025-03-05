@@ -36,7 +36,7 @@ sampling_weight_column = column("sampling_weight")
 z_value = 1.96
 
 PERCENTILE_PRECISION = 100000
-CONFIDENCE_INTERVAL_THRESHOLD = 1.5
+CONFIDENCE_INTERVAL_THRESHOLD = 0.5
 
 CUSTOM_COLUMN_PREFIX = "__snuba_custom_column__"
 
@@ -151,7 +151,7 @@ class GenericExtrapolationContext(ExtrapolationContext):
             return Reliability.RELIABILITY_UNSPECIFIED
 
         relative_confidence = (
-            (self.value + self.confidence_interval) / self.value
+            abs(self.confidence_interval / self.value)
             if self.value != 0
             else float("inf")
         )
@@ -182,10 +182,12 @@ class PercentileExtrapolationContext(ExtrapolationContext):
         )
         ci_lower = self.confidence_interval[percentile_index_lower]
         ci_upper = self.confidence_interval[percentile_index_upper]
-        relative_confidence = max(
-            self.value / ci_lower if ci_lower != 0 else float("inf"),
-            ci_upper / self.value if self.value != 0 else float("inf"),
+
+        max_err = max(self.value - ci_lower, ci_upper - self.value)
+        relative_confidence = (
+            abs(max_err / self.value) if self.value != 0 else float("inf")
         )
+
         if relative_confidence <= CONFIDENCE_INTERVAL_THRESHOLD:
             return Reliability.RELIABILITY_HIGH
         return Reliability.RELIABILITY_LOW
