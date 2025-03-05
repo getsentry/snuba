@@ -182,10 +182,6 @@ def divide(
     return FunctionCall(alias, "divide", (lhs, rhs))
 
 
-def abs(lhs: Expression, alias: Optional[str] = None) -> FunctionCall:
-    return FunctionCall(alias, "abs", (lhs,))
-
-
 def if_in(
     lhs: Expression, rhs: Expression, alias: Optional[str] = None
 ) -> FunctionCall:
