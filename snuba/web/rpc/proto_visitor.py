@@ -183,13 +183,3 @@ class AggregationToConditionalAggregationVisitor(ProtoVisitor):
         _convert_aggregation_to_conditional_aggregation(
             time_series_expression_wrapper.underlying_proto
         )
-
-
-class ContainsAggregateVisitor(ProtoVisitor):
-    def __init__(self) -> None:
-        super().__init__()
-        self.contains_aggregate = False
-
-    def visit_ColumnWrapper(self, column_wrapper: ColumnWrapper) -> None:
-        if column_wrapper.underlying_proto.HasField("conditional_aggregation"):
-            self.contains_aggregate = True
