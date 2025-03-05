@@ -88,15 +88,6 @@ LEFT ARRAY JOIN
         {", ".join(f"arrayMap(x -> tuple(x.1, x.2, 'string'), CAST(attributes_string_{n}, 'Array(Tuple(String, String))'))" for n in range(ITEM_ATTRIBUTE_BUCKETS))},
         {",".join(f"arrayMap(x -> tuple(x, '', 'float'), mapKeys(attributes_float_{n}))" for n in range(ITEM_ATTRIBUTE_BUCKETS))}
     ) AS attrs
-GROUP BY
-    organization_id,
-    project_id,
-    item_type,
-    attr_key,
-    attr_value,
-    attr_type,
-    timestamp,
-    retention_days
 """,
             ),
         ]
