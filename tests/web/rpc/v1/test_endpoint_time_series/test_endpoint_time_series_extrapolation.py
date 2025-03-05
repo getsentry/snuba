@@ -369,13 +369,14 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         query_duration = 3600
         store_timeseries(
             BASE_TIME,
-            1,
+            # accuracy of counts depends on sample count and heterogenity of
+            # sample rates. In this case, we artificially reduce the number of
+            # samples to drive up the relative error.
+            10,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
             measurements=[
-                DummyMeasurement(
-                    "client_sample_rate", get_value=lambda s: 0.0001
-                )  # 0.01% sample rate should result in unreliable extrapolation
+                DummyMeasurement("client_sample_rate", get_value=lambda s: 0.0001)
             ],
         )
 
@@ -412,11 +413,11 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 buckets=expected_buckets,
                 data_points=[
                     DataPoint(
-                        data=120 / 0.0001,
+                        data=12 / 0.0001,
                         data_present=True,
                         reliability=Reliability.RELIABILITY_LOW,
                         avg_sampling_rate=0.0001,
-                        sample_count=120,
+                        sample_count=12,
                     )
                     for _ in range(len(expected_buckets))
                 ],

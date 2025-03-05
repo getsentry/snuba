@@ -465,8 +465,8 @@ def get_extrapolated_function(
 
 def _get_ci_count(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
-    z_value: float,
     alias: str | None = None,
+    z_value: float = Z_VALUE_P95,
 ) -> Expression:
     """
     confidence interval = Z \cdot \sqrt{\sum_{i=1}^n w_i^2 - w_i}
@@ -482,6 +482,7 @@ def _get_ci_count(
 
     field = attribute_key_to_expression(aggregation.key)
     condition_in_aggregation = _get_condition_in_aggregation(aggregation)
+    alias_dict = {"alias": alias} if alias else {}
 
     variance = f.sumIf(
         f.minus(
@@ -494,13 +495,13 @@ def _get_ci_count(
         ),
     )
 
-    return f.multiply(z_value, f.sqrt(variance), alias=alias)
+    return f.multiply(z_value, f.sqrt(variance), **alias_dict)
 
 
 def _get_ci_sum(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
-    z_value: float,
     alias: str | None = None,
+    z_value: float = Z_VALUE_P95,
 ) -> Expression:
     """
     confidence interval = Z \cdot \sqrt{\sum_{i=1}^n x_i^2 \cdot (w_i^2 - w_i)}
@@ -514,6 +515,7 @@ def _get_ci_sum(
 
     field = attribute_key_to_expression(aggregation.key)
     condition_in_aggregation = _get_condition_in_aggregation(aggregation)
+    alias_dict = {"alias": alias} if alias else {}
 
     variance = f.sumIf(
         f.multiply(
@@ -529,7 +531,7 @@ def _get_ci_sum(
         ),
     )
 
-    return f.multiply(z_value, f.sqrt(variance), alias=alias)
+    return f.multiply(z_value, f.sqrt(variance), **alias_dict)
 
 
 def _get_ci_avg(
@@ -554,16 +556,17 @@ def _get_ci_avg(
 
     field = attribute_key_to_expression(aggregation.key)
     condition_in_aggregation = _get_condition_in_aggregation(aggregation)
+    alias_dict = {"alias": alias} if alias else {}
 
     expr_sum = f.sumIfOrNull(
         f.multiply(field, sampling_weight_column),
         and_cond(get_field_existence_expression(field), condition_in_aggregation),
-        alias=f"{alias}_sum",
+        alias=f"{alias}__sum",
     )
     expr_count = f.sumIfOrNull(
         sampling_weight_column,
         and_cond(get_field_existence_expression(field), condition_in_aggregation),
-        alias=f"{alias}_count",
+        alias=f"{alias}__count",
     )
 
     return f.multiply(
@@ -571,20 +574,20 @@ def _get_ci_avg(
             f.divide(
                 f.plus(
                     expr_sum,
-                    _get_ci_sum(aggregation, Z_VALUE_P975, f"{alias}_sum_ci"),
+                    _get_ci_sum(aggregation, f"{alias}__sum_err", Z_VALUE_P975),
                 ),
                 f.minus(
                     expr_count,
-                    _get_ci_count(aggregation, Z_VALUE_P975, f"{alias}_count_ci"),
+                    _get_ci_count(aggregation, f"{alias}__count_err", Z_VALUE_P975),
                 ),
             ),
             f.divide(
-                f.minus(column(f"{alias}_sum"), column(f"{alias}_sum_ci")),
-                f.minus(column(f"{alias}_count"), column(f"{alias}_count_ci")),
+                f.minus(column(f"{alias}__sum"), column(f"{alias}__sum_err")),
+                f.minus(column(f"{alias}__count"), column(f"{alias}__count_err")),
             ),
         ),
         0.5,
-        alias=alias,
+        **alias_dict,
     )
 
 
@@ -599,8 +602,8 @@ def get_confidence_interval_column(
     alias = get_attribute_confidence_interval_alias(aggregation)
 
     function_map_confidence_interval = {
-        Function.FUNCTION_COUNT: _get_ci_count(aggregation, Z_VALUE_P95, alias),
-        Function.FUNCTION_SUM: _get_ci_sum(aggregation, Z_VALUE_P95, alias),
+        Function.FUNCTION_COUNT: _get_ci_count(aggregation, alias),
+        Function.FUNCTION_SUM: _get_ci_sum(aggregation, alias),
         Function.FUNCTION_AVG: _get_ci_avg(aggregation, alias),
         Function.FUNCTION_P50: _get_possible_percentiles_expression(aggregation, 0.5),
         Function.FUNCTION_P75: _get_possible_percentiles_expression(aggregation, 0.75),
