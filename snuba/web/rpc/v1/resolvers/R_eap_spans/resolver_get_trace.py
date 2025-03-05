@@ -19,7 +19,6 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
-from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, equals, literal
 from snuba.query.expressions import FunctionCall
 from snuba.query.logical import Query
@@ -128,13 +127,9 @@ def _build_query(request: GetTraceRequest) -> Query:
                 request.meta.end_timestamp.seconds,
             ),
             equals(
-                f.cast(
-                    column("trace_id"),
-                    "String",
-                    alias="trace_id",
-                ),
+                column("trace_id"),
                 FunctionCall(
-                    "trace_id",
+                    None,
                     "toUUID",
                     (literal(request.trace_id),),
                 ),
