@@ -656,17 +656,13 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         measurement_sums = [v.val_double for v in response.column_values[1].results]
         measurement_reliabilities = [v for v in response.column_values[1].reliabilities]
         assert measurement_sums == [sum(range(5))]
-        assert measurement_reliabilities == [
-            Reliability.RELIABILITY_LOW,
-        ]  # low reliability due to low sample count
+        assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
         measurement_avgs = [v.val_double for v in response.column_values[2].results]
         measurement_reliabilities = [v for v in response.column_values[2].reliabilities]
         assert len(measurement_avgs) == 1
         assert measurement_avgs[0] == sum(range(5)) / 5
-        assert measurement_reliabilities == [
-            Reliability.RELIABILITY_LOW,
-        ]  # low reliability due to low sample count
+        assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
         measurement_counts = [v.val_double for v in response.column_values[3].results]
         measurement_reliabilities = [v for v in response.column_values[3].reliabilities]
@@ -777,17 +773,13 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         measurement_sums = [v.val_double for v in response.column_values[1].results]
         measurement_reliabilities = [v for v in response.column_values[1].reliabilities]
         assert measurement_sums == [sum(range(5))]
-        assert measurement_reliabilities == [
-            Reliability.RELIABILITY_LOW,
-        ]  # low reliability due to low sample count
+        assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
         measurement_avgs = [v.val_double for v in response.column_values[2].results]
         measurement_reliabilities = [v for v in response.column_values[2].reliabilities]
         assert len(measurement_avgs) == 1
         assert measurement_avgs[0] == sum(range(5)) / 5
-        assert measurement_reliabilities == [
-            Reliability.RELIABILITY_LOW,
-        ]  # low reliability due to low sample count
+        assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
         measurement_counts = [v.val_double for v in response.column_values[3].results]
         measurement_reliabilities = [v for v in response.column_values[3].reliabilities]
