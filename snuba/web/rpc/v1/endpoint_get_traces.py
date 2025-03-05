@@ -249,6 +249,8 @@ def _convert_results(
         ] = defaultdict(TraceAttribute)
         for attribute in request.attributes:
             value = row[_ATTRIBUTES[attribute.key][0]]
+            if attribute.key == TraceAttribute.Key.KEY_TRACE_ID:
+                value = uuid.UUID(value).hex
             type = _ATTRIBUTES[attribute.key][1]
             values[attribute.key] = TraceAttribute(
                 key=attribute.key,
