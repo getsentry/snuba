@@ -12,6 +12,7 @@ from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
+    ContainsAggregateVisitor,
     TraceItemTableRequestWrapper,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
@@ -47,9 +48,11 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
         [c.key.name for c in in_msg.columns if c.HasField("key")]
     )
     grouped_by_columns = set([c.name for c in in_msg.group_by])
-    aggregation_present = any(
-        [c for c in in_msg.columns if c.HasField("conditional_aggregation")]
-    )
+
+    vis = ContainsAggregateVisitor()
+    TraceItemTableRequestWrapper(in_msg).accept(vis)
+    aggregation_present = vis.contains_aggregate
+
     if non_aggregted_columns != grouped_by_columns and aggregation_present:
         raise BadSnubaRPCRequestException(
             f"Non aggregated columns should be in group_by. non_aggregated_columns: {non_aggregted_columns}, grouped_by_columns: {grouped_by_columns}"
