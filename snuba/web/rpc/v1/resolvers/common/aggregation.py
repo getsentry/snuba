@@ -477,7 +477,15 @@ def _get_ci_count(
     Z ⋅ ╲ │ ⎳  wᵢ - wᵢ
          ╲│ⁱ⁼¹
 
-    where w_i is the sampling weight for the i-th event and n is the number of events.
+    where w_i is the sampling weight for the i-th event and n is the number of
+    events. This is based on the Horvitz-Thompson estimator for totals of
+    weighted samples:
+     1. Since we're counting, the value of each event is 1, which removes the
+        value from the formula.
+     2. The sampling weight is the inverse of the inclusion probability
+        (sampling rate).
+     3. Samples undergo independent Bernulli trials, which means the term for
+        dependent inclusion probabilities from the HT formula zero out.
     """
 
     field = attribute_key_to_expression(aggregation.key)
@@ -511,6 +519,10 @@ def _get_ci_sum(
        ╲  │ ⎲   2    2
     Z ⋅ ╲ │ ⎳  xᵢ ⋅(wᵢ - wᵢ)
          ╲│ⁱ⁼¹
+
+    Just like for counts, we use the Horvitz-Thompson estimator for totals of
+    weighted samples. In this case, the value of each event contributes to the
+    variance of the total.
     """
 
     field = attribute_key_to_expression(aggregation.key)
@@ -548,10 +560,17 @@ def _get_ci_avg(
     where t is the estimated sum, c is the estimated count, and err_* are the
     confidence intervals for the sum and count respectively.
 
-    This uses the 97.5% confidence interval for the sum and count and computes
-    the spread between the individually computed upper and the lower bounds:
-    max_sum / min_count - min_sum / max_count. Then, we use half of this range
-    as the confidence interval for average.
+    Since the average is `total / count`, we can combine the two individual
+    confidence intervals into bounds for the average using the Bonferroni
+    Method:
+     - Upper bound: `total_upper / count_lower`
+     - Lower bound: `total_lower / count_upper`
+
+    However, since the intervals are combined, they each have to be half as
+    wide, thus 97.5%, to combine into a 95% confidence interval.
+
+    Finally, we take half of the range between the upper and lower bounds as the
+    average between the upper and lower error.
     """
 
     field = attribute_key_to_expression(aggregation.key)
