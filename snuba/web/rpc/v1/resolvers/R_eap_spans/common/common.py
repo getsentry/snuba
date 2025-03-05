@@ -1,4 +1,4 @@
-from typing import Any, Final, Mapping, Sequence, Set
+from typing import Final, Mapping, Sequence, Set
 
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
@@ -42,17 +42,19 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
 
 COLLUMN_PREFIX: str = "sentry."
 
-NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, Any]] = {
-    "sentry.organization_id": {AttributeKey.Type.TYPE_INT},
-    "sentry.project_id": {AttributeKey.Type.TYPE_INT},
-    "sentry.timestamp": {
+NORMALIZED_COLUMNS_EAP_ITEMS: Final[
+    Mapping[str, Sequence[AttributeKey.Type.ValueType]]
+] = {
+    "sentry.organization_id": [AttributeKey.Type.TYPE_INT],
+    "sentry.project_id": [AttributeKey.Type.TYPE_INT],
+    "sentry.timestamp": [
         AttributeKey.Type.TYPE_FLOAT,
         AttributeKey.Type.TYPE_DOUBLE,
         AttributeKey.Type.TYPE_INT,
         AttributeKey.Type.TYPE_STRING,
-    },
-    "sentry.trace_id": {AttributeKey.Type.TYPE_STRING},
-    "sentry.item_id": {AttributeKey.Type.TYPE_STRING},
+    ],
+    "sentry.trace_id": [AttributeKey.Type.TYPE_STRING],
+    "sentry.item_id": [AttributeKey.Type.TYPE_STRING],
 }
 
 PROTO_TYPE_TO_CLICKHOUSE_TYPE: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
