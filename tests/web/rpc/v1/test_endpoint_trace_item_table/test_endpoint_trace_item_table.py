@@ -2894,6 +2894,85 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    def test_formula_aggregation(self) -> None:
+        write_eap_span(BASE_TIME, {"kyles_tag": "a", "const_1": 1}, 10)
+        write_eap_span(BASE_TIME, {"kyles_tag": "b", "const_1": 1}, 5)
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=12)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    label="count / avg",
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    name="const_1",
+                                    type=AttributeKey.TYPE_INT,
+                                ),
+                                label="count",
+                            ),
+                        ),
+                        right=Column(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_AVERAGE,
+                                key=AttributeKey(
+                                    name="const_1",
+                                    type=AttributeKey.TYPE_INT,
+                                ),
+                                label="avg",
+                            ),
+                        ),
+                    ),
+                ),
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kyles_tag")
+                ),
+            ],
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kyles_tag")
+                )
+            ),
+            group_by=[
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="kyles_tag"),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="kyles_tag"
+                        )
+                    )
+                )
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="count / avg",
+                results=[
+                    AttributeValue(val_double=10),
+                    AttributeValue(val_double=5),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="kyles_tag",
+                results=[AttributeValue(val_str="a"), AttributeValue(val_str="b")],
+            ),
+        ]
+
 
 class TestUtils:
     def test_apply_labels_to_columns_backward_compat(self) -> None:
