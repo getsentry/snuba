@@ -138,6 +138,11 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
                 "Nullable(Int64)",
                 alias=alias,
             )
+        return SubscriptableReference(
+            column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
+            key=literal(attr_key.name),
+            alias=alias,
+        )
 
     raise BadSnubaRPCRequestException(
         f"Attribute {attr_key.name} has an unknown type: {AttributeKey.Type.Name(attr_key.type)}"
