@@ -68,9 +68,7 @@ def aggregation_filter_to_expression(agg_filter: AggregationFilter) -> Expressio
             return op_expr(
                 aggregation_to_expression(
                     agg_filter.comparison_filter.aggregation,
-                    attribute_key_to_expression(
-                        agg_filter.comparison_filter.aggregation.key
-                    ),
+                    attribute_key_to_expression,
                 ),
                 agg_filter.comparison_filter.val,
             )
@@ -121,9 +119,7 @@ def _convert_order_by(
                     direction=direction,
                     expression=aggregation_to_expression(
                         x.column.conditional_aggregation,
-                        attribute_key_to_expression(
-                            x.column.conditional_aggregation.key
-                        ),
+                        attribute_key_to_expression,
                     ),
                 )
             )
@@ -150,7 +146,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         elif column.HasField("conditional_aggregation"):
             function_expr = aggregation_to_expression(
                 column.conditional_aggregation,
-                attribute_key_to_expression(column.conditional_aggregation.key),
+                attribute_key_to_expression,
             )
             # aggregation label may not be set and the column label takes priority anyways.
             function_expr = replace(function_expr, alias=column.label)

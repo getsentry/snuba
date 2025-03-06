@@ -193,7 +193,9 @@ def get_attributes(span: Mapping[str, Any]) -> list[GetTraceResponse.Item.Attrib
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
+    items_storage = get_storage(StorageKey("eap_items"))
     write_raw_unprocessed_events(spans_storage, _SPANS)  # type: ignore
+    write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
 
 
 @pytest.mark.clickhouse_db

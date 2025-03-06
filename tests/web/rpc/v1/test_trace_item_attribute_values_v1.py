@@ -78,6 +78,7 @@ def gen_message(tags: Mapping[str, str]) -> Mapping[str, Any]:
 @pytest.fixture(autouse=True)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
+    items_storage = get_storage(StorageKey("eap_items"))
     messages = [
         gen_message({"tag1": "herp", "tag2": "herp"}),
         gen_message({"tag1": "herpderp", "tag2": "herp"}),
@@ -88,6 +89,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
         gen_message({"tag1": "some_last_value"}),
     ]
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
 @pytest.mark.clickhouse_db

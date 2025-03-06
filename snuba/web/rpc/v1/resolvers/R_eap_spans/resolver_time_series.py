@@ -2,7 +2,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime
-from typing import Any, Dict, Iterable
+from typing import Any, Callable, Dict, Iterable
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -15,8 +15,11 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    ExtrapolationMode,
+)
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -51,6 +54,8 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 )
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
+    use_eap_items_table,
 )
 
 OP_TO_EXPR = {
@@ -59,6 +64,14 @@ OP_TO_EXPR = {
     ProtoExpression.BinaryFormula.OP_MULTIPLY: f.multiply,
     ProtoExpression.BinaryFormula.OP_DIVIDE: f.divide,
 }
+
+
+def _get_attribute_key_to_expression_function(
+    request_meta: RequestMeta,
+) -> Callable[[AttributeKey], Expression]:
+    if use_eap_items_table(request_meta):
+        return attribute_key_to_expression_eap_items
+    return attribute_key_to_expression
 
 
 def _convert_result_timeseries(
@@ -184,6 +197,7 @@ def _convert_result_timeseries(
 
 def _get_reliability_context_columns(
     expressions: Iterable[ProtoExpression],
+    request_meta: RequestMeta,
 ) -> list[SelectedExpression]:
     # this reliability logic ignores formulas, meaning formulas may not properly support reliability
     additional_context_columns = []
@@ -199,7 +213,9 @@ def _get_reliability_context_columns(
             aggregation.extrapolation_mode
             == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
         ):
-            confidence_interval_column = get_confidence_interval_column(aggregation)
+            confidence_interval_column = get_confidence_interval_column(
+                aggregation, _get_attribute_key_to_expression_function(request_meta)
+            )
             if confidence_interval_column is not None:
                 additional_context_columns.append(
                     SelectedExpression(
@@ -208,7 +224,9 @@ def _get_reliability_context_columns(
                     )
                 )
 
-            average_sample_rate_column = get_average_sample_rate_column(aggregation)
+            average_sample_rate_column = get_average_sample_rate_column(
+                aggregation, _get_attribute_key_to_expression_function(request_meta)
+            )
             additional_context_columns.append(
                 SelectedExpression(
                     name=average_sample_rate_column.alias,
@@ -216,21 +234,30 @@ def _get_reliability_context_columns(
                 )
             )
 
-        count_column = get_count_column(aggregation)
+        count_column = get_count_column(
+            aggregation, _get_attribute_key_to_expression_function(request_meta)
+        )
         additional_context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
         )
     return additional_context_columns
 
 
-def _proto_expression_to_ast_expression(expr: ProtoExpression) -> Expression:
+def _proto_expression_to_ast_expression(
+    expr: ProtoExpression, request_meta: RequestMeta
+) -> Expression:
     match expr.WhichOneof("expression"):
         case "conditional_aggregation":
-            return aggregation_to_expression(expr.conditional_aggregation)
+            return aggregation_to_expression(
+                expr.conditional_aggregation,
+                attribute_key_to_expression_eap_items
+                if use_eap_items_table(request_meta)
+                else attribute_key_to_expression,
+            )
         case "formula":
             formula_expr = OP_TO_EXPR[expr.formula.op](
-                _proto_expression_to_ast_expression(expr.formula.left),
-                _proto_expression_to_ast_expression(expr.formula.right),
+                _proto_expression_to_ast_expression(expr.formula.left, request_meta),
+                _proto_expression_to_ast_expression(expr.formula.right, request_meta),
             )
             formula_expr = replace(formula_expr, alias=expr.label)
             return formula_expr
@@ -240,25 +267,37 @@ def _proto_expression_to_ast_expression(expr: ProtoExpression) -> Expression:
 
 def _build_query(request: TimeSeriesRequest) -> Query:
     # TODO: This is hardcoded still
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
+    if use_eap_items_table(request.meta):
+        entity = Entity(
+            key=EntityKey("eap_items"),
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
+            sample=None,
+        )
+    else:
+        entity = Entity(
+            key=EntityKey("eap_spans"),
+            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+            sample=None,
+        )
 
     aggregation_columns = [
         SelectedExpression(
             name=expr.label,
-            expression=_proto_expression_to_ast_expression(expr),
+            expression=_proto_expression_to_ast_expression(expr, request.meta),
         )
         for expr in request.expressions
     ]
 
-    additional_context_columns = _get_reliability_context_columns(request.expressions)
+    additional_context_columns = _get_reliability_context_columns(
+        request.expressions, request.meta
+    )
 
     groupby_columns = [
         SelectedExpression(
-            name=attr_key.name, expression=attribute_key_to_expression(attr_key)
+            name=attr_key.name,
+            expression=_get_attribute_key_to_expression_function(request.meta)(
+                attr_key
+            ),
         )
         for attr_key in request.group_by
     ]
@@ -301,12 +340,15 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         condition=base_conditions_and(
             request.meta,
             trace_item_filters_to_expression(
-                request.filter, attribute_key_to_expression
+                request.filter, _get_attribute_key_to_expression_function(request.meta)
             ),
         ),
         groupby=[
             column("time_slot"),
-            *[attribute_key_to_expression(attr_key) for attr_key in request.group_by],
+            *[
+                _get_attribute_key_to_expression_function(request.meta)(attr_key)
+                for attr_key in request.group_by
+            ],
         ],
         order_by=[
             OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)

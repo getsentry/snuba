@@ -1,3 +1,6 @@
+import pytest
+from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.query.dsl import Functions as f
@@ -5,7 +8,9 @@ from snuba.query.dsl import column, literal
 from snuba.query.expressions import SubscriptableReference
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
+    use_eap_items_table,
 )
+from tests.conftest import SnubaSetConfig
 
 
 class TestCommon:
@@ -109,4 +114,22 @@ class TestCommon:
             ),
             "Nullable(Boolean)",
             alias="derp_TYPE_BOOLEAN",
+        )
+
+    @pytest.mark.redis_db
+    def test_use_eap_items_table(self, snuba_set_config: SnubaSetConfig) -> None:
+        snuba_set_config("use_eap_items_table", True)
+        snuba_set_config("use_eap_items_table_start_timestamp_seconds", 10)
+
+        assert use_eap_items_table(RequestMeta(start_timestamp=Timestamp(seconds=10)))
+        assert not use_eap_items_table(
+            RequestMeta(start_timestamp=Timestamp(seconds=9))
+        )
+
+        snuba_set_config("use_eap_items_table", False)
+        assert not use_eap_items_table(
+            RequestMeta(
+                start_timestamp=Timestamp(seconds=5),
+                referrer="force_use_eap_spans_table.test",
+            )
         )

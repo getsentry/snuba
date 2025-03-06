@@ -73,8 +73,10 @@ def populate_eap_spans_storage(num_rows: int) -> None:
         return res
 
     spans_storage = get_storage(StorageKey("eap_spans"))
+    items_storage = get_storage(StorageKey("eap_items"))
     messages = [generate_span_event_message(i) for i in range(num_rows)]
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
 @pytest.fixture(autouse=True)
