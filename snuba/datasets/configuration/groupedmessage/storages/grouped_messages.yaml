@@ -3,7 +3,7 @@ kind: cdc_storage
 name: groupedmessages
 storage:
   key: groupedmessages
-  set_key: cdc
+  set_key: events
 readiness_state: deprecate
 schema:
   columns:

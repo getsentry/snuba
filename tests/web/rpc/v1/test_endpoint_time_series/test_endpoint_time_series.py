@@ -42,6 +42,7 @@ from snuba.web.rpc.v1.endpoint_time_series import (
     _validate_time_buckets,
 )
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 
 
@@ -129,7 +130,9 @@ def store_spans_timeseries(
         numerical_attributes = {m.name: m.get_value(secs) for m in metrics}
         messages.append(gen_span_message(dt, tags, numerical_attributes))
     spans_storage = get_storage(StorageKey("eap_spans"))
+    items_storage = get_storage(StorageKey("eap_items"))
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
 @pytest.mark.clickhouse_db
@@ -1200,3 +1203,18 @@ class TestUtils:
         _validate_time_buckets(message)
         # add another bucket to fit into granularity_secs
         assert message.meta.end_timestamp.seconds == int(BASE_TIME.timestamp()) + 75
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
+    """
+    Run the tests again, but this time on the eap_items table as well to ensure it also works.
+    """
+
+    @pytest.fixture(autouse=True)
+    def use_eap_items_table(
+        self, snuba_set_config: SnubaSetConfig, redis_db: None
+    ) -> None:
+        snuba_set_config("use_eap_items_table", True)
+        snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)

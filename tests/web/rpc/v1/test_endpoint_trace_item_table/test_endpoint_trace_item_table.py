@@ -183,9 +183,11 @@ BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timed
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
+    items_storage = get_storage(StorageKey("eap_items"))
     start = BASE_TIME
     messages = [gen_message(start - timedelta(minutes=i)) for i in range(120)]
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
 @pytest.mark.clickhouse_db
@@ -1151,6 +1153,7 @@ class TestTraceItemTable(BaseApiTest):
 
     def test_aggregation_on_attribute_column_backward_compat(self) -> None:
         spans_storage = get_storage(StorageKey("eap_spans"))
+        items_storage = get_storage(StorageKey("eap_items"))
         start = BASE_TIME
         measurement_val = 420.0
         measurement = {"custom_measurement": {"value": measurement_val}}
@@ -1166,6 +1169,10 @@ class TestTraceItemTable(BaseApiTest):
         ]
         write_raw_unprocessed_events(
             spans_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
             messages_w_measurement + messages_no_measurement,
         )
 
@@ -1202,6 +1209,7 @@ class TestTraceItemTable(BaseApiTest):
 
     def test_aggregation_on_attribute_column(self) -> None:
         spans_storage = get_storage(StorageKey("eap_spans"))
+        items_storage = get_storage(StorageKey("eap_items"))
         start = BASE_TIME
         measurement_val = 420.0
         measurement = {"custom_measurement": {"value": measurement_val}}
@@ -1217,6 +1225,10 @@ class TestTraceItemTable(BaseApiTest):
         ]
         write_raw_unprocessed_events(
             spans_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
             messages_w_measurement + messages_no_measurement,
         )
 
@@ -1411,6 +1423,7 @@ class TestTraceItemTable(BaseApiTest):
     def test_same_column_name(self) -> None:
         dt = BASE_TIME - timedelta(minutes=5)
         spans_storage = get_storage(StorageKey("eap_spans"))
+        items_storage = get_storage(StorageKey("eap_items"))
         messages = [
             {
                 "description": "foo",
@@ -1441,7 +1454,7 @@ class TestTraceItemTable(BaseApiTest):
             }
         ]
         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
-
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
         err_req = {
@@ -1597,6 +1610,7 @@ class TestTraceItemTable(BaseApiTest):
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
         spans_storage = get_storage(StorageKey("eap_spans"))
+        items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
@@ -1604,6 +1618,7 @@ class TestTraceItemTable(BaseApiTest):
             + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
         )
         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -1687,6 +1702,7 @@ class TestTraceItemTable(BaseApiTest):
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
         spans_storage = get_storage(StorageKey("eap_spans"))
+        items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
@@ -1694,6 +1710,7 @@ class TestTraceItemTable(BaseApiTest):
             + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
         )
         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -1772,8 +1789,8 @@ class TestTraceItemTable(BaseApiTest):
         """
         This test sums only if the traceitem contains kylestag = val2
         """
-
         spans_storage = get_storage(StorageKey("eap_spans"))
+        items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
@@ -1781,6 +1798,7 @@ class TestTraceItemTable(BaseApiTest):
             + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(3)]
         )
         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -1852,6 +1870,7 @@ class TestTraceItemTable(BaseApiTest):
 
     def test_reliability_with_conditional_aggregation(self) -> None:
         spans_storage = get_storage(StorageKey("eap_spans"))
+        items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
             gen_message(
@@ -1862,6 +1881,7 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -1966,6 +1986,7 @@ class TestTraceItemTable(BaseApiTest):
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
         spans_storage = get_storage(StorageKey("eap_spans"))
+        items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
@@ -1973,6 +1994,7 @@ class TestTraceItemTable(BaseApiTest):
             + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
         )
         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -2132,6 +2154,7 @@ class TestTraceItemTable(BaseApiTest):
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
         spans_storage = get_storage(StorageKey("eap_spans"))
+        items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
@@ -2139,6 +2162,7 @@ class TestTraceItemTable(BaseApiTest):
             + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
         )
         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -2297,6 +2321,7 @@ class TestTraceItemTable(BaseApiTest):
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
         spans_storage = get_storage(StorageKey("eap_spans"))
+        items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
@@ -2304,6 +2329,7 @@ class TestTraceItemTable(BaseApiTest):
             + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
         )
         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -2865,6 +2891,85 @@ class TestTraceItemTable(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="http_response_rate_5",
                 results=[AttributeValue(val_double=0.1)],
+            ),
+        ]
+
+    def test_formula_aggregation(self) -> None:
+        write_eap_span(BASE_TIME, {"kyles_tag": "a", "const_1": 1}, 10)
+        write_eap_span(BASE_TIME, {"kyles_tag": "b", "const_1": 1}, 5)
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=12)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    label="count / avg",
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    name="const_1",
+                                    type=AttributeKey.TYPE_INT,
+                                ),
+                                label="count",
+                            ),
+                        ),
+                        right=Column(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_AVERAGE,
+                                key=AttributeKey(
+                                    name="const_1",
+                                    type=AttributeKey.TYPE_INT,
+                                ),
+                                label="avg",
+                            ),
+                        ),
+                    ),
+                ),
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kyles_tag")
+                ),
+            ],
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kyles_tag")
+                )
+            ),
+            group_by=[
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="kyles_tag"),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="kyles_tag"
+                        )
+                    )
+                )
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="count / avg",
+                results=[
+                    AttributeValue(val_double=10),
+                    AttributeValue(val_double=5),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="kyles_tag",
+                results=[AttributeValue(val_str="a"), AttributeValue(val_str="b")],
             ),
         ]
 
