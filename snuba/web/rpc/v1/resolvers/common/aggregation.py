@@ -5,13 +5,14 @@ from abc import ABC, abstractmethod
 from bisect import bisect_left
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
+    AttributeKey,
     ExtrapolationMode,
     Function,
     Reliability,
@@ -26,9 +27,6 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    attribute_key_to_expression,
-)
 
 sampling_weight_column = column("sampling_weight")
 
@@ -45,6 +43,7 @@ _FLOATING_POINT_PRECISION = 9
 
 def _get_condition_in_aggregation(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> Expression:
     condition_in_aggregation: Expression = literal(True)
     if isinstance(aggregation, AttributeConditionalAggregation):
@@ -270,6 +269,7 @@ def get_attribute_confidence_interval_alias(
 
 def get_average_sample_rate_column(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> Expression:
     alias = CustomColumnInformation(
         custom_column_id="average_sample_rate",
@@ -277,7 +277,9 @@ def get_average_sample_rate_column(
         metadata={},
     ).to_alias()
     field = attribute_key_to_expression(aggregation.key)
-    condition_in_aggregation = _get_condition_in_aggregation(aggregation)
+    condition_in_aggregation = _get_condition_in_aggregation(
+        aggregation, attribute_key_to_expression
+    )
     return f.divide(
         f.countIf(
             field,
@@ -303,13 +305,14 @@ def _get_count_column_alias(
 
 def get_count_column(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> Expression:
     field = attribute_key_to_expression(aggregation.key)
     return f.countIf(
         field,
         and_cond(
             get_field_existence_expression(field),
-            _get_condition_in_aggregation(aggregation),
+            _get_condition_in_aggregation(aggregation, attribute_key_to_expression),
         ),
         alias=_get_count_column_alias(aggregation),
     )
@@ -336,6 +339,7 @@ def _get_possible_percentiles(
 def _get_possible_percentiles_expression(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
     percentile: float,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
     granularity: float = 0.005,
     width: float = 0.1,
 ) -> Expression:
@@ -365,11 +369,14 @@ def _get_possible_percentiles_expression(
 def get_extrapolated_function(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
     field: Expression,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> CurriedFunctionCall | FunctionCall | None:
     sampling_weight_column = column("sampling_weight")
     alias = aggregation.label if aggregation.label else None
     alias_dict = {"alias": alias} if alias else {}
-    condition_in_aggregation = _get_condition_in_aggregation(aggregation)
+    condition_in_aggregation = _get_condition_in_aggregation(
+        aggregation, attribute_key_to_expression
+    )
     function_map_sample_weighted: dict[
         Function.ValueType, CurriedFunctionCall | FunctionCall
     ] = {
@@ -465,6 +472,7 @@ def get_extrapolated_function(
 
 def _get_ci_count(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
     alias: str | None = None,
     z_value: float = Z_VALUE_P95,
 ) -> Expression:
@@ -489,7 +497,9 @@ def _get_ci_count(
     """
 
     field = attribute_key_to_expression(aggregation.key)
-    condition_in_aggregation = _get_condition_in_aggregation(aggregation)
+    condition_in_aggregation = _get_condition_in_aggregation(
+        aggregation, attribute_key_to_expression
+    )
     alias_dict = {"alias": alias} if alias else {}
 
     variance = f.sumIf(
@@ -508,6 +518,7 @@ def _get_ci_count(
 
 def _get_ci_sum(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
     alias: str | None = None,
     z_value: float = Z_VALUE_P95,
 ) -> Expression:
@@ -526,7 +537,9 @@ def _get_ci_sum(
     """
 
     field = attribute_key_to_expression(aggregation.key)
-    condition_in_aggregation = _get_condition_in_aggregation(aggregation)
+    condition_in_aggregation = _get_condition_in_aggregation(
+        aggregation, attribute_key_to_expression
+    )
     alias_dict = {"alias": alias} if alias else {}
 
     variance = f.sumIf(
@@ -548,6 +561,7 @@ def _get_ci_sum(
 
 def _get_ci_avg(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
     alias: str | None = None,
 ) -> Expression:
     """
@@ -574,7 +588,9 @@ def _get_ci_avg(
     """
 
     field = attribute_key_to_expression(aggregation.key)
-    condition_in_aggregation = _get_condition_in_aggregation(aggregation)
+    condition_in_aggregation = _get_condition_in_aggregation(
+        aggregation, attribute_key_to_expression
+    )
     alias_dict = {"alias": alias} if alias else {}
 
     expr_sum = f.sumIfOrNull(
@@ -588,8 +604,12 @@ def _get_ci_avg(
         alias=f"{alias}__count",
     )
 
-    expr_sum_err = _get_ci_sum(aggregation, f"{alias}__sum_err", Z_VALUE_P975)
-    expr_count_err = _get_ci_count(aggregation, f"{alias}__count_err", Z_VALUE_P975)
+    expr_sum_err = _get_ci_sum(
+        aggregation, attribute_key_to_expression, f"{alias}__sum_err", Z_VALUE_P975
+    )
+    expr_count_err = _get_ci_count(
+        aggregation, attribute_key_to_expression, f"{alias}__count_err", Z_VALUE_P975
+    )
 
     return f.divide(
         f.abs(
@@ -611,6 +631,7 @@ def _get_ci_avg(
 
 def get_confidence_interval_column(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> Expression | None:
     """
     Returns the expression for calculating the upper confidence limit for a given aggregation. If the aggregation cannot be extrapolated, returns None.
@@ -620,14 +641,30 @@ def get_confidence_interval_column(
     alias = get_attribute_confidence_interval_alias(aggregation)
 
     function_map_confidence_interval = {
-        Function.FUNCTION_COUNT: _get_ci_count(aggregation, alias),
-        Function.FUNCTION_SUM: _get_ci_sum(aggregation, alias),
-        Function.FUNCTION_AVG: _get_ci_avg(aggregation, alias),
-        Function.FUNCTION_P50: _get_possible_percentiles_expression(aggregation, 0.5),
-        Function.FUNCTION_P75: _get_possible_percentiles_expression(aggregation, 0.75),
-        Function.FUNCTION_P90: _get_possible_percentiles_expression(aggregation, 0.9),
-        Function.FUNCTION_P95: _get_possible_percentiles_expression(aggregation, 0.95),
-        Function.FUNCTION_P99: _get_possible_percentiles_expression(aggregation, 0.99),
+        Function.FUNCTION_COUNT: _get_ci_count(
+            aggregation, attribute_key_to_expression, alias
+        ),
+        Function.FUNCTION_SUM: _get_ci_sum(
+            aggregation, attribute_key_to_expression, alias
+        ),
+        Function.FUNCTION_AVG: _get_ci_avg(
+            aggregation, attribute_key_to_expression, alias
+        ),
+        Function.FUNCTION_P50: _get_possible_percentiles_expression(
+            aggregation, 0.5, attribute_key_to_expression
+        ),
+        Function.FUNCTION_P75: _get_possible_percentiles_expression(
+            aggregation, 0.75, attribute_key_to_expression
+        ),
+        Function.FUNCTION_P90: _get_possible_percentiles_expression(
+            aggregation, 0.9, attribute_key_to_expression
+        ),
+        Function.FUNCTION_P95: _get_possible_percentiles_expression(
+            aggregation, 0.95, attribute_key_to_expression
+        ),
+        Function.FUNCTION_P99: _get_possible_percentiles_expression(
+            aggregation, 0.99, attribute_key_to_expression
+        ),
     }
 
     return function_map_confidence_interval.get(aggregation.aggregate)
@@ -661,12 +698,14 @@ def _calculate_approximate_ci_percentile_levels(
 
 def aggregation_to_expression(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
-    field: Expression | None = None,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> Expression:
-    field = field or attribute_key_to_expression(aggregation.key)
+    field = attribute_key_to_expression(aggregation.key)
     alias = aggregation.label if aggregation.label else None
     alias_dict = {"alias": alias} if alias else {}
-    condition_in_aggregation = _get_condition_in_aggregation(aggregation)
+    condition_in_aggregation = _get_condition_in_aggregation(
+        aggregation, attribute_key_to_expression
+    )
     function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
         Function.FUNCTION_SUM: f.sumIfOrNull(
             field,
@@ -722,7 +761,9 @@ def aggregation_to_expression(
         aggregation.extrapolation_mode
         == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
     ):
-        agg_func_expr = get_extrapolated_function(aggregation, field)
+        agg_func_expr = get_extrapolated_function(
+            aggregation, field, attribute_key_to_expression
+        )
     else:
         agg_func_expr = function_map.get(aggregation.aggregate)
         if agg_func_expr is not None:

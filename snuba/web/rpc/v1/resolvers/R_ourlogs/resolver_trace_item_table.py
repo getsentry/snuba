@@ -98,6 +98,8 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         groupby=[
             attribute_key_to_expression(attr_key) for attr_key in request.group_by
         ],
+        # Only support offset page tokens for now
+        offset=request.page_token.offset,
         # protobuf sets limit to 0 by default if it is not set,
         # give it a default value that will actually return data
         limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
