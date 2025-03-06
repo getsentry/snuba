@@ -372,13 +372,14 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         query_duration = 3600
         store_timeseries(
             BASE_TIME,
-            1,
+            # accuracy of counts depends on sample count and heterogenity of
+            # sample rates. In this case, we artificially reduce the number of
+            # samples to drive up the relative error.
+            10,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
             measurements=[
-                DummyMeasurement(
-                    "client_sample_rate", get_value=lambda s: 0.0001
-                )  # 0.01% sample rate should result in unreliable extrapolation
+                DummyMeasurement("client_sample_rate", get_value=lambda s: 0.0001)
             ],
         )
 
@@ -415,11 +416,11 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 buckets=expected_buckets,
                 data_points=[
                     DataPoint(
-                        data=120 / 0.0001,
+                        data=12 / 0.0001,
                         data_present=True,
                         reliability=Reliability.RELIABILITY_LOW,
                         avg_sampling_rate=0.0001,
-                        sample_count=120,
+                        sample_count=12,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -485,6 +486,80 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                     )
                     for _ in range(len(expected_buckets))
                 ],
+            ),
+        ]
+
+    def test_avg_empty(self) -> None:
+        """
+        Asserts that the divisions in the confidence computation for avg do not
+        result in errors or low confidence - we expect an empty result set to be
+        returned.
+        """
+
+        granularity_secs = 120
+        query_duration = 3600
+
+        store_timeseries(
+            BASE_TIME,
+            query_duration // 2,
+            query_duration,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+            measurements=[
+                DummyMeasurement(
+                    "client_sample_rate",
+                    get_value=lambda s: 1.0,
+                )
+            ],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_AVG,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="avg(test_metric)",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        expected_points = [
+            (
+                DataPoint(
+                    data=1,
+                    data_present=True,
+                    reliability=Reliability.RELIABILITY_HIGH,
+                    avg_sampling_rate=1.0,
+                    sample_count=1,
+                )
+                if secs % (query_duration // 2) == 0
+                else DataPoint(data_present=False)
+            )
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
+            TimeSeries(
+                label="avg(test_metric)",
+                buckets=expected_buckets,
+                data_points=expected_points,
             ),
         ]
 
