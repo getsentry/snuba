@@ -492,7 +492,7 @@ def _get_ci_count(
         value from the formula.
      2. The sampling weight is the inverse of the inclusion probability
         (sampling rate).
-     3. Samples undergo independent Bernulli trials, which means the term for
+     3. Samples undergo independent Bernoulli trials, which means the term for
         dependent inclusion probabilities from the HT formula zero out.
     """
 
