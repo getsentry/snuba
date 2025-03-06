@@ -86,7 +86,7 @@ DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset()
 # Joins can be performed across storage sets in the same group.
 JOINABLE_STORAGE_SETS: FrozenSet[FrozenSet[StorageSetKey]] = frozenset(
     {
-        frozenset({StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO, StorageSetKey.CDC}),
+        frozenset({StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO}),
         frozenset(
             {
                 StorageSetKey.EVENTS,
