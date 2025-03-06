@@ -101,21 +101,32 @@ columns.extend(
 )
 
 
-def get_mv_expr(sampling_rate: int) -> str:
+def get_mv_expr(sampling_weight: int) -> str:
     """
-    we use sampling_weight for our calculations, which is 1/sample_rate which means that when we downsample in storage, the downsampled sampling weight should be multiplied by the downsample rate.
+    we use sampling_weight for our calculations, which is 1/sampling_weight which means that when we downsample in storage, the downsampled sampling weight should be multiplied by the downsample rate.
     Example:
         original_sampling_weight = 1 // this means the sampling rate of the item was 1.0
-        tier_1_sampling_rate = 8 // tier 1 takes every 8 items
-        tier_2_sampling_rate = 64 // tier 2 takes every 8 items from tier 1
-        tier_3_sampling_rate = 512 // tier 3 takes every 8 items from tier 2
+        tier_1_sampling_weight = 8 // tier 1 takes every 8 items
+        tier_2_sampling_weight = 64 // tier 2 takes every 64 items from tier 0
+        tier_3_sampling_weight = 512 // tier 3 takes every 512 items from tier 0
     """
     column_names_str = ", ".join(
         [f"{c.name} AS {c.name}" for c in columns if c.name != "sampling_weight"]
     )
+    # NOTE (Volo): We're doing somethign a little sketchy here.
+    # We want sampling to be random across tiers (i.e. each tier is a random sample of the source table),
+    # `cityHash64(item_id) % sampling_weight = 0` would make it so that each tier was a strict subset of the previous tier
+    # we would rather have `rand64() % sampling_weight` as our way to select a sample
+    # !!!! BUT !!!!!
+    # when testing locally, using `rand64()` to select the sample, made actual sample rates between tiers be off by an order of magnitude (and unpredictably so)
+    # in order to achieve the goal while avoiding what seems to be a bug in clickhouse we do the following:
 
-    # set sampling weight explicitly in mv
-    return f"SELECT {column_names_str}, sampling_weight * {sampling_rate} AS sampling_weight FROM eap_items_1_local WHERE (cityHash64(item_id) % {sampling_rate}) = 0"
+    # (cityHash64(item_id + {sampling_weight})  % {sampling_weight}) = 0
+    #             ^^^^^^^^^^^^^^^^^^^^^^^
+    # Add the sampling_weight to the item id before hashing it. This assures that every tier will generate a different hash make a sampling decision.
+    # item_ids are random already, hashing the sum assures enough randomness for our purposes and makes the sampling deterministic which may be easier
+    # to reason about and test
+    return f"SELECT {column_names_str}, sampling_weight * {sampling_weight} AS sampling_weight FROM eap_items_1_local WHERE (cityHash64(item_id + {sampling_weight})  % {sampling_weight}) = 0"
 
 
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
@@ -127,14 +138,14 @@ class Migration(migration.ClickhouseNodeMigration):
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
     granularity = "8192"
 
-    sampling_rates = [8, 8**2, 8**3]
+    sampling_weights = [8, 8**2, 8**3]
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
         ops = []
-        for sample_rate in self.sampling_rates:
-            local_table_name = f"eap_items_1_downsample_{sample_rate}_local"
-            mv_name = f"eap_items_1_downsample_{sample_rate}_mv"
-            mv_query = get_mv_expr(sample_rate)
+        for sampling_weight in self.sampling_weights:
+            local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
+            mv_name = f"eap_items_1_downsample_{sampling_weight}_mv"
+            mv_query = get_mv_expr(sampling_weight)
             ops.append(
                 operations.CreateMaterializedView(
                     storage_set=self.storage_set_key,
@@ -150,8 +161,8 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
         ops = []
-        for sample_rate in self.sampling_rates:
-            mv_name = f"eap_items_1_downsample_{sample_rate}_mv"
+        for sampling_weight in self.sampling_weights:
+            mv_name = f"eap_items_1_downsample_{sampling_weight}_mv"
 
             ops.extend(
                 [
