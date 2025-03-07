@@ -10,6 +10,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import PageToken
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
+    ExistsFilter,
     TraceItemFilter,
 )
 
@@ -36,6 +37,7 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
@@ -120,6 +122,18 @@ def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReques
     )
 
 
+class AttributeKeyCollector(ProtoVisitor):
+    def __init__(self):
+        self.keys = set()
+
+    def visit_TraceItemFilterWrapper(
+        self, trace_item_filter_wrapper: TraceItemFilterWrapper
+    ):
+        trace_item_filter = trace_item_filter_wrapper.underlying_proto
+        if isinstance(trace_item_filter, (ExistsFilter, ComparisonFilter)):
+            self.keys.add(trace_item_filter.key.name)
+
+
 def convert_to_attributes(
     query_res: QueryResult, attribute_type: AttributeKey.Type.ValueType
 ) -> list[TraceItemAttributeNamesResponse.Attribute]:
@@ -134,6 +148,36 @@ def convert_to_attributes(
         )
 
     return list(map(t, query_res.result["data"]))
+
+
+def get_co_occurring_attributes(request: TraceItemAttributeNamesRequest) -> QueryResult:
+    """Query:
+
+    SELECT DISTINCT(attr_key) FROM (
+        SELECT arrayJoin(
+            arrayFilter(
+                attr -> NOT in(attr, ['allocation_policy.is_throttled']), attributes_string)
+            ) AS attr_key
+        FROM eap_trace_item_attrs_dist
+        WHERE
+        hasAll(attributes_string_hash, [cityHash64('allocation_policy.is_throttled')])
+        AND project_id IN [1]
+        AND organization_id = 1
+        AND item_type = 1 -- item type 1 is spans
+        AND date >= toDate('2025-02-12') AND date < toDate('2025-02-14')
+        LIMIT 10000
+    ) LIMIT 1000
+    """
+    # get all attribute keys from the filter
+    collector = AttributeKeyCollector()
+    TraceItemFilterWrapper(request.intersecting_attributes_filter).accept(collector)
+    attribute_keys_to_search = collector.keys
+
+    # create the composite query, add a time limit with query settings
+
+    # construct result
+
+    # return result
 
 
 class EndpointTraceItemAttributeNames(
@@ -185,11 +229,13 @@ class EndpointTraceItemAttributeNames(
     ) -> TraceItemAttributeNamesResponse:
         if not req.meta.request_id:
             req.meta.request_id = str(uuid.uuid4())
-
-        snuba_request = convert_to_snuba_request(req)
-        res = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=snuba_request,
-            timer=self._timer,
-        )
+        if req.HasField("intersecting_attributes_filter"):
+            res = get_co_occurring_attributes(req)
+        else:
+            snuba_request = convert_to_snuba_request(req)
+            res = run_query(
+                dataset=PluggableDataset(name="eap", all_entities=[]),
+                request=snuba_request,
+                timer=self._timer,
+            )
         return self._build_response(req, res)
