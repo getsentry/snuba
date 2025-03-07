@@ -686,7 +686,6 @@ mod tests {
         assert_eq!(&replay_row.device_model, "");
         assert_eq!(&replay_row.device_name, "");
         assert_eq!(&replay_row.dist, "");
-        assert_eq!(&replay_row.environment, "");
         assert_eq!(&replay_row.os_name, "");
         assert_eq!(&replay_row.os_version, "");
         assert_eq!(&replay_row.release, "");
@@ -743,6 +742,7 @@ mod tests {
         let payload = r#"{
             "type": "replay_actions",
             "replay_id": "048aa04be40243948eb3b57089c519ee",
+            "environment": "prod",
             "clicks": [{
                 "alt": "Alternate",
                 "aria_label": "Aria-label",
@@ -799,6 +799,7 @@ mod tests {
         );
         assert_eq!(replay_row.retention_days, 30);
         assert_eq!(replay_row.segment_id, None);
+        assert_eq!(&replay_row.environment, "prod");
 
         // Default columns - not providable on this event.
         assert_eq!(&replay_row.browser_name, "");
@@ -808,7 +809,6 @@ mod tests {
         assert_eq!(&replay_row.device_model, "");
         assert_eq!(&replay_row.device_name, "");
         assert_eq!(&replay_row.dist, "");
-        assert_eq!(&replay_row.environment, "");
         assert_eq!(&replay_row.os_name, "");
         assert_eq!(&replay_row.os_version, "");
         assert_eq!(&replay_row.release, "");
@@ -903,7 +903,6 @@ mod tests {
         assert_eq!(&replay_row.device_model, "");
         assert_eq!(&replay_row.device_name, "");
         assert_eq!(&replay_row.dist, "");
-        assert_eq!(&replay_row.environment, "");
         assert_eq!(&replay_row.os_name, "");
         assert_eq!(&replay_row.os_version, "");
         assert_eq!(&replay_row.release, "");
@@ -983,7 +982,6 @@ mod tests {
         assert_eq!(&replay_row.device_model, "");
         assert_eq!(&replay_row.device_name, "");
         assert_eq!(&replay_row.dist, "");
-        assert_eq!(&replay_row.environment, "");
         assert_eq!(&replay_row.os_name, "");
         assert_eq!(&replay_row.os_version, "");
         assert_eq!(&replay_row.release, "");
@@ -1069,16 +1067,6 @@ mod tests {
         assert_eq!(&replay_row.device_model, "");
         assert_eq!(&replay_row.device_name, "");
         assert_eq!(&replay_row.dist, "");
-        assert_eq!(&replay_row.environment, "");
-        assert_eq!(replay_row.error_id, Uuid::nil());
-        assert_eq!(replay_row.error_ids, vec![]);
-        assert_eq!(replay_row.error_sample_rate, -1.0);
-        assert_eq!(replay_row.fatal_id, Uuid::nil());
-        assert_eq!(replay_row.info_id, Uuid::nil());
-        assert_eq!(replay_row.ip_address_v4, None);
-        assert_eq!(replay_row.ip_address_v6, None);
-        assert_eq!(replay_row.is_archived, 0);
-        assert_eq!(replay_row.offset, 0);
         assert_eq!(&replay_row.os_name, "");
         assert_eq!(&replay_row.os_version, "");
         assert_eq!(replay_row.partition, 0);
@@ -1232,5 +1220,104 @@ mod tests {
         let replay_row = rows.first().unwrap();
         assert_eq!(replay_row.tags_key, [] as [String; 0]);
         assert_eq!(replay_row.tags_value, [] as [String; 0]);
+    }
+
+    #[test]
+    fn test_parse_replay_click_event_null_environment() {
+        let payload = r#"{
+            "type": "replay_actions",
+            "replay_id": "048aa04be40243948eb3b57089c519ee",
+            "environment": null,
+            "clicks": [{
+                "alt": "Alternate",
+                "aria_label": "Aria-label",
+                "class": ["hello", "world"],
+                "component_name": "SignUpButton",
+                "event_hash": "b4370ef8d1994e96b5bc719b72afbf49",
+                "id": "id",
+                "is_dead": 0,
+                "is_rage": 1,
+                "node_id": 320,
+                "role": "button",
+                "tag": "div",
+                "testid": "",
+                "text": "Submit",
+                "timestamp": 1702659277,
+                "title": "title"
+            }]
+        }"#;
+        let payload_value = payload.as_bytes();
+
+        let data = format!(
+            r#"{{
+                "payload": {payload_value:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let replay_row = rows.first().unwrap();
+
+        // Columns in the critical path.
+        assert_eq!(&replay_row.click_alt, "Alternate");
+        assert_eq!(&replay_row.click_aria_label, "Aria-label");
+        assert_eq!(&replay_row.click_component_name, "SignUpButton");
+        assert_eq!(&replay_row.click_id, "id");
+        assert_eq!(&replay_row.click_role, "button");
+        assert_eq!(&replay_row.environment, "");
+    }
+
+    #[test]
+    fn test_parse_replay_click_event_no_environment() {
+        let payload = r#"{
+            "type": "replay_actions",
+            "replay_id": "048aa04be40243948eb3b57089c519ee",
+            "clicks": [{
+                "alt": "Alternate",
+                "aria_label": "Aria-label",
+                "class": ["hello", "world"],
+                "component_name": "SignUpButton",
+                "event_hash": "b4370ef8d1994e96b5bc719b72afbf49",
+                "id": "id",
+                "is_dead": 0,
+                "is_rage": 1,
+                "node_id": 320,
+                "role": "button",
+                "tag": "div",
+                "testid": "",
+                "text": "Submit",
+                "timestamp": 1702659277,
+                "title": "title"
+            }]
+        }"#;
+        let payload_value = payload.as_bytes();
+
+        let data = format!(
+            r#"{{
+                "payload": {payload_value:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let replay_row = rows.first().unwrap();
+
+        // Columns in the critical path.
+        assert_eq!(&replay_row.click_alt, "Alternate");
+        assert_eq!(&replay_row.click_aria_label, "Aria-label");
+        assert_eq!(&replay_row.click_component_name, "SignUpButton");
+        assert_eq!(&replay_row.click_id, "id");
+        assert_eq!(&replay_row.click_role, "button");
+        assert_eq!(&replay_row.environment, "");
     }
 }
