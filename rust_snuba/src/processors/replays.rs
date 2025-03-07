@@ -49,6 +49,7 @@ pub fn deserialize_message(
                 click_testid: click.testid,
                 click_text: click.text,
                 click_title: click.title,
+                environment: event.environment.clone().unwrap_or("".to_string()),
                 error_sample_rate: -1.0,
                 event_hash: click.event_hash,
                 offset,
@@ -245,6 +246,8 @@ enum ReplayPayload {
 
 #[derive(Debug, Deserialize)]
 struct ReplayClickEvent {
+    #[serde(default)]
+    environment: Option<String>,
     clicks: Vec<ReplayClickEventClick>,
 }
 
