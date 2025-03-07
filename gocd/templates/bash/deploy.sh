@@ -48,13 +48,12 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="search-issues-consumer" \
   --container-name="snuba-admin" \
   --container-name="spans-consumer" \
-  --container-name="test-eap-mutations-vector" \
   --container-name="transactions-consumer-new" \
   --container-name="transactions-subscriptions-executor" \
   --container-name="transactions-subscriptions-scheduler" \
   --container-name="uptime-results-consumer" \
-  # https://getsentry.atlassian.net/browse/SRE-630
-  # Prepare to move to consistent image name
+  ## https://getsentry.atlassian.net/browse/SRE-630
+  ## Prepare to move to consistent image name
   --container-name="snuba" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --label-selector="${LABEL_SELECTOR}" \
