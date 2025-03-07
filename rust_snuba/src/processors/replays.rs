@@ -686,6 +686,7 @@ mod tests {
         assert_eq!(&replay_row.device_model, "");
         assert_eq!(&replay_row.device_name, "");
         assert_eq!(&replay_row.dist, "");
+        assert_eq!(&replay_row.environment, "");
         assert_eq!(&replay_row.os_name, "");
         assert_eq!(&replay_row.os_version, "");
         assert_eq!(&replay_row.release, "");
@@ -903,6 +904,7 @@ mod tests {
         assert_eq!(&replay_row.device_model, "");
         assert_eq!(&replay_row.device_name, "");
         assert_eq!(&replay_row.dist, "");
+        assert_eq!(&replay_row.environment, "");
         assert_eq!(&replay_row.os_name, "");
         assert_eq!(&replay_row.os_version, "");
         assert_eq!(&replay_row.release, "");
@@ -982,6 +984,7 @@ mod tests {
         assert_eq!(&replay_row.device_model, "");
         assert_eq!(&replay_row.device_name, "");
         assert_eq!(&replay_row.dist, "");
+        assert_eq!(&replay_row.environment, "");
         assert_eq!(&replay_row.os_name, "");
         assert_eq!(&replay_row.os_version, "");
         assert_eq!(&replay_row.release, "");
@@ -1067,6 +1070,16 @@ mod tests {
         assert_eq!(&replay_row.device_model, "");
         assert_eq!(&replay_row.device_name, "");
         assert_eq!(&replay_row.dist, "");
+        assert_eq!(&replay_row.environment, "");
+        assert_eq!(replay_row.error_id, Uuid::nil());
+        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_sample_rate, -1.0);
+        assert_eq!(replay_row.fatal_id, Uuid::nil());
+        assert_eq!(replay_row.info_id, Uuid::nil());
+        assert_eq!(replay_row.ip_address_v4, None);
+        assert_eq!(replay_row.ip_address_v6, None);
+        assert_eq!(replay_row.is_archived, 0);
+        assert_eq!(replay_row.offset, 0);
         assert_eq!(&replay_row.os_name, "");
         assert_eq!(&replay_row.os_version, "");
         assert_eq!(replay_row.partition, 0);
