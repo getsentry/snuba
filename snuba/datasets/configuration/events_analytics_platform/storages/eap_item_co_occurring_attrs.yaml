@@ -1,0 +1,51 @@
+version: v1
+kind: readable_storage
+name: eap_item_co_occurring_attrs
+
+storage:
+  key: eap_item_co_occurring_attrs
+  set_key: events_analytics_platform
+
+readiness_state: complete
+
+schema:
+  columns:
+    [
+
+      { name: organization_id, type: UInt, args: { size: 64 } },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: item_type, type: UInt, args: { size: 8 } },
+      { name: date, type: Date},
+      { name: retention_days, type: UInt, args: { size: 16 } },
+
+      { name: attribute_keys_hash, type: Array, args: { inner_type: { type: UInt, args: { size: 64 } } } },
+      { name: attributes_string, type: Array, args: { inner_type: { type: String } } },
+      { name: attributes_float, type: Array, args: { inner_type: { type: String } } }
+    ]
+  local_table_name: eap_item_co_occurring_attrs_1_local
+  dist_table_name: eap_item_co_occurring_attrs_1_dist
+  partition_format: [date]
+allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 1
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+  - name: BytesScannedRejectingPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - project_id
+        - referrer
+      default_config_overrides:
+        is_active: 0
+        is_enforced: 0
