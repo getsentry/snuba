@@ -64,6 +64,8 @@ def run(module: str, bind: str, **kwargs: bool | int | str | None) -> NoReturn:
         "thunder_lock": True,
         "vacuum": True,
         "virtualenv": sys.prefix,
+        # kill requests after thirty seconds
+        "harakiri": 30,
         "wsgi_env_behavior": "holy",
         f"{protocol}_socket": bind,
         **kwargs,
