@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations import migration, operations, table_engines
+from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.utils.constants import ITEM_ATTRIBUTE_BUCKETS
@@ -41,31 +41,6 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
         return [
-            operations.CreateTable(
-                storage_set=self.storage_set_key,
-                table_name=self.local_table,
-                engine=table_engines.ReplacingMergeTree(
-                    storage_set=self.storage_set_key,
-                    primary_key="(organization_id, project_id, timestamp, item_type, attr_key)",
-                    order_by="(organization_id, project_id, timestamp, item_type, attr_key, attr_type, attr_value, retention_days)",
-                    partition_by="(retention_days, toMonday(timestamp))",
-                    settings={
-                        "index_granularity": self.granularity,
-                    },
-                    ttl="timestamp + toIntervalDay(retention_days)",
-                ),
-                columns=self.columns,
-                target=OperationTarget.LOCAL,
-            ),
-            operations.CreateTable(
-                storage_set=self.storage_set_key,
-                table_name=self.dist_table,
-                engine=table_engines.Distributed(
-                    local_table_name=self.local_table, sharding_key=None
-                ),
-                columns=self.columns,
-                target=OperationTarget.DISTRIBUTED,
-            ),
             operations.CreateMaterializedView(
                 storage_set=self.storage_set_key,
                 view_name=self.mv,
@@ -98,15 +73,5 @@ LEFT ARRAY JOIN
                 storage_set=self.storage_set_key,
                 table_name=self.mv,
                 target=OperationTarget.LOCAL,
-            ),
-            operations.DropTable(
-                storage_set=self.storage_set_key,
-                table_name=self.local_table,
-                target=OperationTarget.LOCAL,
-            ),
-            operations.DropTable(
-                storage_set=self.storage_set_key,
-                table_name=self.dist_table,
-                target=OperationTarget.DISTRIBUTED,
             ),
         ]
