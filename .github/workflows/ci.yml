@@ -208,7 +208,7 @@ jobs:
     needs: [linting, snuba-image]
     name: Tests and code coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     strategy:
       matrix:
         snuba_settings:
