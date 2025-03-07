@@ -1105,6 +1105,65 @@ class TestTimeSeriesApi(BaseApiTest):
             expected_formula_timeseries
         ]
 
+    def test_eap_items_name_attribute(self) -> None:
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                        ),
+                        label="sum(test_metric)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                    label="sum(test_metric)",
+                ),
+            ],
+            group_by=[
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.name"),
+            ],
+            granularity_secs=granularity_secs,
+        )
+
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        expected_timeseries = TimeSeries(
+            label="sum(test_metric)",
+            group_by_attributes={"sentry.name": "/api/0/relays/projectconfigs/"},
+            buckets=expected_buckets,
+            data_points=[
+                DataPoint(data=300, data_present=True, sample_count=300)
+                for _ in range(len(expected_buckets))
+            ],
+        )
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
+            expected_timeseries
+        ]
+
 
 class TestUtils:
     def test_no_duplicate_labels(self) -> None:
