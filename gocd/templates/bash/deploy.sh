@@ -53,6 +53,9 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="transactions-subscriptions-executor" \
   --container-name="transactions-subscriptions-scheduler" \
   --container-name="uptime-results-consumer" \
+  # https://getsentry.atlassian.net/browse/SRE-630
+  # Prepare to move to consistent image name
+  --container-name="snuba" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --label-selector="${LABEL_SELECTOR}" \
   --image="us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
