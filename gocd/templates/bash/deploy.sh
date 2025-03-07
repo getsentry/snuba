@@ -48,7 +48,6 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="search-issues-consumer" \
   --container-name="snuba-admin" \
   --container-name="spans-consumer" \
-  --container-name="test-eap-mutations-vector" \
   --container-name="transactions-consumer-new" \
   --container-name="transactions-subscriptions-executor" \
   --container-name="transactions-subscriptions-scheduler" \
