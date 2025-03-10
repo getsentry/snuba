@@ -304,7 +304,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                     DataPoint(
                         data=0,
                         data_present=True,
-                        reliability=Reliability.RELIABILITY_LOW,
+                        reliability=Reliability.RELIABILITY_HIGH,
                         avg_sampling_rate=1,
                         sample_count=120,
                     )
