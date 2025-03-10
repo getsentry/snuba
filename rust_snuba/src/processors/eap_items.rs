@@ -165,7 +165,7 @@ impl From<FromSpanMessage> for EAPItem {
                         res.attributes
                             .insert_str("sentry.raw_description".to_string(), v);
                     } else {
-                        res.attributes.insert_str(format!("sentry.{k}"), v);
+                        res.attributes.insert_str(k, v);
                     }
                 }
             }
