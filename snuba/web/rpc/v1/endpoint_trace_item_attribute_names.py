@@ -6,6 +6,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
     TraceItemAttributeNamesResponse,
 )
+from snuba.query.dsl import and_cond, column, Functions as f
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
@@ -14,13 +15,15 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
+from snuba.datasets.storages.storage_key import StorageKey
+from snuba.datasets.storages.factory import get_storage
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.data_source.simple import Entity
+from snuba.query.data_source.simple import Entity, Storage
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
 from snuba.query.logical import Query
@@ -129,9 +132,13 @@ class AttributeKeyCollector(ProtoVisitor):
     def visit_TraceItemFilterWrapper(
         self, trace_item_filter_wrapper: TraceItemFilterWrapper
     ):
+        import pdb
+        pdb.set_trace()
         trace_item_filter = trace_item_filter_wrapper.underlying_proto
-        if isinstance(trace_item_filter, (ExistsFilter, ComparisonFilter)):
-            self.keys.add(trace_item_filter.key.name)
+        if trace_item_filter.HasField("exists_filter"):
+            self.keys.add(trace_item_filter.exists_filter.key.name)
+        elif trace_item_filter.HasField("comparison_filter"):
+            self.keys.add(trace_item_filter.comparison_filter.key.name)
 
 
 def convert_to_attributes(
@@ -153,18 +160,30 @@ def convert_to_attributes(
 def get_co_occurring_attributes(request: TraceItemAttributeNamesRequest) -> QueryResult:
     """Query:
 
+    # this is not accurate anymore due to the query being able to not take a "TYPE" as a required attribute
+    # but we still need to return the type so:
+
+
+        array_func = arrayConcat(arrayMap(x -> ('string', x), attributes_string), arrayMap(x -> ('float', x), attributes_float)) <--
+
+            arrayFilter(
+                attr -> NOT in(attr, ['allocation_policy.is_throttled']), array_func)
+            ) AS attr_key
+
+
     SELECT DISTINCT(attr_key) FROM (
         SELECT arrayJoin(
             arrayFilter(
-                attr -> NOT in(attr, ['allocation_policy.is_throttled']), attributes_string)
+                -- TODO: add value substring match
+                attr -> NOT in(attr.2, ['allocation_policy.is_throttled']), arrayConcat(arrayMap(x -> ('string', x), attributes_string), arrayMap(x -> ('float', x), attributes_float)))
             ) AS attr_key
-        FROM eap_trace_item_attrs_dist
+        FROM eap_item_co_occurring_attrs_1_dist
         WHERE
-        hasAll(attributes_string_hash, [cityHash64('allocation_policy.is_throttled')])
+        hasAll(attribute_keys_hash, [cityHash64('allocation_policy.is_throttled')])
         AND project_id IN [1]
         AND organization_id = 1
         AND item_type = 1 -- item type 1 is spans
-        AND date >= toDate('2025-02-12') AND date < toDate('2025-02-14')
+        AND date >= toDate('2025-03-03') AND date < toDate('2025-03-12')
         LIMIT 10000
     ) LIMIT 1000
     """
@@ -173,7 +192,48 @@ def get_co_occurring_attributes(request: TraceItemAttributeNamesRequest) -> Quer
     TraceItemFilterWrapper(request.intersecting_attributes_filter).accept(collector)
     attribute_keys_to_search = collector.keys
 
+    import pdb
+    pdb.set_trace()
+
+    storage= Storage(
+        key=StorageKey("eap_item_co_occurring_attrs"),
+        schema=get_storage(StorageKey("eap_item_co_occurring_attrs")).get_data_model(),
+        sample=None,
+    )
     # create the composite query, add a time limit with query settings
+
+    condition= and_cond(
+        project_id_and_org_conditions(meta),
+        # timestamp should be converted to start and end of week
+        timestamp_in_range_condition(
+            request.meta.start_timestamp.seconds, request.meta.end_timestamp.seconds
+        ),
+        f.equals(column("item_type"), request.meta.trace_item_type),
+        f.hasAll(column("attribute_keys_hash"), f.array([f.cityHash64(k) for k in attribute_keys_to_search]))
+    )
+
+    # inner_query = Query(
+    #     from_clause=storage,
+    #     selected_columns=[
+    #         SelectedExpression(
+    #             name="attr_key",
+    #             expression=f.arrayJoin(
+    #                 f.arrayFilter(
+    #                     # how to write lambda in dsl?
+    #                     "attr -> NOT in(attr, ['allocation_policy.is_throttled']), attributes_string)"
+    #         ),
+    #     ],
+    #     condition=condition,
+    #     order_by=[
+    #         OrderBy(direction=OrderByDirection.ASC, expression=column("attr_key")),
+    #     ],
+    #     groupby=[
+    #         column("attr_key", alias="attr_key"),
+    #     ],
+    #     # chosen arbitrarily to be a high number
+    #     limit=10000
+    # )
+
 
     # construct result
 
