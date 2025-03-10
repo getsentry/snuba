@@ -150,7 +150,7 @@ impl From<FromSpanMessage> for EAPItem {
         {
             if let Some(description) = from.description {
                 res.attributes
-                    .insert_str("sentry.description".to_string(), description);
+                    .insert_str("sentry.raw_description".to_string(), description);
             }
 
             // insert int double writes as float and int
