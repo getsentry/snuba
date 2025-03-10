@@ -322,6 +322,7 @@ mod tests {
     "retention_days": 90,
     "segment_id": "8873a98879faf06d",
     "sentry_tags": {
+        "description": "Sentry Description Value",
         "category": "http",
         "environment": "development",
         "op": "http.server",
@@ -382,5 +383,19 @@ mod tests {
         insta::with_settings!({sort_maps => true}, {
             insta::assert_json_snapshot!(item)
         });
+    }
+
+    #[test]
+    fn test_sentry_description_to_raw_description() {
+        let msg: FromSpanMessage = serde_json::from_slice(SPAN_KAFKA_MESSAGE.as_bytes()).unwrap();
+        let item: EAPItem = msg.into();
+
+        // Check that the sentry.description tag is written into raw_description
+        assert_eq!(
+            item.attributes
+                .attributes_string_11
+                .get("sentry.raw_description"),
+            Some(&"Sentry Description Value".to_string())
+        );
     }
 }
