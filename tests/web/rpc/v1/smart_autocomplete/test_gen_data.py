@@ -1,0 +1,277 @@
+import random
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Any, Mapping
+
+import pytest
+
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
+from tests.helpers import write_raw_unprocessed_events
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    ComparisonFilter,
+    ExistsFilter,
+    NotFilter,
+    OrFilter,
+    TraceItemFilter,
+)
+
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any, Mapping
+
+import pytest
+from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
+    TraceItemAttributeNamesRequest,
+    TraceItemAttributeNamesResponse,
+
+)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    AttributeValue,
+)
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
+from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
+    EndpointTraceItemAttributeNames,
+)
+from tests.helpers import write_raw_unprocessed_events
+
+
+_RELEASE_TAG = "4.2.0"
+
+
+def gen_message(
+    project_id: int,
+    dt: datetime,
+    measurements: dict[str, dict[str, float]] | None = None,
+    tags: dict[str, str] | None = None,
+) -> Mapping[str, Any]:
+    measurements = measurements or {}
+    tags = tags or {}
+    return {
+        "description": "/api/0/relays/projectconfigs/",
+        "duration_ms": 152,
+        "event_id": "d826225de75d42d6b2f01b957d51f18f",
+        "exclusive_time_ms": 0.228,
+        "is_segment": True,
+        "data": {
+            "sentry.environment": "development",
+            "sentry.release": "abcde",
+            "thread.name": "uWSGIWorker1Core0",
+            "thread.id": "8522009600",
+            "sentry.segment.name": "/api/0/relays/projectconfigs/",
+            "sentry.sdk.name": "sentry.python.django",
+            "sentry.sdk.version": "2.7.0",
+            "my.float.field": 101.2,
+            "my.int.field": 2000,
+            "my.neg.field": -100,
+            "my.neg.float.field": -101.2,
+            "my.true.bool.field": True,
+            "my.false.bool.field": False,
+        },
+        "measurements": {
+            "num_of_spans": {"value": 50.0},
+            "eap.measurement": {"value": random.choice([1, 100, 1000])},
+            **measurements,
+        },
+        "organization_id": 1,
+        "origin": "auto.http.django",
+        "project_id": project_id,
+        "received": 1721319572.877828,
+        "retention_days": 90,
+        "segment_id": "8873a98879faf06d",
+        "sentry_tags": {
+            "category": "http",
+            "environment": "development",
+            "op": "http.server",
+            "platform": "python",
+            "release": _RELEASE_TAG,
+            "sdk.name": "sentry.python.django",
+            "sdk.version": "2.7.0",
+            "status": "ok",
+            "status_code": "200",
+            "thread.id": "8522009600",
+            "thread.name": "uWSGIWorker1Core0",
+            "trace.status": "ok",
+            "transaction": "/api/0/relays/projectconfigs/",
+            "transaction.method": "POST",
+            "transaction.op": "http.server",
+            "user": "ip:127.0.0.1",
+        },
+        "span_id": uuid.uuid4().hex,
+        "tags": {
+            **tags,
+        },
+        "trace_id": uuid.uuid4().hex,
+        "start_timestamp_ms": int(dt.timestamp()) * 1000 - int(random.gauss(1000, 200)),
+        "start_timestamp_precise": dt.timestamp(),
+        "end_timestamp_precise": dt.timestamp() + 1,
+    }
+
+
+BASE_TIME = datetime.now(timezone.utc).replace(
+    minute=0, second=0, microsecond=0
+) - timedelta(minutes=180)
+
+
+@pytest.fixture(autouse=False)
+def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
+    spans_storage = get_storage(StorageKey("eap_items"))
+    start = BASE_TIME
+
+    num_messages_per_set = 10
+    messages = []
+    num_attr_sets = 5
+    num_attributes_per_item = 5
+
+    str_attrs = [uuid.uuid4().hex for _ in range(num_attributes_per_item)]
+
+    for attr_set in range(num_attr_sets):
+        for _ in range(num_messages_per_set):
+            messages.append(
+                gen_message(
+                    1,  # TODO: more project_ids
+                    start,  # this can be more random as long as its in the retention period
+                    measurements={
+                        f"measure_{attr_set}_{i}": {"value": random.random()}
+                        for i in range(num_attributes_per_item)
+                    },
+                    # TODO: the attributes can probably be not random, and something more readable and predicatable
+                    # tags={f"tag_{attr_set}_{i}": random.choice(str_attrs) for i in range(num_attributes_per_item)}
+                    tags={
+                        f"tag_{attr_set}_{i}": "value"
+                        for i in range(num_attributes_per_item)
+                    },
+                )
+            )
+    write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestSmartAutocompleteData:
+    def test_generate(self, setup_teardown: None) -> None:
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            limit=1000,
+            value_substring_match="",
+            intersecting_attributes_filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="tag_1_0"),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="value")
+                )
+            )
+
+
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+
+        expected = []
+        # measure_1_{0..5}
+        # tag_1_{1..5}
+        for i in range(5):
+            expected.append(
+                TraceItemAttributeNamesResponse.Attribute(
+                    name=f"measure_1_{i}", type=AttributeKey.Type.TYPE_DOUBLE
+                )
+            )
+        for i in range(1, 5):
+            expected.append(
+                TraceItemAttributeNamesResponse.Attribute(
+                    name=f"tag_1_{i}", type=AttributeKey.Type.TYPE_STRING
+                )
+            )
+
+        assert res.attributes == expected
+
+    # def test_generate_many_partitions(self):
+
+    #     spans_storage = get_storage(StorageKey("eap_items"))
+
+    #     num_messages_per_set = 10
+    #     messages = []
+    #     num_attr_sets = 5
+    #     num_attributes_per_item = 5
+
+    #     str_attrs = [uuid.uuid4().hex for _ in range(num_attributes_per_item)]
+
+    #     for day_diff in range(90):
+    #         start = BASE_TIME - timedelta(days=day_diff)
+    #         for attr_set in range(num_attr_sets):
+    #             for _ in range(num_messages_per_set):
+    #                 messages.append(
+    #                     gen_message(
+    #                         1,  # TODO: more project_ids
+    #                         start,  # this can be more random as long as its in the retention period
+    #                         measurements={
+    #                             f"measure_{day_diff}_{attr_set}_{i}": {"value": random.random()}
+    #                             for i in range(num_attributes_per_item)
+    #                         },
+    #                         # TODO: the attributes can probably be not random, and something more readable and predicatable
+    #                         # tags={f"tag_{attr_set}_{i}": random.choice(str_attrs) for i in range(num_attributes_per_item)}
+    #                         tags={
+    #                             f"tag_{day_diff}_{attr_set}_{i}": "value"
+    #                             for i in range(num_attributes_per_item)
+    #                         },
+    #                     )
+    #                 )
+    #         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+
+    #     import pdb
+
+    #     pdb.set_trace()
+
+
+    # def test_generate_many_partitions_no_separators(self):
+
+    #     spans_storage = get_storage(StorageKey("eap_spans"))
+
+    #     num_messages_per_set = 10
+    #     messages = []
+    #     num_attr_sets = 5
+    #     num_attributes_per_item = 5
+
+    #     str_attrs = [uuid.uuid4().hex for _ in range(num_attributes_per_item)]
+
+    #     for day_diff in range(25):
+    #         start = BASE_TIME - timedelta(days=day_diff)
+    #         for attr_set in range(num_attr_sets):
+    #             for _ in range(num_messages_per_set):
+    #                 messages.append(
+    #                     gen_message(
+    #                         1,  # TODO: more project_ids
+    #                         start,  # this can be more random as long as its in the retention period
+    #                         measurements={
+    #                             f"measure_{day_diff}_{attr_set}_{i}": {"value": random.random()}
+    #                             for i in range(num_attributes_per_item)
+    #                         },
+    #                         # TODO: the attributes can probably be not random, and something more readable and predicatable
+    #                         # tags={f"tag_{attr_set}_{i}": random.choice(str_attrs) for i in range(num_attributes_per_item)}
+    #                         tags={
+    #                             f"tagU{day_diff}U{attr_set}U{i}": "value"
+    #                             for i in range(num_attributes_per_item)
+    #                         },
+    #                     )
+    #                 )
+    #         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+
+    #     import pdb
+
+    #     pdb.set_trace()
