@@ -183,23 +183,58 @@ def get_co_occurring_attributes_date_condition(
 def get_co_occurring_attributes(
     request: TraceItemAttributeNamesRequest,
 ) -> SnubaRequest:
-    """Query:
+    """Constructs the clickhouse query for co-occurring attributes:
 
-    SELECT DISTINCT(attr_key) FROM (
-        SELECT arrayJoin(
-            arrayFilter(
-                -- TODO: add value substring match
-                attr -> NOT in(attr.2, ['allocation_policy.is_throttled']), arrayConcat(arrayMap(x -> ('string', x), attributes_string), arrayMap(x -> ('float', x), attributes_float)))
-            ) AS attr_key
-        FROM eap_item_co_occurring_attrs_1_dist
-        WHERE
-        hasAll(attribute_keys_hash, [cityHash64('allocation_policy.is_throttled')])
-        AND project_id IN [1]
-        AND organization_id = 1
-        AND item_type = 1 -- item type 1 is spans
-        AND date >= toDate('2025-03-03') AND date < toDate('2025-03-12')
-        LIMIT 10000
-    ) LIMIT 1000
+
+      The query at the end looks something like this:
+
+      SELECT DISTINCT attr_key
+      FROM
+      (
+          SELECT arrayJoin(arrayFilter(attr -> ((NOT ((attr.2) IN ['test_tag_1_0'])) AND startsWith(attr.2, 'test_')), arrayMap(x -> ('TYPE_STRING', x), attributes_string))) AS attr_key
+          FROM eap_item_co_occurring_attrs_1_local
+          WHERE (item_type = 1) AND (project_id IN [1]) AND (organization_id = 1) AND (date < toDateTime(toDate('2025-03-17', 'Universal'))) AND (date >= toDateTime(toDate('2025-03-10', 'Universal')))
+
+          -- This is a faster way of looking up whether all attributes co-exist, it uses an array of hashes. This avoids string equality comparisons
+          AND hasAll(attribute_keys_hash, [cityHash64('test_tag_1_0')])
+          --
+
+          ORDER BY attr_key ASC
+          LIMIT 0, 10000
+      )
+
+      **Explanation:**
+
+      1. This query would narrow down the granules to scan using the primary key (stored in memory):
+
+          `(organization_id, project_id, date, item_type, key_val_hash)`
+
+      2. The following line checks to see that the events contain all of the co-occurring attributes
+          `hasAll(attribute_keys_hash, [cityHash64('test_tag_1_0')])`
+
+          - This hits the bloom filter index on `attribute_keys_hash` and prevents granules that do not have all of the co-occurring attributes from being scanned
+          - loading `attributes_string_hash` is orders of magnitude faster than the `attributes_string` array because all elements are fixed size (UInt64) and
+              equality can be checked in a single CPU instruction (or fewer if SIMD instructions are used)
+          - Clickhouse automatically puts this clause into the [PREWHERE](https://clickhouse.com/docs/sql-reference/statements/select/prewhere)
+      3. The inner query surfaces all co-occurring attributes with `allocation_policy.is_throttled` on an event-by-event basis, stopping at 1000 attributes
+
+      ```sql
+      -- each of the co-occurring attributes becomes a row sent to the outer query
+      arrayJoin(
+              arrayFilter(
+                  attr -> NOT in(attr, ['test_tag_1_0']),
+                  attributes_string
+              )
+      ) AS attr_key
+      ```
+    4. . The outer query deduplicates the attributes sent by the inner query to return to the user distinct co-occurring attributes
+
+      **The following things make this query more performant than searching the source table:**
+
+          - The attribute keys are NOT bucketed. Since the functionality has to process ALL the attributes, all the bucket files would have to be opened for each granule.
+          This way Clickhouse only has to open 1 file
+          - The attribute keys are deduplicated, resulting in less data to scan (~95% row reduction rate)
+          - there is a bloom filter index on all key values
     """
     # get all attribute keys from the filter
     collector = AttributeKeyCollector()
