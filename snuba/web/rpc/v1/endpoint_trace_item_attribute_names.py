@@ -128,12 +128,12 @@ def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReques
 
 
 class AttributeKeyCollector(ProtoVisitor):
-    def __init__(self):
-        self.keys = set()
+    def __init__(self) -> None:
+        self.keys: set[str] = set()
 
     def visit_TraceItemFilterWrapper(
         self, trace_item_filter_wrapper: TraceItemFilterWrapper
-    ):
+    ) -> None:
         trace_item_filter = trace_item_filter_wrapper.underlying_proto
         if trace_item_filter.HasField("exists_filter"):
             self.keys.add(trace_item_filter.exists_filter.key.name)

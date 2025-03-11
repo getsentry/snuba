@@ -254,7 +254,7 @@ class TestSmartAutocompleteData:
 
         assert res.attributes == expected
 
-    def test_no_co_occurrence(self, setup_teardown: None):
+    def test_no_co_occurrence(self, setup_teardown: None) -> None:
         req = TraceItemAttributeNamesRequest(
             meta=META,
             limit=1000,
