@@ -48,11 +48,11 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="search-issues-consumer" \
   --container-name="snuba-admin" \
   --container-name="spans-consumer" \
-  --container-name="test-eap-mutations-vector" \
   --container-name="transactions-consumer-new" \
   --container-name="transactions-subscriptions-executor" \
   --container-name="transactions-subscriptions-scheduler" \
   --container-name="uptime-results-consumer" \
+  --container-name="snuba" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --label-selector="${LABEL_SELECTOR}" \
   --image="us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
