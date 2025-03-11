@@ -152,7 +152,7 @@ impl From<FromSpanMessage> for EAPItem {
                 for (k, v) in sentry_tags {
                     if k == "description" {
                         res.attributes
-                            .insert_str("sentry.raw_description".to_string(), v);
+                            .insert_str("sentry.description".to_string(), v);
                     } else {
                         res.attributes.insert_str(format!("sentry.{k}"), v);
                     }
@@ -163,7 +163,7 @@ impl From<FromSpanMessage> for EAPItem {
                 for (k, v) in tags {
                     if k == "description" {
                         res.attributes
-                            .insert_str("sentry.raw_description".to_string(), v);
+                            .insert_str("sentry.description".to_string(), v);
                     } else {
                         res.attributes.insert_str(k, v);
                     }
@@ -218,7 +218,7 @@ impl From<FromSpanMessage> for EAPItem {
 
             if let Some(description) = from.description {
                 res.attributes
-                    .insert_str("sentry.description".to_string(), description);
+                    .insert_str("sentry.raw_description".to_string(), description);
             }
 
             // insert int double writes as float and int
@@ -390,12 +390,20 @@ mod tests {
         let msg: FromSpanMessage = serde_json::from_slice(SPAN_KAFKA_MESSAGE.as_bytes()).unwrap();
         let item: EAPItem = msg.into();
 
-        // Check that the sentry.description tag is written into raw_description
+        // Check that the sentry.description tag is written into description
+        assert_eq!(
+            item.attributes
+                .attributes_string_38
+                .get("sentry.description"),
+            Some(&"Sentry Description Value".to_string())
+        );
+
+        // Check that description is written into raw_description
         assert_eq!(
             item.attributes
                 .attributes_string_11
                 .get("sentry.raw_description"),
-            Some(&"Sentry Description Value".to_string())
+            Some(&"/api/0/relays/projectconfigs/".to_string())
         );
     }
 }
