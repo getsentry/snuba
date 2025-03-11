@@ -152,7 +152,7 @@ impl From<FromSpanMessage> for EAPItem {
                 for (k, v) in sentry_tags {
                     if k == "description" {
                         res.attributes
-                            .insert_str("sentry.description".to_string(), v);
+                            .insert_str("sentry.normalized_description".to_string(), v);
                     } else {
                         res.attributes.insert_str(format!("sentry.{k}"), v);
                     }
@@ -163,7 +163,7 @@ impl From<FromSpanMessage> for EAPItem {
                 for (k, v) in tags {
                     if k == "description" {
                         res.attributes
-                            .insert_str("sentry.description".to_string(), v);
+                            .insert_str("sentry.normalized_description".to_string(), v);
                     } else {
                         res.attributes.insert_str(k, v);
                     }
@@ -218,7 +218,7 @@ impl From<FromSpanMessage> for EAPItem {
 
             if let Some(description) = from.description {
                 res.attributes
-                    .insert_str("sentry.raw_description".to_string(), description);
+                    .insert_str("sentry.description".to_string(), description);
             }
 
             // insert int double writes as float and int
@@ -322,7 +322,7 @@ mod tests {
     "retention_days": 90,
     "segment_id": "8873a98879faf06d",
     "sentry_tags": {
-        "description": "Sentry Description Value",
+        "description": "normalized_description",
         "category": "http",
         "environment": "development",
         "op": "http.server",
@@ -393,16 +393,16 @@ mod tests {
         // Check that the sentry.description tag is written into description
         assert_eq!(
             item.attributes
-                .attributes_string_38
-                .get("sentry.description"),
-            Some(&"Sentry Description Value".to_string())
+                .attributes_string_36
+                .get("sentry.normalized_description"),
+            Some(&"normalized_description".to_string())
         );
 
         // Check that description is written into raw_description
         assert_eq!(
             item.attributes
-                .attributes_string_11
-                .get("sentry.raw_description"),
+                .attributes_string_38
+                .get("sentry.description"),
             Some(&"/api/0/relays/projectconfigs/".to_string())
         );
     }
