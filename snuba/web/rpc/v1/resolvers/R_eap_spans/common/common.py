@@ -76,7 +76,7 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
 }
 
 ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
-    "sentry.name": "sentry.description",
+    "sentry.name": "sentry.raw_description",
 }
 
 
