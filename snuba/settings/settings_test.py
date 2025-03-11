@@ -42,8 +42,6 @@ ENFORCE_RETENTION = True
 ADMIN_ALLOWED_PROD_PROJECTS = [1, 11276]
 ADMIN_ALLOWED_ORG_IDS = [123]
 
-USE_EAP_ITEMS_TABLE = True
-
 REDIS_CLUSTERS = {
     key: {
         "use_redis_cluster": os.environ.get("USE_REDIS_CLUSTER", "0") != "0",
