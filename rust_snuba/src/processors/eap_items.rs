@@ -218,7 +218,7 @@ impl From<FromSpanMessage> for EAPItem {
 
             if let Some(description) = from.description {
                 res.attributes
-                    .insert_str("sentry.description".to_string(), description);
+                    .insert_str("sentry.name".to_string(), description);
             }
 
             // insert int double writes as float and int
@@ -400,9 +400,7 @@ mod tests {
 
         // Check that description is written into raw_description
         assert_eq!(
-            item.attributes
-                .attributes_string_38
-                .get("sentry.description"),
+            item.attributes.attributes_string_7.get("sentry.name"),
             Some(&"/api/0/relays/projectconfigs/".to_string())
         );
     }

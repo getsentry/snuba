@@ -121,11 +121,11 @@ expression: item
   "attributes_string_36": {
     "sentry.normalized_description": "normalized_description"
   },
-  "attributes_string_38": {
-    "sentry.description": "/api/0/relays/projectconfigs/"
-  },
   "attributes_string_6": {
     "thread.name": "uWSGIWorker1Core0"
+  },
+  "attributes_string_7": {
+    "sentry.name": "/api/0/relays/projectconfigs/"
   },
   "item_id": 9832388815107059821,
   "item_type": 1,
