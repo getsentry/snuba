@@ -4,35 +4,17 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
 import pytest
-
-from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.storage_key import StorageKey
-from tests.helpers import write_raw_unprocessed_events
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
-    ComparisonFilter,
-    ExistsFilter,
-    NotFilter,
-    OrFilter,
-    TraceItemFilter,
-)
-
-import uuid
-from datetime import UTC, datetime, timedelta
-from typing import Any, Mapping
-
-import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
     TraceItemAttributeNamesResponse,
-
 )
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeKey,
-    AttributeValue,
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    ComparisonFilter,
+    TraceItemFilter,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -40,7 +22,6 @@ from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     EndpointTraceItemAttributeNames,
 )
 from tests.helpers import write_raw_unprocessed_events
-
 
 _RELEASE_TAG = "4.2.0"
 
@@ -129,8 +110,6 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     num_attr_sets = 5
     num_attributes_per_item = 5
 
-    str_attrs = [uuid.uuid4().hex for _ in range(num_attributes_per_item)]
-
     for attr_set in range(num_attr_sets):
         for _ in range(num_messages_per_set):
             messages.append(
@@ -155,7 +134,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestSmartAutocompleteData:
-    def test_generate(self, setup_teardown: None) -> None:
+    def test_basic(self, setup_teardown: None) -> None:
         req = TraceItemAttributeNamesRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -168,30 +147,22 @@ class TestSmartAutocompleteData:
                 end_timestamp=Timestamp(
                     seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
                 ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             limit=1000,
-            value_substring_match="",
+            value_substring_match="tag",
             intersecting_attributes_filter=TraceItemFilter(
                 comparison_filter=ComparisonFilter(
                     key=AttributeKey(type=AttributeKey.TYPE_STRING, name="tag_1_0"),
                     op=ComparisonFilter.OP_EQUALS,
-                    value=AttributeValue(val_str="value")
+                    value=AttributeValue(val_str="value"),
                 )
-            )
-
-
+            ),
         )
         res = EndpointTraceItemAttributeNames().execute(req)
-
         expected = []
         # measure_1_{0..5}
         # tag_1_{1..5}
-        for i in range(5):
-            expected.append(
-                TraceItemAttributeNamesResponse.Attribute(
-                    name=f"measure_1_{i}", type=AttributeKey.Type.TYPE_DOUBLE
-                )
-            )
         for i in range(1, 5):
             expected.append(
                 TraceItemAttributeNamesResponse.Attribute(
@@ -237,7 +208,6 @@ class TestSmartAutocompleteData:
     #     import pdb
 
     #     pdb.set_trace()
-
 
     # def test_generate_many_partitions_no_separators(self):
 
