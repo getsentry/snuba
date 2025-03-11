@@ -336,12 +336,14 @@ def get_co_occurring_attributes(
         limit=1000,
     )
     treeify_or_and_conditions(full_query)
+    settings = HTTPQuerySettings()
+    settings.push_clickhouse_setting("max_execution_time", 1)
+    settings.push_clickhouse_setting("timeout_overflow_mode", "break")
     snuba_request = SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
         query=full_query,
-        # TODO: Add time limit
-        query_settings=HTTPQuerySettings(),
+        query_settings=settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
             team="eap",
