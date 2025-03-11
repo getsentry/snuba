@@ -185,17 +185,6 @@ def get_co_occurring_attributes(
 ) -> SnubaRequest:
     """Query:
 
-    # this is not accurate anymore due to the query being able to not take a "TYPE" as a required attribute
-    # but we still need to return the type so:
-
-
-        array_func = arrayConcat(arrayMap(x -> ('string', x), attributes_string), arrayMap(x -> ('float', x), attributes_float)) <--
-
-            arrayFilter(
-                attr -> NOT in(attr, ['allocation_policy.is_throttled']), array_func)
-            ) AS attr_key
-
-
     SELECT DISTINCT(attr_key) FROM (
         SELECT arrayJoin(
             arrayFilter(
@@ -242,18 +231,35 @@ def get_co_occurring_attributes(
             f.equals(column("item_type"), request.meta.trace_item_type), condition
         )
 
-    # array_func = f.arrayConcat(arrayMap(x -> ('string', x), attributes_string), arrayMap(x -> ('float', x), attributes_float))
-    # TODO: don't concat if the user specified a specific type
-    array_func = f.arrayConcat(
-        f.arrayMap(
-            Lambda(None, ("x",), f.tuple("TYPE_STRING", column("x"))),
-            column("attributes_string"),
-        ),
-        f.arrayMap(
-            Lambda(None, ("x",), f.tuple("TYPE_DOUBLE", column("x"))),
-            column("attributes_float"),
-        ),
+    string_array = f.arrayMap(
+        Lambda(None, ("x",), f.tuple("TYPE_STRING", column("x"))),
+        column("attributes_string"),
     )
+
+    double_array = f.arrayMap(
+        Lambda(None, ("x",), f.tuple("TYPE_DOUBLE", column("x"))),
+        column("attributes_float"),
+    )
+    array_func = None
+    if request.type == AttributeKey.Type.TYPE_STRING:
+        array_func = string_array
+    elif request.type in (
+        AttributeKey.Type.TYPE_FLOAT,
+        AttributeKey.Type.TYPE_DOUBLE,
+        AttributeKey.Type.TYPE_INT,
+    ):
+        array_func = double_array
+    else:
+        array_func = f.arrayConcat(
+            f.arrayMap(
+                Lambda(None, ("x",), f.tuple("TYPE_STRING", column("x"))),
+                column("attributes_string"),
+            ),
+            f.arrayMap(
+                Lambda(None, ("x",), f.tuple("TYPE_DOUBLE", column("x"))),
+                column("attributes_float"),
+            ),
+        )
 
     attr_filter = not_cond(
         in_cond(column("attr.2"), f.array(*attribute_keys_to_search))
@@ -270,7 +276,6 @@ def get_co_occurring_attributes(
                 name="attr_key",
                 expression=f.arrayJoin(
                     f.arrayFilter(
-                        # TODO: value_substring_match
                         Lambda(None, ("attr",), attr_filter),
                         array_func,
                     ),
