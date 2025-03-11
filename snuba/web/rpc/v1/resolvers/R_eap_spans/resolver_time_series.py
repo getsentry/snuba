@@ -1,3 +1,4 @@
+import typing
 import uuid
 from collections import defaultdict
 from dataclasses import replace
@@ -34,6 +35,8 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryResult
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     base_conditions_and,
@@ -358,10 +361,12 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     return res
 
 
-def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
+def _build_snuba_request(request: TimeSeriesRequest, tier: int = 1) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
+
+    query_settings.set_tier(tier)
 
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
@@ -382,6 +387,27 @@ def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
     )
 
 
+def _run_query_against_correct_tier(
+    in_msg: TimeSeriesRequest, timer: Timer
+) -> QueryResult:
+    request_to_tier_512 = _build_snuba_request(in_msg, tier=512)
+    res_from_tier_512 = run_query(
+        dataset=PluggableDataset(name="eap", all_entities=[]),
+        request=request_to_tier_512,
+        timer=timer,
+    )
+    num_rows_from_tier_512 = typing.cast(  # noqa: F841
+        int, res_from_tier_512.result["data"][0]["count"]
+    )
+
+    request_to_correct_tier = _build_snuba_request(in_msg)
+    return run_query(
+        dataset=PluggableDataset(name="eap", all_entities=[]),
+        request=request_to_correct_tier,
+        timer=timer,
+    )
+
+
 class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
@@ -392,12 +418,7 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
         # if the user passes it in
         assert len(in_msg.aggregations) == 0
 
-        snuba_request = _build_snuba_request(in_msg)
-        res = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=snuba_request,
-            timer=self._timer,
-        )
+        res = _run_query_against_correct_tier(in_msg, self._timer)
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,

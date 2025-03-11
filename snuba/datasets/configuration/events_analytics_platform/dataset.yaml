@@ -9,6 +9,3 @@ entities:
   - uptime_checks
   - eap_items
   - eap_items_log
-  - eap_items_downsample_8
-  - eap_items_downsample_64
-  - eap_items_downsample_512
