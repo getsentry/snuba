@@ -482,21 +482,16 @@ def clickhouse_trace_query() -> Response:
             ),
             400,
         )
-
+    try_gather_profile_events = req.get("gather_profile_events", True)
     try:
+        settings = {}
         # Append 'log_profile_events=1' with/without the SETTINGS clause to the incoming query.
-        settings_index = raw_sql.lower().find("settings")
-        if settings_index != -1:
-            start_index = settings_index + len("settings")
-            remaining = raw_sql[start_index:].strip()
-            if "log_profile_events=1" not in remaining:
-                raw_sql += ", log_profile_events=1"
-        else:
-            raw_sql += " SETTINGS log_profile_events=1"
+        if try_gather_profile_events:
+            settings["log_profile_events"] = 1
 
-        query_trace = run_query_and_get_trace(storage, raw_sql)
+        query_trace = run_query_and_get_trace(storage, raw_sql, settings)
 
-        if req.get("gather_profile_events", True):
+        if try_gather_profile_events:
             try:
                 gather_profile_events(query_trace, storage)
             except Exception:
