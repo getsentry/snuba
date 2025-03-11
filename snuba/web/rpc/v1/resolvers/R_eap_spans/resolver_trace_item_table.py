@@ -157,7 +157,7 @@ def _convert_order_by(
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=_formula_to_expression(x.column.formula),
+                    expression=_formula_to_expression(x.column.formula, request_meta),
                 )
             )
     return res
@@ -217,10 +217,12 @@ def _get_reliability_context_columns(
     return []
 
 
-def _formula_to_expression(formula: Column.BinaryFormula) -> Expression:
+def _formula_to_expression(
+    formula: Column.BinaryFormula, request_meta: RequestMeta
+) -> Expression:
     return OP_TO_EXPR[formula.op](
-        _column_to_expression(formula.left),
-        _column_to_expression(formula.right),
+        _column_to_expression(formula.left, request_meta),
+        _column_to_expression(formula.right, request_meta),
     )
 
 
@@ -245,7 +247,7 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
         function_expr = replace(function_expr, alias=column.label)
         return function_expr
     elif column.HasField("formula"):
-        formula_expr = _formula_to_expression(column.formula)
+        formula_expr = _formula_to_expression(column.formula, request_meta)
         formula_expr = replace(formula_expr, alias=column.label)
         return formula_expr
     else:
@@ -255,12 +257,18 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
 
 
 def _build_query(request: TraceItemTableRequest) -> Query:
-    # TODO: This is hardcoded still
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
+    if use_eap_items_table(request.meta):
+        entity = Entity(
+            key=EntityKey("eap_items"),
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
+            sample=None,
+        )
+    else:
+        entity = Entity(
+            key=EntityKey("eap_spans"),
+            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+            sample=None,
+        )
 
     selected_columns = []
     for column in request.columns:
