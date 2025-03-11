@@ -131,6 +131,7 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
         return f"{self.visit_column(exp.column)}[{self.visit_literal(exp.key)}]"
 
     def visit_function_call(self, exp: FunctionCall) -> str:
+        print("Visit: ", exp)
         if exp.function_name == "array":
             # Workaround for https://github.com/ClickHouse/ClickHouse/issues/11622
             # Some distributed queries fail when arrays are passed as array(1,2,3)

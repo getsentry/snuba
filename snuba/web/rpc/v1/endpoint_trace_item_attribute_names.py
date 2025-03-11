@@ -1,4 +1,5 @@
 import uuid
+from datetime import timedelta
 from typing import Type
 
 from google.protobuf.json_format import MessageToDict
@@ -6,26 +7,26 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
     TraceItemAttributeNamesResponse,
 )
-from snuba.query.dsl import and_cond, column, Functions as f
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
-    ExistsFilter,
     TraceItemFilter,
 )
 
-from snuba.datasets.storages.storage_key import StorageKey
-from snuba.datasets.storages.factory import get_storage
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity, Storage
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column
+from snuba.query.dsl import and_cond, column, in_cond, not_cond
+from snuba.query.expressions import Expression, Lambda
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Row
@@ -36,6 +37,7 @@ from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     base_conditions_and,
     convert_filter_offset,
+    project_id_and_org_conditions,
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
@@ -132,8 +134,6 @@ class AttributeKeyCollector(ProtoVisitor):
     def visit_TraceItemFilterWrapper(
         self, trace_item_filter_wrapper: TraceItemFilterWrapper
     ):
-        import pdb
-        pdb.set_trace()
         trace_item_filter = trace_item_filter_wrapper.underlying_proto
         if trace_item_filter.HasField("exists_filter"):
             self.keys.add(trace_item_filter.exists_filter.key.name)
@@ -157,7 +157,32 @@ def convert_to_attributes(
     return list(map(t, query_res.result["data"]))
 
 
-def get_co_occurring_attributes(request: TraceItemAttributeNamesRequest) -> QueryResult:
+def get_co_occurring_attributes_date_condition(
+    request: TraceItemAttributeNamesRequest,
+) -> Expression:
+    # round the lower timestamp to the previous monday
+    lower_ts = request.meta.start_timestamp.ToDatetime().date()
+    lower_ts = lower_ts - timedelta(days=(lower_ts.weekday() - 0) % 7)
+
+    # round the upper timestamp to the next monday
+    upper_ts = request.meta.end_timestamp.ToDatetime().date()
+    upper_ts = upper_ts + timedelta(days=(7 - upper_ts.weekday()) % 7)
+
+    return and_cond(
+        f.less(
+            column("date"),
+            f.toDateTime(upper_ts),
+        ),
+        f.greaterOrEquals(
+            column("date"),
+            f.toDateTime(lower_ts),
+        ),
+    )
+
+
+def get_co_occurring_attributes(
+    request: TraceItemAttributeNamesRequest,
+) -> SnubaRequest:
     """Query:
 
     # this is not accurate anymore due to the query being able to not take a "TYPE" as a required attribute
@@ -192,52 +217,121 @@ def get_co_occurring_attributes(request: TraceItemAttributeNamesRequest) -> Quer
     TraceItemFilterWrapper(request.intersecting_attributes_filter).accept(collector)
     attribute_keys_to_search = collector.keys
 
-    import pdb
-    pdb.set_trace()
-
-    storage= Storage(
+    storage = Storage(
         key=StorageKey("eap_item_co_occurring_attrs"),
-        schema=get_storage(StorageKey("eap_item_co_occurring_attrs")).get_data_model(),
+        schema=get_storage(StorageKey("eap_item_co_occurring_attrs"))
+        .get_schema()
+        .get_columns(),
         sample=None,
     )
-    # create the composite query, add a time limit with query settings
 
-    condition= and_cond(
-        project_id_and_org_conditions(meta),
-        # timestamp should be converted to start and end of week
-        timestamp_in_range_condition(
-            request.meta.start_timestamp.seconds, request.meta.end_timestamp.seconds
+    condition = and_cond(
+        and_cond(
+            project_id_and_org_conditions(request.meta),
+            # timestamp should be converted to start and end of week
+            get_co_occurring_attributes_date_condition(request),
         ),
-        f.equals(column("item_type"), request.meta.trace_item_type),
-        f.hasAll(column("attribute_keys_hash"), f.array([f.cityHash64(k) for k in attribute_keys_to_search]))
+        f.hasAll(
+            column("attribute_keys_hash"),
+            f.array(*[f.cityHash64(k) for k in attribute_keys_to_search]),
+        ),
     )
 
-    # inner_query = Query(
-    #     from_clause=storage,
-    #     selected_columns=[
-    #         SelectedExpression(
-    #             name="attr_key",
-    #             expression=f.arrayJoin(
-    #                 f.arrayFilter(
-    #                     # how to write lambda in dsl?
-    #                     "attr -> NOT in(attr, ['allocation_policy.is_throttled']), attributes_string)"
-    #         ),
-    #     ],
-    #     condition=condition,
-    #     order_by=[
-    #         OrderBy(direction=OrderByDirection.ASC, expression=column("attr_key")),
-    #     ],
-    #     groupby=[
-    #         column("attr_key", alias="attr_key"),
-    #     ],
-    #     # chosen arbitrarily to be a high number
-    #     limit=10000
-    # )
+    if request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
+        condition = and_cond(
+            f.equals(column("item_type"), request.meta.trace_item_type), condition
+        )
+
+    # array_func = f.arrayConcat(arrayMap(x -> ('string', x), attributes_string), arrayMap(x -> ('float', x), attributes_float))
+    # TODO: don't concat if the user specified a specific type
+    array_func = f.arrayConcat(
+        f.arrayMap(
+            Lambda(None, ("x",), f.tuple("TYPE_STRING", column("x"))),
+            column("attributes_string"),
+        ),
+        f.arrayMap(
+            Lambda(None, ("x",), f.tuple("TYPE_DOUBLE", column("x"))),
+            column("attributes_float"),
+        ),
+    )
+
+    attr_filter = not_cond(
+        in_cond(column("attr.2"), f.array(*attribute_keys_to_search))
+    )
+    if request.value_substring_match:
+        attr_filter = and_cond(
+            attr_filter, f.startsWith(column("attr.2"), request.value_substring_match)
+        )
+
+    inner_query = Query(
+        from_clause=storage,
+        selected_columns=[
+            SelectedExpression(
+                name="attr_key",
+                expression=f.arrayJoin(
+                    f.arrayFilter(
+                        # TODO: value_substring_match
+                        Lambda(None, ("attr",), attr_filter),
+                        array_func,
+                    ),
+                    alias="attr_key",
+                ),
+            ),
+        ],
+        condition=condition,
+        order_by=[
+            OrderBy(direction=OrderByDirection.ASC, expression=column("attr_key")),
+        ],
+        # chosen arbitrarily to be a high number
+        limit=10000,
+    )
+
+    full_query = CompositeQuery(
+        from_clause=inner_query,
+        selected_columns=[
+            SelectedExpression(
+                name="attr_key", expression=f.distinct(column("attr_key"))
+            )
+        ],
+        limit=1000,
+    )
+    treeify_or_and_conditions(full_query)
+    snuba_request = SnubaRequest(
+        id=uuid.UUID(request.meta.request_id),
+        original_body=MessageToDict(request),
+        query=full_query,
+        # TODO: Add time limit
+        query_settings=HTTPQuerySettings(),
+        attribution_info=AttributionInfo(
+            referrer=request.meta.referrer,
+            team="eap",
+            feature="eap",
+            tenant_ids={
+                "organization_id": request.meta.organization_id,
+                "referrer": request.meta.referrer,
+            },
+            app_id=AppID("eap"),
+            parent_api=EndpointTraceItemAttributeNames.config_key(),
+        ),
+    )
+    return snuba_request
 
 
-    # construct result
+def convert_co_occurring_results_to_attributes(
+    query_res: QueryResult,
+) -> list[TraceItemAttributeNamesResponse.Attribute]:
+    def t(row: Row) -> TraceItemAttributeNamesResponse.Attribute:
+        # our query to snuba only selected 1 column, attr_key
+        # so the result should only have 1 item per row
+        vals = row.values()
+        assert len(vals) == 1
+        attr_type, attr_name = list(vals)[0]
+        assert isinstance(attr_type, str)
+        return TraceItemAttributeNamesResponse.Attribute(
+            name=attr_name, type=getattr(AttributeKey.Type, attr_type)
+        )
 
-    # return result
+    return list(map(t, query_res.result.get("data", [])))
 
 
 class EndpointTraceItemAttributeNames(
@@ -285,17 +379,28 @@ class EndpointTraceItemAttributeNames(
         )
 
     def _execute(
-        self, req: TraceItemAttributeNamesRequest
+        self, in_msg: TraceItemAttributeNamesRequest
     ) -> TraceItemAttributeNamesResponse:
-        if not req.meta.request_id:
-            req.meta.request_id = str(uuid.uuid4())
-        if req.HasField("intersecting_attributes_filter"):
-            res = get_co_occurring_attributes(req)
-        else:
-            snuba_request = convert_to_snuba_request(req)
+        if not in_msg.meta.request_id:
+            in_msg.meta.request_id = str(uuid.uuid4())
+        if in_msg.HasField("intersecting_attributes_filter"):
+            snuba_request = get_co_occurring_attributes(in_msg)
             res = run_query(
                 dataset=PluggableDataset(name="eap", all_entities=[]),
                 request=snuba_request,
                 timer=self._timer,
             )
-        return self._build_response(req, res)
+            return TraceItemAttributeNamesResponse(
+                attributes=convert_co_occurring_results_to_attributes(res),
+                meta=extract_response_meta(
+                    in_msg.meta.request_id, in_msg.meta.debug, [res], [self._timer]
+                ),
+            )
+        else:
+            snuba_request = convert_to_snuba_request(in_msg)
+            res = run_query(
+                dataset=PluggableDataset(name="eap", all_entities=[]),
+                request=snuba_request,
+                timer=self._timer,
+            )
+        return self._build_response(in_msg, res)
