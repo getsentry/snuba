@@ -107,13 +107,8 @@ class TraceItemFilterWrapper(ProtoWrapper[TraceItemFilter]):
         filter_value = item_filter.WhichOneof("value")
         if filter_value in ("and_filter", "or_filter", "not_filter"):
             filters = getattr(item_filter, filter_value).filters
-            if len(filters) == 0:
-                return
-            elif len(filters) == 1:
-                TraceItemFilterWrapper(filters[0]).accept(visitor)
-            else:
-                for f in filters:
-                    TraceItemFilterWrapper(f).accept(visitor)
+            for f in filters:
+                TraceItemFilterWrapper(f).accept(visitor)
 
 
 class ProtoVisitor(ABC):
