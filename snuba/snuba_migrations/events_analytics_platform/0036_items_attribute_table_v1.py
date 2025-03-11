@@ -76,7 +76,7 @@ GROUP BY
     attr_value,
     attr_type,
     timestamp,
-    retention_days,
+    retention_days
 """,
             ),
         ]
