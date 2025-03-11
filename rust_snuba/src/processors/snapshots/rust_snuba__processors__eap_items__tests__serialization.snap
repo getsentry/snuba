@@ -52,6 +52,7 @@ expression: item
     "relay_protocol_version": "3"
   },
   "attributes_string_11": {
+    "sentry.raw_description": "/api/0/relays/projectconfigs/",
     "sentry.segment_id": "8873a98879faf06d",
     "sentry.transaction.method": "POST"
   },
@@ -123,9 +124,6 @@ expression: item
   },
   "attributes_string_6": {
     "thread.name": "uWSGIWorker1Core0"
-  },
-  "attributes_string_7": {
-    "sentry.name": "/api/0/relays/projectconfigs/"
   },
   "item_id": 9832388815107059821,
   "item_type": 1,

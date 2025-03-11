@@ -75,7 +75,9 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
     AttributeKey.Type.TYPE_BOOLEAN: "attributes_bool",
 }
 
-ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {}
+ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
+    "sentry.name": "sentry.raw_description",
+}
 
 
 def use_eap_items_table(request_meta: RequestMeta) -> bool:
