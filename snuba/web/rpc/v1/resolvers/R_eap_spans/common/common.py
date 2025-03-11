@@ -6,7 +6,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     VirtualColumnContext,
 )
 
-from snuba import state
+from snuba import settings, state
 from snuba.query import Query
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal, literals_array
@@ -77,12 +77,18 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
 
 ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
     "sentry.name": "sentry.raw_description",
+    "sentry.description": "sentry.normalized_description",
+    "sentry.span_id": "sentry.item_id",
+    "sentry.segment_name": "sentry.transaction",
 }
 
 
 def use_eap_items_table(request_meta: RequestMeta) -> bool:
     if request_meta.referrer.startswith("force_use_eap_spans_table"):
         return False
+
+    if settings.USE_EAP_ITEMS_TABLE:
+        return True
 
     use_eap_items_table_start_timestamp_seconds = state.get_int_config(
         "use_eap_items_table_start_timestamp_seconds"
