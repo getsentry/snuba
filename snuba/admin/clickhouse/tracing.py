@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -35,13 +35,15 @@ class TraceOutput:
     profile_events_profile: dict[str, int]
 
 
-def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
+def run_query_and_get_trace(
+    storage_name: str, query: str, settings: Mapping[str, Any] | None = None
+) -> TraceOutput:
     validate_ro_query(query)
     connection = get_ro_query_node_connection(
         storage_name, ClickhouseClientSettings.TRACING
     )
     query_result = connection.execute(
-        query=query, capture_trace=True, with_column_types=True
+        query=query, capture_trace=True, with_column_types=True, settings=settings or {}
     )
     summarized_trace_output = summarize_trace_output(query_result.trace_output)
     return TraceOutput(
