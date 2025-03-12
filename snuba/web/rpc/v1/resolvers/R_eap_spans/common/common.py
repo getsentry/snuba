@@ -75,6 +75,10 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
     AttributeKey.Type.TYPE_BOOLEAN: "attributes_bool",
 }
 
+ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
+    "sentry.name": "sentry.raw_description",
+}
+
 
 def use_eap_items_table(request_meta: RequestMeta) -> bool:
     if request_meta.referrer.startswith("force_use_eap_spans_table"):
@@ -118,11 +122,15 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
         )
 
     if attr_key.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
+        attr_name = attr_key.name
+        if attr_key.name in ATTRIBUTE_MAPPINGS:
+            attr_name = ATTRIBUTE_MAPPINGS[attr_key.name]
+
         if attr_key.type == AttributeKey.Type.TYPE_BOOLEAN:
             return f.CAST(
                 SubscriptableReference(
                     column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
-                    key=literal(attr_key.name),
+                    key=literal(attr_name),
                     alias=alias,
                 ),
                 "Nullable(Boolean)",
@@ -132,7 +140,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
             return f.CAST(
                 SubscriptableReference(
                     column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
-                    key=literal(attr_key.name),
+                    key=literal(attr_name),
                     alias=alias,
                 ),
                 "Nullable(Int64)",
@@ -140,7 +148,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
             )
         return SubscriptableReference(
             column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
-            key=literal(attr_key.name),
+            key=literal(attr_name),
             alias=alias,
         )
 

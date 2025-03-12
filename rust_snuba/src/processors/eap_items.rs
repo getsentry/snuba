@@ -148,9 +148,77 @@ impl From<FromSpanMessage> for EAPItem {
         };
 
         {
+            if let Some(sentry_tags) = from.sentry_tags {
+                for (k, v) in sentry_tags {
+                    if k == "description" {
+                        res.attributes
+                            .insert_str("sentry.normalized_description".to_string(), v);
+                    } else {
+                        res.attributes.insert_str(format!("sentry.{k}"), v);
+                    }
+                }
+            }
+
+            if let Some(tags) = from.tags {
+                for (k, v) in tags {
+                    if k == "description" {
+                        res.attributes
+                            .insert_str("sentry.normalized_description".to_string(), v);
+                    } else {
+                        res.attributes.insert_str(k, v);
+                    }
+                }
+            }
+
+            let mut sampling_factor = 1.0;
+            if let Some(measurements) = from.measurements {
+                for (k, v) in measurements {
+                    match k.as_str() {
+                        "client_sample_rate" if v.value > 0.0 => sampling_factor *= v.value,
+                        "server_sample_rate" if v.value > 0.0 => sampling_factor *= v.value,
+                        _ => res.attributes.insert_float(k, v.value),
+                    }
+                }
+            }
+            // lower precision to compensate floating point errors
+            sampling_factor = (sampling_factor * 1e9).round() / 1e9;
+            res.sampling_weight = (1.0 / sampling_factor).round() as u64;
+
+            if let Some(data) = from.data {
+                for (k, v) in data {
+                    match v {
+                        Value::String(string) => res.attributes.insert_str(k, string),
+                        Value::Array(array) => res
+                            .attributes
+                            .insert_str(k, serde_json::to_string(&array).unwrap_or_default()),
+                        Value::Object(object) => res
+                            .attributes
+                            .insert_str(k, serde_json::to_string(&object).unwrap_or_default()),
+                        Value::Number(number) => {
+                            if number.is_i64() {
+                                res.attributes
+                                    .insert_int(k, number.as_i64().unwrap_or_default());
+                            } else if number.is_u64() {
+                                // as_i64() will return None if the u64 is too large to fit in i64
+                                res.attributes
+                                    .insert_int(k, number.as_i64().unwrap_or_default());
+                            } else {
+                                res.attributes
+                                    .insert_float(k, number.as_f64().unwrap_or_default());
+                            }
+                        }
+                        Value::Bool(b) => {
+                            // insert_bool double writes as a bool and float
+                            res.attributes.insert_bool(k.clone(), b);
+                        }
+                        _ => (),
+                    }
+                }
+            }
+
             if let Some(description) = from.description {
                 res.attributes
-                    .insert_str("sentry.description".to_string(), description);
+                    .insert_str("sentry.raw_description".to_string(), description);
             }
 
             // insert int double writes as float and int
@@ -201,64 +269,6 @@ impl From<FromSpanMessage> for EAPItem {
                 "sentry.start_timestamp_precise".to_string(),
                 from.start_timestamp_precise,
             );
-
-            if let Some(sentry_tags) = from.sentry_tags {
-                for (k, v) in sentry_tags {
-                    res.attributes.insert_str(format!("sentry.{k}"), v);
-                }
-            }
-
-            if let Some(tags) = from.tags {
-                for (k, v) in tags {
-                    res.attributes.insert_str(k, v);
-                }
-            }
-
-            let mut sampling_factor = 1.0;
-            if let Some(measurements) = from.measurements {
-                for (k, v) in measurements {
-                    match k.as_str() {
-                        "client_sample_rate" if v.value > 0.0 => sampling_factor *= v.value,
-                        "server_sample_rate" if v.value > 0.0 => sampling_factor *= v.value,
-                        _ => res.attributes.insert_float(k, v.value),
-                    }
-                }
-            }
-            // lower precision to compensate floating point errors
-            sampling_factor = (sampling_factor * 1e9).round() / 1e9;
-            res.sampling_weight = (1.0 / sampling_factor).round() as u64;
-
-            if let Some(data) = from.data {
-                for (k, v) in data {
-                    match v {
-                        Value::String(string) => res.attributes.insert_str(k, string),
-                        Value::Array(array) => res
-                            .attributes
-                            .insert_str(k, serde_json::to_string(&array).unwrap_or_default()),
-                        Value::Object(object) => res
-                            .attributes
-                            .insert_str(k, serde_json::to_string(&object).unwrap_or_default()),
-                        Value::Number(number) => {
-                            if number.is_i64() {
-                                res.attributes
-                                    .insert_int(k, number.as_i64().unwrap_or_default());
-                            } else if number.is_u64() {
-                                // as_i64() will return None if the u64 is too large to fit in i64
-                                res.attributes
-                                    .insert_int(k, number.as_i64().unwrap_or_default());
-                            } else {
-                                res.attributes
-                                    .insert_float(k, number.as_f64().unwrap_or_default());
-                            }
-                        }
-                        Value::Bool(b) => {
-                            // insert_bool double writes as a bool and float
-                            res.attributes.insert_bool(k.clone(), b);
-                        }
-                        _ => (),
-                    }
-                }
-            }
         }
 
         res
@@ -312,6 +322,7 @@ mod tests {
     "retention_days": 90,
     "segment_id": "8873a98879faf06d",
     "sentry_tags": {
+        "description": "normalized_description",
         "category": "http",
         "environment": "development",
         "op": "http.server",
@@ -372,5 +383,27 @@ mod tests {
         insta::with_settings!({sort_maps => true}, {
             insta::assert_json_snapshot!(item)
         });
+    }
+
+    #[test]
+    fn test_sentry_description_to_raw_description() {
+        let msg: FromSpanMessage = serde_json::from_slice(SPAN_KAFKA_MESSAGE.as_bytes()).unwrap();
+        let item: EAPItem = msg.into();
+
+        // Check that the sentry.description tag is written into description
+        assert_eq!(
+            item.attributes
+                .attributes_string_36
+                .get("sentry.normalized_description"),
+            Some(&"normalized_description".to_string())
+        );
+
+        // Check that description is written into raw_description
+        assert_eq!(
+            item.attributes
+                .attributes_string_11
+                .get("sentry.raw_description"),
+            Some(&"/api/0/relays/projectconfigs/".to_string())
+        );
     }
 }

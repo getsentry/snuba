@@ -52,6 +52,7 @@ expression: item
     "relay_protocol_version": "3"
   },
   "attributes_string_11": {
+    "sentry.raw_description": "/api/0/relays/projectconfigs/",
     "sentry.segment_id": "8873a98879faf06d",
     "sentry.transaction.method": "POST"
   },
@@ -118,8 +119,8 @@ expression: item
   "attributes_string_32": {
     "relay_use_post_or_schedule_rejected": "version"
   },
-  "attributes_string_38": {
-    "sentry.description": "/api/0/relays/projectconfigs/"
+  "attributes_string_36": {
+    "sentry.normalized_description": "normalized_description"
   },
   "attributes_string_6": {
     "thread.name": "uWSGIWorker1Core0"

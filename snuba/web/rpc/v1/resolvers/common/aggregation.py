@@ -34,7 +34,7 @@ Z_VALUE_P95 = 1.96  # Z value for 95% confidence interval is 1.96 which comes fr
 Z_VALUE_P975 = 2.24  # Z value for 97.5% confidence interval used for the avg() CI
 
 PERCENTILE_PRECISION = 100000
-CONFIDENCE_INTERVAL_THRESHOLD = 1.5
+CONFIDENCE_INTERVAL_THRESHOLD = 0.5
 
 CUSTOM_COLUMN_PREFIX = "__snuba_custom_column__"
 
@@ -149,12 +149,16 @@ class GenericExtrapolationContext(ExtrapolationContext):
         if not self.is_extrapolated or not self.is_data_present:
             return Reliability.RELIABILITY_UNSPECIFIED
 
-        relative_confidence = (
-            (self.value + self.confidence_interval) / self.value
-            if self.value != 0
-            else float("inf")
-        )
-        if relative_confidence <= CONFIDENCE_INTERVAL_THRESHOLD:
+        # We determine reliability relative to the returned value. If the
+        # confidence interval (CI) is 0, we're not sampling and have high
+        # reliability. Otherwise, if the value is 0, the CI is infinitely larger
+        # than the value, so reliability is low.
+        if self.confidence_interval == 0:
+            return Reliability.RELIABILITY_HIGH
+        elif self.value == 0:
+            return Reliability.RELIABILITY_LOW
+
+        if abs(self.confidence_interval / self.value) <= CONFIDENCE_INTERVAL_THRESHOLD:
             return Reliability.RELIABILITY_HIGH
         return Reliability.RELIABILITY_LOW
 
@@ -181,10 +185,12 @@ class PercentileExtrapolationContext(ExtrapolationContext):
         )
         ci_lower = self.confidence_interval[percentile_index_lower]
         ci_upper = self.confidence_interval[percentile_index_upper]
-        relative_confidence = max(
-            self.value / ci_lower if ci_lower != 0 else float("inf"),
-            ci_upper / self.value if self.value != 0 else float("inf"),
+
+        max_err = max(self.value - ci_lower, ci_upper - self.value)
+        relative_confidence = (
+            abs(max_err / self.value) if self.value != 0 else float("inf")
         )
+
         if relative_confidence <= CONFIDENCE_INTERVAL_THRESHOLD:
             return Reliability.RELIABILITY_HIGH
         return Reliability.RELIABILITY_LOW
