@@ -14,6 +14,7 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.trace_item_attribute_values import AttributeValuesRequest
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 
 BASE_TIME = datetime.now(timezone.utc).replace(
@@ -206,3 +207,18 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         res = AttributeValuesRequest().execute(req)
         assert res.values == []
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestTimeSeriesApiEAPItems(TestTraceItemAttributes):
+    """
+    Run the tests again, but this time on the eap_items table as well to ensure it also works.
+    """
+
+    @pytest.fixture(autouse=True)
+    def use_eap_items_table(
+        self, snuba_set_config: SnubaSetConfig, redis_db: None
+    ) -> None:
+        snuba_set_config("use_eap_items_attrs_table", True)
+        snuba_set_config("use_eap_items_attrs_table_start_timestamp_seconds", 0)
