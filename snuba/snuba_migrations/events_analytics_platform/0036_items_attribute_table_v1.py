@@ -60,7 +60,7 @@ SELECT DISTINCT
     attrs.1 as attr_key,
     attrs.2 as attr_value,
     attrs.3 as attr_type,
-    toStartOfWeek(timestamp) AS ts,
+    toStartOfWeek(timestamp) AS timestamp,
     retention_days,
 FROM eap_items_1_local
 ARRAY JOIN
