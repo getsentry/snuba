@@ -177,6 +177,7 @@ class TestTimeSeriesApi(BaseApiTest):
             error = Error()
             error.ParseFromString(response.data)
             assert response.status_code == 200, (error.message, error.details)
+        assert False
 
     def test_fails_without_type(self) -> None:
         ts = Timestamp()
@@ -345,6 +346,7 @@ class TestTimeSeriesApi(BaseApiTest):
         assert sorted(response.result_timeseries, key=lambda x: x.label) == [
             expected_formula_timeseries
         ]
+        assert False
 
     def test_sum(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
