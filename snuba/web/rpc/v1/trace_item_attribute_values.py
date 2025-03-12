@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timedelta
 from typing import Type
 
 from google.protobuf.json_format import MessageToDict
@@ -6,7 +7,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeValuesRequest,
     TraceItemAttributeValuesResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
@@ -15,13 +16,13 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.data_source.simple import Entity
+from snuba.query.data_source.simple import Storage
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal, literals_array
+from snuba.query.dsl import and_cond, column, literal, literals_array
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -29,8 +30,8 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
-    base_conditions_and,
     convert_filter_offset,
+    project_id_and_org_conditions,
     treeify_or_and_conditions,
     truncate_request_meta_to_day,
 )
@@ -41,52 +42,74 @@ from snuba.web.rpc.v1.legacy.trace_item_attribute_values import (
 )
 
 
+def next_monday(dt: datetime) -> datetime:
+    return dt + timedelta(days=(7 - dt.weekday()) or 7)
+
+
+def prev_monday(dt: datetime) -> datetime:
+    return dt - timedelta(days=(dt.weekday() % 7))
+
+
+def get_time_range_condition(meta: RequestMeta) -> Expression:
+    # round the lower timestamp to the previous monday
+    lower_ts = meta.start_timestamp.ToDatetime().replace(hour=0, minute=0, second=0)
+
+    # round the upper timestamp to the next monday
+    upper_ts = meta.end_timestamp.ToDatetime().replace(hour=0, minute=0, second=0)
+
+    return and_cond(
+        f.less(
+            column("timestamp"),
+            f.toStartOfWeek(f.addDays(f.toDateTime(upper_ts), 7)),
+        ),
+        f.greaterOrEquals(
+            column("timestamp"),
+            f.toStartOfWeek(f.toDateTime(lower_ts)),
+        ),
+    )
+
+
 def _build_base_conditions_and(request: TraceItemAttributeValuesRequest) -> Expression:
+    # TODO: week conversions
+    conditions: list[Expression] = [
+        f.equals(column("attr_key"), literal(request.key.name)),
+        f.equals(column("attr_type"), literal("string")),
+    ]
+    if request.meta.trace_item_type:
+        conditions.append(f.equals(column("item_type"), request.meta.trace_item_type))
     if request.value_substring_match:
-        return (
-            base_conditions_and(
-                request.meta,
-                f.equals(column("attr_key"), literal(request.key.name)),
-                # multiSearchAny has special treatment with ngram bloom filters
-                # https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/mergetree#functions-support
-                f.multiSearchAny(
-                    column("attr_value"),
-                    literals_array(None, [literal(request.value_substring_match)]),
-                ),
-                convert_filter_offset(request.page_token.filter_offset),
-            )
-            if request.page_token.HasField("filter_offset")
-            else base_conditions_and(
-                request.meta,
-                f.equals(column("attr_key"), literal(request.key.name)),
-                f.multiSearchAny(
-                    column("attr_value"),
-                    literals_array(None, [literal(request.value_substring_match)]),
-                ),
+        conditions.append(
+            f.multiSearchAny(
+                column("attr_value"),
+                literals_array(None, [literal(request.value_substring_match)]),
             )
         )
-    else:
-        return (
-            base_conditions_and(
-                request.meta,
-                f.equals(column("attr_key"), literal(request.key.name)),
-                convert_filter_offset(request.page_token.filter_offset),
-            )
-            if request.page_token.HasField("filter_offset")
-            else base_conditions_and(
-                request.meta,
-                f.equals(column("attr_key"), literal(request.key.name)),
-            )
-        )
+    if request.page_token.HasField("filter_offset"):
+        conditions.append(convert_filter_offset(request.page_token.filter_offset))
+
+    return and_cond(
+        and_cond(
+            project_id_and_org_conditions(request.meta),
+            # timestamp should be converted to start and end of week
+            get_time_range_condition(request.meta),
+        ),
+        *conditions
+    )
+
+    # return base_conditions_and(
+    #    request.meta,
+    #    *conditions
+    # )
 
 
 def _build_query(request: TraceItemAttributeValuesRequest) -> Query:
     if request.limit > 1000:
         raise BadSnubaRPCRequestException("Limit can be at most 1000")
 
-    entity = Entity(
-        key=EntityKey("spans_str_attrs"),
-        schema=get_entity(EntityKey("spans_str_attrs")).get_data_model(),
+    storage_key = StorageKey("items_attrs")
+    entity = Storage(
+        key=storage_key,
+        schema=get_storage(storage_key).get_schema().get_columns(),
         sample=None,
     )
 
@@ -116,7 +139,23 @@ def _build_snuba_request(
 ) -> SnubaRequest:
     if not should_use_items_attrs(request.meta):
         return build_snuba_request_legacy(request)
-    raise NotImplementedError
+    return SnubaRequest(
+        id=uuid.uuid4(),
+        original_body=MessageToDict(request),
+        query=_build_query(request),
+        query_settings=HTTPQuerySettings(),
+        attribution_info=AttributionInfo(
+            referrer=request.meta.referrer,
+            team="eap",
+            feature="eap",
+            tenant_ids={
+                "organization_id": request.meta.organization_id,
+                "referrer": request.meta.referrer,
+            },
+            app_id=AppID("eap"),
+            parent_api="trace_item_values",
+        ),
+    )
 
 
 class AttributeValuesRequest(
@@ -129,6 +168,10 @@ class AttributeValuesRequest(
     @classmethod
     def request_class(cls) -> Type[TraceItemAttributeValuesRequest]:
         return TraceItemAttributeValuesRequest
+
+    @classmethod
+    def response_class(cls) -> Type[TraceItemAttributeValuesResponse]:
+        return TraceItemAttributeValuesResponse
 
     def _execute(
         self, in_msg: TraceItemAttributeValuesRequest

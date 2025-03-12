@@ -105,7 +105,7 @@ class TestTraceItemAttributes(BaseApiTest):
             limit=10,
         )
         response = self.app.post(
-            "/rpc/AttributeValuesRequest/v1alpha", data=message.SerializeToString()
+            "/rpc/AttributeValuesRequest/v1", data=message.SerializeToString()
         )
         assert response.status_code == 200
 
@@ -211,7 +211,7 @@ class TestTraceItemAttributes(BaseApiTest):
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-class TestTimeSeriesApiEAPItems(TestTraceItemAttributes):
+class TestAttributeValuesEAPItems(TestTraceItemAttributes):
     """
     Run the tests again, but this time on the eap_items table as well to ensure it also works.
     """
