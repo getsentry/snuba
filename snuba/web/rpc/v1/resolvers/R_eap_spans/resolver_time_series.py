@@ -1,3 +1,4 @@
+import typing
 import uuid
 from collections import defaultdict
 from dataclasses import replace
@@ -26,8 +27,9 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.data_source.simple import Entity
+from snuba.query.data_source.simple import Entity, Table
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
 from snuba.query.expressions import Expression
@@ -265,21 +267,29 @@ def _proto_expression_to_ast_expression(
             raise ValueError(f"Unknown expression type: {default}")
 
 
-def _build_query(request: TimeSeriesRequest) -> Query:
+def _get_entity(request: TimeSeriesRequest, to_tier_512: bool) -> Entity | Table:
+    if to_tier_512:
+        return Table(
+            table_name="eap_items_1_downsample_512_dist",
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
+            storage_key=StorageKey.EVENTS_ANALYTICS_PLATFORM,  # does this work
+        )
     # TODO: This is hardcoded still
     if use_eap_items_table(request.meta):
-        entity = Entity(
+        return Entity(
             key=EntityKey("eap_items"),
             schema=get_entity(EntityKey("eap_items")).get_data_model(),
             sample=None,
         )
     else:
-        entity = Entity(
+        return Entity(
             key=EntityKey("eap_spans"),
             schema=get_entity(EntityKey("eap_spans")).get_data_model(),
             sample=None,
         )
 
+
+def _build_query(request: TimeSeriesRequest, to_tier_512: bool) -> Query:
     aggregation_columns = [
         SelectedExpression(
             name=expr.label,
@@ -303,7 +313,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     ]
 
     res = Query(
-        from_clause=entity,
+        from_clause=_get_entity(request, to_tier_512),  # type: ignore
         selected_columns=[
             # buckets time by granularity according to the start time of the request.
             # time_slot = start_time + (((timestamp - start_time) // granularity) * granularity)
@@ -358,7 +368,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     return res
 
 
-def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
+def _build_snuba_request(request: TimeSeriesRequest, to_tier_512: bool) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
@@ -366,7 +376,7 @@ def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=_build_query(request),
+        query=_build_query(request, to_tier_512),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -392,7 +402,16 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
         # if the user passes it in
         assert len(in_msg.aggregations) == 0
 
-        snuba_request = _build_snuba_request(in_msg)
+        request_to_tier_512 = _build_snuba_request(in_msg, to_tier_512=True)
+        res_from_tier_512 = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=request_to_tier_512,
+            timer=self._timer,
+        )
+        num_rows_from_tier_512 = typing.cast(  # noqa: F841
+            int, res_from_tier_512.result["data"][0]["count"]
+        )
+        snuba_request = _build_snuba_request(in_msg, to_tier_512=False)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
