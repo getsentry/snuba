@@ -357,6 +357,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         ],
     )
     treeify_or_and_conditions(res)
+    print("ressss", res)
     return res
 
 
@@ -423,7 +424,7 @@ def _run_query_against_correct_tier(
     )
 
     # TODO: logic to select the correct tier based on num_rows_from_tier_512. For now all queries will go to tier 1
-
+    print("afterthisssssssss")
     request_to_correct_tier = _build_snuba_request(in_msg, tier=1, get_num_rows=False)
     return run_query(
         dataset=PluggableDataset(name="eap", all_entities=[]),
