@@ -68,11 +68,11 @@ PROTO_TYPE_TO_CLICKHOUSE_TYPE: Final[Mapping[AttributeKey.Type.ValueType, str]] 
 }
 
 PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
-    AttributeKey.Type.TYPE_INT: "attributes_int",
+    AttributeKey.Type.TYPE_INT: "attributes_float",
     AttributeKey.Type.TYPE_STRING: "attributes_string",
     AttributeKey.Type.TYPE_DOUBLE: "attributes_float",
     AttributeKey.Type.TYPE_FLOAT: "attributes_float",
-    AttributeKey.Type.TYPE_BOOLEAN: "attributes_bool",
+    AttributeKey.Type.TYPE_BOOLEAN: "attributes_float",
 }
 
 ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
@@ -137,7 +137,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
                 SubscriptableReference(
                     column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
                     key=literal(attr_name),
-                    alias=alias,
+                    alias=None,
                 ),
                 "Nullable(Boolean)",
                 alias=alias,
@@ -147,7 +147,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
                 SubscriptableReference(
                     column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
                     key=literal(attr_name),
-                    alias=alias,
+                    alias=None,
                 ),
                 "Nullable(Int64)",
                 alias=alias,
