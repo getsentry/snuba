@@ -359,156 +359,6 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     treeify_or_and_conditions(res)
     return res
 
-    # condition = base_conditions_and(
-    #     request.meta,
-    #     trace_item_filters_to_expression(
-    #         request.filter, _get_attribute_key_to_expression_function(request.meta)
-    #     ),
-    # ),
-    #
-    # if get_num_rows:
-    #     res = Query(
-    #         from_clause=_get_entity,
-    #         selected_columns=[
-    #             SelectedExpression("count", FunctionCall("count", "count", ())),
-    #         ],
-    #         condition=base_conditions_and(
-    #             request.meta,
-    #             trace_item_filters_to_expression(
-    #                 request.filter, _get_attribute_key_to_expression_function(request.meta)
-    #             ),
-    #         ),  # type: ignore
-    #     )
-    # else:
-    #     aggregation_columns = [
-    #         SelectedExpression(
-    #             name=expr.label,
-    #             expression=_proto_expression_to_ast_expression(expr, request.meta),
-    #         )
-    #         for expr in request.expressions
-    #     ]
-    #
-    #     additional_context_columns = _get_reliability_context_columns(
-    #         request.expressions, request.meta
-    #     )
-    #
-    #     groupby_columns = [
-    #         SelectedExpression(
-    #             name=attr_key.name,
-    #             expression=_get_attribute_key_to_expression_function(request.meta)(
-    #                 attr_key
-    #             ),
-    #         )
-    #         for attr_key in request.group_by
-    #     ]
-    #     res = Query(
-    #         from_clause=entity,
-    #         selected_columns=[
-    #             # buckets time by granularity according to the start time of the request.
-    #             # time_slot = start_time + (((timestamp - start_time) // granularity) * granularity)
-    #             # Example:
-    #             #   start_time = 1001
-    #             #   end_time = 1901
-    #             #   granularity = 300
-    #             #   timestamps = [1201, 1002, 1302, 1400, 1700]
-    #             #   buckets = [1001, 1301, 1601] # end time not included because it would be filtered out by the request
-    #             SelectedExpression(
-    #                 name="time",
-    #                 expression=f.toDateTime(
-    #                     f.plus(
-    #                         request.meta.start_timestamp.seconds,
-    #                         f.multiply(
-    #                             f.intDiv(
-    #                                 f.minus(
-    #                                     f.toUnixTimestamp(column("timestamp")),
-    #                                     request.meta.start_timestamp.seconds,
-    #                                 ),
-    #                                 request.granularity_secs,
-    #                             ),
-    #                             request.granularity_secs,
-    #                         ),
-    #                     ),
-    #                     alias="time_slot",
-    #                 ),
-    #             ),
-    #             *aggregation_columns,
-    #             *groupby_columns,
-    #             *additional_context_columns,
-    #         ],
-    #         granularity=request.granularity_secs,
-    #         condition=base_conditions_and(
-    #             request.meta,
-    #             trace_item_filters_to_expression(
-    #                 request.filter, _get_attribute_key_to_expression_function(request.meta)
-    #             ),
-    #         ), # type: ignore
-    #         groupby=[
-    #             column("time_slot"),
-    #             *[
-    #                 _get_attribute_key_to_expression_function(request.meta)(attr_key)
-    #                 for attr_key in request.group_by
-    #             ],
-    #         ],
-    #         order_by=[
-    #             OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)
-    #         ],
-    #     )
-    #
-    # # print("queryyyy", Query(
-    # #     from_clause=entity,
-    # #     selected_columns=[
-    # #         # buckets time by granularity according to the start time of the request.
-    # #         # time_slot = start_time + (((timestamp - start_time) // granularity) * granularity)
-    # #         # Example:
-    # #         #   start_time = 1001
-    # #         #   end_time = 1901
-    # #         #   granularity = 300
-    # #         #   timestamps = [1201, 1002, 1302, 1400, 1700]
-    # #         #   buckets = [1001, 1301, 1601] # end time not included because it would be filtered out by the request
-    # #         SelectedExpression(
-    # #             name="time",
-    # #             expression=f.toDateTime(
-    # #                 f.plus(
-    # #                     request.meta.start_timestamp.seconds,
-    # #                     f.multiply(
-    # #                         f.intDiv(
-    # #                             f.minus(
-    # #                                 f.toUnixTimestamp(column("timestamp")),
-    # #                                 request.meta.start_timestamp.seconds,
-    # #                             ),
-    # #                             request.granularity_secs,
-    # #                         ),
-    # #                         request.granularity_secs,
-    # #                     ),
-    # #                 ),
-    # #                 alias="time_slot",
-    # #             ),
-    # #         ),
-    # #         *aggregation_columns,
-    # #         *groupby_columns,
-    # #         *additional_context_columns,
-    # #     ],
-    # #     granularity=request.granularity_secs,
-    # #     condition=base_conditions_and(
-    # #         request.meta,
-    # #         trace_item_filters_to_expression(
-    # #             request.filter, _get_attribute_key_to_expression_function(request.meta)
-    # #         ),
-    # #     ),
-    # #     groupby=[
-    # #         column("time_slot"),
-    # #         *[
-    # #             _get_attribute_key_to_expression_function(request.meta)(attr_key)
-    # #             for attr_key in request.group_by
-    # #         ],
-    # #     ],
-    # #     order_by=[
-    # #         OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)
-    # #     ],
-    # # ))
-    # treeify_or_and_conditions(res)
-    # return res
-
 
 def _build_count_rows_query(request: TimeSeriesRequest) -> Query:
     res = Query(
@@ -562,7 +412,6 @@ def _run_query_against_correct_tier(
     select_query_to_count_rows_to_tier_512 = _build_snuba_request(
         in_msg, tier=512, get_num_rows=True
     )
-    print(select_query_to_count_rows_to_tier_512)
     select_res_from_tier_512 = run_query(
         dataset=PluggableDataset(name="eap", all_entities=[]),
         request=select_query_to_count_rows_to_tier_512,
@@ -576,13 +425,6 @@ def _run_query_against_correct_tier(
     # TODO: logic to select the correct tier based on num_rows_from_tier_512. For now all queries will go to tier 1
 
     request_to_correct_tier = _build_snuba_request(in_msg, tier=1, get_num_rows=False)
-    print(
-        run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=request_to_correct_tier,
-            timer=timer,
-        )
-    )
     return run_query(
         dataset=PluggableDataset(name="eap", all_entities=[]),
         request=request_to_correct_tier,

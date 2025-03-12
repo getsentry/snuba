@@ -22,6 +22,7 @@ class EAPItemsStorageSelector(QueryStorageSelector):
             storage_key = StorageKey.EAP_ITEMS
         else:
             storage_key = getattr(StorageKey, f"EAP_ITEMS_DOWNSAMPLE_{tier}")
+        print("get_storageee", storage_key, get_storage(storage_key))
         return EntityStorageConnection(
             storage=get_storage(storage_key),
             translation_mappers=TranslationMappers(),

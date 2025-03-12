@@ -121,7 +121,7 @@ storages:
             num_attribute_buckets: 40
 
 storage_selector:
-  selector: DefaultQueryStorageSelector
+  selector: EAPItemsStorageSelector
 
 query_processors:
   - processor: HashBucketFunctionTransformer
