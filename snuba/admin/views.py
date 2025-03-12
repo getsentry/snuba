@@ -485,7 +485,6 @@ def clickhouse_trace_query() -> Response:
     try_gather_profile_events = req.get("gather_profile_events", True)
     try:
         settings = {}
-        # Append 'log_profile_events=1' with/without the SETTINGS clause to the incoming query.
         if try_gather_profile_events:
             settings["log_profile_events"] = 1
 
