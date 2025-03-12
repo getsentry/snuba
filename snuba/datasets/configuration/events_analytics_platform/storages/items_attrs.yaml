@@ -39,12 +39,3 @@ allocation_policies:
       required_tenant_types:
         - organization_id
         - referrer
-
-query_processors:
-  - processor: UniqInSelectAndHavingProcessor
-  - processor: TupleUnaliaser
-
-mandatory_condition_checkers:
-  - condition: OrgIdEnforcer
-    args:
-      field_name: organization_id
