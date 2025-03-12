@@ -384,6 +384,67 @@ class Runner:
         else:
             self._reverse_migration_impl(migration_key)
 
+    def reverse_all(
+        self,
+        *,
+        through: str = "all",
+        fake: bool = False,
+        force: bool = False,
+        include_system: bool = False,
+        group: Optional[MigrationGroup] = None,
+        readiness_states: Optional[Sequence[ReadinessState]] = None,
+    ) -> None:
+
+        groups = (
+            [group]
+            if group
+            else (
+                get_active_migration_groups()
+                if include_system
+                else [
+                    g
+                    for g in get_active_migration_groups()
+                    if g != MigrationGroup.SYSTEM
+                ]
+            )
+        )
+        completed_migrations = self._get_completed_migrations(groups)
+
+        if readiness_states:
+            completed_migrations = [
+                m
+                for m in completed_migrations
+                if get_group_readiness_state(m.group) in readiness_states
+            ]
+
+        use_through = False if through == "all" else True
+
+        def exact_migration_exists(through: str) -> bool:
+            migration_ids = [
+                key.migration_id
+                for key in completed_migrations
+                if key.migration_id.startswith(through)
+            ]
+            if len(migration_ids) == 1:
+                return True
+            return False
+
+        if use_through and not exact_migration_exists(through):
+            raise MigrationError(f"No exact match for: {through}")
+
+        if not force:
+            raise MigrationError("Requires force to reverse migrations")
+
+        for migration_key in completed_migrations:
+            if fake:
+                self._update_migration_status(migration_key, Status.NOT_STARTED)
+            else:
+                self._reverse_migration_impl(migration_key)
+
+            if use_through and migration_key.migration_id.startswith(through):
+                logger.info(f"Reverse through: {migration_key.migration_id}")
+                break
+
     def reverse_in_progress(
         self,
         fake: bool = False,
@@ -486,6 +547,34 @@ class Runner:
                 )
                 raise InvalidMigrationState(f"Missing migrations: {missing_migrations}")
 
+        return group_migrations
+
+    def _get_completed_migrations(
+        self, groups: List[MigrationGroup]
+    ) -> List[MigrationKey]:
+        """
+        Get a list of completed migrations for a list of groups
+        """
+        migration_status = self._get_migration_status()
+
+        def get_status(migration_key: MigrationKey) -> Status:
+            return migration_status.get(migration_key, Status.NOT_STARTED)
+
+        group_migrations: List[MigrationKey] = []
+        for group in groups:
+            group_loader = get_group_loader(group)
+            for migration_id in group_loader.get_migrations():
+                migration_key = MigrationKey(group, migration_id)
+                status = get_status(migration_key)
+                if status == Status.IN_PROGRESS:
+                    # can't reverse migrations if one is stuck pending
+                    raise MigrationInProgress(str(migration_key))
+                if status == Status.NOT_STARTED:
+                    continue
+                elif status == Status.COMPLETED:
+                    group_migrations.append(migration_key)
+        # need opposite order
+        group_migrations.reverse()
         return group_migrations
 
     def _update_migration_status(
