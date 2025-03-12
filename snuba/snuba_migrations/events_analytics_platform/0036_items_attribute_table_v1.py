@@ -63,7 +63,7 @@ SELECT
     toStartOfWeek(timestamp) AS timestamp,
     retention_days,
 FROM eap_items_1_local
-LEFT ARRAY JOIN
+ARRAY JOIN
     arrayConcat(
         {", ".join(f"arrayMap(x -> tuple(x.1, x.2, 'string'), CAST(attributes_string_{n}, 'Array(Tuple(String, String))'))" for n in range(ITEM_ATTRIBUTE_BUCKETS))},
         {",".join(f"arrayMap(x -> tuple(x, '', 'float'), mapKeys(attributes_float_{n}))" for n in range(ITEM_ATTRIBUTE_BUCKETS))}
