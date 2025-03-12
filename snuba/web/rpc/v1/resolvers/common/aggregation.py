@@ -149,12 +149,16 @@ class GenericExtrapolationContext(ExtrapolationContext):
         if not self.is_extrapolated or not self.is_data_present:
             return Reliability.RELIABILITY_UNSPECIFIED
 
-        relative_confidence = (
-            abs(self.confidence_interval / self.value)
-            if self.value != 0
-            else float("inf")
-        )
-        if relative_confidence <= CONFIDENCE_INTERVAL_THRESHOLD:
+        # We determine reliability relative to the returned value. If the
+        # confidence interval (CI) is 0, we're not sampling and have high
+        # reliability. Otherwise, if the value is 0, the CI is infinitely larger
+        # than the value, so reliability is low.
+        if self.confidence_interval == 0:
+            return Reliability.RELIABILITY_HIGH
+        elif self.value == 0:
+            return Reliability.RELIABILITY_LOW
+
+        if abs(self.confidence_interval / self.value) <= CONFIDENCE_INTERVAL_THRESHOLD:
             return Reliability.RELIABILITY_HIGH
         return Reliability.RELIABILITY_LOW
 
