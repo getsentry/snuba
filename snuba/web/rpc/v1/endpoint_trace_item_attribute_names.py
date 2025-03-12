@@ -37,6 +37,7 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.legacy.attributes_common import should_use_items_attrs
 from snuba.web.rpc.v1.legacy.trace_item_attribute_names import (
     convert_to_snuba_request as legacy_convert_to_snuba_request,
 )
@@ -46,8 +47,7 @@ MAX_REQUEST_LIMIT = 1000
 
 
 def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
-
-    if not _should_use_items_attrs(req):
+    if not should_use_items_attrs(req.meta):
         return legacy_convert_to_snuba_request(req)
 
 
@@ -65,28 +65,6 @@ def convert_to_attributes(
         )
 
     return list(map(t, query_res.result["data"]))
-
-
-def _should_use_items_attrs(request: TraceItemAttributeNamesRequest) -> bool:
-    request_meta = request.meta
-    if getattr(settings, "USE_EAP_ITEMS_TABLE", False):
-        return True
-    if request_meta.referrer.startswith("force_use_eap_spans_table"):
-        return False
-
-    use_eap_items_attrs_table_start_timestamp_seconds = state.get_int_config(
-        "use_eap_items_attrs_table_start_timestamp_seconds"
-    )
-    if (
-        state.get_config("use_eap_items_attrs_table", False)
-        and use_eap_items_attrs_table_start_timestamp_seconds is not None
-    ):
-        return (
-            request_meta.start_timestamp.seconds
-            >= use_eap_items_attrs_table_start_timestamp_seconds
-        )
-
-    return False
 
 
 class EndpointTraceItemAttributeNames(
