@@ -53,14 +53,14 @@ class Migration(migration.ClickhouseNodeMigration):
                 destination_table_name=self.local_table,
                 target=OperationTarget.LOCAL,
                 query=f"""
-SELECT
+SELECT DISTINCT
     organization_id,
     project_id,
     item_type,
     attrs.1 as attr_key,
     attrs.2 as attr_value,
     attrs.3 as attr_type,
-    toStartOfWeek(timestamp) AS timestamp,
+    toStartOfWeek(timestamp) AS ts,
     retention_days,
 FROM eap_items_1_local
 ARRAY JOIN
@@ -68,15 +68,6 @@ ARRAY JOIN
         {", ".join(f"arrayMap(x -> tuple(x.1, x.2, 'string'), CAST(attributes_string_{n}, 'Array(Tuple(String, String))'))" for n in range(ITEM_ATTRIBUTE_BUCKETS))},
         {",".join(f"arrayMap(x -> tuple(x, '', 'float'), mapKeys(attributes_float_{n}))" for n in range(ITEM_ATTRIBUTE_BUCKETS))}
     ) AS attrs
-GROUP BY
-    organization_id,
-    project_id,
-    item_type,
-    attr_key,
-    attr_value,
-    attr_type,
-    timestamp,
-    retention_days
 """,
             ),
         ]
