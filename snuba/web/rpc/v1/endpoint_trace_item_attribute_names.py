@@ -245,12 +245,11 @@ def get_co_occurring_attributes(
     collector = AttributeKeyCollector()
     TraceItemFilterWrapper(request.intersecting_attributes_filter).accept(collector)
     attribute_keys_to_search = collector.keys
+    storage_key = StorageKey("eap_item_co_occurring_attrs")
 
     storage = Storage(
-        key=StorageKey("eap_item_co_occurring_attrs"),
-        schema=get_storage(StorageKey("eap_item_co_occurring_attrs"))
-        .get_schema()
-        .get_columns(),
+        key=storage_key,
+        schema=get_storage(storage_key).get_schema().get_columns(),
         sample=None,
     )
 
@@ -450,4 +449,4 @@ class EndpointTraceItemAttributeNames(
                 request=snuba_request,
                 timer=self._timer,
             )
-        return self._build_response(in_msg, res)
+            return self._build_response(in_msg, res)
