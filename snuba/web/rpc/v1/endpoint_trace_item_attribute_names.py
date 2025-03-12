@@ -1,5 +1,4 @@
 import uuid
-from datetime import timedelta
 from typing import Type
 
 from google.protobuf.json_format import MessageToDict
@@ -37,6 +36,8 @@ from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     base_conditions_and,
     convert_filter_offset,
+    next_monday,
+    prev_monday,
     project_id_and_org_conditions,
     treeify_or_and_conditions,
 )
@@ -161,21 +162,25 @@ def get_co_occurring_attributes_date_condition(
     request: TraceItemAttributeNamesRequest,
 ) -> Expression:
     # round the lower timestamp to the previous monday
-    lower_ts = request.meta.start_timestamp.ToDatetime().date()
-    lower_ts = lower_ts - timedelta(days=(lower_ts.weekday() - 0) % 7)
+    lower_ts = request.meta.start_timestamp.ToDatetime().replace(
+        hour=0, minute=0, second=0
+    )
+    lower_ts = prev_monday(lower_ts)
 
     # round the upper timestamp to the next monday
-    upper_ts = request.meta.end_timestamp.ToDatetime().date()
-    upper_ts = upper_ts + timedelta(days=(7 - upper_ts.weekday()) % 7)
+    upper_ts = request.meta.end_timestamp.ToDatetime().replace(
+        hour=0, minute=0, second=0
+    )
+    upper_ts = next_monday(upper_ts)
 
     return and_cond(
         f.less(
             column("date"),
-            f.toDateTime(upper_ts),
+            f.toDate(upper_ts),
         ),
         f.greaterOrEquals(
             column("date"),
-            f.toDateTime(lower_ts),
+            f.toDate(lower_ts),
         ),
     )
 
