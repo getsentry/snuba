@@ -199,7 +199,6 @@ def _get_rows_to_delete(
         .get_reader()
         .execute(formatted_select_query_to_count_rows)
     )
-    print("select_queryyyyy", select_query_results)
     return typing.cast(int, select_query_results["data"][0]["count"])
 
 
@@ -241,7 +240,6 @@ def _enforce_max_rows(delete_query: Query) -> int:
         from_clause=get_new_from_clause(),
         condition=delete_query.get_condition(),
     )
-    print("select_itself", select_query_to_count_rows)
     rows_to_delete = _get_rows_to_delete(
         storage_key=storage_key, select_query_to_count_rows=select_query_to_count_rows
     )

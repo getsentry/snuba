@@ -292,9 +292,11 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         )
         for expr in request.expressions
     ]
+
     additional_context_columns = _get_reliability_context_columns(
         request.expressions, request.meta
     )
+
     groupby_columns = [
         SelectedExpression(
             name=attr_key.name,
@@ -304,6 +306,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         )
         for attr_key in request.group_by
     ]
+
     res = Query(
         from_clause=_get_entity(request),
         selected_columns=[
@@ -357,7 +360,6 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         ],
     )
     treeify_or_and_conditions(res)
-    print("ressss", res)
     return res
 
 
@@ -372,7 +374,7 @@ def _build_count_rows_query(request: TimeSeriesRequest) -> Query:
             trace_item_filters_to_expression(
                 request.filter, _get_attribute_key_to_expression_function(request.meta)
             ),
-        ),  # type: ignore
+        ),
     )
     treeify_or_and_conditions(res)
     return res
@@ -418,13 +420,11 @@ def _run_query_against_correct_tier(
         request=select_query_to_count_rows_to_tier_512,
         timer=timer,
     )
-    print("res_from_tier_512", select_res_from_tier_512)
     num_rows_from_tier_512 = typing.cast(  # noqa: F841
         int, select_res_from_tier_512.result["data"][0]["count"]
     )
 
     # TODO: logic to select the correct tier based on num_rows_from_tier_512. For now all queries will go to tier 1
-    print("afterthisssssssss")
     request_to_correct_tier = _build_snuba_request(in_msg, tier=1, get_num_rows=False)
     return run_query(
         dataset=PluggableDataset(name="eap", all_entities=[]),

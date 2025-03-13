@@ -112,8 +112,6 @@ class EntityProcessingExecutor:
                 )
             )
 
-        print("translate_query_and_apply_mapperssss", clickhouse_query)
-
         if settings.get_dry_run():
             explain_meta.add_transform_step(
                 "storage_planning", "mappers", str(query), str(clickhouse_query)
@@ -141,7 +139,6 @@ def run_entity_processing_executor(
     entity = get_entity(entity_key)
     assert isinstance(entity, PluggableEntity)
     entity_processing_executor = entity.get_processing_executor()
-    print("run_entity_processing_executorrrr", query)
     physical_query = entity_processing_executor.execute(
         cast(EntityQuery, query), query_settings
     )

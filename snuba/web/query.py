@@ -41,7 +41,6 @@ def _run_query_pipeline(
     concurrent_queries_gauge: Optional[Gauge] = None,
     force_dry_run: bool = False,
 ) -> QueryResult:
-    # print("_run_query_pipeline_requestttt", request)
     clickhouse_query = EntityProcessingStage().execute(
         QueryPipelineResult(
             data=request,
@@ -50,7 +49,6 @@ def _run_query_pipeline(
             error=None,
         )
     )
-    print("thefirstclickhouse_qeury", clickhouse_query)
     clickhouse_query = StorageProcessingStage().execute(clickhouse_query)
 
     res = ExecutionStage(

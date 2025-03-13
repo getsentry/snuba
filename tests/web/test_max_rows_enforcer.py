@@ -79,7 +79,6 @@ class TestMaxRowsEnforcer(SimpleAPITest, BaseApiTest, ConfigurationTest):
     def test_max_row_enforcer_passes(self) -> None:
         self._insert_event()
         _enforce_max_rows(self.query)
-        assert False
 
     @pytest.mark.clickhouse_db
     @mock.patch(
