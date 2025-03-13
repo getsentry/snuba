@@ -40,6 +40,8 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
+    use_eap_items_table,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -100,11 +102,18 @@ def _build_attr_distribution_snuba_request(
 def _build_attr_distribution_query(
     in_msg: TraceItemStatsRequest, distributions_params: AttributeDistributionsRequest
 ) -> Query:
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
+    if use_eap_items_table(in_msg.meta):
+        entity = Entity(
+            key=EntityKey("eap_items"),
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
+            sample=None,
+        )
+    else:
+        entity = Entity(
+            key=EntityKey("eap_spans"),
+            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+            sample=None,
+        )
 
     concat_attr_maps = FunctionCall(
         alias="attr_str_concat",
@@ -136,7 +145,10 @@ def _build_attr_distribution_query(
     ]
 
     trace_item_filters_expression = trace_item_filters_to_expression(
-        in_msg.filter, attribute_key_to_expression
+        in_msg.filter,
+        attribute_key_to_expression_eap_items
+        if use_eap_items_table(in_msg.meta)
+        else attribute_key_to_expression,
     )
 
     query = Query(

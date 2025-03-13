@@ -39,6 +39,8 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverGetTrace
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
+    use_eap_items_table,
 )
 
 _BUCKET_COUNT = 20
@@ -82,7 +84,9 @@ def _build_query(request: GetTraceRequest) -> Query:
             selected_columns.append(
                 SelectedExpression(
                     name=attribute_key.name,
-                    expression=attribute_key_to_expression(attribute_key),
+                    expression=attribute_key_to_expression_eap_items(attribute_key)
+                    if use_eap_items_table(request.meta)
+                    else attribute_key_to_expression(attribute_key),
                 )
             )
     else:
@@ -113,11 +117,18 @@ def _build_query(request: GetTraceRequest) -> Query:
             ]
         )
 
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
+    if use_eap_items_table(request.meta):
+        entity = Entity(
+            key=EntityKey("eap_items"),
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
+            sample=None,
+        )
+    else:
+        entity = Entity(
+            key=EntityKey("eap_spans"),
+            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+            sample=None,
+        )
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,

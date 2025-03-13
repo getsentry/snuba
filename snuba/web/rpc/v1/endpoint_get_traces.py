@@ -9,7 +9,11 @@ from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import (
     GetTracesResponse,
     TraceAttribute,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
+    RequestMeta,
+    TraceItemType,
+)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
@@ -42,6 +46,8 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
+    use_eap_items_table,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -135,8 +141,7 @@ _TYPES_TO_CLICKHOUSE: dict[
 
 
 def _attribute_to_expression(
-    trace_attribute: TraceAttribute,
-    *conditions: Expression,
+    trace_attribute: TraceAttribute, *conditions: Expression, request_meta: RequestMeta
 ) -> Expression:
     def _get_root_span_attribute(attribute_name: str) -> Expression:
         return f.argMinIf(
@@ -154,8 +159,14 @@ def _attribute_to_expression(
         )
 
     def _get_earliest_frontend_span_attribute(attribute_name: str) -> Expression:
-        span_op = attribute_key_to_expression(
-            AttributeKey(name="sentry.op", type=AttributeKey.Type.TYPE_STRING)
+        span_op = (
+            attribute_key_to_expression_eap_items(
+                AttributeKey(name="sentry.op", type=AttributeKey.Type.TYPE_STRING)
+            )
+            if use_eap_items_table(request_meta)
+            else attribute_key_to_expression(
+                AttributeKey(name="sentry.op", type=AttributeKey.Type.TYPE_STRING)
+            )
         )
         return f.argMinIf(
             column(attribute_name),
@@ -352,7 +363,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> dict[str, int]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
-            attribute_key_to_expression,
+            attribute_key_to_expression_eap_items
+            if use_eap_items_table(request.meta)
+            else attribute_key_to_expression,
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(
@@ -372,11 +385,18 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 ),
             ),
         ]
-        entity = Entity(
-            key=EntityKey("eap_spans"),
-            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-            sample=None,
-        )
+        if use_eap_items_table(request.meta):
+            entity = Entity(
+                key=EntityKey("eap_items"),
+                schema=get_entity(EntityKey("eap_items")).get_data_model(),
+                sample=None,
+            )
+        else:
+            entity = Entity(
+                key=EntityKey("eap_spans"),
+                schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+                sample=None,
+            )
         query = Query(
             from_clause=entity,
             selected_columns=selected_columns,
@@ -413,7 +433,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> list[GetTracesResponse.Trace]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
-            attribute_key_to_expression,
+            attribute_key_to_expression_eap_items
+            if use_eap_items_table(request.meta)
+            else attribute_key_to_expression,
         )
 
         selected_columns: list[SelectedExpression] = []
@@ -427,6 +449,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     expression=_attribute_to_expression(
                         trace_attribute,
                         trace_item_filters_expression,
+                        request.meta,
                     ),
                 )
             )
@@ -441,15 +464,23 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     expression=_attribute_to_expression(
                         trace_attribute,
                         trace_item_filters_expression,
+                        request.meta,
                     ),
                 )
             )
 
-        entity = Entity(
-            key=EntityKey("eap_spans"),
-            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-            sample=None,
-        )
+        if use_eap_items_table(request.meta):
+            entity = Entity(
+                key=EntityKey("eap_items"),
+                schema=get_entity(EntityKey("eap_items")).get_data_model(),
+                sample=None,
+            )
+        else:
+            entity = Entity(
+                key=EntityKey("eap_spans"),
+                schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+                sample=None,
+            )
         timestamps = trace_ids.values()
         query = Query(
             from_clause=entity,
@@ -476,6 +507,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     TraceAttribute(
                         key=TraceAttribute.Key.KEY_TRACE_ID,
                     ),
+                    request.meta,
                 ),
             ],
             order_by=[
