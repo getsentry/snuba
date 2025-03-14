@@ -135,6 +135,7 @@ impl From<FromLogMessage> for EAPItem {
                 .as_bytes(),
             ),
             sampling_weight: 1,
+            sampling_weight_2: 1.0,
             retention_days: Some(from.retention_days),
             attributes: Default::default(),
         };
