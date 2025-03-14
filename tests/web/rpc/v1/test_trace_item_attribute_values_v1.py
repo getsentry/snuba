@@ -223,3 +223,14 @@ class TestAttributeValuesEAPItems(TestTraceItemAttributes):
     ) -> None:
         snuba_set_config("use_eap_items_attrs_table", True)
         snuba_set_config("use_eap_items_attrs_table_start_timestamp_seconds", 0)
+
+    # NOTE: pagination of values doesn't work with the new approach of getting attribute values
+    # (straight from the source table) without significant performance degradation
+    # as of 2025-03-14, this functionality has also not been used. As such for now, it's better to
+    # ship an autocomplete that is mostly functional minus this paginatin feature. Instead we rely on the
+    # user to add more characters in the value_substring_match
+    def test_page_token(self, setup_teardown: Any) -> None:
+        pass
+
+    def test_page_token_filter_offset(self) -> None:
+        pass

@@ -41,15 +41,18 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
 
 
 def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
+    attribute_key = attribute_key_to_expression_eap_items(request.key)
+
     conditions: list[Expression] = [
         f.has(column("_hash_map_string"), request.key.name),
     ]
     if request.meta.trace_item_type:
         conditions.append(f.equals(column("item_type"), request.meta.trace_item_type))
+
     if request.value_substring_match:
         conditions.append(
             f.like(
-                attribute_key_to_expression_eap_items(request.key),
+                attribute_key,
                 f"%{request.value_substring_match}%",
             )
         )
