@@ -1,3 +1,4 @@
+import typing
 import uuid
 from collections import defaultdict
 from dataclasses import replace
@@ -30,10 +31,12 @@ from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
-from snuba.query.expressions import Expression
+from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryResult
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     base_conditions_and,
@@ -265,21 +268,23 @@ def _proto_expression_to_ast_expression(
             raise ValueError(f"Unknown expression type: {default}")
 
 
-def _build_query(request: TimeSeriesRequest) -> Query:
+def _get_entity(request: TimeSeriesRequest) -> Entity:
     # TODO: This is hardcoded still
     if use_eap_items_table(request.meta):
-        entity = Entity(
+        return Entity(
             key=EntityKey("eap_items"),
             schema=get_entity(EntityKey("eap_items")).get_data_model(),
             sample=None,
         )
     else:
-        entity = Entity(
+        return Entity(
             key=EntityKey("eap_spans"),
             schema=get_entity(EntityKey("eap_spans")).get_data_model(),
             sample=None,
         )
 
+
+def _build_query(request: TimeSeriesRequest) -> Query:
     aggregation_columns = [
         SelectedExpression(
             name=expr.label,
@@ -303,7 +308,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     ]
 
     res = Query(
-        from_clause=entity,
+        from_clause=_get_entity(request),
         selected_columns=[
             # buckets time by granularity according to the start time of the request.
             # time_slot = start_time + (((timestamp - start_time) // granularity) * granularity)
@@ -358,15 +363,37 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     return res
 
 
-def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
+def _build_count_rows_query(request: TimeSeriesRequest) -> Query:
+    res = Query(
+        from_clause=_get_entity(request),
+        selected_columns=[
+            SelectedExpression("count", FunctionCall("count", "count", ())),
+        ],
+        condition=base_conditions_and(
+            request.meta,
+            trace_item_filters_to_expression(
+                request.filter, _get_attribute_key_to_expression_function(request.meta)
+            ),
+        ),
+    )
+    treeify_or_and_conditions(res)
+    return res
+
+
+def _build_snuba_request(
+    request: TimeSeriesRequest, tier: int, get_num_rows: bool
+) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
+    query_settings.set_tier(tier)
 
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=_build_query(request),
+        query=_build_count_rows_query(request)
+        if get_num_rows
+        else _build_query(request),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -382,6 +409,30 @@ def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
     )
 
 
+def _run_query_against_correct_tier(
+    in_msg: TimeSeriesRequest, timer: Timer
+) -> QueryResult:
+    select_query_to_count_rows_to_tier_512 = _build_snuba_request(
+        in_msg, tier=512, get_num_rows=True
+    )
+    select_res_from_tier_512 = run_query(
+        dataset=PluggableDataset(name="eap", all_entities=[]),
+        request=select_query_to_count_rows_to_tier_512,
+        timer=timer,
+    )
+    num_rows_from_tier_512 = typing.cast(  # noqa: F841
+        int, select_res_from_tier_512.result["data"][0]["count"]
+    )
+
+    # TODO: logic to select the correct tier based on num_rows_from_tier_512. For now all queries will go to tier 1
+    request_to_correct_tier = _build_snuba_request(in_msg, tier=1, get_num_rows=False)
+    return run_query(
+        dataset=PluggableDataset(name="eap", all_entities=[]),
+        request=request_to_correct_tier,
+        timer=timer,
+    )
+
+
 class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
@@ -392,12 +443,7 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
         # if the user passes it in
         assert len(in_msg.aggregations) == 0
 
-        snuba_request = _build_snuba_request(in_msg)
-        res = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=snuba_request,
-            timer=self._timer,
-        )
+        res = _run_query_against_correct_tier(in_msg, self._timer)
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
