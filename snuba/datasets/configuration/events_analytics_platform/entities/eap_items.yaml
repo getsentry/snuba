@@ -67,6 +67,12 @@ query_processors:
         - attributes_string
         - attributes_float
       num_attribute_buckets: 40
+  - processor: HashMapHasFunctionTransformer
+    args:
+      hash_bucket_names:
+        - _hash_map_float
+        - _hash_map_string
+      num_attribute_buckets: 40
 
 validators: []
 
