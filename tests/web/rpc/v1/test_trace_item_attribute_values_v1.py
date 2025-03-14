@@ -203,6 +203,7 @@ class TestTraceItemAttributes(BaseApiTest):
                     seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
                 ),
             ),
+            key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
             value_substring_match="this_definitely_doesnt_exist_93710",
         )
         res = AttributeValuesRequest().execute(req)

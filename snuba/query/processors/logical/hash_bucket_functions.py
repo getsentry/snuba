@@ -84,7 +84,6 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
 
             if exp.function_name not in ("mapContains", "arrayElement"):
                 return exp
-
             key = exp.parameters[1]
             if not isinstance(key, Literal) or not isinstance(key.value, str):
                 return exp
@@ -101,3 +100,58 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
 
         query.transform_expressions(transform_map_keys_and_values_expression)
         query.transform_expressions(transform_map_contains_and_array_element_expression)
+
+
+class HashMapHasFunctionTransformer(LogicalQueryProcessor):
+    """ """
+
+    def __init__(
+        self,
+        hash_bucket_names: Sequence[str],
+        num_attribute_buckets: int,
+    ):
+        self.hash_bucket_names = hash_bucket_names
+        self.num_attribute_buckets = num_attribute_buckets
+
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+        def transform_has_expressions(exp: Expression) -> Expression:
+            if not isinstance(exp, FunctionCall):
+                return exp
+
+            if len(exp.parameters) != 2:
+                return exp
+
+            param = exp.parameters[0]
+            if not isinstance(param, Column):
+                return exp
+
+            if param.column_name not in self.hash_bucket_names:
+                return exp
+
+            # TODO: also support hasAll
+            if exp.function_name not in ("has",):
+                return exp
+
+            key = exp.parameters[1]
+            if not isinstance(key, Literal) or not isinstance(key.value, str):
+                return exp
+            bucket_idx = fnv_1a(key.value.encode("utf-8")) % self.num_attribute_buckets
+
+            return FunctionCall(
+                alias=exp.alias,
+                function_name="has",
+                parameters=(
+                    Column(
+                        None,
+                        column_name=f"{param.column_name}_{bucket_idx}",
+                        table_name=param.table_name,
+                    ),
+                    FunctionCall(
+                        None,
+                        function_name="cityHash64",
+                        parameters=(key,),
+                    ),
+                ),
+            )
+
+        query.transform_expressions(transform_has_expressions)

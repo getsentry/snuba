@@ -49,6 +49,7 @@ MAX_REQUEST_LIMIT = 1000
 def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
     if not should_use_items_attrs(req.meta):
         return legacy_convert_to_snuba_request(req)
+    raise NotImplementedError
 
 
 def convert_to_attributes(
