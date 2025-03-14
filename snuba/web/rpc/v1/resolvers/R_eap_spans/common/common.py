@@ -81,6 +81,8 @@ ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
     "sentry.description": "sentry.normalized_description",
     "sentry.span_id": "sentry.item_id",
     "sentry.segment_name": "sentry.transaction",
+    "sentry.start_timestamp": "sentry.start_timestamp_precise",
+    "sentry.end_timestamp": "sentry.end_timestamp_precise",
 }
 
 

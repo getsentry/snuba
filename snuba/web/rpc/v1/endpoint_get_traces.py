@@ -164,7 +164,7 @@ def _attribute_to_expression(
         return f.argMinIf(
             _get_attribute_expression(attribute_name, attribute_type, request_meta),
             _get_attribute_expression(
-                "sentry.start_timestamp_precise",
+                "sentry.start_timestamp",
                 AttributeKey.Type.TYPE_DOUBLE,
                 request_meta,
             ),
@@ -183,7 +183,7 @@ def _attribute_to_expression(
         return f.argMin(
             _get_attribute_expression(attribute_name, attribute_type, request_meta),
             _get_attribute_expression(
-                "sentry.start_timestamp_precise",
+                "sentry.start_timestamp",
                 AttributeKey.Type.TYPE_DOUBLE,
                 request_meta,
             ),
@@ -199,7 +199,7 @@ def _attribute_to_expression(
         return f.argMinIf(
             _get_attribute_expression(attribute_name, attribute_type, request_meta),
             _get_attribute_expression(
-                "sentry.start_timestamp_precise",
+                "sentry.start_timestamp",
                 AttributeKey.Type.TYPE_DOUBLE,
                 request_meta,
             ),
@@ -220,7 +220,7 @@ def _attribute_to_expression(
             return f.cast(
                 f.min(
                     _get_attribute_expression(
-                        "sentry.start_timestamp_precise",
+                        "sentry.start_timestamp",
                         AttributeKey.Type.TYPE_DOUBLE,
                         request_meta,
                     )
@@ -250,7 +250,7 @@ def _attribute_to_expression(
             )
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS:
             return _get_root_span_attribute(
-                "sentry.duration_ms", AttributeKey.Type.TYPE_INT
+                "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
             )
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_PROJECT_ID:
             return _get_root_span_attribute(
@@ -266,7 +266,7 @@ def _attribute_to_expression(
             )
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS:
             return _get_earliest_span_attribute(
-                "sentry.duration_ms", AttributeKey.Type.TYPE_INT
+                "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
             )
         elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN:
             return _get_earliest_frontend_span_attribute(
@@ -278,7 +278,7 @@ def _attribute_to_expression(
             )
         elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_DURATION_MS:
             return _get_earliest_frontend_span_attribute(
-                "sentry.duration_ms", AttributeKey.Type.TYPE_INT
+                "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
             )
         else:
             return f.cast(column(attribute_name), clickhouse_type, alias=alias)

@@ -63,7 +63,7 @@ def gen_message(
         timestamp += random.random()
     return {
         "description": span_name,
-        "duration_ms": 152,
+        "duration_ms": 1000,
         "event_id": uuid.uuid4().hex,
         "exclusive_time_ms": 0.228,
         "is_segment": is_segment,
@@ -485,7 +485,7 @@ class TestGetTraces(BaseApiTest):
                             key=TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS,
                             type=AttributeKey.TYPE_INT,
                             value=AttributeValue(
-                                val_int=152,
+                                val_int=1000,
                             ),
                         ),
                         TraceAttribute(
@@ -513,7 +513,7 @@ class TestGetTraces(BaseApiTest):
                             key=TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS,
                             type=AttributeKey.TYPE_INT,
                             value=AttributeValue(
-                                val_int=152,
+                                val_int=1000,
                             ),
                         ),
                         TraceAttribute(
@@ -534,7 +534,7 @@ class TestGetTraces(BaseApiTest):
                             key=TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_DURATION_MS,
                             type=AttributeKey.TYPE_INT,
                             value=AttributeValue(
-                                val_int=152,
+                                val_int=1000,
                             ),
                         ),
                     ],
