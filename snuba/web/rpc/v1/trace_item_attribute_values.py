@@ -63,7 +63,9 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
 def _build_query(
     request: TraceItemAttributeValuesRequest,
 ) -> CompositeQuery[LogicalDataSource]:
-    """
+    """Example query:
+
+
     SELECT distinct(attr_value) FROM
     (
         SELECT attributes_string_38['sentry.description'] as attr_value
@@ -76,8 +78,11 @@ def _build_query(
         AND greaterOrEquals(timestamp, toDateTime(1741651200))
         ORDER BY attr_value
         LIMIT 10000
-    ) LIMIT 1000
+    ) ORDER BY attr_value LIMIT 1000
 
+
+    This query will match the first 10000 occurrences of an attribute value and then deduplicate them,
+    this gives a large speedup to the query at the cost of ordering and paginating all values
     """
     if request.limit > 1000:
         raise BadSnubaRPCRequestException("Limit can be at most 1000")
