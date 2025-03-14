@@ -32,6 +32,7 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_endpoint_trace_item_table.test_endpoint_trace_item_table import (
     write_eap_span,
@@ -979,3 +980,18 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 ],
             ),
         ]
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestTraceItemTableWithExtrapolationEAPItems(TestTraceItemTableWithExtrapolation):
+    """
+    Run the tests again, but this time on the eap_items table as well to ensure it also works.
+    """
+
+    @pytest.fixture(autouse=True)
+    def use_eap_items_table(
+        self, snuba_set_config: SnubaSetConfig, redis_db: None
+    ) -> None:
+        snuba_set_config("use_eap_items_table", True)
+        snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)

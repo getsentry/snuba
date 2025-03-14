@@ -9,7 +9,11 @@ from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import (
     GetTracesResponse,
     TraceAttribute,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
+    RequestMeta,
+    TraceItemType,
+)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
@@ -42,6 +46,8 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
+    use_eap_items_table,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -134,32 +140,69 @@ _TYPES_TO_CLICKHOUSE: dict[
 }
 
 
-def _attribute_to_expression(
-    trace_attribute: TraceAttribute,
-    *conditions: Expression,
+def _get_attribute_expression(
+    attribute_name: str,
+    attribute_type: AttributeKey.Type.ValueType,
+    request_meta: RequestMeta,
 ) -> Expression:
-    def _get_root_span_attribute(attribute_name: str) -> Expression:
+    if use_eap_items_table(request_meta):
+        return attribute_key_to_expression_eap_items(
+            AttributeKey(name=attribute_name, type=attribute_type)
+        )
+    else:
+        return attribute_key_to_expression(
+            AttributeKey(name=attribute_name, type=attribute_type)
+        )
+
+
+def _attribute_to_expression(
+    trace_attribute: TraceAttribute, *conditions: Expression, request_meta: RequestMeta
+) -> Expression:
+    def _get_root_span_attribute(
+        attribute_name: str, attribute_type: AttributeKey.Type.ValueType
+    ) -> Expression:
         return f.argMinIf(
-            column(attribute_name),
-            column("start_timestamp"),
-            f.equals(column("parent_span_id"), literal("0" * 16)),
+            _get_attribute_expression(attribute_name, attribute_type, request_meta),
+            _get_attribute_expression(
+                "sentry.start_timestamp",
+                AttributeKey.Type.TYPE_DOUBLE,
+                request_meta,
+            ),
+            f.equals(
+                _get_attribute_expression(
+                    "sentry.parent_span_id", AttributeKey.Type.TYPE_STRING, request_meta
+                ),
+                literal("0" * 16),
+            ),
             alias=alias,
         )
 
-    def _get_earliest_span_attribute(attribute_name: str) -> Expression:
+    def _get_earliest_span_attribute(
+        attribute_name: str, attribute_type: AttributeKey.Type.ValueType
+    ) -> Expression:
         return f.argMin(
-            column(attribute_name),
-            column("start_timestamp"),
+            _get_attribute_expression(attribute_name, attribute_type, request_meta),
+            _get_attribute_expression(
+                "sentry.start_timestamp",
+                AttributeKey.Type.TYPE_DOUBLE,
+                request_meta,
+            ),
             alias=alias,
         )
 
-    def _get_earliest_frontend_span_attribute(attribute_name: str) -> Expression:
-        span_op = attribute_key_to_expression(
-            AttributeKey(name="sentry.op", type=AttributeKey.Type.TYPE_STRING)
+    def _get_earliest_frontend_span_attribute(
+        attribute_name: str, attribute_type: AttributeKey.Type.ValueType
+    ) -> Expression:
+        span_op = _get_attribute_expression(
+            "sentry.op", AttributeKey.Type.TYPE_STRING, request_meta
         )
         return f.argMinIf(
-            column(attribute_name),
-            column("start_timestamp"),
+            _get_attribute_expression(attribute_name, attribute_type, request_meta),
+            _get_attribute_expression(
+                "sentry.start_timestamp",
+                AttributeKey.Type.TYPE_DOUBLE,
+                request_meta,
+            ),
             or_cond(
                 f.equals(span_op, literal("pageload")),
                 f.equals(span_op, literal("navigation")),
@@ -175,32 +218,68 @@ def _attribute_to_expression(
 
         if key == TraceAttribute.Key.KEY_START_TIMESTAMP:
             return f.cast(
-                f.min(column("start_timestamp")), clickhouse_type, alias=alias
+                f.min(
+                    _get_attribute_expression(
+                        "sentry.start_timestamp",
+                        AttributeKey.Type.TYPE_DOUBLE,
+                        request_meta,
+                    )
+                ),
+                clickhouse_type,
+                alias=alias,
             )
         elif key == TraceAttribute.Key.KEY_END_TIMESTAMP:
-            return f.cast(f.max(column("end_timestamp")), clickhouse_type, alias=alias)
+            return f.cast(
+                f.max(
+                    _get_attribute_expression(
+                        "sentry.end_timestamp",
+                        AttributeKey.Type.TYPE_DOUBLE,
+                        request_meta,
+                    )
+                ),
+                clickhouse_type,
+                alias=alias,
+            )
         elif key == TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT:
             return f.count(alias=alias)
         elif key == TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT:
             return f.countIf(*conditions, alias=alias)
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
-            return _get_root_span_attribute("name")
+            return _get_root_span_attribute(
+                "sentry.name", AttributeKey.Type.TYPE_STRING
+            )
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS:
-            return _get_root_span_attribute("duration_ms")
+            return _get_root_span_attribute(
+                "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
+            )
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_PROJECT_ID:
-            return _get_root_span_attribute("project_id")
+            return _get_root_span_attribute(
+                "sentry.project_id", AttributeKey.Type.TYPE_INT
+            )
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_NAME:
-            return _get_earliest_span_attribute("name")
+            return _get_earliest_span_attribute(
+                "sentry.name", AttributeKey.Type.TYPE_STRING
+            )
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_PROJECT_ID:
-            return _get_earliest_span_attribute("project_id")
+            return _get_earliest_span_attribute(
+                "sentry.project_id", AttributeKey.Type.TYPE_INT
+            )
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS:
-            return _get_earliest_span_attribute("duration_ms")
+            return _get_earliest_span_attribute(
+                "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
+            )
         elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN:
-            return _get_earliest_frontend_span_attribute("name")
+            return _get_earliest_frontend_span_attribute(
+                "sentry.name", AttributeKey.Type.TYPE_STRING
+            )
         elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_PROJECT_ID:
-            return _get_earliest_frontend_span_attribute("project_id")
+            return _get_earliest_frontend_span_attribute(
+                "sentry.project_id", AttributeKey.Type.TYPE_INT
+            )
         elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_DURATION_MS:
-            return _get_earliest_frontend_span_attribute("duration_ms")
+            return _get_earliest_frontend_span_attribute(
+                "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
+            )
         else:
             return f.cast(column(attribute_name), clickhouse_type, alias=alias)
 
@@ -352,7 +431,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> dict[str, int]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
-            attribute_key_to_expression,
+            attribute_key_to_expression_eap_items
+            if use_eap_items_table(request.meta)
+            else attribute_key_to_expression,
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(
@@ -364,19 +445,30 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 ),
             ),
             SelectedExpression(
-                name="_sort_timestamp",
+                name="timestamp",
                 expression=f.cast(
-                    column("_sort_timestamp"),
+                    column(
+                        "timestamp"
+                        if use_eap_items_table(request.meta)
+                        else "_sort_timestamp"
+                    ),
                     "UInt32",
-                    alias="_sort_timestamp",
+                    alias="timestamp",
                 ),
             ),
         ]
-        entity = Entity(
-            key=EntityKey("eap_spans"),
-            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-            sample=None,
-        )
+        if use_eap_items_table(request.meta):
+            entity = Entity(
+                key=EntityKey("eap_items"),
+                schema=get_entity(EntityKey("eap_items")).get_data_model(),
+                sample=None,
+            )
+        else:
+            entity = Entity(
+                key=EntityKey("eap_spans"),
+                schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+                sample=None,
+            )
         query = Query(
             from_clause=entity,
             selected_columns=selected_columns,
@@ -387,7 +479,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             order_by=[
                 OrderBy(
                     direction=OrderByDirection.DESC,
-                    expression=column("_sort_timestamp"),
+                    expression=column("timestamp"),
                 ),
             ],
             limitby=LimitBy(limit=1, columns=[column("trace_id")]),
@@ -403,7 +495,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         )
         trace_ids: dict[str, int] = {}
         for row in results.result.get("data", []):
-            trace_ids[row["trace_id"]] = row["_sort_timestamp"]
+            trace_ids[row["trace_id"]] = row["timestamp"]
         return trace_ids
 
     def _get_metadata_for_traces(
@@ -413,7 +505,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> list[GetTracesResponse.Trace]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
-            attribute_key_to_expression,
+            attribute_key_to_expression_eap_items
+            if use_eap_items_table(request.meta)
+            else attribute_key_to_expression,
         )
 
         selected_columns: list[SelectedExpression] = []
@@ -427,6 +521,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     expression=_attribute_to_expression(
                         trace_attribute,
                         trace_item_filters_expression,
+                        request_meta=request.meta,
                     ),
                 )
             )
@@ -441,15 +536,23 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     expression=_attribute_to_expression(
                         trace_attribute,
                         trace_item_filters_expression,
+                        request_meta=request.meta,
                     ),
                 )
             )
 
-        entity = Entity(
-            key=EntityKey("eap_spans"),
-            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-            sample=None,
-        )
+        if use_eap_items_table(request.meta):
+            entity = Entity(
+                key=EntityKey("eap_items"),
+                schema=get_entity(EntityKey("eap_items")).get_data_model(),
+                sample=None,
+            )
+        else:
+            entity = Entity(
+                key=EntityKey("eap_spans"),
+                schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+                sample=None,
+            )
         timestamps = trace_ids.values()
         query = Query(
             from_clause=entity,
@@ -476,6 +579,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     TraceAttribute(
                         key=TraceAttribute.Key.KEY_TRACE_ID,
                     ),
+                    request_meta=request.meta,
                 ),
             ],
             order_by=[

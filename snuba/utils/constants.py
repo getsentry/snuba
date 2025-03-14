@@ -12,6 +12,8 @@ GRANULARITIES_AVAILABLE = (10, 60, 60 * 60, 24 * 60 * 60)
 # This will affect migrations and querying.
 ATTRIBUTE_BUCKETS = 20
 
+ATTRIBUTE_BUCKETS_EAP_ITEMS = 40
+
 # number of buckets in eap_items_1_local table
 ITEM_ATTRIBUTE_BUCKETS = 40
 
