@@ -18,6 +18,7 @@ schema:
       { name: trace_id, type: UUID },
       { name: item_id, type: UInt, args: { size: 128 } },
       { name: sampling_weight, type: UInt, args: { size: 64 } },
+      { name: sampling_weight_2, type: Float, args: { size: 64 } },
       { name: retention_days, type: UInt, args: { size: 16 } },
 
       { name: attributes_bool, type: Map, args: { key: { type: String }, value: { type: Bool } } },

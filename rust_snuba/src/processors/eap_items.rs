@@ -105,6 +105,7 @@ pub(crate) struct EAPItem {
     pub(crate) trace_id: Uuid,
     pub(crate) item_id: u128,
     pub(crate) sampling_weight: u64,
+    pub(crate) sampling_weight_2: f64,
     pub(crate) retention_days: Option<u16>,
 
     #[serde(flatten)]
@@ -142,6 +143,7 @@ impl From<FromSpanMessage> for EAPItem {
             trace_id: from.trace_id,
             item_id,
             sampling_weight: 1,
+            sampling_weight_2: 1.0,
             retention_days: from.retention_days,
 
             ..Default::default()
@@ -183,6 +185,7 @@ impl From<FromSpanMessage> for EAPItem {
             // lower precision to compensate floating point errors
             sampling_factor = (sampling_factor * 1e9).round() / 1e9;
             res.sampling_weight = (1.0 / sampling_factor).round() as u64;
+            res.sampling_weight_2 = 1.0 / sampling_factor;
 
             if let Some(data) = from.data {
                 for (k, v) in data {
