@@ -57,6 +57,7 @@ NORMALIZED_COLUMNS_EAP_ITEMS: Final[
         AttributeKey.Type.TYPE_STRING
     ],  # this gets converted from a uuid to a string in a storage processor
     f"{COLUMN_PREFIX}item_id": [AttributeKey.Type.TYPE_STRING],
+    f"{COLUMN_PREFIX}sampling_weight": [AttributeKey.Type.TYPE_DOUBLE],
 }
 
 PROTO_TYPE_TO_CLICKHOUSE_TYPE: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
@@ -112,26 +113,26 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
             f"attribute key {attr_key.name} must have a type specified"
         )
 
-    if attr_key.name in NORMALIZED_COLUMNS_EAP_ITEMS:
-        if attr_key.type not in NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name]:
+    attr_name = attr_key.name
+    if attr_key.name in ATTRIBUTE_MAPPINGS:
+        attr_name = ATTRIBUTE_MAPPINGS[attr_key.name]
+
+    if attr_name in NORMALIZED_COLUMNS_EAP_ITEMS:
+        if attr_key.type not in NORMALIZED_COLUMNS_EAP_ITEMS[attr_name]:
             formatted_attribute_types = ", ".join(
-                map(AttributeKey.Type.Name, NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name])
+                map(AttributeKey.Type.Name, NORMALIZED_COLUMNS_EAP_ITEMS[attr_name])
             )
             raise BadSnubaRPCRequestException(
                 f"Attribute {attr_key.name} must be one of [{formatted_attribute_types}], got {AttributeKey.Type.Name(attr_key.type)}"
             )
 
         return f.CAST(
-            column(attr_key.name[len(COLUMN_PREFIX) :]),
+            column(attr_name[len(COLUMN_PREFIX) :]),
             PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
             alias=alias,
         )
 
     if attr_key.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
-        attr_name = attr_key.name
-        if attr_key.name in ATTRIBUTE_MAPPINGS:
-            attr_name = ATTRIBUTE_MAPPINGS[attr_key.name]
-
         if attr_key.type == AttributeKey.Type.TYPE_BOOLEAN:
             return f.CAST(
                 SubscriptableReference(

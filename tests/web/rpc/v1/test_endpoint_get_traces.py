@@ -485,7 +485,7 @@ class TestGetTraces(BaseApiTest):
                             key=TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS,
                             type=AttributeKey.TYPE_INT,
                             value=AttributeValue(
-                                val_int=1000,
+                                val_int=152,
                             ),
                         ),
                         TraceAttribute(
@@ -513,7 +513,7 @@ class TestGetTraces(BaseApiTest):
                             key=TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS,
                             type=AttributeKey.TYPE_INT,
                             value=AttributeValue(
-                                val_int=1000,
+                                val_int=152,
                             ),
                         ),
                         TraceAttribute(
@@ -534,7 +534,7 @@ class TestGetTraces(BaseApiTest):
                             key=TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_DURATION_MS,
                             type=AttributeKey.TYPE_INT,
                             value=AttributeValue(
-                                val_int=1000,
+                                val_int=152,
                             ),
                         ),
                     ],

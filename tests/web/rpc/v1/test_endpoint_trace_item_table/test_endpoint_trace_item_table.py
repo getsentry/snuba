@@ -175,6 +175,14 @@ def write_eap_span(
         ],
     )
 
+    write_raw_unprocessed_events(
+        get_storage(StorageKey("eap_items")),  # type: ignore
+        [
+            gen_message(timestamp, measurements=measurements, tags=tags)
+            for _ in range(count)
+        ],
+    )
+
 
 BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
     minutes=180
@@ -1902,12 +1910,12 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_factor"
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_weight"
                         ),
-                        label="avg_sample(sampling_rate)",
+                        label="avg_sample(sampling_weight)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
-                    label="avg_sample(sampling_rate)",
+                    label="avg_sample(sampling_weight)",
                 ),
                 Column(
                     aggregation=AttributeAggregation(
@@ -1924,12 +1932,12 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_MIN,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_factor"
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_weight"
                         ),
-                        label="min(sampling_rate)",
+                        label="min(sampling_weight)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
-                    label="min(sampling_rate)",
+                    label="min(sampling_weight)",
                 ),
                 Column(
                     aggregation=AttributeAggregation(
@@ -1947,9 +1955,9 @@ class TestTraceItemTable(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         assert response.column_values == [
             TraceItemColumnValues(
-                attribute_name="avg_sample(sampling_rate)",
+                attribute_name="avg_sample(sampling_weight)",
                 results=[
-                    AttributeValue(val_double=0.475),
+                    AttributeValue(val_double=5.5),
                 ],
             ),
             TraceItemColumnValues(
@@ -1960,9 +1968,9 @@ class TestTraceItemTable(BaseApiTest):
                 reliabilities=[Reliability.RELIABILITY_LOW],
             ),
             TraceItemColumnValues(
-                attribute_name="min(sampling_rate)",
+                attribute_name="min(sampling_weight)",
                 results=[
-                    AttributeValue(val_double=0.1),
+                    AttributeValue(val_double=1),
                 ],
             ),
             TraceItemColumnValues(

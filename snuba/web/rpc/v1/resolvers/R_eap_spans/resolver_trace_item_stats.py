@@ -118,14 +118,31 @@ def _build_attr_distribution_query(
     concat_attr_maps = FunctionCall(
         alias="attr_str_concat",
         function_name="mapConcat",
-        parameters=tuple(column(f"attr_str_{i}") for i in range(ATTRIBUTE_BUCKETS)),
+        parameters=tuple(
+            column(
+                f"attributes_string_{i}"
+                if use_eap_items_table(in_msg.meta)
+                else f"attr_str_{i}"
+            )
+            for i in range(
+                40 if use_eap_items_table(in_msg.meta) else ATTRIBUTE_BUCKETS
+            )
+        ),
     )
     attrs_string_keys = tupleElement(
-        "attr_key", arrayJoin("attr_str", concat_attr_maps), Literal(None, 1)
+        "attr_key",
+        arrayJoin(
+            "attributes_string" if use_eap_items_table(in_msg.meta) else "attr_str",
+            concat_attr_maps,
+        ),
+        Literal(None, 1),
     )
     attrs_string_values = tupleElement(
         "attr_value",
-        arrayJoin("attr_str", concat_attr_maps),
+        arrayJoin(
+            "attributes_string" if use_eap_items_table(in_msg.meta) else "attr_str",
+            concat_attr_maps,
+        ),
         Literal(None, 2),
     )
 

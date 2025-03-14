@@ -219,6 +219,9 @@ query_processors:
   - processor: UUIDColumnProcessor
     args:
       columns: [trace_id]
+  - processor: HexIntColumnProcessor
+    args:
+      columns: [item_id]
   - processor: PrewhereProcessor
     args:
       prewhere_candidates:
