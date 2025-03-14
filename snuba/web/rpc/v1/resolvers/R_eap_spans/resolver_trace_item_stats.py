@@ -25,7 +25,7 @@ from snuba.query.expressions import FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.utils.constants import ATTRIBUTE_BUCKETS
+from snuba.utils.constants import ATTRIBUTE_BUCKETS, ATTRIBUTE_BUCKETS_EAP_ITEMS
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     base_conditions_and,
@@ -125,7 +125,9 @@ def _build_attr_distribution_query(
                 else f"attr_str_{i}"
             )
             for i in range(
-                40 if use_eap_items_table(in_msg.meta) else ATTRIBUTE_BUCKETS
+                ATTRIBUTE_BUCKETS_EAP_ITEMS
+                if use_eap_items_table(in_msg.meta)
+                else ATTRIBUTE_BUCKETS
             )
         ),
     )
