@@ -44,7 +44,7 @@ storages:
         - mapper: SubscriptableHashBucketMapper
           args:
             from_column_table: null
-            from_column_name: _hash_map_float
+            from_column_name: _hash_map_string
             to_col_table: null
             to_col_name: _hash_map_float
             num_attribute_buckets: 40
