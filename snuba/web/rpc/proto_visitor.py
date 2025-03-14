@@ -18,6 +18,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
 )
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 
@@ -97,6 +98,17 @@ class TimeSeriesRequestWrapper(ProtoWrapper[TimeSeriesRequest]):
         time_series_request = self.underlying_proto
         for expression in time_series_request.expressions:
             TimeSeriesExpressionWrapper(expression).accept(visitor)
+
+
+class TraceItemFilterWrapper(ProtoWrapper[TraceItemFilter]):
+    def accept(self, visitor: ProtoVisitor) -> None:
+        visitor.visit_TraceItemFilterWrapper(self)
+        item_filter = self.underlying_proto
+        filter_value = item_filter.WhichOneof("value")
+        if filter_value in ("and_filter", "or_filter", "not_filter"):
+            filters = getattr(item_filter, filter_value).filters
+            for f in filters:
+                TraceItemFilterWrapper(f).accept(visitor)
 
 
 class ProtoVisitor(ABC):

@@ -34,6 +34,14 @@ def _check_non_string_values_cannot_ignore_case(
         raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
 
 
+def next_monday(dt: datetime) -> datetime:
+    return dt + timedelta(days=(7 - dt.weekday()) or 7)
+
+
+def prev_monday(dt: datetime) -> datetime:
+    return dt - timedelta(days=(dt.weekday() % 7))
+
+
 def truncate_request_meta_to_day(meta: RequestMeta) -> None:
     # some tables store timestamp as toStartOfDay(x) in UTC, so if you request 4PM - 8PM on a specific day, nada
     # this changes a request from 4PM - 8PM to a request from midnight today to 8PM tomorrow UTC.
