@@ -320,10 +320,8 @@ def test_run_all_using_readiness() -> None:
 @pytest.mark.clickhouse_db
 def test_reverse_all() -> None:
     runner = Runner()
-    all_migrations = runner._get_pending_migrations()
     runner.run_all(force=True)
-    for migration in reversed(all_migrations):
-        runner.reverse_migration(migration, force=True)
+    runner.reverse_all(force=True, include_system=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
@@ -331,6 +329,26 @@ def test_reverse_all() -> None:
     assert (
         connection.execute("SHOW TABLES").results == []
     ), "All tables should be deleted"
+
+
+@pytest.mark.clickhouse_db
+def test_reverse_all_for_group() -> None:
+    runner = Runner()
+    runner.run_all(group=MigrationGroup.PROFILE_CHUNKS, force=True)
+    runner.run_all(group=MigrationGroup.PROFILES, force=True)
+    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
+    num_of_tables = len(connection.execute("SHOW TABLES").results)
+
+    runner.reverse_all(
+        group=MigrationGroup.PROFILE_CHUNKS, force=True, include_system=True
+    )
+
+    assert len(connection.execute("SHOW TABLES").results) == num_of_tables - 1
+    assert (
+        connection.execute("SHOW TABLES LIKE 'profile_chunks_local'").results == []
+    ), "'profile_chunks_local' table should be deleted"
 
 
 @pytest.mark.clickhouse_db
