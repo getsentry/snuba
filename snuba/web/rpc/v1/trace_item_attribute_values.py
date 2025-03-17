@@ -101,7 +101,6 @@ def _build_query(
             SelectedExpression(name=attr_value.alias, expression=attr_value)
         ],
         condition=_build_conditions(request),
-        offset=request.page_token.offset,
         limit=10000,
     )
     treeify_or_and_conditions(inner_query)
@@ -117,7 +116,6 @@ def _build_query(
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
         ],
         limit=request.limit,
-        offset=request.page_token.offset,
     )
     return res
 
