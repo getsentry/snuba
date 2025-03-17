@@ -320,10 +320,8 @@ def test_run_all_using_readiness() -> None:
 @pytest.mark.clickhouse_db
 def test_reverse_all() -> None:
     runner = Runner()
-    all_migrations = runner._get_pending_migrations()
     runner.run_all(force=True)
-    for migration in reversed(all_migrations):
-        runner.reverse_migration(migration, force=True)
+    runner.reverse_all(force=True, include_system=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
@@ -331,6 +329,37 @@ def test_reverse_all() -> None:
     assert (
         connection.execute("SHOW TABLES").results == []
     ), "All tables should be deleted"
+
+
+@pytest.mark.clickhouse_db
+def test_reverse_all_for_group() -> None:
+    """
+    Uses the PROFILES migration group to show that reversing all migrations
+    from one group will not affect other groups.
+    """
+    runner = Runner()
+    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
+    # we don't want to include migrations (local/dist) tables when we compare
+    # table counts, since those don't get removed
+    sql = "SHOW TABLES LIKE 'profile%'"
+    runner.run_all(group=MigrationGroup.PROFILES, force=True)
+    initial_profile_tables = len(connection.execute(sql).results)
+    runner.run_all(group=MigrationGroup.PROFILE_CHUNKS, force=True)
+    total_profile_tables = len(connection.execute(sql).results)
+
+    runner.reverse_all(
+        group=MigrationGroup.PROFILE_CHUNKS, force=True, include_system=True
+    )
+
+    assert (
+        len(connection.execute(sql).results)
+        == total_profile_tables - initial_profile_tables
+    )
+    assert (
+        connection.execute("SHOW TABLES LIKE 'profile_chunks_local'").results == []
+    ), "'profile_chunks_local' table should be deleted"
 
 
 @pytest.mark.clickhouse_db
