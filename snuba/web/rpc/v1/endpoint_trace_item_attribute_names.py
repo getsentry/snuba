@@ -13,17 +13,14 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
-from snuba import settings, state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Entity, Storage
+from snuba.query.data_source.simple import Storage
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, in_cond, not_cond
 from snuba.query.expressions import Expression, Lambda
@@ -35,15 +32,12 @@ from snuba.web import QueryResult
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
-    base_conditions_and,
-    convert_filter_offset,
     next_monday,
     prev_monday,
     project_id_and_org_conditions,
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
 from snuba.web.rpc.v1.legacy.attributes_common import should_use_items_attrs
 from snuba.web.rpc.v1.legacy.trace_item_attribute_names import (
