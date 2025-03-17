@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional, Sequence, TypeVar, Union
 
 import sentry_sdk
@@ -11,6 +12,10 @@ from snuba.clickhouse.translators.snuba.mapping import (
     SnubaClickhouseMappingTranslator,
     TranslationMappers,
 )
+from snuba.datasets.configuration.entity_builder import _build_storage_connections
+from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
+from snuba.datasets.configuration.loader import load_configuration_data
+from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
@@ -79,7 +84,13 @@ def build_best_plan(
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> ClickhouseQueryPlan:
     storage_key = StorageKeyFinder().visit(physical_query)
-    storage = get_storage(storage_key)
+    if storage_key == StorageKey("EAP_ITEMS") or storage_key == StorageKey("StorageKey.EAP_ITEMS_DOWNSAMPLE_8") or storage_key == StorageKey("StorageKey.EAP_ITEMS_DOWNSAMPLE_64") or storage_key == StorageKey("StorageKey.EAP_ITEMS_DOWNSAMPLE_512"):
+        config = load_configuration_data(
+                f"{Path(__file__).parent.parent.parent.as_posix()}/configuration/events_analytics_platform/storages/eap_items.yaml",
+                STORAGE_VALIDATORS)
+        storage = QueryStorageSelector.get_from_name('EAPItemsStorageSelector')().select_storage(physical_query, settings, _build_storage_connections(config["storages"])).storage
+    else:
+        storage = get_storage(storage_key)
 
     # Return failure if storage readiness state is not supported in current environment
     check_storage_readiness(storage)

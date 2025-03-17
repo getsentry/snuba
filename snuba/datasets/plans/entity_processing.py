@@ -58,6 +58,7 @@ class EntityProcessingExecutor:
     def get_storage(
         self, query: LogicalQuery, settings: QuerySettings
     ) -> EntityStorageConnection:
+        print("isthisevercallledddd")
         with sentry_sdk.start_span(
             op="build_plan.storage_query_plan_builder", description="select_storage"
         ):

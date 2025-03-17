@@ -60,7 +60,7 @@ def build_storage_from_config(
 ) -> ReadableTableStorage | WritableTableStorage:
     config = load_configuration_data(config_file_path, STORAGE_VALIDATORS)
 
-    storage_kwargs = __build_readable_storage_kwargs(config)
+    storage_kwargs = build_readable_storage_kwargs(config)
     if config[KIND] == READABLE_STORAGE:
         return ReadableTableStorage(**storage_kwargs)
 
@@ -72,7 +72,7 @@ def build_storage_from_config(
     return CdcStorage(**storage_kwargs)
 
 
-def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+def build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     storage_key = register_storage_key(config[STORAGE]["key"])
     return {
         STORAGE_KEY: storage_key,

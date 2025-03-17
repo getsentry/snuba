@@ -49,7 +49,9 @@ def _run_query_pipeline(
             error=None,
         )
     )
+    print("roudn1", clickhouse_query)
     clickhouse_query = StorageProcessingStage().execute(clickhouse_query)
+    print("round2", clickhouse_query)
 
     res = ExecutionStage(
         request.attribution_info,
