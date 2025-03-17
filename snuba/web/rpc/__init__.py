@@ -274,6 +274,6 @@ def run_rpc_handler(
         return convert_rpc_exception_to_proto(
             RPCRequestException(
                 status_code=500,
-                message=f"internal error occurred while executing this RPC call: {e}",
+                message=f"500 error: {e}",
             )
         )
