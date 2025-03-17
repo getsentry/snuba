@@ -550,7 +550,7 @@ class Runner:
         return group_migrations
 
     def _get_completed_migrations(
-        self, groups: List[MigrationGroup]
+        self, groups: Sequence[MigrationGroup]
     ) -> List[MigrationKey]:
         """
         Get a list of completed migrations for a list of groups
