@@ -1,5 +1,36 @@
 # Changelog
 
+## 25.3.0
+
+### Various fixes & improvements
+
+- feat(smart-autocomplete): Implement smart autocomplete functionality (#6960) by @volokluev
+- fix(eap): remove items_attribute_mv (#6968) by @volokluev
+- fix(eap): allow hashmaps to be used in the entity (#6967) by @volokluev
+- fix(eap-items): add attribute mappings for backwards compatibility (#6961) by @davidtsuk
+- feat: storage for new item_attrs table (#6944) by @kylemumma
+- feat: new mv for item_attrs (#6956) by @kylemumma
+- fix(admin): fix log profile events nonsense (#6965) by @volokluev
+- fix(eap): Return high reliability when sampling rate is 100% (#6954) by @jan-auer
+- fix(eap-items): swap description and raw_description (#6958) by @davidtsuk
+- fix(eap-items): make sure we are not overriding sentry.description (#6955) by @davidtsuk
+- ref(replay): add environment to ReplayClickEvent (#6946) by @michellewzhang
+- feat(smart_autocomplete): storage definition for new materialized view (#6951) by @volokluev
+- fix(eap): Update relative confidence calculation (#6935) by @jan-auer
+- feat: drop item_attrs mv (#6953) by @kylemumma
+- chore: increase timeout for some of the ci tests (#6952) by @kylemumma
+- Remove unsupported comments deploy.sh (#6950) by @volokluev
+- fix(eap-items): map sentry.name to sentry.description in eap_items (#6949) by @davidtsuk
+- Remove vector deployment again (#6948) by @volokluev
+- Revert "remove test-eap-mutations-vector from deploy script (#6947)" (342d8207) by @getsentry-bot
+- remove test-eap-mutations-vector from deploy script (#6947) by @volokluev
+- feat: item_attrs materialized views for new eap_items table (#6943) by @kylemumma
+- feat(eap-sampling): add mv migration for sampled views (#6940) by @volokluev
+- SRE-630: add snuba container selector for migration (#6945) by @mwarkentin
+- fix(gocd): Fix missing/changed container names (#6942) by @rgibert
+
+_Plus 52 more_
+
 ## 25.2.0
 
 ### Various fixes & improvements
