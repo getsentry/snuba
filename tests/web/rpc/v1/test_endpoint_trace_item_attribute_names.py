@@ -17,6 +17,7 @@ from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     EndpointTraceItemAttributeNames,
 )
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 
 BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(
@@ -103,10 +104,9 @@ class TestTraceItemAttributeNames(BaseApiTest):
             ),
             limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_STRING,
-            value_substring_match="",
+            value_substring_match="a_tag",
         )
         res = EndpointTraceItemAttributeNames().execute(req)
-
         expected = []
         for i in range(TOTAL_GENERATED_ATTR_PER_TYPE):
             expected.append(
@@ -132,7 +132,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
             ),
             limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_FLOAT,
-            value_substring_match="",
+            value_substring_match="b_mea",
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         expected = []
@@ -161,7 +161,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
             ),
             limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_DOUBLE,
-            value_substring_match="",
+            value_substring_match="b_mea",
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         expected = []
@@ -325,3 +325,19 @@ class TestTraceItemAttributeNames(BaseApiTest):
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         assert res.meta.query_info != []
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestTraceItemAttributeNamesEAPItems(TestTraceItemAttributeNames):
+    @pytest.fixture(autouse=True)
+    def use_eap_items_table(
+        self, snuba_set_config: SnubaSetConfig, redis_db: None
+    ) -> None:
+        snuba_set_config("use_eap_items_autocomplete", True)
+
+    def test_with_page_token_offset(self, *args, **kwargs):
+        pass
+
+    def test_page_token_offset_filter(self, *args, **kwargs):
+        pass

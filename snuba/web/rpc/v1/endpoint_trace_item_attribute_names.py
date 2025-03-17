@@ -13,6 +13,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
+from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.pluggable_dataset import PluggableDataset
@@ -180,16 +181,18 @@ def get_co_occurring_attributes(
     )
 
     condition = and_cond(
-        and_cond(
-            project_id_and_org_conditions(request.meta),
-            # timestamp should be converted to start and end of week
-            get_co_occurring_attributes_date_condition(request),
-        ),
-        f.hasAll(
-            column("attribute_keys_hash"),
-            f.array(*[f.cityHash64(k) for k in attribute_keys_to_search]),
-        ),
+        project_id_and_org_conditions(request.meta),
+        get_co_occurring_attributes_date_condition(request),
     )
+
+    if attribute_keys_to_search:
+        condition = and_cond(
+            condition,
+            f.hasAll(
+                column("attribute_keys_hash"),
+                f.array(*[f.cityHash64(k) for k in attribute_keys_to_search]),
+            ),
+        )
 
     if request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
         condition = and_cond(
@@ -201,8 +204,13 @@ def get_co_occurring_attributes(
         column("attributes_string"),
     )
 
+    # backwards compatibility with TYPE_FLOAT
+    floating_point_type = (
+        "TYPE_FLOAT" if request.type == AttributeKey.Type.TYPE_FLOAT else "TYPE_DOUBLE"
+    )
+
     double_array = f.arrayMap(
-        Lambda(None, ("x",), f.tuple("TYPE_DOUBLE", column("x"))),
+        Lambda(None, ("x",), f.tuple(floating_point_type, column("x"))),
         column("attributes_float"),
     )
     array_func = None
@@ -212,26 +220,18 @@ def get_co_occurring_attributes(
         AttributeKey.Type.TYPE_FLOAT,
         AttributeKey.Type.TYPE_DOUBLE,
         AttributeKey.Type.TYPE_INT,
+        AttributeKey.Type.TYPE_BOOLEAN,
     ):
         array_func = double_array
     else:
-        array_func = f.arrayConcat(
-            f.arrayMap(
-                Lambda(None, ("x",), f.tuple("TYPE_STRING", column("x"))),
-                column("attributes_string"),
-            ),
-            f.arrayMap(
-                Lambda(None, ("x",), f.tuple("TYPE_DOUBLE", column("x"))),
-                column("attributes_float"),
-            ),
-        )
+        array_func = f.arrayConcat(string_array, double_array)
 
     attr_filter = not_cond(
         in_cond(column("attr.2"), f.array(*attribute_keys_to_search))
     )
     if request.value_substring_match:
         attr_filter = and_cond(
-            attr_filter, f.startsWith(column("attr.2"), request.value_substring_match)
+            attr_filter, f.like(column("attr.2"), f"%{request.value_substring_match}%")
         )
 
     inner_query = Query(
@@ -355,7 +355,9 @@ class EndpointTraceItemAttributeNames(
     ) -> TraceItemAttributeNamesResponse:
         if not in_msg.meta.request_id:
             in_msg.meta.request_id = str(uuid.uuid4())
-        if in_msg.HasField("intersecting_attributes_filter"):
+        if in_msg.HasField("intersecting_attributes_filter") or state.get_config(
+            "use_eap_items_autocomplete"
+        ):
             snuba_request = get_co_occurring_attributes(in_msg)
             res = run_query(
                 dataset=PluggableDataset(name="eap", all_entities=[]),
