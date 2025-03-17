@@ -1,5 +1,4 @@
 import uuid
-from typing import Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
