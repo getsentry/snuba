@@ -74,6 +74,8 @@ def pytest_collection_modifyitems(items: Sequence[Any]) -> None:
     for item in items:
         if item.get_closest_marker("clickhouse_db"):
             item.fixturenames.append("clickhouse_db")
+        elif item.get_closest_marker("custom_clickhouse_db"):
+            item.fixturenames.append("custom_clickhouse_db")
         else:
             item.fixturenames.append("block_clickhouse_db")
 
@@ -196,6 +198,21 @@ def _clear_db() -> None:
                     ClickhouseClientSettings.MIGRATE, node
                 )
                 connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
+
+
+@pytest.fixture
+def custom_clickhouse_db(
+    request: pytest.FixtureRequest,
+) -> Generator[None, None, None]:
+    if not request.node.get_closest_marker("custom_clickhouse_db"):
+        # Make people use the marker explicitly so `-m` works on CLI
+        pytest.fail(
+            "Need to use custom_clickhouse_db marker if custom_clickhouse_db fixture is used"
+        )
+    try:
+        yield
+    finally:
+        _clear_db()
 
 
 @pytest.fixture
