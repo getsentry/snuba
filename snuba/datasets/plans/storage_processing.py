@@ -12,6 +12,8 @@ from snuba.clickhouse.translators.snuba.mapping import (
     SnubaClickhouseMappingTranslator,
     TranslationMappers,
 )
+from snuba.clusters.cluster import get_cluster
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
@@ -83,7 +85,11 @@ def _get_corresponding_table(storage_key: str) -> str:
         r"StorageKey\.EAP_ITEMS_DOWNSAMPLE_(\d+)", storage_key
     )
     assert downsampling_factor is not None
-    return f"eap_items_1_downsample_{downsampling_factor.group(1)}_dist"
+    return (
+        f"eap_items_1_downsample_{downsampling_factor.group(1)}_local"
+        if get_cluster(StorageSetKey.EVENTS_ANALYTICS_PLATFORM).is_single_node()
+        else f"eap_items_1_downsample_{downsampling_factor.group(1)}_dist"
+    )
 
 
 def build_best_plan(
