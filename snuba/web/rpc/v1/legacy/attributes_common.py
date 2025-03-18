@@ -11,7 +11,11 @@ def should_use_items_attrs(request_meta: RequestMeta) -> bool:
 
     use_eap_items_attrs_table_start_timestamp_seconds = state.get_int_config(
         "use_eap_items_attrs_table_start_timestamp_seconds",
-        float("inf"),  # type: ignore
+    )
+    use_eap_items_attrs_table_start_timestamp_seconds = (
+        float("inf")
+        if use_eap_items_attrs_table_start_timestamp_seconds is None
+        else use_eap_items_attrs_table_start_timestamp_seconds
     )
 
     org_should_use_items_attrs = state.get_config(
