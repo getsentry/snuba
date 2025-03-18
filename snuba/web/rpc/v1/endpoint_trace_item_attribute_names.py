@@ -13,7 +13,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.pluggable_dataset import PluggableDataset
@@ -40,6 +39,7 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
+from snuba.web.rpc.v1.legacy.attributes_common import should_use_items_attrs
 from snuba.web.rpc.v1.legacy.trace_item_attribute_names import (
     convert_to_snuba_request as legacy_convert_to_snuba_request,
 )
@@ -352,8 +352,8 @@ class EndpointTraceItemAttributeNames(
     ) -> TraceItemAttributeNamesResponse:
         if not in_msg.meta.request_id:
             in_msg.meta.request_id = str(uuid.uuid4())
-        if in_msg.HasField("intersecting_attributes_filter") or state.get_config(
-            "use_eap_items_autocomplete"
+        if in_msg.HasField("intersecting_attributes_filter") or should_use_items_attrs(
+            in_msg.meta
         ):
             snuba_request = get_co_occurring_attributes(in_msg)
             res = run_query(
