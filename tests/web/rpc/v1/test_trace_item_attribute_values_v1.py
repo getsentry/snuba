@@ -222,7 +222,7 @@ class TestAttributeValuesEAPItems(TestTraceItemAttributes):
     def use_eap_items_table(
         self, snuba_set_config: SnubaSetConfig, redis_db: None
     ) -> None:
-        snuba_set_config("use_eap_items_attrs_table", True)
+        snuba_set_config("use_eap_items_attrs_table__1", True)
         snuba_set_config("use_eap_items_attrs_table_start_timestamp_seconds", 0)
 
     # NOTE: pagination of values doesn't work with the new approach of getting attribute values
