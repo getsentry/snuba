@@ -266,7 +266,6 @@ def _proto_expression_to_ast_expression(
 
 
 def _build_query(request: TimeSeriesRequest) -> Query:
-    # TODO: This is hardcoded still
     if use_eap_items_table(request.meta):
         entity = Entity(
             key=EntityKey("eap_items"),
