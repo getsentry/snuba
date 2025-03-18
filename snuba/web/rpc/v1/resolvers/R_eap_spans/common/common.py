@@ -128,6 +128,10 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
                 f"Attribute {attr_key.name} must be one of [{formatted_attribute_types}], got {AttributeKey.Type.Name(attr_key.type)}"
             )
 
+        # To maintain backwards compatibility with the old span_id column, we only need the last 16 characters of the item_id
+        if attr_key.name == "sentry.span_id":
+            return f.right(column(attr_name[len(COLUMN_PREFIX) :]), 16, alias=alias)
+
         return f.CAST(
             column(attr_name[len(COLUMN_PREFIX) :]),
             PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
