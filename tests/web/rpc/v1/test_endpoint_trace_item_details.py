@@ -113,7 +113,7 @@ class TestTraceItemDetails(BaseApiTest):
         assert response.status_code == 404, error_proto
 
     def test_endpoint(self, setup_logs_in_db: Any) -> None:
-        ts = Timestamp()
+        ts = Timestamp()  # sdjflsk
         ts.GetCurrentTime()
 
         logs = (
