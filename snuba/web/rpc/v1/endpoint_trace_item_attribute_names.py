@@ -39,7 +39,6 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
-from snuba.web.rpc.v1.legacy.attributes_common import should_use_items_attrs
 from snuba.web.rpc.v1.legacy.trace_item_attribute_names import (
     convert_to_snuba_request as legacy_convert_to_snuba_request,
 )
@@ -49,9 +48,7 @@ MAX_REQUEST_LIMIT = 1000
 
 
 def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
-    if not should_use_items_attrs(req.meta):
-        return legacy_convert_to_snuba_request(req)
-    raise NotImplementedError
+    return legacy_convert_to_snuba_request(req)
 
 
 class AttributeKeyCollector(ProtoVisitor):
