@@ -37,4 +37,6 @@ def test_selects_correct_eap_items_tier() -> None:
     selected_storage = EAPItemsStorageSelector().select_storage(
         unimportant_query, query_settings, EAP_ITEMS_STORAGE_CONNECTIONS
     )
-    assert str(selected_storage.storage.get_storage_key()) == str(StorageKey.EAP_ITEMS_DOWNSAMPLE_512)
+    assert str(selected_storage.storage.get_storage_key()) == str(
+        StorageKey.EAP_ITEMS_DOWNSAMPLE_512
+    )

@@ -408,7 +408,6 @@ class TestTimeSeriesApi(BaseApiTest):
                 ],
             ),
         ]
-        assert False
 
     def test_with_group_by(self) -> None:
         store_spans_timeseries(

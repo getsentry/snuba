@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
+import re
 from typing import Optional, Sequence, TypeVar, Union
 
 import sentry_sdk
@@ -12,10 +12,6 @@ from snuba.clickhouse.translators.snuba.mapping import (
     SnubaClickhouseMappingTranslator,
     TranslationMappers,
 )
-from snuba.datasets.configuration.entity_builder import _build_storage_connections
-from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
-from snuba.datasets.configuration.loader import load_configuration_data
-from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
@@ -78,17 +74,39 @@ def check_storage_readiness(storage: ReadableStorage) -> None:
             )
 
 
+def _is_downsampled_storage_key(storage_key: str) -> bool:
+    return bool(re.match(r"^StorageKey\.EAP_ITEMS_DOWNSAMPLE_\d+$", storage_key))
+
+
+def _get_corresponding_table(storage_key: str) -> str:
+    downsampling_factor = re.search(
+        r"StorageKey\.EAP_ITEMS_DOWNSAMPLE_(\d+)", storage_key
+    )
+    assert downsampling_factor is not None
+    return f"eap_items_1_downsample_{downsampling_factor.group(1)}_dist"
+
+
 def build_best_plan(
     physical_query: Union[Query, ProcessableQuery[Table]],
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> ClickhouseQueryPlan:
     storage_key = StorageKeyFinder().visit(physical_query)
-    if storage_key == StorageKey("EAP_ITEMS") or storage_key == StorageKey("StorageKey.EAP_ITEMS_DOWNSAMPLE_8") or storage_key == StorageKey("StorageKey.EAP_ITEMS_DOWNSAMPLE_64") or storage_key == StorageKey("StorageKey.EAP_ITEMS_DOWNSAMPLE_512"):
-        config = load_configuration_data(
-                f"{Path(__file__).parent.parent.parent.as_posix()}/configuration/events_analytics_platform/storages/eap_items.yaml",
-                STORAGE_VALIDATORS)
-        storage = QueryStorageSelector.get_from_name('EAPItemsStorageSelector')().select_storage(physical_query, settings, _build_storage_connections(config["storages"])).storage
+
+    if _is_downsampled_storage_key(str(storage_key)):
+        storage = get_storage(StorageKey.EAP_ITEMS)
+        original_table = physical_query.get_from_clause()
+        physical_query.set_from_clause(
+            Table(
+                table_name=_get_corresponding_table(str(storage_key)),
+                schema=original_table.schema,
+                storage_key=original_table.storage_key,
+                allocation_policies=original_table.allocation_policies,
+                final=original_table.final,
+                sampling_rate=original_table.sampling_rate,
+                mandatory_conditions=original_table.mandatory_conditions,
+            )
+        )
     else:
         storage = get_storage(storage_key)
 
@@ -138,7 +156,10 @@ def apply_storage_processors(
 ) -> Query:
     # storage selection should not be done through the entity anymore.
     storage_key = StorageKeyFinder().visit(query_plan.query)
-    storage = get_storage(storage_key)
+    if _is_downsampled_storage_key(str(storage_key)):
+        storage = get_storage(StorageKey.EAP_ITEMS)
+    else:
+        storage = get_storage(storage_key)
     if is_storage_set_sliced(storage.get_storage_set_key()):
         raise NotImplementedError("sliced storages not supported in new pipeline")
 

@@ -8,7 +8,6 @@ import sentry_sdk
 from snuba import settings
 from snuba.datasets.cdc.cdcstorage import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage_from_config
-from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -32,9 +31,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         self._all_storages = self._config_built_storages
 
     def get(self, storage_key: StorageKey) -> Storage:
-        if storage_key not in self._all_storages:
-            print("Storage key that does not exist is: ", storage_key)
-            print("Existing storage keys: ", self._all_storages)
         return self._all_storages[storage_key]
 
     def get_writable_storage_keys(self) -> list[StorageKey]:
@@ -77,7 +73,6 @@ def initialize_storage_factory() -> None:
 
 
 def get_storage(storage_key: StorageKey) -> ReadableTableStorage:
-
     storage = _storage_factory().get(storage_key)
     assert isinstance(storage, ReadableTableStorage)
     return storage

@@ -201,13 +201,11 @@ def _build_validation_mode(mode: str | None) -> ColumnValidationMode | None:
 
 
 def build_entity_from_config(file_path: str) -> PluggableEntity:
-    print("filepattthhhh", file_path)
     try:
         config = load_configuration_data(file_path, ENTITY_VALIDATORS)
     except Exception as e:
         logging.exception("could not load entity from file: " + file_path)
         raise e
-    print("configg", config)
     return PluggableEntity(
         entity_key=register_entity_key(config["name"]),
         storages=_build_storage_connections(config["storages"]),

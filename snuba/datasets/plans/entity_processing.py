@@ -58,7 +58,6 @@ class EntityProcessingExecutor:
     def get_storage(
         self, query: LogicalQuery, settings: QuerySettings
     ) -> EntityStorageConnection:
-        print("isthisevercallledddd")
         with sentry_sdk.start_span(
             op="build_plan.storage_query_plan_builder", description="select_storage"
         ):
@@ -103,6 +102,7 @@ class EntityProcessingExecutor:
         with sentry_sdk.start_span(
             op="build_plan.storage_query_plan_builder", description="set_from_clause"
         ):
+            print("sourceee", storage.get_schema().get_data_source())
             clickhouse_query.set_from_clause(
                 get_query_data_source(
                     storage.get_schema().get_data_source(),
