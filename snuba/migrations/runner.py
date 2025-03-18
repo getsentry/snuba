@@ -9,12 +9,7 @@ from clickhouse_driver import errors
 from snuba import settings
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.escaping import escape_string
-from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import (
-    ClickhouseClientSettings,
-    ClickhouseNodeType,
-    get_cluster,
-)
+from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.migrations.connect import (
@@ -34,8 +29,7 @@ from snuba.migrations.groups import (
     get_group_loader,
     get_group_readiness_state,
 )
-from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
-from snuba.migrations.operations import RunSqlAsCode
+from snuba.migrations.migration import ClickhouseNodeMigration
 from snuba.migrations.status import Status
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -561,49 +555,3 @@ class Runner:
                 raise e
 
         return data
-
-    @classmethod
-    def add_node(
-        self,
-        node_type: ClickhouseNodeType,
-        storage_sets: Sequence[StorageSetKey],
-        host_name: str,
-        port: int,
-        user: str,
-        password: str,
-        database: str,
-        secure: bool = False,
-        ca_certs: Optional[str] = None,
-        verify: Optional[bool] = False,
-    ) -> None:
-        client_settings = ClickhouseClientSettings.MIGRATE.value
-        clickhouse = ClickhousePool(
-            host_name,
-            port,
-            user,
-            password,
-            database,
-            secure,
-            ca_certs,
-            verify,
-            client_settings=client_settings.settings,
-            send_receive_timeout=client_settings.timeout,
-        )
-
-        migrations: List[Migration] = []
-
-        for group in get_active_migration_groups():
-            group_loader = get_group_loader(group)
-
-            for migration_id in group_loader.get_migrations():
-                migration = group_loader.load_migration(migration_id)
-                migrations.append(migration)
-
-        for migration in migrations:
-            if isinstance(migration, ClickhouseNodeMigration):
-                for sql_op in migration.forwards_ops():
-                    op = RunSqlAsCode(sql_op)
-                    op.execute_new_node(storage_sets, node_type, clickhouse)
-            elif isinstance(migration, CodeMigration):
-                for python_op in migration.forwards_global():
-                    python_op.execute_new_node(storage_sets, node_type, clickhouse)
