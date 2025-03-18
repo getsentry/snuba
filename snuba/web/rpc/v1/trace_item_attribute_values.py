@@ -44,7 +44,9 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
     attribute_key = attribute_key_to_expression_eap_items(request.key)
 
     conditions: list[Expression] = [
-        f.has(column("_hash_map_string"), request.key.name),
+        f.has(
+            column("_hash_map_string"), getattr(attribute_key, "key", request.key.name)
+        ),
     ]
     if request.meta.trace_item_type:
         conditions.append(f.equals(column("item_type"), request.meta.trace_item_type))
@@ -101,6 +103,7 @@ def _build_query(
             SelectedExpression(name=attr_value.alias, expression=attr_value)
         ],
         condition=_build_conditions(request),
+        offset=0,
         limit=10000,
     )
     treeify_or_and_conditions(inner_query)
@@ -162,6 +165,7 @@ class AttributeValuesRequest(
     def _execute(
         self, in_msg: TraceItemAttributeValuesRequest
     ) -> TraceItemAttributeValuesResponse:
+        in_msg.limit = in_msg.limit or 1000
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
@@ -174,7 +178,6 @@ class AttributeValuesRequest(
                 values=values,
                 page_token=None,
             )
-
         return TraceItemAttributeValuesResponse(
             values=values,
             page_token=(

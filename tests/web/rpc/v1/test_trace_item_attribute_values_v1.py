@@ -88,6 +88,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
         gen_message({"tag1": "derpderp", "tag2": "derp"}),
         gen_message({"tag2": "hehe"}),
         gen_message({"tag1": "some_last_value"}),
+        gen_message({"sentry.transaction": "*foo"}),
     ]
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
@@ -234,3 +235,23 @@ class TestAttributeValuesEAPItems(TestTraceItemAttributes):
 
     def test_page_token_filter_offset(self) -> None:
         pass
+
+    def test_transaction(self) -> None:
+        req = TraceItemAttributeValuesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            key=AttributeKey(name="sentry.segment_name", type=AttributeKey.TYPE_STRING),
+            value_substring_match="",
+        )
+        res = AttributeValuesRequest().execute(req)
+        assert res.values == ["*foo"]
