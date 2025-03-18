@@ -337,8 +337,8 @@ class TestTraceItemAttributeNamesEAPItems(TestTraceItemAttributeNames):
         snuba_set_config("use_eap_items_attrs_table_start_timestamp_seconds", 0)
         snuba_set_config("use_eap_items_attrs_table_all", True)
 
-    def test_with_page_token_offset(self, *args, **kwargs):
+    def test_with_page_token_offset(self) -> None:
         pass
 
-    def test_page_token_offset_filter(self, *args, **kwargs):
+    def test_page_token_offset_filter(self) -> None:
         pass
