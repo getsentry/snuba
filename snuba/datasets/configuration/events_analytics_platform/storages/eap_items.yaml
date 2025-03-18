@@ -222,6 +222,7 @@ query_processors:
   - processor: HexIntColumnProcessor
     args:
       columns: [item_id]
+      size: 32
   - processor: PrewhereProcessor
     args:
       prewhere_candidates:

@@ -56,7 +56,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             SelectedExpression(
                 "timestamp", f.toUnixTimestamp(column("timestamp"), alias="timestamp")
             ),
-            SelectedExpression("hex_item_id", column("item_id")),
+            SelectedExpression("hex_item_id", column("item_id", alias="hex_item_id")),
             SelectedExpression("trace_id", column("trace_id", alias="trace_id")),
             SelectedExpression(
                 "organization_id", column("organization_id", alias="organization_id")

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Union
 
 import pytest
@@ -60,7 +60,7 @@ def gen_log_message(
     }
 
 
-BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
+BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(
     minutes=180
 )
 
@@ -112,7 +112,6 @@ class TestTraceItemDetails(BaseApiTest):
             error_proto.ParseFromString(response.data)
         assert response.status_code == 404, error_proto
 
-    @pytest.mark.skip(reason="This test doesn't work")
     def test_endpoint(self, setup_logs_in_db: Any) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
