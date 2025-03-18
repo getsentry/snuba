@@ -95,18 +95,6 @@ def build_best_plan(
 
     if _is_downsampled_storage_key(str(storage_key)):
         storage = get_storage(StorageKey.EAP_ITEMS)
-        original_table = physical_query.get_from_clause()
-        physical_query.set_from_clause(
-            Table(
-                table_name=_get_corresponding_table(str(storage_key)),
-                schema=original_table.schema,
-                storage_key=original_table.storage_key,
-                allocation_policies=original_table.allocation_policies,
-                final=original_table.final,
-                sampling_rate=original_table.sampling_rate,
-                mandatory_conditions=original_table.mandatory_conditions,
-            )
-        )
     else:
         storage = get_storage(storage_key)
 
@@ -119,7 +107,6 @@ def build_best_plan(
         MandatoryConditionApplier(),
         MandatoryConditionEnforcer(storage.get_mandatory_condition_checkers()),
     ]
-
     return ClickhouseQueryPlan(
         query=physical_query,
         plan_query_processors=[],
@@ -177,6 +164,20 @@ def apply_storage_processors(
                 storage_key=storage.get_storage_key(),
             )
         )
+        if _is_downsampled_storage_key(str(storage_key)):
+            original_table = query_plan.query.get_from_clause()
+            query_plan.query.set_from_clause(
+                Table(
+                    table_name=_get_corresponding_table(str(storage_key)),
+                    schema=original_table.schema,
+                    storage_key=original_table.storage_key,
+                    allocation_policies=original_table.allocation_policies,
+                    final=original_table.final,
+                    sampling_rate=original_table.sampling_rate,
+                    mandatory_conditions=original_table.mandatory_conditions,
+                )
+            )
+
     assert isinstance(query_plan.query, Query)
     for processor in query_plan.db_query_processors:
         with sentry_sdk.start_span(
