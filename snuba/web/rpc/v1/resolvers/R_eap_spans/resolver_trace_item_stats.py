@@ -20,7 +20,16 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
-from snuba.query.dsl import arrayJoin, column, count, tupleElement
+from snuba.query.dsl import (
+    arrayJoin,
+    column,
+    count,
+    in_cond,
+    literal,
+    literals_array,
+    not_cond,
+    tupleElement,
+)
 from snuba.query.expressions import FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -65,11 +74,6 @@ def _transform_results(
     for row in results:
         attr_key = row["attr_key"]
         attr_value = row["attr_value"]
-        if (
-            use_eap_items_table(request_meta)
-            and attr_key in ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS
-        ):
-            continue
         default = AttributeDistribution(
             attribute_name=attr_key,
         )
@@ -183,6 +187,14 @@ def _build_attr_distribution_query(
         condition=base_conditions_and(
             in_msg.meta,
             trace_item_filters_expression,
+            not_cond(
+                in_cond(
+                    attrs_string_keys,
+                    literals_array(
+                        None, list(map(literal, ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS))
+                    ),
+                ),
+            ),
         ),
         order_by=[
             OrderBy(
