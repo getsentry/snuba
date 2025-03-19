@@ -3139,7 +3139,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             column_values=[
                 TraceItemColumnValues(
                     attribute_name="server_name",
-                    results=[AttributeValue(val_str=_SERVER_NAME) for _ in range(220)],
+                    results=[AttributeValue(val_str=_SERVER_NAME) for _ in range(60)],
                 )
             ],
             page_token=PageToken(offset=60),
