@@ -56,7 +56,9 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             SelectedExpression(
                 "timestamp", f.toUnixTimestamp(column("timestamp"), alias="timestamp")
             ),
-            SelectedExpression("hex_item_id", column("item_id", alias="hex_item_id")),
+            SelectedExpression(
+                "hex_item_id", f.hex(column("item_id"), alias="hex_item_id")
+            ),
             SelectedExpression("trace_id", column("trace_id", alias="trace_id")),
             SelectedExpression(
                 "organization_id", column("organization_id", alias="organization_id")
@@ -89,7 +91,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             f.equals(column("item_type"), TraceItemType.TRACE_ITEM_TYPE_LOG),
             f.equals(
                 column("item_id"),
-                literal(request.item_id),
+                f.reinterpretAsUInt128(f.reverse(f.unhex(literal(request.item_id)))),
             ),
             trace_item_filters_to_expression(
                 request.filter, attribute_key_to_expression

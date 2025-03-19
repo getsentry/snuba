@@ -56,7 +56,6 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import (
     _apply_labels_to_columns,
 )
 from tests.base import BaseApiTest
-from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 
 _RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
@@ -169,14 +168,6 @@ def write_eap_span(
 
     write_raw_unprocessed_events(
         get_storage(StorageKey("eap_spans")),  # type: ignore
-        [
-            gen_message(timestamp, measurements=measurements, tags=tags)
-            for _ in range(count)
-        ],
-    )
-
-    write_raw_unprocessed_events(
-        get_storage(StorageKey("eap_items")),  # type: ignore
         [
             gen_message(timestamp, measurements=measurements, tags=tags)
             for _ in range(count)
@@ -1910,12 +1901,12 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_weight"
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_factor"
                         ),
-                        label="avg_sample(sampling_weight)",
+                        label="avg_sample(sampling_rate)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
-                    label="avg_sample(sampling_weight)",
+                    label="avg_sample(sampling_rate)",
                 ),
                 Column(
                     aggregation=AttributeAggregation(
@@ -1932,12 +1923,12 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_MIN,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_weight"
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_factor"
                         ),
-                        label="min(sampling_weight)",
+                        label="min(sampling_rate)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
-                    label="min(sampling_weight)",
+                    label="min(sampling_rate)",
                 ),
                 Column(
                     aggregation=AttributeAggregation(
@@ -1955,9 +1946,9 @@ class TestTraceItemTable(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         assert response.column_values == [
             TraceItemColumnValues(
-                attribute_name="avg_sample(sampling_weight)",
+                attribute_name="avg_sample(sampling_rate)",
                 results=[
-                    AttributeValue(val_double=5.5),
+                    AttributeValue(val_double=0.475),
                 ],
             ),
             TraceItemColumnValues(
@@ -1968,9 +1959,9 @@ class TestTraceItemTable(BaseApiTest):
                 reliabilities=[Reliability.RELIABILITY_LOW],
             ),
             TraceItemColumnValues(
-                attribute_name="min(sampling_weight)",
+                attribute_name="min(sampling_rate)",
                 results=[
-                    AttributeValue(val_double=1),
+                    AttributeValue(val_double=0.1),
                 ],
             ),
             TraceItemColumnValues(
@@ -3047,18 +3038,3 @@ class TestUtils:
         _apply_labels_to_columns(message)
         assert message.columns[0].label == "avg(custom_measurement)"
         assert message.columns[1].label == "avg(custom_measurement_2)"
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-class TestTraceItemTableEAPItems(TestTraceItemTable):
-    """
-    Run the tests again, but this time on the eap_items table as well to ensure it also works.
-    """
-
-    @pytest.fixture(autouse=True)
-    def use_eap_items_table(
-        self, snuba_set_config: SnubaSetConfig, redis_db: None
-    ) -> None:
-        snuba_set_config("use_eap_items_table", True)
-        snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
