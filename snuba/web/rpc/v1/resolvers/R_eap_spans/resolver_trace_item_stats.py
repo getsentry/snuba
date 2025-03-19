@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     TraceItemStatsResponse,
     TraceItemStatsResult,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -20,12 +20,21 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
-from snuba.query.dsl import arrayJoin, column, count, tupleElement
+from snuba.query.dsl import (
+    arrayJoin,
+    column,
+    count,
+    in_cond,
+    literal,
+    literals_array,
+    not_cond,
+    tupleElement,
+)
 from snuba.query.expressions import FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.utils.constants import ATTRIBUTE_BUCKETS
+from snuba.utils.constants import ATTRIBUTE_BUCKETS, ATTRIBUTE_BUCKETS_EAP_ITEMS
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     base_conditions_and,
@@ -39,7 +48,10 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+    ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS,
     attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
+    use_eap_items_table,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -52,6 +64,7 @@ COUNT_LABEL = "count()"
 
 def _transform_results(
     results: Iterable[Dict[str, Any]],
+    request_meta: RequestMeta,
 ) -> Iterable[AttributeDistribution]:
 
     # Maintain the order of keys, so it is in descending order
@@ -100,23 +113,49 @@ def _build_attr_distribution_snuba_request(
 def _build_attr_distribution_query(
     in_msg: TraceItemStatsRequest, distributions_params: AttributeDistributionsRequest
 ) -> Query:
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
+    if use_eap_items_table(in_msg.meta):
+        entity = Entity(
+            key=EntityKey("eap_items"),
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
+            sample=None,
+        )
+    else:
+        entity = Entity(
+            key=EntityKey("eap_spans"),
+            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+            sample=None,
+        )
 
     concat_attr_maps = FunctionCall(
         alias="attr_str_concat",
         function_name="mapConcat",
-        parameters=tuple(column(f"attr_str_{i}") for i in range(ATTRIBUTE_BUCKETS)),
+        parameters=tuple(
+            column(
+                f"attributes_string_{i}"
+                if use_eap_items_table(in_msg.meta)
+                else f"attr_str_{i}"
+            )
+            for i in range(
+                ATTRIBUTE_BUCKETS_EAP_ITEMS
+                if use_eap_items_table(in_msg.meta)
+                else ATTRIBUTE_BUCKETS
+            )
+        ),
     )
     attrs_string_keys = tupleElement(
-        "attr_key", arrayJoin("attr_str", concat_attr_maps), Literal(None, 1)
+        "attr_key",
+        arrayJoin(
+            "attributes_string" if use_eap_items_table(in_msg.meta) else "attr_str",
+            concat_attr_maps,
+        ),
+        Literal(None, 1),
     )
     attrs_string_values = tupleElement(
         "attr_value",
-        arrayJoin("attr_str", concat_attr_maps),
+        arrayJoin(
+            "attributes_string" if use_eap_items_table(in_msg.meta) else "attr_str",
+            concat_attr_maps,
+        ),
         Literal(None, 2),
     )
 
@@ -136,7 +175,10 @@ def _build_attr_distribution_query(
     ]
 
     trace_item_filters_expression = trace_item_filters_to_expression(
-        in_msg.filter, attribute_key_to_expression
+        in_msg.filter,
+        attribute_key_to_expression_eap_items
+        if use_eap_items_table(in_msg.meta)
+        else attribute_key_to_expression,
     )
 
     query = Query(
@@ -145,6 +187,14 @@ def _build_attr_distribution_query(
         condition=base_conditions_and(
             in_msg.meta,
             trace_item_filters_expression,
+            not_cond(
+                in_cond(
+                    attrs_string_keys,
+                    literals_array(
+                        None, list(map(literal, ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS))
+                    ),
+                ),
+            ),
         ),
         order_by=[
             OrderBy(
@@ -201,7 +251,9 @@ class ResolverTraceItemStatsEAPSpans(ResolverTraceItemStats):
                     timer=self._timer,
                 )
 
-                attributes = _transform_results(query_res.result.get("data", []))
+                attributes = _transform_results(
+                    query_res.result.get("data", []), in_msg.meta
+                )
                 result.attribute_distributions.CopyFrom(
                     AttributeDistributions(attributes=attributes)
                 )

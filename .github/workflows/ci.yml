@@ -380,6 +380,7 @@ jobs:
               tests/sentry/uptime/endpoints/test_organization_uptime_stats.py \
               tests/sentry/api/endpoints/test_organization_traces.py \
               tests/sentry/api/endpoints/test_organization_spans_fields.py \
+              tests/sentry/api/endpoints/test_organization_spans_fields_stats.py \
               tests/sentry/sentry_metrics/querying \
               -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
