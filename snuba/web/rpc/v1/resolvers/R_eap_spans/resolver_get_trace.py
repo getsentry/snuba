@@ -39,35 +39,54 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverGetTrace
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
+    use_eap_items_table,
 )
 
 _BUCKET_COUNT = 20
 
 
 NORMALIZED_COLUMNS_TO_INCLUDE = [
-    col.name
-    for col in get_entity(EntityKey("eap_spans")).get_data_model().columns
-    if col.name
-    not in [
-        "retention_days",
-        "sign",
-        "attr_str",
-        "attr_num",
-        "span_id",
-        "timestamp",
-    ]
+    "organization_id",
+    "project_id",
+    "service",
+    "trace_id",
+    "parent_span_id",
+    "segment_id",
+    "segment_name",
+    "is_segment",
+    "time",
+    "start_timestamp",
+    "end_timestamp",
+    "duration_ms",
+    "exclusive_time_ms",
+    "name",
+    "sampling_factor",
+    "sampling_weight",
 ]
+
+NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = ["organization_id", "project_id", "trace_id"]
 
 
 def _build_query(request: GetTraceRequest) -> Query:
     selected_columns: list[SelectedExpression] = [
         SelectedExpression(
             name="id",
-            expression=column("span_id", alias="id"),
+            expression=attribute_key_to_expression_eap_items(
+                AttributeKey(name="sentry.span_id", type=AttributeKey.Type.TYPE_STRING)
+            )
+            if use_eap_items_table(request.meta)
+            else column("span_id", alias="id"),
         ),
         SelectedExpression(
             name="timestamp",
-            expression=column(
+            expression=f.CAST(
+                column("timestamp"),
+                "DateTime64",
+                alias="timestamp",
+            )
+            if use_eap_items_table(request.meta)
+            else column(
                 "start_timestamp",
                 alias="timestamp",
             ),
@@ -82,42 +101,79 @@ def _build_query(request: GetTraceRequest) -> Query:
             selected_columns.append(
                 SelectedExpression(
                     name=attribute_key.name,
-                    expression=attribute_key_to_expression(attribute_key),
+                    expression=attribute_key_to_expression_eap_items(attribute_key)
+                    if use_eap_items_table(request.meta)
+                    else attribute_key_to_expression(attribute_key),
                 )
             )
     else:
         selected_columns += [
             SelectedExpression(
-                name="attrs_str",
+                name="attributes_string"
+                if use_eap_items_table(request.meta)
+                else "attrs_str",
                 expression=FunctionCall(
-                    "attrs_str",
+                    "attributes_string"
+                    if use_eap_items_table(request.meta)
+                    else "attrs_str",
                     "mapConcat",
-                    tuple(column(f"attr_str_{i}") for i in range(_BUCKET_COUNT)),
+                    tuple(
+                        column(
+                            f"attributes_string_{i}"
+                            if use_eap_items_table(request.meta)
+                            else f"attr_str_{i}"
+                        )
+                        for i in range(
+                            40 if use_eap_items_table(request.meta) else _BUCKET_COUNT
+                        )
+                    ),
                 ),
             ),
             SelectedExpression(
-                name="attrs_num",
+                name="attributes_float"
+                if use_eap_items_table(request.meta)
+                else "attrs_num",
                 expression=FunctionCall(
-                    "attrs_num",
+                    "attributes_float"
+                    if use_eap_items_table(request.meta)
+                    else "attrs_num",
                     "mapConcat",
-                    tuple(column(f"attr_num_{i}") for i in range(_BUCKET_COUNT)),
+                    tuple(
+                        column(
+                            f"attributes_float_{i}"
+                            if use_eap_items_table(request.meta)
+                            else f"attr_num_{i}"
+                        )
+                        for i in range(
+                            40 if use_eap_items_table(request.meta) else _BUCKET_COUNT
+                        )
+                    ),
                 ),
             ),
         ]
         selected_columns.extend(
-            [
-                SelectedExpression(
+            map(
+                lambda col_name: SelectedExpression(
                     name=col_name, expression=column(col_name, alias=col_name)
-                )
-                for col_name in NORMALIZED_COLUMNS_TO_INCLUDE
-            ]
+                ),
+                NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS
+                if use_eap_items_table(request.meta)
+                else NORMALIZED_COLUMNS_TO_INCLUDE,
+            )
         )
 
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
+    if use_eap_items_table(request.meta):
+        entity = Entity(
+            key=EntityKey("eap_items"),
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
+            sample=None,
+        )
+    else:
+        entity = Entity(
+            key=EntityKey("eap_spans"),
+            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+            sample=None,
+        )
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,
