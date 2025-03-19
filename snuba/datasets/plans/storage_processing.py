@@ -76,18 +76,19 @@ def check_storage_readiness(storage: ReadableStorage) -> None:
             )
 
 
-def _is_downsampled_storage_key(storage_key: str) -> bool:
-    return bool(re.match(r"^StorageKey\.EAP_ITEMS_DOWNSAMPLE_\d+$", storage_key))
+def _is_downsampled_storage_key(storage_key: StorageKey) -> bool:
+    return storage_key.value.startswith("eap_items_downsample_")
 
 
-def _get_corresponding_table(storage_key: str) -> str:
-    downsampling_factor = re.search(
-        r"StorageKey\.EAP_ITEMS_DOWNSAMPLE_(\d+)", storage_key
-    )
-    assert downsampling_factor is not None
+def _get_corresponding_table(storage_key: StorageKey) -> str:
+    downsampling_factor = re.search(r"eap_items_downsample_(\d+)", storage_key.value)
+    assert (
+        downsampling_factor is not None
+    ), f"Invalid downsampled storage key: {storage_key}"
+    eap_cluster = get_cluster(StorageSetKey.EVENTS_ANALYTICS_PLATFORM)
     return (
         f"eap_items_1_downsample_{downsampling_factor.group(1)}_local"
-        if get_cluster(StorageSetKey.EVENTS_ANALYTICS_PLATFORM).is_single_node()
+        if eap_cluster.is_single_node()
         else f"eap_items_1_downsample_{downsampling_factor.group(1)}_dist"
     )
 
@@ -98,7 +99,7 @@ def build_best_plan(
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> ClickhouseQueryPlan:
     storage_key = StorageKeyFinder().visit(physical_query)
-    if _is_downsampled_storage_key(str(storage_key)):
+    if _is_downsampled_storage_key(storage_key):
         storage = get_storage(StorageKey.EAP_ITEMS)
     else:
         storage = get_storage(storage_key)
@@ -149,7 +150,7 @@ def apply_storage_processors(
 ) -> Query:
     # storage selection should not be done through the entity anymore.
     storage_key = StorageKeyFinder().visit(query_plan.query)
-    if _is_downsampled_storage_key(str(storage_key)):
+    if _is_downsampled_storage_key(storage_key):
         storage = get_storage(StorageKey.EAP_ITEMS)
     else:
         storage = get_storage(storage_key)
@@ -172,7 +173,7 @@ def apply_storage_processors(
             )
         )
 
-    if _is_downsampled_storage_key(str(storage_key)):
+    if _is_downsampled_storage_key(storage_key):
         original_table = query_plan.query.get_from_clause()
         query_plan.query.set_from_clause(
             Table(
