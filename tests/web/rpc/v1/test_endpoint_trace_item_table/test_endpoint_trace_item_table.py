@@ -63,13 +63,6 @@ from tests.helpers import write_raw_unprocessed_events
 _RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
 _SERVER_NAME = "D23CXQ4GK2.local"
 
-SEED = 331
-RANDOM_GENERATOR = random.Random(SEED)
-
-
-def seeded_uuid4() -> uuid.UUID:
-    return uuid.UUID(int=RANDOM_GENERATOR.getrandbits(128))
-
 
 def gen_message(
     dt: datetime,
@@ -128,7 +121,7 @@ def gen_message(
             "transaction.op": "http.server",
             "user": "ip:127.0.0.1",
         },
-        "span_id": seeded_uuid4().hex,
+        "span_id": "123456781234567D",
         "tags": {
             "relay_endpoint_version": "3",
             "relay_id": "88888888-4444-4444-8444-cccccccccccc",
