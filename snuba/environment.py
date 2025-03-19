@@ -75,14 +75,15 @@ def setup_logging(level: Optional[str] = None) -> None:
 
 
 def setup_sentry() -> None:
+    spotlight: bool | str = False
     if settings.DEBUG:
-        spotlight: bool | str = os.getenv("SENTRY_SPOTLIGHT", "")
-        if spotlight.lower() in ("0", "false", "n", "no"):
+        spotlight_env = os.getenv("SENTRY_SPOTLIGHT", "")
+        if spotlight_env.lower() in ("0", "false", "n", "no"):
             spotlight = False
-        elif not spotlight.startswith("http"):
+        elif not spotlight_env.startswith("http"):
+            spotlight = spotlight_env
+        else:
             spotlight = True
-    else:
-        spotlight = False
 
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
