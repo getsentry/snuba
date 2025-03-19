@@ -77,11 +77,11 @@ def check_storage_readiness(storage: ReadableStorage) -> None:
 
 
 def _is_downsampled_storage_key(storage_key: StorageKey) -> bool:
-    return storage_key.value.startswith("eap_items_downsample_")
+    return storage_key.value.startswith("EAP_ITEMS_DOWNSAMPLE_")
 
 
 def _get_corresponding_table(storage_key: StorageKey) -> str:
-    downsampling_factor = re.search(r"eap_items_downsample_(\d+)", storage_key.value)
+    downsampling_factor = re.search(r"EAP_ITEMS_DOWNSAMPLE_(\d+)", storage_key.value)
     assert (
         downsampling_factor is not None
     ), f"Invalid downsampled storage key: {storage_key}"
