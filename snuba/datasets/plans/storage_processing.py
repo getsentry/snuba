@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Optional, Sequence, TypeVar, Union
 
 import sentry_sdk
@@ -11,6 +12,8 @@ from snuba.clickhouse.translators.snuba.mapping import (
     SnubaClickhouseMappingTranslator,
     TranslationMappers,
 )
+from snuba.clusters.cluster import get_cluster
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
@@ -73,13 +76,32 @@ def check_storage_readiness(storage: ReadableStorage) -> None:
             )
 
 
+def _is_downsampled_storage_key(storage_key: str) -> bool:
+    return bool(re.match(r"^StorageKey\.EAP_ITEMS_DOWNSAMPLE_\d+$", storage_key))
+
+
+def _get_corresponding_table(storage_key: str) -> str:
+    downsampling_factor = re.search(
+        r"StorageKey\.EAP_ITEMS_DOWNSAMPLE_(\d+)", storage_key
+    )
+    assert downsampling_factor is not None
+    return (
+        f"eap_items_1_downsample_{downsampling_factor.group(1)}_local"
+        if get_cluster(StorageSetKey.EVENTS_ANALYTICS_PLATFORM).is_single_node()
+        else f"eap_items_1_downsample_{downsampling_factor.group(1)}_dist"
+    )
+
+
 def build_best_plan(
     physical_query: Union[Query, ProcessableQuery[Table]],
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> ClickhouseQueryPlan:
     storage_key = StorageKeyFinder().visit(physical_query)
-    storage = get_storage(storage_key)
+    if _is_downsampled_storage_key(str(storage_key)):
+        storage = get_storage(StorageKey.EAP_ITEMS)
+    else:
+        storage = get_storage(storage_key)
 
     # Return failure if storage readiness state is not supported in current environment
     check_storage_readiness(storage)
@@ -127,7 +149,11 @@ def apply_storage_processors(
 ) -> Query:
     # storage selection should not be done through the entity anymore.
     storage_key = StorageKeyFinder().visit(query_plan.query)
-    storage = get_storage(storage_key)
+    if _is_downsampled_storage_key(str(storage_key)):
+        storage = get_storage(StorageKey.EAP_ITEMS)
+    else:
+        storage = get_storage(storage_key)
+
     if is_storage_set_sliced(storage.get_storage_set_key()):
         raise NotImplementedError("sliced storages not supported in new pipeline")
 
@@ -145,6 +171,21 @@ def apply_storage_processors(
                 storage_key=storage.get_storage_key(),
             )
         )
+
+    if _is_downsampled_storage_key(str(storage_key)):
+        original_table = query_plan.query.get_from_clause()
+        query_plan.query.set_from_clause(
+            Table(
+                table_name=_get_corresponding_table(str(storage_key)),
+                schema=original_table.schema,
+                storage_key=original_table.storage_key,
+                allocation_policies=original_table.allocation_policies,
+                final=original_table.final,
+                sampling_rate=original_table.sampling_rate,
+                mandatory_conditions=original_table.mandatory_conditions,
+            )
+        )
+
     assert isinstance(query_plan.query, Query)
     for processor in query_plan.db_query_processors:
         with sentry_sdk.start_span(

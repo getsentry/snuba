@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Iterable
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import DataPoint
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     Expression as ProtoExpression,
@@ -57,6 +58,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression_eap_items,
     use_eap_items_table,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.downsampled_storage_tiers import Tier
 
 OP_TO_EXPR = {
     ProtoExpression.BinaryFormula.OP_ADD: f.plus,
@@ -361,6 +363,13 @@ def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
+
+    if request.meta.HasField("downsampled_storage_config"):
+        if (
+            request.meta.downsampled_storage_config.mode
+            == DownsampledStorageConfig.MODE_PREFLIGHT
+        ):
+            query_settings.set_tier(Tier.TIER_512.value)
 
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),

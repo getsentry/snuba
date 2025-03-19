@@ -86,6 +86,7 @@ class HTTPQuerySettings(QuerySettings):
         apply_default_subscriptable_mapping: bool = True,
     ) -> None:
         super().__init__()
+        self.__tier = 1
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug
@@ -132,6 +133,17 @@ class HTTPQuerySettings(QuerySettings):
 
     def get_apply_default_subscriptable_mapping(self) -> bool:
         return self.__apply_default_subscriptable_mapping
+
+    """
+    Tiers indicate which storage tier to direct the query to. This is used by the TimeSeriesEndpoint and the TraceItemTableEndpoint
+    in EAP.
+    """
+
+    def set_tier(self, tier: int) -> None:
+        self.__tier = tier
+
+    def get_tier(self) -> int:
+        return self.__tier
 
 
 class SubscriptionQuerySettings(QuerySettings):

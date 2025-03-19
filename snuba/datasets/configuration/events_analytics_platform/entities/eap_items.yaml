@@ -58,7 +58,7 @@ storages:
 
 
 storage_selector:
-  selector: DefaultQueryStorageSelector
+  selector: EAPItemsStorageSelector
 
 query_processors:
   - processor: HashBucketFunctionTransformer
