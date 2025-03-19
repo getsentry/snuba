@@ -43,9 +43,11 @@ from snuba.web.rpc.v1.legacy.attributes_common import should_use_items_attrs
 from snuba.web.rpc.v1.legacy.trace_item_attribute_names import (
     convert_to_snuba_request as legacy_convert_to_snuba_request,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import ATTRIBUTE_MAPPINGS
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
+UNSEARCHABLE_ATTRIBUTE_KEYS = ["sentry.event_id"]
 
 
 def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
@@ -224,7 +226,10 @@ def get_co_occurring_attributes(
         array_func = f.arrayConcat(string_array, double_array)
 
     attr_filter = not_cond(
-        in_cond(column("attr.2"), f.array(*attribute_keys_to_search))
+        in_cond(
+            column("attr.2"),
+            f.array(*attribute_keys_to_search, *UNSEARCHABLE_ATTRIBUTE_KEYS),
+        )
     )
     if request.value_substring_match:
         attr_filter = and_cond(
@@ -287,6 +292,7 @@ def get_co_occurring_attributes(
 
 
 def convert_co_occurring_results_to_attributes(
+    request: TraceItemAttributeNamesRequest,
     query_res: QueryResult,
 ) -> list[TraceItemAttributeNamesResponse.Attribute]:
     def t(row: Row) -> TraceItemAttributeNamesResponse.Attribute:
@@ -300,7 +306,12 @@ def convert_co_occurring_results_to_attributes(
             name=attr_name, type=getattr(AttributeKey.Type, attr_type)
         )
 
-    return list(map(t, query_res.result.get("data", [])))
+    data = query_res.result.get("data", [])
+    # if request.type in (AttributeKey.TYPE_UNSPECIFIED, AttributeKey.TYPE_STRING):
+    #     data.extend([ {"attr_key": ("TYPE_STRING", key_name)} for key_name in ATTRIBUTE_MAPPINGS.keys() if request.value_substring_match in key_name])
+    #     data.sort(key=lambda row: row["attr_key"])
+
+    return list(map(t, data))
 
 
 class EndpointTraceItemAttributeNames(
@@ -350,6 +361,8 @@ class EndpointTraceItemAttributeNames(
     def _execute(
         self, in_msg: TraceItemAttributeNamesRequest
     ) -> TraceItemAttributeNamesResponse:
+        print("IN:")
+        print(in_msg)
         if not in_msg.meta.request_id:
             in_msg.meta.request_id = str(uuid.uuid4())
         if in_msg.HasField("intersecting_attributes_filter") or should_use_items_attrs(
@@ -361,12 +374,19 @@ class EndpointTraceItemAttributeNames(
                 request=snuba_request,
                 timer=self._timer,
             )
-            return TraceItemAttributeNamesResponse(
-                attributes=convert_co_occurring_results_to_attributes(res),
+            import pprint
+
+            print(res.extra["sql"])
+            print(res.result["data"])
+
+            response = TraceItemAttributeNamesResponse(
+                attributes=convert_co_occurring_results_to_attributes(in_msg, res),
                 meta=extract_response_meta(
                     in_msg.meta.request_id, in_msg.meta.debug, [res], [self._timer]
                 ),
             )
+            pprint.pprint(response)
+            return response
         else:
             snuba_request = convert_to_snuba_request(in_msg)
             res = run_query(
@@ -374,4 +394,11 @@ class EndpointTraceItemAttributeNames(
                 request=snuba_request,
                 timer=self._timer,
             )
-            return self._build_response(in_msg, res)
+            import pprint
+
+            print(res.extra["sql"])
+            print(res.result["data"])
+
+            response = self._build_response(in_msg, res)
+            pprint.pprint(response)
+            return response
