@@ -43,11 +43,19 @@ from snuba.web.rpc.v1.legacy.attributes_common import should_use_items_attrs
 from snuba.web.rpc.v1.legacy.trace_item_attribute_names import (
     convert_to_snuba_request as legacy_convert_to_snuba_request,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import ATTRIBUTE_MAPPINGS
+
+# from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import ATTRIBUTE_MAPPINGS
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
-UNSEARCHABLE_ATTRIBUTE_KEYS = ["sentry.event_id"]
+UNSEARCHABLE_ATTRIBUTE_KEYS = [
+    "sentry.event_id",
+    "sentry.start_timestamp_precise",
+    "sentry.received",
+    "sentry.is_segment",
+    "sentry.exclusive_time_ms",
+    "sentry.end_timestamp_precise",
+]
 
 
 def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
@@ -199,6 +207,7 @@ def get_co_occurring_attributes(
         )
 
     string_array = f.arrayMap(
+        # TODO: A map lookup here for backwards compatibility
         Lambda(None, ("x",), f.tuple("TYPE_STRING", column("x"))),
         column("attributes_string"),
     )
