@@ -23,6 +23,7 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_stats import EndpointTraceItemStats
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 
 _RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
@@ -214,6 +215,31 @@ class TestTraceItemAttributesStats(BaseApiTest):
 
         assert match
 
+    def test_backwards_compatibility(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=3)).timestamp())
+        message = TraceItemStatsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            stats_types=[
+                StatsType(
+                    attribute_distributions=AttributeDistributionsRequest(
+                        max_buckets=10, max_attributes=100
+                    )
+                )
+            ],
+        )
+
+        response = EndpointTraceItemStats().execute(message)
+        assert len(response.results[0].attribute_distributions.attributes) == 30
+
     def test_with_filter(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=3)).timestamp())
@@ -267,3 +293,18 @@ class TestTraceItemAttributesStats(BaseApiTest):
             expected_low_cardinality_stats
             in response.results[0].attribute_distributions.attributes
         )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestTraceItemAttributesStatsEAPItems(TestTraceItemAttributesStats):
+    """
+    Run the tests again, but this time on the eap_items table as well to ensure it also works.
+    """
+
+    @pytest.fixture(autouse=True)
+    def use_eap_items_table(
+        self, snuba_set_config: SnubaSetConfig, redis_db: None
+    ) -> None:
+        snuba_set_config("use_eap_items_table", True)
+        snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)

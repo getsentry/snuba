@@ -40,6 +40,23 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
     "sentry.end_timestamp",
 }
 
+# These are attributes that were not stored in attr_str_ or attr_num_ in eap_spans because they were stored in columns.
+# Since we store these in the attribute columns in eap_items, we need to exclude them in endpoints that don't expect them to be in the attribute columns.
+ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS: Final[Set[str]] = {
+    "sentry.raw_description",
+    "sentry.transaction",
+    "sentry.start_timestamp_precise",
+    "sentry.end_timestamp_precise",
+    "sentry.duration_ms",
+    "sentry.event_id",
+    "sentry.exclusive_time_ms",
+    "sentry.is_segment",
+    "sentry.parent_span_id",
+    "sentry.profile_id",
+    "sentry.received",
+    "sentry.segment_id",
+}
+
 COLUMN_PREFIX: str = "sentry."
 
 NORMALIZED_COLUMNS_EAP_ITEMS: Final[
@@ -57,6 +74,7 @@ NORMALIZED_COLUMNS_EAP_ITEMS: Final[
         AttributeKey.Type.TYPE_STRING
     ],  # this gets converted from a uuid to a string in a storage processor
     f"{COLUMN_PREFIX}item_id": [AttributeKey.Type.TYPE_STRING],
+    f"{COLUMN_PREFIX}sampling_weight": [AttributeKey.Type.TYPE_DOUBLE],
 }
 
 PROTO_TYPE_TO_CLICKHOUSE_TYPE: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
@@ -75,11 +93,14 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
     AttributeKey.Type.TYPE_BOOLEAN: "attributes_float",
 }
 
+# We have renamed some attributes in eap_items, so to avoid breaking changes we need to map the old names to the new names
 ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
     "sentry.name": "sentry.raw_description",
     "sentry.description": "sentry.normalized_description",
     "sentry.span_id": "sentry.item_id",
     "sentry.segment_name": "sentry.transaction",
+    "sentry.start_timestamp": "sentry.start_timestamp_precise",
+    "sentry.end_timestamp": "sentry.end_timestamp_precise",
 }
 
 
@@ -90,12 +111,31 @@ def use_eap_items_table(request_meta: RequestMeta) -> bool:
     if settings.USE_EAP_ITEMS_TABLE:
         return True
 
+    use_eap_items_orgs = state.get_str_config("use_eap_items_orgs")
+    eap_items_enabled_orgs = []
+    use_eap_items_for_all_orgs = True
+    if use_eap_items_orgs:
+        try:
+            eap_items_enabled_orgs = list(
+                map(int, use_eap_items_orgs.strip("[]").split(","))
+            )
+            use_eap_items_for_all_orgs = False
+        except ValueError:
+            pass
+
+    turned_on_for_org = (
+        use_eap_items_for_all_orgs
+        or request_meta.organization_id in eap_items_enabled_orgs
+    )
+
     use_eap_items_table_start_timestamp_seconds = state.get_int_config(
         "use_eap_items_table_start_timestamp_seconds"
     )
+
     if (
-        state.get_config("use_eap_items_table", False)
+        state.get_int_config("use_eap_items_table", 0)
         and use_eap_items_table_start_timestamp_seconds is not None
+        and turned_on_for_org
     ):
         return (
             request_meta.start_timestamp.seconds
@@ -112,31 +152,42 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
             f"attribute key {attr_key.name} must have a type specified"
         )
 
-    if attr_key.name in NORMALIZED_COLUMNS_EAP_ITEMS:
-        if attr_key.type not in NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name]:
+    converted_attr_name = ATTRIBUTE_MAPPINGS.get(attr_key.name, attr_key.name)
+    if converted_attr_name in NORMALIZED_COLUMNS_EAP_ITEMS:
+        if attr_key.type not in NORMALIZED_COLUMNS_EAP_ITEMS[converted_attr_name]:
             formatted_attribute_types = ", ".join(
-                map(AttributeKey.Type.Name, NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name])
+                map(
+                    AttributeKey.Type.Name,
+                    NORMALIZED_COLUMNS_EAP_ITEMS[converted_attr_name],
+                )
             )
             raise BadSnubaRPCRequestException(
                 f"Attribute {attr_key.name} must be one of [{formatted_attribute_types}], got {AttributeKey.Type.Name(attr_key.type)}"
             )
 
+        # To maintain backwards compatibility with the old span_id column, we only need the last 16 characters of the item_id
+        # In eap_items, they're just integers, there's no issue fitting a 64 bit integer in a 128 bit integer.
+        # The problem is that this is just our internal representation, but when a user interacts with span_id through EAP, it's treated as a hex string with 16 characters.
+        # However, a 128 bit integer cannot be represented as a 16 character hex string (16 characters can at most represent a 64 bit integer). Hence,
+        # by default we represent item_id as a 32 character hex string. Since the user expects 16 characters and we know that a span_id will currently never use the full 128 bits,
+        # it's safe to get rid of the first 16 characters since we know those will just be padding.
+        if attr_key.name == "sentry.span_id":
+            return f.right(
+                column(converted_attr_name[len(COLUMN_PREFIX) :]), 16, alias=alias
+            )
+
         return f.CAST(
-            column(attr_key.name[len(COLUMN_PREFIX) :]),
+            column(converted_attr_name[len(COLUMN_PREFIX) :]),
             PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
             alias=alias,
         )
 
     if attr_key.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
-        attr_name = attr_key.name
-        if attr_key.name in ATTRIBUTE_MAPPINGS:
-            attr_name = ATTRIBUTE_MAPPINGS[attr_key.name]
-
         if attr_key.type == AttributeKey.Type.TYPE_BOOLEAN:
             return f.CAST(
                 SubscriptableReference(
                     column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
-                    key=literal(attr_name),
+                    key=literal(converted_attr_name),
                     alias=None,
                 ),
                 "Nullable(Boolean)",
@@ -146,7 +197,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
             return f.CAST(
                 SubscriptableReference(
                     column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
-                    key=literal(attr_name),
+                    key=literal(converted_attr_name),
                     alias=None,
                 ),
                 "Nullable(Int64)",
@@ -154,7 +205,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
             )
         return SubscriptableReference(
             column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
-            key=literal(attr_name),
+            key=literal(converted_attr_name),
             alias=alias,
         )
 

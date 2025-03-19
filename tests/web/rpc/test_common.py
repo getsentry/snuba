@@ -146,3 +146,17 @@ class TestCommon:
                 referrer="force_use_eap_spans_table.test",
             )
         )
+
+        snuba_set_config("use_eap_items_table", True)
+        snuba_set_config("use_eap_items_orgs", "[2, 3]")
+        assert not use_eap_items_table(
+            RequestMeta(organization_id=1, start_timestamp=Timestamp(seconds=10))
+        )
+        assert use_eap_items_table(
+            RequestMeta(organization_id=2, start_timestamp=Timestamp(seconds=10))
+        )
+
+        snuba_set_config("use_eap_items_orgs", "wrong format")
+        assert use_eap_items_table(
+            RequestMeta(organization_id=1, start_timestamp=Timestamp(seconds=10))
+        )

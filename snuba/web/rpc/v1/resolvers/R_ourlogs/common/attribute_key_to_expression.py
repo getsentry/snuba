@@ -34,7 +34,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
     if attr_key.name == "sentry.item_id":
         if attr_key.type == AttributeKey.Type.TYPE_STRING:
-            return f.hex(column("item_id"), alias=alias)
+            return column("item_id", alias=alias)
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as a string, got {attr_key.type}"
         )
