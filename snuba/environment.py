@@ -75,8 +75,18 @@ def setup_logging(level: Optional[str] = None) -> None:
 
 
 def setup_sentry() -> None:
+    if settings.DEBUG:
+        spotlight = os.getenv("SENTRY_SPOTLIGHT", "")
+        if spotlight.lower() in ("0", "false", "n", "no"):
+            spotlight = False
+        elif not spotlight.startswith("http"):
+            spotlight = True
+    else:
+        spotlight = False
+
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
+        spotlight=spotlight,
         integrations=[
             FlaskIntegration(),
             GnuBacktraceIntegration(),
