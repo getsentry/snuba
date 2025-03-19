@@ -142,3 +142,8 @@ class TestCommon:
         assert use_eap_items_table(
             RequestMeta(organization_id=2, start_timestamp=Timestamp(seconds=10))
         )
+
+        snuba_set_config("use_eap_items_orgs", "wrong format")
+        assert use_eap_items_table(
+            RequestMeta(organization_id=1, start_timestamp=Timestamp(seconds=10))
+        )
