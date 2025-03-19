@@ -11,6 +11,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationAndFilter,
     AggregationComparisonFilter,
@@ -61,6 +62,13 @@ from tests.helpers import write_raw_unprocessed_events
 
 _RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
 _SERVER_NAME = "D23CXQ4GK2.local"
+
+SEED = 331
+RANDOM_GENERATOR = random.Random(SEED)
+
+
+def seeded_uuid4():
+    return uuid.UUID(int=RANDOM_GENERATOR.getrandbits(128))
 
 
 def gen_message(
@@ -120,7 +128,7 @@ def gen_message(
             "transaction.op": "http.server",
             "user": "ip:127.0.0.1",
         },
-        "span_id": "123456781234567D",
+        "span_id": seeded_uuid4().hex,
         "tags": {
             "relay_endpoint_version": "3",
             "relay_id": "88888888-4444-4444-8444-cccccccccccc",
@@ -3101,3 +3109,40 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
     ) -> None:
         snuba_set_config("use_eap_items_table", True)
         snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
+
+    def test_preflight(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_PREFLIGHT
+                ),
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name")
+                )
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        expected_response = TraceItemTableResponse(
+            column_values=[
+                TraceItemColumnValues(
+                    attribute_name="server_name",
+                    results=[AttributeValue(val_str=_SERVER_NAME) for _ in range(220)],
+                )
+            ],
+            page_token=PageToken(offset=60),
+            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+        )
+        assert response == expected_response

@@ -1,3 +1,4 @@
+import random
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -42,10 +43,16 @@ from snuba.web.rpc.v1.endpoint_time_series import (
     EndpointTimeSeries,
     _validate_time_buckets,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.downsampled_storage_tiers import Tier
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
+
+SEED = 331
+RANDOM_GENERATOR = random.Random(SEED)
+
+
+def seeded_uuid4():
+    return uuid.UUID(int=RANDOM_GENERATOR.getrandbits(128))
 
 
 def gen_span_message(
@@ -95,7 +102,7 @@ def gen_span_message(
             "transaction.op": "http.server",
             "user": "ip:127.0.0.1",
         },
-        "span_id": uuid.uuid4().hex,
+        "span_id": seeded_uuid4().hex,
         "tags": tags,
         "trace_id": uuid.uuid4().hex,
         "start_timestamp_ms": int(dt.timestamp()) * 1000,
@@ -140,6 +147,10 @@ def store_spans_timeseries(
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestTimeSeriesApi(BaseApiTest):
+    def setup_method(self, test_method: Callable[..., Any]) -> None:
+        RANDOM_GENERATOR.seed(SEED)
+        super().setup_method(test_method)
+
     def test_basic(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
@@ -1266,10 +1277,6 @@ class TestUtils:
         assert message.meta.end_timestamp.seconds == int(BASE_TIME.timestamp()) + 75
 
 
-def _within_range(num: float, target: int, tolerance: int) -> bool:
-    return target - tolerance <= num <= target + tolerance
-
-
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
@@ -1287,12 +1294,12 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
     def test_preflight(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 3600
-        query_duration = granularity_secs * 6
+        query_duration = granularity_secs * 3
         store_spans_timeseries(
             BASE_TIME,
             1,
             query_duration,
-            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+            metrics=[DummyMetric("test_preflight_metric", get_value=lambda x: 1)],
         )
 
         message = TimeSeriesRequest(
@@ -1313,7 +1320,9 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             aggregations=[
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_FLOAT, name="test_preflight_metric"
+                    ),
                     label="sum",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                 ),
@@ -1325,18 +1334,25 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(0, query_duration, granularity_secs)
         ]
-        expected_number_of_data_points_in_each_bucket = (
-            granularity_secs // Tier.TIER_512.value
-        )
-        tolerance = 5
+
+        expected_datapoints_based_on_random_seed = [
+            DataPoint(
+                data=5.0,
+                data_present=True,
+                sample_count=5,
+            ),
+            DataPoint(
+                data=4.0,
+                data_present=True,
+                sample_count=4,
+            ),
+            DataPoint(
+                data=11.0,
+                data_present=True,
+                sample_count=11,
+            ),
+        ]
 
         for i in range(len(expected_buckets)):
             datapoint = response.result_timeseries[0].data_points[i]
-            assert _within_range(
-                datapoint.data, expected_number_of_data_points_in_each_bucket, tolerance
-            )
-            assert _within_range(
-                datapoint.sample_count,
-                expected_number_of_data_points_in_each_bucket,
-                tolerance,
-            )
+            assert datapoint == expected_datapoints_based_on_random_seed[i]
