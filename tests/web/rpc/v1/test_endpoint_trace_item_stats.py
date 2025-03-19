@@ -215,6 +215,31 @@ class TestTraceItemAttributesStats(BaseApiTest):
 
         assert match
 
+    def test_backwards_compatibility(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=3)).timestamp())
+        message = TraceItemStatsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            stats_types=[
+                StatsType(
+                    attribute_distributions=AttributeDistributionsRequest(
+                        max_buckets=10, max_attributes=100
+                    )
+                )
+            ],
+        )
+
+        response = EndpointTraceItemStats().execute(message)
+        assert len(response.results[0].attribute_distributions.attributes) == 30
+
     def test_with_filter(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=3)).timestamp())

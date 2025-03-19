@@ -40,6 +40,21 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
     "sentry.end_timestamp",
 }
 
+ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS: Final[Set[str]] = {
+    "sentry.raw_description",
+    "sentry.transaction",
+    "sentry.start_timestamp_precise",
+    "sentry.end_timestamp_precise",
+    "sentry.duration_ms",
+    "sentry.event_id",
+    "sentry.exclusive_time_ms",
+    "sentry.is_segment",
+    "sentry.parent_span_id",
+    "sentry.profile_id",
+    "sentry.received",
+    "sentry.segment_id",
+}
+
 COLUMN_PREFIX: str = "sentry."
 
 NORMALIZED_COLUMNS_EAP_ITEMS: Final[

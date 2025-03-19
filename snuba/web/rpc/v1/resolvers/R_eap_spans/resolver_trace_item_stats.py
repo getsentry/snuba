@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     TraceItemStatsResponse,
     TraceItemStatsResult,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -39,6 +39,7 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+    ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS,
     attribute_key_to_expression,
     attribute_key_to_expression_eap_items,
     use_eap_items_table,
@@ -54,6 +55,7 @@ COUNT_LABEL = "count()"
 
 def _transform_results(
     results: Iterable[Dict[str, Any]],
+    request_meta: RequestMeta,
 ) -> Iterable[AttributeDistribution]:
 
     # Maintain the order of keys, so it is in descending order
@@ -63,6 +65,11 @@ def _transform_results(
     for row in results:
         attr_key = row["attr_key"]
         attr_value = row["attr_value"]
+        if (
+            use_eap_items_table(request_meta)
+            and attr_key in ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS
+        ):
+            continue
         default = AttributeDistribution(
             attribute_name=attr_key,
         )
@@ -232,7 +239,9 @@ class ResolverTraceItemStatsEAPSpans(ResolverTraceItemStats):
                     timer=self._timer,
                 )
 
-                attributes = _transform_results(query_res.result.get("data", []))
+                attributes = _transform_results(
+                    query_res.result.get("data", []), in_msg.meta
+                )
                 result.attribute_distributions.CopyFrom(
                     AttributeDistributions(attributes=attributes)
                 )
