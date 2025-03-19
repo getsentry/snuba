@@ -15,17 +15,14 @@ from snuba.query.processors.physical.type_converters import (
 
 
 class HexIntColumnProcessor(BaseTypeConverter):
-    def __init__(self, columns: Set[str], size: int = 16) -> None:
+    def __init__(self, columns: Set[str]) -> None:
         super().__init__(columns, optimize_ordering=True)
-        self._size = size
+        self._size = 16
 
     def _translate_literal(self, exp: Literal) -> Literal:
         try:
             assert isinstance(exp.value, str)
-            # 128 bit integers in clickhouse need to be referenced as strings
-            if self._size == 32:
-                return Literal(alias=exp.alias, value=str(int(exp.value, 16)))
-            return Literal(alias=exp.alias, value=int(exp.value, 16))
+            return Literal(alias=exp.alias, value=int(exp.value, self._size))
         except (AssertionError, ValueError):
             raise ColumnTypeError("Invalid hexint", should_report=False)
 
