@@ -334,7 +334,8 @@ class TestTraceItemAttributeNames(BaseApiTest):
         PROJECT_ID = 4555754011230209
         ORGANIZATION_ID = 4555754011164672
         true = True
-
+        start = BASE_TIME.timestamp()
+        end = BASE_TIME.timestamp() + 1
         spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
         messages = [
@@ -344,12 +345,12 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 "span_id": "9d1a44cc6388423d",
                 "trace_id": "4708357b20c041f39e40848e2980947b",
                 "duration_ms": 100,
-                "start_timestamp_precise": 1742410542.0,
-                "end_timestamp_precise": 1742410542.1,
+                "start_timestamp_precise": start,
+                "end_timestamp_precise": end,
                 "exclusive_time_ms": 100,
                 "is_segment": True,
                 "received": 1742411142.980593,
-                "start_timestamp_ms": 1742410542000,
+                "start_timestamp_ms": int(start * 1000),
                 "sentry_tags": {"transaction": "foo"},
                 "retention_days": 90,
                 "tags": {"foo": "foo"},
@@ -363,12 +364,12 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 "span_id": "b91705f800054f21",
                 "trace_id": "d3bf3091daf84eb395f704a47b11f83c",
                 "duration_ms": 100,
-                "start_timestamp_precise": 1742410543.0,
-                "end_timestamp_precise": 1742410543.1,
+                "start_timestamp_precise": start,
+                "end_timestamp_precise": end,
                 "exclusive_time_ms": 100,
                 "is_segment": true,
                 "received": 1742411143.021623,
-                "start_timestamp_ms": 1742410543000,
+                "start_timestamp_ms": int(start * 1000),
                 "sentry_tags": {"transaction": "foo"},
                 "retention_days": 90,
                 "tags": {"bar": "bar"},
@@ -379,20 +380,20 @@ class TestTraceItemAttributeNames(BaseApiTest):
             {
                 "project_id": PROJECT_ID,
                 "organization_id": ORGANIZATION_ID,
-                "span_id": "49ab2a01ceea41c6",
-                "trace_id": "2e59d7af13994adfb11f05705bd1f81c",
+                "span_id": "b91705f800054f21",
+                "trace_id": "d3bf3091daf84eb395f704a47b11f83c",
                 "duration_ms": 100,
-                "start_timestamp_precise": 1742410543.0,
-                "end_timestamp_precise": 1742410543.1,
+                "start_timestamp_precise": start,
+                "end_timestamp_precise": end,
                 "exclusive_time_ms": 100,
                 "is_segment": true,
-                "received": 1742411143.060675,
-                "start_timestamp_ms": 1742410543000,
+                "received": 1742411143.021623,
+                "start_timestamp_ms": int(start * 1000),
                 "sentry_tags": {"transaction": "foo"},
                 "retention_days": 90,
                 "tags": {"baz": "baz"},
-                "event_id": "a1002b1d7458424ca523efdc53e90637",
-                "segment_id": "a1002b1d7458424c",
+                "event_id": "8af9dc00313a45f4b0e09d755c56b353",
+                "segment_id": "8af9dc00313a45f4",
                 "ingest_in_eap": true,
             },
         ]
