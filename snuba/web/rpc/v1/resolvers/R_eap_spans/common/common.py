@@ -40,6 +40,8 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
     "sentry.end_timestamp",
 }
 
+# These are attributes that were not stored in attr_str_ or attr_num_ in eap_spans because they were stored in columns.
+# Since we store these in the attribute columns in eap_items, we need to exclude them in endpoints that don't expect them to be in the attribute columns.
 ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS: Final[Set[str]] = {
     "sentry.raw_description",
     "sentry.transaction",
@@ -91,6 +93,7 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
     AttributeKey.Type.TYPE_BOOLEAN: "attributes_float",
 }
 
+# We have renamed some attributes in eap_items, so to avoid breaking changes we need to map the old names to the new names
 ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
     "sentry.name": "sentry.raw_description",
     "sentry.description": "sentry.normalized_description",
@@ -108,13 +111,24 @@ def use_eap_items_table(request_meta: RequestMeta) -> bool:
     if settings.USE_EAP_ITEMS_TABLE:
         return True
 
+    use_eap_items_orgs = state.get_config("use_eap_items_orgs")
+    if use_eap_items_orgs:
+        use_eap_items_orgs = map(int, use_eap_items_orgs.strip("[]").split(","))
+
     use_eap_items_table_start_timestamp_seconds = state.get_int_config(
         "use_eap_items_table_start_timestamp_seconds"
     )
+
     if (
         state.get_config("use_eap_items_table", False)
         and use_eap_items_table_start_timestamp_seconds is not None
     ):
+        if (
+            use_eap_items_orgs
+            and request_meta.organization_id not in use_eap_items_orgs
+        ):
+            return False
+
         return (
             request_meta.start_timestamp.seconds
             >= use_eap_items_table_start_timestamp_seconds
@@ -130,10 +144,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
             f"attribute key {attr_key.name} must have a type specified"
         )
 
-    attr_name = attr_key.name
-    if attr_key.name in ATTRIBUTE_MAPPINGS:
-        attr_name = ATTRIBUTE_MAPPINGS[attr_key.name]
-
+    attr_name = ATTRIBUTE_MAPPINGS.get(attr_key.name, attr_key.name)
     if attr_name in NORMALIZED_COLUMNS_EAP_ITEMS:
         if attr_key.type not in NORMALIZED_COLUMNS_EAP_ITEMS[attr_name]:
             formatted_attribute_types = ", ".join(

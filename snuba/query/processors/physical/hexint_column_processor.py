@@ -16,6 +16,9 @@ from snuba.query.processors.physical.type_converters import (
 
 class HexIntColumnProcessor(BaseTypeConverter):
     def __init__(self, columns: Set[str], size: int = 16) -> None:
+        """
+        size is the number of characters in the hex string representation of the integer (e.g. 32 for 128 bit integers)
+        """
         super().__init__(columns, optimize_ordering=True)
         self._size = size
 
