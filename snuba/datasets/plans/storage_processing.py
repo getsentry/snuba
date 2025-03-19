@@ -177,7 +177,7 @@ def apply_storage_processors(
         original_table = query_plan.query.get_from_clause()
         query_plan.query.set_from_clause(
             Table(
-                table_name=_get_corresponding_table(str(storage_key)),
+                table_name=_get_corresponding_table(storage_key),
                 schema=original_table.schema,
                 storage_key=original_table.storage_key,
                 allocation_policies=original_table.allocation_policies,

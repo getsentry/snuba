@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Sequence
 
 from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
@@ -12,7 +13,6 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
-from snuba.settings import ROOT_REPO_PATH
 
 
 class EAPItemsStorageSelector(QueryStorageSelector):
@@ -32,7 +32,7 @@ class EAPItemsStorageSelector(QueryStorageSelector):
 
         else:
             eap_items_downsample_config = load_configuration_data(
-                f"{ROOT_REPO_PATH}/configuration/events_analytics_platform/storages/eap_items.yaml",
+                f"{Path(__file__).parent.parent.parent.as_posix()}/configuration/events_analytics_platform/storages/eap_items.yaml",
                 STORAGE_VALIDATORS,
             )
             eap_items_downsample_storage_kwargs = build_readable_storage_kwargs(

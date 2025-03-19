@@ -52,7 +52,6 @@ RANDOM_GENERATOR = random.Random(SEED)
 
 
 def seeded_uuid4() -> uuid.UUID:
-    print("helpppp", type(uuid.UUID(int=RANDOM_GENERATOR.getrandbits(128))))
     return uuid.UUID(int=RANDOM_GENERATOR.getrandbits(128))
 
 
