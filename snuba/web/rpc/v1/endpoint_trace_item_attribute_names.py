@@ -229,7 +229,6 @@ def get_co_occurring_attributes(
         )
 
     string_array = f.arrayMap(
-        # TODO: A map lookup here for backwards compatibility
         Lambda(
             None, ("x",), f.tuple("TYPE_STRING", _backwards_compatible_mapping_expr())
         ),
