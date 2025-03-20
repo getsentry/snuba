@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any, MutableMapping, Optional
 
+from snuba.downsampled_storage_tiers import Tier
 from snuba.state.quota import ResourceQuota
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.downsampled_storage_tiers import Tier
 
 
 class QuerySettings(ABC):

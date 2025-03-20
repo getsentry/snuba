@@ -3,6 +3,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entities.storage_selectors.eap_items import EAPItemsStorageSelector
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.downsampled_storage_tiers import Tier
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -21,7 +22,7 @@ EAP_ITEMS_STORAGE_CONNECTIONS = get_entity(
 def test_selects_eap_items() -> None:
     unimportant_query = Query(from_clause=EAP_ITEMS_ENTITY)
     query_settings = HTTPQuerySettings()
-    query_settings.set_tier(1)
+    query_settings.set_sampling_tier(Tier.TIER_1)
 
     selected_storage = EAPItemsStorageSelector().select_storage(
         unimportant_query, query_settings, EAP_ITEMS_STORAGE_CONNECTIONS
@@ -32,7 +33,7 @@ def test_selects_eap_items() -> None:
 def test_selects_correct_eap_items_tier() -> None:
     unimportant_query = Query(from_clause=EAP_ITEMS_ENTITY)
     query_settings = HTTPQuerySettings()
-    query_settings.set_tier(512)
+    query_settings.set_sampling_tier(Tier.TIER_512)
 
     selected_storage = EAPItemsStorageSelector().select_storage(
         unimportant_query, query_settings, EAP_ITEMS_STORAGE_CONNECTIONS

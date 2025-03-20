@@ -16,7 +16,7 @@ class EAPItemsStorageSelector(QueryStorageSelector):
         storage_connections: Sequence[EntityStorageConnection],
     ) -> EntityStorageConnection:
         assert isinstance(query_settings, HTTPQuerySettings)
-        tier = query_settings.get_tier()
+        tier = query_settings.get_sampling_tier().value
         if tier == 1:
             storage_key = StorageKey.EAP_ITEMS
         else:
