@@ -166,6 +166,12 @@ class AttributeValuesRequest(
         self, in_msg: TraceItemAttributeValuesRequest
     ) -> TraceItemAttributeValuesResponse:
         in_msg.limit = in_msg.limit or 1000
+        # HACK (Volo): for backwards compatibility. eap_spans used to store this value,
+        # eap_items does not
+        if in_msg.key == "sentry.service":
+            return TraceItemAttributeValuesResponse(
+                values=[str(p) for p in in_msg.meta.project_ids],
+            )
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),

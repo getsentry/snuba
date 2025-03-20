@@ -432,12 +432,9 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 "foo",
                 "sentry.name",
                 "sentry.segment_name",
-                # "sentry.service",
+                "sentry.service",
             ]
         ]
-        import pdb
-
-        pdb.set_trace()
         assert res.attributes == expected
 
 

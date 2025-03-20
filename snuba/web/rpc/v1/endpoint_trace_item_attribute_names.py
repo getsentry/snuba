@@ -57,6 +57,8 @@ UNSEARCHABLE_ATTRIBUTE_KEYS = [
     "sentry.end_timestamp_precise",
 ]
 
+NON_STORED_ATTRIBUTE_KEYS = ["sentry.service"]
+
 
 def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
     return legacy_convert_to_snuba_request(req)
@@ -212,7 +214,12 @@ def get_co_occurring_attributes(
             condition,
             f.hasAll(
                 column("attribute_keys_hash"),
-                f.array(*[f.cityHash64(k) for k in attribute_keys_to_search]),
+                f.array(
+                    *[
+                        f.cityHash64(ATTRIBUTE_MAPPINGS.get(k, k))
+                        for k in attribute_keys_to_search
+                    ]
+                ),
             ),
         )
 
@@ -333,9 +340,19 @@ def convert_co_occurring_results_to_attributes(
         )
 
     data = query_res.result.get("data", [])
-    # if request.type in (AttributeKey.TYPE_UNSPECIFIED, AttributeKey.TYPE_STRING):
-    #     data.extend([ {"attr_key": ("TYPE_STRING", key_name)} for key_name in ATTRIBUTE_MAPPINGS.keys() if request.value_substring_match in key_name])
-    #     data.sort(key=lambda row: row["attr_key"])
+    try:
+        if request.type in (AttributeKey.TYPE_UNSPECIFIED, AttributeKey.TYPE_STRING):
+            data.extend(
+                [
+                    {"attr_key": ["TYPE_STRING", key_name]}
+                    for key_name in NON_STORED_ATTRIBUTE_KEYS
+                    if request.value_substring_match in key_name
+                ]
+            )
+            data.sort(key=lambda row: row["attr_key"])
+    except Exception as e:
+        print(e)
+        print(data)
 
     return list(map(t, data))
 
@@ -387,8 +404,6 @@ class EndpointTraceItemAttributeNames(
     def _execute(
         self, in_msg: TraceItemAttributeNamesRequest
     ) -> TraceItemAttributeNamesResponse:
-        print("IN:")
-        print(in_msg)
         if not in_msg.meta.request_id:
             in_msg.meta.request_id = str(uuid.uuid4())
         if in_msg.HasField("intersecting_attributes_filter") or should_use_items_attrs(
@@ -400,12 +415,6 @@ class EndpointTraceItemAttributeNames(
                 request=snuba_request,
                 timer=self._timer,
             )
-            import pdb
-            import pprint
-
-            pdb.set_trace()
-            print(res.extra["sql"])
-            print(res.result["data"])
 
             response = TraceItemAttributeNamesResponse(
                 attributes=convert_co_occurring_results_to_attributes(in_msg, res),
@@ -413,7 +422,6 @@ class EndpointTraceItemAttributeNames(
                     in_msg.meta.request_id, in_msg.meta.debug, [res], [self._timer]
                 ),
             )
-            pprint.pprint(response)
             return response
         else:
             snuba_request = convert_to_snuba_request(in_msg)
@@ -422,11 +430,6 @@ class EndpointTraceItemAttributeNames(
                 request=snuba_request,
                 timer=self._timer,
             )
-            import pprint
-
-            print(res.extra["sql"])
-            print(res.result["data"])
 
             response = self._build_response(in_msg, res)
-            pprint.pprint(response)
             return response
