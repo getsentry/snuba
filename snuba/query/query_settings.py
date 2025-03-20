@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, MutableMapping, Optional
 
 from snuba.state.quota import ResourceQuota
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.downsampled_storage_tiers import Tier
 
 
 class QuerySettings(ABC):
@@ -86,7 +87,7 @@ class HTTPQuerySettings(QuerySettings):
         apply_default_subscriptable_mapping: bool = True,
     ) -> None:
         super().__init__()
-        self.__tier = 1
+        self.__tier = Tier.TIER_1
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug
@@ -139,10 +140,10 @@ class HTTPQuerySettings(QuerySettings):
     in EAP.
     """
 
-    def set_tier(self, tier: int) -> None:
+    def set_sampling_tier(self, tier: Tier) -> None:
         self.__tier = tier
 
-    def get_tier(self) -> int:
+    def get_sampling_tier(self) -> Tier:
         return self.__tier
 
 
