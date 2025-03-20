@@ -146,6 +146,9 @@ def _convert_result_timeseries(
         for secs in range(0, query_duration, request.granularity_secs)
     ]
 
+    if False:
+        raise Exception
+
     # this loop fill in our pre-computed dictionaries so that we can zerofill later
     for row in data:
         group_by_map = {}
