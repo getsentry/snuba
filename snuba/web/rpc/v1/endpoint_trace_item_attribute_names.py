@@ -339,19 +339,15 @@ def convert_co_occurring_results_to_attributes(
         )
 
     data = query_res.result.get("data", [])
-    try:
-        if request.type in (AttributeKey.TYPE_UNSPECIFIED, AttributeKey.TYPE_STRING):
-            data.extend(
-                [
-                    {"attr_key": ["TYPE_STRING", key_name]}
-                    for key_name in NON_STORED_ATTRIBUTE_KEYS
-                    if request.value_substring_match in key_name
-                ]
-            )
-            data.sort(key=lambda row: row["attr_key"])
-    except Exception as e:
-        print(e)
-        print(data)
+    if request.type in (AttributeKey.TYPE_UNSPECIFIED, AttributeKey.TYPE_STRING):
+        data.extend(
+            [
+                {"attr_key": ["TYPE_STRING", key_name]}
+                for key_name in NON_STORED_ATTRIBUTE_KEYS
+                if request.value_substring_match in key_name
+            ]
+        )
+        data.sort(key=lambda row: row["attr_key"])
 
     return list(map(t, data))
 
