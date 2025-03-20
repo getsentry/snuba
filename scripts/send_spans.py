@@ -27,7 +27,7 @@ Frontend makes 1-3 backend calls, which make 1-3 API calls
 """
 
 PROJECTS = [1, 2, 3]
-ORGANIZATION_ID = 1123
+ORGANIZATION_ID = 1
 RECEIVED = datetime.datetime.now().timestamp()
 CUSTOM_TAGS: list[tuple[str, Callable[[], Any]]] = [
     ("tag1", partial(random.randint, 0, 10)),

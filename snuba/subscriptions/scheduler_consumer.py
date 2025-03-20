@@ -17,6 +17,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.state import get_str_config
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.scheduler_processing_strategy import (
@@ -109,6 +110,16 @@ class CommitLogTickConsumer(Consumer[Tick]):
         self.__synchronization_timestamp = synchronization_timestamp
         self.__time_shift = time_shift.total_seconds() if time_shift is not None else 0
 
+    def followed_group_dynamic(self) -> str:
+        override_group = get_str_config(
+            f"subscriptions_override_consumer_group_{self.__followed_consumer_group}"
+        )
+
+        if override_group is not None:
+            logger.info("override_group tripped")
+            return override_group
+        return self.__followed_consumer_group
+
     def subscribe(
         self,
         topics: Sequence[Topic],
@@ -143,7 +154,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
             )
             return None
 
-        if commit.group != self.__followed_consumer_group:
+        if commit.group != self.followed_group_dynamic():
             return None
 
         previous_message = self.__previous_messages.get(commit.partition)
