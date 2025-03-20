@@ -1,4 +1,3 @@
-import random
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -11,7 +10,10 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
-from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import (
+    DownsampledStorageConfig,
+    DownsampledStorageMeta,
+)
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     DataPoint,
     Expression,
@@ -46,13 +48,6 @@ from snuba.web.rpc.v1.endpoint_time_series import (
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
-
-SEED = 331
-RANDOM_GENERATOR = random.Random(SEED)
-
-
-def seeded_uuid4() -> uuid.UUID:
-    return uuid.UUID(int=RANDOM_GENERATOR.getrandbits(128))
 
 
 def gen_span_message(
@@ -102,7 +97,7 @@ def gen_span_message(
             "transaction.op": "http.server",
             "user": "ip:127.0.0.1",
         },
-        "span_id": seeded_uuid4().hex,
+        "span_id": uuid.uuid4().hex,
         "tags": tags,
         "trace_id": uuid.uuid4().hex,
         "start_timestamp_ms": int(dt.timestamp()) * 1000,
@@ -147,10 +142,6 @@ def store_spans_timeseries(
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestTimeSeriesApi(BaseApiTest):
-    def setup_method(self, test_method: Callable[..., Any]) -> None:
-        RANDOM_GENERATOR.seed(SEED)
-        super().setup_method(test_method)
-
     def test_basic(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
@@ -1293,8 +1284,8 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
 
     def test_preflight(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
-        granularity_secs = 3600
-        query_duration = granularity_secs * 3
+        granularity_secs = 15
+        query_duration = granularity_secs * 1
         store_spans_timeseries(
             BASE_TIME,
             1,
@@ -1302,7 +1293,7 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             metrics=[DummyMetric("test_preflight_metric", get_value=lambda x: 1)],
         )
 
-        message = TimeSeriesRequest(
+        preflight_message = TimeSeriesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -1329,30 +1320,13 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             ],
             granularity_secs=granularity_secs,
         )
-        response = EndpointTimeSeries().execute(message)
-        expected_buckets = [
-            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
-            for secs in range(0, query_duration, granularity_secs)
-        ]
 
-        expected_datapoints_based_on_random_seed = [
-            DataPoint(
-                data=5.0,
-                data_present=True,
-                sample_count=5,
-            ),
-            DataPoint(
-                data=4.0,
-                data_present=True,
-                sample_count=4,
-            ),
-            DataPoint(
-                data=11.0,
-                data_present=True,
-                sample_count=11,
-            ),
-        ]
+        preflight_response = EndpointTimeSeries().execute(preflight_message)
 
-        for i in range(len(expected_buckets)):
-            datapoint = response.result_timeseries[0].data_points[i]
-            assert datapoint == expected_datapoints_based_on_random_seed[i]
+        assert preflight_response.result_timeseries == []
+        assert (
+            preflight_response.meta.downsampled_storage_meta
+            == DownsampledStorageMeta(
+                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_512
+            )
+        )

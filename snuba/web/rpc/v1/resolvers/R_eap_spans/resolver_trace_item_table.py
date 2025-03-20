@@ -29,7 +29,7 @@ from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.query.query_settings import QuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -38,10 +38,7 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
-from snuba.web.rpc.common.debug_info import (
-    extract_response_meta,
-    setup_trace_query_settings,
-)
+from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
@@ -52,12 +49,15 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    add_tier_to_query_settings,
     apply_virtual_columns,
     apply_virtual_columns_eap_items,
     attribute_key_to_expression,
     attribute_key_to_expression_eap_items,
     use_eap_items_table,
+)
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
+    add_sampling_tier_to_query_stats,
+    construct_query_settings,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -324,13 +324,9 @@ def _build_query(request: TraceItemTableRequest) -> Query:
     return res
 
 
-def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
-    query_settings = (
-        setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
-    )
-
-    if request.meta.HasField("downsampled_storage_config"):
-        add_tier_to_query_settings(request, query_settings)
+def _build_snuba_request(
+    request: TraceItemTableRequest, query_settings: QuerySettings
+) -> SnubaRequest:
 
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
@@ -366,18 +362,22 @@ class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
-        snuba_request = _build_snuba_request(in_msg)
+        query_settings = construct_query_settings(in_msg)
+
+        snuba_request = _build_snuba_request(in_msg, query_settings)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
             timer=self._timer,
         )
+        add_sampling_tier_to_query_stats(res, query_settings)
         column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
             [res],
             [self._timer],
+            extract_sampling_tier=in_msg.meta.HasField("downsampled_storage_config"),
         )
         return TraceItemTableResponse(
             column_values=column_values,

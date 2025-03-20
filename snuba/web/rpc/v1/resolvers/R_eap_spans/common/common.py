@@ -1,8 +1,5 @@
 from typing import Final, Mapping, Sequence, Set
 
-from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
-from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
-from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
@@ -10,12 +7,10 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 
 from snuba import settings, state
-from snuba.downsampled_storage_tiers import Tier
 from snuba.query import Query
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal, literals_array
 from snuba.query.expressions import Expression, SubscriptableReference
-from snuba.query.query_settings import HTTPQuerySettings
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 # These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse
@@ -107,17 +102,6 @@ ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
     "sentry.start_timestamp": "sentry.start_timestamp_precise",
     "sentry.end_timestamp": "sentry.end_timestamp_precise",
 }
-
-
-def add_tier_to_query_settings(
-    request: TimeSeriesRequest | TraceItemTableRequest,
-    query_settings: HTTPQuerySettings,
-) -> None:
-    if (
-        request.meta.downsampled_storage_config.mode
-        == DownsampledStorageConfig.MODE_PREFLIGHT
-    ):
-        query_settings.set_sampling_tier(Tier.TIER_512)
 
 
 def use_eap_items_table(request_meta: RequestMeta) -> bool:
