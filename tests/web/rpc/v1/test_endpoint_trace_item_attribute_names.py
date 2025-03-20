@@ -8,7 +8,11 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
     TraceItemAttributeNamesResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
+    RequestMeta,
+    TraceItemType,
+)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.factory import get_storage
@@ -17,6 +21,7 @@ from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     EndpointTraceItemAttributeNames,
 )
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 
 BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(
@@ -103,10 +108,9 @@ class TestTraceItemAttributeNames(BaseApiTest):
             ),
             limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_STRING,
-            value_substring_match="",
+            value_substring_match="a_tag",
         )
         res = EndpointTraceItemAttributeNames().execute(req)
-
         expected = []
         for i in range(TOTAL_GENERATED_ATTR_PER_TYPE):
             expected.append(
@@ -132,7 +136,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
             ),
             limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_FLOAT,
-            value_substring_match="",
+            value_substring_match="b_mea",
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         expected = []
@@ -161,7 +165,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
             ),
             limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_DOUBLE,
-            value_substring_match="",
+            value_substring_match="b_mea",
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         expected = []
@@ -325,3 +329,127 @@ class TestTraceItemAttributeNames(BaseApiTest):
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         assert res.meta.query_info != []
+
+    def test_backwards_compat_names(self) -> None:
+        PROJECT_ID = 4555754011230209
+        ORGANIZATION_ID = 4555754011164672
+        true = True
+        start = BASE_TIME.timestamp()
+        end = BASE_TIME.timestamp() + 1
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        items_storage = get_storage(StorageKey("eap_items"))
+        messages = [
+            {
+                "project_id": PROJECT_ID,
+                "organization_id": ORGANIZATION_ID,
+                "span_id": "9d1a44cc6388423d",
+                "trace_id": "4708357b20c041f39e40848e2980947b",
+                "description": "/api/0/relays/projectconfigs/",
+                "duration_ms": 100,
+                "start_timestamp_precise": start,
+                "end_timestamp_precise": end,
+                "exclusive_time_ms": 100,
+                "is_segment": True,
+                "received": 1742411142.980593,
+                "start_timestamp_ms": int(start * 1000),
+                "sentry_tags": {"transaction": "foo"},
+                "retention_days": 90,
+                "tags": {"foo": "foo"},
+                "event_id": "654cfc4376f84645a70d889fbe9284a0",
+                "segment_id": "654cfc4376f84645",
+                "ingest_in_eap": True,
+            },
+            {
+                "project_id": PROJECT_ID,
+                "organization_id": ORGANIZATION_ID,
+                "span_id": "b91705f800054f21",
+                "trace_id": "d3bf3091daf84eb395f704a47b11f83c",
+                "description": "/api/0/relays/projectconfigs/",
+                "duration_ms": 100,
+                "start_timestamp_precise": start,
+                "end_timestamp_precise": end,
+                "exclusive_time_ms": 100,
+                "is_segment": true,
+                "received": 1742411143.021623,
+                "start_timestamp_ms": int(start * 1000),
+                "sentry_tags": {"transaction": "foo"},
+                "retention_days": 90,
+                "tags": {"bar": "bar"},
+                "event_id": "8af9dc00313a45f4b0e09d755c56b353",
+                "segment_id": "8af9dc00313a45f4",
+                "ingest_in_eap": true,
+            },
+            {
+                "project_id": PROJECT_ID,
+                "organization_id": ORGANIZATION_ID,
+                "span_id": "b91705f800054f21",
+                "trace_id": "d3bf3091daf84eb395f704a47b11f83c",
+                "description": "/api/0/relays/projectconfigs/",
+                "duration_ms": 100,
+                "start_timestamp_precise": start,
+                "end_timestamp_precise": end,
+                "exclusive_time_ms": 100,
+                "is_segment": true,
+                "received": 1742411143.021623,
+                "start_timestamp_ms": int(start * 1000),
+                "sentry_tags": {"transaction": "foo"},
+                "retention_days": 90,
+                "tags": {"baz": "baz"},
+                "event_id": "8af9dc00313a45f4b0e09d755c56b353",
+                "segment_id": "8af9dc00313a45f4",
+                "ingest_in_eap": true,
+            },
+        ]
+
+        write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[PROJECT_ID],
+                organization_id=ORGANIZATION_ID,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            limit=1000,
+            type=AttributeKey.Type.TYPE_STRING,
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        expected = [
+            TraceItemAttributeNamesResponse.Attribute(
+                name=attr_name, type=AttributeKey.Type.TYPE_STRING
+            )
+            for attr_name in [
+                "bar",
+                "baz",
+                "foo",
+                "sentry.name",
+                "sentry.segment_name",
+                "sentry.service",
+            ]
+        ]
+        assert res.attributes == expected
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestTraceItemAttributeNamesEAPItems(TestTraceItemAttributeNames):
+    @pytest.fixture(autouse=True)
+    def use_eap_items_table(
+        self, snuba_set_config: SnubaSetConfig, redis_db: None
+    ) -> None:
+        snuba_set_config("use_eap_items_attrs_table_start_timestamp_seconds", 0)
+        snuba_set_config("use_eap_items_attrs_table_all", True)
+
+    def test_with_page_token_offset(self) -> None:
+        pass
+
+    def test_page_token_offset_filter(self) -> None:
+        pass

@@ -22,7 +22,7 @@ from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Storage
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, in_cond, not_cond
+from snuba.query.dsl import and_cond, column, if_cond, in_cond, not_cond
 from snuba.query.expressions import Expression, Lambda
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -39,12 +39,25 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
+from snuba.web.rpc.v1.legacy.attributes_common import should_use_items_attrs
 from snuba.web.rpc.v1.legacy.trace_item_attribute_names import (
     convert_to_snuba_request as legacy_convert_to_snuba_request,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import ATTRIBUTE_MAPPINGS
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
+UNSEARCHABLE_ATTRIBUTE_KEYS = [
+    "sentry.event_id",
+    "sentry.segment_id",
+    "sentry.start_timestamp_precise",
+    "sentry.received",
+    "sentry.is_segment",
+    "sentry.exclusive_time_ms",
+    "sentry.end_timestamp_precise",
+]
+
+NON_STORED_ATTRIBUTE_KEYS = ["sentry.service"]
 
 
 def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
@@ -63,6 +76,17 @@ class AttributeKeyCollector(ProtoVisitor):
             self.keys.add(trace_item_filter.exists_filter.key.name)
         elif trace_item_filter.HasField("comparison_filter"):
             self.keys.add(trace_item_filter.comparison_filter.key.name)
+
+
+def _backwards_compatible_mapping_expr() -> Expression:
+    backwards_keys = f.array(*list(ATTRIBUTE_MAPPINGS.keys()))
+    backwards_vals = f.array(*list(ATTRIBUTE_MAPPINGS.values()))
+
+    return if_cond(
+        in_cond(column("x"), backwards_vals),
+        f.arrayElement(backwards_keys, f.indexOf(backwards_vals, column("x"))),
+        column("x"),
+    )
 
 
 def convert_to_attributes(
@@ -177,16 +201,23 @@ def get_co_occurring_attributes(
     )
 
     condition = and_cond(
-        and_cond(
-            project_id_and_org_conditions(request.meta),
-            # timestamp should be converted to start and end of week
-            get_co_occurring_attributes_date_condition(request),
-        ),
-        f.hasAll(
-            column("attribute_keys_hash"),
-            f.array(*[f.cityHash64(k) for k in attribute_keys_to_search]),
-        ),
+        project_id_and_org_conditions(request.meta),
+        get_co_occurring_attributes_date_condition(request),
     )
+
+    if attribute_keys_to_search:
+        condition = and_cond(
+            condition,
+            f.hasAll(
+                column("attribute_keys_hash"),
+                f.array(
+                    *[
+                        f.cityHash64(ATTRIBUTE_MAPPINGS.get(k, k))
+                        for k in attribute_keys_to_search
+                    ]
+                ),
+            ),
+        )
 
     if request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
         condition = and_cond(
@@ -194,12 +225,19 @@ def get_co_occurring_attributes(
         )
 
     string_array = f.arrayMap(
-        Lambda(None, ("x",), f.tuple("TYPE_STRING", column("x"))),
+        Lambda(
+            None, ("x",), f.tuple("TYPE_STRING", _backwards_compatible_mapping_expr())
+        ),
         column("attributes_string"),
     )
 
+    # backwards compatibility with TYPE_FLOAT
+    floating_point_type = (
+        "TYPE_FLOAT" if request.type == AttributeKey.Type.TYPE_FLOAT else "TYPE_DOUBLE"
+    )
+
     double_array = f.arrayMap(
-        Lambda(None, ("x",), f.tuple("TYPE_DOUBLE", column("x"))),
+        Lambda(None, ("x",), f.tuple(floating_point_type, column("x"))),
         column("attributes_float"),
     )
     array_func = None
@@ -209,26 +247,21 @@ def get_co_occurring_attributes(
         AttributeKey.Type.TYPE_FLOAT,
         AttributeKey.Type.TYPE_DOUBLE,
         AttributeKey.Type.TYPE_INT,
+        AttributeKey.Type.TYPE_BOOLEAN,
     ):
         array_func = double_array
     else:
-        array_func = f.arrayConcat(
-            f.arrayMap(
-                Lambda(None, ("x",), f.tuple("TYPE_STRING", column("x"))),
-                column("attributes_string"),
-            ),
-            f.arrayMap(
-                Lambda(None, ("x",), f.tuple("TYPE_DOUBLE", column("x"))),
-                column("attributes_float"),
-            ),
-        )
+        array_func = f.arrayConcat(string_array, double_array)
 
     attr_filter = not_cond(
-        in_cond(column("attr.2"), f.array(*attribute_keys_to_search))
+        in_cond(
+            column("attr.2"),
+            f.array(*attribute_keys_to_search, *UNSEARCHABLE_ATTRIBUTE_KEYS),
+        )
     )
     if request.value_substring_match:
         attr_filter = and_cond(
-            attr_filter, f.startsWith(column("attr.2"), request.value_substring_match)
+            attr_filter, f.like(column("attr.2"), f"%{request.value_substring_match}%")
         )
 
     inner_query = Query(
@@ -287,6 +320,7 @@ def get_co_occurring_attributes(
 
 
 def convert_co_occurring_results_to_attributes(
+    request: TraceItemAttributeNamesRequest,
     query_res: QueryResult,
 ) -> list[TraceItemAttributeNamesResponse.Attribute]:
     def t(row: Row) -> TraceItemAttributeNamesResponse.Attribute:
@@ -300,7 +334,18 @@ def convert_co_occurring_results_to_attributes(
             name=attr_name, type=getattr(AttributeKey.Type, attr_type)
         )
 
-    return list(map(t, query_res.result.get("data", [])))
+    data = query_res.result.get("data", [])
+    if request.type in (AttributeKey.TYPE_UNSPECIFIED, AttributeKey.TYPE_STRING):
+        data.extend(
+            [
+                {"attr_key": ("TYPE_STRING", key_name)}
+                for key_name in NON_STORED_ATTRIBUTE_KEYS
+                if request.value_substring_match in key_name
+            ]
+        )
+        data.sort(key=lambda row: tuple(row.get("attr_key", ("TYPE_STRING", ""))))
+
+    return list(map(t, data))
 
 
 class EndpointTraceItemAttributeNames(
@@ -352,19 +397,23 @@ class EndpointTraceItemAttributeNames(
     ) -> TraceItemAttributeNamesResponse:
         if not in_msg.meta.request_id:
             in_msg.meta.request_id = str(uuid.uuid4())
-        if in_msg.HasField("intersecting_attributes_filter"):
+        if in_msg.HasField("intersecting_attributes_filter") or should_use_items_attrs(
+            in_msg.meta
+        ):
             snuba_request = get_co_occurring_attributes(in_msg)
             res = run_query(
                 dataset=PluggableDataset(name="eap", all_entities=[]),
                 request=snuba_request,
                 timer=self._timer,
             )
-            return TraceItemAttributeNamesResponse(
-                attributes=convert_co_occurring_results_to_attributes(res),
+
+            response = TraceItemAttributeNamesResponse(
+                attributes=convert_co_occurring_results_to_attributes(in_msg, res),
                 meta=extract_response_meta(
                     in_msg.meta.request_id, in_msg.meta.debug, [res], [self._timer]
                 ),
             )
+            return response
         else:
             snuba_request = convert_to_snuba_request(in_msg)
             res = run_query(
@@ -372,4 +421,6 @@ class EndpointTraceItemAttributeNames(
                 request=snuba_request,
                 timer=self._timer,
             )
-            return self._build_response(in_msg, res)
+
+            response = self._build_response(in_msg, res)
+            return response

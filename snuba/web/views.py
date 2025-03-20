@@ -627,7 +627,6 @@ if application.debug or application.testing:
     @application.route("/tests/<entity:entity>/eventstream", methods=["POST"])
     def eventstream(*, entity: Entity) -> RespTuple:
         record = json.loads(http_request.data)
-
         version = record[0]
         if version != 2:
             raise RuntimeError("Unsupported protocol version: %s" % record)

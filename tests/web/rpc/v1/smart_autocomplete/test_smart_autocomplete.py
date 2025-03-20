@@ -288,3 +288,29 @@ class TestSmartAutocompleteData:
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         assert res.attributes == []
+
+    def test_backwards_compat_names(self, setup_teardown: None) -> None:
+        # this tests makes sure the the old field names supported by EAP spans would still be returned
+        # by the autocomplete endpoint
+        req = TraceItemAttributeNamesRequest(
+            meta=META,
+            limit=1000,
+            value_substring_match="test_",
+            intersecting_attributes_filter=TraceItemFilter(
+                and_filter=AndFilter(
+                    filters=[
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="sentry.name"
+                                ),
+                                op=ComparisonFilter.OP_EQUALS,
+                                value=AttributeValue(val_str="value"),
+                            )
+                        ),
+                    ]
+                )
+            ),
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        assert len(res.attributes) > 0
