@@ -55,7 +55,6 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     use_eap_items_table,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
-    add_sampling_tier_to_query_stats,
     construct_query_settings,
 )
 
@@ -399,7 +398,6 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
             request=snuba_request,
             timer=self._timer,
         )
-        add_sampling_tier_to_query_stats(res, query_settings)
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,

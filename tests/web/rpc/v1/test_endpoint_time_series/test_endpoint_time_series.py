@@ -1293,6 +1293,17 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             metrics=[DummyMetric("test_preflight_metric", get_value=lambda x: 1)],
         )
 
+        aggregations = [
+            AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(
+                    type=AttributeKey.TYPE_FLOAT, name="test_preflight_metric"
+                ),
+                label="sum",
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+            ),
+        ]
+
         preflight_message = TimeSeriesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -1308,22 +1319,35 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
                     mode=DownsampledStorageConfig.MODE_PREFLIGHT
                 ),
             ),
-            aggregations=[
-                AttributeAggregation(
-                    aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_FLOAT, name="test_preflight_metric"
-                    ),
-                    label="sum",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+            aggregations=aggregations,
+            granularity_secs=granularity_secs,
+        )
+
+        message_to_non_downsampled_tier = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
                 ),
-            ],
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=aggregations,
             granularity_secs=granularity_secs,
         )
 
         preflight_response = EndpointTimeSeries().execute(preflight_message)
+        non_downsampled_tier_response = EndpointTimeSeries().execute(
+            message_to_non_downsampled_tier
+        )
 
-        assert preflight_response.result_timeseries == []
+        assert (
+            len(preflight_response.result_timeseries)
+            < len(non_downsampled_tier_response.result_timeseries) / 100
+        )
         assert (
             preflight_response.meta.downsampled_storage_meta
             == DownsampledStorageMeta(

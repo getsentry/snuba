@@ -20,7 +20,7 @@ class EAPItemsStorageSelector(QueryStorageSelector):
 
         tier = query_settings.get_sampling_tier()
 
-        if tier == Tier.TIER_1:
+        if tier == Tier.TIER_1 or tier == Tier.TIER_NO_TIER:
             storage_key = StorageKey.EAP_ITEMS
         else:
             storage_key = getattr(StorageKey, f"EAP_ITEMS_DOWNSAMPLE_{tier.value}")

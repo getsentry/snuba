@@ -15,6 +15,29 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 
 
+def _construct_meta_if_downsampled(
+    query_results: List[QueryResult],
+) -> DownsampledStorageMeta | None:
+    highest_sampling_tier = Tier.TIER_NO_TIER
+
+    for query_result in query_results:
+        sampling_tier = query_result.extra.get("stats", {}).get("sampling_tier")
+        if sampling_tier:
+            if sampling_tier.value > highest_sampling_tier.value:
+                highest_sampling_tier = sampling_tier
+
+    return (
+        DownsampledStorageMeta(
+            tier=getattr(
+                DownsampledStorageMeta.SelectedTier,
+                "SELECTED_" + highest_sampling_tier.name,
+            ),
+        )
+        if highest_sampling_tier != Tier.TIER_NO_TIER
+        else None
+    )
+
+
 def extract_response_meta(
     request_id: str,
     debug: bool,
@@ -24,20 +47,7 @@ def extract_response_meta(
 ) -> ResponseMeta:
     query_info: List[QueryInfo] = []
 
-    downsampled_storage_meta = None
-
-    if extract_sampling_tier:
-        assert (
-            len(query_results) == 1
-        ), "we can only extract 1 result at a time for EndpointTimeSeres and EndpointTraceItemTable"
-        sampling_tier = (
-            query_results[0].extra.get("stats", {}).get("sampling_tier", Tier.TIER_1)
-        )
-        downsampled_storage_meta = DownsampledStorageMeta(
-            tier=getattr(
-                DownsampledStorageMeta.SelectedTier, "SELECTED_" + sampling_tier.name
-            ),
-        )
+    downsampled_storage_meta = _construct_meta_if_downsampled(query_results)
 
     if not debug:
         return (

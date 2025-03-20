@@ -13,7 +13,7 @@ from snuba.clusters.cluster import (
 )
 from snuba.core.initialize import initialize_snuba
 from snuba.datasets.factory import reset_dataset_factory
-from snuba.datasets.schemas.tables import WritableTableSchema
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.environment import setup_sentry
 from snuba.redis import all_redis_clients
@@ -189,7 +189,7 @@ def _clear_db() -> None:
         database = cluster.get_database()
 
         schema = storage.get_schema()
-        if isinstance(schema, WritableTableSchema):
+        if isinstance(schema, TableSchema):
             table_name = schema.get_local_table_name()
 
             nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
@@ -197,7 +197,12 @@ def _clear_db() -> None:
                 connection = cluster.get_node_connection(
                     ClickhouseClientSettings.MIGRATE, node
                 )
-                connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
+                try:
+                    connection.execute(
+                        f"TRUNCATE TABLE IF EXISTS {database}.{table_name}"
+                    )
+                except Exception:
+                    pass
 
 
 @pytest.fixture

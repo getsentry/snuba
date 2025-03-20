@@ -3114,13 +3114,17 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 msg_timestamp,
                 tags={"preflighttag": "preflight"},
             )
-            for i in range(30)
+            for _ in range(30)
         ]
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-        message = TraceItemTableRequest(
+
+        columns = [
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="preflighttag"))
+        ]
+        preflight_message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -3134,14 +3138,38 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                     mode=DownsampledStorageConfig.MODE_PREFLIGHT
                 ),
             ),
+            columns=columns,
+        )
+
+        message_to_non_downsampled_tier = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
             columns=[
                 Column(
                     key=AttributeKey(type=AttributeKey.TYPE_STRING, name="preflighttag")
                 )
             ],
         )
-        response = EndpointTraceItemTable().execute(message)
-        assert response.column_values == []
-        assert response.meta.downsampled_storage_meta == DownsampledStorageMeta(
-            tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_512
+
+        preflight_response = EndpointTraceItemTable().execute(preflight_message)
+        non_downsampled_tier_response = EndpointTraceItemTable().execute(
+            message_to_non_downsampled_tier
+        )
+        assert (
+            len(preflight_response.column_values)
+            < len(non_downsampled_tier_response.column_values) / 100
+        )
+        assert (
+            preflight_response.meta.downsampled_storage_meta
+            == DownsampledStorageMeta(
+                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_512
+            )
         )

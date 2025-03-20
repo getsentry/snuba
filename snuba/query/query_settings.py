@@ -87,7 +87,7 @@ class HTTPQuerySettings(QuerySettings):
         apply_default_subscriptable_mapping: bool = True,
     ) -> None:
         super().__init__()
-        self.__tier = Tier.TIER_1
+        self.__tier = Tier.TIER_NO_TIER
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug
