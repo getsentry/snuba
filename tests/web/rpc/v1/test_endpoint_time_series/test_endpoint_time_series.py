@@ -1277,3 +1277,6 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
     ) -> None:
         snuba_set_config("use_eap_items_table", True)
         snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
+
+    def test_again(self) -> None:
+        assert True
