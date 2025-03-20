@@ -590,7 +590,6 @@ if application.debug or application.testing:
     def _write_to_entity(*, entity: EntityType) -> RespTuple:
         from snuba.processor import InsertBatch
 
-        print("INSERT ", entity.entity_key, http_request.data)
         rows: MutableSequence[WriterTableRow] = []
         offset_base = int(round(time.time() * 1000))
         writable_storage = entity.get_writable_storage()
