@@ -52,6 +52,7 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+    add_tier_to_query_settings,
     apply_virtual_columns,
     apply_virtual_columns_eap_items,
     attribute_key_to_expression,
@@ -327,6 +328,9 @@ def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
+
+    if request.meta.HasField("downsampled_storage_config"):
+        add_tier_to_query_settings(request, query_settings)
 
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),

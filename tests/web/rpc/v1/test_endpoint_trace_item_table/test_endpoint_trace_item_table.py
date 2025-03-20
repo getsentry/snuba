@@ -1,7 +1,7 @@
 import random
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -63,11 +63,19 @@ from tests.helpers import write_raw_unprocessed_events
 _RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
 _SERVER_NAME = "D23CXQ4GK2.local"
 
+SEED = 331
+RANDOM_GENERATOR = random.Random(SEED)
+
+
+def seeded_uuid4() -> uuid.UUID:
+    return uuid.UUID(int=RANDOM_GENERATOR.getrandbits(128))
+
 
 def gen_message(
     dt: datetime,
     measurements: dict[str, dict[str, float]] | None = None,
     tags: dict[str, str] | None = None,
+    generate_random_span_id: bool = False,
 ) -> Mapping[str, Any]:
     measurements = measurements or {}
     tags = tags or {}
@@ -121,7 +129,9 @@ def gen_message(
             "transaction.op": "http.server",
             "user": "ip:127.0.0.1",
         },
-        "span_id": "123456781234567D",
+        "span_id": seeded_uuid4().hex
+        if generate_random_span_id
+        else "123456781234567D",
         "tags": {
             "relay_endpoint_version": "3",
             "relay_id": "88888888-4444-4444-8444-cccccccccccc",
@@ -203,6 +213,10 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestTraceItemTable(BaseApiTest):
+    def setup_method(self, test_method: Callable[..., Any]) -> None:
+        RANDOM_GENERATOR.seed(SEED)
+        super().setup_method(test_method)
+
     def test_basic(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
@@ -3104,6 +3118,18 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
 
     def test_preflight(self, setup_teardown: Any) -> None:
+        items_storage = get_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = [
+            gen_message(
+                msg_timestamp,
+                tags={"preflighttag": "preflight"},
+                generate_random_span_id=True,
+            )
+            for i in range(3600)
+        ]
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -3122,20 +3148,25 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             ),
             columns=[
                 Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name")
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="preflighttag")
                 )
             ],
         )
         response = EndpointTraceItemTable().execute(message)
 
+        expected_num_rows_from_random_seed = 5
         expected_response = TraceItemTableResponse(
             column_values=[
                 TraceItemColumnValues(
-                    attribute_name="server_name",
-                    results=[AttributeValue(val_str=_SERVER_NAME) for _ in range(60)],
+                    attribute_name="preflighttag",
+                    results=[
+                        AttributeValue(val_str="preflight")
+                        for _ in range(expected_num_rows_from_random_seed)
+                    ],
                 )
             ],
-            page_token=PageToken(offset=60),
+            page_token=PageToken(offset=expected_num_rows_from_random_seed),
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
+
         assert response == expected_response
