@@ -342,12 +342,12 @@ def convert_co_occurring_results_to_attributes(
     if request.type in (AttributeKey.TYPE_UNSPECIFIED, AttributeKey.TYPE_STRING):
         data.extend(
             [
-                {"attr_key": ["TYPE_STRING", key_name]}
+                {"attr_key": ("TYPE_STRING", key_name)}
                 for key_name in NON_STORED_ATTRIBUTE_KEYS
                 if request.value_substring_match in key_name
             ]
         )
-        data.sort(key=lambda row: row.get("attr_key", ""))
+        data.sort(key=lambda row: tuple(row.get("attr_key", ("TYPE_STRING", ""))))
 
     return list(map(t, data))
 
