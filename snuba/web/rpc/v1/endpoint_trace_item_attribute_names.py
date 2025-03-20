@@ -79,10 +79,6 @@ class AttributeKeyCollector(ProtoVisitor):
 
 
 def _backwards_compatible_mapping_expr() -> Expression:
-    map_elems = []
-    for key, val in ATTRIBUTE_MAPPINGS.items():
-        map_elems.append(key)
-        map_elems.append(val)
     backwards_keys = f.array(*list(ATTRIBUTE_MAPPINGS.keys()))
     backwards_vals = f.array(*list(ATTRIBUTE_MAPPINGS.values()))
 
