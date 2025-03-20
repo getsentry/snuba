@@ -116,7 +116,10 @@ class CommitLogTickConsumer(Consumer[Tick]):
         )
 
         if override_group is not None:
-            logger.info("override_group tripped")
+            self.__metrics.increment(
+                "followed_group_override",
+                tags={"original_group": self.__followed_consumer_group},
+            )
             return override_group
         return self.__followed_consumer_group
 
@@ -155,6 +158,10 @@ class CommitLogTickConsumer(Consumer[Tick]):
             return None
 
         if commit.group != self.followed_group_dynamic():
+            self.__metrics.increment(
+                "followed_group_mismatch",
+                tags={"group": commit.group},
+            )
             return None
 
         previous_message = self.__previous_messages.get(commit.partition)
