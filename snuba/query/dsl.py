@@ -236,5 +236,14 @@ def countIf(
     )
 
 
+def if_cond(
+    condition: FunctionCall,
+    then_clause: Expression,
+    else_clause: Expression,
+    alias: Optional[str] = None,
+) -> FunctionCall:
+    return FunctionCall(alias, "if", (condition, then_clause, else_clause))
+
+
 def identity(expression: Expression, alias: Optional[str]) -> FunctionCall:
     return FunctionCall(alias, "identity", (expression,))

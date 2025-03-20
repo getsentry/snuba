@@ -344,6 +344,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 "organization_id": ORGANIZATION_ID,
                 "span_id": "9d1a44cc6388423d",
                 "trace_id": "4708357b20c041f39e40848e2980947b",
+                "description": "/api/0/relays/projectconfigs/",
                 "duration_ms": 100,
                 "start_timestamp_precise": start,
                 "end_timestamp_precise": end,
@@ -363,6 +364,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 "organization_id": ORGANIZATION_ID,
                 "span_id": "b91705f800054f21",
                 "trace_id": "d3bf3091daf84eb395f704a47b11f83c",
+                "description": "/api/0/relays/projectconfigs/",
                 "duration_ms": 100,
                 "start_timestamp_precise": start,
                 "end_timestamp_precise": end,
@@ -382,6 +384,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 "organization_id": ORGANIZATION_ID,
                 "span_id": "b91705f800054f21",
                 "trace_id": "d3bf3091daf84eb395f704a47b11f83c",
+                "description": "/api/0/relays/projectconfigs/",
                 "duration_ms": 100,
                 "start_timestamp_precise": start,
                 "end_timestamp_precise": end,
@@ -429,9 +432,12 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 "foo",
                 "sentry.name",
                 "sentry.segment_name",
-                "sentry.service",
+                # "sentry.service",
             ]
         ]
+        import pdb
+
+        pdb.set_trace()
         assert res.attributes == expected
 
 

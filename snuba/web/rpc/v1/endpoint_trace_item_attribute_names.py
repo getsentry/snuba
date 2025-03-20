@@ -22,7 +22,7 @@ from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Storage
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, in_cond, not_cond
+from snuba.query.dsl import and_cond, column, if_cond, in_cond, not_cond
 from snuba.query.expressions import Expression, Lambda
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -43,13 +43,13 @@ from snuba.web.rpc.v1.legacy.attributes_common import should_use_items_attrs
 from snuba.web.rpc.v1.legacy.trace_item_attribute_names import (
     convert_to_snuba_request as legacy_convert_to_snuba_request,
 )
-
-# from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import ATTRIBUTE_MAPPINGS
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import ATTRIBUTE_MAPPINGS
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
 UNSEARCHABLE_ATTRIBUTE_KEYS = [
     "sentry.event_id",
+    "sentry.segment_id",
     "sentry.start_timestamp_precise",
     "sentry.received",
     "sentry.is_segment",
@@ -74,6 +74,21 @@ class AttributeKeyCollector(ProtoVisitor):
             self.keys.add(trace_item_filter.exists_filter.key.name)
         elif trace_item_filter.HasField("comparison_filter"):
             self.keys.add(trace_item_filter.comparison_filter.key.name)
+
+
+def _backwards_compatible_mapping_expr() -> Expression:
+    map_elems = []
+    for key, val in ATTRIBUTE_MAPPINGS.items():
+        map_elems.append(key)
+        map_elems.append(val)
+    backwards_keys = f.array(*list(ATTRIBUTE_MAPPINGS.keys()))
+    backwards_vals = f.array(*list(ATTRIBUTE_MAPPINGS.values()))
+
+    return if_cond(
+        in_cond(column("x"), backwards_vals),
+        f.arrayElement(backwards_keys, f.indexOf(backwards_vals, column("x"))),
+        column("x"),
+    )
 
 
 def convert_to_attributes(
@@ -208,7 +223,9 @@ def get_co_occurring_attributes(
 
     string_array = f.arrayMap(
         # TODO: A map lookup here for backwards compatibility
-        Lambda(None, ("x",), f.tuple("TYPE_STRING", column("x"))),
+        Lambda(
+            None, ("x",), f.tuple("TYPE_STRING", _backwards_compatible_mapping_expr())
+        ),
         column("attributes_string"),
     )
 
@@ -383,8 +400,10 @@ class EndpointTraceItemAttributeNames(
                 request=snuba_request,
                 timer=self._timer,
             )
+            import pdb
             import pprint
 
+            pdb.set_trace()
             print(res.extra["sql"])
             print(res.result["data"])
 
