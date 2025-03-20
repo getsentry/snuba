@@ -347,7 +347,7 @@ def convert_co_occurring_results_to_attributes(
                 if request.value_substring_match in key_name
             ]
         )
-        data.sort(key=lambda row: row["attr_key"])
+        data.sort(key=lambda row: row.get("attr_key", ""))
 
     return list(map(t, data))
 
