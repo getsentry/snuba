@@ -90,6 +90,9 @@ ATTRIBUTES_TO_SKIP_FROM_EAP_ITEMS = [
     "received",
 ]
 
+# Attributes to hexify
+HEX_COLUMNS = ["parent_span_id", "segment_id"]
+
 
 def _build_query(request: GetTraceRequest) -> Query:
     selected_columns: list[SelectedExpression] = [
@@ -105,7 +108,7 @@ def _build_query(request: GetTraceRequest) -> Query:
             name="timestamp",
             expression=f.CAST(
                 column("timestamp"),
-                "DateTime64",
+                "DateTime64(6)",
                 alias="timestamp",
             )
             if use_eap_items_table(request.meta)
@@ -192,7 +195,7 @@ def _build_query(request: GetTraceRequest) -> Query:
                     name="sampling_factor",
                     expression=f.divide(
                         literal(1),
-                        f.cast(column("sampling_weight"), "Float64"),
+                        f.CAST(column("sampling_weight"), "Float64"),
                         alias="sampling_factor",
                     ),
                 )
@@ -338,15 +341,25 @@ def _convert_results(
                 )
             )
 
+        # marks which hex columns we've seen
+        seen_hex_columns = set()
         for key, value in row.items():
             if isinstance(value, dict):
                 for k, v in value.items():
                     k = EAP_ITEMS_ATTRIBUTE_MAP.get(k, k)
                     if k in ATTRIBUTES_TO_SKIP_FROM_EAP_ITEMS:
                         continue
+
+                    if k in HEX_COLUMNS:
+                        seen_hex_columns.add(k)
                     add_attribute(k, v)
             else:
                 add_attribute(key, value)
+
+        # this is a hack to get backwards compatibility to work, remove eventually
+        for k in HEX_COLUMNS:
+            if k not in seen_hex_columns:
+                add_attribute(k, "0" * 16)
 
         item = GetTraceResponse.Item(
             id=id,

@@ -107,7 +107,6 @@ def gen_message(
             "user": "ip:127.0.0.1",
         },
         "span_id": uuid.uuid4().hex[:16],
-        "parent_span_id": uuid.uuid4().hex[:16],
         "tags": {
             "http.status_code": "200",
             "relay_endpoint_version": "3",
