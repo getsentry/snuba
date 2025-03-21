@@ -10,6 +10,7 @@ from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.v1.endpoint_time_series import _convert_aggregations_to_expressions
 
 
 class CreateSubscriptionRequest(
@@ -32,6 +33,11 @@ class CreateSubscriptionRequest(
     ) -> CreateSubscriptionResponse:
         from snuba.subscriptions.data import RPCSubscriptionData
         from snuba.subscriptions.subscription import SubscriptionCreator
+
+        # convert aggregations to expressions
+        in_msg.time_series_request.CopyFrom(
+            _convert_aggregations_to_expressions(in_msg.time_series_request)
+        )
 
         dataset = PluggableDataset(name="eap", all_entities=[])
         entity_key = EntityKey("eap_spans")
