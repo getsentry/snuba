@@ -61,7 +61,10 @@ from snuba.web.rpc.proto_visitor import (
     GetExpressionAggregationsVisitor,
     TimeSeriesExpressionWrapper,
 )
-from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
+from snuba.web.rpc.v1.endpoint_time_series import (
+    EndpointTimeSeries,
+    _convert_aggregations_to_expressions,
+)
 
 SUBSCRIPTION_REFERRER = "subscription"
 
@@ -176,6 +179,17 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
 
     request_name: str
     request_version: str
+
+    def __post_init__(self) -> None:
+        # convert any use of aggregation to expressions
+        request = TimeSeriesRequest()
+        request.ParseFromString(base64.b64decode(self.time_series_request))
+        request = _convert_aggregations_to_expressions(request)
+        object.__setattr__(
+            self,
+            "time_series_request",
+            base64.b64encode(request.SerializeToString()).decode("utf-8"),
+        )
 
     def validate(self) -> None:
         super().validate()
