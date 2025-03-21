@@ -148,6 +148,8 @@ def use_eap_items_table(request_meta: RequestMeta) -> bool:
 
 def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
     alias = attr_key.name + "_" + AttributeKey.Type.Name(attr_key.type)
+    if attr_key.name in NORMALIZED_COLUMNS:
+        alias = attr_key.name
     if attr_key.type == AttributeKey.Type.TYPE_UNSPECIFIED:
         raise BadSnubaRPCRequestException(
             f"attribute key {attr_key.name} must have a type specified"

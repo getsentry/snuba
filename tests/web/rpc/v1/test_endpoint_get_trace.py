@@ -310,6 +310,10 @@ class TestGetTrace(BaseApiTest):
                             name="server_name",
                             type=AttributeKey.Type.TYPE_STRING,
                         ),
+                        AttributeKey(
+                            name="sentry.parent_span_id",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
                     ],
                 )
             ],
@@ -332,6 +336,15 @@ class TestGetTrace(BaseApiTest):
                             id=span["span_id"],
                             timestamp=timestamp,
                             attributes=[
+                                GetTraceResponse.Item.Attribute(
+                                    key=AttributeKey(
+                                        name="sentry.parent_span_id",
+                                        type=AttributeKey.Type.TYPE_STRING,
+                                    ),
+                                    value=AttributeValue(
+                                        val_str="0" * 16,
+                                    ),
+                                ),
                                 GetTraceResponse.Item.Attribute(
                                     key=AttributeKey(
                                         name="server_name",

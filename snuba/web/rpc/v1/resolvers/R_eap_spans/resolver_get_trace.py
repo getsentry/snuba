@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from operator import attrgetter
-from typing import Any, Dict, Iterable, Set
+from typing import Any, Dict, Iterable
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -95,7 +95,6 @@ HEX_COLUMNS = ["parent_span_id", "segment_id"]
 
 
 def _build_query(request: GetTraceRequest) -> Query:
-    print(request)
     selected_columns: list[SelectedExpression] = [
         SelectedExpression(
             name="id",
@@ -325,7 +324,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
 
 
 def _convert_results(
-    data: Iterable[Dict[str, Any]], hex_columns_to_add: Set[str] = set()
+    data: Iterable[Dict[str, Any]], add_hex_columns: bool = False
 ) -> list[GetTraceResponse.Item]:
     items: list[GetTraceResponse.Item] = []
 
@@ -360,12 +359,15 @@ def _convert_results(
                         seen_hex_columns.add(k)
                     add_attribute(k, v)
             else:
+                if key.lstrip("sentry.") in HEX_COLUMNS and value == "":
+                    value = "0" * 16
                 add_attribute(key, value)
 
         # this is a hack to get backwards compatibility to work, remove eventually
-        for k in HEX_COLUMNS:
-            if k not in seen_hex_columns and k in hex_columns_to_add:
-                add_attribute(k, "0" * 16)
+        if add_hex_columns:
+            for k in HEX_COLUMNS:
+                if k not in seen_hex_columns:
+                    add_attribute(k, "0" * 16)
 
         item = GetTraceResponse.Item(
             id=id,
@@ -396,15 +398,7 @@ class ResolverGetTraceEAPSpans(ResolverGetTrace):
         ][0]
         items = _convert_results(
             results.result.get("data", []),
-            set(
-                [
-                    attr.name
-                    for attr in item_conditions.attributes
-                    if attr.name in HEX_COLUMNS
-                ]
-            )
-            if len(item_conditions.attributes) > 0
-            else set(HEX_COLUMNS),
+            not item_conditions.attributes,
         )
         item_groups: list[GetTraceResponse.ItemGroup] = [
             GetTraceResponse.ItemGroup(
