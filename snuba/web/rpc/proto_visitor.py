@@ -18,6 +18,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
 )
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeAggregation
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
@@ -205,3 +206,25 @@ class ContainsAggregateVisitor(ProtoVisitor):
     def visit_ColumnWrapper(self, column_wrapper: ColumnWrapper) -> None:
         if column_wrapper.underlying_proto.HasField("conditional_aggregation"):
             self.contains_aggregate = True
+
+
+class GetExpressionAggregationsVisitor(ProtoVisitor):
+    """
+    is mean to visit a timeseries expression object and return a list of the aggregations in it
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.aggregations: list[
+            AttributeAggregation | AttributeConditionalAggregation
+        ] = []
+
+    def visit_TimeSeriesExpressionWrapper(
+        self, expression_wrapper: TimeSeriesExpressionWrapper
+    ) -> None:
+        if expression_wrapper.underlying_proto.HasField("aggregation"):
+            self.aggregations.append(expression_wrapper.underlying_proto.aggregation)
+        elif expression_wrapper.underlying_proto.HasField("conditional_aggregation"):
+            self.aggregations.append(
+                expression_wrapper.underlying_proto.conditional_aggregation
+            )

@@ -57,6 +57,10 @@ from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.query import run_query
+from snuba.web.rpc.proto_visitor import (
+    GetExpressionAggregationsVisitor,
+    TimeSeriesExpressionWrapper,
+)
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 
 SUBSCRIPTION_REFERRER = "subscription"
@@ -189,16 +193,18 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         if len(request.meta.project_ids) != 1:
             raise InvalidSubscriptionError("Multiple project IDs not supported.")
 
-        if not request.aggregations or len(request.aggregations) != 1:
-            raise InvalidSubscriptionError("Exactly one aggregation required.")
+        if not request.expressions or len(request.expressions) != 1:
+            raise InvalidSubscriptionError("Exactly one expression required.")
 
         if request.group_by:
             raise InvalidSubscriptionError("Group bys not supported.")
 
-        aggregation = request.aggregations[0]
-        if (
-            aggregation.extrapolation_mode
-            != ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
+        expression = request.expressions[0]
+        vis = GetExpressionAggregationsVisitor()
+        TimeSeriesExpressionWrapper(expression).accept(vis)
+        if any(
+            e.extrapolation_mode != ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
+            for e in vis.aggregations
         ):
             raise InvalidSubscriptionError(
                 f"Invalid extrapolation mode. Allowed extrapolation modes: {ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED}"
@@ -244,7 +250,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         if not response.result_timeseries:
             result: Result = {
                 "meta": [],
-                "data": [{request.aggregations[0].label: None}],
+                "data": [{request.expressions[0].label: None}],
                 "trace_output": "",
             }
             return QueryResult(
