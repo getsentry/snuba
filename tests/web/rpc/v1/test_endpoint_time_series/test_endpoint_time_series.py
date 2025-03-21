@@ -1284,7 +1284,7 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
 
     def test_preflight(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
-        granularity_secs = 15
+        granularity_secs = 3600
         query_duration = granularity_secs * 1
         store_spans_timeseries(
             BASE_TIME,
@@ -1344,9 +1344,17 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             message_to_non_downsampled_tier
         )
 
+        if preflight_response.result_timeseries == []:
+            sum_of_preflight_metric = 0.0
+        else:
+            sum_of_preflight_metric = (
+                preflight_response.result_timeseries[0].data_points[0].data
+            )
+
         assert (
-            len(preflight_response.result_timeseries)
-            < len(non_downsampled_tier_response.result_timeseries) / 100
+            sum_of_preflight_metric
+            < non_downsampled_tier_response.result_timeseries[0].data_points[0].data
+            / 100
         )
         assert (
             preflight_response.meta.downsampled_storage_meta
