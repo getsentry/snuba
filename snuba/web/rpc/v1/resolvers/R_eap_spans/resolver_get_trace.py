@@ -39,6 +39,8 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverGetTrace
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
+    use_eap_items_table,
 )
 
 _BUCKET_COUNT = 20
@@ -55,19 +57,67 @@ NORMALIZED_COLUMNS_TO_INCLUDE = [
         "attr_num",
         "span_id",
         "timestamp",
+        "time",
     ]
 ]
+
+NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
+    "organization_id",
+    "project_id",
+    "trace_id",
+    "sampling_weight",
+]
+
+# Map of eap_items attributes to eap_spans attributes to preserve backwards compatibility
+EAP_ITEMS_ATTRIBUTE_MAP = {
+    "sentry.raw_description": "name",
+    "sentry.transaction": "segment_name",
+    "sentry.start_timestamp_precise": "start_timestamp",
+    "sentry.end_timestamp_precise": "end_timestamp",
+    "sentry.duration_ms": "duration_ms",
+    "sentry.event_id": "event_id",
+    "sentry.exclusive_time_ms": "exclusive_time_ms",
+    "sentry.is_segment": "is_segment",
+    "sentry.parent_span_id": "parent_span_id",
+    "sentry.profile_id": "profile_id",
+    "sentry.received": "received",
+    "sentry.segment_id": "segment_id",
+}
+
+# Attributes that we store in eap_items but not eap_spans
+ATTRIBUTES_TO_SKIP_FROM_EAP_ITEMS = [
+    "event_id",
+    "received",
+]
+
+# Attributes to hexify
+HEX_COLUMNS = ["parent_span_id", "segment_id"]
 
 
 def _build_query(request: GetTraceRequest) -> Query:
     selected_columns: list[SelectedExpression] = [
         SelectedExpression(
             name="id",
-            expression=column("span_id", alias="id"),
+            expression=attribute_key_to_expression_eap_items(
+                AttributeKey(name="sentry.span_id", type=AttributeKey.Type.TYPE_STRING)
+            )
+            if use_eap_items_table(request.meta)
+            else column("span_id", alias="id"),
         ),
         SelectedExpression(
             name="timestamp",
-            expression=column(
+            expression=f.CAST(
+                attribute_key_to_expression_eap_items(
+                    AttributeKey(
+                        name="sentry.start_timestamp_precise",
+                        type=AttributeKey.Type.TYPE_DOUBLE,
+                    )
+                ),
+                "DateTime64(6)",
+                alias="timestamp",
+            )
+            if use_eap_items_table(request.meta)
+            else column(
                 "start_timestamp",
                 alias="timestamp",
             ),
@@ -82,42 +132,97 @@ def _build_query(request: GetTraceRequest) -> Query:
             selected_columns.append(
                 SelectedExpression(
                     name=attribute_key.name,
-                    expression=attribute_key_to_expression(attribute_key),
+                    expression=attribute_key_to_expression_eap_items(attribute_key)
+                    if use_eap_items_table(request.meta)
+                    else attribute_key_to_expression(attribute_key),
                 )
             )
     else:
         selected_columns += [
             SelectedExpression(
-                name="attrs_str",
+                name="attributes_string"
+                if use_eap_items_table(request.meta)
+                else "attrs_str",
                 expression=FunctionCall(
-                    "attrs_str",
+                    "attributes_string"
+                    if use_eap_items_table(request.meta)
+                    else "attrs_str",
                     "mapConcat",
-                    tuple(column(f"attr_str_{i}") for i in range(_BUCKET_COUNT)),
+                    tuple(
+                        column(
+                            f"attributes_string_{i}"
+                            if use_eap_items_table(request.meta)
+                            else f"attr_str_{i}"
+                        )
+                        for i in range(
+                            40 if use_eap_items_table(request.meta) else _BUCKET_COUNT
+                        )
+                    ),
                 ),
             ),
             SelectedExpression(
-                name="attrs_num",
+                name="attributes_float"
+                if use_eap_items_table(request.meta)
+                else "attrs_num",
                 expression=FunctionCall(
-                    "attrs_num",
+                    "attributes_float"
+                    if use_eap_items_table(request.meta)
+                    else "attrs_num",
                     "mapConcat",
-                    tuple(column(f"attr_num_{i}") for i in range(_BUCKET_COUNT)),
+                    tuple(
+                        column(
+                            f"attributes_float_{i}"
+                            if use_eap_items_table(request.meta)
+                            else f"attr_num_{i}"
+                        )
+                        for i in range(
+                            40 if use_eap_items_table(request.meta) else _BUCKET_COUNT
+                        )
+                    ),
                 ),
             ),
         ]
         selected_columns.extend(
-            [
-                SelectedExpression(
+            map(
+                lambda col_name: SelectedExpression(
                     name=col_name, expression=column(col_name, alias=col_name)
-                )
-                for col_name in NORMALIZED_COLUMNS_TO_INCLUDE
-            ]
+                ),
+                NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS
+                if use_eap_items_table(request.meta)
+                else NORMALIZED_COLUMNS_TO_INCLUDE,
+            )
         )
 
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
+        # special case for sampling_factor and service since we don't store them in eap_items
+        if use_eap_items_table(request.meta):
+            selected_columns.append(
+                SelectedExpression(
+                    name="sampling_factor",
+                    expression=f.divide(
+                        literal(1),
+                        f.CAST(column("sampling_weight"), "Float64"),
+                        alias="sampling_factor",
+                    ),
+                )
+            )
+            selected_columns.append(
+                SelectedExpression(
+                    name="service",
+                    expression=f.CAST(column("project_id"), "String", alias="service"),
+                )
+            )
+    if use_eap_items_table(request.meta):
+        entity = Entity(
+            key=EntityKey("eap_items"),
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
+            sample=None,
+        )
+    else:
+        entity = Entity(
+            key=EntityKey("eap_spans"),
+            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+            sample=None,
+        )
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -219,7 +324,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
 
 
 def _convert_results(
-    data: Iterable[Dict[str, Any]],
+    data: Iterable[Dict[str, Any]], add_hex_columns: bool = False
 ) -> list[GetTraceResponse.Item]:
     items: list[GetTraceResponse.Item] = []
 
@@ -241,12 +346,28 @@ def _convert_results(
                 )
             )
 
+        # marks which hex columns we've seen
+        seen_hex_columns = set()
         for key, value in row.items():
             if isinstance(value, dict):
                 for k, v in value.items():
+                    k = EAP_ITEMS_ATTRIBUTE_MAP.get(k, k)
+                    if k in ATTRIBUTES_TO_SKIP_FROM_EAP_ITEMS:
+                        continue
+
+                    if k in HEX_COLUMNS:
+                        seen_hex_columns.add(k)
                     add_attribute(k, v)
             else:
+                if key.lstrip("sentry.") in HEX_COLUMNS and value == "":
+                    value = "0" * 16
                 add_attribute(key, value)
+
+        # this is a hack to get backwards compatibility to work, remove eventually
+        if add_hex_columns:
+            for k in HEX_COLUMNS:
+                if k not in seen_hex_columns:
+                    add_attribute(k, "0" * 16)
 
         item = GetTraceResponse.Item(
             id=id,
@@ -272,7 +393,13 @@ class ResolverGetTraceEAPSpans(ResolverGetTrace):
             request=_build_snuba_request(in_msg),
             timer=self._timer,
         )
-        items = _convert_results(results.result.get("data", []))
+        item_conditions = [
+            i for i in in_msg.items if i.item_type == TraceItemType.TRACE_ITEM_TYPE_SPAN
+        ][0]
+        items = _convert_results(
+            results.result.get("data", []),
+            not item_conditions.attributes,
+        )
         item_groups: list[GetTraceResponse.ItemGroup] = [
             GetTraceResponse.ItemGroup(
                 item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
