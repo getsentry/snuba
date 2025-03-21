@@ -1,5 +1,6 @@
 from typing import List
 
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageMeta
 from sentry_protos.snuba.v1.request_common_pb2 import (
     QueryInfo,
     QueryMetadata,
@@ -8,9 +9,33 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     TimingMarks,
 )
 
+from snuba.downsampled_storage_tiers import Tier
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
+
+
+def _construct_meta_if_downsampled(
+    query_results: List[QueryResult],
+) -> DownsampledStorageMeta | None:
+    highest_sampling_tier = Tier.TIER_NO_TIER
+
+    for query_result in query_results:
+        sampling_tier = query_result.extra.get("stats", {}).get("sampling_tier")
+        if sampling_tier:
+            if sampling_tier.value > highest_sampling_tier.value:
+                highest_sampling_tier = sampling_tier
+
+    return (
+        DownsampledStorageMeta(
+            tier=getattr(
+                DownsampledStorageMeta.SelectedTier,
+                "SELECTED_" + highest_sampling_tier.name,
+            ),
+        )
+        if highest_sampling_tier != Tier.TIER_NO_TIER
+        else None
+    )
 
 
 def extract_response_meta(
@@ -18,11 +43,22 @@ def extract_response_meta(
     debug: bool,
     query_results: List[QueryResult],
     timers: List[Timer],
+    extract_sampling_tier: bool = False,
 ) -> ResponseMeta:
     query_info: List[QueryInfo] = []
 
+    downsampled_storage_meta = _construct_meta_if_downsampled(query_results)
+
     if not debug:
-        return ResponseMeta(request_id=request_id, query_info=query_info)
+        return (
+            ResponseMeta(
+                request_id=request_id,
+                query_info=query_info,
+                downsampled_storage_meta=downsampled_storage_meta,
+            )
+            if downsampled_storage_meta
+            else ResponseMeta(request_id=request_id, query_info=query_info)
+        )
 
     for query_result, timer in zip(query_results, timers):
         extra = getattr(query_result, "extra", None) or {}
@@ -67,7 +103,15 @@ def extract_response_meta(
             QueryInfo(stats=query_stats, metadata=query_metadata, trace_logs=trace_logs)
         )
 
-    return ResponseMeta(request_id=request_id, query_info=query_info)
+    return (
+        ResponseMeta(
+            request_id=request_id,
+            query_info=query_info,
+            downsampled_storage_meta=downsampled_storage_meta,
+        )
+        if downsampled_storage_meta
+        else ResponseMeta(request_id=request_id, query_info=query_info)
+    )
 
 
 def setup_trace_query_settings() -> HTTPQuerySettings:

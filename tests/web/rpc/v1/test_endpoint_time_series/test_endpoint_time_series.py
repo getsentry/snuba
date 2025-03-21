@@ -10,6 +10,10 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import (
+    DownsampledStorageConfig,
+    DownsampledStorageMeta,
+)
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     DataPoint,
     Expression,
@@ -1277,3 +1281,84 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
     ) -> None:
         snuba_set_config("use_eap_items_table", True)
         snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
+
+    def test_preflight(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 3600
+        query_duration = granularity_secs * 1
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            query_duration,
+            metrics=[DummyMetric("test_preflight_metric", get_value=lambda x: 1)],
+        )
+
+        aggregations = [
+            AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(
+                    type=AttributeKey.TYPE_FLOAT, name="test_preflight_metric"
+                ),
+                label="sum",
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+            ),
+        ]
+
+        preflight_message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_PREFLIGHT
+                ),
+            ),
+            aggregations=aggregations,
+            granularity_secs=granularity_secs,
+        )
+
+        message_to_non_downsampled_tier = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=aggregations,
+            granularity_secs=granularity_secs,
+        )
+
+        preflight_response = EndpointTimeSeries().execute(preflight_message)
+        non_downsampled_tier_response = EndpointTimeSeries().execute(
+            message_to_non_downsampled_tier
+        )
+
+        if preflight_response.result_timeseries == []:
+            sum_of_preflight_metric = 0.0
+        else:
+            sum_of_preflight_metric = (
+                preflight_response.result_timeseries[0].data_points[0].data
+            )
+
+        assert (
+            sum_of_preflight_metric
+            < non_downsampled_tier_response.result_timeseries[0].data_points[0].data
+            / 100
+        )
+        assert (
+            preflight_response.meta.downsampled_storage_meta
+            == DownsampledStorageMeta(
+                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_512
+            )
+        )

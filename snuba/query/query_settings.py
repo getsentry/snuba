@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, MutableMapping, Optional
 
+from snuba.downsampled_storage_tiers import Tier
 from snuba.state.quota import ResourceQuota
 
 
@@ -86,6 +87,7 @@ class HTTPQuerySettings(QuerySettings):
         apply_default_subscriptable_mapping: bool = True,
     ) -> None:
         super().__init__()
+        self.__tier = Tier.TIER_NO_TIER
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug
@@ -132,6 +134,17 @@ class HTTPQuerySettings(QuerySettings):
 
     def get_apply_default_subscriptable_mapping(self) -> bool:
         return self.__apply_default_subscriptable_mapping
+
+    """
+    Tiers indicate which storage tier to direct the query to. This is used by the TimeSeriesEndpoint and the TraceItemTableEndpoint
+    in EAP.
+    """
+
+    def set_sampling_tier(self, tier: Tier) -> None:
+        self.__tier = tier
+
+    def get_sampling_tier(self) -> Tier:
+        return self.__tier
 
 
 class SubscriptionQuerySettings(QuerySettings):
