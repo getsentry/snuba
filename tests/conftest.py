@@ -196,7 +196,7 @@ def _clear_db() -> None:
             or storage_key == StorageKey.EAP_ITEMS_DOWNSAMPLE_64
             or storage_key == StorageKey.EAP_ITEMS_DOWNSAMPLE_512
         ):
-            table_name = schema.get_local_table_name()
+            table_name = schema.get_local_table_name()  # type: ignore
 
             nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
             for node in nodes:
