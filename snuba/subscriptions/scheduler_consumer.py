@@ -144,6 +144,10 @@ class CommitLogTickConsumer(Consumer[Tick]):
             return None
 
         if commit.group != self.__followed_consumer_group:
+            self.__metrics.increment(
+                "followed_group_mismatch",
+                tags={"group": commit.group},
+            )
             return None
 
         previous_message = self.__previous_messages.get(commit.partition)
