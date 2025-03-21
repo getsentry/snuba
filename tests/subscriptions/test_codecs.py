@@ -91,16 +91,17 @@ def build_rpc_subscription_data(
     entity_key: EntityKey, metadata: Mapping[str, Any]
 ) -> SubscriptionData:
 
-    return RPCSubscriptionData(
+    tmp = RPCSubscriptionData(
         project_id=1,
         time_window_sec=300,
         resolution_sec=60,
         entity=get_entity(entity_key),
         metadata=metadata,
-        time_series_request="Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIaGggBEg8IAxILdGVzdF9tZXRyaWMaA3N1bSAB",
+        time_series_request="Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIyIQoaCAESDwgDEgt0ZXN0X21ldHJpYxoDc3VtIAEaA3N1bQ==",
         request_name="TimeSeriesRequest",
         request_version="v1",
     )
+    return tmp
 
 
 RPC_CASES = [
@@ -484,7 +485,7 @@ def test_subscription_task_encoder_rpc() -> None:
         b'"timestamp":"1970-01-01T00:00:00",'
         b'"entity":"eap_spans",'
         b'"task":{'
-        b'"data":{"project_id":1,"time_window":300,"resolution":60,"time_series_request":"Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIaGggBEg8IAxILdGVzdF9tZXRyaWMaA3N1bSAB","request_version":"v1","request_name":"TimeSeriesRequest","subscription_type":"rpc"}},'
+        b'"data":{"project_id":1,"time_window":300,"resolution":60,"time_series_request":"Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIyIQoaCAESDwgDEgt0ZXN0X21ldHJpYxoDc3VtIAEaA3N1bQ==","request_version":"v1","request_name":"TimeSeriesRequest","subscription_type":"rpc"}},'
         b'"tick_upper_offset":5'
         b"}"
     )
