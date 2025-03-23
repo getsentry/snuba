@@ -1366,7 +1366,7 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
 
     @patch.object(Timer, "get_duration_between_marks")
     def test_best_effort_route_to_tier_64(
-        self, mock_get_duration_between_marks
+        self, mock_get_duration_between_marks: MagicMock
     ) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 3600
