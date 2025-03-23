@@ -43,7 +43,6 @@ def extract_response_meta(
     debug: bool,
     query_results: List[QueryResult],
     timers: List[Timer],
-    extract_sampling_tier: bool = False,
 ) -> ResponseMeta:
     query_info: List[QueryInfo] = []
 

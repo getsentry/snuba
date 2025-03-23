@@ -88,6 +88,7 @@ class HTTPQuerySettings(QuerySettings):
     ) -> None:
         super().__init__()
         self.__tier = Tier.TIER_NO_TIER
+        self.__record_query_duration = False
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug
@@ -145,6 +146,12 @@ class HTTPQuerySettings(QuerySettings):
 
     def get_sampling_tier(self) -> Tier:
         return self.__tier
+
+    def set_record_query_duration(self, to_time_query_duration: bool) -> None:
+        self.__record_query_duration = to_time_query_duration
+
+    def get_record_query_duration(self) -> bool:
+        return self.__record_query_duration
 
 
 class SubscriptionQuerySettings(QuerySettings):

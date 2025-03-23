@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import IntEnum
 
 
-class Tier(Enum):
+class Tier(IntEnum):
     TIER_NO_TIER = -1
     TIER_1 = 1
     TIER_8 = 8

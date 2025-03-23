@@ -375,7 +375,6 @@ class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
             in_msg.meta.debug,
             [res],
             [self._timer],
-            extract_sampling_tier=in_msg.meta.HasField("downsampled_storage_config"),
         )
         return TraceItemTableResponse(
             column_values=column_values,
