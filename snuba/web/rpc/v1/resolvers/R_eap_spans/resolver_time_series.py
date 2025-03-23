@@ -1,12 +1,9 @@
-import uuid
 from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime
 from typing import Any, Callable, Dict, Iterable
 
-from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import DataPoint
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     Expression as ProtoExpression,
@@ -22,21 +19,15 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     ExtrapolationMode,
 )
 
-from snuba.attribution.appid import AppID
-from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.downsampled_storage_tiers import Tier
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
-from snuba.request import Request as SnubaRequest
-from snuba.web.query import run_query
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
@@ -60,7 +51,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     use_eap_items_table,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
-    get_target_tier,
+    run_query_to_correct_tier,
 )
 
 OP_TO_EXPR = {
@@ -270,7 +261,7 @@ def _proto_expression_to_ast_expression(
             raise ValueError(f"Unknown expression type: {default}")
 
 
-def _build_query(request: TimeSeriesRequest) -> Query:
+def build_query(request: TimeSeriesRequest) -> Query:
     if use_eap_items_table(request.meta):
         entity = Entity(
             key=EntityKey("eap_items"),
@@ -362,29 +353,6 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     return res
 
 
-def _build_snuba_request(
-    request: TimeSeriesRequest, query_settings: QuerySettings
-) -> SnubaRequest:
-
-    return SnubaRequest(
-        id=uuid.UUID(request.meta.request_id),
-        original_body=MessageToDict(request),
-        query=_build_query(request),
-        query_settings=query_settings,
-        attribution_info=AttributionInfo(
-            referrer=request.meta.referrer,
-            team="eap",
-            feature="eap",
-            tenant_ids={
-                "organization_id": request.meta.organization_id,
-                "referrer": request.meta.referrer,
-            },
-            app_id=AppID("eap"),
-            parent_api="eap_span_samples",
-        ),
-    )
-
-
 class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
@@ -399,57 +367,9 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )
 
-        if in_msg.meta.HasField("downsampled_storage_config"):
-            query_settings.set_sampling_tier(Tier.TIER_512)
-
-            request_to_most_downsampled_tier = _build_snuba_request(
-                in_msg, query_settings
-            )
-
-            if (
-                in_msg.meta.downsampled_storage_config.mode
-                == DownsampledStorageConfig.MODE_BEST_EFFORT
-            ):
-                query_settings.set_record_query_duration(True)
-
-            res = run_query(
-                dataset=PluggableDataset(name="eap", all_entities=[]),
-                request=request_to_most_downsampled_tier,
-                timer=self._timer,
-            )
-
-            if (
-                in_msg.meta.downsampled_storage_config.mode
-                == DownsampledStorageConfig.MODE_BEST_EFFORT
-            ):
-                most_downsampled_query_duration_ms = (
-                    self._timer.get_duration_between_marks(
-                        "right_before_execute", "execute"
-                    )
-                )
-
-                target_tier = get_target_tier(most_downsampled_query_duration_ms)
-
-                query_settings.set_sampling_tier(target_tier)
-                query_settings.set_record_query_duration(
-                    False
-                )  # doesn't make a functional diff
-
-                request_to_target_tier = _build_snuba_request(in_msg, query_settings)
-
-                res = run_query(
-                    dataset=PluggableDataset(name="eap", all_entities=[]),
-                    request=request_to_target_tier,
-                    timer=self._timer,
-                )
-
-        else:
-            snuba_request = _build_snuba_request(in_msg, query_settings)
-            res = run_query(
-                dataset=PluggableDataset(name="eap", all_entities=[]),
-                request=snuba_request,
-                timer=self._timer,
-            )
+        res = run_query_to_correct_tier(
+            in_msg, query_settings, self._timer, build_query
+        )
 
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
