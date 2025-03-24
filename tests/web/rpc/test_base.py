@@ -2,6 +2,7 @@ import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, Mapping, Type
+from unittest.mock import patch
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -106,18 +107,20 @@ def test_metrics() -> None:
 
 
 def test_error_metrics() -> None:
-    metrics_backend = TestingMetricsBackend()
-    rpc_call = ErrorRPC(metrics_backend=metrics_backend)
-    with pytest.raises(RPCException):
-        rpc_call.execute(Timestamp())
-    metric_tags = [m.tags for m in metrics_backend.calls]
-    assert metric_tags == [
-        {"endpoint_name": "ErrorRPC", "version": "v1"}
-        for _ in range(len(metrics_backend.calls))
-    ]
+    with patch("snuba.web.rpc.sentry_sdk.capture_exception") as sentry_sdk_mock:
+        metrics_backend = TestingMetricsBackend()
+        rpc_call = ErrorRPC(metrics_backend=metrics_backend)
+        with pytest.raises(RPCException):
+            rpc_call.execute(Timestamp())
+        metric_tags = [m.tags for m in metrics_backend.calls]
+        assert metric_tags == [
+            {"endpoint_name": "ErrorRPC", "version": "v1"}
+            for _ in range(len(metrics_backend.calls))
+        ]
 
-    metric_names_to_metric = {m.name: m for m in metrics_backend.calls}  # type: ignore
-    assert metric_names_to_metric["rpc.request_error"].value == 1  # type: ignore
+        metric_names_to_metric = {m.name: m for m in metrics_backend.calls}  # type: ignore
+        assert metric_names_to_metric["rpc.request_error"].value == 1  # type: ignore
+        sentry_sdk_mock.assert_called()
 
 
 def test_list_all_endpoint_names() -> None:
