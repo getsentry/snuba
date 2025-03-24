@@ -52,10 +52,10 @@ class Timer:
     def get_duration_between_marks(self, start_mark: str, end_mark: str) -> float:
         start_mark_duration = -1
         end_mark_duration = -1
-        for name, timestamp in self.__marks:
-            if name == start_mark:
+        for mark, timestamp in self.__marks:
+            if mark == start_mark:
                 start_mark_duration = self.__diff_ms(self.__marks[0][1], timestamp)
-            if name == end_mark:
+            if mark == end_mark:
                 end_mark_duration = self.__diff_ms(self.__marks[0][1], timestamp)
 
         assert (

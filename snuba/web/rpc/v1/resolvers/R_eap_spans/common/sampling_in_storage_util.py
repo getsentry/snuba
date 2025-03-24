@@ -23,7 +23,7 @@ T = TypeVar("T", TimeSeriesRequest, TraceItemTableRequest)
 SENTRY_TIMEOUT = 30000  # 30s = 30000ms
 ERROR_BUDGET = 5000  # 5s
 
-TIER_MULTIPLIERS = {
+DOWNSAMPLING_TIER_MULTIPLIERS = {
     Tier.TIER_512: 1,
     Tier.TIER_64: 8,
     Tier.TIER_8: 64,
@@ -39,7 +39,8 @@ def _get_target_tier(timer: Timer) -> Tier:
     target_tier = Tier.TIER_NO_TIER
     for tier in sorted(Tier, reverse=True)[:-1]:
         estimated_query_duration_to_this_tier = (
-            most_downsampled_query_duration_ms * cast(int, TIER_MULTIPLIERS.get(tier))
+            most_downsampled_query_duration_ms
+            * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier))
         )
         if estimated_query_duration_to_this_tier <= SENTRY_TIMEOUT - ERROR_BUDGET:
             target_tier = tier
@@ -105,6 +106,10 @@ def run_query_to_correct_tier(
     )
 
     if is_best_effort_mode(in_msg):
+        query_settings.push_clickhouse_setting(
+            "max_execution_time", SENTRY_TIMEOUT / 1000 - ERROR_BUDGET
+        )
+        query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
         query_settings.set_sampling_tier(_get_target_tier(timer))
         query_settings.set_record_query_duration(
             False
