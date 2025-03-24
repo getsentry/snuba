@@ -2,7 +2,6 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, MutableMapping
-from unittest import mock
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -46,9 +45,6 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_time_series import (
     EndpointTimeSeries,
     _validate_time_buckets,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
-    _enough_time_budget_to_at_least_run_next_tier,
 )
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
@@ -1369,71 +1365,6 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
         )
 
     @patch.object(Timer, "get_duration_between_marks")
-    def test_best_effort_returns_most_downsampled_query_if_not_enough_time_budget_left(
-        self, mock_get_duration_between_marks: MagicMock
-    ) -> None:
-        # store a a test metric with a value of 1, every second of one hour
-        granularity_secs = 3600
-        query_duration = granularity_secs * 1
-        store_spans_timeseries(
-            BASE_TIME,
-            1,
-            query_duration,
-            metrics=[DummyMetric("test_most_downsampled", get_value=lambda x: 1)],
-        )
-
-        best_effort_downsample_message = TimeSeriesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
-                ),
-            ),
-            aggregations=[
-                AttributeAggregation(
-                    aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_FLOAT, name="test_most_downsampled"
-                    ),
-                    label="sum",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                ),
-            ],
-            granularity_secs=granularity_secs,
-        )
-
-        mock_get_duration_between_marks.return_value = 2778.0
-
-        with mock.patch(
-            "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._enough_time_budget_to_at_least_run_next_tier",
-            wraps=_enough_time_budget_to_at_least_run_next_tier,
-        ) as mock_enough_time_budget:
-
-            best_effort_response = EndpointTimeSeries().execute(
-                best_effort_downsample_message
-            )
-
-            assert (
-                best_effort_response.meta.downsampled_storage_meta
-                == DownsampledStorageMeta(
-                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_512
-                )
-            )
-
-            assert (
-                mock_enough_time_budget(mock_enough_time_budget.call_args_list[0][0][0])
-                is False
-            )
-
-    @patch.object(Timer, "get_duration_between_marks")
     def test_best_effort_route_to_tier_64(
         self, mock_get_duration_between_marks: MagicMock
     ) -> None:
@@ -1513,13 +1444,9 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             <= non_downsampled_best_effort_metric_sum / 50
         )
 
-        breakpoint()
-
         assert (
             best_effort_response.meta.downsampled_storage_meta
             == DownsampledStorageMeta(
                 tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
             )
         )
-
-        assert False

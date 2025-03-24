@@ -46,13 +46,16 @@ def _get_query_duration(timer: Timer) -> float:
 def _get_target_tier(timer: Timer) -> Tier:
     most_downsampled_query_duration_ms = _get_query_duration(timer)
 
-    target_tier = Tier.TIER_NO_TIER
+    target_tier = Tier.TIER_512
     for tier in sorted(Tier, reverse=True)[:-1]:
         estimated_query_duration_to_this_tier = (
             most_downsampled_query_duration_ms
             * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier))
         )
-        if estimated_query_duration_to_this_tier <= _get_time_budget():
+        if (
+            estimated_query_duration_to_this_tier
+            <= _get_time_budget() - most_downsampled_query_duration_ms
+        ):
             target_tier = tier
     return target_tier
 
@@ -63,11 +66,6 @@ def _is_best_effort_mode(in_msg: T) -> bool:
         and in_msg.meta.downsampled_storage_config.mode
         == DownsampledStorageConfig.MODE_BEST_EFFORT
     )
-
-
-def _enough_time_budget_to_at_least_run_next_tier(timer: Timer) -> bool:
-    most_downsampled_query_duration_ms = _get_query_duration(timer)
-    return most_downsampled_query_duration_ms * 9 < _get_time_budget()
 
 
 def build_snuba_request(
@@ -110,21 +108,23 @@ def run_query_to_correct_tier(
     request_to_most_downsampled_tier = build_snuba_request(
         in_msg, query_settings, build_query
     )
-
     res = run_query(
         dataset=PluggableDataset(name="eap", all_entities=[]),
         request=request_to_most_downsampled_tier,
         timer=timer,
     )
 
-    if _is_best_effort_mode(in_msg) and _enough_time_budget_to_at_least_run_next_tier(
-        timer
-    ):
+    if _is_best_effort_mode(in_msg):
         query_settings.push_clickhouse_setting(
             "max_execution_time",
             _get_time_budget() / 1000,
         )
         query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
+        target_tier = _get_target_tier(timer)
+
+        if target_tier == Tier.TIER_512:
+            return res
+
         query_settings.set_sampling_tier(_get_target_tier(timer))
 
         request_to_target_tier = build_snuba_request(
