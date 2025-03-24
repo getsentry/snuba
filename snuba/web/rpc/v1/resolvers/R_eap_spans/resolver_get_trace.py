@@ -185,7 +185,11 @@ def _build_query(request: GetTraceRequest) -> Query:
         selected_columns.extend(
             map(
                 lambda col_name: SelectedExpression(
-                    name=col_name, expression=column(col_name, alias=col_name)
+                    name=col_name,
+                    expression=column(
+                        col_name,
+                        alias=f"selected_{col_name}",
+                    ),
                 ),
                 NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS
                 if use_eap_items_table(request.meta)
@@ -233,11 +237,7 @@ def _build_query(request: GetTraceRequest) -> Query:
                 request.meta.end_timestamp.seconds,
             ),
             equals(
-                f.cast(
-                    column("trace_id"),
-                    "String",
-                    alias="trace_id",
-                ),
+                column("trace_id"),
                 literal(request.trace_id),
             ),
         ),
