@@ -233,11 +233,7 @@ def _build_query(request: GetTraceRequest) -> Query:
                 request.meta.end_timestamp.seconds,
             ),
             equals(
-                f.cast(
-                    column("trace_id"),
-                    "String",
-                    alias="trace_id",
-                ),
+                column("trace_id"),
                 literal(request.trace_id),
             ),
         ),
