@@ -205,6 +205,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
+            sentry_sdk.capture_exception(error)
             self.metrics.increment(
                 "request_error",
                 tags=self._timer.tags,
