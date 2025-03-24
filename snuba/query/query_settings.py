@@ -147,12 +147,6 @@ class HTTPQuerySettings(QuerySettings):
     def get_sampling_tier(self) -> Tier:
         return self.__tier
 
-    def set_record_query_duration(self, to_time_query_duration: bool) -> None:
-        self.__record_query_duration = to_time_query_duration
-
-    def get_record_query_duration(self) -> bool:
-        return self.__record_query_duration
-
 
 class SubscriptionQuerySettings(QuerySettings):
     """

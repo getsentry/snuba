@@ -96,9 +96,6 @@ def run_query_to_correct_tier(
         in_msg, query_settings, build_query
     )
 
-    if is_best_effort_mode(in_msg):
-        query_settings.set_record_query_duration(True)
-
     res = run_query(
         dataset=PluggableDataset(name="eap", all_entities=[]),
         request=request_to_most_downsampled_tier,
@@ -111,9 +108,6 @@ def run_query_to_correct_tier(
         )
         query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
         query_settings.set_sampling_tier(_get_target_tier(timer))
-        query_settings.set_record_query_duration(
-            False
-        )  # doesn't make a functional diff
 
         request_to_target_tier = build_snuba_request(
             in_msg, query_settings, build_query

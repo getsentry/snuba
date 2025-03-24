@@ -177,11 +177,7 @@ def execute_query(
     # Apply clickhouse query setting overrides
     clickhouse_query_settings.update(query_settings.get_clickhouse_settings())
 
-    if (
-        isinstance(query_settings, HTTPQuerySettings)
-        and query_settings.get_record_query_duration()
-    ):
-        timer.mark("right_before_execute")
+    timer.mark("right_before_execute")
 
     result = reader.execute(
         formatted_query,
