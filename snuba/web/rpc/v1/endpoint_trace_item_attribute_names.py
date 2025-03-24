@@ -19,7 +19,6 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Storage
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, if_cond, in_cond, not_cond
@@ -140,10 +139,7 @@ def get_co_occurring_attributes(
 
       The query at the end looks something like this:
 
-      SELECT DISTINCT attr_key
-      FROM
-      (
-          SELECT arrayJoin(arrayFilter(attr -> ((NOT ((attr.2) IN ['test_tag_1_0'])) AND startsWith(attr.2, 'test_')), arrayMap(x -> ('TYPE_STRING', x), attributes_string))) AS attr_key
+          SELECT distinct(arrayJoin(arrayFilter(attr -> ((NOT ((attr.2) IN ['test_tag_1_0'])) AND startsWith(attr.2, 'test_')), arrayMap(x -> ('TYPE_STRING', x), attributes_string)))) AS attr_key
           FROM eap_item_co_occurring_attrs_1_local
           WHERE (item_type = 1) AND (project_id IN [1]) AND (organization_id = 1) AND (date < toDateTime(toDate('2025-03-17', 'Universal'))) AND (date >= toDateTime(toDate('2025-03-10', 'Universal')))
 
@@ -152,8 +148,7 @@ def get_co_occurring_attributes(
           --
 
           ORDER BY attr_key ASC
-          LIMIT 0, 10000
-      )
+          LIMIT 10000
 
       **Explanation:**
 
@@ -264,17 +259,19 @@ def get_co_occurring_attributes(
             attr_filter, f.like(column("attr.2"), f"%{request.value_substring_match}%")
         )
 
-    inner_query = Query(
+    query = Query(
         from_clause=storage,
         selected_columns=[
             SelectedExpression(
                 name="attr_key",
-                expression=f.arrayJoin(
-                    f.arrayFilter(
-                        Lambda(None, ("attr",), attr_filter),
-                        array_func,
-                    ),
-                    alias="attr_key",
+                expression=f.distinct(
+                    f.arrayJoin(
+                        f.arrayFilter(
+                            Lambda(None, ("attr",), attr_filter),
+                            array_func,
+                        ),
+                        alias="attr_key",
+                    )
                 ),
             ),
         ],
@@ -283,26 +280,17 @@ def get_co_occurring_attributes(
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_key")),
         ],
         # chosen arbitrarily to be a high number
-        limit=10000,
+        limit=request.limit,
     )
 
-    full_query = CompositeQuery(
-        from_clause=inner_query,
-        selected_columns=[
-            SelectedExpression(
-                name="attr_key", expression=f.distinct(column("attr_key"))
-            )
-        ],
-        limit=1000,
-    )
-    treeify_or_and_conditions(full_query)
+    treeify_or_and_conditions(query)
     settings = HTTPQuerySettings()
     settings.push_clickhouse_setting("max_execution_time", 1)
     settings.push_clickhouse_setting("timeout_overflow_mode", "break")
     snuba_request = SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=full_query,
+        query=query,
         query_settings=settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
