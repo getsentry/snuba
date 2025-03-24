@@ -3240,9 +3240,9 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
 
         # tier 1's results should be 3600, so tier 64's results should be around 3600 / 64 (give or take due to random sampling)
         assert (
-            len(non_downsampled_tier_response.column_values) / 50
+            len(non_downsampled_tier_response.column_values) / 80
             <= len(best_effort_response.column_values)
-            <= len(non_downsampled_tier_response.column_values) / 80
+            <= len(non_downsampled_tier_response.column_values) / 50
         )
         assert (
             best_effort_response.meta.downsampled_storage_meta
