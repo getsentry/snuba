@@ -1499,13 +1499,9 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             message_to_non_downsampled_tier
         )
 
-        # sums over the best effort metric
-        if best_effort_response.result_timeseries == []:
-            best_effort_metric_sum = 0.0
-        else:
-            best_effort_metric_sum = (
-                best_effort_response.result_timeseries[0].data_points[0].data
-            )
+        best_effort_metric_sum = (
+            best_effort_response.result_timeseries[0].data_points[0].data
+        )
 
         # tier 1 sum should be 3600, so tier 64 sum should be around 3600 / 64 (give or take due to random sampling)
         non_downsampled_best_effort_metric_sum = (
@@ -1517,9 +1513,13 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             <= non_downsampled_best_effort_metric_sum / 50
         )
 
+        breakpoint()
+
         assert (
             best_effort_response.meta.downsampled_storage_meta
             == DownsampledStorageMeta(
                 tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
             )
         )
+
+        assert False

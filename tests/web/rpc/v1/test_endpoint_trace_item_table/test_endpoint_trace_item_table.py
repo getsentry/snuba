@@ -125,7 +125,7 @@ def gen_message(
             "transaction.op": "http.server",
             "user": "ip:127.0.0.1",
         },
-        "span_id": "123456781234567D",
+        "span_id": uuid.uuid4().hex,
         "tags": {
             "relay_endpoint_version": "3",
             "relay_id": "88888888-4444-4444-8444-cccccccccccc",
@@ -3186,7 +3186,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 msg_timestamp,
                 tags={"tier64tag": "tier64tag"},
             )
-            for _ in range(30)
+            for _ in range(3600)
         ]
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
@@ -3238,11 +3238,13 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             message_to_non_downsampled_tier
         )
 
+        breakpoint()
+
         # tier 1's results should be 3600, so tier 64's results should be around 3600 / 64 (give or take due to random sampling)
         assert (
-            len(non_downsampled_tier_response.column_values) / 80
-            <= len(best_effort_response.column_values)
-            <= len(non_downsampled_tier_response.column_values) / 50
+            len(non_downsampled_tier_response.column_values[0].results) / 80
+            <= len(best_effort_response.column_values[0].results)
+            <= len(non_downsampled_tier_response.column_values[0].results) / 50
         )
         assert (
             best_effort_response.meta.downsampled_storage_meta
