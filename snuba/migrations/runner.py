@@ -395,6 +395,9 @@ class Runner:
         readiness_states: Optional[Sequence[ReadinessState]] = None,
     ) -> None:
 
+        if not force:
+            raise MigrationError("Requires force to reverse migrations")
+
         groups = (
             [group]
             if group
@@ -417,7 +420,7 @@ class Runner:
                 if get_group_readiness_state(m.group) in readiness_states
             ]
 
-        use_through = False if through == "all" else True
+        use_through = through != "all"
 
         def exact_migration_exists(through: str) -> bool:
             migration_ids = [
@@ -425,15 +428,10 @@ class Runner:
                 for key in completed_migrations
                 if key.migration_id.startswith(through)
             ]
-            if len(migration_ids) == 1:
-                return True
-            return False
+            return len(migration_ids) == 1
 
         if use_through and not exact_migration_exists(through):
             raise MigrationError(f"No exact match for: {through}")
-
-        if not force:
-            raise MigrationError("Requires force to reverse migrations")
 
         for migration_key in completed_migrations:
             if fake:
@@ -557,22 +555,25 @@ class Runner:
         """
         migration_status = self._get_migration_status()
 
-        def get_status(migration_key: MigrationKey) -> Status:
-            return migration_status.get(migration_key, Status.NOT_STARTED)
-
         group_migrations: List[MigrationKey] = []
         for group in groups:
             group_loader = get_group_loader(group)
+            completed_migrations = 0
             for migration_id in group_loader.get_migrations():
                 migration_key = MigrationKey(group, migration_id)
-                status = get_status(migration_key)
+                status = migration_status.get(migration_key, Status.NOT_STARTED)
                 if status == Status.IN_PROGRESS:
                     # can't reverse migrations if one is stuck pending
                     raise MigrationInProgress(str(migration_key))
-                if status == Status.NOT_STARTED:
-                    continue
                 elif status == Status.COMPLETED:
                     group_migrations.append(migration_key)
+                    completed_migrations += 1
+                elif completed_migrations > 0:
+                    # once we've seen completed migrations for a group
+                    # we shoudln't see anymore that are NOT_STARTED
+                    raise MigrationError(
+                        f"Unexpected not_started migration {migration_key} while reverting migrations"
+                    )
         # need opposite order
         group_migrations.reverse()
         return group_migrations
