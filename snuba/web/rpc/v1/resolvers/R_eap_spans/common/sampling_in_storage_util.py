@@ -31,10 +31,12 @@ DOWNSAMPLING_TIER_MULTIPLIERS = {
 }
 
 
+def _get_query_duration(timer) -> int:
+    return timer.get_duration_between_marks("right_before_execute", "execute")
+
+
 def _get_target_tier(timer: Timer) -> Tier:
-    most_downsampled_query_duration_ms = timer.get_duration_between_marks(
-        "right_before_execute", "execute"
-    )
+    most_downsampled_query_duration_ms = _get_query_duration(timer)
 
     target_tier = Tier.TIER_NO_TIER
     for tier in sorted(Tier, reverse=True)[:-1]:
@@ -47,12 +49,17 @@ def _get_target_tier(timer: Timer) -> Tier:
     return target_tier
 
 
-def is_best_effort_mode(in_msg: T) -> bool:
+def _is_best_effort_mode(in_msg: T) -> bool:
     return (
         in_msg.meta.HasField("downsampled_storage_config")
         and in_msg.meta.downsampled_storage_config.mode
         == DownsampledStorageConfig.MODE_BEST_EFFORT
     )
+
+
+def _enough_time_budget_to_at_least_run_next_tier(timer: Timer) -> bool:
+    most_downsampled_query_duration_ms = _get_query_duration(timer)
+    return most_downsampled_query_duration_ms * 9 < SENTRY_TIMEOUT - ERROR_BUDGET
 
 
 def build_snuba_request(
@@ -102,9 +109,11 @@ def run_query_to_correct_tier(
         timer=timer,
     )
 
-    if is_best_effort_mode(in_msg):
+    if _is_best_effort_mode(in_msg) and _enough_time_budget_to_at_least_run_next_tier(
+        timer
+    ):
         query_settings.push_clickhouse_setting(
-            "max_execution_time", SENTRY_TIMEOUT / 1000 - ERROR_BUDGET
+            "max_execution_time", (SENTRY_TIMEOUT - ERROR_BUDGET) / 1000
         )
         query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
         query_settings.set_sampling_tier(_get_target_tier(timer))
