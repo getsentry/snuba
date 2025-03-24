@@ -185,7 +185,11 @@ def _build_query(request: GetTraceRequest) -> Query:
         selected_columns.extend(
             map(
                 lambda col_name: SelectedExpression(
-                    name=col_name, expression=column(col_name, alias=col_name)
+                    name=col_name,
+                    expression=column(
+                        col_name,
+                        alias=f"selected_{col_name}",
+                    ),
                 ),
                 NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS
                 if use_eap_items_table(request.meta)
