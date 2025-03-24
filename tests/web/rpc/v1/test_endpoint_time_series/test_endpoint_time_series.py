@@ -1410,7 +1410,7 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             granularity_secs=granularity_secs,
         )
 
-        mock_get_duration_between_marks.return_value = 3000.0
+        mock_get_duration_between_marks.return_value = 2778.0
 
         with mock.patch(
             "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._enough_time_budget_to_at_least_run_next_tier",
@@ -1491,7 +1491,7 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             granularity_secs=granularity_secs,
         )
 
-        mock_get_duration_between_marks.return_value = 3124.0
+        mock_get_duration_between_marks.return_value = 2777.0
 
         best_effort_response = EndpointTimeSeries().execute(
             best_effort_downsample_message

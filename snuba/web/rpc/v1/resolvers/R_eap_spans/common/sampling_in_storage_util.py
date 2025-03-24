@@ -6,6 +6,7 @@ from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageCon
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 
+from snuba import state
 from snuba.attribution import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.pluggable_dataset import PluggableDataset
@@ -20,15 +21,24 @@ from snuba.web.query import run_query
 T = TypeVar("T", TimeSeriesRequest, TraceItemTableRequest)
 
 
-SENTRY_TIMEOUT = 30000  # 30s = 30000ms
-ERROR_BUDGET = 5000  # 5s
-
 DOWNSAMPLING_TIER_MULTIPLIERS = {
     Tier.TIER_512: 1,
     Tier.TIER_64: 8,
     Tier.TIER_8: 64,
     Tier.TIER_1: 512,
 }
+
+
+def _get_sentry_timeout_ms() -> int:
+    return cast(
+        int, state.get_int_config("sampling_in_storage_sentry_timeout", default=30000)
+    )  # 30s = 30000ms
+
+
+def _get_error_budget() -> int:
+    return cast(
+        int, state.get_int_config("sampling_in_storage_error_budget", default=5000)
+    )  # 5s = 5000ms
 
 
 def _get_query_duration(timer) -> int:
@@ -44,7 +54,10 @@ def _get_target_tier(timer: Timer) -> Tier:
             most_downsampled_query_duration_ms
             * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier))
         )
-        if estimated_query_duration_to_this_tier <= SENTRY_TIMEOUT - ERROR_BUDGET:
+        if (
+            estimated_query_duration_to_this_tier
+            <= _get_sentry_timeout_ms() - _get_error_budget()
+        ):
             target_tier = tier
     return target_tier
 
@@ -59,7 +72,10 @@ def _is_best_effort_mode(in_msg: T) -> bool:
 
 def _enough_time_budget_to_at_least_run_next_tier(timer: Timer) -> bool:
     most_downsampled_query_duration_ms = _get_query_duration(timer)
-    return most_downsampled_query_duration_ms * 9 < SENTRY_TIMEOUT - ERROR_BUDGET
+    return (
+        most_downsampled_query_duration_ms * 9
+        < _get_sentry_timeout_ms() - _get_error_budget()
+    )
 
 
 def build_snuba_request(
@@ -113,7 +129,8 @@ def run_query_to_correct_tier(
         timer
     ):
         query_settings.push_clickhouse_setting(
-            "max_execution_time", (SENTRY_TIMEOUT - ERROR_BUDGET) / 1000
+            "max_execution_time",
+            (_get_sentry_timeout_ms() - _get_error_budget()) / 1000,
         )
         query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
         query_settings.set_sampling_tier(_get_target_tier(timer))

@@ -3231,7 +3231,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             ],
         )
 
-        mock_get_duration_between_marks.return_value = 3124.0
+        mock_get_duration_between_marks.return_value = 2777.0
 
         best_effort_response = EndpointTraceItemTable().execute(best_effort_message)
         non_downsampled_tier_response = EndpointTraceItemTable().execute(
