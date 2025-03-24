@@ -3184,7 +3184,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         messages = [
             gen_message(
                 msg_timestamp,
-                tags={"preflighttag": "preflight"},
+                tags={"tier64tag": "tier64tag"},
             )
             for _ in range(30)
         ]
@@ -3196,6 +3196,8 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         columns = [
             Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="tier64tag"))
         ]
+
+        # sends a best effort request and a non-downsampled request to ensure their responses are different
         best_effort_message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -3212,7 +3214,6 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             ),
             columns=columns,
         )
-
         message_to_non_downsampled_tier = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -3230,16 +3231,18 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 )
             ],
         )
-
+        # this forces the query to route to tier 64
         mock_get_duration_between_marks.return_value = 2777.0
-
         best_effort_response = EndpointTraceItemTable().execute(best_effort_message)
         non_downsampled_tier_response = EndpointTraceItemTable().execute(
             message_to_non_downsampled_tier
         )
+
+        # tier 1's results should be 3600, so tier 64's results should be around 3600 / 64 (give or take due to random sampling)
         assert (
-            len(best_effort_response.column_values)
-            < len(non_downsampled_tier_response.column_values) / 36
+            len(non_downsampled_tier_response.column_values) / 50
+            <= len(best_effort_response.column_values)
+            <= len(non_downsampled_tier_response.column_values) / 80
         )
         assert (
             best_effort_response.meta.downsampled_storage_meta

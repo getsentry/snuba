@@ -1456,6 +1456,7 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             ),
         ]
 
+        # sends a best effort request and a non-downsampled request to ensure their responses are different
         best_effort_downsample_message = TimeSeriesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -1474,7 +1475,6 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             aggregations=aggregations,
             granularity_secs=granularity_secs,
         )
-
         message_to_non_downsampled_tier = TimeSeriesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -1490,9 +1490,8 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             aggregations=aggregations,
             granularity_secs=granularity_secs,
         )
-
+        # this forces the query to route to tier 64
         mock_get_duration_between_marks.return_value = 2777.0
-
         best_effort_response = EndpointTimeSeries().execute(
             best_effort_downsample_message
         )
@@ -1500,6 +1499,7 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             message_to_non_downsampled_tier
         )
 
+        # sums over the best effort metric
         if best_effort_response.result_timeseries == []:
             best_effort_metric_sum = 0.0
         else:
@@ -1507,11 +1507,16 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
                 best_effort_response.result_timeseries[0].data_points[0].data
             )
 
-        assert (
-            best_effort_metric_sum
-            < non_downsampled_tier_response.result_timeseries[0].data_points[0].data
-            / 36
+        # tier 1 sum should be 3600, so tier 64 sum should be around 3600 / 64 (give or take due to random sampling)
+        non_downsampled_best_effort_metric_sum = (
+            non_downsampled_tier_response.result_timeseries[0].data_points[0].data
         )
+        assert (
+            non_downsampled_best_effort_metric_sum / 50
+            <= best_effort_metric_sum
+            <= non_downsampled_best_effort_metric_sum / 80
+        )
+
         assert (
             best_effort_response.meta.downsampled_storage_meta
             == DownsampledStorageMeta(

@@ -29,19 +29,17 @@ DOWNSAMPLING_TIER_MULTIPLIERS = {
 }
 
 
-def _get_sentry_timeout_ms() -> int:
-    return cast(
+def _get_time_budget() -> float:
+    sentry_timeout_ms = cast(
         int, state.get_int_config("sampling_in_storage_sentry_timeout", default=30000)
     )  # 30s = 30000ms
-
-
-def _get_error_budget() -> int:
-    return cast(
+    error_budget_ms = cast(
         int, state.get_int_config("sampling_in_storage_error_budget", default=5000)
     )  # 5s = 5000ms
+    return sentry_timeout_ms - error_budget_ms
 
 
-def _get_query_duration(timer) -> int:
+def _get_query_duration(timer: Timer) -> float:
     return timer.get_duration_between_marks("right_before_execute", "execute")
 
 
@@ -54,10 +52,7 @@ def _get_target_tier(timer: Timer) -> Tier:
             most_downsampled_query_duration_ms
             * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier))
         )
-        if (
-            estimated_query_duration_to_this_tier
-            <= _get_sentry_timeout_ms() - _get_error_budget()
-        ):
+        if estimated_query_duration_to_this_tier <= _get_time_budget():
             target_tier = tier
     return target_tier
 
@@ -72,10 +67,7 @@ def _is_best_effort_mode(in_msg: T) -> bool:
 
 def _enough_time_budget_to_at_least_run_next_tier(timer: Timer) -> bool:
     most_downsampled_query_duration_ms = _get_query_duration(timer)
-    return (
-        most_downsampled_query_duration_ms * 9
-        < _get_sentry_timeout_ms() - _get_error_budget()
-    )
+    return most_downsampled_query_duration_ms * 9 < _get_time_budget()
 
 
 def build_snuba_request(
@@ -130,7 +122,7 @@ def run_query_to_correct_tier(
     ):
         query_settings.push_clickhouse_setting(
             "max_execution_time",
-            (_get_sentry_timeout_ms() - _get_error_budget()) / 1000,
+            _get_time_budget() / 1000,
         )
         query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
         query_settings.set_sampling_tier(_get_target_tier(timer))
