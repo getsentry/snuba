@@ -133,7 +133,7 @@ def migrate(
     "--readiness-state",
     multiple=True,
     type=click.Choice([r.value for r in ReadinessState], case_sensitive=False),
-    default=None,
+    default=(),
 )
 @click.argument("through", default="all")
 @click.option("--force", is_flag=True)
@@ -178,9 +178,11 @@ def revert(
     try:
         if group:
             migration_group = MigrationGroup(group)
+        elif through != "all":
+            raise click.ClickException(
+                "A migration group must be specified when 'through' is not 'all'."
+            )
         else:
-            if through != "all":
-                raise click.ClickException("Need migration group")
             migration_group = None
         runner.reverse_all(
             through=through,
