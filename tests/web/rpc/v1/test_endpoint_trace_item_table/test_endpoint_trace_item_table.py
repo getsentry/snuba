@@ -72,6 +72,7 @@ def gen_message(
     dt: datetime,
     measurements: dict[str, dict[str, float]] | None = None,
     tags: dict[str, str] | None = None,
+    randomize_span_id: bool = False,
 ) -> Mapping[str, Any]:
     measurements = measurements or {}
     tags = tags or {}
@@ -125,7 +126,7 @@ def gen_message(
             "transaction.op": "http.server",
             "user": "ip:127.0.0.1",
         },
-        "span_id": uuid.uuid4().hex,
+        "span_id": uuid.uuid4().hex if randomize_span_id else "123456781234567d",
         "tags": {
             "relay_endpoint_version": "3",
             "relay_id": "88888888-4444-4444-8444-cccccccccccc",
@@ -427,6 +428,11 @@ class TestTraceItemTable(BaseApiTest):
                         type=AttributeKey.TYPE_BOOLEAN, name="sentry.is_segment"
                     )
                 ),
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.span_id"
+                    )
+                ),
             ],
             order_by=[
                 TraceItemTableRequest.OrderBy(
@@ -445,6 +451,12 @@ class TestTraceItemTable(BaseApiTest):
                 TraceItemColumnValues(
                     attribute_name="sentry.is_segment",
                     results=[AttributeValue(val_bool=True) for _ in range(60)],
+                ),
+                TraceItemColumnValues(
+                    attribute_name="sentry.span_id",
+                    results=[
+                        AttributeValue(val_str="123456781234567d") for _ in range(60)
+                    ],
                 ),
             ],
             page_token=PageToken(offset=60),
@@ -3103,6 +3115,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             gen_message(
                 msg_timestamp,
                 tags={"preflighttag": "preflight"},
+                randomize_span_id=True,
             )
             for _ in range(30)
         ]
@@ -3174,6 +3187,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             gen_message(
                 msg_timestamp,
                 tags={"tier64tag": "tier64tag"},
+                randomize_span_id=True,
             )
             for _ in range(3600)
         ]
