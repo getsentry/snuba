@@ -1,7 +1,10 @@
 import os
 from logging import Logger
 from typing import Callable, Sequence
+from unittest import mock
 from unittest.mock import Mock
+
+import pytest
 
 from snuba.clickhouse.columns import Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -21,6 +24,7 @@ from snuba.migrations.operations import (
     ModifyColumn,
     ModifyTableSettings,
     ModifyTableTTL,
+    OperationMissingNodes,
     OperationTarget,
     RemoveTableTTL,
     RenameTable,
@@ -452,3 +456,11 @@ def test_reset_settings() -> None:
         ).format_sql()
         == "ALTER TABLE test_table RESET SETTING setting_a, setting_b;"
     )
+
+
+@mock.patch("snuba.clusters.cluster.ClickhouseCluster.get_local_nodes", return_value=[])
+def test_missing_nodes_for_operation(mock_get_local_nodes: Mock) -> None:
+    with pytest.raises(OperationMissingNodes):
+        TruncateTable(
+            StorageSetKey.EVENTS, "blah_table", target=OperationTarget.LOCAL
+        ).execute()

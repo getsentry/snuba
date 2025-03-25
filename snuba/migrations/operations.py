@@ -23,6 +23,10 @@ from snuba.migrations.table_engines import TableEngine
 logger = structlog.get_logger().bind(module=__name__)
 
 
+class OperationMissingNodes(Exception):
+    pass
+
+
 class OperationTarget(Enum):
     """
     Represents the target nodes of an operation.
@@ -53,25 +57,27 @@ class SqlOperation(ABC):
         return self._storage_set
 
     def get_nodes(self) -> Sequence[ClickhouseNode]:
+        if self.target not in [OperationTarget.LOCAL, OperationTarget.DISTRIBUTED]:
+            raise ValueError(f"Target not set for {self}")
+
         cluster = get_cluster(self._storage_set)
-        local_nodes, dist_nodes = (
-            cluster.get_local_nodes(),
-            cluster.get_distributed_nodes(),
-        )
 
         if self.target == OperationTarget.LOCAL:
-            nodes = local_nodes
+            nodes = cluster.get_local_nodes()
         elif self.target == OperationTarget.DISTRIBUTED:
-            nodes = dist_nodes
-        else:
-            raise ValueError(f"Target not set for {self}")
+            nodes = cluster.get_distributed_nodes()
+
+        if not nodes:
+            raise OperationMissingNodes(
+                f"No nodes found for {cluster.get_clickhouse_cluster_name()}"
+            )
+
         return nodes
 
     def execute(self) -> None:
         nodes = self.get_nodes()
         cluster = get_cluster(self._storage_set)
-        if nodes:
-            logger.info(f"Executing op: {self.format_sql()[:32]}...")
+        logger.info(f"Executing op: {self.format_sql()[:32]}...")
         for node in nodes:
             connection = cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE, node
