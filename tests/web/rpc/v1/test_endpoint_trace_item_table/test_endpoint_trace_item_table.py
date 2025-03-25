@@ -3117,7 +3117,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 tags={"preflighttag": "preflight"},
                 randomize_span_id=True,
             )
-            for _ in range(30)
+            for _ in range(3600)
         ]
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
@@ -3167,8 +3167,8 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             message_to_non_downsampled_tier
         )
         assert (
-            len(preflight_response.column_values)
-            < len(non_downsampled_tier_response.column_values) / 100
+            len(preflight_response.column_values[0].results)
+            < len(non_downsampled_tier_response.column_values[0].results) / 100
         )
         assert (
             preflight_response.meta.downsampled_storage_meta
