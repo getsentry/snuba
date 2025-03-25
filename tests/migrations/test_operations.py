@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import pytest
 
 from snuba.clickhouse.columns import Column, String, UInt
+from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -459,18 +460,23 @@ def test_reset_settings() -> None:
 
 
 @mock.patch("snuba.clusters.cluster.ClickhouseCluster.get_local_nodes", return_value=[])
-@mock.patch(
-    "snuba.clusters.cluster.ClickhouseCluster.get_distributed_nodes", return_value=[]
-)
-def test_missing_nodes_for_operation(
-    mock_get_local_nodes: Mock, mock_get_dist_nodes: Mock
-) -> None:
+def test_missing_nodes_for_operation(mock_get_local_nodes: Mock) -> None:
     with pytest.raises(OperationMissingNodes):
         TruncateTable(
             StorageSetKey.EVENTS, "blah_table", target=OperationTarget.LOCAL
-        ).execute()
+        ).get_nodes()
 
-    # in single node mode get_distributed_nodes returning [] is okay
-    TruncateTable(
-        StorageSetKey.EVENTS, "blah_table", target=OperationTarget.DISTRIBUTED
-    ).execute()
+    cluster = get_cluster(StorageSetKey.EVENTS)
+    if cluster.is_single_node():
+        # in single node mode get_distributed_nodes returning [] is okay
+        assert (
+            TruncateTable(
+                StorageSetKey.EVENTS, "blah_table", target=OperationTarget.DISTRIBUTED
+            ).get_nodes()
+            == []
+        )
+    else:
+        # in multi node mode get_distributed_nodes should have nodes
+        assert TruncateTable(
+            StorageSetKey.EVENTS, "blah_table", target=OperationTarget.DISTRIBUTED
+        ).get_nodes()
