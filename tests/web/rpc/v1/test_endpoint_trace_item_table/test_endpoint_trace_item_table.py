@@ -26,6 +26,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
+from sentry_protos.snuba.v1.formula_pb2 import Literal
 from sentry_protos.snuba.v1.request_common_pb2 import (
     PageToken,
     RequestMeta,
@@ -3025,6 +3026,62 @@ class TestTraceItemTable(BaseApiTest):
                 attribute_name="sentry.span_id",
                 results=[AttributeValue(val_str="123456781234567d")],
             )
+        ]
+
+    def test_literal(self) -> None:
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"measurement": 2}, 10)
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="measurement")
+                )
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="measurement",
+                                ),
+                            ),
+                            label="sum(measurement)",
+                        ),
+                        right=Column(
+                            literal=Literal(
+                                val_double=5,
+                            ),
+                            label="5",
+                        ),
+                    ),
+                    label="sum(measurement) / 5",
+                ),
+            ],
+            limit=1,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="sum(measurement) / 5",
+                results=[
+                    AttributeValue(val_double=(20 / 5)),
+                ],
+            ),
         ]
 
 
