@@ -1421,7 +1421,7 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             aggregations=aggregations,
             granularity_secs=granularity_secs,
         )
-        # this forces the query to route to tier 64
+        # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
         mock_get_duration_between_marks.return_value = 2777.0
         best_effort_response = EndpointTimeSeries().execute(
             best_effort_downsample_message

@@ -427,11 +427,6 @@ class TestTraceItemTable(BaseApiTest):
                         type=AttributeKey.TYPE_BOOLEAN, name="sentry.is_segment"
                     )
                 ),
-                Column(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_STRING, name="sentry.span_id"
-                    )
-                ),
             ],
             order_by=[
                 TraceItemTableRequest.OrderBy(
@@ -450,12 +445,6 @@ class TestTraceItemTable(BaseApiTest):
                 TraceItemColumnValues(
                     attribute_name="sentry.is_segment",
                     results=[AttributeValue(val_bool=True) for _ in range(60)],
-                ),
-                TraceItemColumnValues(
-                    attribute_name="sentry.span_id",
-                    results=[
-                        AttributeValue(val_str="123456781234567d") for _ in range(60)
-                    ],
                 ),
             ],
             page_token=PageToken(offset=60),
@@ -3231,14 +3220,12 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 )
             ],
         )
-        # this forces the query to route to tier 64
+        # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
         mock_get_duration_between_marks.return_value = 2777.0
         best_effort_response = EndpointTraceItemTable().execute(best_effort_message)
         non_downsampled_tier_response = EndpointTraceItemTable().execute(
             message_to_non_downsampled_tier
         )
-
-        breakpoint()
 
         # tier 1's results should be 3600, so tier 64's results should be around 3600 / 64 (give or take due to random sampling)
         assert (

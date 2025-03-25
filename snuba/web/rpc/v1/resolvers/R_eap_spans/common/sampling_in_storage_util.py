@@ -13,6 +13,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
+from snuba.request import Request
 from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -44,8 +45,7 @@ def _get_query_duration(timer: Timer) -> float:
     return timer.get_duration_between_marks("right_before_execute", "execute")
 
 
-def _get_target_tier(timer: Timer, metrics_backend: MetricsBackend) -> Tier:
-    timer.mark("sampling_in_storage_start_estimation")
+def _get_target_tier(timer: Timer) -> Tier:
     most_downsampled_query_duration_ms = _get_query_duration(timer)
 
     target_tier = Tier.TIER_512
@@ -60,14 +60,6 @@ def _get_target_tier(timer: Timer, metrics_backend: MetricsBackend) -> Tier:
         ):
             target_tier = tier
 
-    timer.mark("sampling_in_storage_finished_estimation")
-    metrics_backend.timing(
-        "sampling_in_storage_estimation_duration",
-        timer.get_duration_between_marks(
-            "sampling_in_storage_start_estimation",
-            "sampling_in_storage_finished_estimation",
-        ),
-    )
     return target_tier
 
 
@@ -101,6 +93,31 @@ def build_snuba_request(
     )
 
 
+def _run_query_on_most_downsampled_tier(
+    is_best_effort_mode: bool,
+    request_to_most_downsampled_tier: Request,
+    timer: Timer,
+    metrics_backend: MetricsBackend,
+) -> QueryResult:
+    if is_best_effort_mode:
+        timer.mark("sampling_in_storage_start_estimation")
+    res = run_query(
+        dataset=PluggableDataset(name="eap", all_entities=[]),
+        request=request_to_most_downsampled_tier,
+        timer=timer,
+    )
+    if is_best_effort_mode:
+        timer.mark("sampling_in_storage_start_estimation")
+        metrics_backend.timing(
+            "sampling_in_storage_estimation_duration",
+            timer.get_duration_between_marks(
+                "sampling_in_storage_start_estimation",
+                "sampling_in_storage_finished_estimation",
+            ),
+        )
+    return res
+
+
 def run_query_to_correct_tier(
     in_msg: T,
     query_settings: HTTPQuerySettings,
@@ -120,10 +137,11 @@ def run_query_to_correct_tier(
     request_to_most_downsampled_tier = build_snuba_request(
         in_msg, query_settings, build_query
     )
-    res = run_query(
-        dataset=PluggableDataset(name="eap", all_entities=[]),
-        request=request_to_most_downsampled_tier,
-        timer=timer,
+    res = _run_query_on_most_downsampled_tier(
+        _is_best_effort_mode(in_msg),
+        request_to_most_downsampled_tier,
+        timer,
+        metrics_backend,
     )
 
     if _is_best_effort_mode(in_msg):
@@ -132,7 +150,7 @@ def run_query_to_correct_tier(
             _get_time_budget() / 1000,
         )
         query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
-        target_tier = _get_target_tier(timer, metrics_backend)
+        target_tier = _get_target_tier(timer)
 
         if target_tier == Tier.TIER_512:
             return res
