@@ -26,7 +26,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, or_cond
+from snuba.query.dsl import and_cond, literal, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
@@ -250,6 +250,8 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
         formula_expr = _formula_to_expression(column.formula, request_meta)
         formula_expr = replace(formula_expr, alias=column.label)
         return formula_expr
+    elif column.HasField("literal"):
+        return literal(column.literal.val_double)
     else:
         raise BadSnubaRPCRequestException(
             "Column is not one of: aggregate, attribute key, or formula"

@@ -29,7 +29,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column
+from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
@@ -261,6 +261,8 @@ def _proto_expression_to_ast_expression(
             )
             formula_expr = replace(formula_expr, alias=expr.label)
             return formula_expr
+        case "literal":
+            return literal(expr.literal.val_double)
         case default:
             raise ValueError(f"Unknown expression type: {default}")
 
