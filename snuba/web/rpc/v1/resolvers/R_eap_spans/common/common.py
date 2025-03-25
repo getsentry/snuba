@@ -272,13 +272,13 @@ def apply_virtual_columns_eap_items(
             attribute_expression = attribute_key_to_expression_eap_items(
                 AttributeKey(
                     name=context.from_column_name,
-                    type=NORMALIZED_COLUMNS.get(
-                        context.from_column_name, AttributeKey.TYPE_STRING
-                    ),
+                    type=NORMALIZED_COLUMNS_EAP_ITEMS.get(
+                        context.from_column_name, [AttributeKey.TYPE_STRING]
+                    )[0],
                 )
             )
             return f.transform(
-                f.CAST(attribute_expression, "String"),
+                f.CAST(f.ifNull(attribute_expression, literal("")), "String"),
                 literals_array(None, [literal(k) for k in context.value_map.keys()]),
                 literals_array(None, [literal(v) for v in context.value_map.values()]),
                 literal(
@@ -428,7 +428,7 @@ def apply_virtual_columns(
                 )
             )
             return f.transform(
-                f.CAST(attribute_expression, "String"),
+                f.CAST(f.ifNull(attribute_expression, literal("")), "String"),
                 literals_array(None, [literal(k) for k in context.value_map.keys()]),
                 literals_array(None, [literal(v) for v in context.value_map.values()]),
                 literal(
