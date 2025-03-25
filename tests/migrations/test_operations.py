@@ -459,8 +459,18 @@ def test_reset_settings() -> None:
 
 
 @mock.patch("snuba.clusters.cluster.ClickhouseCluster.get_local_nodes", return_value=[])
-def test_missing_nodes_for_operation(mock_get_local_nodes: Mock) -> None:
+@mock.patch(
+    "snuba.clusters.cluster.ClickhouseCluster.get_distributed_nodes", return_value=[]
+)
+def test_missing_nodes_for_operation(
+    mock_get_local_nodes: Mock, mock_get_dist_nodes: Mock
+) -> None:
     with pytest.raises(OperationMissingNodes):
         TruncateTable(
             StorageSetKey.EVENTS, "blah_table", target=OperationTarget.LOCAL
         ).execute()
+
+    # in single node mode get_distributed_nodes returning [] is okay
+    TruncateTable(
+        StorageSetKey.EVENTS, "blah_table", target=OperationTarget.DISTRIBUTED
+    ).execute()

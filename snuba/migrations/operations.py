@@ -57,27 +57,41 @@ class SqlOperation(ABC):
         return self._storage_set
 
     def get_nodes(self) -> Sequence[ClickhouseNode]:
+        """
+        This should return the given local or dist nodes for which the operation should
+        be ran. If there are no nodes found, this probably means something is wrong.
+
+        However, this will return `[]` in the event that the target typs is for the
+        distributed nodes and the cluster is a single node cluster, since there are
+        no dist nodes in a single node cluster.
+        """
         if self.target not in [OperationTarget.LOCAL, OperationTarget.DISTRIBUTED]:
             raise ValueError(f"Target not set for {self}")
 
         cluster = get_cluster(self._storage_set)
 
-        if self.target == OperationTarget.LOCAL:
-            nodes = cluster.get_local_nodes()
-        elif self.target == OperationTarget.DISTRIBUTED:
-            nodes = cluster.get_distributed_nodes()
+        nodes = (
+            cluster.get_local_nodes()
+            if self.target == OperationTarget.LOCAL
+            else cluster.get_distributed_nodes()
+        )
 
-        if not nodes:
-            raise OperationMissingNodes(
-                f"No nodes found for {cluster.get_clickhouse_cluster_name()}"
-            )
+        if nodes or (
+            not nodes
+            and self.target == OperationTarget.DISTRIBUTED
+            and cluster.is_single_node()
+        ):
+            return nodes
 
-        return nodes
+        raise OperationMissingNodes(
+            f"No {self.target.value} nodes found for {cluster.get_clickhouse_cluster_name()}"
+        )
 
     def execute(self) -> None:
         nodes = self.get_nodes()
         cluster = get_cluster(self._storage_set)
-        logger.info(f"Executing op: {self.format_sql()[:32]}...")
+        if nodes:
+            logger.info(f"Executing op: {self.format_sql()[:32]}...")
         for node in nodes:
             connection = cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE, node
