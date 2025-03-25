@@ -25,6 +25,7 @@ jobs:
         if [ ${{ github.event_name }} = 'push' ]; then
           args+=(
             --tag ghcr.io/getsentry/snuba:latest
+            --tag ghcr.io/getsentry/snuba:nightly
             --tag ghcr.io/getsentry/snuba:amd64-latest
             --cache-to type=registry,ref=ghcr.io/getsentry/snuba:buildcache,mode=max
             --push
