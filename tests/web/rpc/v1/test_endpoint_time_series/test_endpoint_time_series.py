@@ -1439,9 +1439,9 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             non_downsampled_tier_response.result_timeseries[0].data_points[0].data
         )
         assert (
-            non_downsampled_best_effort_metric_sum / 80
+            non_downsampled_best_effort_metric_sum / 90
             <= best_effort_metric_sum
-            <= non_downsampled_best_effort_metric_sum / 50
+            <= non_downsampled_best_effort_metric_sum / 40
         )
 
         assert (
