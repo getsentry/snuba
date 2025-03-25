@@ -346,7 +346,7 @@ def test_reverse_all_for_group() -> None:
     ), "'profile_chunks_local' table should be deleted"
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_reverse_idempotency_all() -> None:
     """
     This test is to ensure that reversing a migration twice does not cause any
