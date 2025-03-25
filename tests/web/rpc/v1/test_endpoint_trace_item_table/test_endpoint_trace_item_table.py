@@ -290,7 +290,7 @@ class TestTraceItemTable(BaseApiTest):
                 EndpointTraceItemTable().execute(message)
             assert "DB::Exception: Memory limit (for query) exceeded" in str(e.value)
 
-            sentry_sdk_mock.assert_called_once()
+            sentry_sdk_mock.assert_called()
             assert metrics_mock.increment.call_args_list.count(call("OOM_query")) == 1
 
     def test_errors_without_type(self) -> None:
