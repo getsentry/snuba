@@ -368,7 +368,7 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
         )
 
         res = run_query_to_correct_tier(
-            in_msg, query_settings, self._timer, build_query
+            in_msg, query_settings, self._timer, build_query, self._metrics_backend
         )
 
         response_meta = extract_response_meta(

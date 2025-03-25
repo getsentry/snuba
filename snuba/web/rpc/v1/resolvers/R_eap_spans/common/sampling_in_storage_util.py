@@ -14,6 +14,7 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.query import run_query
@@ -43,7 +44,8 @@ def _get_query_duration(timer: Timer) -> float:
     return timer.get_duration_between_marks("right_before_execute", "execute")
 
 
-def _get_target_tier(timer: Timer) -> Tier:
+def _get_target_tier(timer: Timer, metrics_backend: MetricsBackend) -> Tier:
+    timer.mark("sampling_in_storage_start_estimation")
     most_downsampled_query_duration_ms = _get_query_duration(timer)
 
     target_tier = Tier.TIER_512
@@ -57,6 +59,15 @@ def _get_target_tier(timer: Timer) -> Tier:
             <= _get_time_budget() - most_downsampled_query_duration_ms
         ):
             target_tier = tier
+
+    timer.mark("sampling_in_storage_finished_estimation")
+    metrics_backend.timing(
+        "sampling_in_storage_estimation_duration",
+        timer.get_duration_between_marks(
+            "sampling_in_storage_start_estimation",
+            "sampling_in_storage_finished_estimation",
+        ),
+    )
     return target_tier
 
 
@@ -95,6 +106,7 @@ def run_query_to_correct_tier(
     query_settings: HTTPQuerySettings,
     timer: Timer,
     build_query: Callable[[T], Query],
+    metrics_backend: MetricsBackend,
 ) -> QueryResult:
     if not in_msg.meta.HasField("downsampled_storage_config"):
         return run_query(
@@ -120,12 +132,12 @@ def run_query_to_correct_tier(
             _get_time_budget() / 1000,
         )
         query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
-        target_tier = _get_target_tier(timer)
+        target_tier = _get_target_tier(timer, metrics_backend)
 
         if target_tier == Tier.TIER_512:
             return res
 
-        query_settings.set_sampling_tier(_get_target_tier(timer))
+        query_settings.set_sampling_tier(target_tier)
 
         request_to_target_tier = build_snuba_request(
             in_msg, query_settings, build_query
