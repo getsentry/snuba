@@ -127,6 +127,78 @@ def migrate(
 
 
 @migrations.command()
+@click.option("-g", "--group", default=None)
+@click.option(
+    "-r",
+    "--readiness-state",
+    multiple=True,
+    type=click.Choice([r.value for r in ReadinessState], case_sensitive=False),
+    default=(),
+)
+@click.argument("through", default="all")
+@click.option("--force", is_flag=True)
+@click.option("--fake", is_flag=True)
+@click.option("--include-system", is_flag=True)
+@click.option(
+    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
+)
+def revert(
+    group: Optional[str],
+    readiness_state: Optional[Sequence[str]],
+    through: str,
+    force: bool,
+    fake: bool,
+    include_system: bool,
+    log_level: Optional[str] = None,
+) -> None:
+    """
+    If group is specified, reverse all the migrations for a group.
+    If no group is specified, reverses all migrations for all groups.
+        * by default SYSTEM migrations are NOT reversed
+        * use --include-system to also reverse SYSTEM migrations
+
+    --force is required
+    """
+
+    readiness_states = (
+        [ReadinessState(state) for state in readiness_state]
+        if readiness_state
+        else None
+    )
+
+    setup_logging(log_level)
+    clusters_to_check = (
+        get_clusters_for_readiness_states(readiness_states, CLUSTERS)
+        if readiness_states
+        else CLUSTERS
+    )
+    check_clickhouse_connections(clusters_to_check)
+    runner = Runner()
+
+    try:
+        if group:
+            migration_group = MigrationGroup(group)
+        elif through != "all":
+            raise click.ClickException(
+                "A migration group must be specified when 'through' is not 'all'."
+            )
+        else:
+            migration_group = None
+        runner.reverse_all(
+            through=through,
+            force=force,
+            fake=fake,
+            include_system=include_system,
+            group=migration_group,
+            readiness_states=readiness_states,
+        )
+    except MigrationError as e:
+        raise click.ClickException(str(e))
+
+    click.echo("Finished reversing migrations")
+
+
+@migrations.command()
 @click.option("--group", required=True, help="Migration group")
 @click.option("--migration-id", required=True, help="Migration ID")
 @click.option("--force", is_flag=True)
