@@ -88,6 +88,7 @@ class HTTPQuerySettings(QuerySettings):
     ) -> None:
         super().__init__()
         self.__tier = Tier.TIER_NO_TIER
+        self.__record_query_duration = False
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug

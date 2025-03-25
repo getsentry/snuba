@@ -38,6 +38,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -1360,5 +1361,92 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             preflight_response.meta.downsampled_storage_meta
             == DownsampledStorageMeta(
                 tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_512
+            )
+        )
+
+    @patch.object(Timer, "get_duration_between_marks")
+    def test_best_effort_route_to_tier_64(
+        self, mock_get_duration_between_marks: MagicMock
+    ) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 3600
+        query_duration = granularity_secs * 1
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            query_duration,
+            metrics=[DummyMetric("test_best_effort", get_value=lambda x: 1)],
+        )
+
+        aggregations = [
+            AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_best_effort"),
+                label="sum",
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+            ),
+        ]
+
+        # sends a best effort request and a non-downsampled request to ensure their responses are different
+        best_effort_downsample_message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                ),
+            ),
+            aggregations=aggregations,
+            granularity_secs=granularity_secs,
+        )
+        message_to_non_downsampled_tier = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=aggregations,
+            granularity_secs=granularity_secs,
+        )
+        # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
+        mock_get_duration_between_marks.return_value = 2777.0
+        best_effort_response = EndpointTimeSeries().execute(
+            best_effort_downsample_message
+        )
+        non_downsampled_tier_response = EndpointTimeSeries().execute(
+            message_to_non_downsampled_tier
+        )
+
+        best_effort_metric_sum = (
+            best_effort_response.result_timeseries[0].data_points[0].data
+        )
+
+        # tier 1 sum should be 3600, so tier 64 sum should be around 3600 / 64 (give or take due to random sampling)
+        non_downsampled_best_effort_metric_sum = (
+            non_downsampled_tier_response.result_timeseries[0].data_points[0].data
+        )
+        assert (
+            non_downsampled_best_effort_metric_sum / 90
+            <= best_effort_metric_sum
+            <= non_downsampled_best_effort_metric_sum / 40
+        )
+
+        assert (
+            best_effort_response.meta.downsampled_storage_meta
+            == DownsampledStorageMeta(
+                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
             )
         )

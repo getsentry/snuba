@@ -1,10 +1,8 @@
-import uuid
 from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime
 from typing import Any, Callable, Dict, Iterable
 
-from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import DataPoint
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
@@ -21,26 +19,24 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     ExtrapolationMode,
 )
 
-from snuba.attribution.appid import AppID
-from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
-from snuba.query.query_settings import QuerySettings
-from snuba.request import Request as SnubaRequest
-from snuba.web.query import run_query
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
-from snuba.web.rpc.common.debug_info import extract_response_meta
+from snuba.web.rpc.common.debug_info import (
+    extract_response_meta,
+    setup_trace_query_settings,
+)
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     ExtrapolationContext,
@@ -55,7 +51,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     use_eap_items_table,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
-    construct_query_settings,
+    run_query_to_correct_tier,
 )
 
 OP_TO_EXPR = {
@@ -265,7 +261,7 @@ def _proto_expression_to_ast_expression(
             raise ValueError(f"Unknown expression type: {default}")
 
 
-def _build_query(request: TimeSeriesRequest) -> Query:
+def build_query(request: TimeSeriesRequest) -> Query:
     if use_eap_items_table(request.meta):
         entity = Entity(
             key=EntityKey("eap_items"),
@@ -357,29 +353,6 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     return res
 
 
-def _build_snuba_request(
-    request: TimeSeriesRequest, query_settings: QuerySettings
-) -> SnubaRequest:
-
-    return SnubaRequest(
-        id=uuid.UUID(request.meta.request_id),
-        original_body=MessageToDict(request),
-        query=_build_query(request),
-        query_settings=query_settings,
-        attribution_info=AttributionInfo(
-            referrer=request.meta.referrer,
-            team="eap",
-            feature="eap",
-            tenant_ids={
-                "organization_id": request.meta.organization_id,
-                "referrer": request.meta.referrer,
-            },
-            app_id=AppID("eap"),
-            parent_api="eap_span_samples",
-        ),
-    )
-
-
 class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
@@ -390,20 +363,19 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
         # if the user passes it in
         assert len(in_msg.aggregations) == 0
 
-        query_settings = construct_query_settings(in_msg)
-
-        snuba_request = _build_snuba_request(in_msg, query_settings)
-        res = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=snuba_request,
-            timer=self._timer,
+        query_settings = (
+            setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )
+
+        res = run_query_to_correct_tier(
+            in_msg, query_settings, self._timer, build_query, self._metrics_backend
+        )
+
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
             [res],
             [self._timer],
-            extract_sampling_tier=in_msg.meta.HasField("downsampled_storage_config"),
         )
 
         return TimeSeriesResponse(

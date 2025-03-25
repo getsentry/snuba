@@ -52,6 +52,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -71,6 +72,7 @@ def gen_message(
     dt: datetime,
     measurements: dict[str, dict[str, float]] | None = None,
     tags: dict[str, str] | None = None,
+    randomize_span_id: bool = False,
 ) -> Mapping[str, Any]:
     measurements = measurements or {}
     tags = tags or {}
@@ -124,7 +126,7 @@ def gen_message(
             "transaction.op": "http.server",
             "user": "ip:127.0.0.1",
         },
-        "span_id": "123456781234567D",
+        "span_id": uuid.uuid4().hex if randomize_span_id else "123456781234567d",
         "tags": {
             "relay_endpoint_version": "3",
             "relay_id": "88888888-4444-4444-8444-cccccccccccc",
@@ -3113,8 +3115,9 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             gen_message(
                 msg_timestamp,
                 tags={"preflighttag": "preflight"},
+                randomize_span_id=True,
             )
-            for _ in range(30)
+            for _ in range(3600)
         ]
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
@@ -3164,12 +3167,89 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             message_to_non_downsampled_tier
         )
         assert (
-            len(preflight_response.column_values)
-            < len(non_downsampled_tier_response.column_values) / 100
+            len(preflight_response.column_values[0].results)
+            < len(non_downsampled_tier_response.column_values[0].results) / 100
         )
         assert (
             preflight_response.meta.downsampled_storage_meta
             == DownsampledStorageMeta(
                 tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_512
+            )
+        )
+
+    @patch.object(Timer, "get_duration_between_marks")
+    def test_best_effort_route_to_tier_64(
+        self, mock_get_duration_between_marks: MagicMock
+    ) -> None:
+        items_storage = get_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = [
+            gen_message(
+                msg_timestamp,
+                tags={"tier64tag": "tier64tag"},
+                randomize_span_id=True,
+            )
+            for _ in range(3600)
+        ]
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        columns = [
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="tier64tag"))
+        ]
+
+        # sends a best effort request and a non-downsampled request to ensure their responses are different
+        best_effort_message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                ),
+            ),
+            columns=columns,
+        )
+        message_to_non_downsampled_tier = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="tier64tag")
+                )
+            ],
+        )
+        # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
+        mock_get_duration_between_marks.return_value = 2777.0
+        best_effort_response = EndpointTraceItemTable().execute(best_effort_message)
+        non_downsampled_tier_response = EndpointTraceItemTable().execute(
+            message_to_non_downsampled_tier
+        )
+
+        # tier 1's results should be 3600, so tier 64's results should be around 3600 / 64 (give or take due to random sampling)
+        assert (
+            len(non_downsampled_tier_response.column_values[0].results) / 90
+            <= len(best_effort_response.column_values[0].results)
+            <= len(non_downsampled_tier_response.column_values[0].results) / 40
+        )
+        assert (
+            best_effort_response.meta.downsampled_storage_meta
+            == DownsampledStorageMeta(
+                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
             )
         )
