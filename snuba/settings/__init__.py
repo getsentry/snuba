@@ -219,7 +219,9 @@ BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
 USE_EAP_ITEMS_TABLE = os.environ.get("USE_EAP_ITEMS_TABLE", True)
-USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS = 1741762800  # 12AM PST March 12, 2025
+
+# Represents 12AM PST March 12, 2025. We can remove this setting once 30 days have passed since this date.
+USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS = 1741762800
 
 # Processor/Writer Options
 
