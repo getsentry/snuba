@@ -1548,7 +1548,7 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             )
         )
 
-    def test_best_effort_end_to_end(self, setup_teardown: Any) -> None:
+    def test_best_effort_end_to_end(self) -> None:
         granularity_secs = 3600
         query_duration = granularity_secs * 1
         store_spans_timeseries(

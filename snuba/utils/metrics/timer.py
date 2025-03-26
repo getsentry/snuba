@@ -1,11 +1,17 @@
 from itertools import groupby
-from typing import Dict, Mapping, MutableSequence, Optional, Tuple
+from typing import Dict, List, Mapping, MutableSequence, Optional, Tuple
 
 from sentry_kafka_schemas.schema_types.snuba_queries_v1 import TimerData
 
 from snuba.utils.clock import Clock, SystemClock
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
+from snuba.utils.serializable_exception import SerializableException
+
+
+class MissingTimerMarksException(SerializableException):
+    def __init__(self, marks: List[str]):
+        super().__init__(f"Please pass in timer marks that exist: missing {marks}")
 
 
 class Timer:
@@ -58,12 +64,14 @@ class Timer:
             if mark == end_mark:
                 end_mark_duration = self.__diff_ms(self.__marks[0][1], timestamp)
 
-        assert (
-            start_mark_duration != -1
-        ), f"Please pass in timer marks that exist: missing {start_mark}"
-        assert (
-            end_mark_duration != -1
-        ), f"Please pass in timer marks that exist: missing {end_mark}"
+        missing_marks = []
+        if start_mark_duration == -1:
+            missing_marks.append(start_mark)
+        if end_mark_duration == -1:
+            missing_marks.append(end_mark)
+
+        if missing_marks:
+            raise MissingTimerMarksException(missing_marks)
 
         return end_mark_duration - start_mark_duration
 
