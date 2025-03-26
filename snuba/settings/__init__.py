@@ -218,7 +218,7 @@ SNAPSHOT_LOAD_PRODUCT = "snuba"
 BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
-USE_EAP_ITEMS_TABLE = os.environ.get("USE_EAP_ITEMS_TABLE", False)
+USE_EAP_ITEMS_TABLE = os.environ.get("USE_EAP_ITEMS_TABLE", True)
 
 # Processor/Writer Options
 
