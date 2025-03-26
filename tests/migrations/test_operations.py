@@ -460,7 +460,7 @@ def test_reset_settings() -> None:
 
 
 @mock.patch("snuba.clusters.cluster.ClickhouseCluster.get_local_nodes", return_value=[])
-@pytest.mark.clickhouse_custom_db
+@pytest.mark.custom_clickhouse_db
 def test_missing_nodes_for_operation(mock_get_local_nodes: Mock) -> None:
     with pytest.raises(OperationMissingNodes):
         TruncateTable(
