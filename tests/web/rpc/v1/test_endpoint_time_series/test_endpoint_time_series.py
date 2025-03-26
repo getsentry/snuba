@@ -1547,3 +1547,42 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
                 tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
             )
         )
+
+    def test_best_effort_end_to_end(self, setup_teardown: Any) -> None:
+        granularity_secs = 3600
+        query_duration = granularity_secs * 1
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            query_duration,
+            metrics=[DummyMetric("endtoend", get_value=lambda x: 1)],
+        )
+
+        aggregations = [
+            AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="endtoend"),
+                label="sum",
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+            ),
+        ]
+
+        best_effort_downsample_message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                ),
+            ),
+            aggregations=aggregations,
+            granularity_secs=granularity_secs,
+        )
+        EndpointTimeSeries().execute(best_effort_downsample_message)
