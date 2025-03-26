@@ -99,20 +99,23 @@ def _run_query_on_most_downsampled_tier(
     timer: Timer,
     metrics_backend: MetricsBackend,
 ) -> QueryResult:
+    start_mark = "sampling_in_storage_start_estimation"
+    end_mark = "sampling_in_storage_finished_estimation"
+
     if is_best_effort_mode:
-        timer.mark("sampling_in_storage_start_estimation")
+        timer.mark(start_mark)
     res = run_query(
         dataset=PluggableDataset(name="eap", all_entities=[]),
         request=request_to_most_downsampled_tier,
         timer=timer,
     )
     if is_best_effort_mode:
-        timer.mark("sampling_in_storage_start_estimation")
+        timer.mark(end_mark)
         metrics_backend.timing(
             "sampling_in_storage_estimation_duration",
             timer.get_duration_between_marks(
-                "sampling_in_storage_start_estimation",
-                "sampling_in_storage_finished_estimation",
+                start_mark,
+                end_mark,
             ),
         )
     return res

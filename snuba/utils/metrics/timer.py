@@ -59,8 +59,11 @@ class Timer:
                 end_mark_duration = self.__diff_ms(self.__marks[0][1], timestamp)
 
         assert (
-            start_mark_duration != -1 and end_mark_duration != -1
-        ), "Please pass in mark names that exist"
+            start_mark_duration != -1
+        ), f"Please pass in timer marks that exist: missing {start_mark}"
+        assert (
+            end_mark_duration != -1
+        ), f"Please pass in timer marks that exist: missing {end_mark}"
 
         return end_mark_duration - start_mark_duration
 
