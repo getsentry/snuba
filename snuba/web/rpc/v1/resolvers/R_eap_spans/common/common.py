@@ -126,9 +126,11 @@ def use_eap_items_table(request_meta: RequestMeta) -> bool:
         or request_meta.organization_id in eap_items_enabled_orgs
     )
 
-    use_eap_items_table_start_timestamp_seconds = state.get_int_config(
-        "use_eap_items_table_start_timestamp_seconds",
-        settings.USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS,
+    use_eap_items_table_start_timestamp_seconds = int(
+        state.get_int_config(
+            "use_eap_items_table_start_timestamp_seconds",
+            settings.USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS,
+        )
     )
 
     if (

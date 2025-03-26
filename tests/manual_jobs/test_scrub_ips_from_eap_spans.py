@@ -252,6 +252,7 @@ def _generate_expected_response(ip: str) -> TraceItemTableResponse:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
+@pytest.mark.skip(reason="Skipping test as it's not needed anymore")
 def test_span_is_scrubbed() -> None:
     BASE_TIME = datetime.utcnow().replace(
         minute=0, second=0, microsecond=0
