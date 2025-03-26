@@ -3084,6 +3084,46 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    def test_virtual_column_with_missing_attribute(self) -> None:
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"attr1": "1"}, 10)
+        write_eap_span(span_ts, {"attr2": "2"}, 5)
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="attr1_virtual"
+                    )
+                ),
+            ],
+            virtual_column_contexts=[
+                VirtualColumnContext(
+                    from_column_name="attr1",
+                    to_column_name="attr1_virtual",
+                    value_map={
+                        "1": "a",
+                        "2": "b",
+                    },
+                    default_value="default",
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert sorted(response.column_values[0].results, key=lambda x: x.val_str) == [
+            AttributeValue(val_str="a") for _ in range(10)
+        ] + [AttributeValue(val_str="default") for _ in range(5)]
+
 
 class TestUtils:
     def test_apply_labels_to_columns_backward_compat(self) -> None:
