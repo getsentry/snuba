@@ -1558,15 +1558,6 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             metrics=[DummyMetric("endtoend", get_value=lambda x: 1)],
         )
 
-        aggregations = [
-            AttributeAggregation(
-                aggregate=Function.FUNCTION_SUM,
-                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="endtoend"),
-                label="sum",
-                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-            ),
-        ]
-
         best_effort_downsample_message = TimeSeriesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -1582,7 +1573,18 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
                     mode=DownsampledStorageConfig.MODE_BEST_EFFORT
                 ),
             ),
-            aggregations=aggregations,
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="endtoend"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
             granularity_secs=granularity_secs,
         )
-        EndpointTimeSeries().execute(best_effort_downsample_message)
+        response = EndpointTimeSeries().execute(best_effort_downsample_message)
+        assert (
+            response.meta.downsampled_storage_meta.tier
+            != DownsampledStorageMeta.SELECTED_TIER_UNSPECIFIED
+        )

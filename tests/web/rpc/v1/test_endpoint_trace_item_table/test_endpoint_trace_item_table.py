@@ -3205,7 +3205,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         snuba_set_config("use_eap_items_table", True)
         snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
 
-    def test_preflight(self, setup_teardown: Any) -> None:
+    def test_preflight(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
@@ -3276,7 +3276,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
 
     @patch.object(Timer, "get_duration_between_marks")
     def test_best_effort_route_to_tier_64(
-        self, mock_get_duration_between_marks: MagicMock, setup_teardown: Any
+        self, mock_get_duration_between_marks: MagicMock
     ) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
@@ -3381,4 +3381,8 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="endtoend"))
             ],
         )
-        EndpointTraceItemTable().execute(best_effort_message)
+        response = EndpointTraceItemTable().execute(best_effort_message)
+        assert (
+            response.meta.downsampled_storage_meta.tier
+            != DownsampledStorageMeta.SELECTED_TIER_UNSPECIFIED
+        )
