@@ -3423,3 +3423,46 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             response.meta.downsampled_storage_meta.tier
             != DownsampledStorageMeta.SELECTED_TIER_UNSPECIFIED
         )
+
+    def test_downsampling_uses_hexintcolumnprocessor(self) -> None:
+        items_storage = get_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = [
+            gen_message(
+                msg_timestamp,
+                tags={"endtoend": "endtoend"},
+                randomize_span_id=True,
+            )
+            for _ in range(3600)
+        ]
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        best_effort_message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                ),
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.span_id"
+                    ),
+                    label="id",
+                ),
+            ],
+        )
+
+        # ensures we don't get DB::Exception: Illegal type UInt128 of argument of function right
+        EndpointTraceItemTable().execute(best_effort_message)
