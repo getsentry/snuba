@@ -3205,7 +3205,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         snuba_set_config("use_eap_items_table", True)
         snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
 
-    def test_preflight(self, setup_teardown: Any) -> None:
+    def test_preflight(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
@@ -3325,11 +3325,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
-            columns=[
-                Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="tier64tag")
-                )
-            ],
+            columns=columns,
         )
         # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
         mock_get_duration_between_marks.return_value = 2777.0
@@ -3349,4 +3345,44 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             == DownsampledStorageMeta(
                 tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
             )
+        )
+
+    def test_best_effort_end_to_end(self) -> None:
+        items_storage = get_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = [
+            gen_message(
+                msg_timestamp,
+                tags={"endtoend": "endtoend"},
+                randomize_span_id=True,
+            )
+            for _ in range(3600)
+        ]
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        best_effort_message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                ),
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="endtoend"))
+            ],
+        )
+        response = EndpointTraceItemTable().execute(best_effort_message)
+        assert (
+            response.meta.downsampled_storage_meta.tier
+            != DownsampledStorageMeta.SELECTED_TIER_UNSPECIFIED
         )
