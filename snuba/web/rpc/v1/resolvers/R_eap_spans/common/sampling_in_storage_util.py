@@ -128,7 +128,11 @@ def run_query_to_correct_tier(
     build_query: Callable[[T], Query],
     metrics_backend: MetricsBackend,
 ) -> QueryResult:
-    if not in_msg.meta.HasField("downsampled_storage_config"):
+    if (
+        not in_msg.meta.HasField("downsampled_storage_config")
+        or in_msg.meta.downsampled_storage_config.mode
+        == DownsampledStorageConfig.MODE_UNSPECIFIED
+    ):
         return run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=build_snuba_request(in_msg, query_settings, build_query),
