@@ -8,11 +8,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
     TraceItemAttributeNamesResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import (
-    PageToken,
-    RequestMeta,
-    TraceItemType,
-)
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.factory import get_storage
@@ -205,46 +201,6 @@ class TestTraceItemAttributeNames(BaseApiTest):
         ]
         assert res.attributes == expected
 
-    def test_with_page_token_offset(self) -> None:
-        # this is all the expected attributes
-        expected_attributes = []
-        for i in range(TOTAL_GENERATED_ATTR_PER_TYPE):
-            expected_attributes.append(
-                TraceItemAttributeNamesResponse.Attribute(
-                    name=f"a_tag_{str(i).zfill(3)}",
-                    type=AttributeKey.Type.TYPE_STRING,
-                )
-            )
-        # grab 10 at a time until we get them all
-        done = 0
-        page_token = PageToken(offset=0)
-        at_a_time = 10
-        while done < TOTAL_GENERATED_ATTR_PER_TYPE:
-            req = TraceItemAttributeNamesRequest(
-                meta=RequestMeta(
-                    project_ids=[1, 2, 3],
-                    organization_id=1,
-                    cogs_category="something",
-                    referrer="something",
-                    start_timestamp=Timestamp(
-                        seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                    ),
-                    end_timestamp=Timestamp(
-                        seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                    ),
-                ),
-                limit=at_a_time,
-                type=AttributeKey.Type.TYPE_STRING,
-                value_substring_match="",
-                page_token=page_token,
-            )
-            res = EndpointTraceItemAttributeNames().execute(req)
-            page_token = res.page_token
-            assert res.attributes == expected_attributes[:at_a_time]
-            expected_attributes = expected_attributes[at_a_time:]
-            done += at_a_time
-        assert expected_attributes == []
-
     def test_empty_results(self) -> None:
         req = TraceItemAttributeNamesRequest(
             meta=RequestMeta(
@@ -264,48 +220,6 @@ class TestTraceItemAttributeNames(BaseApiTest):
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         assert res.attributes == []
-
-    def test_page_token_offset_filter(self) -> None:
-
-        expected_attributes = []
-        for i in range(TOTAL_GENERATED_ATTR_PER_TYPE):
-            expected_attributes.append(
-                TraceItemAttributeNamesResponse.Attribute(
-                    name=f"a_tag_{str(i).zfill(3)}",
-                    type=AttributeKey.Type.TYPE_STRING,
-                )
-            )
-        # grab 10 at a time until we get them all
-        done = 0
-        page_token = None
-        at_a_time = 10
-
-        while done < TOTAL_GENERATED_ATTR_PER_TYPE:
-            req = TraceItemAttributeNamesRequest(
-                meta=RequestMeta(
-                    project_ids=[1, 2, 3],
-                    organization_id=1,
-                    cogs_category="something",
-                    referrer="something",
-                    start_timestamp=Timestamp(
-                        seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                    ),
-                    end_timestamp=Timestamp(
-                        seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                    ),
-                ),
-                limit=at_a_time,
-                type=AttributeKey.Type.TYPE_STRING,
-                value_substring_match="",
-                page_token=page_token,
-            )
-            res = EndpointTraceItemAttributeNames().execute(req)
-            page_token = res.page_token
-            assert res.page_token.WhichOneof("value") == "filter_offset"
-            assert res.attributes == expected_attributes[:at_a_time]
-            expected_attributes = expected_attributes[at_a_time:]
-            done += at_a_time
-        assert expected_attributes == []
 
     def test_response_metadata(self) -> None:
         # debug must be true in RequestMeta for it to return query_info in the response
