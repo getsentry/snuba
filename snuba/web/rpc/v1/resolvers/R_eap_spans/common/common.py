@@ -109,9 +109,6 @@ def use_eap_items_table(request_meta: RequestMeta) -> bool:
     if request_meta.referrer.startswith("force_use_eap_spans_table"):
         return False
 
-    if settings.USE_EAP_ITEMS_TABLE:
-        return True
-
     use_eap_items_orgs = state.get_str_config("use_eap_items_orgs")
     eap_items_enabled_orgs = []
     use_eap_items_for_all_orgs = True
@@ -130,12 +127,17 @@ def use_eap_items_table(request_meta: RequestMeta) -> bool:
     )
 
     use_eap_items_table_start_timestamp_seconds = state.get_int_config(
-        "use_eap_items_table_start_timestamp_seconds"
+        "use_eap_items_table_start_timestamp_seconds",
+        settings.USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS,
+    )
+
+    assert use_eap_items_table_start_timestamp_seconds is not None
+    use_eap_items_table_start_timestamp_seconds = int(
+        use_eap_items_table_start_timestamp_seconds
     )
 
     if (
-        state.get_int_config("use_eap_items_table", 0)
-        and use_eap_items_table_start_timestamp_seconds is not None
+        state.get_int_config("use_eap_items_table", settings.USE_EAP_ITEMS_TABLE)
         and turned_on_for_org
     ):
         return (
