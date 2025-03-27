@@ -109,7 +109,6 @@ def _build_snuba_request(request: TraceItemDetailsRequest) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
-    is_logs = request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG
 
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
@@ -118,14 +117,14 @@ def _build_snuba_request(request: TraceItemDetailsRequest) -> SnubaRequest:
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
-            team="ourlogs" if is_logs else "eap",
-            feature="ourlogs" if is_logs else "eap",
+            team="eap",
+            feature="eap",
             tenant_ids={
                 "organization_id": request.meta.organization_id,
                 "referrer": request.meta.referrer,
             },
             app_id=AppID("eap"),
-            parent_api="ourlog_trace_item_table" if is_logs else "eap_trace_item_table",
+            parent_api="eap_trace_item_table",
         ),
     )
 
