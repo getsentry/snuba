@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal
+from snuba.query.dsl import and_cond, column, literal
 from snuba.query.expressions import FunctionCall
 from snuba.web.rpc.common.common import trace_item_filters_to_expression
 from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
@@ -79,54 +79,50 @@ class TestOurlogsExpressionConverters:
             )
 
     def test_trace_item_filters_to_expression(self) -> None:
-        assert trace_item_filters_to_expression(
-            TraceItemFilter(
-                and_filter=AndFilter(
-                    filters=[
-                        TraceItemFilter(
-                            exists_filter=ExistsFilter(
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_STRING, name="hello"
-                                )
+        filter = TraceItemFilter(
+            and_filter=AndFilter(
+                filters=[
+                    TraceItemFilter(
+                        exists_filter=ExistsFilter(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_STRING, name="hello"
                             )
-                        ),
-                        TraceItemFilter(
-                            exists_filter=ExistsFilter(
-                                key=AttributeKey(type=AttributeKey.TYPE_INT, name="two")
-                            )
-                        ),
-                        TraceItemFilter(
-                            comparison_filter=ComparisonFilter(
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_INT, name="world"
-                                ),
-                                op=ComparisonFilter.OP_IN,
-                                value=AttributeValue(
-                                    val_int_array=IntArray(values=[1, 2, 3])
-                                ),
-                            )
-                        ),
-                    ]
-                )
-            ),
-            attribute_key_to_expression,
-        ) == FunctionCall(
-            None,
-            "and",
-            (
-                f.mapContains(column("attributes_string"), literal("hello")),
-                f.mapContains(column("attributes_int"), literal("two")),
-                FunctionCall(
-                    None,
-                    "in",
-                    (
-                        f.arrayElement(
-                            column("attributes_int"),
-                            literal("world"),
-                            alias="world_TYPE_INT",
-                        ),
-                        f.array(literal(1), literal(2), literal(3)),
+                        )
                     ),
+                    TraceItemFilter(
+                        exists_filter=ExistsFilter(
+                            key=AttributeKey(type=AttributeKey.TYPE_INT, name="two")
+                        )
+                    ),
+                    TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(type=AttributeKey.TYPE_INT, name="world"),
+                            op=ComparisonFilter.OP_IN,
+                            value=AttributeValue(
+                                val_int_array=IntArray(values=[1, 2, 3])
+                            ),
+                        )
+                    ),
+                ]
+            )
+        )
+        expected_expr = and_cond(
+            f.mapContains(column("attributes_string"), literal("hello")),
+            f.mapContains(column("attributes_int"), literal("two")),
+            f.has(
+                f.array(literal(1), literal(2), literal(3)),
+                f.arrayElement(
+                    column("attributes_int"),
+                    literal("world"),
+                    alias="world_TYPE_INT",
                 ),
             ),
+        )
+
+        assert (
+            trace_item_filters_to_expression(
+                filter,
+                attribute_key_to_expression,
+            )
+            == expected_expr
         )
