@@ -14,10 +14,6 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeValuesRequest,
     TraceItemAttributeValuesResponse,
 )
-from sentry_protos.snuba.v1.endpoint_trace_item_details_pb2 import (
-    TraceItemDetailsRequest,
-    TraceItemDetailsResponse,
-)
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     TraceItemStatsRequest,
     TraceItemStatsResponse,
@@ -37,14 +33,6 @@ class ResolverTraceItemTable(
     @classmethod
     def endpoint_name(cls) -> str:
         return "TraceItemTable"
-
-
-class ResolverTraceItemDetails(
-    TraceItemDataResolver[TraceItemDetailsRequest, TraceItemDetailsResponse]
-):
-    @classmethod
-    def endpoint_name(cls) -> str:
-        return "TraceItemDetails"
 
 
 class ResolverTimeSeries(TraceItemDataResolver[TimeSeriesRequest, TimeSeriesResponse]):
