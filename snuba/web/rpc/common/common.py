@@ -236,7 +236,7 @@ def trace_item_filters_to_expression(
             )
             # we redefine the way not equals works for nulls to be more intuitive
             expr_with_null = or_cond(
-                expr, and_cond(f.isNull(k_expression), not_cond(f.isNull(v_expression)))
+                expr, f.xor(f.isNull(k_expression), f.isNull(v_expression))
             )
             return expr_with_null
         if op == ComparisonFilter.OP_LIKE:
