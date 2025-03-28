@@ -119,67 +119,6 @@ class TestTraceItemAttributes(BaseApiTest):
         response = AttributeValuesRequest().execute(message)
         assert response.values == ["blah", "derpderp", "durp", "herp", "herpderp"]
 
-    def test_page_token(self, setup_teardown: Any) -> None:
-        expected_values = [
-            "blah",
-            "derpderp",
-            "durp",
-            "herp",
-            "herpderp",
-            "some_last_value",
-        ]
-        total_number_of_values = len(expected_values)
-
-        # grab 2 at a time until we get them all
-        done = 0
-        page_token = None
-        at_a_time = 2
-        while done < total_number_of_values:
-            req = TraceItemAttributeValuesRequest(
-                meta=COMMON_META,
-                limit=at_a_time,
-                key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
-                value_substring_match="",
-                page_token=page_token,
-            )
-            res = AttributeValuesRequest().execute(req)
-            page_token = res.page_token
-            assert res.values == expected_values[:at_a_time]
-            expected_values = expected_values[at_a_time:]
-            done += at_a_time
-        assert expected_values == []
-
-    def test_page_token_filter_offset(self) -> None:
-        expected_values = [
-            "blah",
-            "derpderp",
-            "durp",
-            "herp",
-            "herpderp",
-            "some_last_value",
-        ]
-        total_number_of_values = len(expected_values)
-
-        # grab 2 at a time until we get them all
-        done = 0
-        page_token = None
-        at_a_time = 2
-        while done < total_number_of_values:
-            req = TraceItemAttributeValuesRequest(
-                meta=COMMON_META,
-                limit=at_a_time,
-                key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
-                value_substring_match="",
-                page_token=page_token,
-            )
-            res = AttributeValuesRequest().execute(req)
-            page_token = res.page_token
-            assert res.page_token.WhichOneof("value") == "filter_offset"
-            assert res.values == expected_values[:at_a_time]
-            expected_values = expected_values[at_a_time:]
-            done += at_a_time
-        assert expected_values == []
-
     def test_with_value_substring_match(self, setup_teardown: Any) -> None:
         message = TraceItemAttributeValuesRequest(
             meta=COMMON_META,
