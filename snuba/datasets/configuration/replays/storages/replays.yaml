@@ -182,7 +182,7 @@ query_processors:
   - processor: ClickhouseSettingsOverride
     args:
       settings:
-        max_rows_to_group_by: 1000000
+        max_rows_to_group_by: 1500000
         group_by_overflow_mode: any
   - processor: MappingOptimizer
     args:
