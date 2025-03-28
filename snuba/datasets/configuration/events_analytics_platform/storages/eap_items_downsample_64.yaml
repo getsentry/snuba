@@ -221,7 +221,7 @@ query_processors:
       columns: [trace_id]
   - processor: HexIntColumnProcessor
     args:
-      columns: [ item_id ]
+      columns: [item_id]
       size: 32
   - processor: PrewhereProcessor
     args:
