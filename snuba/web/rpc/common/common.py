@@ -217,18 +217,28 @@ def trace_item_filters_to_expression(
 
         if op == ComparisonFilter.OP_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-            return (
+            expr = (
                 f.equals(f.lower(k_expression), f.lower(v_expression))
                 if item_filter.comparison_filter.ignore_case
                 else f.equals(k_expression, v_expression)
             )
+            # we redefine the way equals works for nulls to be more intuitive
+            expr_with_null = or_cond(
+                expr, and_cond(f.isNull(k_expression), f.isNull(v_expression))
+            )
+            return expr_with_null
         if op == ComparisonFilter.OP_NOT_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-            return (
+            expr = (
                 f.notEquals(f.lower(k_expression), f.lower(v_expression))
                 if item_filter.comparison_filter.ignore_case
                 else f.notEquals(k_expression, v_expression)
             )
+            # we redefine the way not equals works for nulls to be more intuitive
+            expr_with_null = or_cond(
+                expr, and_cond(f.isNull(k_expression), not_cond(f.isNull(v_expression)))
+            )
+            return expr_with_null
         if op == ComparisonFilter.OP_LIKE:
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
@@ -240,7 +250,10 @@ def trace_item_filters_to_expression(
                 raise BadSnubaRPCRequestException(
                     "the NOT LIKE comparison is only supported on string keys"
                 )
-            return f.notLike(k_expression, v_expression)
+            expr = f.notLike(k_expression, v_expression)
+            # we redefine the way not like works for nulls to be more intuitive
+            expr_with_null = or_cond(expr, f.isNull(k_expression))
+            return expr_with_null
         if op == ComparisonFilter.OP_LESS_THAN:
             return f.less(k_expression, v_expression)
         if op == ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
@@ -257,7 +270,8 @@ def trace_item_filters_to_expression(
                     None,
                     list(map(lambda x: literal(x.lower()), v.val_str_array.values)),
                 )
-            return in_cond(k_expression, v_expression)
+            # note: v_expression must be an array
+            return f.has(v_expression, k_expression)
         if op == ComparisonFilter.OP_NOT_IN:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             if item_filter.comparison_filter.ignore_case:
@@ -266,7 +280,8 @@ def trace_item_filters_to_expression(
                     None,
                     list(map(lambda x: literal(x.lower()), v.val_str_array.values)),
                 )
-            return not_cond(in_cond(k_expression, v_expression))
+            # note: v_expression must be an array
+            return not_cond(f.has(v_expression, k_expression))
 
         raise BadSnubaRPCRequestException(
             f"Invalid string comparison, unknown op: {item_filter.comparison_filter}"
