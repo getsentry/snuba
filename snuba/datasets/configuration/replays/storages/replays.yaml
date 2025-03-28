@@ -182,8 +182,8 @@ query_processors:
   - processor: ClickhouseSettingsOverride
     args:
       settings:
-        max_rows_to_group_by: 1500000
-        group_by_overflow_mode: any
+        max_rows_to_group_by: 1000000
+        group_by_overflow_mode: break
   - processor: MappingOptimizer
     args:
       column_name: tags
