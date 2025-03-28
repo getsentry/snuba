@@ -39,8 +39,11 @@ from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     RPCRequestException,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+    attribute_key_to_expression as spans_attribute_key_to_expression,
+)
 from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
-    attribute_key_to_expression,
+    attribute_key_to_expression as log_attribute_key_to_expression,
 )
 
 _BUCKET_COUNT = 40
@@ -52,6 +55,10 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
         sample=None,
     )
+    if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
+        attribute_key_to_expression = log_attribute_key_to_expression
+    else:
+        attribute_key_to_expression = spans_attribute_key_to_expression
 
     res = Query(
         from_clause=entity,

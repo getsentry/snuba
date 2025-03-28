@@ -221,8 +221,10 @@ class TestTraceItemDetails(BaseApiTest):
         }
 
     def test_endpoint_on_spans(self, setup_spans_in_db: Any) -> None:
-        ts = Timestamp()
-        ts.GetCurrentTime()
+        end = Timestamp()
+        start = Timestamp()
+        start.FromDatetime(BASE_TIME)
+        end.GetCurrentTime()
 
         spans = (
             EndpointTraceItemTable()
@@ -233,8 +235,8 @@ class TestTraceItemDetails(BaseApiTest):
                         organization_id=1,
                         cogs_category="something",
                         referrer="something",
-                        start_timestamp=Timestamp(seconds=0),
-                        end_timestamp=ts,
+                        start_timestamp=start,
+                        end_timestamp=end,
                         request_id=_REQUEST_ID,
                         trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                     ),
@@ -258,8 +260,8 @@ class TestTraceItemDetails(BaseApiTest):
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
-                    start_timestamp=Timestamp(seconds=0),
-                    end_timestamp=ts,
+                    start_timestamp=start,
+                    end_timestamp=end,
                     request_id=_REQUEST_ID,
                     trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
