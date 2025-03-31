@@ -31,11 +31,6 @@ DOWNSAMPLING_TIER_MULTIPLIERS = {
 }
 
 
-def _get_referrer(in_msg: T) -> str:
-    # if the referrer isn't set, this would return ""
-    return in_msg.meta.referrer
-
-
 def _get_time_budget() -> float:
     sentry_timeout_ms = cast(
         int, state.get_int_config("sampling_in_storage_sentry_timeout", default=30000)
@@ -161,7 +156,7 @@ def run_query_to_correct_tier(
 
     query_settings.set_sampling_tier(_get_most_downsampled_tier())
 
-    referrer = _get_referrer(in_msg)
+    referrer = in_msg.meta.referrer
 
     request_to_most_downsampled_tier = build_snuba_request(
         in_msg, query_settings, build_query

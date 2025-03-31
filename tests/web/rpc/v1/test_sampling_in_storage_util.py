@@ -3,13 +3,6 @@ from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
-from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
-    Column,
-    TraceItemTableRequest,
-)
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.attribution import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -21,7 +14,6 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
     DOWNSAMPLING_TIER_MULTIPLIERS,
-    _get_referrer,
     _get_target_tier,
     _run_query_on_most_downsampled_tier,
 )
@@ -31,44 +23,6 @@ DOESNT_MATTER_INT = 2
 SAMPLING_IN_STORAGE_UTIL_PREFIX = (
     "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util."
 )
-
-
-def test_get_referrer() -> None:
-    expected_extracted_referrer = "important_referrer"
-    in_msg_with_referrer = TraceItemTableRequest(
-        meta=RequestMeta(
-            project_ids=[1],
-            organization_id=1,
-            cogs_category=DOESNT_MATTER_STR,
-            referrer=expected_extracted_referrer,
-            start_timestamp=Timestamp(),
-            end_timestamp=Timestamp(),
-            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-        ),
-        columns=[
-            Column(
-                key=AttributeKey(type=AttributeKey.TYPE_STRING, name=DOESNT_MATTER_STR)
-            )
-        ],
-    )
-    assert _get_referrer(in_msg_with_referrer) == expected_extracted_referrer
-
-    in_msg_without_referrer = TraceItemTableRequest(
-        meta=RequestMeta(
-            project_ids=[1],
-            organization_id=1,
-            cogs_category=DOESNT_MATTER_STR,
-            start_timestamp=Timestamp(),
-            end_timestamp=Timestamp(),
-            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-        ),
-        columns=[
-            Column(
-                key=AttributeKey(type=AttributeKey.TYPE_STRING, name=DOESNT_MATTER_STR)
-            )
-        ],
-    )
-    assert _get_referrer(in_msg_without_referrer) == ""
 
 
 @pytest.mark.parametrize(
@@ -81,7 +35,7 @@ def test_get_referrer() -> None:
     ],
 )
 def test_get_target_tier(
-    most_downsampled_query_duration_ms, time_budget, expected_tier
+    most_downsampled_query_duration_ms: int, time_budget: int, expected_tier: Tier
 ) -> None:
     timer = Timer(DOESNT_MATTER_STR)
     metrics_mock = MagicMock(spec=MetricsBackend)
