@@ -24,15 +24,15 @@ def test_sampling_in_storage_estimation_duration_metric_is_sent() -> None:
     ):
 
         _run_query_on_most_downsampled_tier(
-            is_best_effort_mode=True,
             request_to_most_downsampled_tier=MagicMock(spec=Request),
             timer=timer,
             metrics_backend=metrics_mock,
+            referrer="doesntmatter",
         )
 
         duration = timer.get_duration_between_marks(
-            "sampling_in_storage_start_estimation",
-            "sampling_in_storage_finished_estimation",
+            "right_before_execute",
+            "execute",
         )
         metrics_mock.timing.assert_called_once_with(
             "sampling_in_storage_estimation_duration", duration
