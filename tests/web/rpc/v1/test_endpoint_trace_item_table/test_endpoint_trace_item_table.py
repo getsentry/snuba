@@ -53,6 +53,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.state import set_config
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
@@ -3466,3 +3467,56 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
 
         # ensures we don't get DB::Exception: Illegal type UInt128 of argument of function right
         EndpointTraceItemTable().execute(best_effort_message)
+
+    @pytest.mark.redis_db
+    def test_non_existant_attribute_filter(self) -> None:
+        """
+        This test filters by env != "prod" and ensures that both "env"="dev" and "env"=None (attribute doesnt exist on the span) are returned.
+        """
+        set_config("use_new_null_comparison", 1)
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"env": "prod", "num_cats": 1})
+        write_eap_span(span_ts, {"env": "dev", "num_cats": 2})
+        write_eap_span(span_ts, {"num_cats": 3})
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="env"),
+                    op=ComparisonFilter.OP_NOT_EQUALS,
+                    value=AttributeValue(val_str="prod"),
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="env")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="num_cats")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="env",
+                results=[
+                    AttributeValue(is_null=True),
+                    AttributeValue(val_str="dev"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="num_cats",
+                results=[
+                    AttributeValue(val_int=3),
+                    AttributeValue(val_int=2),
+                ],
+            ),
+        ]

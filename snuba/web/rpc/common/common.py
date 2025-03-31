@@ -21,7 +21,7 @@ from snuba.query.dsl import (
     or_cond,
 )
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
-from snuba.state import get_int_config, set_config
+from snuba.state import get_int_config
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -216,7 +216,6 @@ def trace_item_filters_to_expression(
                         f"translation of AttributeValue type {default} is not implemented"
                     )
 
-        set_config("use_new_null_comparison", 1)
         use_new_null_comparison = (bool)(
             get_int_config("use_new_null_comparison", default=0)
         )
