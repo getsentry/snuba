@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, literal
+from snuba.query.dsl import and_cond, column, in_cond, literal, or_cond
 from snuba.query.expressions import FunctionCall
 from snuba.web.rpc.common.common import trace_item_filters_to_expression
 from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
@@ -109,12 +109,24 @@ class TestOurlogsExpressionConverters:
         expected_expr = and_cond(
             f.mapContains(column("attributes_string"), literal("hello")),
             f.mapContains(column("attributes_int"), literal("two")),
-            f.has(
-                f.array(literal(1), literal(2), literal(3)),
-                f.arrayElement(
-                    column("attributes_int"),
-                    literal("world"),
-                    alias="world_TYPE_INT",
+            or_cond(
+                in_cond(
+                    f.arrayElement(
+                        column("attributes_int"),
+                        literal("world"),
+                        alias="world_TYPE_INT",
+                    ),
+                    f.array(literal(1), literal(2), literal(3)),
+                ),
+                and_cond(
+                    f.isNull(
+                        f.arrayElement(
+                            column("attributes_int"),
+                            literal("world"),
+                            alias="world_TYPE_INT",
+                        )
+                    ),
+                    f.has(f.array(literal(1), literal(2), literal(3)), literal(None)),
                 ),
             ),
         )
