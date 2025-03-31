@@ -1,5 +1,5 @@
 import uuid
-from typing import Callable, TypeVar, cast
+from typing import Any, Callable, Dict, TypeVar, cast
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
@@ -50,19 +50,23 @@ def _get_query_duration(timer: Timer) -> float:
     return timer.get_duration_between_marks("right_before_execute", "execute")
 
 
+def _get_most_downsampled_tier() -> Tier:
+    return sorted(Tier, reverse=True)[-1]
+
+
 def _get_target_tier(
     timer: Timer, metrics_backend: MetricsBackend, referrer: str
 ) -> Tier:
     most_downsampled_query_duration_ms = _get_query_duration(timer)
 
-    target_tier = Tier.TIER_512
+    target_tier = _get_most_downsampled_tier()
     for tier in sorted(Tier, reverse=True)[:-1]:
         estimated_query_duration_to_this_tier = (
             most_downsampled_query_duration_ms
             * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier))
         )
         metrics_backend.timing(
-            f"sampling_in_storage_estimated_query_duration_to_{target_tier}",
+            f"sampling_in_storage_estimated_query_duration_to_TIER_{tier}",
             estimated_query_duration_to_this_tier,
             tags={"referrer": referrer},
         )
@@ -114,18 +118,27 @@ def _run_query_on_most_downsampled_tier(
     metrics_backend: MetricsBackend,
     referrer: str,
 ) -> QueryResult:
-
     res = run_query(
         dataset=PluggableDataset(name="eap", all_entities=[]),
         request=request_to_most_downsampled_tier,
         timer=timer,
     )
     metrics_backend.timing(
-        "sampling_in_storage_most_downsampled_tier_query_duration",
+        "sampling_in_storage_query_duration_from_most_downsampled_tier",
         _get_query_duration(timer),
         tags={"referrer": referrer},
     )
     return res
+
+
+def _record_actual_query_duration(
+    metrics_backend: MetricsBackend, timer: Timer, tags: Dict[str, Any]
+) -> None:
+    metrics_backend.timing(
+        "sampling_in_storage_actual_query_duration",
+        _get_query_duration(timer),
+        tags=tags,
+    )
 
 
 def run_query_to_correct_tier(
@@ -146,7 +159,7 @@ def run_query_to_correct_tier(
             timer=timer,
         )
 
-    query_settings.set_sampling_tier(Tier.TIER_512)
+    query_settings.set_sampling_tier(_get_most_downsampled_tier())
 
     referrer = _get_referrer(in_msg)
 
@@ -165,7 +178,10 @@ def run_query_to_correct_tier(
         query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
         target_tier = _get_target_tier(timer, metrics_backend, referrer)
 
-        if target_tier == Tier.TIER_512:
+        if target_tier == _get_most_downsampled_tier():
+            _record_actual_query_duration(
+                metrics_backend, timer, tags={"referrer": referrer, "tier": target_tier}
+            )
             return res
 
         query_settings.set_sampling_tier(target_tier)
@@ -179,10 +195,8 @@ def run_query_to_correct_tier(
             request=request_to_target_tier,
             timer=timer,
         )
-        metrics_backend.timing(
-            "sampling_in_storage_actual_query_duration",
-            _get_query_duration(timer),
-            tags={"referrer": referrer},
+        _record_actual_query_duration(
+            metrics_backend, timer, tags={"referrer": referrer, "tier": target_tier}
         )
 
     return res
