@@ -227,7 +227,8 @@ def trace_item_filters_to_expression(
                 if item_filter.comparison_filter.ignore_case
                 else f.equals(k_expression, v_expression)
             )
-            # we redefine the way equals works for nulls to be more intuitive
+            # we redefine the way equals works for nulls
+            # now null=null is true
             if use_new_null_comparison:
                 expr_with_null = or_cond(
                     expr, and_cond(f.isNull(k_expression), f.isNull(v_expression))
@@ -241,7 +242,8 @@ def trace_item_filters_to_expression(
                 if item_filter.comparison_filter.ignore_case
                 else f.notEquals(k_expression, v_expression)
             )
-            # we redefine the way not equals works for nulls to be more intuitive
+            # we redefine the way not equals works for nulls
+            # now null!=null is true
             if use_new_null_comparison:
                 expr_with_null = or_cond(
                     expr, f.xor(f.isNull(k_expression), f.isNull(v_expression))
@@ -260,7 +262,8 @@ def trace_item_filters_to_expression(
                     "the NOT LIKE comparison is only supported on string keys"
                 )
             expr = f.notLike(k_expression, v_expression)
-            # we redefine the way not like works for nulls to be more intuitive
+            # we redefine the way not like works for nulls
+            # now null not like "%anything%" is true
             if use_new_null_comparison:
                 expr_with_null = or_cond(expr, f.isNull(k_expression))
                 return expr_with_null
@@ -283,6 +286,8 @@ def trace_item_filters_to_expression(
                 )
             expr = in_cond(k_expression, v_expression)
             # note: v_expression must be an array
+            # we redefine the way in works for nulls
+            # now null in ['hi', null] is true
             if use_new_null_comparison:
                 expr_with_null = or_cond(
                     expr,
@@ -302,6 +307,8 @@ def trace_item_filters_to_expression(
                 )
             expr = not_cond(in_cond(k_expression, v_expression))
             # note: v_expression must be an array
+            # we redefine the way not in works for nulls
+            # now null not in ['hi'] is true
             if use_new_null_comparison:
                 expr_with_null = or_cond(
                     expr,

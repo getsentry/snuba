@@ -3502,21 +3502,28 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="env")),
                 Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="num_cats")),
             ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="env")
+                    )
+                )
+            ],
         )
         response = EndpointTraceItemTable().execute(message)
         assert response.column_values == [
             TraceItemColumnValues(
                 attribute_name="env",
                 results=[
-                    AttributeValue(is_null=True),
                     AttributeValue(val_str="dev"),
+                    AttributeValue(is_null=True),
                 ],
             ),
             TraceItemColumnValues(
                 attribute_name="num_cats",
                 results=[
-                    AttributeValue(val_int=3),
                     AttributeValue(val_int=2),
+                    AttributeValue(val_int=3),
                 ],
             ),
         ]
