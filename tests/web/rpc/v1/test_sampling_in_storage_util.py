@@ -46,17 +46,15 @@ def test_get_target_tier(
     ), patch(
         SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_time_budget", return_value=time_budget
     ):
-        assert _get_target_tier(timer, metrics_mock, DOESNT_MATTER_STR) == expected_tier
-
-        for tier in sorted(Tier, reverse=True)[:-1]:
-            expected_estimated_duration = most_downsampled_query_duration_ms * cast(
-                int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier)
-            )
-            metrics_mock.timing.assert_any_call(
-                "sampling_in_storage_estimated_query_duration",
-                expected_estimated_duration,
-                tags={"referrer": DOESNT_MATTER_STR, "tier": str(tier)},
-            )
+        target_tier, estimated_target_tier_query_duration = _get_target_tier(
+            timer, metrics_mock, DOESNT_MATTER_STR
+        )
+        assert target_tier == expected_tier
+        assert (
+            estimated_target_tier_query_duration
+            == most_downsampled_query_duration_ms
+            * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(target_tier))
+        )
 
         metrics_mock.timing.assert_any_call(
             "sampling_in_storage_routed_tier",

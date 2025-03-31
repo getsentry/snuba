@@ -1,5 +1,5 @@
 import uuid
-from typing import Callable, Dict, TypeVar, cast
+from typing import Callable, Dict, Tuple, TypeVar, cast
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
@@ -23,7 +23,7 @@ from snuba.web.query import run_query
 T = TypeVar("T", TimeSeriesRequest, TraceItemTableRequest)
 
 
-DOWNSAMPLING_TIER_MULTIPLIERS = {
+DOWNSAMPLING_TIER_MULTIPLIERS: Dict[Tier, int] = {
     Tier.TIER_512: 1,
     Tier.TIER_64: 8,
     Tier.TIER_8: 64,
@@ -46,37 +46,36 @@ def _get_query_duration(timer: Timer) -> float:
 
 
 def _get_most_downsampled_tier() -> Tier:
-    return sorted(Tier, reverse=True)[-1]
+    return sorted(Tier, reverse=True)[0]
 
 
 def _get_target_tier(
     timer: Timer, metrics_backend: MetricsBackend, referrer: str
-) -> Tier:
+) -> Tuple[Tier, float]:
     most_downsampled_query_duration_ms = _get_query_duration(timer)
 
     target_tier = _get_most_downsampled_tier()
+    estimated_target_tier_query_duration = most_downsampled_query_duration_ms * cast(
+        int, DOWNSAMPLING_TIER_MULTIPLIERS.get(target_tier)
+    )
     for tier in sorted(Tier, reverse=True)[:-1]:
         estimated_query_duration_to_this_tier = (
             most_downsampled_query_duration_ms
             * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier))
-        )
-        metrics_backend.timing(
-            "sampling_in_storage_estimated_query_duration",
-            estimated_query_duration_to_this_tier,
-            tags={"referrer": referrer, "tier": str(tier)},
         )
         if (
             estimated_query_duration_to_this_tier
             <= _get_time_budget() - most_downsampled_query_duration_ms
         ):
             target_tier = tier
+            estimated_target_tier_query_duration = estimated_query_duration_to_this_tier
 
     metrics_backend.timing(
         "sampling_in_storage_routed_tier",
         target_tier,
         tags={"referrer": referrer, "tier": str(target_tier)},
     )
-    return target_tier
+    return target_tier, estimated_target_tier_query_duration
 
 
 def _is_best_effort_mode(in_msg: T) -> bool:
@@ -128,16 +127,6 @@ def _run_query_on_most_downsampled_tier(
     return res
 
 
-def _record_actual_query_duration(
-    metrics_backend: MetricsBackend, timer: Timer, tags: Dict[str, str]
-) -> None:
-    metrics_backend.timing(
-        "sampling_in_storage_actual_query_duration",
-        _get_query_duration(timer),
-        tags=tags,
-    )
-
-
 def run_query_to_correct_tier(
     in_msg: T,
     query_settings: HTTPQuerySettings,
@@ -173,12 +162,14 @@ def run_query_to_correct_tier(
             _get_time_budget() / 1000,
         )
         query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
-        target_tier = _get_target_tier(timer, metrics_backend, referrer)
+        target_tier, estimated_target_tier_query_duration = _get_target_tier(
+            timer, metrics_backend, referrer
+        )
 
         if target_tier == _get_most_downsampled_tier():
-            _record_actual_query_duration(
-                metrics_backend,
-                timer,
+            metrics_backend.timing(
+                "sampling_in_storage_difference_between_estimated_and_true_query_duration",
+                0,
                 tags={"referrer": referrer, "tier": str(target_tier)},
             )
             return res
@@ -194,9 +185,9 @@ def run_query_to_correct_tier(
             request=request_to_target_tier,
             timer=timer,
         )
-        _record_actual_query_duration(
-            metrics_backend,
-            timer,
+        metrics_backend.timing(
+            "sampling_in_storage_difference_between_estimated_and_true_query_duration",
+            estimated_target_tier_query_duration - _get_query_duration(timer),
             tags={"referrer": referrer, "tier": str(target_tier)},
         )
 
