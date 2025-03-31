@@ -1,3 +1,4 @@
+import pytest
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     AttributeValue,
@@ -78,6 +79,7 @@ class TestOurlogsExpressionConverters:
                 (column(col), literal("z")),
             )
 
+    @pytest.mark.redis_db
     def test_trace_item_filters_to_expression(self) -> None:
         filter = TraceItemFilter(
             and_filter=AndFilter(
