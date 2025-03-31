@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Callable, Dict, TypeVar, cast
+from typing import Callable, Dict, TypeVar, cast
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
@@ -61,9 +61,9 @@ def _get_target_tier(
             * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier))
         )
         metrics_backend.timing(
-            f"sampling_in_storage_estimated_query_duration_to_TIER_{tier}",
+            "sampling_in_storage_estimated_query_duration",
             estimated_query_duration_to_this_tier,
-            tags={"referrer": referrer},
+            tags={"referrer": referrer, "tier": str(tier)},
         )
         if (
             estimated_query_duration_to_this_tier
@@ -71,8 +71,10 @@ def _get_target_tier(
         ):
             target_tier = tier
 
-    metrics_backend.gauge(
-        "sampling_in_storage_routed_tier", target_tier, tags={"referrer": referrer}
+    metrics_backend.timing(
+        "sampling_in_storage_routed_tier",
+        target_tier,
+        tags={"referrer": referrer, "tier": str(target_tier)},
     )
     return target_tier
 
@@ -127,7 +129,7 @@ def _run_query_on_most_downsampled_tier(
 
 
 def _record_actual_query_duration(
-    metrics_backend: MetricsBackend, timer: Timer, tags: Dict[str, Any]
+    metrics_backend: MetricsBackend, timer: Timer, tags: Dict[str, str]
 ) -> None:
     metrics_backend.timing(
         "sampling_in_storage_actual_query_duration",
@@ -175,7 +177,9 @@ def run_query_to_correct_tier(
 
         if target_tier == _get_most_downsampled_tier():
             _record_actual_query_duration(
-                metrics_backend, timer, tags={"referrer": referrer, "tier": target_tier}
+                metrics_backend,
+                timer,
+                tags={"referrer": referrer, "tier": str(target_tier)},
             )
             return res
 
@@ -191,7 +195,9 @@ def run_query_to_correct_tier(
             timer=timer,
         )
         _record_actual_query_duration(
-            metrics_backend, timer, tags={"referrer": referrer, "tier": target_tier}
+            metrics_backend,
+            timer,
+            tags={"referrer": referrer, "tier": str(target_tier)},
         )
 
     return res

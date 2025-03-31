@@ -53,15 +53,15 @@ def test_get_target_tier(
                 int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier)
             )
             metrics_mock.timing.assert_any_call(
-                f"sampling_in_storage_estimated_query_duration_to_TIER_{tier}",
+                "sampling_in_storage_estimated_query_duration",
                 expected_estimated_duration,
-                tags={"referrer": DOESNT_MATTER_STR},
+                tags={"referrer": DOESNT_MATTER_STR, "tier": str(tier)},
             )
 
-        metrics_mock.gauge.assert_called_once_with(
+        metrics_mock.timing.assert_any_call(
             "sampling_in_storage_routed_tier",
             expected_tier,
-            tags={"referrer": DOESNT_MATTER_STR},
+            tags={"referrer": DOESNT_MATTER_STR, "tier": str(expected_tier)},
         )
 
 
