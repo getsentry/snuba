@@ -92,13 +92,11 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Update CMake
-        run: |
-          sudo apt-get update
-          sudo apt-get install cmake
       - name: Run linter
         run: |
           make lint-rust format-rust-ci
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: 3.10
 
   typing:
     name: "mypy typing"
