@@ -25,7 +25,15 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
+from snuba.query.dsl import (
+    and_cond,
+    column,
+    in_cond,
+    literal,
+    literals_array,
+    not_cond,
+    or_cond,
+)
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -458,12 +466,16 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             ),
         ]
         if use_eap_items_table(request.meta):
+            generate_expression_from_attribute_key = (
+                attribute_key_to_expression_eap_items
+            )
             entity = Entity(
                 key=EntityKey("eap_items"),
                 schema=get_entity(EntityKey("eap_items")).get_data_model(),
                 sample=None,
             )
         else:
+            generate_expression_from_attribute_key = attribute_key_to_expression
             entity = Entity(
                 key=EntityKey("eap_spans"),
                 schema=get_entity(EntityKey("eap_spans")).get_data_model(),
@@ -475,6 +487,17 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             condition=base_conditions_and(
                 request.meta,
                 trace_item_filters_expression,
+                not_cond(
+                    f.equals(
+                        generate_expression_from_attribute_key(
+                            AttributeKey(
+                                name="sentry.segment_id",
+                                type=AttributeKey.Type.TYPE_STRING,
+                            ),
+                        ),
+                        literal("00"),
+                    ),
+                ),
             ),
             order_by=[
                 OrderBy(
@@ -542,12 +565,16 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             )
 
         if use_eap_items_table(request.meta):
+            generate_expression_from_attribute_key = (
+                attribute_key_to_expression_eap_items
+            )
             entity = Entity(
                 key=EntityKey("eap_items"),
                 schema=get_entity(EntityKey("eap_items")).get_data_model(),
                 sample=None,
             )
         else:
+            generate_expression_from_attribute_key = attribute_key_to_expression
             entity = Entity(
                 key=EntityKey("eap_spans"),
                 schema=get_entity(EntityKey("eap_spans")).get_data_model(),
@@ -571,6 +598,17 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     ),
                     literals_array(
                         None, [literal(trace_id) for trace_id in trace_ids.keys()]
+                    ),
+                ),
+                not_cond(
+                    f.equals(
+                        generate_expression_from_attribute_key(
+                            AttributeKey(
+                                name="sentry.segment_id",
+                                type=AttributeKey.Type.TYPE_STRING,
+                            ),
+                        ),
+                        literal("00"),
                     ),
                 ),
             ),
