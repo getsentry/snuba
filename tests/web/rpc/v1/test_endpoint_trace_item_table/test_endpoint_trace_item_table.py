@@ -3550,6 +3550,10 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             ],
         )
 
+        print("----")
         EndpointTraceItemTable().execute(in_msg)
+        print("----")
         EndpointTraceItemTable().execute(in_msg)
+        print("----")
         EndpointTraceItemTable().execute(in_msg)
+        assert False

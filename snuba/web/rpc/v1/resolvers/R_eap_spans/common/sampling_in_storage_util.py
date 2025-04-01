@@ -53,6 +53,7 @@ def _get_target_tier(
     timer: Timer, metrics_backend: MetricsBackend, referrer: str
 ) -> Tuple[Tier, float]:
     most_downsampled_query_duration_ms = _get_query_duration(timer)
+    print("durationnn", most_downsampled_query_duration_ms)
 
     target_tier = _get_most_downsampled_tier()
     estimated_target_tier_query_duration = most_downsampled_query_duration_ms * cast(
