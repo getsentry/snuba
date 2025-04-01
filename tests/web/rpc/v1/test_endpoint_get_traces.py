@@ -164,7 +164,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
             [
                 gen_message(
                     dt=_BASE_TIME + timedelta(minutes=i),
-                    trace_id=_TRACE_IDS[i % len(_TRACE_IDS)],
+                    trace_id=uuid.uuid4().hex,
                     span_op="lcp",
                     span_name="standalone",
                     is_segment=False,
