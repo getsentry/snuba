@@ -484,6 +484,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             ],
             limitby=LimitBy(limit=1, columns=[column("trace_id")]),
             limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
+            offset=request.page_token.offset,
         )
 
         treeify_or_and_conditions(query)
