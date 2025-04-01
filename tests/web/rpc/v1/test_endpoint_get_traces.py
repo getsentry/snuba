@@ -160,7 +160,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     for storage in {spans_storage, items_storage}:
         write_raw_unprocessed_events(storage, _SPANS)  # type: ignore
         write_raw_unprocessed_events(
-            storage,
+            storage,  # type: ignore
             [
                 gen_message(
                     dt=_BASE_TIME + timedelta(minutes=i),
@@ -173,7 +173,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
                 )
                 for i in range(_SPAN_COUNT)
             ],
-        )  # type: ignore
+        )
 
 
 @pytest.mark.clickhouse_db
