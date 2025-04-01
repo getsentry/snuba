@@ -92,8 +92,6 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Setup cmake
-        uses: jwlawson/actions-setup-cmake@v2
       - name: Run linter
         run: |
           make lint-rust format-rust-ci
