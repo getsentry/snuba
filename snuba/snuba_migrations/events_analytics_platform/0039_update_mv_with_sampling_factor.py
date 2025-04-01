@@ -135,7 +135,18 @@ def get_mv_expr(sampling_weight: int) -> str:
     return f"SELECT {column_names_str}, sampling_weight * {sampling_weight} AS sampling_weight FROM eap_items_1_local WHERE (cityHash64(item_id + {sampling_weight})  % {sampling_weight}) = 0"
 
 
-storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
+def get_mv_expr_sampling_factor(sampling_weight: int) -> str:
+    """
+    same as above but we're also adding the sampling factor to the mv
+    """
+    column_names_str = ", ".join(
+        [
+            f"{c.name} AS {c.name}"
+            for c in columns
+            if c.name != "sampling_weight" and c.name != "sampling_factor"
+        ]
+    )
+    return f"SELECT {column_names_str}, sampling_weight * {sampling_weight} AS sampling_weight, sampling_factor / {sampling_weight} AS sampling_factor FROM eap_items_1_local WHERE (cityHash64(item_id + {sampling_weight})  % {sampling_weight}) = 0"
 
 
 class Migration(migration.ClickhouseNodeMigration):
@@ -151,7 +162,7 @@ class Migration(migration.ClickhouseNodeMigration):
         for sampling_weight in self.sampling_weights:
             local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
             mv_name = f"eap_items_1_downsample_{sampling_weight}_mv_2"
-            mv_query = get_mv_expr(sampling_weight)
+            mv_query = get_mv_expr_sampling_factor(sampling_weight)
             ops.append(
                 operations.CreateMaterializedView(
                     storage_set=self.storage_set_key,
