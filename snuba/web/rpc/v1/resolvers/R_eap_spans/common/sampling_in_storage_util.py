@@ -78,7 +78,7 @@ def _get_target_tier(
     metrics_backend.timing(
         "sampling_in_storage_routed_tier",
         target_tier,
-        tags={"referrer": referrer, "tier": str(target_tier)},
+        tags={"referrer": referrer},
     )
     return target_tier, estimated_target_tier_query_duration
 
