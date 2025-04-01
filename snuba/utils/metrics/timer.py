@@ -55,6 +55,13 @@ class Timer:
 
         return duration_group
 
+    def set_duration_between_marks(
+        self, start_mark: str, end_mark: str, duration: float
+    ) -> None:
+        self.__data = None
+        self.__marks.append((start_mark, self.__clock.time()))
+        self.__marks.append((end_mark, self.__clock.time() + duration))
+
     def get_duration_between_marks(self, start_mark: str, end_mark: str) -> float:
         start_mark_duration = -1
         end_mark_duration = -1

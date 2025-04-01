@@ -3527,3 +3527,29 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 ],
             ),
         ]
+
+    def test_will(self) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        in_msg = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                ),
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="endtoend"))
+            ],
+        )
+
+        EndpointTraceItemTable().execute(in_msg)
+        EndpointTraceItemTable().execute(in_msg)
+        EndpointTraceItemTable().execute(in_msg)
