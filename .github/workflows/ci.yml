@@ -98,7 +98,7 @@ jobs:
         run: |
           make lint-rust format-rust-ci
         env:
-          CMAKE_POLICY_VERSION_MINIMUM: 3.10
+          CMAKE_POLICY_VERSION_MINIMUM: "3.10"
 
   typing:
     name: "mypy typing"
