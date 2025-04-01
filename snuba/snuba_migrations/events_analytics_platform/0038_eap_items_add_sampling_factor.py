@@ -86,3 +86,5 @@ class Migration(migration.ClickhouseNodeMigration):
                     target=OperationTarget.LOCAL,
                 )
             )
+
+        return ops
