@@ -3467,6 +3467,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
 
         # ensures we don't get DB::Exception: Illegal type UInt128 of argument of function right
         EndpointTraceItemTable().execute(best_effort_message)
+        assert False
 
     @pytest.mark.redis_db
     def test_non_existant_attribute_filter(self) -> None:
