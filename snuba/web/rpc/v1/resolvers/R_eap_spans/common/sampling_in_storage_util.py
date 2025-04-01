@@ -42,7 +42,7 @@ def _get_time_budget() -> float:
 
 
 def _get_query_duration_ms(res: QueryResult) -> float:
-    return cast(float, res.result.get("profile", {}).get("elapsed", 0) * 1000)
+    return cast(float, res.result.get("profile", {}).get("elapsed", 0) * 1000)  # type: ignore
 
 
 def _get_most_downsampled_tier() -> Tier:

@@ -12,6 +12,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryResult
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
     DOWNSAMPLING_TIER_MULTIPLIERS,
     _get_target_tier,
@@ -37,17 +38,17 @@ SAMPLING_IN_STORAGE_UTIL_PREFIX = (
 def test_get_target_tier(
     most_downsampled_query_duration_ms: int, time_budget: int, expected_tier: Tier
 ) -> None:
-    timer = Timer(DOESNT_MATTER_STR)
+    res = MagicMock(QueryResult)
     metrics_mock = MagicMock(spec=MetricsBackend)
 
     with patch(
-        SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_query_duration",
+        SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_query_duration_ms",
         return_value=most_downsampled_query_duration_ms,
     ), patch(
         SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_time_budget", return_value=time_budget
     ):
         target_tier, estimated_target_tier_query_duration = _get_target_tier(
-            timer, metrics_mock, DOESNT_MATTER_STR
+            res, metrics_mock, DOESNT_MATTER_STR
         )
         assert target_tier == expected_tier
         assert (
@@ -83,7 +84,7 @@ def test_sampling_in_storage_query_duration_from_most_downsampled_tier_metric_is
         ),
     )
     with patch(SAMPLING_IN_STORAGE_UTIL_PREFIX + "run_query",), patch(
-        SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_query_duration",
+        SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_query_duration_ms",
         return_value=DOESNT_MATTER_INT,
     ):
         _run_query_on_most_downsampled_tier(
