@@ -74,6 +74,7 @@ class ExecutionStage(
     def _process_data(
         self, pipe_input: QueryPipelineData[ClickhouseQuery | CompositeQuery[Table]]
     ) -> QueryResult:
+        print("_process_dataaaaa")
         cluster = self.get_cluster(pipe_input.data, pipe_input.query_settings)
         if pipe_input.query_settings.get_dry_run():
             return _dry_run_query_runner(
@@ -127,6 +128,7 @@ def _run_and_apply_column_names(
     reader: Reader,
     cluster_name: str,
 ) -> QueryResult:
+    print("_run_and_apply_column_namessss")
     """
     Executes the query and, after that, replaces the column names in
     QueryResult with the names the user expects and that are stored in
@@ -181,6 +183,7 @@ def _format_storage_query_and_run(
     concurrent_queries_gauge: Optional[Gauge] = None,
     cluster_name: str = "",
 ) -> QueryResult:
+    print("_format_storage_query_and_runnnn")
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
     """

@@ -171,6 +171,7 @@ def execute_query(
     clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
 ) -> Result:
+    print("execute_queryyyy")
     """
     Execute a query and return a result.
     """
@@ -242,6 +243,8 @@ def execute_query_with_query_id(
     else:
         query_id = get_query_cache_key(formatted_query)
 
+    print("execute_query_with_query_idddd")
+
     try:
         return execute_query_with_readthrough_caching(
             clickhouse_query,
@@ -296,6 +299,7 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
+    print("execute_query_with_readthrough_cachingggg")
     span = sentry_sdk.get_current_span()
 
     if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
@@ -417,6 +421,7 @@ def _raw_query(
     trace_id: Optional[str] = None,
     robust: bool = False,
 ) -> QueryResult:
+    print("_raw_queryyyy")
     """
     this function is responsible for running the clickhouse query and if there is any error, constructing the
     QueryException that  the rest of the stack depends on. See the `db_query` docstring for more details
@@ -619,6 +624,7 @@ def db_query(
     trace_id: str,
     robust: bool = False,
 ) -> QueryResult:
+    print("db_queryyyyy")
     """This function is responsible for:
 
     * Checking and updating the allocation policy (which exists on the query)

@@ -71,13 +71,13 @@ class RedisCache(Cache[TValue]):
         if cached_value is not None:
             record_cache_hit_type(RESULT_VALUE)
             decoded_cache_value = self.__codec.decode(cached_value)
-            print("cachehit", decoded_cache_value)
             if timer:
                 timer.set_duration_between_marks(
                     "right_before_execute",
                     "execute",
-                    decoded_cache_value["profile"]["elapsed"],
+                    decoded_cache_value["profile"]["elapsed"],  # type: ignore
                 )
+            print("cachehit", key, timer._Timer__marks)
             return decoded_cache_value
         else:
             try:
@@ -87,7 +87,7 @@ class RedisCache(Cache[TValue]):
                     self.__codec.encode(value),
                     ex=get_config("cache_expiry_sec", 1),
                 )
-                print("cachemiss", self.__codec.encode(value))
+                print("cachemiss", key, timer._Timer__marks)
                 record_cache_hit_type(RESULT_EXECUTE)
                 if timer is not None:
                     timer.mark("cache_set")

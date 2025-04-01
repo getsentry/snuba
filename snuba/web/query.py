@@ -41,6 +41,7 @@ def _run_query_pipeline(
     concurrent_queries_gauge: Optional[Gauge] = None,
     force_dry_run: bool = False,
 ) -> QueryResult:
+    print("run_query_pipelineeeeeee")
     clickhouse_query = EntityProcessingStage().execute(
         QueryPipelineResult(
             data=request,
@@ -77,6 +78,8 @@ def run_query(
     Processes, runs a Snuba Query, then records the metadata about the query that was run.
     """
     query_metadata = SnubaQueryMetadata(request, get_dataset_name(dataset), timer)
+
+    print("run_queryyyyy")
 
     try:
         result = _run_query_pipeline(
