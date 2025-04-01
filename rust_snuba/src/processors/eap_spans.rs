@@ -179,8 +179,8 @@ impl From<FromSpanMessage> for EAPSpan {
             is_segment: from.is_segment,
             start_timestamp: (from.start_timestamp_precise * 1e6) as u64,
             end_timestamp: (from.end_timestamp_precise * 1e6) as u64,
-            duration_micro: ((from.end_timestamp_precise - from.start_timestamp_precise) * 1e6)
-                as u64,
+            duration_micro: (from.end_timestamp_precise * 1e6) as u64
+                - (from.start_timestamp_precise * 1e6) as u64,
             exclusive_time_micro: (from.exclusive_time_ms * 1e3) as u64,
             retention_days: from.retention_days,
             name: from.description.unwrap_or_default(),
