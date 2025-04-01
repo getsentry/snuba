@@ -60,7 +60,7 @@ def test_get_target_tier(
         metrics_mock.timing.assert_any_call(
             "sampling_in_storage_routed_tier",
             expected_tier,
-            tags={"referrer": DOESNT_MATTER_STR, "tier": str(expected_tier)},
+            tags={"referrer": DOESNT_MATTER_STR},
         )
 
 
