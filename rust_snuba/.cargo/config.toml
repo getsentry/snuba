@@ -1,0 +1,3 @@
+[env]
+# Workaround for https://github.com/confluentinc/librdkafka/pull/5012
+CMAKE_POLICY_VERSION_MINIMUM = "3.10"
