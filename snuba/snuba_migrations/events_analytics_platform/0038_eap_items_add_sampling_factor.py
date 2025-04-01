@@ -62,15 +62,15 @@ class Migration(migration.ClickhouseNodeMigration):
         ops = [
             operations.DropColumn(
                 storage_set=storage_set_name,
-                table_name=local_table_name,
-                column_name="sampling_factor",
-                target=OperationTarget.LOCAL,
-            ),
-            operations.DropColumn(
-                storage_set=storage_set_name,
                 table_name=dist_table_name,
                 column_name="sampling_factor",
                 target=OperationTarget.DISTRIBUTED,
+            ),
+            operations.DropColumn(
+                storage_set=storage_set_name,
+                table_name=local_table_name,
+                column_name="sampling_factor",
+                target=OperationTarget.LOCAL,
             ),
         ]
 
