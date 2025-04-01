@@ -487,6 +487,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             condition=base_conditions_and(
                 request.meta,
                 trace_item_filters_expression,
+                # Exclude standalone spans until they are supported in the Trace View
                 not_cond(
                     f.equals(
                         generate_expression_from_attribute_key(
@@ -600,6 +601,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                         None, [literal(trace_id) for trace_id in trace_ids.keys()]
                     ),
                 ),
+                # Exclude standalone spans until they are supported in the Trace View
                 not_cond(
                     f.equals(
                         generate_expression_from_attribute_key(
