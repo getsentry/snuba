@@ -92,6 +92,10 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update CMake
+        run: |
+          sudo apt-get update
+          sudo apt-get install cmake
       - name: Run linter
         run: |
           make lint-rust format-rust-ci
