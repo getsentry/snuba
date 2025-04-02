@@ -34,7 +34,7 @@ from snuba.query.dsl import (
     not_cond,
     or_cond,
 )
-from snuba.query.expressions import Expression
+from snuba.query.expressions import Expression, SubscriptableReference
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -635,7 +635,9 @@ SEGMENT_ID_ATTRIBUTE = AttributeKey(
 
 def exclude_standalone_span_conditions_for_eap_items() -> Expression:
     segment_id_expression = attribute_key_to_expression_eap_items(SEGMENT_ID_ATTRIBUTE)
-    return f.mapContains(segment_id_expression.column, segment_id_expression.key)
+    if isinstance(segment_id_expression, SubscriptableReference):
+        return f.mapContains(segment_id_expression.column, segment_id_expression.key)
+    raise BadSnubaRPCRequestException("can't convert this attribute into an expression")
 
 
 def exclude_standalone_span_conditions_for_eap_spans() -> Expression:
