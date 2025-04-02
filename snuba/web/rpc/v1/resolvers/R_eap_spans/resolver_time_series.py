@@ -339,6 +339,7 @@ def build_query(request: TimeSeriesRequest) -> Query:
             trace_item_filters_to_expression(
                 request.filter, _get_attribute_key_to_expression_function(request.meta)
             ),
+            f.equals(column("item_type"), request.meta.trace_item_type),
         ),
         groupby=[
             column("time_slot"),
