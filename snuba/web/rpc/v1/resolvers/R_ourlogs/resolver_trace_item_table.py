@@ -3,11 +3,10 @@ from typing import Sequence
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
-    TraceItemColumnValues,
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -26,13 +25,9 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
-from snuba.web.rpc.common.debug_info import (
-    extract_response_meta,
-    setup_trace_query_settings,
-)
+from snuba.web.rpc.common.debug_info import setup_trace_query_settings
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
-from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_eap_spans.resolver_trace_item_table import (
     ResolverTraceItemTableEAPSpans,
 )
@@ -134,15 +129,6 @@ def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
     )
 
 
-def _get_page_token(
-    request: TraceItemTableRequest, response: list[TraceItemColumnValues]
-) -> PageToken:
-    if not response:
-        return PageToken(offset=0)
-    num_rows = len(response[0].results)
-    return PageToken(offset=request.page_token.offset + num_rows)
-
-
 class ResolverTraceItemTableOurlogs(ResolverTraceItemTable):
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
@@ -157,18 +143,6 @@ class ResolverTraceItemTableOurlogs(ResolverTraceItemTable):
             timer=self._timer,
         )
         """
-        spans_resolver = ResolverTraceItemTableEAPSpans()
-        res = spans_resolver._first_half(in_msg)
-        # at this point convert the alias
-        column_values = convert_results(in_msg, res.result.get("data", []))
-        response_meta = extract_response_meta(
-            in_msg.meta.request_id,
-            in_msg.meta.debug,
-            [res],
-            [self._timer],
-        )
-        return TraceItemTableResponse(
-            column_values=column_values,
-            page_token=_get_page_token(in_msg, column_values),
-            meta=response_meta,
-        )
+        res = ResolverTraceItemTableEAPSpans().resolve(in_msg)
+        # option 2 at this point convert the timestamp alias
+        return res
