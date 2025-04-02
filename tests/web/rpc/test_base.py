@@ -22,6 +22,7 @@ from snuba.web.rpc import (
 )
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.backends.metrics import TestingMetricsBackend
+from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 
 
@@ -162,8 +163,11 @@ def gen_message(
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_trim_time_range() -> None:
-    spans_storage = get_storage(StorageKey("eap_spans"))
+def test_trim_time_range(snuba_set_config: SnubaSetConfig) -> None:
+    snuba_set_config("use_eap_items_table", True)
+    snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
+
+    spans_storage = get_storage(StorageKey("eap_items"))
     write_raw_unprocessed_events(
         spans_storage,  # type: ignore
         [
@@ -218,7 +222,12 @@ _REFERRER = "something"
         (99 * 24, "gt_90_days"),
     ],
 )
-def test_tagged_metrics(hours: int, expected_time_bucket: str) -> None:
+def test_tagged_metrics(
+    hours: int, expected_time_bucket: str, snuba_set_config: SnubaSetConfig
+) -> None:
+    snuba_set_config("use_eap_items_table", True)
+    snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
+
     end_timestamp = Timestamp(seconds=int(_BASE_TIME.timestamp()))
     start_timestamp = Timestamp(
         seconds=int((_BASE_TIME - timedelta(hours=hours)).timestamp())
