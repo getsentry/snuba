@@ -13,7 +13,6 @@ from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -21,7 +20,6 @@ from snuba.query.dsl import column
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     base_conditions_and,
@@ -35,6 +33,9 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
+from snuba.web.rpc.v1.resolvers.R_eap_spans.resolver_trace_item_table import (
+    ResolverTraceItemTableEAPSpans,
+)
 from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
     attribute_key_to_expression,
 )
@@ -148,12 +149,17 @@ class ResolverTraceItemTableOurlogs(ResolverTraceItemTable):
         return TraceItemType.TRACE_ITEM_TYPE_LOG
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
+        """
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
             timer=self._timer,
         )
+        """
+        spans_resolver = ResolverTraceItemTableEAPSpans()
+        res = spans_resolver._first_half(in_msg)
+        # at this point convert the alias
         column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
