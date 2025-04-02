@@ -62,7 +62,7 @@ def gen_message(
     timestamp = dt.timestamp()
     if not is_segment:
         timestamp += random.random()
-    return {
+    span = {
         "description": span_name,
         "duration_ms": 1000,
         "event_id": uuid.uuid4().hex,
@@ -94,7 +94,6 @@ def gen_message(
         "project_id": 1,
         "received": 1721319572.877828,
         "retention_days": 90,
-        "segment_id": "0" if standalone_span else trace_id[:16],
         "sentry_tags": {
             "category": "http",
             "environment": "development",
@@ -133,6 +132,9 @@ def gen_message(
         "start_timestamp_precise": timestamp,
         "end_timestamp_precise": timestamp + 1,
     }
+    if not standalone_span:
+        span["segment_id"] = trace_id[:16]
+    return span
 
 
 _SPANS = [
