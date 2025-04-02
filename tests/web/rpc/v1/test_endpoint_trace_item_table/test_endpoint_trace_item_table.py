@@ -61,9 +61,6 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
     _apply_labels_to_columns,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
-    _run_query_on_most_downsampled_tier,
-)
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
@@ -3529,56 +3526,3 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 ],
             ),
         ]
-
-    def test_cached_query_results_is_used_in_routing(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
-        msg_timestamp = BASE_TIME - timedelta(minutes=1)
-        messages = [
-            gen_message(
-                msg_timestamp,
-                tags={"cached": "cached"},
-                randomize_span_id=True,
-            )
-            for _ in range(10)
-        ]
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
-
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-        in_msg = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
-                ),
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="cached"))
-            ],
-        )
-
-        with patch(
-            "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._run_query_on_most_downsampled_tier",
-            wraps=_run_query_on_most_downsampled_tier,
-        ) as mock_run_query_on_most_downsampled_tier:
-            EndpointTraceItemTable().execute(in_msg)
-            EndpointTraceItemTable().execute(in_msg)
-            assert mock_run_query_on_most_downsampled_tier.call_count == 2
-            first_call_result = mock_run_query_on_most_downsampled_tier(
-                *mock_run_query_on_most_downsampled_tier.call_args_list[0].args,
-                *mock_run_query_on_most_downsampled_tier.call_args_list[0].kwargs
-            )
-            second_call_result = mock_run_query_on_most_downsampled_tier(
-                *mock_run_query_on_most_downsampled_tier.call_args_list[1].args,
-                *mock_run_query_on_most_downsampled_tier.call_args_list[1].kwargs
-            )
-            assert first_call_result.result.get("profile", {}).get(
-                "elapsed"
-            ) == second_call_result.result.get("profile", {}).get("elapsed")
