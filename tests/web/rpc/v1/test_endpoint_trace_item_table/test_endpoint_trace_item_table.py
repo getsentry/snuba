@@ -3531,6 +3531,18 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         ]
 
     def test_cached_query_results_is_used_in_routing(self) -> None:
+        items_storage = get_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = [
+            gen_message(
+                msg_timestamp,
+                tags={"cached": "cached"},
+                randomize_span_id=True,
+            )
+            for _ in range(10)
+        ]
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         in_msg = TraceItemTableRequest(
@@ -3548,7 +3560,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 ),
             ),
             columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="endtoend"))
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="cached"))
             ],
         )
 
