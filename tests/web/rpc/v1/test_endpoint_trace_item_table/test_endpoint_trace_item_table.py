@@ -54,7 +54,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import set_config
-from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -3312,10 +3311,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             )
         )
 
-    @patch.object(Timer, "get_duration_between_marks")
-    def test_best_effort_route_to_tier_64(
-        self, mock_get_duration_between_marks: MagicMock
-    ) -> None:
+    def test_best_effort_route_to_tier_64(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
@@ -3366,24 +3362,27 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
             columns=columns,
         )
         # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
-        mock_get_duration_between_marks.return_value = 2777.0
-        best_effort_response = EndpointTraceItemTable().execute(best_effort_message)
-        non_downsampled_tier_response = EndpointTraceItemTable().execute(
-            message_to_non_downsampled_tier
-        )
-
-        # tier 1's results should be 3600, so tier 64's results should be around 3600 / 64 (give or take due to random sampling)
-        assert (
-            len(non_downsampled_tier_response.column_values[0].results) / 90
-            <= len(best_effort_response.column_values[0].results)
-            <= len(non_downsampled_tier_response.column_values[0].results) / 40
-        )
-        assert (
-            best_effort_response.meta.downsampled_storage_meta
-            == DownsampledStorageMeta(
-                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
+        with patch(
+            "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._get_query_duration_ms",
+            return_value=2777.0,
+        ):
+            best_effort_response = EndpointTraceItemTable().execute(best_effort_message)
+            non_downsampled_tier_response = EndpointTraceItemTable().execute(
+                message_to_non_downsampled_tier
             )
-        )
+
+            # tier 1's results should be 3600, so tier 64's results should be around 3600 / 64 (give or take due to random sampling)
+            assert (
+                len(non_downsampled_tier_response.column_values[0].results) / 90
+                <= len(best_effort_response.column_values[0].results)
+                <= len(non_downsampled_tier_response.column_values[0].results) / 40
+            )
+            assert (
+                best_effort_response.meta.downsampled_storage_meta
+                == DownsampledStorageMeta(
+                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
+                )
+            )
 
     def test_best_effort_end_to_end(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))

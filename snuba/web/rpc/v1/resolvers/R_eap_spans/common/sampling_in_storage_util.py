@@ -41,8 +41,8 @@ def _get_time_budget() -> float:
     return sentry_timeout_ms - error_budget_ms
 
 
-def _get_query_duration(timer: Timer) -> float:
-    return timer.get_duration_between_marks("right_before_execute", "execute")
+def _get_query_duration_ms(res: QueryResult) -> float:
+    return cast(float, res.result.get("profile", {}).get("elapsed", 0) * 1000)  # type: ignore
 
 
 def _get_most_downsampled_tier() -> Tier:
@@ -50,9 +50,9 @@ def _get_most_downsampled_tier() -> Tier:
 
 
 def _get_target_tier(
-    timer: Timer, metrics_backend: MetricsBackend, referrer: str
+    most_downsampled_res: QueryResult, metrics_backend: MetricsBackend, referrer: str
 ) -> Tuple[Tier, float]:
-    most_downsampled_query_duration_ms = _get_query_duration(timer)
+    most_downsampled_query_duration_ms = _get_query_duration_ms(most_downsampled_res)
 
     target_tier = _get_most_downsampled_tier()
     estimated_target_tier_query_duration = most_downsampled_query_duration_ms * cast(
@@ -92,11 +92,11 @@ def _is_best_effort_mode(in_msg: T) -> bool:
 
 
 def _record_actual_query_duration(
-    metrics_backend: MetricsBackend, timer: Timer, tags: Dict[str, str]
+    metrics_backend: MetricsBackend, res: QueryResult, tags: Dict[str, str]
 ) -> None:
     metrics_backend.timing(
         "sampling_in_storage_actual_query_duration",
-        _get_query_duration(timer),
+        _get_query_duration_ms(res),
         tags=tags,
     )
 
@@ -136,7 +136,7 @@ def _run_query_on_most_downsampled_tier(
     )
     metrics_backend.timing(
         "sampling_in_storage_query_duration_from_most_downsampled_tier",
-        _get_query_duration(timer),
+        _get_query_duration_ms(res),
         tags={"referrer": referrer},
     )
     return res
@@ -178,13 +178,13 @@ def run_query_to_correct_tier(
         )
         query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
         target_tier, estimated_target_tier_query_duration = _get_target_tier(
-            timer, metrics_backend, referrer
+            res, metrics_backend, referrer
         )
 
         if target_tier == _get_most_downsampled_tier():
             _record_actual_query_duration(
                 metrics_backend,
-                timer,
+                res,
                 tags={"referrer": referrer, "tier": str(target_tier)},
             )
             return res
@@ -202,12 +202,12 @@ def run_query_to_correct_tier(
         )
         _record_actual_query_duration(
             metrics_backend,
-            timer,
+            res,
             tags={"referrer": referrer, "tier": str(target_tier)},
         )
         metrics_backend.timing(
             "sampling_in_storage_estimation_error",
-            estimated_target_tier_query_duration - _get_query_duration(timer),
+            estimated_target_tier_query_duration - _get_query_duration_ms(res),
             tags={"referrer": referrer, "tier": str(target_tier)},
         )
 
