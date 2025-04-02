@@ -221,10 +221,7 @@ BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 USE_EAP_ITEMS_TABLE = bool(os.environ.get("USE_EAP_ITEMS_TABLE", True))
 
 # Represents 12AM PST March 12, 2025. We can remove this setting once 30 days have passed since this date.
-# USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS = 1741762800
-
-# HACK(Volo): to make sentry CI always use EAP_ITEMS
-USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS = 0 if USE_EAP_ITEMS_TABLE else 1741762800
+USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS = 1741762800
 
 # Processor/Writer Options
 

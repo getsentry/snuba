@@ -283,6 +283,11 @@ def build_query(request: TraceItemTableRequest) -> Query:
         )
         selected_columns.extend(_get_reliability_context_columns(column, request.meta))
 
+    item_type_conds = (
+        [f.equals(snuba_column("item_type"), request.meta.trace_item_type)]
+        if use_eap_items_table(request.meta)
+        else []
+    )
     res = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -294,7 +299,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
                 if use_eap_items_table(request.meta)
                 else attribute_key_to_expression,
             ),
-            f.equals(snuba_column("item_type"), request.meta.trace_item_type),
+            *item_type_conds,
         ),
         order_by=_convert_order_by(request.order_by, request.meta),
         groupby=[

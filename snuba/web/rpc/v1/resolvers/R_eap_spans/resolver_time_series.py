@@ -298,6 +298,11 @@ def build_query(request: TimeSeriesRequest) -> Query:
         )
         for attr_key in request.group_by
     ]
+    item_type_conds = (
+        [f.equals(column("item_type"), request.meta.trace_item_type)]
+        if use_eap_items_table
+        else []
+    )
 
     res = Query(
         from_clause=entity,
@@ -339,7 +344,7 @@ def build_query(request: TimeSeriesRequest) -> Query:
             trace_item_filters_to_expression(
                 request.filter, _get_attribute_key_to_expression_function(request.meta)
             ),
-            f.equals(column("item_type"), request.meta.trace_item_type),
+            *item_type_conds,
         ),
         groupby=[
             column("time_slot"),
