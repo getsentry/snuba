@@ -27,7 +27,6 @@ from snuba.query.dsl import literal, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.web import QueryResult
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     base_conditions_and,
@@ -346,7 +345,14 @@ class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
-        res = self._first_half(in_msg)
+        query_settings = (
+            setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
+        )
+
+        res = run_query_to_correct_tier(
+            in_msg, query_settings, self._timer, build_query, self._metrics_backend
+        )
+        # option 1 at this point convert the timestamp alias
         column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
@@ -359,13 +365,3 @@ class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
             page_token=_get_page_token(in_msg, column_values),
             meta=response_meta,
         )
-
-    def _first_half(self, in_msg: TraceItemTableRequest) -> QueryResult:
-        query_settings = (
-            setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
-        )
-
-        res = run_query_to_correct_tier(
-            in_msg, query_settings, self._timer, build_query, self._metrics_backend
-        )
-        return res
