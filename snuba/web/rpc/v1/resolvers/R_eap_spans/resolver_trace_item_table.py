@@ -293,6 +293,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
         selected_columns=selected_columns,
         condition=base_conditions_and(
             request.meta,
+            f.equals(column_dsl("item_type"), request.meta.trace_item_type),
             trace_item_filters_to_expression(
                 request.filter,
                 attribute_key_to_expression_eap_items
