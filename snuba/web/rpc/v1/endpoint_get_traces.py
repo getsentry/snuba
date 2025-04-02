@@ -488,16 +488,8 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 request.meta,
                 trace_item_filters_expression,
                 # Exclude standalone spans until they are supported in the Trace View
-                not_cond(
-                    f.equals(
-                        generate_expression_from_attribute_key(
-                            AttributeKey(
-                                name="sentry.segment_id",
-                                type=AttributeKey.Type.TYPE_STRING,
-                            ),
-                        ),
-                        literal("0"),
-                    ),
+                exclude_standalone_span_conditions(
+                    generate_expression_from_attribute_key,
                 ),
             ),
             order_by=[
@@ -603,16 +595,8 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     ),
                 ),
                 # Exclude standalone spans until they are supported in the Trace View
-                not_cond(
-                    f.equals(
-                        generate_expression_from_attribute_key(
-                            AttributeKey(
-                                name="sentry.segment_id",
-                                type=AttributeKey.Type.TYPE_STRING,
-                            ),
-                        ),
-                        literal("0"),
-                    ),
+                exclude_standalone_span_conditions(
+                    generate_expression_from_attribute_key,
                 ),
             ),
             groupby=[
@@ -640,3 +624,30 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         )
 
         return _convert_results(request, results.result.get("data", []))
+
+
+def exclude_standalone_span_conditions(expression_generator: Callable) -> Expression:
+    segment_id_expression = expression_generator(
+        AttributeKey(
+            name="sentry.segment_id",
+            type=AttributeKey.Type.TYPE_STRING,
+        ),
+    )
+    return and_cond(
+        f.mapContains(segment_id_expression.column, segment_id_expression.key),
+        not_cond(
+            in_cond(
+                segment_id_expression,
+                literals_array(
+                    None,
+                    [
+                        literal(v)
+                        for v in {
+                            "0",
+                            "00",
+                        }
+                    ],
+                ),
+            ),
+        ),
+    )
