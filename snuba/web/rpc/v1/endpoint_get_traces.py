@@ -477,7 +477,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             )
         else:
             exclude_standalone_span_conditions = (
-                exclude_standalone_span_conditions_for_eap_spans()
+                EXCLUDE_STANDALONE_SPAN_CONDITIONS_FOR_EAP_SPANS
             )
             entity = Entity(
                 key=EntityKey("eap_spans"),
@@ -570,7 +570,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             )
         else:
             exclude_standalone_span_conditions = (
-                exclude_standalone_span_conditions_for_eap_spans()
+                EXCLUDE_STANDALONE_SPAN_CONDITIONS_FOR_EAP_SPANS
             )
             entity = Entity(
                 key=EntityKey("eap_spans"),
@@ -640,20 +640,18 @@ def exclude_standalone_span_conditions_for_eap_items() -> Expression:
     raise BadSnubaRPCRequestException("can't convert this attribute into an expression")
 
 
-def exclude_standalone_span_conditions_for_eap_spans() -> Expression:
-    segment_id_expression = attribute_key_to_expression(SEGMENT_ID_ATTRIBUTE)
-    return not_cond(
-        in_cond(
-            segment_id_expression,
-            literals_array(
-                None,
-                [
-                    literal(v)
-                    for v in {
-                        "0",
-                        "00",
-                    }
-                ],
-            ),
+EXCLUDE_STANDALONE_SPAN_CONDITIONS_FOR_EAP_SPANS = not_cond(
+    in_cond(
+        attribute_key_to_expression(SEGMENT_ID_ATTRIBUTE),
+        literals_array(
+            None,
+            [
+                literal(v)
+                for v in {
+                    "0",
+                    "00",
+                }
+            ],
         ),
-    )
+    ),
+)
