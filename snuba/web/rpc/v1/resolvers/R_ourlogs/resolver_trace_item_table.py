@@ -22,8 +22,10 @@ class ResolverTraceItemTableOurlogs(ResolverTraceItemTable):
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
         use_new_logs_resolver = bool(get_int_config("use_new_logs_resolver", default=0))
         if use_new_logs_resolver:
-            res = ResolverTraceItemTableEAPItems().resolve(in_msg)
+            res = ResolverTraceItemTableEAPItems().resolve(
+                in_msg, self._timer, self._metrics_backend
+            )
             # option 2 at this point convert the timestamp alias
             return res
         else:
-            return OldResolverTraceItemTableOurlogs().resolve(in_msg)
+            return OldResolverTraceItemTableOurlogs().resolve(in_msg, self._timer)

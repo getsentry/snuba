@@ -21,6 +21,7 @@ from snuba.query.dsl import column
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
@@ -33,7 +34,6 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
     attribute_key_to_expression,
@@ -142,20 +142,24 @@ def _get_page_token(
     return PageToken(offset=request.page_token.offset + num_rows)
 
 
-class OldResolverTraceItemTableOurlogs(ResolverTraceItemTable):
-    def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
+class OldResolverTraceItemTableOurlogs:
+    def resolve(
+        self,
+        in_msg: TraceItemTableRequest,
+        timer: Timer,
+    ) -> TraceItemTableResponse:
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
-            timer=self._timer,
+            timer=timer,
         )
         column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
             [res],
-            [self._timer],
+            [timer],
         )
         return TraceItemTableResponse(
             column_values=column_values,

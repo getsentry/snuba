@@ -16,4 +16,6 @@ class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
-        return ResolverTraceItemTableEAPItems().resolve(in_msg)
+        return ResolverTraceItemTableEAPItems().resolve(
+            in_msg, self._timer, self._metrics_backend
+        )
