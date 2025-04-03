@@ -19,6 +19,7 @@ class ClickhouseClusterConfig:
     user: str
     password: str
     database: str
+    secure: bool
 
 
 @dataclass(frozen=True)
@@ -275,6 +276,7 @@ def resolve_storage_config(
         http_port=cluster.get_http_port(),
         user=user,
         password=password,
+        secure=cluster.get_secure(),
         database=cluster.get_database(),
     )
 
