@@ -1,6 +1,6 @@
 from typing import Final, Mapping, Sequence, Set
 
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     VirtualColumnContext,
@@ -108,6 +108,9 @@ ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
 def use_eap_items_table(request_meta: RequestMeta) -> bool:
     if request_meta.referrer.startswith("force_use_eap_spans_table"):
         return False
+
+    if request_meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
+        return True
 
     use_eap_items_orgs = state.get_str_config("use_eap_items_orgs")
     eap_items_enabled_orgs = []
