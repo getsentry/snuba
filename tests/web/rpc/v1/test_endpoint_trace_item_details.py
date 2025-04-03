@@ -214,6 +214,7 @@ class TestTraceItemDetails(BaseApiTest):
             "sentry.project_id",
             "sentry.trace_id",
             "sentry.item_type",
+            "sentry.timestamp_precise",
             "bool_tag",
             "double_tag",
             "int_tag",
