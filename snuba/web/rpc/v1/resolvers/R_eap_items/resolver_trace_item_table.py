@@ -349,7 +349,6 @@ class ResolverTraceItemTableEAPItems:
         res = run_query_to_correct_tier(
             in_msg, query_settings, timer, build_query, metrics_backend
         )
-        # option 1 at this point convert the timestamp alias
         column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,

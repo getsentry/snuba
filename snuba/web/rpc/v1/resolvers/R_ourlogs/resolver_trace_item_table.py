@@ -23,10 +23,8 @@ class ResolverTraceItemTableOurlogs(ResolverTraceItemTable):
         use_new_logs_resolver = bool(get_int_config("use_new_logs_resolver", default=0))
         use_new_logs_resolver = True  # just to test CI
         if use_new_logs_resolver:
-            res = ResolverTraceItemTableEAPItems().resolve(
+            return ResolverTraceItemTableEAPItems().resolve(
                 in_msg, self._timer, self._metrics_backend
             )
-            # option 2 at this point convert the timestamp alias
-            return res
         else:
             return OldResolverTraceItemTableOurlogs().resolve(in_msg, self._timer)
