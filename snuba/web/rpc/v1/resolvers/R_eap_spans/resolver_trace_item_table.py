@@ -21,7 +21,9 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, literal, or_cond
+from snuba.query.dsl import and_cond
+from snuba.query.dsl import column as snuba_column
+from snuba.query.dsl import literal, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -281,6 +283,11 @@ def build_query(request: TraceItemTableRequest) -> Query:
         )
         selected_columns.extend(_get_reliability_context_columns(column, request.meta))
 
+    item_type_conds = (
+        [f.equals(snuba_column("item_type"), request.meta.trace_item_type)]
+        if use_eap_items_table(request.meta)
+        else []
+    )
     res = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -292,6 +299,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
                 if use_eap_items_table(request.meta)
                 else attribute_key_to_expression,
             ),
+            *item_type_conds,
         ),
         order_by=_convert_order_by(request.order_by, request.meta),
         groupby=[
