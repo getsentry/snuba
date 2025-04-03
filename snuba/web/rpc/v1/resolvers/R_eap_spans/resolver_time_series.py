@@ -300,7 +300,7 @@ def build_query(request: TimeSeriesRequest) -> Query:
     ]
     item_type_conds = (
         [f.equals(column("item_type"), request.meta.trace_item_type)]
-        if use_eap_items_table
+        if use_eap_items_table(request.meta)
         else []
     )
 
