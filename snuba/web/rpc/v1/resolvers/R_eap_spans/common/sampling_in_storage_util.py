@@ -154,10 +154,8 @@ def run_query_to_correct_tier(
         or in_msg.meta.downsampled_storage_config.mode
         == DownsampledStorageConfig.MODE_UNSPECIFIED
     ):
-        return run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=build_snuba_request(in_msg, query_settings, build_query),
-            timer=timer,
+        in_msg.meta.downsampled_storage_config = DownsampledStorageConfig(
+            mode=DownsampledStorageConfig.MODE_BEST_EFFORT
         )
 
     query_settings.set_sampling_tier(_get_most_downsampled_tier())
