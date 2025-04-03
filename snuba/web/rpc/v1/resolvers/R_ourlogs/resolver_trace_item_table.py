@@ -21,7 +21,6 @@ class ResolverTraceItemTableOurlogs(ResolverTraceItemTable):
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
         use_new_logs_resolver = bool(get_int_config("use_new_logs_resolver", default=0))
-        use_new_logs_resolver = True  # just to test CI
         if use_new_logs_resolver:
             return ResolverTraceItemTableEAPItems().resolve(
                 in_msg, self._timer, self._metrics_backend
