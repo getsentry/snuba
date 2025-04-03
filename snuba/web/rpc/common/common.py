@@ -21,7 +21,6 @@ from snuba.query.dsl import (
     or_cond,
 )
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
-from snuba.state import get_int_config
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -216,10 +215,6 @@ def trace_item_filters_to_expression(
                         f"translation of AttributeValue type {default} is not implemented"
                     )
 
-        use_new_null_comparison = (bool)(
-            get_int_config("use_new_null_comparison", default=0)
-        )
-
         if op == ComparisonFilter.OP_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             expr = (
@@ -229,12 +224,10 @@ def trace_item_filters_to_expression(
             )
             # we redefine the way equals works for nulls
             # now null=null is true
-            if use_new_null_comparison:
-                expr_with_null = or_cond(
-                    expr, and_cond(f.isNull(k_expression), f.isNull(v_expression))
-                )
-                return expr_with_null
-            return expr
+            expr_with_null = or_cond(
+                expr, and_cond(f.isNull(k_expression), f.isNull(v_expression))
+            )
+            return expr_with_null
         if op == ComparisonFilter.OP_NOT_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             expr = (
@@ -244,12 +237,10 @@ def trace_item_filters_to_expression(
             )
             # we redefine the way not equals works for nulls
             # now null!=null is true
-            if use_new_null_comparison:
-                expr_with_null = or_cond(
-                    expr, f.xor(f.isNull(k_expression), f.isNull(v_expression))
-                )
-                return expr_with_null
-            return expr
+            expr_with_null = or_cond(
+                expr, f.xor(f.isNull(k_expression), f.isNull(v_expression))
+            )
+            return expr_with_null
         if op == ComparisonFilter.OP_LIKE:
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
@@ -264,10 +255,8 @@ def trace_item_filters_to_expression(
             expr = f.notLike(k_expression, v_expression)
             # we redefine the way not like works for nulls
             # now null not like "%anything%" is true
-            if use_new_null_comparison:
-                expr_with_null = or_cond(expr, f.isNull(k_expression))
-                return expr_with_null
-            return expr
+            expr_with_null = or_cond(expr, f.isNull(k_expression))
+            return expr_with_null
         if op == ComparisonFilter.OP_LESS_THAN:
             return f.less(k_expression, v_expression)
         if op == ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
@@ -288,15 +277,11 @@ def trace_item_filters_to_expression(
             # note: v_expression must be an array
             # we redefine the way in works for nulls
             # now null in ['hi', null] is true
-            if use_new_null_comparison:
-                expr_with_null = or_cond(
-                    expr,
-                    and_cond(
-                        f.isNull(k_expression), f.has(v_expression, literal(None))
-                    ),
-                )
-                return expr_with_null
-            return expr
+            expr_with_null = or_cond(
+                expr,
+                and_cond(f.isNull(k_expression), f.has(v_expression, literal(None))),
+            )
+            return expr_with_null
         if op == ComparisonFilter.OP_NOT_IN:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             if item_filter.comparison_filter.ignore_case:
@@ -309,16 +294,14 @@ def trace_item_filters_to_expression(
             # note: v_expression must be an array
             # we redefine the way not in works for nulls
             # now null not in ['hi'] is true
-            if use_new_null_comparison:
-                expr_with_null = or_cond(
-                    expr,
-                    and_cond(
-                        f.isNull(k_expression),
-                        not_cond(f.has(v_expression, literal(None))),
-                    ),
-                )
-                return expr_with_null
-            return expr
+            expr_with_null = or_cond(
+                expr,
+                and_cond(
+                    f.isNull(k_expression),
+                    not_cond(f.has(v_expression, literal(None))),
+                ),
+            )
+            return expr_with_null
 
         raise BadSnubaRPCRequestException(
             f"Invalid string comparison, unknown op: {item_filter.comparison_filter}"

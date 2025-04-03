@@ -14,7 +14,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, in_cond, literal, or_cond
 from snuba.query.expressions import FunctionCall
-from snuba.state import set_config
 from snuba.web.rpc.common.common import trace_item_filters_to_expression
 from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
     attribute_key_to_expression,
@@ -82,7 +81,6 @@ class TestOurlogsExpressionConverters:
 
     @pytest.mark.redis_db
     def test_trace_item_filters_to_expression(self) -> None:
-        set_config("use_new_null_comparison", 1)
         filter = TraceItemFilter(
             and_filter=AndFilter(
                 filters=[

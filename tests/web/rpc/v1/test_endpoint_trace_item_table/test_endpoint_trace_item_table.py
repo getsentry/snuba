@@ -53,7 +53,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state import set_config
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -3472,7 +3471,6 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         """
         This test filters by env != "prod" and ensures that both "env"="dev" and "env"=None (attribute doesnt exist on the span) are returned.
         """
-        set_config("use_new_null_comparison", 1)
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_span(span_ts, {"env": "prod", "num_cats": 1})
         write_eap_span(span_ts, {"env": "dev", "num_cats": 2})
