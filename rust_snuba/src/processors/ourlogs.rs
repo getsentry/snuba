@@ -138,6 +138,10 @@ impl From<FromLogMessage> for EAPItem {
             retention_days: Some(from.retention_days),
             attributes: Default::default(),
         };
+        res.attributes.insert_int(
+            "sentry.timestamp_precise".to_string(),
+            from.timestamp_nanos as i64,
+        );
         res.attributes.insert_str(
             "sentry.severity_text".to_string(),
             from.severity_text.unwrap_or_else(|| "INFO".into()),
