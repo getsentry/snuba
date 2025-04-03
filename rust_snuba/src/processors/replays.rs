@@ -155,7 +155,6 @@ pub fn deserialize_message(
                 retention_days: replay_message.retention_days,
                 sdk_name: event.sdk.name.unwrap_or_default(),
                 sdk_version: event.sdk.version.unwrap_or_default(),
-                segment_id: segment_id,
                 timestamp: event.timestamp as u32,
                 trace_ids: event.trace_ids.unwrap_or_default(),
                 urls: event.urls.unwrap_or_default(),
@@ -163,6 +162,7 @@ pub fn deserialize_message(
                 user_email: event.user.email.unwrap_or_default(),
                 user_id: user_id.unwrap_or_default(),
                 user_name: event.user.username.unwrap_or_default(),
+                segment_id,
                 title,
                 tags_key,
                 tags_value: tags_value
