@@ -23,6 +23,8 @@ from snuba.query.dsl import literal, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     base_conditions_and,
@@ -34,7 +36,6 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     aggregation_to_expression,
     get_average_sample_rate_column,
@@ -334,14 +335,19 @@ def _get_page_token(
     return PageToken(offset=request.page_token.offset + num_rows)
 
 
-class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
-    def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
+class ResolverTraceItemTableEAPItems:
+    def resolve(
+        self,
+        in_msg: TraceItemTableRequest,
+        timer: Timer,
+        metrics_backend: MetricsBackend,
+    ) -> TraceItemTableResponse:
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )
 
         res = run_query_to_correct_tier(
-            in_msg, query_settings, self._timer, build_query, self._metrics_backend
+            in_msg, query_settings, timer, build_query, metrics_backend
         )
         # option 1 at this point convert the timestamp alias
         column_values = convert_results(in_msg, res.result.get("data", []))
@@ -349,7 +355,7 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             in_msg.meta.request_id,
             in_msg.meta.debug,
             [res],
-            [self._timer],
+            [timer],
         )
         return TraceItemTableResponse(
             column_values=column_values,
