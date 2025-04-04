@@ -3383,6 +3383,59 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 )
             )
 
+    def test_should_route_to_tier_1(self) -> None:
+        items_storage = get_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = [
+            gen_message(
+                msg_timestamp,
+                tags={"tier64tag": "tier64tag"},
+                randomize_span_id=True,
+            )
+            for _ in range(3600)
+        ]
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        columns = [
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="tier64tag"))
+        ]
+
+        # sends a best effort request and a non-downsampled request to ensure their responses are different
+        best_effort_message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                ),
+            ),
+            columns=columns,
+        )
+
+        # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
+        with patch(
+            "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._get_query_duration_ms",
+            return_value=18.9,
+        ):
+            best_effort_response = EndpointTraceItemTable().execute(best_effort_message)
+
+            assert len(best_effort_response.column_values[0].results) == 3600
+            assert (
+                best_effort_response.meta.downsampled_storage_meta
+                == DownsampledStorageMeta(
+                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_1
+                )
+            )
+
     def test_best_effort_end_to_end(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
