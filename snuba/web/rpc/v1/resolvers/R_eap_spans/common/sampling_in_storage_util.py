@@ -69,13 +69,15 @@ def _get_target_tier(
             * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(target_tier))
         )
         for tier in sorted(Tier, reverse=True)[:-1]:
-            with sentry_sdk.start_span(op=f"_get_target_tier.Tier_{tier}"):
+            with sentry_sdk.start_span(
+                op=f"_get_target_tier.Tier_{tier}"
+            ) as tier_specific_span:
                 estimated_query_duration_to_this_tier = (
                     most_downsampled_query_duration_ms
                     * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier))
                 )
 
-                span.set_data(
+                tier_specific_span.set_data(
                     "estimated_query_duration_to_this_tier",
                     estimated_query_duration_to_this_tier,
                 )
@@ -85,16 +87,18 @@ def _get_target_tier(
                     tags={"referrer": referrer, "tier": str(tier)},
                 )
 
+                time_budget = _get_time_budget()
                 if (
                     estimated_query_duration_to_this_tier
-                    <= _get_time_budget() - most_downsampled_query_duration_ms
+                    <= time_budget - most_downsampled_query_duration_ms
                 ):
                     target_tier = tier
                     estimated_target_tier_query_duration = (
                         estimated_query_duration_to_this_tier
                     )
 
-                span.set_data("target_tier", target_tier)
+                tier_specific_span.set_data("target_tier", target_tier)
+                tier_specific_span.set_data("time_budget", time_budget)
 
         metrics_backend.timing(
             "sampling_in_storage_routed_tier",
