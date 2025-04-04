@@ -82,6 +82,7 @@ expression: snapshot_payload
     "organization_id": 69,
     "project_id": 1,
     "retention_days": 90,
+    "sampling_factor": 1.0,
     "sampling_weight": 1,
     "timestamp": 1715868485,
     "trace_id": "deadbeef-dead-beef-dead-beefdeadbeef"

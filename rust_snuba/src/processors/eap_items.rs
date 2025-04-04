@@ -105,6 +105,7 @@ pub(crate) struct EAPItem {
     pub(crate) trace_id: Uuid,
     pub(crate) item_id: u128,
     pub(crate) sampling_weight: u64,
+    pub(crate) sampling_factor: f64,
     pub(crate) retention_days: Option<u16>,
 
     #[serde(flatten)]
@@ -142,6 +143,7 @@ impl From<FromSpanMessage> for EAPItem {
             trace_id: from.trace_id,
             item_id,
             sampling_weight: 1,
+            sampling_factor: 1.0,
             retention_days: from.retention_days,
 
             ..Default::default()
@@ -170,19 +172,18 @@ impl From<FromSpanMessage> for EAPItem {
                 }
             }
 
-            let mut sampling_factor = 1.0;
             if let Some(measurements) = from.measurements {
                 for (k, v) in measurements {
                     match k.as_str() {
-                        "client_sample_rate" if v.value > 0.0 => sampling_factor *= v.value,
-                        "server_sample_rate" if v.value > 0.0 => sampling_factor *= v.value,
+                        "client_sample_rate" if v.value > 0.0 => res.sampling_factor *= v.value,
+                        "server_sample_rate" if v.value > 0.0 => res.sampling_factor *= v.value,
                         _ => res.attributes.insert_float(k, v.value),
                     }
                 }
             }
             // lower precision to compensate floating point errors
-            sampling_factor = (sampling_factor * 1e9).round() / 1e9;
-            res.sampling_weight = (1.0 / sampling_factor).round() as u64;
+            res.sampling_factor = (res.sampling_factor * 1e9).round() / 1e9;
+            res.sampling_weight = (1.0 / res.sampling_factor).round() as u64;
 
             if let Some(data) = from.data {
                 for (k, v) in data {
