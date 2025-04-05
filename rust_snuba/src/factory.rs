@@ -116,6 +116,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             &self.clickhouse_concurrency,
             &self.storage_config.clickhouse_cluster.user,
             &self.storage_config.clickhouse_cluster.password,
+            self.storage_config.clickhouse_cluster.secure,
             self.async_inserts,
             self.batch_write_timeout,
             self.custom_envoy_request_timeout,

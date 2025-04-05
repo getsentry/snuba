@@ -441,6 +441,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_http_port(self) -> int:
         return self.__http_port
 
+    def get_secure(self) -> bool:
+        return self.__secure
+
 
 CLUSTERS = [
     ClickhouseCluster(
