@@ -1,10 +1,12 @@
 import uuid
 from typing import Callable, Dict, Tuple, TypeVar, cast
 
+import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
+from sentry_sdk.tracing import Span
 
 from snuba import state
 from snuba.attribution import AppID
@@ -17,6 +19,7 @@ from snuba.request import Request
 from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.util import with_span
 from snuba.web import QueryResult
 from snuba.web.query import run_query
 
@@ -52,35 +55,61 @@ def _get_most_downsampled_tier() -> Tier:
 def _get_target_tier(
     most_downsampled_res: QueryResult, metrics_backend: MetricsBackend, referrer: str
 ) -> Tuple[Tier, float]:
-    most_downsampled_query_duration_ms = _get_query_duration_ms(most_downsampled_res)
+    with sentry_sdk.start_span(op="_get_target_tier") as span:
+        most_downsampled_query_duration_ms = _get_query_duration_ms(
+            most_downsampled_res
+        )
+        span.set_data(
+            "most_downsampled_query_duration_ms", most_downsampled_query_duration_ms
+        )
 
-    target_tier = _get_most_downsampled_tier()
-    estimated_target_tier_query_duration = most_downsampled_query_duration_ms * cast(
-        int, DOWNSAMPLING_TIER_MULTIPLIERS.get(target_tier)
-    )
-    for tier in sorted(Tier, reverse=True)[:-1]:
-        estimated_query_duration_to_this_tier = (
+        target_tier = _get_most_downsampled_tier()
+        estimated_target_tier_query_duration = (
             most_downsampled_query_duration_ms
-            * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier))
+            * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(target_tier))
         )
-        metrics_backend.timing(
-            "sampling_in_storage_estimated_query_duration",
-            estimated_query_duration_to_this_tier,
-            tags={"referrer": referrer, "tier": str(tier)},
-        )
-        if (
-            estimated_query_duration_to_this_tier
-            <= _get_time_budget() - most_downsampled_query_duration_ms
-        ):
-            target_tier = tier
-            estimated_target_tier_query_duration = estimated_query_duration_to_this_tier
+        for tier in sorted(Tier, reverse=True)[:-1]:
+            with sentry_sdk.start_span(
+                op=f"_get_target_tier.Tier_{tier}"
+            ) as tier_specific_span:
+                estimated_query_duration_to_this_tier = (
+                    most_downsampled_query_duration_ms
+                    * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier))
+                )
 
-    metrics_backend.timing(
-        "sampling_in_storage_routed_tier",
-        target_tier,
-        tags={"referrer": referrer},
-    )
-    return target_tier, estimated_target_tier_query_duration
+                tier_specific_span.set_data(
+                    "estimated_query_duration_to_this_tier",
+                    estimated_query_duration_to_this_tier,
+                )
+                metrics_backend.timing(
+                    "sampling_in_storage_estimated_query_duration",
+                    estimated_query_duration_to_this_tier,
+                    tags={"referrer": referrer, "tier": str(tier)},
+                )
+
+                time_budget = _get_time_budget()
+                if (
+                    estimated_query_duration_to_this_tier
+                    <= time_budget - most_downsampled_query_duration_ms
+                ):
+                    target_tier = tier
+                    estimated_target_tier_query_duration = (
+                        estimated_query_duration_to_this_tier
+                    )
+
+                tier_specific_span.set_data("target_tier", target_tier)
+                tier_specific_span.set_data("time_budget", time_budget)
+
+        metrics_backend.timing(
+            "sampling_in_storage_routed_tier",
+            target_tier,
+            tags={"referrer": referrer},
+        )
+        span.set_data("target_tier", target_tier)
+        span.set_data(
+            "estimated_target_tier_query_duration", estimated_target_tier_query_duration
+        )
+        return target_tier, estimated_target_tier_query_duration
 
 
 def _is_best_effort_mode(in_msg: T) -> bool:
@@ -92,11 +121,14 @@ def _is_best_effort_mode(in_msg: T) -> bool:
 
 
 def _record_actual_query_duration(
-    metrics_backend: MetricsBackend, res: QueryResult, tags: Dict[str, str]
+    span: Span, metrics_backend: MetricsBackend, res: QueryResult, tags: Dict[str, str]
 ) -> None:
+    actual_query_duration_ms = _get_query_duration_ms(res)
+    span.set_data("tier", tags.get("tier", -1))
+    span.set_data("actual_query_duration_ms", actual_query_duration_ms)
     metrics_backend.timing(
         "sampling_in_storage_actual_query_duration",
-        _get_query_duration_ms(res),
+        actual_query_duration_ms,
         tags=tags,
     )
 
@@ -129,19 +161,26 @@ def _run_query_on_most_downsampled_tier(
     metrics_backend: MetricsBackend,
     referrer: str,
 ) -> QueryResult:
-    res = run_query(
-        dataset=PluggableDataset(name="eap", all_entities=[]),
-        request=request_to_most_downsampled_tier,
-        timer=timer,
-    )
-    metrics_backend.timing(
-        "sampling_in_storage_query_duration_from_most_downsampled_tier",
-        _get_query_duration_ms(res),
-        tags={"referrer": referrer},
-    )
-    return res
+    with sentry_sdk.start_span(op="_run_query_on_most_downsampled_tier") as span:
+        res = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=request_to_most_downsampled_tier,
+            timer=timer,
+        )
+        query_duration_from_most_downsampled_tier = _get_query_duration_ms(res)
+        span.set_data(
+            "query_duration_from_most_downsampled_tier",
+            query_duration_from_most_downsampled_tier,
+        )
+        metrics_backend.timing(
+            "sampling_in_storage_query_duration_from_most_downsampled_tier",
+            query_duration_from_most_downsampled_tier,
+            tags={"referrer": referrer},
+        )
+        return res
 
 
+@with_span(op="function")
 def run_query_to_correct_tier(
     in_msg: T,
     query_settings: HTTPQuerySettings,
@@ -160,55 +199,71 @@ def run_query_to_correct_tier(
             timer=timer,
         )
 
-    query_settings.set_sampling_tier(_get_most_downsampled_tier())
+    with sentry_sdk.start_span(op="query_most_downsampled_tier"):
 
-    referrer = in_msg.meta.referrer
+        query_settings.set_sampling_tier(_get_most_downsampled_tier())
 
-    request_to_most_downsampled_tier = build_snuba_request(
-        in_msg, query_settings, build_query
-    )
-    res = _run_query_on_most_downsampled_tier(
-        request_to_most_downsampled_tier, timer, metrics_backend, referrer
-    )
+        referrer = in_msg.meta.referrer
+
+        request_to_most_downsampled_tier = build_snuba_request(
+            in_msg, query_settings, build_query
+        )
+        res = _run_query_on_most_downsampled_tier(
+            request_to_most_downsampled_tier, timer, metrics_backend, referrer
+        )
 
     if _is_best_effort_mode(in_msg):
-        query_settings.push_clickhouse_setting(
-            "max_execution_time",
-            _get_time_budget() / 1000,
-        )
-        query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
-        target_tier, estimated_target_tier_query_duration = _get_target_tier(
-            res, metrics_backend, referrer
-        )
+        with sentry_sdk.start_span(op="redirect_to_target_tier") as span:
+            query_settings.push_clickhouse_setting(
+                "max_execution_time",
+                _get_time_budget() / 1000,
+            )
+            query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
+            target_tier, estimated_target_tier_query_duration = _get_target_tier(
+                res, metrics_backend, referrer
+            )
 
-        if target_tier == _get_most_downsampled_tier():
+            span.set_data("target_tier", target_tier)
+            span.set_data(
+                "estimated_target_tier_query_duration",
+                estimated_target_tier_query_duration,
+            )
+
+            if target_tier == _get_most_downsampled_tier():
+                _record_actual_query_duration(
+                    span,
+                    metrics_backend,
+                    res,
+                    tags={"referrer": referrer, "tier": str(target_tier)},
+                )
+                return res
+
+            query_settings.set_sampling_tier(target_tier)
+
+            request_to_target_tier = build_snuba_request(
+                in_msg, query_settings, build_query
+            )
+
+            res = run_query(
+                dataset=PluggableDataset(name="eap", all_entities=[]),
+                request=request_to_target_tier,
+                timer=timer,
+            )
             _record_actual_query_duration(
+                span,
                 metrics_backend,
                 res,
                 tags={"referrer": referrer, "tier": str(target_tier)},
             )
-            return res
+            estimation_error = (
+                estimated_target_tier_query_duration - _get_query_duration_ms(res)
+            )
+            metrics_backend.timing(
+                "sampling_in_storage_estimation_error",
+                estimated_target_tier_query_duration - _get_query_duration_ms(res),
+                tags={"referrer": referrer, "tier": str(target_tier)},
+            )
 
-        query_settings.set_sampling_tier(target_tier)
-
-        request_to_target_tier = build_snuba_request(
-            in_msg, query_settings, build_query
-        )
-
-        res = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=request_to_target_tier,
-            timer=timer,
-        )
-        _record_actual_query_duration(
-            metrics_backend,
-            res,
-            tags={"referrer": referrer, "tier": str(target_tier)},
-        )
-        metrics_backend.timing(
-            "sampling_in_storage_estimation_error",
-            estimated_target_tier_query_duration - _get_query_duration_ms(res),
-            tags={"referrer": referrer, "tier": str(target_tier)},
-        )
+            span.set_data("estimation_error", estimation_error)
 
     return res

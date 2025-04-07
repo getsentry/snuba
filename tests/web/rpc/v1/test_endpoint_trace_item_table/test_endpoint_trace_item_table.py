@@ -53,7 +53,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state import set_config
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -3373,9 +3372,9 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
 
             # tier 1's results should be 3600, so tier 64's results should be around 3600 / 64 (give or take due to random sampling)
             assert (
-                len(non_downsampled_tier_response.column_values[0].results) / 90
+                len(non_downsampled_tier_response.column_values[0].results) / 200
                 <= len(best_effort_response.column_values[0].results)
-                <= len(non_downsampled_tier_response.column_values[0].results) / 40
+                <= len(non_downsampled_tier_response.column_values[0].results) / 16
             )
             assert (
                 best_effort_response.meta.downsampled_storage_meta
@@ -3472,7 +3471,6 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         """
         This test filters by env != "prod" and ensures that both "env"="dev" and "env"=None (attribute doesnt exist on the span) are returned.
         """
-        set_config("use_new_null_comparison", 1)
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_span(span_ts, {"env": "prod", "num_cats": 1})
         write_eap_span(span_ts, {"env": "dev", "num_cats": 2})

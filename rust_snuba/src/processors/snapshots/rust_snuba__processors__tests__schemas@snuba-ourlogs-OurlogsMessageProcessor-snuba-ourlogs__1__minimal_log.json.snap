@@ -6,11 +6,15 @@ expression: snapshot_payload
 [
   {
     "attributes_bool": {},
+    "attributes_float_14": {
+      "sentry.timestamp_precise": "<item timestamp>"
+    },
     "attributes_float_37": {
       "sentry.severity_number": 0.0
     },
     "attributes_int": {
-      "sentry.severity_number": 0
+      "sentry.severity_number": 0,
+      "sentry.timestamp_precise": "<item timestamp>"
     },
     "attributes_string_0": {
       "sentry.body": "hello world!"

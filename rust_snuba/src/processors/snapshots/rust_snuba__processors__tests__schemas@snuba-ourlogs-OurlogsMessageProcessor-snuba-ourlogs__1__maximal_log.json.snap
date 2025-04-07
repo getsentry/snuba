@@ -8,6 +8,9 @@ expression: snapshot_payload
     "attributes_bool": {
       "bool.user.tag": true
     },
+    "attributes_float_14": {
+      "sentry.timestamp_precise": "<item timestamp>"
+    },
     "attributes_float_15": {
       "double.user.tag": -10.59
     },
@@ -22,7 +25,8 @@ expression: snapshot_payload
     },
     "attributes_int": {
       "another.user.tag": 10,
-      "sentry.severity_number": 1
+      "sentry.severity_number": 1,
+      "sentry.timestamp_precise": "<item timestamp>"
     },
     "attributes_string_0": {
       "sentry.body": "hello world!"

@@ -115,6 +115,17 @@ pub fn deserialize_message(
             let error_sample_rate = event.contexts.replay.error_sample_rate.unwrap_or(-1.0);
             let session_sample_rate = event.contexts.replay.session_sample_rate.unwrap_or(-1.0);
 
+            let segment_id = match event.segment_id {
+                Some(s_id) => {
+                    if s_id <= u16::MAX.into() {
+                        Some(s_id as u16)
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            };
+
             vec![ReplayRow {
                 browser_name: event.contexts.browser.name.unwrap_or_default(),
                 browser_version: event.contexts.browser.version.unwrap_or_default(),
@@ -144,7 +155,6 @@ pub fn deserialize_message(
                 retention_days: replay_message.retention_days,
                 sdk_name: event.sdk.name.unwrap_or_default(),
                 sdk_version: event.sdk.version.unwrap_or_default(),
-                segment_id: event.segment_id,
                 timestamp: event.timestamp as u32,
                 trace_ids: event.trace_ids.unwrap_or_default(),
                 urls: event.urls.unwrap_or_default(),
@@ -152,6 +162,7 @@ pub fn deserialize_message(
                 user_email: event.user.email.unwrap_or_default(),
                 user_id: user_id.unwrap_or_default(),
                 user_name: event.user.username.unwrap_or_default(),
+                segment_id,
                 title,
                 tags_key,
                 tags_value: tags_value
@@ -304,7 +315,7 @@ struct ReplayEvent {
     #[serde(default)]
     sdk: Version,
     #[serde(default)]
-    segment_id: Option<u16>,
+    segment_id: Option<u32>,
     timestamp: f64,
     #[serde(default)]
     urls: Option<Vec<String>>,
@@ -468,6 +479,77 @@ mod tests {
     use chrono::DateTime;
     use sentry_arroyo::backends::kafka::types::KafkaPayload;
     use std::{str::FromStr, time::SystemTime};
+
+    #[test]
+    fn test_parse_replay_event_overflow_segment_id() {
+        let payload = r#"{
+            "contexts": {
+                "browser": {
+                    "name": "browser",
+                    "version": "v1"
+                },
+                "device": {
+                    "brand": "brand",
+                    "family": "family",
+                    "model": "model",
+                    "name": "name"
+                },
+                "os": {
+                    "name": "os",
+                    "version": "v1"
+                },
+                "replay": {
+                    "error_sample_rate": 1,
+                    "session_sample_rate": 0.5
+                }
+            },
+            "user": {
+                "email": "email",
+                "ip_address": "127.0.0.1",
+                "id": "user_id",
+                "username": "username"
+            },
+            "sdk": {
+                "name": "sdk",
+                "version": "v1"
+            },
+            "dist": "dist",
+            "environment": "environment",
+            "is_archived": false,
+            "platform": "platform",
+            "release": "release",
+            "replay_start_timestamp": 1702659277,
+            "replay_type": "buffer",
+            "urls": ["urls"],
+            "trace_ids": ["2cd798d70f9346089026d2014a826629"],
+            "error_ids": ["df11e6d952da470386a64340f13151c4"],
+            "tags": [
+                ["a", "b"],
+                ["transaction.name", null]
+            ],
+            "segment_id": 4206942069,
+            "replay_id": "048aa04be40243948eb3b57089c519ee",
+            "timestamp": 1702659277,
+            "type": "replay_event"
+        }"#;
+        let payload_value = payload.as_bytes();
+
+        let data = format!(
+            r#"{{
+                "payload": {payload_value:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let replay_row = rows.first().unwrap();
+        assert_eq!(replay_row.segment_id, None);
+    }
 
     #[test]
     fn test_parse_replay_event() {
