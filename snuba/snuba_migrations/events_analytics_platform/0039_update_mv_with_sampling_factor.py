@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import List, Sequence
 
 from snuba.clickhouse.columns import Array, Column, UInt
@@ -100,7 +101,7 @@ columns.extend(
     ]
 )
 
-columns_with_sampling_factor = columns
+columns_with_sampling_factor = deepcopy(columns)
 columns_with_sampling_factor.insert(
     7,
     Column("sampling_factor", Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
@@ -158,7 +159,7 @@ class Migration(migration.ClickhouseNodeMigration):
     sampling_weights = [8, 8**2, 8**3]
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
-        ops = []
+        ops: List[SqlOperation] = []
         for sampling_weight in self.sampling_weights:
             local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
             mv_name = f"eap_items_1_downsample_{sampling_weight}_mv_2"
@@ -190,7 +191,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return ops
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
-        ops = []
+        ops: List[SqlOperation] = []
         for sampling_weight in self.sampling_weights:
             local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
             mv_name = f"eap_items_1_downsample_{sampling_weight}_mv"
@@ -199,7 +200,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 operations.CreateMaterializedView(
                     storage_set=self.storage_set_key,
                     view_name=mv_name,
-                    columns=columns_with_sampling_factor,
+                    columns=columns,
                     destination_table_name=local_table_name,
                     target=OperationTarget.LOCAL,
                     query=mv_query,
