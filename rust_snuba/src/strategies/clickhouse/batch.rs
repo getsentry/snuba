@@ -41,6 +41,7 @@ impl BatchFactory {
         concurrency: &ConcurrencyConfig,
         clickhouse_user: &str,
         clickhouse_password: &str,
+        clickhouse_secure: bool,
         async_inserts: bool,
         batch_write_timeout: Option<Duration>,
         custom_envoy_request_timeout: Option<u64>,
@@ -77,7 +78,9 @@ impl BatchFactory {
             }
         }
 
-        let url = format!("http://{hostname}:{http_port}?{query_params}");
+        let scheme = if clickhouse_secure { "https" } else { "http" };
+
+        let url = format!("{scheme}://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
         let client = if let Some(timeout_duration) = batch_write_timeout {
@@ -274,6 +277,7 @@ mod tests {
             "default",
             "",
             false,
+            false,
             None,
             None,
         );
@@ -309,6 +313,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
             true,
             None,
             None,
@@ -345,6 +350,7 @@ mod tests {
             "default",
             "",
             false,
+            false,
             None,
             None,
         );
@@ -377,6 +383,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
             false,
             None,
             None,
@@ -412,6 +419,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
             true,
             // pass in an unreasonably short timeout
             // which prevents the client request from reaching Clickhouse
@@ -448,6 +456,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
             true,
             // pass in a reasonable timeout
             Some(Duration::from_millis(1000)),
