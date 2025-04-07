@@ -55,6 +55,26 @@ class Timer:
 
         return duration_group
 
+    def get_duration_between_marks(self, start_mark: str, end_mark: str) -> float:
+        start_mark_duration = -1
+        end_mark_duration = -1
+        for mark, timestamp in self.__marks:
+            if mark == start_mark:
+                start_mark_duration = self.__diff_ms(self.__marks[0][1], timestamp)
+            if mark == end_mark:
+                end_mark_duration = self.__diff_ms(self.__marks[0][1], timestamp)
+
+        missing_marks = []
+        if start_mark_duration == -1:
+            missing_marks.append(start_mark)
+        if end_mark_duration == -1:
+            missing_marks.append(end_mark)
+
+        if missing_marks:
+            raise MissingTimerMarksException(missing_marks)
+
+        return end_mark_duration - start_mark_duration
+
     def finish(self) -> TimerData:
         if self.__data is None:
             start = self.__marks[0][1]

@@ -36,6 +36,8 @@ DOWNSAMPLING_TIER_MULTIPLIERS: Dict[Tier, int] = {
     Tier.TIER_1: 512,
 }
 _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
+_START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
+_END_ESTIMATION_MARK = "end_sampling_in_storage_estimation"
 
 
 def _get_time_budget() -> float:
@@ -144,8 +146,8 @@ def _get_target_tier(
             span,
             metrics_backend.increment,
             "target_tier",
-            target_tier,
-            {"referrer": referrer},
+            1,
+            {"referrer": referrer, "tier": str(tier)},
         )
 
         span.set_data(
@@ -234,6 +236,7 @@ def run_query_to_correct_tier(
         )
 
     with sentry_sdk.start_span(op="query_most_downsampled_tier"):
+        timer.mark(_START_ESTIMATION_MARK)
 
         query_settings.set_sampling_tier(_get_most_downsampled_tier())
 
@@ -256,6 +259,16 @@ def run_query_to_correct_tier(
             target_tier, estimated_target_tier_query_bytes_scanned = _get_target_tier(
                 res, metrics_backend, referrer, timer
             )
+            timer.mark(_END_ESTIMATION_MARK)
+            _record_value_in_span_and_DD(
+                span,
+                metrics_backend.timing,
+                "estimation_time_overhead",
+                timer.get_duration_between_marks(
+                    _START_ESTIMATION_MARK, _END_ESTIMATION_MARK
+                ),
+                {"referrer": referrer, "tier": str(target_tier)},
+            )
 
             span.set_data(_SAMPLING_IN_STORAGE_PREFIX + "target_tier", target_tier)
             span.set_data(
@@ -277,7 +290,7 @@ def run_query_to_correct_tier(
                 _record_value_in_span_and_DD(
                     span,
                     metrics_backend.distribution,
-                    "estimation_error",
+                    "estimation_error_percentage",
                     abs(
                         estimated_target_tier_query_bytes_scanned
                         - _get_query_bytes_scanned(res)
