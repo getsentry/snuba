@@ -159,6 +159,79 @@ class TestTraceItemDetails(BaseApiTest):
             error_proto.ParseFromString(response.data)
         assert response.status_code == 404, error_proto
 
+    def test_missing_item_id(self, setup_logs_in_db: Any) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = TraceItemDetailsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=0),
+                end_timestamp=ts,
+                request_id=_REQUEST_ID,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            trace_id=uuid.uuid4().hex,
+        )
+        response = self.app.post(
+            "/rpc/EndpointTraceItemDetails/v1", data=message.SerializeToString()
+        )
+        error_proto = ErrorProto()
+        if response.status_code != 200:
+            error_proto.ParseFromString(response.data)
+        assert response.status_code == 400, error_proto
+
+    def test_missing_trace_id(self, setup_logs_in_db: Any) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = TraceItemDetailsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=0),
+                end_timestamp=ts,
+                request_id=_REQUEST_ID,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            item_id="00000",
+        )
+        response = self.app.post(
+            "/rpc/EndpointTraceItemDetails/v1", data=message.SerializeToString()
+        )
+        error_proto = ErrorProto()
+        if response.status_code != 200:
+            error_proto.ParseFromString(response.data)
+        assert response.status_code == 400, error_proto
+
+    def test_invalid_trace_id(self, setup_logs_in_db: Any) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = TraceItemDetailsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=0),
+                end_timestamp=ts,
+                request_id=_REQUEST_ID,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            item_id="00000",
+            trace_id="baduuid",
+        )
+        response = self.app.post(
+            "/rpc/EndpointTraceItemDetails/v1", data=message.SerializeToString()
+        )
+        error_proto = ErrorProto()
+        if response.status_code != 200:
+            error_proto.ParseFromString(response.data)
+        assert response.status_code == 400, error_proto
+
     def test_endpoint_on_logs(self, setup_logs_in_db: Any) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()

@@ -216,6 +216,22 @@ class EndpointTraceItemDetails(
             raise BadSnubaRPCRequestException(
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
             )
+        if in_msg.item_id == "":
+            raise BadSnubaRPCRequestException(
+                "This endpoint requires item_id to be set."
+            )
+        if in_msg.trace_id == "":
+            raise BadSnubaRPCRequestException(
+                "This endpoint requires trace_id to be set."
+            )
+        else:
+            try:
+                _ = uuid.UUID(in_msg.trace_id)
+            except ValueError:
+                raise BadSnubaRPCRequestException(
+                    "This endpoint requires trace_id to be a valid UUID."
+                )
+
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
