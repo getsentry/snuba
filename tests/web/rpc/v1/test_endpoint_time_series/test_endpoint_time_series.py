@@ -1517,7 +1517,7 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
         # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
         with patch(
             "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._get_query_bytes_scanned",
-            return_value=314572799,
+            return_value=2516582401,
         ):
             best_effort_response = EndpointTimeSeries().execute(
                 best_effort_downsample_message

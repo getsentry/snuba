@@ -57,14 +57,36 @@ def _get_query_bytes_scanned(res: QueryResult) -> int:
     return cast(int, res.result.get("profile", {}).get("progress_bytes", 0))  # type: ignore
 
 
+def _get_query_duration_ms(res: QueryResult) -> float:
+    return cast(float, res.result.get("profile", {}).get("elapsed", 0) * 1000)  # type: ignore
+
+
 def _get_most_downsampled_tier() -> Tier:
     return sorted(Tier, reverse=True)[0]
 
 
+def _record_duration(
+    span: Span,
+    metrics_backend: MetricsBackend,
+    name: str,
+    duration: float,
+    tags: Dict[str, str],
+) -> None:
+    metrics_backend.timing(name, duration, tags)
+    span.set_data(name, duration)
+
+
 def _get_target_tier(
-    most_downsampled_res: QueryResult, metrics_backend: MetricsBackend, referrer: str
+    most_downsampled_res: QueryResult,
+    metrics_backend: MetricsBackend,
+    referrer: str,
+    timer: Timer,
 ) -> Tuple[Tier, float]:
+    _ESTIMATION_START_MARK = "sampling_in_storage_estimation_start"
+    _ESTIMATION_END_MARK = "sampling_in_storage_estimation_end"
     with sentry_sdk.start_span(op="_get_target_tier") as span:
+        timer.mark(_ESTIMATION_START_MARK)
+
         most_downsampled_query_bytes_scanned = _get_query_bytes_scanned(
             most_downsampled_res
         )
@@ -106,6 +128,16 @@ def _get_target_tier(
                 tier_specific_span.set_data("target_tier", target_tier)
                 tier_specific_span.set_data("bytes_scanned_limit", bytes_scanned_limit)
 
+        timer.mark(_ESTIMATION_END_MARK)
+        _record_duration(
+            span,
+            metrics_backend,
+            "sampling_in_storage_time_to_run_storage_routing_algo",
+            timer.get_duration_between_marks(
+                _ESTIMATION_START_MARK, _ESTIMATION_END_MARK
+            ),
+            tags={"referrer": referrer, "tier": str(target_tier)},
+        )
         metrics_backend.timing(
             "sampling_in_storage_routed_tier",
             target_tier,
@@ -226,7 +258,7 @@ def run_query_to_correct_tier(
             )
             query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
             target_tier, estimated_target_tier_query_bytes_scanned = _get_target_tier(
-                res, metrics_backend, referrer
+                res, metrics_backend, referrer, timer
             )
 
             span.set_data("target_tier", target_tier)
@@ -268,6 +300,14 @@ def run_query_to_correct_tier(
             metrics_backend.timing(
                 "sampling_in_storage_estimation_error",
                 estimation_error,
+                tags={"referrer": referrer, "tier": str(target_tier)},
+            )
+
+            _record_duration(
+                span,
+                metrics_backend,
+                f"time_to_run_query_in_target_tier_Tier_{target_tier}",
+                _get_query_duration_ms(res),
                 tags={"referrer": referrer, "tier": str(target_tier)},
             )
 
