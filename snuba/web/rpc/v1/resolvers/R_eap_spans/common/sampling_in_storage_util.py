@@ -6,6 +6,7 @@ from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_sdk.tracing import Span
 
 from snuba import state
@@ -136,6 +137,15 @@ def _record_actual_query_duration(
 def build_snuba_request(
     request: T, query_settings: QuerySettings, build_query: Callable[[T], Query]
 ) -> SnubaRequest:
+    if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
+        team = "ourlogs"
+        feature = "ourlogs"
+        parent_api = "ourlog_trace_item_table"
+    else:
+        team = "eap"
+        feature = "eap"
+        parent_api = "eap_span_samples"
+
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
@@ -143,14 +153,14 @@ def build_snuba_request(
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
-            team="eap",
-            feature="eap",
+            team=team,
+            feature=feature,
             tenant_ids={
                 "organization_id": request.meta.organization_id,
                 "referrer": request.meta.referrer,
             },
             app_id=AppID("eap"),
-            parent_api="eap_span_samples",
+            parent_api=parent_api,
         ),
     )
 
