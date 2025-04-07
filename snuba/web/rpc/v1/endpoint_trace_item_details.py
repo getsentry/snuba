@@ -101,6 +101,10 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
                 column("item_id"),
                 literal(request.item_id),
             ),
+            f.equals(
+                column("trace_id"),
+                literal(request.trace_id),
+            ),
             trace_item_filters_to_expression(
                 request.filter, attribute_key_to_expression
             ),

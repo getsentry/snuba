@@ -246,13 +246,19 @@ class TestTraceItemDetails(BaseApiTest):
                             key=AttributeKey(
                                 type=AttributeKey.TYPE_STRING, name="sentry.item_id"
                             )
-                        )
+                        ),
+                        Column(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_STRING, name="sentry.trace_id"
+                            )
+                        ),
                     ],
                 )
             )
             .column_values
         )
         span_id = spans[0].results[0].val_str
+        trace_id = spans[1].results[0].val_str
 
         res = EndpointTraceItemDetails().execute(
             TraceItemDetailsRequest(
@@ -267,6 +273,7 @@ class TestTraceItemDetails(BaseApiTest):
                     trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 item_id=span_id,
+                trace_id=trace_id,
             )
         )
 
