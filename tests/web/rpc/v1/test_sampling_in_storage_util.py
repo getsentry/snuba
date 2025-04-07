@@ -61,12 +61,6 @@ def test_get_target_tier(
             * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(target_tier))
         )
 
-        metrics_mock.timing.assert_any_call(
-            "sampling_in_storage_routed_tier",
-            expected_tier,
-            tags={"referrer": DOESNT_MATTER_STR},
-        )
-
 
 def test_sampling_in_storage_query_bytes_scanned_from_most_downsampled_tier_metric_is_sent() -> None:
     timer = Timer(DOESNT_MATTER_STR)

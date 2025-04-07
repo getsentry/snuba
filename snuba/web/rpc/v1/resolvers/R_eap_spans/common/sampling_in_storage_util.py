@@ -83,6 +83,7 @@ def _record_value_in_span_and_DD(
     value: float | int,
     tags: Dict[str, str],
 ) -> None:
+    name = _SAMPLING_IN_STORAGE_PREFIX + name
     metrics_backend_func(name, value, tags, None)
     span.set_data(name, value)
 
@@ -93,11 +94,7 @@ def _get_target_tier(
     referrer: str,
     timer: Timer,
 ) -> Tuple[Tier, int]:
-    _ESTIMATION_START_MARK = _SAMPLING_IN_STORAGE_PREFIX + "estimation_start"
-    _ESTIMATION_END_MARK = _SAMPLING_IN_STORAGE_PREFIX + "estimation_end"
     with sentry_sdk.start_span(op="_get_target_tier") as span:
-        timer.mark(_ESTIMATION_START_MARK)
-
         most_downsampled_query_bytes_scanned = _get_query_bytes_scanned(
             most_downsampled_res
         )
@@ -123,7 +120,7 @@ def _get_target_tier(
                 _record_value_in_span_and_DD(
                     span,
                     metrics_backend.distribution,
-                    _SAMPLING_IN_STORAGE_PREFIX + "estimated_query_bytes_scanned",
+                    "estimated_query_bytes_scanned",
                     estimated_query_bytes_scanned_to_this_tier,
                     {"referrer": referrer, "tier": str(tier)},
                 )
@@ -143,20 +140,10 @@ def _get_target_tier(
                     bytes_scanned_limit,
                 )
 
-        timer.mark(_ESTIMATION_END_MARK)
         _record_value_in_span_and_DD(
             span,
-            metrics_backend.timing,
-            _SAMPLING_IN_STORAGE_PREFIX + "time_to_run_storage_routing_algo",
-            timer.get_duration_between_marks(
-                _ESTIMATION_START_MARK, _ESTIMATION_END_MARK
-            ),
-            tags={"referrer": referrer, "tier": str(target_tier)},
-        )
-        _record_value_in_span_and_DD(
-            span,
-            metrics_backend.timing,
-            _SAMPLING_IN_STORAGE_PREFIX + "target_tier",
+            metrics_backend.increment,
+            "target_tier",
             target_tier,
             {"referrer": referrer},
         )
@@ -213,9 +200,15 @@ def _run_query_on_most_downsampled_tier(
         _record_value_in_span_and_DD(
             span,
             metrics_backend.timing,
-            _SAMPLING_IN_STORAGE_PREFIX
-            + "query_bytes_scanned_from_most_downsampled_tier",
+            "query_bytes_scanned_from_most_downsampled_tier",
             _get_query_bytes_scanned(res),
+            {"referrer": referrer},
+        )
+        _record_value_in_span_and_DD(
+            span,
+            metrics_backend.timing,
+            "query_duration_from_most_downsampled_tier",
+            _get_query_duration_ms(res),
             {"referrer": referrer},
         )
         return res
@@ -284,23 +277,26 @@ def run_query_to_correct_tier(
                 _record_value_in_span_and_DD(
                     span,
                     metrics_backend.distribution,
-                    _SAMPLING_IN_STORAGE_PREFIX + "estimation_error",
-                    estimated_target_tier_query_bytes_scanned
-                    - _get_query_bytes_scanned(res),
+                    "estimation_error",
+                    abs(
+                        estimated_target_tier_query_bytes_scanned
+                        - _get_query_bytes_scanned(res)
+                    )
+                    / _get_query_bytes_scanned(res),
                     {"referrer": referrer, "tier": str(target_tier)},
                 )
 
             _record_value_in_span_and_DD(
                 span,
                 metrics_backend.distribution,
-                f"{_SAMPLING_IN_STORAGE_PREFIX}_actual_bytes_scanned_in_target_tier_{target_tier}",
+                f"actual_bytes_scanned_in_target_tier_{target_tier}",
                 _get_query_bytes_scanned(res),
                 tags={"referrer": referrer, "tier": str(target_tier)},
             )
             _record_value_in_span_and_DD(
                 span,
                 metrics_backend.timing,
-                f"{_SAMPLING_IN_STORAGE_PREFIX}_time_to_run_query_in_target_tier_{target_tier}",
+                f"time_to_run_query_in_target_tier_{target_tier}",
                 _get_query_duration_ms(res),
                 tags={"referrer": referrer, "tier": str(target_tier)},
             )
