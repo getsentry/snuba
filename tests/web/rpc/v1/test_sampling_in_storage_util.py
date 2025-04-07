@@ -42,6 +42,7 @@ def test_get_target_tier(
 ) -> None:
     res = MagicMock(QueryResult)
     metrics_mock = MagicMock(spec=MetricsBackend)
+    timer = MagicMock(spec=Timer)
 
     with patch(
         SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_query_bytes_scanned",
@@ -51,7 +52,7 @@ def test_get_target_tier(
         return_value=bytes_scanned_limit,
     ):
         target_tier, estimated_target_tier_query_bytes_scanned = _get_target_tier(
-            res, metrics_mock, DOESNT_MATTER_STR
+            res, metrics_mock, DOESNT_MATTER_STR, timer
         )
         assert target_tier == expected_tier
         assert (
