@@ -149,6 +149,7 @@ class TestTraceItemDetails(BaseApiTest):
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
             ),
             item_id="00000",
+            trace_id=uuid.uuid4().hex,
         )
         response = self.app.post(
             "/rpc/EndpointTraceItemDetails/v1", data=message.SerializeToString()
@@ -181,13 +182,19 @@ class TestTraceItemDetails(BaseApiTest):
                             key=AttributeKey(
                                 type=AttributeKey.TYPE_STRING, name="sentry.item_id"
                             )
-                        )
+                        ),
+                        Column(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_STRING, name="sentry.trace_id"
+                            )
+                        ),
                     ],
                 )
             )
             .column_values
         )
         log_id = logs[0].results[0].val_str
+        trace_id = logs[1].results[0].val_str
 
         res = EndpointTraceItemDetails().execute(
             TraceItemDetailsRequest(
@@ -202,6 +209,7 @@ class TestTraceItemDetails(BaseApiTest):
                     trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
                 ),
                 item_id=log_id,
+                trace_id=trace_id,
             )
         )
 
