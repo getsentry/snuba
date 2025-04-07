@@ -3362,8 +3362,8 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         )
         # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
         with patch(
-            "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._get_query_duration_ms",
-            return_value=2777.0,
+            "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._get_query_bytes_scanned",
+            return_value=314572799,
         ):
             best_effort_response = EndpointTraceItemTable().execute(best_effort_message)
             non_downsampled_tier_response = EndpointTraceItemTable().execute(
