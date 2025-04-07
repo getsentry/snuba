@@ -67,7 +67,10 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
                 "timestamp", f.toUnixTimestamp(column("timestamp"), alias="timestamp")
             ),
             SelectedExpression("hex_item_id", column("item_id", alias="hex_item_id")),
-            SelectedExpression("trace_id", column("trace_id", alias="trace_id")),
+            SelectedExpression(
+                "trace_id",
+                column("trace_id", alias="selected_trace_id"),
+            ),
             SelectedExpression(
                 "organization_id", column("organization_id", alias="organization_id")
             ),
@@ -100,6 +103,10 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             f.equals(
                 column("item_id"),
                 literal(request.item_id),
+            ),
+            f.equals(
+                column("trace_id"),
+                literal(request.trace_id),
             ),
             trace_item_filters_to_expression(
                 request.filter, attribute_key_to_expression
@@ -209,6 +216,22 @@ class EndpointTraceItemDetails(
             raise BadSnubaRPCRequestException(
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
             )
+        if in_msg.item_id == "":
+            raise BadSnubaRPCRequestException(
+                "This endpoint requires item_id to be set."
+            )
+        if in_msg.trace_id == "":
+            raise BadSnubaRPCRequestException(
+                "This endpoint requires trace_id to be set."
+            )
+        else:
+            try:
+                _ = uuid.UUID(in_msg.trace_id)
+            except ValueError:
+                raise BadSnubaRPCRequestException(
+                    "This endpoint requires trace_id to be a valid UUID."
+                )
+
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),

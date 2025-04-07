@@ -149,6 +149,7 @@ class TestTraceItemDetails(BaseApiTest):
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
             ),
             item_id="00000",
+            trace_id=uuid.uuid4().hex,
         )
         response = self.app.post(
             "/rpc/EndpointTraceItemDetails/v1", data=message.SerializeToString()
@@ -157,6 +158,79 @@ class TestTraceItemDetails(BaseApiTest):
         if response.status_code != 200:
             error_proto.ParseFromString(response.data)
         assert response.status_code == 404, error_proto
+
+    def test_missing_item_id(self, setup_logs_in_db: Any) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = TraceItemDetailsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=0),
+                end_timestamp=ts,
+                request_id=_REQUEST_ID,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            trace_id=uuid.uuid4().hex,
+        )
+        response = self.app.post(
+            "/rpc/EndpointTraceItemDetails/v1", data=message.SerializeToString()
+        )
+        error_proto = ErrorProto()
+        if response.status_code != 200:
+            error_proto.ParseFromString(response.data)
+        assert response.status_code == 400, error_proto
+
+    def test_missing_trace_id(self, setup_logs_in_db: Any) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = TraceItemDetailsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=0),
+                end_timestamp=ts,
+                request_id=_REQUEST_ID,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            item_id="00000",
+        )
+        response = self.app.post(
+            "/rpc/EndpointTraceItemDetails/v1", data=message.SerializeToString()
+        )
+        error_proto = ErrorProto()
+        if response.status_code != 200:
+            error_proto.ParseFromString(response.data)
+        assert response.status_code == 400, error_proto
+
+    def test_invalid_trace_id(self, setup_logs_in_db: Any) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = TraceItemDetailsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=0),
+                end_timestamp=ts,
+                request_id=_REQUEST_ID,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            item_id="00000",
+            trace_id="baduuid",
+        )
+        response = self.app.post(
+            "/rpc/EndpointTraceItemDetails/v1", data=message.SerializeToString()
+        )
+        error_proto = ErrorProto()
+        if response.status_code != 200:
+            error_proto.ParseFromString(response.data)
+        assert response.status_code == 400, error_proto
 
     def test_endpoint_on_logs(self, setup_logs_in_db: Any) -> None:
         ts = Timestamp()
@@ -181,13 +255,19 @@ class TestTraceItemDetails(BaseApiTest):
                             key=AttributeKey(
                                 type=AttributeKey.TYPE_STRING, name="sentry.item_id"
                             )
-                        )
+                        ),
+                        Column(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_STRING, name="sentry.trace_id"
+                            )
+                        ),
                     ],
                 )
             )
             .column_values
         )
         log_id = logs[0].results[0].val_str
+        trace_id = logs[1].results[0].val_str
 
         res = EndpointTraceItemDetails().execute(
             TraceItemDetailsRequest(
@@ -202,6 +282,7 @@ class TestTraceItemDetails(BaseApiTest):
                     trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
                 ),
                 item_id=log_id,
+                trace_id=trace_id,
             )
         )
 
@@ -246,13 +327,19 @@ class TestTraceItemDetails(BaseApiTest):
                             key=AttributeKey(
                                 type=AttributeKey.TYPE_STRING, name="sentry.item_id"
                             )
-                        )
+                        ),
+                        Column(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_STRING, name="sentry.trace_id"
+                            )
+                        ),
                     ],
                 )
             )
             .column_values
         )
         span_id = spans[0].results[0].val_str
+        trace_id = spans[1].results[0].val_str
 
         res = EndpointTraceItemDetails().execute(
             TraceItemDetailsRequest(
@@ -267,6 +354,7 @@ class TestTraceItemDetails(BaseApiTest):
                     trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 item_id=span_id,
+                trace_id=trace_id,
             )
         )
 
