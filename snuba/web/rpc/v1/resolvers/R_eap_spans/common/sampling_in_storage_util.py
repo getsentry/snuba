@@ -44,8 +44,17 @@ def _get_time_budget() -> float:
     return sentry_timeout_ms - error_budget_ms
 
 
-def _get_query_duration_ms(res: QueryResult) -> float:
-    return cast(float, res.result.get("profile", {}).get("elapsed", 0) * 1000)  # type: ignore
+def _get_bytes_scanned_limit() -> int:
+    return cast(
+        int,
+        state.get_int_config(
+            "sampling_in_storage_bytes_scanned_per_query_limit", default=161061273600
+        ),
+    )  # 150 gigabytes is default
+
+
+def _get_query_bytes_scanned(res: QueryResult) -> int:
+    return cast(int, res.result.get("profile", {}).get("progress_bytes", 0))  # type: ignore
 
 
 def _get_most_downsampled_tier() -> Tier:
@@ -56,49 +65,46 @@ def _get_target_tier(
     most_downsampled_res: QueryResult, metrics_backend: MetricsBackend, referrer: str
 ) -> Tuple[Tier, float]:
     with sentry_sdk.start_span(op="_get_target_tier") as span:
-        most_downsampled_query_duration_ms = _get_query_duration_ms(
+        most_downsampled_query_bytes_scanned = _get_query_bytes_scanned(
             most_downsampled_res
         )
         span.set_data(
-            "most_downsampled_query_duration_ms", most_downsampled_query_duration_ms
+            "most_downsampled_query_bytes_scanned", most_downsampled_query_bytes_scanned
         )
 
         target_tier = _get_most_downsampled_tier()
-        estimated_target_tier_query_duration = (
-            most_downsampled_query_duration_ms
+        estimated_target_tier_bytes_scanned = (
+            most_downsampled_query_bytes_scanned
             * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(target_tier))
         )
         for tier in sorted(Tier, reverse=True)[:-1]:
             with sentry_sdk.start_span(
                 op=f"_get_target_tier.Tier_{tier}"
             ) as tier_specific_span:
-                estimated_query_duration_to_this_tier = (
-                    most_downsampled_query_duration_ms
+                estimated_query_bytes_scanned_to_this_tier = (
+                    most_downsampled_query_bytes_scanned
                     * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier))
                 )
 
                 tier_specific_span.set_data(
-                    "estimated_query_duration_to_this_tier",
-                    estimated_query_duration_to_this_tier,
+                    "estimated_query_bytes_scanned_to_this_tier",
+                    estimated_query_bytes_scanned_to_this_tier,
                 )
                 metrics_backend.timing(
-                    "sampling_in_storage_estimated_query_duration",
-                    estimated_query_duration_to_this_tier,
+                    "sampling_in_storage_estimated_query_bytes_scanned",
+                    estimated_query_bytes_scanned_to_this_tier,
                     tags={"referrer": referrer, "tier": str(tier)},
                 )
 
-                time_budget = _get_time_budget()
-                if (
-                    estimated_query_duration_to_this_tier
-                    <= time_budget - most_downsampled_query_duration_ms
-                ):
+                bytes_scanned_limit = _get_bytes_scanned_limit()
+                if estimated_query_bytes_scanned_to_this_tier <= bytes_scanned_limit:
                     target_tier = tier
-                    estimated_target_tier_query_duration = (
-                        estimated_query_duration_to_this_tier
+                    estimated_target_tier_bytes_scanned = (
+                        estimated_query_bytes_scanned_to_this_tier
                     )
 
                 tier_specific_span.set_data("target_tier", target_tier)
-                tier_specific_span.set_data("time_budget", time_budget)
+                tier_specific_span.set_data("bytes_scanned_limit", bytes_scanned_limit)
 
         metrics_backend.timing(
             "sampling_in_storage_routed_tier",
@@ -107,9 +113,9 @@ def _get_target_tier(
         )
         span.set_data("target_tier", target_tier)
         span.set_data(
-            "estimated_target_tier_query_duration", estimated_target_tier_query_duration
+            "estimated_target_tier_bytes_scanned", estimated_target_tier_bytes_scanned
         )
-        return target_tier, estimated_target_tier_query_duration
+        return target_tier, estimated_target_tier_bytes_scanned
 
 
 def _is_best_effort_mode(in_msg: T) -> bool:
@@ -120,15 +126,15 @@ def _is_best_effort_mode(in_msg: T) -> bool:
     )
 
 
-def _record_actual_query_duration(
+def _record_actual_bytes_scanned(
     span: Span, metrics_backend: MetricsBackend, res: QueryResult, tags: Dict[str, str]
 ) -> None:
-    actual_query_duration_ms = _get_query_duration_ms(res)
+    actual_query_bytes_scanned = _get_query_bytes_scanned(res)
     span.set_data("tier", tags.get("tier", -1))
-    span.set_data("actual_query_duration_ms", actual_query_duration_ms)
+    span.set_data("actual_query_bytes_scanned", actual_query_bytes_scanned)
     metrics_backend.timing(
-        "sampling_in_storage_actual_query_duration",
-        actual_query_duration_ms,
+        "sampling_in_storage_actual_query_bytes_scanned",
+        actual_query_bytes_scanned,
         tags=tags,
     )
 
@@ -167,14 +173,14 @@ def _run_query_on_most_downsampled_tier(
             request=request_to_most_downsampled_tier,
             timer=timer,
         )
-        query_duration_from_most_downsampled_tier = _get_query_duration_ms(res)
+        query_bytes_scanned_from_most_downsampled_tier = _get_query_bytes_scanned(res)
         span.set_data(
-            "query_duration_from_most_downsampled_tier",
-            query_duration_from_most_downsampled_tier,
+            "query_bytes_scanned_from_most_downsampled_tier",
+            query_bytes_scanned_from_most_downsampled_tier,
         )
         metrics_backend.timing(
-            "sampling_in_storage_query_duration_from_most_downsampled_tier",
-            query_duration_from_most_downsampled_tier,
+            "sampling_in_storage_query_bytes_scanned_from_most_downsampled_tier",
+            query_bytes_scanned_from_most_downsampled_tier,
             tags={"referrer": referrer},
         )
         return res
@@ -219,18 +225,18 @@ def run_query_to_correct_tier(
                 _get_time_budget() / 1000,
             )
             query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
-            target_tier, estimated_target_tier_query_duration = _get_target_tier(
+            target_tier, estimated_target_tier_query_bytes_scanned = _get_target_tier(
                 res, metrics_backend, referrer
             )
 
             span.set_data("target_tier", target_tier)
             span.set_data(
-                "estimated_target_tier_query_duration",
-                estimated_target_tier_query_duration,
+                "estimated_target_tier_query_bytes_scanned",
+                estimated_target_tier_query_bytes_scanned,
             )
 
             if target_tier == _get_most_downsampled_tier():
-                _record_actual_query_duration(
+                _record_actual_bytes_scanned(
                     span,
                     metrics_backend,
                     res,
@@ -249,18 +255,19 @@ def run_query_to_correct_tier(
                 request=request_to_target_tier,
                 timer=timer,
             )
-            _record_actual_query_duration(
+            _record_actual_bytes_scanned(
                 span,
                 metrics_backend,
                 res,
                 tags={"referrer": referrer, "tier": str(target_tier)},
             )
             estimation_error = (
-                estimated_target_tier_query_duration - _get_query_duration_ms(res)
+                estimated_target_tier_query_bytes_scanned
+                - _get_query_bytes_scanned(res)
             )
             metrics_backend.timing(
                 "sampling_in_storage_estimation_error",
-                estimated_target_tier_query_duration - _get_query_duration_ms(res),
+                estimation_error,
                 tags={"referrer": referrer, "tier": str(target_tier)},
             )
 
