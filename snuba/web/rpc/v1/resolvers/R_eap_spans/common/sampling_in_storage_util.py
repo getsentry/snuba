@@ -6,8 +6,8 @@ from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
-from sentry_sdk.tracing import Span
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
+from sentry_sdk.tracing import Span
 
 from snuba import state
 from snuba.attribution import AppID
