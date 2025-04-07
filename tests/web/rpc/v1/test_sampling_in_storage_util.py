@@ -27,7 +27,7 @@ SAMPLING_IN_STORAGE_UTIL_PREFIX = (
 
 
 @pytest.mark.parametrize(
-    "most_downsampled_query_duration_ms, time_budget, expected_tier",
+    "most_downsampled_query_bytes_scanned, bytes_scanned_limit, expected_tier",
     [
         (100, 200, Tier.TIER_512),
         (100, 900, Tier.TIER_64),
@@ -36,27 +36,29 @@ SAMPLING_IN_STORAGE_UTIL_PREFIX = (
     ],
 )
 def test_get_target_tier(
-    most_downsampled_query_duration_ms: int, time_budget: int, expected_tier: Tier
+    most_downsampled_query_bytes_scanned: int,
+    bytes_scanned_limit: int,
+    expected_tier: Tier,
 ) -> None:
     res = MagicMock(QueryResult)
     metrics_mock = MagicMock(spec=MetricsBackend)
 
     with patch(
-        SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_query_duration_ms",
-        return_value=most_downsampled_query_duration_ms,
+        SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_query_bytes_scanned",
+        return_value=most_downsampled_query_bytes_scanned,
     ), patch(
-        SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_time_budget", return_value=time_budget
+        SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_bytes_scanned_limit",
+        return_value=bytes_scanned_limit,
     ):
-        target_tier, estimated_target_tier_query_duration = _get_target_tier(
+        target_tier, estimated_target_tier_query_bytes_scanned = _get_target_tier(
             res, metrics_mock, DOESNT_MATTER_STR
         )
         assert target_tier == expected_tier
         assert (
-            estimated_target_tier_query_duration
-            == most_downsampled_query_duration_ms
+            estimated_target_tier_query_bytes_scanned
+            == most_downsampled_query_bytes_scanned
             * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(target_tier))
         )
-        print({"referrer": DOESNT_MATTER_STR, "tier": str(expected_tier)})
 
         metrics_mock.timing.assert_any_call(
             "sampling_in_storage_routed_tier",
@@ -65,7 +67,7 @@ def test_get_target_tier(
         )
 
 
-def test_sampling_in_storage_query_duration_from_most_downsampled_tier_metric_is_sent() -> None:
+def test_sampling_in_storage_query_bytes_scanned_from_most_downsampled_tier_metric_is_sent() -> None:
     timer = Timer(DOESNT_MATTER_STR)
     metrics_mock = MagicMock(spec=MetricsBackend)
 
@@ -84,14 +86,14 @@ def test_sampling_in_storage_query_duration_from_most_downsampled_tier_metric_is
         ),
     )
     with patch(SAMPLING_IN_STORAGE_UTIL_PREFIX + "run_query",), patch(
-        SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_query_duration_ms",
+        SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_query_bytes_scanned",
         return_value=DOESNT_MATTER_INT,
     ):
         _run_query_on_most_downsampled_tier(
             doesnt_matter_request, timer, metrics_mock, DOESNT_MATTER_STR
         )
         metrics_mock.timing.assert_called_once_with(
-            "sampling_in_storage_query_duration_from_most_downsampled_tier",
+            "sampling_in_storage_query_bytes_scanned_from_most_downsampled_tier",
             DOESNT_MATTER_INT,
             tags={"referrer": DOESNT_MATTER_STR},
         )
