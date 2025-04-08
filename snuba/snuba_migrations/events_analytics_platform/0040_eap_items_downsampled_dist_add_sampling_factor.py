@@ -18,13 +18,13 @@ class Migration(migration.ClickhouseNodeMigration):
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         ops = []
         for sampling_weight in self.sampling_weights:
-            downsampled_local_table_name = (
+            downsampled_dist_table_name = (
                 f"eap_items_1_downsample_{sampling_weight}_dist"
             )
             ops.append(
                 operations.AddColumn(
                     storage_set=storage_set_name,
-                    table_name=downsampled_local_table_name,
+                    table_name=downsampled_dist_table_name,
                     column=Column(
                         "sampling_factor",
                         Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"])),
@@ -40,13 +40,13 @@ class Migration(migration.ClickhouseNodeMigration):
         ops = []
 
         for sampling_weight in self.sampling_weights:
-            downsampled_local_table_name = (
+            downsampled_dist_table_name = (
                 f"eap_items_1_downsample_{sampling_weight}_dist"
             )
             ops.append(
                 operations.DropColumn(
                     storage_set=storage_set_name,
-                    table_name=downsampled_local_table_name,
+                    table_name=downsampled_dist_table_name,
                     column_name="sampling_factor",
                     target=OperationTarget.DISTRIBUTED,
                 )
