@@ -143,13 +143,12 @@ def _get_target_tier(
                     bytes_scanned_limit,
                 )
 
-        _record_value_in_span_and_DD(
-            span,
-            metrics_backend.increment,
-            "target_tier",
+        metrics_backend.increment(
+            _SAMPLING_IN_STORAGE_PREFIX + "target_tier",
             1,
-            {"referrer": referrer, "tier": str(tier)},
+            {"referrer": referrer, "tier": str(target_tier)},
         )
+        span.set_data(_SAMPLING_IN_STORAGE_PREFIX + "target_tier", target_tier)
 
         span.set_data(
             _SAMPLING_IN_STORAGE_PREFIX + "estimated_target_tier_bytes_scanned",
