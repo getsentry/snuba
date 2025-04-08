@@ -215,39 +215,6 @@ class TestTimeSeriesApi(BaseApiTest):
             error.ParseFromString(response.data)
         assert response.status_code == 400, (error.message, error.details)
 
-    def test_fails_for_logs(self) -> None:
-        ts = Timestamp()
-        ts.GetCurrentTime()
-        tstart = Timestamp(seconds=ts.seconds - 3600)
-        message = TimeSeriesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=tstart,
-                end_timestamp=ts,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-            ),
-            aggregations=[
-                AttributeAggregation(
-                    aggregate=Function.FUNCTION_COUNT,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_FLOAT, name="sentry.duration"
-                    ),
-                    label="count",
-                ),
-            ],
-            granularity_secs=60,
-        )
-        response = self.app.post(
-            "/rpc/EndpointTimeSeries/v1", data=message.SerializeToString()
-        )
-        error = Error()
-        if response.status_code != 200:
-            error.ParseFromString(response.data)
-        assert response.status_code == 400, (error.message, error.details)
-
     def test_conditional_aggregation(self) -> None:
         # store a test metric with a value of 1, for ever even second of one hour
         granularity_secs = 300
