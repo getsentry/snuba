@@ -296,15 +296,23 @@ def run_query_to_correct_tier(
                     request=request_to_target_tier,
                     timer=timer,
                 )
+
+                estimation_error = (
+                    estimated_target_tier_query_bytes_scanned
+                    - _get_query_bytes_scanned(res)
+                )
                 _record_value_in_span_and_DD(
                     span,
                     metrics_backend.distribution,
                     "estimation_error_percentage",
-                    abs(
-                        estimated_target_tier_query_bytes_scanned
-                        - _get_query_bytes_scanned(res)
-                    )
-                    / _get_query_bytes_scanned(res),
+                    abs(estimation_error) / _get_query_bytes_scanned(res),
+                    {"referrer": referrer, "tier": str(target_tier)},
+                )
+                _record_value_in_span_and_DD(
+                    span,
+                    metrics_backend.gauge,
+                    "estimation_error",
+                    estimation_error,
                     {"referrer": referrer, "tier": str(target_tier)},
                 )
 
