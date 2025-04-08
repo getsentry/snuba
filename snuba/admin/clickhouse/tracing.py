@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Mapping
+from uuid import UUID
 
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -58,10 +60,23 @@ def run_query_and_get_trace(
     )
 
 
+def is_hex(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+
+    try:
+        int(value, 16)
+        return True
+    except Exception:
+        return False
+
+
 def scrub_row(row: tuple[Any, ...]) -> tuple[Any, ...]:
     rv: list[Any] = []
     for val in row:
-        if isinstance(val, (int, float)):
+        if isinstance(val, (datetime, UUID)) or is_hex(val):
+            rv.append(val)
+        elif isinstance(val, (int, float)):
             if math.isnan(val):
                 rv.append(None)
             else:
