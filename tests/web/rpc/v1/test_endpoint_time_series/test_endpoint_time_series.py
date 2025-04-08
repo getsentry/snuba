@@ -10,6 +10,10 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import (
+    DownsampledStorageConfig,
+    DownsampledStorageMeta,
+)
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     DataPoint,
     Expression,
@@ -17,6 +21,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error
+from sentry_protos.snuba.v1.formula_pb2 import Literal
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
@@ -190,39 +195,6 @@ class TestTimeSeriesApi(BaseApiTest):
                 referrer="something",
                 start_timestamp=tstart,
                 end_timestamp=ts,
-            ),
-            aggregations=[
-                AttributeAggregation(
-                    aggregate=Function.FUNCTION_COUNT,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_FLOAT, name="sentry.duration"
-                    ),
-                    label="count",
-                ),
-            ],
-            granularity_secs=60,
-        )
-        response = self.app.post(
-            "/rpc/EndpointTimeSeries/v1", data=message.SerializeToString()
-        )
-        error = Error()
-        if response.status_code != 200:
-            error.ParseFromString(response.data)
-        assert response.status_code == 400, (error.message, error.details)
-
-    def test_fails_for_logs(self) -> None:
-        ts = Timestamp()
-        ts.GetCurrentTime()
-        tstart = Timestamp(seconds=ts.seconds - 3600)
-        message = TimeSeriesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=tstart,
-                end_timestamp=ts,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -1010,7 +982,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 EndpointTimeSeries().execute(message)
             assert "DB::Exception: Memory limit (for query) exceeded" in str(e.value)
 
-            sentry_sdk_mock.assert_called_once()
+            sentry_sdk_mock.assert_called()
             assert metrics_mock.increment.call_args_list.count(call("OOM_query")) == 1
 
     def test_formula(self) -> None:
@@ -1164,6 +1136,102 @@ class TestTimeSeriesApi(BaseApiTest):
             expected_timeseries
         ]
 
+    def test_literal(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_ADD,
+                        left=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                                ),
+                                label="sum",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            )
+                        ),
+                        right=Expression(
+                            literal=Literal(val_double=1.0),
+                        ),
+                    ),
+                    label="sum + 1",
+                ),
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_DIVIDE,
+                        left=Expression(
+                            literal=Literal(val_double=1.0),
+                        ),
+                        right=Expression(
+                            literal=Literal(val_double=2.0),
+                        ),
+                    ),
+                    label="1 / 2",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        expected_sum_timeseries = TimeSeries(
+            label="sum",
+            buckets=expected_buckets,
+            data_points=[
+                DataPoint(data=300, data_present=True)
+                for _ in range(len(expected_buckets))
+            ],
+        )
+        expected_formula_timeseries = TimeSeries(
+            label="sum + 1",
+            buckets=expected_buckets,
+            data_points=[
+                DataPoint(
+                    data=sum_datapoint.data + 1,
+                    data_present=True,
+                    sample_count=sum_datapoint.sample_count,
+                )
+                for sum_datapoint in expected_sum_timeseries.data_points
+            ],
+        )
+
+        expected_literal_timeseries = TimeSeries(
+            label="1 / 2",
+            buckets=expected_buckets,
+            data_points=[
+                DataPoint(data=0.5, data_present=True)
+                for _ in range(len(expected_buckets))
+            ],
+        )
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
+            expected_literal_timeseries,
+            expected_formula_timeseries,
+        ]
+
 
 class TestUtils:
     def test_no_duplicate_labels(self) -> None:
@@ -1277,3 +1345,212 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
     ) -> None:
         snuba_set_config("use_eap_items_table", True)
         snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
+
+    def test_preflight(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 3600
+        query_duration = granularity_secs * 1
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            query_duration,
+            metrics=[DummyMetric("test_preflight_metric", get_value=lambda x: 1)],
+        )
+
+        aggregations = [
+            AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(
+                    type=AttributeKey.TYPE_FLOAT, name="test_preflight_metric"
+                ),
+                label="sum",
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+            ),
+        ]
+
+        preflight_message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_PREFLIGHT
+                ),
+            ),
+            aggregations=aggregations,
+            granularity_secs=granularity_secs,
+        )
+
+        message_to_non_downsampled_tier = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=aggregations,
+            granularity_secs=granularity_secs,
+        )
+
+        preflight_response = EndpointTimeSeries().execute(preflight_message)
+        non_downsampled_tier_response = EndpointTimeSeries().execute(
+            message_to_non_downsampled_tier
+        )
+
+        if preflight_response.result_timeseries == []:
+            sum_of_preflight_metric = 0.0
+        else:
+            sum_of_preflight_metric = (
+                preflight_response.result_timeseries[0].data_points[0].data
+            )
+
+        assert (
+            sum_of_preflight_metric
+            < non_downsampled_tier_response.result_timeseries[0].data_points[0].data
+            / 100
+        )
+        assert (
+            preflight_response.meta.downsampled_storage_meta
+            == DownsampledStorageMeta(
+                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_512
+            )
+        )
+
+    def test_best_effort_route_to_tier_64(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 3600
+        query_duration = granularity_secs * 1
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            query_duration,
+            metrics=[DummyMetric("test_best_effort", get_value=lambda x: 1)],
+        )
+
+        aggregations = [
+            AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_best_effort"),
+                label="sum",
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+            ),
+        ]
+
+        # sends a best effort request and a non-downsampled request to ensure their responses are different
+        best_effort_downsample_message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                ),
+            ),
+            aggregations=aggregations,
+            granularity_secs=granularity_secs,
+        )
+        message_to_non_downsampled_tier = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=aggregations,
+            granularity_secs=granularity_secs,
+        )
+        # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
+        with patch(
+            "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._get_query_bytes_scanned",
+            return_value=2516582401,
+        ):
+            best_effort_response = EndpointTimeSeries().execute(
+                best_effort_downsample_message
+            )
+            non_downsampled_tier_response = EndpointTimeSeries().execute(
+                message_to_non_downsampled_tier
+            )
+
+            best_effort_metric_sum = (
+                best_effort_response.result_timeseries[0].data_points[0].data
+            )
+
+            # tier 1 sum should be 3600, so tier 64 sum should be around 3600 / 64 (give or take due to random sampling)
+            non_downsampled_best_effort_metric_sum = (
+                non_downsampled_tier_response.result_timeseries[0].data_points[0].data
+            )
+            assert (
+                non_downsampled_best_effort_metric_sum / 200
+                <= best_effort_metric_sum
+                <= non_downsampled_best_effort_metric_sum / 16
+            )
+
+            assert (
+                best_effort_response.meta.downsampled_storage_meta
+                == DownsampledStorageMeta(
+                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
+                )
+            )
+
+    def test_best_effort_end_to_end(self) -> None:
+        granularity_secs = 3600
+        query_duration = granularity_secs * 1
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            query_duration,
+            metrics=[DummyMetric("endtoend", get_value=lambda x: 1)],
+        )
+
+        best_effort_downsample_message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                ),
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="endtoend"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(best_effort_downsample_message)
+        assert (
+            response.meta.downsampled_storage_meta.tier
+            != DownsampledStorageMeta.SELECTED_TIER_UNSPECIFIED
+        )

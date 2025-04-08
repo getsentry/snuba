@@ -119,7 +119,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
             time_window_secs=300,
             resolution_secs=60,
         ),
-        "Exactly one aggregation required",
+        "Exactly one expression required",
         id="Invalid subscription: multiple aggregations",
     ),
     pytest.param(

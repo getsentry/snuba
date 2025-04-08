@@ -24,6 +24,7 @@ from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.downsampled_storage_tiers import Tier
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
     MAX_THRESHOLD,
@@ -36,7 +37,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
-from snuba.query.query_settings import QuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.querylog.query_metadata import (
     SLO,
     ClickhouseQueryMetadata,
@@ -732,7 +733,15 @@ def db_query(
             metrics.increment("cache_miss", tags={"dataset": dataset_name})
         if stats.get("cache_hit_simple"):
             metrics.increment("cache_hit_simple", tags={"dataset": dataset_name})
+
         if result:
+            if (
+                isinstance(query_settings, HTTPQuerySettings)
+                and query_settings.get_sampling_tier() != Tier.TIER_NO_TIER
+            ):
+                stats = dict(result.extra["stats"])
+                stats["sampling_tier"] = query_settings.get_sampling_tier()
+                result.extra["stats"] = stats
             return result
         raise error or Exception(
             "No error or result when running query, this should never happen"

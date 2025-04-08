@@ -26,6 +26,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.resolver_get_trace import (
     NORMALIZED_COLUMNS_TO_INCLUDE,
 )
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 
 _RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
@@ -309,6 +310,10 @@ class TestGetTrace(BaseApiTest):
                             name="server_name",
                             type=AttributeKey.Type.TYPE_STRING,
                         ),
+                        AttributeKey(
+                            name="sentry.parent_span_id",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
                     ],
                 )
             ],
@@ -333,6 +338,15 @@ class TestGetTrace(BaseApiTest):
                             attributes=[
                                 GetTraceResponse.Item.Attribute(
                                     key=AttributeKey(
+                                        name="sentry.parent_span_id",
+                                        type=AttributeKey.Type.TYPE_STRING,
+                                    ),
+                                    value=AttributeValue(
+                                        val_str="0" * 16,
+                                    ),
+                                ),
+                                GetTraceResponse.Item.Attribute(
+                                    key=AttributeKey(
                                         name="server_name",
                                         type=AttributeKey.Type.TYPE_STRING,
                                     ),
@@ -348,3 +362,18 @@ class TestGetTrace(BaseApiTest):
             ],
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestGetTraceEAPItems(TestGetTrace):
+    """
+    Run the tests again, but this time on the eap_items table as well to ensure it also works.
+    """
+
+    @pytest.fixture(autouse=True)
+    def use_eap_items_table(
+        self, snuba_set_config: SnubaSetConfig, redis_db: None
+    ) -> None:
+        snuba_set_config("use_eap_items_table", True)
+        snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)

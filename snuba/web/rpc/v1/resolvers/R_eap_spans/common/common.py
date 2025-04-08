@@ -1,6 +1,6 @@
 from typing import Final, Mapping, Sequence, Set
 
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     VirtualColumnContext,
@@ -75,6 +75,7 @@ NORMALIZED_COLUMNS_EAP_ITEMS: Final[
     ],  # this gets converted from a uuid to a string in a storage processor
     f"{COLUMN_PREFIX}item_id": [AttributeKey.Type.TYPE_STRING],
     f"{COLUMN_PREFIX}sampling_weight": [AttributeKey.Type.TYPE_DOUBLE],
+    f"{COLUMN_PREFIX}sampling_factor": [AttributeKey.Type.TYPE_DOUBLE],
 }
 
 PROTO_TYPE_TO_CLICKHOUSE_TYPE: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
@@ -108,7 +109,7 @@ def use_eap_items_table(request_meta: RequestMeta) -> bool:
     if request_meta.referrer.startswith("force_use_eap_spans_table"):
         return False
 
-    if settings.USE_EAP_ITEMS_TABLE:
+    if request_meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
         return True
 
     use_eap_items_orgs = state.get_str_config("use_eap_items_orgs")
@@ -129,12 +130,17 @@ def use_eap_items_table(request_meta: RequestMeta) -> bool:
     )
 
     use_eap_items_table_start_timestamp_seconds = state.get_int_config(
-        "use_eap_items_table_start_timestamp_seconds"
+        "use_eap_items_table_start_timestamp_seconds",
+        settings.USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS,
+    )
+
+    assert use_eap_items_table_start_timestamp_seconds is not None
+    use_eap_items_table_start_timestamp_seconds = int(
+        use_eap_items_table_start_timestamp_seconds
     )
 
     if (
-        state.get_int_config("use_eap_items_table", 0)
-        and use_eap_items_table_start_timestamp_seconds is not None
+        state.get_int_config("use_eap_items_table", settings.USE_EAP_ITEMS_TABLE)
         and turned_on_for_org
     ):
         return (
@@ -147,6 +153,8 @@ def use_eap_items_table(request_meta: RequestMeta) -> bool:
 
 def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
     alias = attr_key.name + "_" + AttributeKey.Type.Name(attr_key.type)
+    if attr_key.name in NORMALIZED_COLUMNS:
+        alias = attr_key.name
     if attr_key.type == AttributeKey.Type.TYPE_UNSPECIFIED:
         raise BadSnubaRPCRequestException(
             f"attribute key {attr_key.name} must have a type specified"
@@ -174,6 +182,12 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
         if attr_key.name == "sentry.span_id":
             return f.right(
                 column(converted_attr_name[len(COLUMN_PREFIX) :]), 16, alias=alias
+            )
+        elif attr_key.name == "sentry.sampling_factor":
+            return f.divide(
+                literal(1),
+                f.CAST(column("sampling_weight"), "Float64"),
+                alias=alias,
             )
 
         return f.CAST(
@@ -263,13 +277,13 @@ def apply_virtual_columns_eap_items(
             attribute_expression = attribute_key_to_expression_eap_items(
                 AttributeKey(
                     name=context.from_column_name,
-                    type=NORMALIZED_COLUMNS.get(
-                        context.from_column_name, AttributeKey.TYPE_STRING
-                    ),
+                    type=NORMALIZED_COLUMNS_EAP_ITEMS.get(
+                        context.from_column_name, [AttributeKey.TYPE_STRING]
+                    )[0],
                 )
             )
             return f.transform(
-                f.CAST(attribute_expression, "String"),
+                f.CAST(f.ifNull(attribute_expression, literal("")), "String"),
                 literals_array(None, [literal(k) for k in context.value_map.keys()]),
                 literals_array(None, [literal(v) for v in context.value_map.values()]),
                 literal(
@@ -419,7 +433,7 @@ def apply_virtual_columns(
                 )
             )
             return f.transform(
-                f.CAST(attribute_expression, "String"),
+                f.CAST(f.ifNull(attribute_expression, literal("")), "String"),
                 literals_array(None, [literal(k) for k in context.value_map.keys()]),
                 literals_array(None, [literal(v) for v in context.value_map.values()]),
                 literal(

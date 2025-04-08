@@ -55,13 +55,14 @@ def gen_message(
     span_name: str = "root",
     is_segment: bool = False,
     parent_span_id: str = "0" * 16,
+    standalone_span: bool = False,
 ) -> Mapping[str, Any]:
     measurements = measurements or {}
     tags = tags or {}
     timestamp = dt.timestamp()
     if not is_segment:
         timestamp += random.random()
-    return {
+    span = {
         "description": span_name,
         "duration_ms": 1000,
         "event_id": uuid.uuid4().hex,
@@ -93,7 +94,6 @@ def gen_message(
         "project_id": 1,
         "received": 1721319572.877828,
         "retention_days": 90,
-        "segment_id": trace_id[:16],
         "sentry_tags": {
             "category": "http",
             "environment": "development",
@@ -132,6 +132,9 @@ def gen_message(
         "start_timestamp_precise": timestamp,
         "end_timestamp_precise": timestamp + 1,
     }
+    if not standalone_span:
+        span["segment_id"] = trace_id[:16]
+    return span
 
 
 _SPANS = [
@@ -155,8 +158,24 @@ _SPANS = [
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
     items_storage = get_storage(StorageKey("eap_items"))
-    write_raw_unprocessed_events(spans_storage, _SPANS)  # type: ignore
-    write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
+
+    for storage in {spans_storage, items_storage}:
+        write_raw_unprocessed_events(storage, _SPANS)  # type: ignore
+        write_raw_unprocessed_events(
+            storage,  # type: ignore
+            [
+                gen_message(
+                    dt=_BASE_TIME + timedelta(minutes=i),
+                    trace_id=uuid.uuid4().hex,
+                    span_op="lcp",
+                    span_name="standalone",
+                    is_segment=False,
+                    parent_span_id="0",
+                    standalone_span=True,
+                )
+                for i in range(_SPAN_COUNT)
+            ],
+        )
 
 
 @pytest.mark.clickhouse_db
@@ -346,7 +365,6 @@ class TestGetTraces(BaseApiTest):
     def test_with_data_and_aggregated_fields_all_keys(
         self, setup_teardown: Any
     ) -> None:
-
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)

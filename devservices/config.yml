@@ -81,6 +81,7 @@ services:
       ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES: 1
       ENABLE_GROUP_ATTRIBUTES_CONSUMER: ${ENABLE_GROUP_ATTRIBUTES_CONSUMER:-}
       ENABLE_LW_DELETIONS_CONSUMER: ${ENABLE_LW_DELETIONS_CONSUMER:-}
+      SENTRY_SPOTLIGHT: 'http://host.docker.internal:8969/stream'
     platform: linux/amd64
     extra_hosts:
       host.docker.internal: host-gateway

@@ -46,7 +46,10 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             )
         if attr_key.type == AttributeKey.Type.TYPE_INT:
             return f.CAST(column(attr_key.name[len("sentry.") :]), "Int64", alias=alias)
-        if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
+        if (
+            attr_key.type == AttributeKey.Type.TYPE_FLOAT
+            or attr_key.type == AttributeKey.Type.TYPE_DOUBLE
+        ):
             return f.CAST(
                 column(attr_key.name[len("sentry.") :]), "Float64", alias=alias
             )
@@ -66,7 +69,10 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         return f.arrayElement(
             column("attributes_string"), literal(attr_key.name), alias=alias
         )
-    if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
+    if (
+        attr_key.type == AttributeKey.Type.TYPE_FLOAT
+        or attr_key.type == AttributeKey.Type.TYPE_DOUBLE
+    ):
         return f.arrayElement(
             column("attributes_float"), literal(attr_key.name), alias=alias
         )

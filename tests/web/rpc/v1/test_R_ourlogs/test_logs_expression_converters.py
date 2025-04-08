@@ -1,3 +1,4 @@
+import pytest
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     AttributeValue,
@@ -11,7 +12,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal
+from snuba.query.dsl import and_cond, column, in_cond, literal, or_cond
 from snuba.query.expressions import FunctionCall
 from snuba.web.rpc.common.common import trace_item_filters_to_expression
 from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
@@ -78,55 +79,64 @@ class TestOurlogsExpressionConverters:
                 (column(col), literal("z")),
             )
 
+    @pytest.mark.redis_db
     def test_trace_item_filters_to_expression(self) -> None:
-        assert trace_item_filters_to_expression(
-            TraceItemFilter(
-                and_filter=AndFilter(
-                    filters=[
-                        TraceItemFilter(
-                            exists_filter=ExistsFilter(
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_STRING, name="hello"
-                                )
+        filter = TraceItemFilter(
+            and_filter=AndFilter(
+                filters=[
+                    TraceItemFilter(
+                        exists_filter=ExistsFilter(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_STRING, name="hello"
                             )
-                        ),
-                        TraceItemFilter(
-                            exists_filter=ExistsFilter(
-                                key=AttributeKey(type=AttributeKey.TYPE_INT, name="two")
-                            )
-                        ),
-                        TraceItemFilter(
-                            comparison_filter=ComparisonFilter(
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_INT, name="world"
-                                ),
-                                op=ComparisonFilter.OP_IN,
-                                value=AttributeValue(
-                                    val_int_array=IntArray(values=[1, 2, 3])
-                                ),
-                            )
-                        ),
-                    ]
-                )
-            ),
-            attribute_key_to_expression,
-        ) == FunctionCall(
-            None,
-            "and",
-            (
-                f.mapContains(column("attributes_string"), literal("hello")),
-                f.mapContains(column("attributes_int"), literal("two")),
-                FunctionCall(
-                    None,
-                    "in",
-                    (
+                        )
+                    ),
+                    TraceItemFilter(
+                        exists_filter=ExistsFilter(
+                            key=AttributeKey(type=AttributeKey.TYPE_INT, name="two")
+                        )
+                    ),
+                    TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(type=AttributeKey.TYPE_INT, name="world"),
+                            op=ComparisonFilter.OP_IN,
+                            value=AttributeValue(
+                                val_int_array=IntArray(values=[1, 2, 3])
+                            ),
+                        )
+                    ),
+                ]
+            )
+        )
+        expected_expr = and_cond(
+            f.mapContains(column("attributes_string"), literal("hello")),
+            f.mapContains(column("attributes_int"), literal("two")),
+            or_cond(
+                in_cond(
+                    f.arrayElement(
+                        column("attributes_int"),
+                        literal("world"),
+                        alias="world_TYPE_INT",
+                    ),
+                    f.array(literal(1), literal(2), literal(3)),
+                ),
+                and_cond(
+                    f.isNull(
                         f.arrayElement(
                             column("attributes_int"),
                             literal("world"),
                             alias="world_TYPE_INT",
-                        ),
-                        f.array(literal(1), literal(2), literal(3)),
+                        )
                     ),
+                    f.has(f.array(literal(1), literal(2), literal(3)), literal(None)),
                 ),
             ),
+        )
+
+        assert (
+            trace_item_filters_to_expression(
+                filter,
+                attribute_key_to_expression,
+            )
+            == expected_expr
         )

@@ -161,7 +161,8 @@ mod tests {
                 }
 
                 if *topic_name == "snuba-ourlogs" {
-                    settings.add_redaction(".*.item_id", "<item ID>") //UUID7 has timestamp in it
+                    settings.add_redaction(".*.item_id", "<item ID>"); //UUID7 has timestamp in it
+                    settings.add_redaction(".**[\"sentry.timestamp_precise\"]", "<item timestamp>");
                 }
 
                 settings.set_description(std::str::from_utf8(example.payload()).unwrap());

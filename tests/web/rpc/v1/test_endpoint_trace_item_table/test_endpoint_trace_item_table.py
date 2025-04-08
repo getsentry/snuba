@@ -11,6 +11,10 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import (
+    DownsampledStorageConfig,
+    DownsampledStorageMeta,
+)
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationAndFilter,
     AggregationComparisonFilter,
@@ -22,6 +26,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
+from sentry_protos.snuba.v1.formula_pb2 import Literal
 from sentry_protos.snuba.v1.request_common_pb2 import (
     PageToken,
     RequestMeta,
@@ -67,6 +72,7 @@ def gen_message(
     dt: datetime,
     measurements: dict[str, dict[str, float]] | None = None,
     tags: dict[str, str] | None = None,
+    randomize_span_id: bool = False,
 ) -> Mapping[str, Any]:
     measurements = measurements or {}
     tags = tags or {}
@@ -120,7 +126,7 @@ def gen_message(
             "transaction.op": "http.server",
             "user": "ip:127.0.0.1",
         },
-        "span_id": "123456781234567D",
+        "span_id": uuid.uuid4().hex if randomize_span_id else "123456781234567d",
         "tags": {
             "relay_endpoint_version": "3",
             "relay_id": "88888888-4444-4444-8444-cccccccccccc",
@@ -286,7 +292,7 @@ class TestTraceItemTable(BaseApiTest):
                 EndpointTraceItemTable().execute(message)
             assert "DB::Exception: Memory limit (for query) exceeded" in str(e.value)
 
-            sentry_sdk_mock.assert_called_once()
+            sentry_sdk_mock.assert_called()
             assert metrics_mock.increment.call_args_list.count(call("OOM_query")) == 1
 
     def test_errors_without_type(self) -> None:
@@ -3021,6 +3027,102 @@ class TestTraceItemTable(BaseApiTest):
             )
         ]
 
+    def test_literal(self) -> None:
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"measurement": 2}, 10)
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="measurement")
+                )
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="measurement",
+                                ),
+                            ),
+                            label="sum(measurement)",
+                        ),
+                        right=Column(
+                            literal=Literal(
+                                val_double=5,
+                            ),
+                            label="5",
+                        ),
+                    ),
+                    label="sum(measurement) / 5",
+                ),
+            ],
+            limit=1,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="sum(measurement) / 5",
+                results=[
+                    AttributeValue(val_double=(20 / 5)),
+                ],
+            ),
+        ]
+
+    def test_virtual_column_with_missing_attribute(self) -> None:
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"attr1": "1"}, 10)
+        write_eap_span(span_ts, {"attr2": "2"}, 5)
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="attr1_virtual"
+                    )
+                ),
+            ],
+            virtual_column_contexts=[
+                VirtualColumnContext(
+                    from_column_name="attr1",
+                    to_column_name="attr1_virtual",
+                    value_map={
+                        "1": "a",
+                        "2": "b",
+                    },
+                    default_value="default",
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert sorted(response.column_values[0].results, key=lambda x: x.val_str) == [
+            AttributeValue(val_str="a") for _ in range(10)
+        ] + [AttributeValue(val_str="default") for _ in range(5)]
+
 
 class TestUtils:
     def test_apply_labels_to_columns_backward_compat(self) -> None:
@@ -3101,3 +3203,324 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
     ) -> None:
         snuba_set_config("use_eap_items_table", True)
         snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
+
+    def test_empty_downsampling_storage_config_does_not_have_downsampled_storage_meta(
+        self,
+    ) -> None:
+        items_storage = get_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = [
+            gen_message(
+                msg_timestamp,
+            )
+            for _ in range(30)
+        ]
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        empty_downsampled_storage_config_message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(),
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"))
+            ],
+        )
+        response = EndpointTraceItemTable().execute(
+            empty_downsampled_storage_config_message
+        )
+        assert not response.meta.HasField("downsampled_storage_meta")
+
+    def test_preflight(self) -> None:
+        items_storage = get_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = [
+            gen_message(
+                msg_timestamp,
+                tags={"preflighttag": "preflight"},
+                randomize_span_id=True,
+            )
+            for _ in range(3600)
+        ]
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        columns = [
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="preflighttag"))
+        ]
+        preflight_message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_PREFLIGHT
+                ),
+            ),
+            columns=columns,
+        )
+
+        message_to_non_downsampled_tier = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="preflighttag")
+                )
+            ],
+        )
+
+        preflight_response = EndpointTraceItemTable().execute(preflight_message)
+        non_downsampled_tier_response = EndpointTraceItemTable().execute(
+            message_to_non_downsampled_tier
+        )
+        assert (
+            len(preflight_response.column_values[0].results)
+            < len(non_downsampled_tier_response.column_values[0].results) / 100
+        )
+        assert (
+            preflight_response.meta.downsampled_storage_meta
+            == DownsampledStorageMeta(
+                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_512
+            )
+        )
+
+    def test_best_effort_route_to_tier_64(self) -> None:
+        items_storage = get_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = [
+            gen_message(
+                msg_timestamp,
+                tags={"tier64tag": "tier64tag"},
+                randomize_span_id=True,
+            )
+            for _ in range(3600)
+        ]
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        columns = [
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="tier64tag"))
+        ]
+
+        # sends a best effort request and a non-downsampled request to ensure their responses are different
+        best_effort_message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                ),
+            ),
+            columns=columns,
+        )
+        message_to_non_downsampled_tier = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=columns,
+        )
+        # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
+        with patch(
+            "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._get_query_bytes_scanned",
+            return_value=2516582401,
+        ):
+            best_effort_response = EndpointTraceItemTable().execute(best_effort_message)
+            non_downsampled_tier_response = EndpointTraceItemTable().execute(
+                message_to_non_downsampled_tier
+            )
+
+            # tier 1's results should be 3600, so tier 64's results should be around 3600 / 64 (give or take due to random sampling)
+            assert (
+                len(non_downsampled_tier_response.column_values[0].results) / 200
+                <= len(best_effort_response.column_values[0].results)
+                <= len(non_downsampled_tier_response.column_values[0].results) / 16
+            )
+            assert (
+                best_effort_response.meta.downsampled_storage_meta
+                == DownsampledStorageMeta(
+                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
+                )
+            )
+
+    def test_best_effort_end_to_end(self) -> None:
+        items_storage = get_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = [
+            gen_message(
+                msg_timestamp,
+                tags={"endtoend": "endtoend"},
+                randomize_span_id=True,
+            )
+            for _ in range(3600)
+        ]
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        best_effort_message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                ),
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="endtoend"))
+            ],
+        )
+        response = EndpointTraceItemTable().execute(best_effort_message)
+        assert (
+            response.meta.downsampled_storage_meta.tier
+            != DownsampledStorageMeta.SELECTED_TIER_UNSPECIFIED
+        )
+
+    def test_downsampling_uses_hexintcolumnprocessor(self) -> None:
+        items_storage = get_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = [
+            gen_message(
+                msg_timestamp,
+                tags={"endtoend": "endtoend"},
+                randomize_span_id=True,
+            )
+            for _ in range(3600)
+        ]
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        best_effort_message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                ),
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.span_id"
+                    ),
+                    label="id",
+                ),
+            ],
+        )
+
+        # ensures we don't get DB::Exception: Illegal type UInt128 of argument of function right
+        EndpointTraceItemTable().execute(best_effort_message)
+
+    @pytest.mark.redis_db
+    def test_non_existant_attribute_filter(self) -> None:
+        """
+        This test filters by env != "prod" and ensures that both "env"="dev" and "env"=None (attribute doesnt exist on the span) are returned.
+        """
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"env": "prod", "num_cats": 1})
+        write_eap_span(span_ts, {"env": "dev", "num_cats": 2})
+        write_eap_span(span_ts, {"num_cats": 3})
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="env"),
+                    op=ComparisonFilter.OP_NOT_EQUALS,
+                    value=AttributeValue(val_str="prod"),
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="env")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="num_cats")),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="env")
+                    )
+                )
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="env",
+                results=[
+                    AttributeValue(val_str="dev"),
+                    AttributeValue(is_null=True),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="num_cats",
+                results=[
+                    AttributeValue(val_int=2),
+                    AttributeValue(val_int=3),
+                ],
+            ),
+        ]

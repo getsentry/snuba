@@ -18,6 +18,7 @@ schema:
       { name: trace_id, type: UUID },
       { name: item_id, type: UInt, args: { size: 128 } },
       { name: sampling_weight, type: UInt, args: { size: 64 } },
+      { name: sampling_factor, type: Float, args: { size: 64 } },
       { name: retention_days, type: UInt, args: { size: 16 } },
 
       { name: attributes_bool, type: Map, args: { key: { type: String }, value: { type: Bool } } },
@@ -245,3 +246,9 @@ mandatory_condition_checkers:
 stream_loader:
   processor: EAPItemsProcessor
   default_topic: snuba-spans
+  commit_log_topic: snuba-eap-spans-commit-log
+  subscription_scheduler_mode: global
+  subscription_synchronization_timestamp: orig_message_ts
+  subscription_scheduled_topic: scheduled-subscriptions-eap-spans
+  subscription_result_topic: eap-spans-subscription-results
+  subscription_delay_seconds: 60
