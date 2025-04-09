@@ -21,6 +21,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
+from snuba.utils.serializable_exception import SerializableException
 from snuba.web import QueryResult
 from snuba.web.query import run_query
 
@@ -28,6 +29,11 @@ T = TypeVar("T", TimeSeriesRequest, TraceItemTableRequest)
 MetricsBackendType: TypeAlias = Callable[
     [str, Union[int, float], Optional[Dict[str, str]], Optional[str]], None
 ]
+
+
+class QueryResultMissingInfoException(SerializableException):
+    def __init__(self, info: str, res: QueryResult):
+        super().__init__(f"Query result missing {info}: {res}")
 
 
 DOWNSAMPLING_TIER_MULTIPLIERS: Dict[Tier, int] = {
@@ -68,7 +74,14 @@ def _get_bytes_scanned_limit() -> int:
 
 
 def _get_query_bytes_scanned(res: QueryResult) -> int:
-    return cast(int, res.result.get("profile", {}).get("progress_bytes", 0))  # type: ignore
+    profile_dict = res.result.get("profile")
+    if profile_dict is None:
+        raise QueryResultMissingInfoException("profile", res)
+
+    progress_bytes = profile_dict.get("progress_bytes")
+    if progress_bytes is None:
+        raise QueryResultMissingInfoException("progress_bytes", res)
+    return cast(int, progress_bytes)
 
 
 def _get_query_duration_ms(res: QueryResult) -> float:
@@ -122,7 +135,7 @@ def _get_target_tier(
                 )
 
                 _record_value_in_span_and_DD(
-                    span,
+                    tier_specific_span,
                     metrics_backend.distribution,
                     "estimated_query_bytes_scanned",
                     estimated_query_bytes_scanned_to_this_tier,
@@ -298,15 +311,28 @@ def run_query_to_correct_tier(
                     timer=timer,
                 )
 
+                actual_query_bytes_scanned = _get_query_bytes_scanned(res)
+                if actual_query_bytes_scanned == 0:
+                    metrics_backend.increment(
+                        _SAMPLING_IN_STORAGE_PREFIX + "res_scanned_no_bytes",
+                        1,
+                        {"referrer": referrer, "tier": str(target_tier)},
+                    )
+                    span.set_data(
+                        _SAMPLING_IN_STORAGE_PREFIX + "res_scanned_no_bytes", res
+                    )
+
                 estimation_error = (
                     estimated_target_tier_query_bytes_scanned
-                    - _get_query_bytes_scanned(res)
+                    - actual_query_bytes_scanned
                 )
                 _record_value_in_span_and_DD(
                     span,
                     metrics_backend.distribution,
                     "estimation_error_percentage",
-                    abs(estimation_error) / _get_query_bytes_scanned(res),
+                    abs(estimation_error) / actual_query_bytes_scanned
+                    if actual_query_bytes_scanned != 0
+                    else abs(estimation_error),
                     {"referrer": referrer, "tier": str(target_tier)},
                 )
 
