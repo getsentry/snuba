@@ -101,6 +101,7 @@ def _get_target_tier(
         most_downsampled_query_bytes_scanned = _get_query_bytes_scanned(
             most_downsampled_res
         )
+
         span.set_data(
             _SAMPLING_IN_STORAGE_PREFIX + "most_downsampled_query_bytes_scanned",
             most_downsampled_query_bytes_scanned,
@@ -308,11 +309,17 @@ def run_query_to_correct_tier(
                     abs(estimation_error) / _get_query_bytes_scanned(res),
                     {"referrer": referrer, "tier": str(target_tier)},
                 )
+
+                estimation_error_metric_name = (
+                    "over_estimation_error"
+                    if estimation_error > 0
+                    else "under_estimation_error"
+                )
                 _record_value_in_span_and_DD(
                     span,
-                    metrics_backend.gauge,
-                    "estimation_error",
-                    estimation_error,
+                    metrics_backend.distribution,
+                    estimation_error_metric_name,
+                    abs(estimation_error),
                     {"referrer": referrer, "tier": str(target_tier)},
                 )
 
