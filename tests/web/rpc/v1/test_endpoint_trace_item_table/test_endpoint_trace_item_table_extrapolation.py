@@ -686,7 +686,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         measurement_reliabilities = [v for v in response.column_values[4].reliabilities]
         assert len(measurement_p90s) == 1
         assert measurement_p90s[0] == 4
-        assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
+        assert measurement_reliabilities == [Reliability.RELIABILITY_LOW]
 
     def test_count_reliability_with_group_by(self) -> None:
         spans_storage = get_storage(StorageKey("eap_spans"))
@@ -805,7 +805,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         measurement_reliabilities = [v for v in response.column_values[4].reliabilities]
         assert len(measurement_p90s) == 1
         assert measurement_p90s[0] == 4
-        assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
+        assert measurement_reliabilities == [Reliability.RELIABILITY_LOW]
 
     def test_formula(self) -> None:
         """

@@ -153,6 +153,8 @@ struct ErrorData {
     user: Option<User>,
     #[serde(default)]
     version: Option<String>,
+    #[serde(default)]
+    symbolicated_in_app: Option<bool>,
 }
 
 // Contexts
@@ -418,6 +420,8 @@ struct ErrorRow {
     user_name: Option<String>,
     user: String,
     version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    symbolicated_in_app: Option<bool>,
 }
 
 impl ErrorRow {
@@ -740,6 +744,7 @@ impl ErrorRow {
             user_name: from_user.username.0,
             user: user.unwrap_or_default(),
             version: from.data.version,
+            symbolicated_in_app: from.data.symbolicated_in_app,
             ..Default::default()
         })
     }
