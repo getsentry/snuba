@@ -3383,6 +3383,8 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 )
             )
 
+        assert False
+
     def test_best_effort_end_to_end(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)

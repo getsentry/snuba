@@ -66,6 +66,23 @@ def _get_bytes_scanned_limit() -> int:
         ),
     )  # 150 gigabytes is default
 
+def _get_bypass_seconds_threshold() -> int:
+    return cast(
+        int,
+        state.get_int_config(
+            _SAMPLING_IN_STORAGE_PREFIX + "bypass_seconds_threshold",
+            default=1 * 24 * 60 * 60, # a day
+        ),
+    )
+
+def _get_bypass_bytes_threshold() -> int:
+    return cast(
+        int,
+        state.get_int_config(
+            _SAMPLING_IN_STORAGE_PREFIX + "bypass_bytes_threshold",
+            default=int(5e+9), # 5 gigabytes
+        ),
+    )
 
 def _get_query_bytes_scanned(res: QueryResult) -> int:
     return cast(int, res.result.get("profile", {}).get("progress_bytes", 0))  # type: ignore
@@ -95,17 +112,20 @@ def _get_target_tier(
     most_downsampled_res: QueryResult,
     metrics_backend: MetricsBackend,
     referrer: str,
-    timer: Timer,
-) -> Tuple[Tier, int]:
+    request_time_range_secs: int,
+) -> Tuple[Tier, int, bool]:
     with sentry_sdk.start_span(op="_get_target_tier") as span:
+        bypass = False
         most_downsampled_query_bytes_scanned = _get_query_bytes_scanned(
             most_downsampled_res
         )
-
         span.set_data(
             _SAMPLING_IN_STORAGE_PREFIX + "most_downsampled_query_bytes_scanned",
             most_downsampled_query_bytes_scanned,
         )
+
+        if request_time_range_secs <= _get_bypass_seconds_threshold() or _get_query_bytes_scanned(most_downsampled_res) <= _get_bypass_bytes_threshold():
+            bypass = True
 
         target_tier = _get_most_downsampled_tier()
         estimated_target_tier_bytes_scanned = (
@@ -122,7 +142,7 @@ def _get_target_tier(
                 )
 
                 _record_value_in_span_and_DD(
-                    span,
+                    tier_specific_span,
                     metrics_backend.distribution,
                     "estimated_query_bytes_scanned",
                     estimated_query_bytes_scanned_to_this_tier,
@@ -155,7 +175,7 @@ def _get_target_tier(
             _SAMPLING_IN_STORAGE_PREFIX + "estimated_target_tier_bytes_scanned",
             estimated_target_tier_bytes_scanned,
         )
-        return target_tier, estimated_target_tier_bytes_scanned
+        return target_tier, estimated_target_tier_bytes_scanned, bypass
 
 
 def _is_best_effort_mode(in_msg: T) -> bool:
@@ -225,6 +245,35 @@ def _run_query_on_most_downsampled_tier(
         )
         return res
 
+def _emit_estimation_error_info(span: Span, metrics_backend: MetricsBackend, estimated_target_tier_query_bytes_scanned: int, res: QueryResult, tags: Dict[str, str]) -> None:
+    estimation_error = (
+        estimated_target_tier_query_bytes_scanned
+        - _get_query_bytes_scanned(res)
+    )
+    _record_value_in_span_and_DD(
+        span,
+        metrics_backend.distribution,
+        "estimation_error_percentage",
+        abs(estimation_error) / _get_query_bytes_scanned(res),
+        tags,
+    )
+
+    estimation_error_metric_name = (
+        "over_estimation_error"
+        if estimation_error > 0
+        else "under_estimation_error"
+    )
+    _record_value_in_span_and_DD(
+        span,
+        metrics_backend.distribution,
+        estimation_error_metric_name,
+        abs(estimation_error),
+        tags,
+    )
+
+def _get_time_range_secs(in_msg: T) -> int:
+    return in_msg.meta.end_timestamp.seconds - in_msg.meta.start_timestamp.seconds
+
 
 @with_span(op="function")
 def run_query_to_correct_tier(
@@ -244,6 +293,8 @@ def run_query_to_correct_tier(
             request=build_snuba_request(in_msg, query_settings, build_query),
             timer=timer,
         )
+
+    print(in_msg)
 
     with sentry_sdk.start_span(op="query_most_downsampled_tier"):
         timer.mark(_START_ESTIMATION_MARK)
@@ -266,8 +317,8 @@ def run_query_to_correct_tier(
                 _get_time_budget() / 1000,
             )
             query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
-            target_tier, estimated_target_tier_query_bytes_scanned = _get_target_tier(
-                res, metrics_backend, referrer, timer
+            target_tier, estimated_target_tier_query_bytes_scanned, bypassed = _get_target_tier(
+                res, metrics_backend, referrer, _get_time_range_secs(in_msg)
             )
             timer.mark(_END_ESTIMATION_MARK)
             _record_value_in_span_and_DD(
@@ -298,30 +349,8 @@ def run_query_to_correct_tier(
                     timer=timer,
                 )
 
-                estimation_error = (
-                    estimated_target_tier_query_bytes_scanned
-                    - _get_query_bytes_scanned(res)
-                )
-                _record_value_in_span_and_DD(
-                    span,
-                    metrics_backend.distribution,
-                    "estimation_error_percentage",
-                    abs(estimation_error) / _get_query_bytes_scanned(res),
-                    {"referrer": referrer, "tier": str(target_tier)},
-                )
+                _emit_estimation_error_info(span, metrics_backend, estimated_target_tier_query_bytes_scanned, res, {"referrer": referrer, "tier": str(target_tier)})
 
-                estimation_error_metric_name = (
-                    "over_estimation_error"
-                    if estimation_error > 0
-                    else "under_estimation_error"
-                )
-                _record_value_in_span_and_DD(
-                    span,
-                    metrics_backend.distribution,
-                    estimation_error_metric_name,
-                    abs(estimation_error),
-                    {"referrer": referrer, "tier": str(target_tier)},
-                )
 
             _record_value_in_span_and_DD(
                 span,
