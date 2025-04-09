@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
+    AttributeDistribution,
     AttributeDistributionsRequest,
     StatsType,
     TraceItemStatsRequest,
@@ -72,4 +73,26 @@ class TestTraceItemStatsForLogs(BaseApiTest):
                 )
             ],
         )
-        EndpointTraceItemStats().execute(message)
+        response = EndpointTraceItemStats().execute(message)
+        assert response.results[0].HasField("attribute_distributions")
+        actual = response.results[0].attribute_distributions.attributes
+        assert len(actual) == 3
+        assert actual[0:2] == [
+            AttributeDistribution(
+                attribute_name="sentry.severity_text",
+                buckets=[AttributeDistribution.Bucket(label="INFO", value=60)],
+            ),
+            AttributeDistribution(
+                attribute_name="sentry.span_id",
+                buckets=[
+                    AttributeDistribution.Bucket(label="123456781234567D", value=60)
+                ],
+            ),
+        ]
+        assert actual[2].attribute_name == "sentry.body"
+        assert sorted(
+            actual[2].buckets, key=lambda x: int(x.label[len("hello world ") :])
+        ) == [
+            AttributeDistribution.Bucket(label=f"hello world {i}", value=1)
+            for i in range(1, 61)
+        ]
