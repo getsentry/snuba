@@ -34,6 +34,7 @@ Z_VALUE_P95 = 1.96  # Z value for 95% confidence interval is 1.96 which comes fr
 Z_VALUE_P975 = 2.24  # Z value for 97.5% confidence interval used for the avg() CI
 
 PERCENTILE_PRECISION = 100000
+PERCENTILE_SAMPLE_COUNT_THRESHOLD = 50
 CONFIDENCE_INTERVAL_THRESHOLD = 0.5
 
 CUSTOM_COLUMN_PREFIX = "__snuba_custom_column__"
@@ -190,6 +191,9 @@ class PercentileExtrapolationContext(ExtrapolationContext):
         relative_confidence = (
             abs(max_err / self.value) if self.value != 0 else float("inf")
         )
+
+        if self.sample_count <= PERCENTILE_SAMPLE_COUNT_THRESHOLD:
+            return Reliability.RELIABILITY_LOW
 
         if relative_confidence <= CONFIDENCE_INTERVAL_THRESHOLD:
             return Reliability.RELIABILITY_HIGH
