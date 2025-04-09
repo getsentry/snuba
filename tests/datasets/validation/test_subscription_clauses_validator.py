@@ -90,6 +90,23 @@ tests = [
         ),
         id="groupby is allowed in metrics counters subscriptions",
     ),
+    pytest.param(
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
+            ],
+            condition=binary_condition(
+                "equals",
+                Column("_snuba_project_id", None, "project_id"),
+                Literal(None, 1),
+            ),
+            groupby=[Column("_snuba_timestamp", None, "timestamp")],
+        ),
+        id="groupby without matching condition is allowed when allows_group_by_without_condition is True",
+    ),
 ]
 
 
@@ -103,6 +120,7 @@ def test_subscription_clauses_validation(query: LogicalQuery) -> None:
                 SubscriptionAllowedClausesValidator(
                     max_allowed_aggregations=1,
                     disallowed_aggregations=validator.disallowed_aggregations,
+                    allows_group_by_without_condition=validator.allows_group_by_without_condition,
                 ).validate(query)
 
 
@@ -110,7 +128,8 @@ invalid_tests = [
     pytest.param(
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
@@ -255,6 +274,24 @@ invalid_tests = [
             ],
         ),
         id="groupby field in where clause but with a different key",
+    ),
+    pytest.param(
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
+            ],
+            condition=binary_condition(
+                "equals",
+                Column("_snuba_project_id", None, "project_id"),
+                Literal(None, 1),
+            ),
+            groupby=[Column("_snuba_timestamp", None, "timestamp")],
+        ),
+        id="groupby without matching condition fails when allows_group_by_without_condition is False",
     ),
 ]
 
