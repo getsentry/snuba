@@ -76,6 +76,26 @@ def exclude_user_data_from_res(res: QueryResult) -> Dict[str, Any]:
     return result_dict
 
 
+def _get_bypass_seconds_threshold() -> int:
+    return cast(
+        int,
+        state.get_int_config(
+            _SAMPLING_IN_STORAGE_PREFIX + "bypass_seconds_threshold",
+            default=1 * 24 * 60 * 60,  # a day
+        ),
+    )
+
+
+def _get_bypass_bytes_threshold() -> int:
+    return cast(
+        int,
+        state.get_int_config(
+            _SAMPLING_IN_STORAGE_PREFIX + "bypass_bytes_threshold",
+            default=int(5e9),  # 5 gigabytes
+        ),
+    )
+
+
 def _get_query_bytes_scanned(res: QueryResult, span: Span) -> int:
     profile_dict = res.result.get("profile") or {}
     progress_bytes = profile_dict.get("progress_bytes")
@@ -118,17 +138,23 @@ def _get_target_tier(
     most_downsampled_res: QueryResult,
     metrics_backend: MetricsBackend,
     referrer: str,
-    timer: Timer,
-) -> Tuple[Tier, int]:
+    request_time_range_secs: int,
+) -> Tuple[Tier, int, bool]:
     with sentry_sdk.start_span(op="_get_target_tier") as span:
         most_downsampled_query_bytes_scanned = _get_query_bytes_scanned(
             most_downsampled_res, span
         )
-
         span.set_data(
             _SAMPLING_IN_STORAGE_PREFIX + "most_downsampled_query_bytes_scanned",
             most_downsampled_query_bytes_scanned,
         )
+
+        if (
+            request_time_range_secs <= _get_bypass_seconds_threshold()
+            or _get_query_bytes_scanned(most_downsampled_res, span)
+            <= _get_bypass_bytes_threshold()
+        ):
+            return Tier.TIER_1, -1, True
 
         target_tier = _get_most_downsampled_tier()
         estimated_target_tier_bytes_scanned = (
@@ -178,7 +204,7 @@ def _get_target_tier(
             _SAMPLING_IN_STORAGE_PREFIX + "estimated_target_tier_bytes_scanned",
             estimated_target_tier_bytes_scanned,
         )
-        return target_tier, estimated_target_tier_bytes_scanned
+        return target_tier, estimated_target_tier_bytes_scanned, False
 
 
 def _is_best_effort_mode(in_msg: T) -> bool:
@@ -279,6 +305,10 @@ def _emit_estimation_error_info(
     )
 
 
+def _get_time_range_secs(in_msg: T) -> int:
+    return in_msg.meta.end_timestamp.seconds - in_msg.meta.start_timestamp.seconds
+
+
 @with_span(op="function")
 def run_query_to_correct_tier(
     in_msg: T,
@@ -319,8 +349,12 @@ def run_query_to_correct_tier(
                 _get_time_budget() / 1000,
             )
             query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
-            target_tier, estimated_target_tier_query_bytes_scanned = _get_target_tier(
-                res, metrics_backend, referrer, timer
+            (
+                target_tier,
+                estimated_target_tier_query_bytes_scanned,
+                bypassed,
+            ) = _get_target_tier(
+                res, metrics_backend, referrer, _get_time_range_secs(in_msg)
             )
             timer.mark(_END_ESTIMATION_MARK)
             _record_value_in_span_and_DD(
@@ -334,31 +368,32 @@ def run_query_to_correct_tier(
             )
 
             span.set_data(_SAMPLING_IN_STORAGE_PREFIX + "target_tier", target_tier)
-            span.set_data(
-                _SAMPLING_IN_STORAGE_PREFIX
-                + "estimated_target_tier_query_bytes_scanned",
-                estimated_target_tier_query_bytes_scanned,
-            )
-
-            if target_tier != _get_most_downsampled_tier():
-                query_settings.set_sampling_tier(target_tier)
-                request_to_target_tier = build_snuba_request(
-                    in_msg, query_settings, build_query
-                )
-                res = run_query(
-                    dataset=PluggableDataset(name="eap", all_entities=[]),
-                    request=request_to_target_tier,
-                    timer=timer,
+            if not bypassed:
+                span.set_data(
+                    _SAMPLING_IN_STORAGE_PREFIX
+                    + "estimated_target_tier_query_bytes_scanned",
+                    estimated_target_tier_query_bytes_scanned,
                 )
 
-                if _get_query_bytes_scanned(res, span) != 0:
-                    _emit_estimation_error_info(
-                        span,
-                        metrics_backend,
-                        estimated_target_tier_query_bytes_scanned,
-                        res,
-                        {"referrer": referrer, "tier": str(target_tier)},
+                if target_tier != _get_most_downsampled_tier():
+                    query_settings.set_sampling_tier(target_tier)
+                    request_to_target_tier = build_snuba_request(
+                        in_msg, query_settings, build_query
                     )
+                    res = run_query(
+                        dataset=PluggableDataset(name="eap", all_entities=[]),
+                        request=request_to_target_tier,
+                        timer=timer,
+                    )
+
+                    if _get_query_bytes_scanned(res, span) != 0:
+                        _emit_estimation_error_info(
+                            span,
+                            metrics_backend,
+                            estimated_target_tier_query_bytes_scanned,
+                            res,
+                            {"referrer": referrer, "tier": str(target_tier)},
+                        )
 
             _record_value_in_span_and_DD(
                 span,
