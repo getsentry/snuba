@@ -1,5 +1,6 @@
 import uuid
-from typing import Callable, Dict, Optional, Tuple, TypeAlias, TypeVar, Union, cast
+from dataclasses import asdict
+from typing import Any, Callable, Dict, Optional, Tuple, TypeAlias, TypeVar, Union, cast
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -67,8 +68,30 @@ def _get_bytes_scanned_limit() -> int:
     )  # 150 gigabytes is default
 
 
-def _get_query_bytes_scanned(res: QueryResult) -> int:
-    return cast(int, res.result.get("profile", {}).get("progress_bytes", 0))  # type: ignore
+def exclude_user_data_from_res(res: QueryResult) -> Dict[str, Any]:
+    result_dict = asdict(res)
+    result_dict["result"] = {
+        k: v for k, v in result_dict["result"].items() if k != "data"
+    }
+    return result_dict
+
+
+def _get_query_bytes_scanned(res: QueryResult, span: Span) -> int:
+    profile_dict = res.result.get("profile") or {}
+    progress_bytes = profile_dict.get("progress_bytes")
+
+    if progress_bytes is not None:
+        return cast(int, progress_bytes)
+
+    error_type = (
+        "QueryResult_contains_no_profile"
+        if profile_dict is None
+        else "QueryResult_contains_no_progress_bytes"
+    )
+    res_without_user_data = exclude_user_data_from_res(res)
+    sentry_sdk.capture_message(f"{error_type}: {res_without_user_data}", level="error")
+    span.set_data(error_type, res_without_user_data)
+    return 0
 
 
 def _get_query_duration_ms(res: QueryResult) -> float:
@@ -99,7 +122,7 @@ def _get_target_tier(
 ) -> Tuple[Tier, int]:
     with sentry_sdk.start_span(op="_get_target_tier") as span:
         most_downsampled_query_bytes_scanned = _get_query_bytes_scanned(
-            most_downsampled_res
+            most_downsampled_res, span
         )
 
         span.set_data(
@@ -122,7 +145,7 @@ def _get_target_tier(
                 )
 
                 _record_value_in_span_and_DD(
-                    span,
+                    tier_specific_span,
                     metrics_backend.distribution,
                     "estimated_query_bytes_scanned",
                     estimated_query_bytes_scanned_to_this_tier,
@@ -213,7 +236,7 @@ def _run_query_on_most_downsampled_tier(
             span,
             metrics_backend.timing,
             "query_bytes_scanned_from_most_downsampled_tier",
-            _get_query_bytes_scanned(res),
+            _get_query_bytes_scanned(res, span),
             {"referrer": referrer},
         )
         _record_value_in_span_and_DD(
@@ -224,6 +247,36 @@ def _run_query_on_most_downsampled_tier(
             {"referrer": referrer},
         )
         return res
+
+
+def _emit_estimation_error_info(
+    span: Span,
+    metrics_backend: MetricsBackend,
+    estimated_target_tier_query_bytes_scanned: int,
+    res: QueryResult,
+    tags: Dict[str, str],
+) -> None:
+    estimation_error = (
+        estimated_target_tier_query_bytes_scanned - _get_query_bytes_scanned(res, span)
+    )
+    _record_value_in_span_and_DD(
+        span,
+        metrics_backend.distribution,
+        "estimation_error_percentage",
+        abs(estimation_error) / _get_query_bytes_scanned(res, span),
+        tags,
+    )
+
+    estimation_error_metric_name = (
+        "over_estimation_error" if estimation_error > 0 else "under_estimation_error"
+    )
+    _record_value_in_span_and_DD(
+        span,
+        metrics_backend.distribution,
+        estimation_error_metric_name,
+        abs(estimation_error),
+        tags,
+    )
 
 
 @with_span(op="function")
@@ -298,36 +351,20 @@ def run_query_to_correct_tier(
                     timer=timer,
                 )
 
-                estimation_error = (
-                    estimated_target_tier_query_bytes_scanned
-                    - _get_query_bytes_scanned(res)
-                )
-                _record_value_in_span_and_DD(
-                    span,
-                    metrics_backend.distribution,
-                    "estimation_error_percentage",
-                    abs(estimation_error) / _get_query_bytes_scanned(res),
-                    {"referrer": referrer, "tier": str(target_tier)},
-                )
-
-                estimation_error_metric_name = (
-                    "over_estimation_error"
-                    if estimation_error > 0
-                    else "under_estimation_error"
-                )
-                _record_value_in_span_and_DD(
-                    span,
-                    metrics_backend.distribution,
-                    estimation_error_metric_name,
-                    abs(estimation_error),
-                    {"referrer": referrer, "tier": str(target_tier)},
-                )
+                if _get_query_bytes_scanned(res, span) != 0:
+                    _emit_estimation_error_info(
+                        span,
+                        metrics_backend,
+                        estimated_target_tier_query_bytes_scanned,
+                        res,
+                        {"referrer": referrer, "tier": str(target_tier)},
+                    )
 
             _record_value_in_span_and_DD(
                 span,
                 metrics_backend.distribution,
                 f"actual_bytes_scanned_in_target_tier_{target_tier}",
-                _get_query_bytes_scanned(res),
+                _get_query_bytes_scanned(res, span),
                 tags={"referrer": referrer, "tier": str(target_tier)},
             )
             _record_value_in_span_and_DD(
