@@ -41,6 +41,12 @@ _TIME_PERIOD_HOURS_BUCKETS = [
 ]
 _BUCKETS_COUNT = len(_TIME_PERIOD_HOURS_BUCKETS)
 
+_STORAGE_ROUTING_MODE_MAP = {
+    0: "MODE_UNSPECIFIED",
+    1: "MODE_PREFLIGHT",
+    2: "MODE_BEST_EFFORT",
+}
+
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(
@@ -167,9 +173,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             ):
                 tags = {"endpoint": str(self.__class__.__name__)}
                 if self._uses_storage_routing(in_msg):
-                    tags[
-                        "storage_routing_mode"
-                    ] = in_msg.meta.downsampled_storage_config.mode  # type: ignore
+                    tags["storage_routing_mode"] = _STORAGE_ROUTING_MODE_MAP[
+                        in_msg.meta.downsampled_storage_config.mode
+                    ]  # type: ignore
                 self.metrics.increment("timeout_query", 1, tags)
                 sentry_sdk.capture_exception(e)
             out = self.response_class()()
@@ -211,7 +217,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             tags["referrer"] = meta.referrer
 
         if self._uses_storage_routing(in_msg):
-            tags["storage_routing_mode"] = meta.downsampled_storage_config.mode
+            tags["storage_routing_mode"] = _STORAGE_ROUTING_MODE_MAP[
+                meta.downsampled_storage_config.mode
+            ]
 
         return tags
 

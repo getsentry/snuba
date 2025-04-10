@@ -348,7 +348,10 @@ class TestTraceItemTable(BaseApiTest):
             metrics_mock.increment.assert_any_call(
                 "timeout_query",
                 1,
-                {"endpoint": "EndpointTraceItemTable", "storage_routing_mode": 2},
+                {
+                    "endpoint": "EndpointTraceItemTable",
+                    "storage_routing_mode": "MODE_BEST_EFFORT",
+                },
             )
 
     def test_errors_without_type(self) -> None:
