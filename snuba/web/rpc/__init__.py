@@ -174,9 +174,20 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 tags = {"endpoint": str(self.__class__.__name__)}
                 if self._uses_storage_routing(in_msg):
                     tags["storage_routing_mode"] = _STORAGE_ROUTING_MODE_MAP[
-                        in_msg.meta.downsampled_storage_config.mode
-                    ]  # type: ignore
+                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
+                    ]
                 self.metrics.increment("timeout_query", 1, tags)
+                sentry_sdk.capture_exception(e)
+            if (
+                "error_code" in e.extra["stats"]
+                and e.extra["stats"]["error_code"] == 160
+            ):
+                tags = {"endpoint": str(self.__class__.__name__)}
+                if self._uses_storage_routing(in_msg):
+                    tags["storage_routing_mode"] = _STORAGE_ROUTING_MODE_MAP[
+                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
+                    ]
+                self.metrics.increment("estimated_execution_timeout", 1, tags)
                 sentry_sdk.capture_exception(e)
             out = self.response_class()()
             error = e
