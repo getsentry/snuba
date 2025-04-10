@@ -169,7 +169,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 if self._uses_storage_routing(in_msg):
                     tags[
                         "storage_routing_mode"
-                    ] = in_msg.meta.downsampled_storage_config.mode
+                    ] = in_msg.meta.downsampled_storage_config.mode  # type: ignore
                 self.metrics.increment("timeout_query", 1, tags)
                 sentry_sdk.capture_exception(e)
             out = self.response_class()()
