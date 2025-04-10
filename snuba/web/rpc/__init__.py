@@ -41,12 +41,6 @@ _TIME_PERIOD_HOURS_BUCKETS = [
 ]
 _BUCKETS_COUNT = len(_TIME_PERIOD_HOURS_BUCKETS)
 
-_STORAGE_ROUTING_MODE_MAP = {
-    0: "MODE_UNSPECIFIED",
-    1: "MODE_PREFLIGHT",
-    2: "MODE_BEST_EFFORT",
-}
-
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(
@@ -133,7 +127,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def _uses_storage_routing(self, in_msg: Tin) -> bool:
         return (
             hasattr(in_msg, "meta")
-            and in_msg.meta.HasField("downsampled_storage_config")
+            and hasattr(in_msg.meta, "downsampled_storage_config")
             and in_msg.meta.downsampled_storage_config.mode
             != DownsampledStorageConfig.MODE_UNSPECIFIED
         )
@@ -224,9 +218,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             tags["referrer"] = meta.referrer
 
         if self._uses_storage_routing(in_msg):
-            tags["storage_routing_mode"] = _STORAGE_ROUTING_MODE_MAP[
-                meta.downsampled_storage_config.mode
-            ]
+            tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
+                in_msg.meta.downsampled_storage_config.mode
+            )
 
         return tags
 
