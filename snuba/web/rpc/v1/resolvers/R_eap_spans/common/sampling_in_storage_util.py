@@ -302,13 +302,14 @@ def run_query_to_correct_tier(
                     estimated_target_tier_query_bytes_scanned
                     - _get_query_bytes_scanned(res)
                 )
-                _record_value_in_span_and_DD(
-                    span,
-                    metrics_backend.distribution,
-                    "estimation_error_percentage",
-                    abs(estimation_error) / _get_query_bytes_scanned(res),
-                    {"referrer": referrer, "tier": str(target_tier)},
-                )
+                if _get_query_bytes_scanned(res) != 0:
+                    _record_value_in_span_and_DD(
+                        span,
+                        metrics_backend.distribution,
+                        "estimation_error_percentage",
+                        abs(estimation_error) / _get_query_bytes_scanned(res),
+                        {"referrer": referrer, "tier": str(target_tier)},
+                    )
 
                 estimation_error_metric_name = (
                     "over_estimation_error"
