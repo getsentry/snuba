@@ -295,6 +295,65 @@ class TestTraceItemTable(BaseApiTest):
             sentry_sdk_mock.assert_called()
             assert metrics_mock.increment.call_args_list.count(call("OOM_query")) == 1
 
+    def test_timeoutt(self, monkeypatch: Any) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                ),
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                    )
+                )
+            ],
+            limit=10,
+        )
+        metrics_mock = MagicMock()
+        monkeypatch.setattr(RPCEndpoint, "metrics", property(lambda x: metrics_mock))
+        with (
+            patch(
+                "clickhouse_driver.client.Client.execute",
+                side_effect=ServerException(
+                    "DB::Exception: Timeout exceeded: elapsed 32.8457984 seconds, maximum: 30: Blahblahblahblahblahblahblah",
+                    code=159,
+                ),
+            ),
+            patch("snuba.web.rpc.sentry_sdk.capture_exception") as sentry_sdk_mock,
+        ):
+            with pytest.raises(QueryException) as e:
+                EndpointTraceItemTable().execute(message)
+            assert "DB::Exception: Timeout exceeded" in str(e.value)
+
+            sentry_sdk_mock.assert_called()
+            metrics_mock.increment.assert_any_call(
+                "timeout_query",
+                1,
+                {
+                    "endpoint": "EndpointTraceItemTable",
+                    "storage_routing_mode": "MODE_BEST_EFFORT",
+                },
+            )
+
     def test_errors_without_type(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()

@@ -7,6 +7,7 @@ import sentry_sdk
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
@@ -123,6 +124,14 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         res.ParseFromString(bytestring)
         return res
 
+    def _uses_storage_routing(self, in_msg: Tin) -> bool:
+        return (
+            hasattr(in_msg, "meta")
+            and hasattr(in_msg.meta, "downsampled_storage_config")
+            and in_msg.meta.downsampled_storage_config.mode
+            != DownsampledStorageConfig.MODE_UNSPECIFIED
+        )
+
     @final
     def execute(self, in_msg: Tin) -> Tout:
         scope = sentry_sdk.get_current_scope()
@@ -151,6 +160,24 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 and e.extra["stats"]["error_code"] == 241
             ):
                 self.metrics.increment("OOM_query")
+                sentry_sdk.capture_exception(e)
+            if (
+                "error_code" in e.extra["stats"]
+                and e.extra["stats"]["error_code"] == 159
+            ):
+                tags = {"endpoint": str(self.__class__.__name__)}
+                if self._uses_storage_routing(in_msg):
+                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(in_msg.meta.downsampled_storage_config.mode)  # type: ignore
+                self.metrics.increment("timeout_query", 1, tags)
+                sentry_sdk.capture_exception(e)
+            if (
+                "error_code" in e.extra["stats"]
+                and e.extra["stats"]["error_code"] == 160
+            ):
+                tags = {"endpoint": str(self.__class__.__name__)}
+                if self._uses_storage_routing(in_msg):
+                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(in_msg.meta.downsampled_storage_config.mode)  # type: ignore
+                self.metrics.increment("estimated_execution_timeout", 1, tags)
                 sentry_sdk.capture_exception(e)
             out = self.response_class()()
             error = e
@@ -189,6 +216,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
         if hasattr(meta, "referrer"):
             tags["referrer"] = meta.referrer
+
+        if self._uses_storage_routing(in_msg):
+            tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
+                in_msg.meta.downsampled_storage_config.mode
+            )
 
         return tags
 
