@@ -186,6 +186,8 @@ class ClickhousePool(object):
                             span.set_data(
                                 sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse"
                             )
+                            span.set_data("query_id", query_id)
+                            span.set_data("settings", settings)
                             return conn.execute(  # type: ignore
                                 query,
                                 params=params,
