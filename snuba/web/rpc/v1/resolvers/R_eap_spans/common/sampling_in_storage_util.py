@@ -32,7 +32,6 @@ MetricsBackendType: TypeAlias = Callable[
 
 
 DOWNSAMPLING_TIER_MULTIPLIERS: Dict[Tier, int] = {
-    Tier.TIER_512: 1,
     Tier.TIER_64: 8,
     Tier.TIER_8: 64,
     Tier.TIER_1: 512,
@@ -68,7 +67,7 @@ def _get_bytes_scanned_limit() -> int:
     )  # 150 gigabytes is default
 
 
-def exclude_user_data_from_res(res: QueryResult) -> Dict[str, Any]:
+def _exclude_user_data_from_res(res: QueryResult) -> Dict[str, Any]:
     result_dict = asdict(res)
     result_dict["result"] = {
         k: v for k, v in result_dict["result"].items() if k != "data"
@@ -88,7 +87,7 @@ def _get_query_bytes_scanned(res: QueryResult, span: Span) -> int:
         if profile_dict is None
         else "QueryResult_contains_no_progress_bytes"
     )
-    res_without_user_data = exclude_user_data_from_res(res)
+    res_without_user_data = _exclude_user_data_from_res(res)
     sentry_sdk.capture_message(f"{error_type}: {res_without_user_data}", level="error")
     span.set_data(error_type, res_without_user_data)
     return 0
@@ -279,6 +278,51 @@ def _emit_estimation_error_info(
     )
 
 
+def _skip_storage_routing(in_msg: T) -> bool:
+    return (
+        not in_msg.meta.HasField("downsampled_storage_config")
+        or in_msg.meta.downsampled_storage_config.mode
+        == DownsampledStorageConfig.MODE_UNSPECIFIED
+    )
+
+
+def _populate_clickhouse_settings(query_settings: HTTPQuerySettings) -> None:
+    query_settings.push_clickhouse_setting(
+        "max_execution_time", _get_time_budget() / 1000
+    )  # max_execution_time is in seconds
+    query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
+
+
+def _rerun_query_on_target_tier(
+    query_settings: HTTPQuerySettings,
+    timer: Timer,
+    metrics_backend: MetricsBackend,
+    referrer: str,
+    target_tier: Tier,
+    span: Span,
+    in_msg: T,
+    build_query: Callable[[T], Query],
+    estimated_target_tier_query_bytes_scanned: int,
+) -> QueryResult:
+    query_settings.set_sampling_tier(target_tier)
+    request_to_target_tier = build_snuba_request(in_msg, query_settings, build_query)
+    res = run_query(
+        dataset=PluggableDataset(name="eap", all_entities=[]),
+        request=request_to_target_tier,
+        timer=timer,
+    )
+
+    if _get_query_bytes_scanned(res, span) != 0:
+        _emit_estimation_error_info(
+            span,
+            metrics_backend,
+            estimated_target_tier_query_bytes_scanned,
+            res,
+            {"referrer": referrer, "tier": str(target_tier)},
+        )
+    return res
+
+
 @with_span(op="function")
 def run_query_to_correct_tier(
     in_msg: T,
@@ -287,24 +331,18 @@ def run_query_to_correct_tier(
     build_query: Callable[[T], Query],
     metrics_backend: MetricsBackend,
 ) -> QueryResult:
-    if (
-        not in_msg.meta.HasField("downsampled_storage_config")
-        or in_msg.meta.downsampled_storage_config.mode
-        == DownsampledStorageConfig.MODE_UNSPECIFIED
-    ):
+    if _skip_storage_routing(in_msg):
         return run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=build_snuba_request(in_msg, query_settings, build_query),
             timer=timer,
         )
 
+    referrer = in_msg.meta.referrer
+
     with sentry_sdk.start_span(op="query_most_downsampled_tier"):
         timer.mark(_START_ESTIMATION_MARK)
-
         query_settings.set_sampling_tier(_get_most_downsampled_tier())
-
-        referrer = in_msg.meta.referrer
-
         request_to_most_downsampled_tier = build_snuba_request(
             in_msg, query_settings, build_query
         )
@@ -314,11 +352,6 @@ def run_query_to_correct_tier(
 
     if _is_best_effort_mode(in_msg):
         with sentry_sdk.start_span(op="redirect_to_target_tier") as span:
-            query_settings.push_clickhouse_setting(
-                "max_execution_time",
-                _get_time_budget() / 1000,
-            )
-            query_settings.push_clickhouse_setting("timeout_overflow_mode", "break")
             target_tier, estimated_target_tier_query_bytes_scanned = _get_target_tier(
                 res, metrics_backend, referrer, timer
             )
@@ -333,6 +366,8 @@ def run_query_to_correct_tier(
                 {"referrer": referrer, "tier": str(target_tier)},
             )
 
+            _populate_clickhouse_settings(query_settings)
+
             span.set_data(_SAMPLING_IN_STORAGE_PREFIX + "target_tier", target_tier)
             span.set_data(
                 _SAMPLING_IN_STORAGE_PREFIX
@@ -341,24 +376,17 @@ def run_query_to_correct_tier(
             )
 
             if target_tier != _get_most_downsampled_tier():
-                query_settings.set_sampling_tier(target_tier)
-                request_to_target_tier = build_snuba_request(
-                    in_msg, query_settings, build_query
+                res = _rerun_query_on_target_tier(
+                    query_settings,
+                    timer,
+                    metrics_backend,
+                    referrer,
+                    target_tier,
+                    span,
+                    in_msg,
+                    build_query,
+                    estimated_target_tier_query_bytes_scanned,
                 )
-                res = run_query(
-                    dataset=PluggableDataset(name="eap", all_entities=[]),
-                    request=request_to_target_tier,
-                    timer=timer,
-                )
-
-                if _get_query_bytes_scanned(res, span) != 0:
-                    _emit_estimation_error_info(
-                        span,
-                        metrics_backend,
-                        estimated_target_tier_query_bytes_scanned,
-                        res,
-                        {"referrer": referrer, "tier": str(target_tier)},
-                    )
 
             _record_value_in_span_and_DD(
                 span,

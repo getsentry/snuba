@@ -33,9 +33,9 @@ def test_selects_eap_items() -> None:
 def test_selects_correct_eap_items_tier() -> None:
     unimportant_query = Query(from_clause=EAP_ITEMS_ENTITY)
     query_settings = HTTPQuerySettings()
-    query_settings.set_sampling_tier(Tier.TIER_512)
+    query_settings.set_sampling_tier(Tier.TIER_64)
 
     selected_storage = EAPItemsStorageSelector().select_storage(
         unimportant_query, query_settings, EAP_ITEMS_STORAGE_CONNECTIONS
     )
-    assert selected_storage.storage == get_storage(StorageKey.EAP_ITEMS_DOWNSAMPLE_512)
+    assert selected_storage.storage == get_storage(StorageKey.EAP_ITEMS_DOWNSAMPLE_64)

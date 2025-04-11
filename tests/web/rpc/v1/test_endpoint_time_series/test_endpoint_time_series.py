@@ -1418,12 +1418,12 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
         assert (
             sum_of_preflight_metric
             < non_downsampled_tier_response.result_timeseries[0].data_points[0].data
-            / 100
-        )
+            / 10
+        )  # should be about 3600/64 (give or take due to random sampling)
         assert (
             preflight_response.meta.downsampled_storage_meta
             == DownsampledStorageMeta(
-                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_512
+                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
             )
         )
 

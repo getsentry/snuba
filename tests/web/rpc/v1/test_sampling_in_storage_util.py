@@ -22,7 +22,6 @@ SAMPLING_IN_STORAGE_UTIL_PREFIX = (
 @pytest.mark.parametrize(
     "most_downsampled_query_bytes_scanned, bytes_scanned_limit, expected_tier",
     [
-        (100, 200, Tier.TIER_512),
         (100, 900, Tier.TIER_64),
         (100, 6500, Tier.TIER_8),
         (100, 51300, Tier.TIER_1),
