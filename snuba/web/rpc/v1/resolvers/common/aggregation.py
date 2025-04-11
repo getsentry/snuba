@@ -29,12 +29,17 @@ from snuba.web.rpc.common.common import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 sampling_weight_column = column("sampling_weight")
+sampling_factor_column = column("sampling_factor")
 
 Z_VALUE_P95 = 1.96  # Z value for 95% confidence interval is 1.96 which comes from the normal distribution z score.
 Z_VALUE_P975 = 2.24  # Z value for 97.5% confidence interval used for the avg() CI
 
 PERCENTILE_PRECISION = 100000
 PERCENTILE_SAMPLE_COUNT_THRESHOLD = 50
+PERCENTILE_CORRECTION_FACTOR = (
+    1000  # We multiply the sampling weight by this factor to reduce rounding error
+)
+
 CONFIDENCE_INTERVAL_THRESHOLD = 0.5
 
 CUSTOM_COLUMN_PREFIX = "__snuba_custom_column__"
@@ -280,12 +285,18 @@ def get_attribute_confidence_interval_alias(
 def get_average_sample_rate_column(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    use_sampling_factor: bool = False,
 ) -> Expression:
     alias = CustomColumnInformation(
         custom_column_id="average_sample_rate",
         referenced_column=aggregation.label,
         metadata={},
     ).to_alias()
+    sampling_weight = (
+        f.divide(1, sampling_factor_column)
+        if use_sampling_factor
+        else sampling_weight_column
+    )
     field = attribute_key_to_expression(aggregation.key)
     condition_in_aggregation = _get_condition_in_aggregation(
         aggregation, attribute_key_to_expression
@@ -296,7 +307,7 @@ def get_average_sample_rate_column(
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         f.sumIf(
-            sampling_weight_column,
+            sampling_weight,
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
         alias=alias,
@@ -350,6 +361,7 @@ def _get_possible_percentiles_expression(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
     percentile: float,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    use_sampling_factor: bool = False,
     granularity: float = 0.005,
     width: float = 0.1,
 ) -> Expression:
@@ -369,9 +381,14 @@ def _get_possible_percentiles_expression(
         aggregation, {"granularity": str(granularity), "width": str(width)}
     )
     alias_dict = {"alias": alias} if alias else {}
+    sampling_weight = (
+        f.divide(1, sampling_factor_column)
+        if use_sampling_factor
+        else sampling_weight_column
+    )
     return cf.quantilesTDigestWeighted(*possible_percentiles)(
         field,
-        sampling_weight_column,
+        f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
         **alias_dict,
     )
 
@@ -380,30 +397,36 @@ def get_extrapolated_function(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
     field: Expression,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    use_sampling_factor: bool = False,
 ) -> CurriedFunctionCall | FunctionCall | None:
-    sampling_weight_column = column("sampling_weight")
     alias = aggregation.label if aggregation.label else None
     alias_dict = {"alias": alias} if alias else {}
     condition_in_aggregation = _get_condition_in_aggregation(
         aggregation, attribute_key_to_expression
     )
+
+    sampling_weight = (
+        f.divide(1, sampling_factor_column)
+        if use_sampling_factor
+        else sampling_weight_column
+    )
     function_map_sample_weighted: dict[
         Function.ValueType, CurriedFunctionCall | FunctionCall
     ] = {
         Function.FUNCTION_SUM: f.sumIfOrNull(
-            f.multiply(field, sampling_weight_column),
+            f.multiply(field, sampling_weight),
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_AVERAGE: f.divide(
             f.sumIfOrNull(
-                f.multiply(field, sampling_weight_column),
+                f.multiply(field, sampling_weight),
                 and_cond(
                     get_field_existence_expression(field), condition_in_aggregation
                 ),
             ),
             f.sumIfOrNull(
-                sampling_weight_column,
+                sampling_weight,
                 and_cond(
                     get_field_existence_expression(field), condition_in_aggregation
                 ),
@@ -412,13 +435,13 @@ def get_extrapolated_function(
         ),
         Function.FUNCTION_AVG: f.divide(
             f.sumIfOrNull(
-                f.multiply(field, sampling_weight_column),
+                f.multiply(field, sampling_weight),
                 and_cond(
                     get_field_existence_expression(field), condition_in_aggregation
                 ),
             ),
             f.sumIfOrNull(
-                sampling_weight_column,
+                sampling_weight,
                 and_cond(
                     get_field_existence_expression(field), condition_in_aggregation
                 ),
@@ -426,37 +449,37 @@ def get_extrapolated_function(
             **alias_dict,
         ),
         Function.FUNCTION_COUNT: f.sumIfOrNull(
-            sampling_weight_column,
+            sampling_weight,
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P50: cf.quantileTDigestWeightedIfOrNull(0.5)(
             field,
-            sampling_weight_column,
+            f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P75: cf.quantileTDigestWeightedIfOrNull(0.75)(
             field,
-            sampling_weight_column,
+            f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P90: cf.quantileTDigestWeightedIfOrNull(0.9)(
             field,
-            sampling_weight_column,
+            f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P95: cf.quantileTDigestWeightedIfOrNull(0.95)(
             field,
-            sampling_weight_column,
+            f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P99: cf.quantileTDigestWeightedIfOrNull(0.99)(
             field,
-            sampling_weight_column,
+            f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
@@ -485,6 +508,7 @@ def _get_ci_count(
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     alias: str | None = None,
     z_value: float = Z_VALUE_P95,
+    use_sampling_factor: bool = False,
 ) -> Expression:
     """
     confidence interval = Z \cdot \sqrt{\sum_{i=1}^n w_i^2 - w_i}
@@ -511,11 +535,15 @@ def _get_ci_count(
         aggregation, attribute_key_to_expression
     )
     alias_dict = {"alias": alias} if alias else {}
-
+    sampling_weight = (
+        f.divide(1, sampling_factor_column)
+        if use_sampling_factor
+        else sampling_weight_column
+    )
     variance = f.sumIf(
         f.minus(
-            f.multiply(sampling_weight_column, sampling_weight_column),
-            sampling_weight_column,
+            f.multiply(sampling_weight, sampling_weight),
+            sampling_weight,
         ),
         and_cond(
             get_field_existence_expression(field),
@@ -531,6 +559,7 @@ def _get_ci_sum(
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     alias: str | None = None,
     z_value: float = Z_VALUE_P95,
+    use_sampling_factor: bool = False,
 ) -> Expression:
     """
     confidence interval = Z \cdot \sqrt{\sum_{i=1}^n x_i^2 \cdot (w_i^2 - w_i)}
@@ -551,13 +580,17 @@ def _get_ci_sum(
         aggregation, attribute_key_to_expression
     )
     alias_dict = {"alias": alias} if alias else {}
-
+    sampling_weight = (
+        f.divide(1, sampling_factor_column)
+        if use_sampling_factor
+        else sampling_weight_column
+    )
     variance = f.sumIf(
         f.multiply(
             f.multiply(field, field),
             f.minus(
-                f.multiply(sampling_weight_column, sampling_weight_column),
-                sampling_weight_column,
+                f.multiply(sampling_weight, sampling_weight),
+                sampling_weight,
             ),
         ),
         and_cond(
@@ -573,6 +606,7 @@ def _get_ci_avg(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     alias: str | None = None,
+    use_sampling_factor: bool = False,
 ) -> Expression:
     """
     confidence interval = (\\frac{t + err_t}{c - err_c} - \\frac{t - err_t}{c + err_c}) \cdot 0.5
@@ -602,23 +636,36 @@ def _get_ci_avg(
         aggregation, attribute_key_to_expression
     )
     alias_dict = {"alias": alias} if alias else {}
+    sampling_weight = (
+        f.divide(1, sampling_factor_column)
+        if use_sampling_factor
+        else sampling_weight_column
+    )
 
     expr_sum = f.sumIfOrNull(
-        f.multiply(field, sampling_weight_column),
+        f.multiply(field, sampling_weight),
         and_cond(get_field_existence_expression(field), condition_in_aggregation),
         alias=f"{alias}__sum",
     )
     expr_count = f.sumIfOrNull(
-        sampling_weight_column,
+        sampling_weight,
         and_cond(get_field_existence_expression(field), condition_in_aggregation),
         alias=f"{alias}__count",
     )
 
     expr_sum_err = _get_ci_sum(
-        aggregation, attribute_key_to_expression, f"{alias}__sum_err", Z_VALUE_P975
+        aggregation,
+        attribute_key_to_expression,
+        f"{alias}__sum_err",
+        Z_VALUE_P975,
+        use_sampling_factor,
     )
     expr_count_err = _get_ci_count(
-        aggregation, attribute_key_to_expression, f"{alias}__count_err", Z_VALUE_P975
+        aggregation,
+        attribute_key_to_expression,
+        f"{alias}__count_err",
+        Z_VALUE_P975,
+        use_sampling_factor,
     )
 
     return f.divide(
@@ -642,6 +689,7 @@ def _get_ci_avg(
 def get_confidence_interval_column(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    use_sampling_factor: bool = False,
 ) -> Expression | None:
     """
     Returns the expression for calculating the upper confidence limit for a given aggregation. If the aggregation cannot be extrapolated, returns None.
@@ -652,28 +700,34 @@ def get_confidence_interval_column(
 
     function_map_confidence_interval = {
         Function.FUNCTION_COUNT: _get_ci_count(
-            aggregation, attribute_key_to_expression, alias
+            aggregation,
+            attribute_key_to_expression,
+            alias,
+            use_sampling_factor=use_sampling_factor,
         ),
         Function.FUNCTION_SUM: _get_ci_sum(
-            aggregation, attribute_key_to_expression, alias
+            aggregation,
+            attribute_key_to_expression,
+            alias,
+            use_sampling_factor=use_sampling_factor,
         ),
         Function.FUNCTION_AVG: _get_ci_avg(
-            aggregation, attribute_key_to_expression, alias
+            aggregation, attribute_key_to_expression, alias, use_sampling_factor
         ),
         Function.FUNCTION_P50: _get_possible_percentiles_expression(
-            aggregation, 0.5, attribute_key_to_expression
+            aggregation, 0.5, attribute_key_to_expression, use_sampling_factor
         ),
         Function.FUNCTION_P75: _get_possible_percentiles_expression(
-            aggregation, 0.75, attribute_key_to_expression
+            aggregation, 0.75, attribute_key_to_expression, use_sampling_factor
         ),
         Function.FUNCTION_P90: _get_possible_percentiles_expression(
-            aggregation, 0.9, attribute_key_to_expression
+            aggregation, 0.9, attribute_key_to_expression, use_sampling_factor
         ),
         Function.FUNCTION_P95: _get_possible_percentiles_expression(
-            aggregation, 0.95, attribute_key_to_expression
+            aggregation, 0.95, attribute_key_to_expression, use_sampling_factor
         ),
         Function.FUNCTION_P99: _get_possible_percentiles_expression(
-            aggregation, 0.99, attribute_key_to_expression
+            aggregation, 0.99, attribute_key_to_expression, use_sampling_factor
         ),
     }
 
@@ -709,6 +763,7 @@ def _calculate_approximate_ci_percentile_levels(
 def aggregation_to_expression(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    use_sampling_factor: bool = False,
 ) -> Expression:
     field = attribute_key_to_expression(aggregation.key)
     alias = aggregation.label if aggregation.label else None
@@ -772,7 +827,7 @@ def aggregation_to_expression(
         == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
     ):
         agg_func_expr = get_extrapolated_function(
-            aggregation, field, attribute_key_to_expression
+            aggregation, field, attribute_key_to_expression, use_sampling_factor
         )
     else:
         agg_func_expr = function_map.get(aggregation.aggregate)
