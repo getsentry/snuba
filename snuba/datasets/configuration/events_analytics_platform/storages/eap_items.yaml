@@ -231,6 +231,7 @@ query_processors:
   - processor: TupleUnaliaser
   - processor: ClickhouseSettingsOverride
     args:
+      overwrite_existing: false
       settings:
         max_memory_usage: 5000000000
         max_rows_to_group_by: 1000000
