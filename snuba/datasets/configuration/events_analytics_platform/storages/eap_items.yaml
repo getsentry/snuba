@@ -236,7 +236,7 @@ query_processors:
         max_rows_to_group_by: 1000000
         group_by_overflow_mode: any
         max_parallel_replicas: 3
-        max_execution_time: 30
+        max_execution_time: 25
         timeout_before_checking_execution_speed: 0
         timeout_overflow_mode: 'break'
 
