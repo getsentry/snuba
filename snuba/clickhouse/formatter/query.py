@@ -111,7 +111,7 @@ def _format_query_content(
     parsing_context = ParsingContext()
     formatter = expression_formatter_type(parsing_context)
 
-    return [
+    tmp = [
         v
         for v in [
             _format_select(query, formatter),
@@ -138,6 +138,7 @@ def _format_query_content(
         ]
         if v is not None
     ]
+    return tmp
 
 
 def _format_delete_query_content(
@@ -173,9 +174,8 @@ def _format_on_cluster(
 def _format_select(
     query: AbstractQuery, formatter: ExpressionVisitor[str]
 ) -> StringNode:
-    selected_cols = [
-        e.expression.accept(formatter) for e in query.get_selected_columns()
-    ]
+    t1 = list(query.get_selected_columns())
+    selected_cols = list(map(lambda e: e.expression.accept(formatter), t1))
     return StringNode(f"SELECT {', '.join(selected_cols)}")
 
 

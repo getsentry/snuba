@@ -21,6 +21,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.parsing import ParsingContext
+from snuba.query.dsl import Functions as f, and_cond, column, in_cond, literal, or_cond
 
 test_expressions = [
     (Literal(None, "test"), "'test'", "'$S'"),  # String literal
@@ -300,3 +301,76 @@ test_escaped = [
 def test_escaping(expression: Expression, expected: str) -> None:
     visitor = ClickhouseExpressionFormatter()
     assert expression.accept(visitor) == expected
+
+
+def test_format_cat() -> None:
+    my_expr = f.divide(
+        f.sumIfOrNull(
+            column("sampling_weight"),
+            and_cond(
+                f.mapContains(
+                    column("attributes_string_18"), literal("sentry.status_code")
+                ),
+                or_cond(
+                    in_cond(
+                        f.arrayElement(
+                            column("attributes_string_18"),
+                            literal("sentry.status_code"),
+                        ),
+                        f.array(
+                            literal("500"),
+                            literal("501"),
+                            literal("502"),
+                            literal("503"),
+                            literal("504"),
+                            literal("505"),
+                            literal("506"),
+                            literal("507"),
+                            literal("508"),
+                            literal("509"),
+                            literal("510"),
+                            literal("511"),
+                        ),
+                    ),
+                    and_cond(
+                        f.isNull(
+                            f.arrayElement(
+                                column("attributes_string_18"),
+                                literal("sentry.status_code"),
+                            )
+                        ),
+                        f.has(
+                            f.array(
+                                literal("500"),
+                                literal("501"),
+                                literal("502"),
+                                literal("503"),
+                                literal("504"),
+                                literal("505"),
+                                literal("506"),
+                                literal("507"),
+                                literal("508"),
+                                literal("509"),
+                                literal("510"),
+                                literal("511"),
+                            ),
+                            None,
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        f.sumIfOrNull(
+            column("sampling_weight"),
+            and_cond(
+                f.mapContains(
+                    column("attributes_string_18"), literal("sentry.status_code")
+                ),
+                literal(True),
+            ),
+        ),
+    )
+    formatter = ClickhouseExpressionFormatter()
+    res = my_expr.accept(formatter)
+    res2 = my_expr.accept(formatter)
+    print("hello")
