@@ -3114,6 +3114,7 @@ dependencies = [
  "libc",
  "libz-sys",
  "num_enum",
+ "openssl-sys",
  "pkg-config",
 ]
 
@@ -3254,6 +3255,7 @@ dependencies = [
  "parking_lot",
  "procspawn",
  "pyo3",
+ "rdkafka 0.36.1",
  "regex",
  "reqwest",
  "schemars",
