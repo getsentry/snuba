@@ -238,6 +238,7 @@ query_processors:
         max_parallel_replicas: 3
         max_execution_time: 30
         timeout_before_checking_execution_speed: 0
+        timeout_overflow_mode: 'break'
 
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
