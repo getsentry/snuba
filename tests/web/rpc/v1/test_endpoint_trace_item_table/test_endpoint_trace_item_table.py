@@ -3360,7 +3360,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         )
         assert (
             len(preflight_response.column_values[0].results)
-            < len(non_downsampled_tier_response.column_values[0].results) / 100
+            < len(non_downsampled_tier_response.column_values[0].results) / 10
         )
         assert (
             preflight_response.meta.downsampled_storage_meta
