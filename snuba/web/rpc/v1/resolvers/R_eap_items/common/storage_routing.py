@@ -11,6 +11,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    TypedDict
 )
 
 import sentry_sdk
@@ -45,6 +46,7 @@ MetricsBackendType: TypeAlias = Callable[
 ]
 
 RoutedRequestType = Union[TimeSeriesRequest, TraceItemTableRequest]
+ClickhouseQuerySettings = Dict[str, str]
 
 
 def _build_snuba_request(
@@ -101,7 +103,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
     def _decide_tier_and_query_settings(
         self, routing_context: RoutingContext
-    ) -> tuple[Tier, HTTPQuerySettings]:
+    ) -> tuple[Tier, ClickhouseQuerySettings]:
         raise NotImplementedError
 
     def _run_query(self, routing_context: RoutingContext) -> QueryResult:
@@ -116,15 +118,16 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             timer=routing_context.timer,
         )
 
-    def _merge_query_settings(
-        self, routing_context: RoutingContext, query_settings: HTTPQuerySettings
+    def __merge_query_settings(
+        self, routing_context: RoutingContext, query_settings: ClickhouseQuerySettings
     ) -> None:
         """merge query settings decided in _decide_tier_and_query_settings with whatever was passed in the
         routing context initially
 
         the settings in _decide_tier_and_query_settings take priority
         """
-        raise NotImplementedError
+        for k, v in query_settings.items():
+            routing_context.query_settings.push_clickhouse_setting(k, v)
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         raise NotImplementedError
@@ -135,7 +138,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                 routing_context
             )
             routing_context.target_tier = target_tier
-            self._merge_query_settings(routing_context, query_settings)
+            self.__merge_query_settings(routing_context, query_settings)
         except Exception:
             # log some error metrics
             routing_context.target_tier = Tier.TIER_1
