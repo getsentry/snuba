@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Callable
+from typing import Callable, cast
 
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
@@ -8,7 +8,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
-from snuba import state
+from snuba import settings, state
 from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
@@ -61,8 +61,12 @@ def truncate_request_meta_to_day(meta: RequestMeta) -> None:
 
 
 def use_sampling_factor(meta: RequestMeta) -> bool:
-    use_sampling_factor_timestamp_seconds = state.get_int_config(
-        "use_sampling_factor_timestamp_seconds", 0
+    use_sampling_factor_timestamp_seconds = cast(
+        int,
+        state.get_int_config(
+            "use_sampling_factor_timestamp_seconds",
+            settings.USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS,
+        ),
     )
     if use_sampling_factor_timestamp_seconds == 0:
         return False
