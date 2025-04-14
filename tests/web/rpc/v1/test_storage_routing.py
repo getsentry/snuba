@@ -41,52 +41,49 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.common.storage_routing import (
     BaseRoutingStrategy,
     RoutedRequestType,
     RoutingContext,
+    ClickhouseQuerySettings
 )
 
 
 class RoutingStrategyFailsToSelectTier(BaseRoutingStrategy):
     def _decide_tier_and_query_settings(
         self, routing_context: RoutingContext
-    ) -> tuple[Tier, HTTPQuerySettings]:
+    ) -> tuple[Tier, ClickhouseQuerySettings]:
         raise Exception
 
     def _run_query(self, routing_context: RoutingContext) -> QueryResult:
-        pass
+        return QueryResult(result=MagicMock(), extra=MagicMock())
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
 
-    def _merge_query_settings(
-        self, routing_context: RoutingContext, query_settings: HTTPQuerySettings
-    ) -> None:
-        pass
 
 
 class RoutingStrategySelectsTier8(BaseRoutingStrategy):
     def _decide_tier_and_query_settings(
         self, routing_context: RoutingContext
-    ) -> tuple[Tier, HTTPQuerySettings]:
-        return Tier.TIER_8, HTTPQuerySettings()
+    ) -> tuple[Tier, ClickhouseQuerySettings]:
+        return Tier.TIER_8, {}
 
     def _run_query(self, routing_context: RoutingContext) -> QueryResult:
-        pass
+        return QueryResult(result=MagicMock(), extra=MagicMock())
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
 
-    def _merge_query_settings(
-        self, routing_context: RoutingContext, query_settings: HTTPQuerySettings
-    ) -> None:
-        print("doesthisrun")
-        pass
 
 
 class RoutingStrategyUpdatesQuerySettings(BaseRoutingStrategy):
     def _decide_tier_and_query_settings(
         self, routing_context: RoutingContext
-    ) -> tuple[Tier, HTTPQuerySettings]:
+    ) -> tuple[Tier, ClickhouseQuerySettings]:
+        return Tier.TIER_8, {"some_setting": "some_value"}
 
-        return Tier.TIER_8, HTTPQuerySettings()
+    def _run_query(self, routing_context: RoutingContext) -> QueryResult:
+        return QueryResult(result=MagicMock(), extra=MagicMock())
+
+    def _output_metrics(self, routing_context: RoutingContext) -> None:
+        pass
 
 
 def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> None:
@@ -103,7 +100,7 @@ def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> Non
     assert routing_context.target_tier == Tier.TIER_1
 
 
-def test_target_tier_is_tier_8_if_routing_strategy_selects_tier_8() -> None:
+def test_target_tier_is_set_in_routing_context() -> None:
     routing_context = RoutingContext(
         in_msg=MagicMock(spec=RoutedRequestType),
         timer=MagicMock(spec=Timer),
@@ -127,3 +124,6 @@ def test_merge_query_settings() -> None:
         query_result=MagicMock(spec=QueryResult),
         extra_info={},
     )
+    RoutingStrategyUpdatesQuerySettings().run_query(routing_context)
+    assert routing_context.target_tier == Tier.TIER_8
+    assert routing_context.query_settings.get_clickhouse_settings() == {"some_setting": "some_value"}
