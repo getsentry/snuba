@@ -388,7 +388,9 @@ def _get_possible_percentiles_expression(
     )
     return cf.quantilesTDigestWeighted(*possible_percentiles)(
         field,
-        f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
+        f.cast(
+            f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)), "UInt64"
+        ),
         **alias_dict,
     )
 
@@ -455,31 +457,46 @@ def get_extrapolated_function(
         ),
         Function.FUNCTION_P50: cf.quantileTDigestWeightedIfOrNull(0.5)(
             field,
-            f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
+            f.cast(
+                f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
+                "UInt64",
+            ),
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P75: cf.quantileTDigestWeightedIfOrNull(0.75)(
             field,
-            f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
+            f.cast(
+                f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
+                "UInt64",
+            ),
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P90: cf.quantileTDigestWeightedIfOrNull(0.9)(
             field,
-            f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
+            f.cast(
+                f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
+                "UInt64",
+            ),
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P95: cf.quantileTDigestWeightedIfOrNull(0.95)(
             field,
-            f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
+            f.cast(
+                f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
+                "UInt64",
+            ),
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
         Function.FUNCTION_P99: cf.quantileTDigestWeightedIfOrNull(0.99)(
             field,
-            f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
+            f.cast(
+                f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
+                "UInt64",
+            ),
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),

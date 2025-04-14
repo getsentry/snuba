@@ -5,10 +5,11 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
+from snuba import settings
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
 from snuba.query.expressions import SubscriptableReference
-from snuba.web.rpc.common.common import next_monday, prev_monday
+from snuba.web.rpc.common.common import next_monday, prev_monday, use_sampling_factor
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
     use_eap_items_table,
@@ -159,4 +160,26 @@ class TestCommon:
         snuba_set_config("use_eap_items_orgs", "wrong format")
         assert use_eap_items_table(
             RequestMeta(organization_id=1, start_timestamp=Timestamp(seconds=10))
+        )
+
+    @pytest.mark.redis_db
+    def test_use_sampling_factor(self, snuba_set_config: SnubaSetConfig) -> None:
+        assert use_sampling_factor(
+            RequestMeta(
+                start_timestamp=Timestamp(
+                    seconds=settings.USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS
+                )
+            )
+        )
+        assert not use_sampling_factor(
+            RequestMeta(
+                start_timestamp=Timestamp(
+                    seconds=settings.USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS - 1
+                )
+            )
+        )
+        snuba_set_config("use_sampling_factor_timestamp_seconds", 10)
+        assert use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=10)))
+        assert not use_sampling_factor(
+            RequestMeta(start_timestamp=Timestamp(seconds=9))
         )
