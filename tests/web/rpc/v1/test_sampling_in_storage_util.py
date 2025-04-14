@@ -46,7 +46,6 @@ def test_get_target_tier(
         target_tier, estimated_target_tier_query_bytes_scanned = _get_target_tier(
             res, metrics_mock, DOESNT_MATTER_STR, timer
         )
-        print(estimated_target_tier_query_bytes_scanned)
         assert target_tier == expected_tier
         assert (
             estimated_target_tier_query_bytes_scanned
