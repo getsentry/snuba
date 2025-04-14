@@ -58,7 +58,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
     )
     if (
         request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG
-        and not get_int_config("use_new_logs_resolver", default=1)
+        and not get_int_config("use_new_logs_resolver", default=0)
     ):
         attribute_key_to_expression = log_attribute_key_to_expression
     else:
