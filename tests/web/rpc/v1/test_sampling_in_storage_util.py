@@ -12,9 +12,9 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util impo
     _get_target_tier,
 )
 
-DOESNT_MATTER_STR = "doesntmatter"
-DOESNT_MATTER_INT = 2
-SAMPLING_IN_STORAGE_UTIL_PREFIX = (
+_DOESNT_MATTER_STR = "doesntmatter"
+_DOESNT_MATTER_INT = 2
+_SAMPLING_IN_STORAGE_UTIL_PREFIX = (
     "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util."
 )
 
@@ -38,14 +38,14 @@ def test_get_target_tier(
     timer = MagicMock(spec=Timer)
 
     with patch(
-        SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_query_bytes_scanned",
+        _SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_query_bytes_scanned",
         return_value=most_downsampled_query_bytes_scanned,
     ), patch(
-        SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_bytes_scanned_limit",
+        _SAMPLING_IN_STORAGE_UTIL_PREFIX + "_get_bytes_scanned_limit",
         return_value=bytes_scanned_limit,
     ):
         target_tier, estimated_target_tier_query_bytes_scanned = _get_target_tier(
-            res, metrics_mock, DOESNT_MATTER_STR, timer
+            res, metrics_mock, _DOESNT_MATTER_STR, timer
         )
         assert target_tier == expected_tier
         assert (
