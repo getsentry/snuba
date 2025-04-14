@@ -450,9 +450,13 @@ def get_extrapolated_function(
             ),
             **alias_dict,
         ),
-        Function.FUNCTION_COUNT: f.sumIfOrNull(
-            sampling_weight,
-            and_cond(get_field_existence_expression(field), condition_in_aggregation),
+        Function.FUNCTION_COUNT: f.round(
+            f.sumIfOrNull(
+                sampling_weight,
+                and_cond(
+                    get_field_existence_expression(field), condition_in_aggregation
+                ),
+            ),
             **alias_dict,
         ),
         Function.FUNCTION_P50: cf.quantileTDigestWeightedIfOrNull(0.5)(
