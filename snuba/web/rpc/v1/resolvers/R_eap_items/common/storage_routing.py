@@ -95,6 +95,10 @@ class RoutingContext:
 
 
 class BaseRoutingStrategy(metaclass=RegisteredClass):
+    @classmethod
+    def config_key(cls) -> str:
+        return cls.__name__
+
     def _decide_tier_and_query_settings(
         self, routing_context: RoutingContext
     ) -> tuple[Tier, HTTPQuerySettings]:
@@ -112,7 +116,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             timer=routing_context.timer,
         )
 
-    def __merge_query_settings(
+    def _merge_query_settings(
         self, routing_context: RoutingContext, query_settings: HTTPQuerySettings
     ) -> None:
         """merge query settings decided in _decide_tier_and_query_settings with whatever was passed in the
@@ -131,7 +135,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                 routing_context
             )
             routing_context.target_tier = target_tier
-            self.__merge_query_settings(routing_context, query_settings)
+            self._merge_query_settings(routing_context, query_settings)
         except Exception:
             # log some error metrics
             routing_context.target_tier = Tier.TIER_1

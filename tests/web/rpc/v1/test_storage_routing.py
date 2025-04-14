@@ -50,6 +50,44 @@ class RoutingStrategyFailsToSelectTier(BaseRoutingStrategy):
     ) -> tuple[Tier, HTTPQuerySettings]:
         raise Exception
 
+    def _run_query(self, routing_context: RoutingContext) -> QueryResult:
+        pass
+
+    def _output_metrics(self, routing_context: RoutingContext) -> None:
+        pass
+
+    def _merge_query_settings(
+        self, routing_context: RoutingContext, query_settings: HTTPQuerySettings
+    ) -> None:
+        pass
+
+
+class RoutingStrategySelectsTier8(BaseRoutingStrategy):
+    def _decide_tier_and_query_settings(
+        self, routing_context: RoutingContext
+    ) -> tuple[Tier, HTTPQuerySettings]:
+        return Tier.TIER_8, HTTPQuerySettings()
+
+    def _run_query(self, routing_context: RoutingContext) -> QueryResult:
+        pass
+
+    def _output_metrics(self, routing_context: RoutingContext) -> None:
+        pass
+
+    def _merge_query_settings(
+        self, routing_context: RoutingContext, query_settings: HTTPQuerySettings
+    ) -> None:
+        print("doesthisrun")
+        pass
+
+
+class RoutingStrategyUpdatesQuerySettings(BaseRoutingStrategy):
+    def _decide_tier_and_query_settings(
+        self, routing_context: RoutingContext
+    ) -> tuple[Tier, HTTPQuerySettings]:
+
+        return Tier.TIER_8, HTTPQuerySettings()
+
 
 def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> None:
     routing_context = RoutingContext(
@@ -61,5 +99,31 @@ def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> Non
         query_result=MagicMock(spec=QueryResult),
         extra_info={},
     )
-    RoutingStrategyFailsToSelectTier()._decide_tier_and_query_settings(routing_context)
+    RoutingStrategyFailsToSelectTier().run_query(routing_context)
     assert routing_context.target_tier == Tier.TIER_1
+
+
+def test_target_tier_is_tier_8_if_routing_strategy_selects_tier_8() -> None:
+    routing_context = RoutingContext(
+        in_msg=MagicMock(spec=RoutedRequestType),
+        timer=MagicMock(spec=Timer),
+        build_query=MagicMock(),
+        query_settings=MagicMock(spec=HTTPQuerySettings),
+        target_tier=None,
+        query_result=MagicMock(spec=QueryResult),
+        extra_info={},
+    )
+    RoutingStrategySelectsTier8().run_query(routing_context)
+    assert routing_context.target_tier == Tier.TIER_8
+
+
+def test_merge_query_settings() -> None:
+    routing_context = RoutingContext(
+        in_msg=MagicMock(spec=RoutedRequestType),
+        timer=MagicMock(spec=Timer),
+        build_query=MagicMock(),
+        query_settings=HTTPQuerySettings(),
+        target_tier=None,
+        query_result=MagicMock(spec=QueryResult),
+        extra_info={},
+    )
