@@ -46,7 +46,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         return sentry_timeout_ms - error_budget_ms
 
     def _get_most_downsampled_tier(self) -> Tier:
-        return sorted(Tier, reverse=True)[1]
+        return Tier.TIER_64
 
     def _get_multiplier(self, tier: Tier) -> int:
         return int(
@@ -189,11 +189,6 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 "query_bytes_scanned_from_most_downsampled_tier",
                 self._get_query_bytes_scanned(res, span),
             )
-            self._record_value_in_span_and_DD(
-                self.metrics.timing,
-                "query_duration_from_most_downsampled_tier",
-                self._get_query_duration_ms(res),
-            )
             return res
 
     @with_span(op="function")
@@ -207,12 +202,12 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         ):
             return Tier.TIER_1, {}
 
+        if self._is_preflight_mode(routing_context):
+            return self._get_most_downsampled_tier(), {}
+
         routing_context.query_result = self._run_query_on_most_downsampled_tier(
             routing_context
         )
-
-        if self._is_preflight_mode(routing_context):
-            return self._get_most_downsampled_tier(), {}
 
         query_settings = {
             "max_execution_time": self._get_time_budget() / 1000,

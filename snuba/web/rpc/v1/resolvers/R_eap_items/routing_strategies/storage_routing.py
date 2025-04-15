@@ -36,8 +36,6 @@ ClickhouseQuerySettings = Dict[str, Any]
 
 @dataclass
 class RoutingContext:
-    # NIT: some things should only be settable once
-    # e.g. query_result
     in_msg: RoutedRequestType
     timer: Timer
     build_query: Callable[[TimeSeriesRequest | TraceItemTableRequest], Query]
