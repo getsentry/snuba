@@ -249,6 +249,8 @@ class TestGetTrace(BaseApiTest):
         timestamps: list[Timestamp] = []
         for span in _SPANS:
             timestamp = Timestamp()
+            # truncate to microseconds since we store microsecond precision only
+            # then transform to nanoseconds
             timestamp.FromNanoseconds(int(span["start_timestamp_precise"] * 1e6) * 1000)
             timestamps.append(timestamp)
 

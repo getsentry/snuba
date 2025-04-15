@@ -3361,12 +3361,12 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         )
         assert (
             len(preflight_response.column_values[0].results)
-            < len(non_downsampled_tier_response.column_values[0].results) / 100
+            < len(non_downsampled_tier_response.column_values[0].results) / 10
         )
         assert (
             preflight_response.meta.downsampled_storage_meta
             == DownsampledStorageMeta(
-                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_512
+                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
             )
         )
 
@@ -3422,8 +3422,8 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         )
         # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
         with patch(
-            "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._get_query_bytes_scanned",
-            return_value=2516582401,
+            "snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.linear_bytes_scanned_storage_routing.LinearBytesScannedRoutingStrategy._get_query_bytes_scanned",
+            return_value=20132659201,
         ):
             best_effort_response = EndpointTraceItemTable().execute(best_effort_message)
             non_downsampled_tier_response = EndpointTraceItemTable().execute(

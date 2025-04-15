@@ -3114,6 +3114,7 @@ dependencies = [
  "libc",
  "libz-sys",
  "num_enum",
+ "openssl-sys",
  "pkg-config",
 ]
 
@@ -3568,9 +3569,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_arroyo"
-version = "2.20.7"
+version = "2.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5156a58e380a107f0280e2649bdf17c32022a67f542e936887b623e58498f41d"
+checksum = "29f24a490b4749e7812a106c2355d63df3a7a64c96b70b42650bf3c680d543ea"
 dependencies = [
  "chrono",
  "coarsetime",

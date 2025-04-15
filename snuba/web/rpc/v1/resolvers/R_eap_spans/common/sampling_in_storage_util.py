@@ -105,7 +105,14 @@ def _get_query_duration_ms(res: QueryResult) -> float:
 
 
 def _get_most_downsampled_tier() -> Tier:
-    return sorted(Tier, reverse=True)[0]
+    return sorted(Tier, reverse=True)[1]
+
+
+def _get_multiplier(tier: Tier) -> int:
+    return int(
+        DOWNSAMPLING_TIER_MULTIPLIERS[tier]
+        / DOWNSAMPLING_TIER_MULTIPLIERS[_get_most_downsampled_tier()]
+    )
 
 
 def _record_value_in_span_and_DD(
@@ -138,16 +145,14 @@ def _get_target_tier(
 
         target_tier = _get_most_downsampled_tier()
         estimated_target_tier_bytes_scanned = (
-            most_downsampled_query_bytes_scanned
-            * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(target_tier))
+            most_downsampled_query_bytes_scanned * _get_multiplier(target_tier)
         )
         for tier in sorted(Tier, reverse=True)[:-1]:
             with sentry_sdk.start_span(
                 op=f"_get_target_tier.Tier_{tier}"
             ) as tier_specific_span:
                 estimated_query_bytes_scanned_to_this_tier = (
-                    most_downsampled_query_bytes_scanned
-                    * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(tier))
+                    most_downsampled_query_bytes_scanned * _get_multiplier(tier)
                 )
 
                 _record_value_in_span_and_DD(

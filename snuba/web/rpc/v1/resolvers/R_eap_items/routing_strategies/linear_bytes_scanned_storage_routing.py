@@ -173,6 +173,10 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
     ) -> QueryResult:
         with sentry_sdk.start_span(op="_run_query_on_most_downsampled_tier") as span:
             routing_context.target_tier = self._get_most_downsampled_tier()
+            # i dont rly like how this breaks the flow of things can we just get rid of routing_context.target_tier?
+            routing_context.query_settings.set_sampling_tier(
+                routing_context.target_tier
+            )
             request_to_most_downsampled_tier = self._build_snuba_request(
                 routing_context
             )

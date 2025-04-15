@@ -1,4 +1,3 @@
-from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -8,7 +7,6 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
-    DOWNSAMPLING_TIER_MULTIPLIERS,
     _get_target_tier,
 )
 
@@ -20,18 +18,19 @@ SAMPLING_IN_STORAGE_UTIL_PREFIX = (
 
 
 @pytest.mark.parametrize(
-    "most_downsampled_query_bytes_scanned, bytes_scanned_limit, expected_tier",
+    "most_downsampled_query_bytes_scanned, bytes_scanned_limit, expected_tier, expected_estimated_bytes_scanned",
     [
-        (100, 200, Tier.TIER_512),
-        (100, 900, Tier.TIER_64),
-        (100, 6500, Tier.TIER_8),
-        (100, 51300, Tier.TIER_1),
+        (100, 200, Tier.TIER_64, 100),
+        (100, 900, Tier.TIER_8, 800),
+        (100, 6500, Tier.TIER_1, 6400),
+        (100, 51300, Tier.TIER_1, 6400),
     ],
 )
 def test_get_target_tier(
     most_downsampled_query_bytes_scanned: int,
     bytes_scanned_limit: int,
     expected_tier: Tier,
+    expected_estimated_bytes_scanned: int,
 ) -> None:
     res = MagicMock(QueryResult)
     metrics_mock = MagicMock(spec=MetricsBackend)
@@ -50,6 +49,5 @@ def test_get_target_tier(
         assert target_tier == expected_tier
         assert (
             estimated_target_tier_query_bytes_scanned
-            == most_downsampled_query_bytes_scanned
-            * cast(int, DOWNSAMPLING_TIER_MULTIPLIERS.get(target_tier))
+            == expected_estimated_bytes_scanned
         )
