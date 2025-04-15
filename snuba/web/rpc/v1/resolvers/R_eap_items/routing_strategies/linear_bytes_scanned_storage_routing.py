@@ -107,6 +107,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         most_downsampled_tier_query_result: QueryResult,
         routing_context: RoutingContext,
     ) -> Tier:
+        estimated_query_bytes_scanned_to_this_tier = -1
         with sentry_sdk.start_span(op="_get_target_tier") as span:
             most_downsampled_tier_query_bytes_scanned = self._get_query_bytes_scanned(
                 most_downsampled_tier_query_result, span
