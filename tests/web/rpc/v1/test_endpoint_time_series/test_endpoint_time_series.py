@@ -1404,7 +1404,6 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
         )
 
         preflight_response = EndpointTimeSeries().execute(preflight_message)
-        print(preflight_response)
         non_downsampled_tier_response = EndpointTimeSeries().execute(
             message_to_non_downsampled_tier
         )

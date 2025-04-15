@@ -221,7 +221,6 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         )
 
     def _run_query(self, routing_context: RoutingContext) -> QueryResult:
-        # rachel: in what situation would the target tier be the most downsampled tier and the query result be None?
         if (
             routing_context.query_settings.get_sampling_tier()
             == self._get_most_downsampled_tier()
@@ -266,7 +265,6 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
             )
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
-        # TODO: Test what happens when the query result is an error
         assert routing_context.query_result
         if not self._is_preflight_mode(routing_context):
             target_tier = routing_context.query_settings.get_sampling_tier()
