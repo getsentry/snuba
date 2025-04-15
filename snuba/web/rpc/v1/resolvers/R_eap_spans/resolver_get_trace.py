@@ -38,9 +38,7 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverGetTrace
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    attribute_key_to_expression,
     attribute_key_to_expression_eap_items,
-    use_eap_items_table,
 )
 
 _BUCKET_COUNT = 20
@@ -89,8 +87,6 @@ def _build_query(request: GetTraceRequest) -> Query:
                         name="sentry.span_id", type=AttributeKey.Type.TYPE_STRING
                     )
                 )
-                if use_eap_items_table(request.meta)
-                else column("span_id", alias="id")
             ),
         ),
         SelectedExpression(
@@ -102,10 +98,6 @@ def _build_query(request: GetTraceRequest) -> Query:
                             name="sentry.start_timestamp_precise",
                             type=AttributeKey.Type.TYPE_DOUBLE,
                         )
-                    )
-                    if use_eap_items_table(request.meta)
-                    else column(
-                        "start_timestamp",
                     )
                 ),
                 "Float64",
@@ -122,63 +114,25 @@ def _build_query(request: GetTraceRequest) -> Query:
             selected_columns.append(
                 SelectedExpression(
                     name=attribute_key.name,
-                    expression=(
-                        attribute_key_to_expression_eap_items(attribute_key)
-                        if use_eap_items_table(request.meta)
-                        else attribute_key_to_expression(attribute_key)
-                    ),
+                    expression=(attribute_key_to_expression_eap_items(attribute_key)),
                 )
             )
     else:
         selected_columns += [
             SelectedExpression(
-                name=(
-                    "attributes_string"
-                    if use_eap_items_table(request.meta)
-                    else "attrs_str"
-                ),
+                name=("attributes_string"),
                 expression=FunctionCall(
-                    (
-                        "attributes_string"
-                        if use_eap_items_table(request.meta)
-                        else "attrs_str"
-                    ),
+                    ("attributes_string"),
                     "mapConcat",
-                    tuple(
-                        column(
-                            f"attributes_string_{i}"
-                            if use_eap_items_table(request.meta)
-                            else f"attr_str_{i}"
-                        )
-                        for i in range(
-                            40 if use_eap_items_table(request.meta) else _BUCKET_COUNT
-                        )
-                    ),
+                    tuple(column(f"attributes_string_{i}") for i in range(40)),
                 ),
             ),
             SelectedExpression(
-                name=(
-                    "attributes_float"
-                    if use_eap_items_table(request.meta)
-                    else "attrs_num"
-                ),
+                name=("attributes_float"),
                 expression=FunctionCall(
-                    (
-                        "attributes_float"
-                        if use_eap_items_table(request.meta)
-                        else "attrs_num"
-                    ),
+                    ("attributes_float"),
                     "mapConcat",
-                    tuple(
-                        column(
-                            f"attributes_float_{i}"
-                            if use_eap_items_table(request.meta)
-                            else f"attr_num_{i}"
-                        )
-                        for i in range(
-                            40 if use_eap_items_table(request.meta) else _BUCKET_COUNT
-                        )
-                    ),
+                    tuple(column(f"attributes_float_{i}") for i in range(40)),
                 ),
             ),
         ]
@@ -196,23 +150,22 @@ def _build_query(request: GetTraceRequest) -> Query:
         )
 
         # special case for sampling_factor and service since we don't store them in eap_items
-        if use_eap_items_table(request.meta):
-            selected_columns.append(
-                SelectedExpression(
-                    name="sampling_factor",
-                    expression=f.divide(
-                        literal(1),
-                        f.CAST(column("sampling_weight"), "Float64"),
-                        alias="sampling_factor",
-                    ),
-                )
+        selected_columns.append(
+            SelectedExpression(
+                name="sampling_factor",
+                expression=f.divide(
+                    literal(1),
+                    f.CAST(column("sampling_weight"), "Float64"),
+                    alias="sampling_factor",
+                ),
             )
-            selected_columns.append(
-                SelectedExpression(
-                    name="service",
-                    expression=f.CAST(column("project_id"), "String", alias="service"),
-                )
+        )
+        selected_columns.append(
+            SelectedExpression(
+                name="service",
+                expression=f.CAST(column("project_id"), "String", alias="service"),
             )
+        )
 
     entity = Entity(
         key=EntityKey("eap_items"),
