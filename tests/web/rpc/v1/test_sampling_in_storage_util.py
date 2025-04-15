@@ -6,7 +6,7 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.sampling_in_storage_util import (
     _get_target_tier,
 )
 

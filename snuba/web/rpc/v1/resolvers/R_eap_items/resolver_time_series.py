@@ -46,13 +46,13 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_confidence_interval_column,
     get_count_column,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.sampling_in_storage_util import (
+    run_query_to_correct_tier,
+)
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
     attribute_key_to_expression_eap_items,
     use_eap_items_table,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
-    run_query_to_correct_tier,
 )
 
 OP_TO_EXPR = {
@@ -375,7 +375,7 @@ class ResolverTimeSeriesEAPItems:
         )
 
         res = run_query_to_correct_tier(
-            in_msg, query_settings, timer, build_query, metrics_backend  # type: ignore
+            in_msg, query_settings, timer, build_query  # type: ignore
         )
 
         response_meta = extract_response_meta(
