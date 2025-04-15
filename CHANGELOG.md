@@ -1,5 +1,36 @@
 # Changelog
 
+## 25.4.0
+
+### Various fixes & improvements
+
+- fix(eap): Cast timestamp as a float to and then make it a datetime (#7072) by @phacops
+- feat(rust-snuba): Enable SSL in rdkafka (#7059) by @untitaker
+- ref: bump sentry-kafka-schemas to 1.2.0 (#7069) by @getsentry-bot
+- ref: bump sentry-protos to 0.1.69 (#7070) by @getsentry-bot
+- feat(sourecmaps) - Allow querying 'symbolicated_in_app' field on events and discover (#7063) by @yuvmen
+- Set timeout_overflow_mode to break on all tier 1 queries (#7065) by @volokluev
+- obs(snuba): add query settings to db span (#7064) by @volokluev
+- perf(sampling-in-storage): track timeout queries (#7061) by @xurui-c
+- Set timeout_before_checking_execution speed to 0 (#7062) by @volokluev
+- fix(sampling-in-storage): query scans 0 bytes (#7055) by @xurui-c
+- feat(group-by-alerts): Allow for group by's without conditions on the events dataset (#7057) by @JoshFerge
+- feat(eap): add a sample count threshold for percentile reliability (#7054) by @davidtsuk
+- feat(sourcemaps) - Add `symbolicated_in_app` column on errors (#7043) by @yuvmen
+- feat: remove logs resolver, endpoint itemstats (#7042) by @kylemumma
+- perf(sampling-in-storage): emit raw estimation error (#7051) by @xurui-c
+- fix(sourcemaps) - Added `symbolicated_in_app` column to errors_ro (#7052) by @yuvmen
+- fix(admin): Do not scrub UUIDs, hex strings and datetimes (#7053) by @untitaker
+- feat(sourcemaps) - Add new column `symbolicated_in_app` on errors (#7044) by @yuvmen
+- feat: eap timeseries works for logs (#7047) by @kylemumma
+- fix(sampling-in-storage): fix increment metric (#7049) by @xurui-c
+- fix(eap-items): add the sampling factor column to the distributed downsampled tables (#7048) by @davidtsuk
+- bump max clickhouse version to 24.8.14.10459 (#7046) by @MeredithAnya
+- fix(eap-items): Write to new sampling_factor column (#7020) by @davidtsuk
+- fix(eap-items): Update materialized views to include the sampling factor column (#7021) by @davidtsuk
+
+_Plus 60 more_
+
 ## 25.3.0
 
 ### Various fixes & improvements
