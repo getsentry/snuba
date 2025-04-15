@@ -375,7 +375,7 @@ class ResolverTimeSeriesEAPItems:
         )
 
         res = run_query_to_correct_tier(
-            in_msg, query_settings, timer, build_query, metrics_backend
+            in_msg, query_settings, timer, build_query, metrics_backend  # type: ignore
         )
 
         response_meta = extract_response_meta(
