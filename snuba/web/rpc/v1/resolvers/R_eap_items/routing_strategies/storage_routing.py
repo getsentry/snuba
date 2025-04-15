@@ -17,6 +17,7 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass
 from snuba.web import QueryResult
@@ -41,7 +42,6 @@ class RoutingContext:
     timer: Timer
     build_query: Callable[[TimeSeriesRequest | TraceItemTableRequest], Query]
     query_settings: HTTPQuerySettings
-    target_tier: Optional[Tier] = field(default=None)
     query_result: Optional[QueryResult] = field(default=None)
     extra_info: dict[str, Any] = field(default_factory=dict)
 
@@ -140,39 +140,38 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
 
+    @with_span(op="function")
     def run_query_to_correct_tier(self, routing_context: RoutingContext) -> QueryResult:
-        with sentry_sdk.start_span(op="run_query_to_correct_tier"):
-            with sentry_sdk.start_span(op="decide_tier"):
-                try:
-                    routing_context.timer.mark(_START_ESTIMATION_MARK)
-                    target_tier, query_settings = self._decide_tier_and_query_settings(
-                        routing_context
-                    )
-                    routing_context.timer.mark(_END_ESTIMATION_MARK)
-                    self._record_value_in_span_and_DD(
-                        self.metrics.timing,
-                        "estimation_time_overhead",
-                        routing_context.timer.get_duration_between_marks(
-                            _START_ESTIMATION_MARK, _END_ESTIMATION_MARK
-                        ),
-                    )
-                    routing_context.target_tier = target_tier
-                    self.__merge_clickhouse_settings(routing_context, query_settings)
-                except Exception as e:
-                    # log some error metrics
-                    sentry_sdk.capture_exception(e)
-                    routing_context.target_tier = Tier.TIER_1
-            routing_context.query_settings.set_sampling_tier(
-                routing_context.target_tier
-            )
-            with sentry_sdk.start_span(op="run_selected_tier_query"):
-                output = self._run_query(routing_context)
-                routing_context.query_result = output
-            with sentry_sdk.start_span(op="output_metrics"):
-                try:
-                    self._output_metrics(routing_context)
-                except Exception as e:
-                    # log some error metrics
-                    sentry_sdk.capture_exception(e)
-                    pass
-            return routing_context.query_result
+        with sentry_sdk.start_span(op="decide_tier"):
+            try:
+                routing_context.timer.mark(_START_ESTIMATION_MARK)
+                target_tier, query_settings = self._decide_tier_and_query_settings(
+                    routing_context
+                )
+                routing_context.timer.mark(_END_ESTIMATION_MARK)
+                self._record_value_in_span_and_DD(
+                    self.metrics.timing,
+                    "estimation_time_overhead",
+                    routing_context.timer.get_duration_between_marks(
+                        _START_ESTIMATION_MARK, _END_ESTIMATION_MARK
+                    ),
+                )
+                self.__merge_clickhouse_settings(routing_context, query_settings)
+            except Exception as e:
+                # log some error metrics
+                sentry_sdk.capture_exception(e)
+                target_tier = Tier.TIER_1
+
+            routing_context.query_settings.set_sampling_tier(target_tier)
+
+        with sentry_sdk.start_span(op="run_selected_tier_query"):
+            output = self._run_query(routing_context)
+            routing_context.query_result = output
+        with sentry_sdk.start_span(op="output_metrics"):
+            try:
+                self._output_metrics(routing_context)
+            except Exception as e:
+                # log some error metrics
+                sentry_sdk.capture_exception(e)
+                pass
+        return routing_context.query_result

@@ -172,10 +172,9 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         self, routing_context: RoutingContext
     ) -> QueryResult:
         with sentry_sdk.start_span(op="_run_query_on_most_downsampled_tier") as span:
-            routing_context.target_tier = self._get_most_downsampled_tier()
             # i dont rly like how this breaks the flow of things can we just get rid of routing_context.target_tier?
             routing_context.query_settings.set_sampling_tier(
-                routing_context.target_tier
+                self._get_most_downsampled_tier()
             )
             request_to_most_downsampled_tier = self._build_snuba_request(
                 routing_context
@@ -229,7 +228,8 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
     def _run_query(self, routing_context: RoutingContext) -> QueryResult:
         # rachel: in what situation would the target tier be the most downsampled tier and the query result be None?
         if (
-            routing_context.target_tier == self._get_most_downsampled_tier()
+            routing_context.query_settings.get_sampling_tier()
+            == self._get_most_downsampled_tier()
             and routing_context.query_result is not None
         ):
             return routing_context.query_result
@@ -274,18 +274,19 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         # TODO: Test what happens when the query result is an error
         assert routing_context.query_result
         if not self._is_preflight_mode(routing_context):
+            target_tier = routing_context.query_settings.get_sampling_tier()
             self._emit_estimation_error_info(
-                routing_context, {"tier": str(routing_context.target_tier)}
+                routing_context, {"tier": str(target_tier)}
             )
             self._record_value_in_span_and_DD(
                 self.metrics.distribution,
-                f"actual_bytes_scanned_in_target_tier_{routing_context.target_tier}",
+                f"actual_bytes_scanned_in_target_tier_{target_tier}",
                 self._get_query_bytes_scanned(routing_context.query_result),
-                tags={"tier": str(routing_context.target_tier)},
+                tags={"tier": str(target_tier)},
             )
             self._record_value_in_span_and_DD(
                 self.metrics.timing,
-                f"time_to_run_query_in_target_tier_{routing_context.target_tier}",
+                f"time_to_run_query_in_target_tier_{target_tier}",
                 self._get_query_duration_ms(routing_context.query_result),
-                tags={"tier": str(routing_context.target_tier)},
+                tags={"tier": str(target_tier)},
             )
