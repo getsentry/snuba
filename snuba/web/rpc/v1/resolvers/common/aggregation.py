@@ -36,9 +36,10 @@ Z_VALUE_P975 = 2.24  # Z value for 97.5% confidence interval used for the avg() 
 
 PERCENTILE_PRECISION = 100000
 PERCENTILE_SAMPLE_COUNT_THRESHOLD = 50
-PERCENTILE_CORRECTION_FACTOR = (
-    1000  # We multiply the sampling weight by this factor to reduce rounding error
-)
+
+# We multiply the sampling weight by this factor to reduce rounding error.
+# The idea is that for quantiles, scaling the weights has no effect on the result as the distribution is preserved.
+PERCENTILE_CORRECTION_FACTOR = 1000
 
 CONFIDENCE_INTERVAL_THRESHOLD = 0.5
 
@@ -251,6 +252,14 @@ class CustomColumnInformation:
             metadata[key] = value
 
         return CustomColumnInformation(column_type, referenced_column, metadata)
+
+
+def _get_sampling_weight_expression(use_sampling_factor: bool) -> Expression:
+    return (
+        f.divide(1, sampling_factor_column)
+        if use_sampling_factor
+        else sampling_weight_column
+    )
 
 
 def get_attribute_confidence_interval_alias(

@@ -61,6 +61,9 @@ def truncate_request_meta_to_day(meta: RequestMeta) -> None:
 
 
 def use_sampling_factor(meta: RequestMeta) -> bool:
+    """
+    Since we started writing the sampling factor on a specific date, we should only use it on queries that start after that date.
+    """
     use_sampling_factor_timestamp_seconds = cast(
         int,
         state.get_int_config(
