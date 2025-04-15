@@ -1396,9 +1396,16 @@ def get_job_logs(job_id: str) -> Response:
 @check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
 def clickhouse_node_info() -> Response:
     try:
+        # Make sure fallback host mechanism is enabled
+        if state.get_config("use_fallback_host_in_native_connection_pool", 0) != 1:
+            logger.info("Enabling fallback host mechanism for ClickHouse connections")
+            state.set_config("use_fallback_host_in_native_connection_pool", 1)
+            
         node_info = get_node_info()
         return make_response(jsonify(node_info), 200)
     except Exception as e:
+        logger.error("Error retrieving node info", exc_info=True)
+        sentry_sdk.capture_exception(e)
         return make_response(jsonify({"error": str(e)}), 500)
 
 
