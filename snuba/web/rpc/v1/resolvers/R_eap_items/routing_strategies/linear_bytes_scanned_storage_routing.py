@@ -55,8 +55,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         )
 
     def _is_preflight_mode(self, routing_context: RoutingContext) -> bool:
-        # TODO: fix this later
-        return bool(
+        return (
             routing_context.in_msg.meta.HasField("downsampled_storage_config")
             and routing_context.in_msg.meta.downsampled_storage_config.mode
             == DownsampledStorageConfig.MODE_PREFLIGHT
