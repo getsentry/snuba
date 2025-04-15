@@ -437,7 +437,6 @@ class TestTraceItemTable(BaseApiTest):
             page_token=PageToken(offset=60),
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
-        breakpoint()
         assert response == expected_response
 
     def test_booleans_and_number_compares_backward_compat(
@@ -3422,7 +3421,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         )
         # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
         with patch(
-            "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._get_query_bytes_scanned",
+            "snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.linear_bytes_scanned_storage_routing.LinearBytesScannedRoutingStrategy._get_query_bytes_scanned",
             return_value=20132659201,
         ):
             best_effort_response = EndpointTraceItemTable().execute(best_effort_message)

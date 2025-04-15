@@ -70,7 +70,6 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
     def _build_snuba_request(self, routing_context: RoutingContext) -> SnubaRequest:
         request = routing_context.in_msg
-        build_query = routing_context.build_query
         if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
             team = "ourlogs"
             feature = "ourlogs"
@@ -83,7 +82,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
         return SnubaRequest(
             id=uuid.UUID(request.meta.request_id),
             original_body=MessageToDict(request),
-            query=build_query(request),
+            query=routing_context.build_query(request),
             query_settings=routing_context.query_settings,
             attribution_info=AttributionInfo(
                 referrer=request.meta.referrer,
@@ -163,7 +162,6 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                     # log some error metrics
                     sentry_sdk.capture_exception(e)
                     routing_context.target_tier = Tier.TIER_1
-
             routing_context.query_settings.set_sampling_tier(
                 routing_context.target_tier
             )
@@ -177,5 +175,4 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                     # log some error metrics
                     sentry_sdk.capture_exception(e)
                     pass
-
             return routing_context.query_result
