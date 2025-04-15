@@ -104,11 +104,13 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         )
 
     def _get_target_tier(
-        self, most_downsampled_res: QueryResult, routing_context: RoutingContext
+        self,
+        most_downsampled_tier_query_result: QueryResult,
+        routing_context: RoutingContext,
     ) -> Tier:
         with sentry_sdk.start_span(op="_get_target_tier") as span:
             most_downsampled_tier_query_bytes_scanned = self._get_query_bytes_scanned(
-                most_downsampled_res, span
+                most_downsampled_tier_query_result, span
             )
 
             span.set_data(
@@ -130,8 +132,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                         * self._get_multiplier(tier)
                     )
                     self._record_value_in_span_and_DD(
-                        tier_specific_span,
-                        routing_context.metrics_backend.distribution,
+                        self.metrics.distribution,
                         "estimated_query_bytes_scanned_to_this_tier",
                         estimated_query_bytes_scanned_to_this_tier,
                         {"tier": str(tier)},
@@ -152,7 +153,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                         _SAMPLING_IN_STORAGE_PREFIX + "bytes_scanned_limit",
                         bytes_scanned_limit,
                     )
-            routing_context.metrics_backend.increment(
+            self.metrics.increment(
                 _SAMPLING_IN_STORAGE_PREFIX + "target_tier",
                 1,
                 {"tier": str(target_tier)},
@@ -169,7 +170,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
 
     def _run_query_on_most_downsampled_tier(
         self, routing_context: RoutingContext
-    ) -> None:
+    ) -> QueryResult:
         with sentry_sdk.start_span(op="_run_query_on_most_downsampled_tier") as span:
             routing_context.target_tier = self._get_most_downsampled_tier()
             request_to_most_downsampled_tier = self._build_snuba_request(
@@ -180,20 +181,18 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 request=request_to_most_downsampled_tier,
                 timer=routing_context.timer,
             )
-            routing_context.query_result = res
 
             self._record_value_in_span_and_DD(
-                span,
-                routing_context.metrics_backend.timing,
+                self.metrics.timing,
                 "query_bytes_scanned_from_most_downsampled_tier",
                 self._get_query_bytes_scanned(res, span),
             )
             self._record_value_in_span_and_DD(
-                span,
-                routing_context.metrics_backend.timing,
+                self.metrics.timing,
                 "query_duration_from_most_downsampled_tier",
                 self._get_query_duration_ms(res),
             )
+            return res
 
     @with_span(op="function")
     def _decide_tier_and_query_settings(
@@ -206,7 +205,9 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         ):
             return Tier.TIER_1, {}
 
-        self._run_query_on_most_downsampled_tier(routing_context)
+        routing_context.query_result = self._run_query_on_most_downsampled_tier(
+            routing_context
+        )
 
         if self._is_preflight_mode(routing_context):
             return self._get_most_downsampled_tier(), {}
@@ -215,7 +216,11 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
             "max_execution_time": self._get_time_budget() / 1000,
             "timeout_overflow_mode": "break",
         }
-        return self._get_target_tier(routing_context), query_settings
+
+        return (
+            self._get_target_tier(routing_context.query_result, routing_context),
+            query_settings,
+        )
 
     def _run_query(self, routing_context: RoutingContext) -> QueryResult:
         # rachel: in what situation would the target tier be the most downsampled tier and the query result be None?
@@ -231,6 +236,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         routing_context: RoutingContext,
         tags: Dict[str, str],
     ) -> None:
+        assert routing_context.query_result
         if self._get_query_bytes_scanned(routing_context.query_result) != 0:
             estimated_target_tier_query_bytes_scanned = routing_context.extra_info[
                 "estimated_target_tier_bytes_scanned"
@@ -241,7 +247,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
             )
 
             self._record_value_in_span_and_DD(
-                routing_context.metrics_backend.distribution,
+                self.metrics.distribution,
                 "estimation_error_percentage",
                 abs(estimation_error)
                 / self._get_query_bytes_scanned(routing_context.query_result),
@@ -254,25 +260,27 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 else "under_estimation_error"
             )
             self._record_value_in_span_and_DD(
-                routing_context.metrics_backend.distribution,
+                self.metrics.distribution,
                 estimation_error_metric_name,
                 abs(estimation_error),
                 tags,
             )
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
+        # TODO: Test what happens when the query result is an error
+        assert routing_context.query_result
         if not self._is_preflight_mode(routing_context):
             self._emit_estimation_error_info(
                 routing_context, {"tier": str(routing_context.target_tier)}
             )
             self._record_value_in_span_and_DD(
-                routing_context.metrics_backend.distribution,
+                self.metrics.distribution,
                 f"actual_bytes_scanned_in_target_tier_{routing_context.target_tier}",
                 self._get_query_bytes_scanned(routing_context.query_result),
                 tags={"tier": str(routing_context.target_tier)},
             )
             self._record_value_in_span_and_DD(
-                routing_context.metrics_backend.timing,
+                self.metrics.timing,
                 f"time_to_run_query_in_target_tier_{routing_context.target_tier}",
                 self._get_query_duration_ms(routing_context.query_result),
                 tags={"tier": str(routing_context.target_tier)},
