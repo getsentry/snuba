@@ -1,6 +1,7 @@
 import random
 import uuid
 from datetime import datetime, timedelta
+from math import inf
 from typing import Any, Mapping
 from unittest.mock import MagicMock, call, patch
 
@@ -3580,6 +3581,80 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
                 results=[
                     AttributeValue(val_int=2),
                     AttributeValue(val_int=3),
+                ],
+            ),
+        ]
+
+    def test_formula_default(self) -> None:
+        """
+        ensures default values in formulas work
+        """
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_span(span_ts, {"numerator": 10, "denominator": 2})
+        write_eap_span(span_ts, {"numerator": 5})
+        write_eap_span(span_ts, {"numerator": 1, "denominator": 0})
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_INT, name="numerator"
+                            )
+                        ),
+                        right=Column(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_INT, name="denominator"
+                            )
+                        ),
+                        default_value_double=0.0,
+                    ),
+                    label="myformula",
+                )
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        formula=Column.BinaryFormula(
+                            op=Column.BinaryFormula.OP_DIVIDE,
+                            left=Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_INT, name="numerator"
+                                )
+                            ),
+                            right=Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_INT, name="denominator"
+                                )
+                            ),
+                            default_value_double=0.0,
+                        ),
+                        label="myformula",
+                    )
+                )
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="myformula",
+                results=[
+                    AttributeValue(val_double=0.0),
+                    AttributeValue(val_double=5),
+                    AttributeValue(val_double=inf),
                 ],
             ),
         ]
