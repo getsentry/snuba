@@ -24,6 +24,12 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
 from snuba.web import QueryResult
 from snuba.web.query import run_query
+from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.linear_bytes_scanned_storage_routing import (
+    LinearBytesScannedRoutingStrategy,
+)
+from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.storage_routing import (
+    RoutingContext,
+)
 
 T = TypeVar("T", TimeSeriesRequest, TraceItemTableRequest)
 MetricsBackendType: TypeAlias = Callable[
@@ -286,12 +292,22 @@ def _emit_estimation_error_info(
 
 @with_span(op="function")
 def run_query_to_correct_tier(
-    in_msg: T,
+    in_msg: TraceItemTableRequest | TimeSeriesRequest,
     query_settings: HTTPQuerySettings,
     timer: Timer,
-    build_query: Callable[[T], Query],
+    build_query: Callable[[TraceItemTableRequest | TimeSeriesRequest], Query],
     metrics_backend: MetricsBackend,
 ) -> QueryResult:
+    routing_context = RoutingContext(
+        in_msg=in_msg,
+        timer=timer,
+        build_query=build_query,
+        query_settings=query_settings,
+    )
+    return LinearBytesScannedRoutingStrategy().run_query_to_correct_tier(
+        routing_context=routing_context
+    )
+
     if (
         not in_msg.meta.HasField("downsampled_storage_config")
         or in_msg.meta.downsampled_storage_config.mode

@@ -437,6 +437,7 @@ class TestTraceItemTable(BaseApiTest):
             page_token=PageToken(offset=60),
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
+        breakpoint()
         assert response == expected_response
 
     def test_booleans_and_number_compares_backward_compat(

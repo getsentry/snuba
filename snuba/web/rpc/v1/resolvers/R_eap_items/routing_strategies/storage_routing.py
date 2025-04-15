@@ -1,12 +1,12 @@
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, TypeAlias, Union
 
+import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
-from sentry_sdk.tracing import Span
 
 from snuba import environment
 from snuba.attribution import AppID
@@ -41,10 +41,9 @@ class RoutingContext:
     timer: Timer
     build_query: Callable[[TimeSeriesRequest | TraceItemTableRequest], Query]
     query_settings: HTTPQuerySettings
-    target_tier: Tier | None  # TODO (make default Tier 1??)
-    query_result: QueryResult | None
-    # NOTE: this is a landmine
-    extra_info: dict[str, Any]
+    target_tier: Optional[Tier] = field(default=None)
+    query_result: Optional[QueryResult] = field(default=None)
+    extra_info: dict[str, Any] = field(default_factory=dict)
 
 
 class BaseRoutingStrategy(metaclass=RegisteredClass):
@@ -70,7 +69,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
         )
 
     def _build_snuba_request(self, routing_context: RoutingContext) -> SnubaRequest:
-        request = routing_context.request
+        request = routing_context.in_msg
         build_query = routing_context.build_query
         if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
             team = "ourlogs"
@@ -123,7 +122,6 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
     def _record_value_in_span_and_DD(
         self,
-        span: Span | None,
         metrics_backend_func: MetricsBackendType,
         name: str,
         value: float | int,
@@ -131,7 +129,8 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
     ) -> None:
         name = _SAMPLING_IN_STORAGE_PREFIX + name
         metrics_backend_func(name, value, tags, None)
-        if span:
+        span = sentry_sdk.get_current_span()
+        if span is not None:
             span.set_data(name, value)
 
     def _decide_tier_and_query_settings(
@@ -140,37 +139,43 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
         raise NotImplementedError
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
-        raise NotImplementedError
+        pass
 
-    def run_query(self, routing_context: RoutingContext) -> QueryResult:
-        try:
-            routing_context.timer.mark(_START_ESTIMATION_MARK)
-            target_tier, query_settings = self._decide_tier_and_query_settings(
-                routing_context
+    def run_query_to_correct_tier(self, routing_context: RoutingContext) -> QueryResult:
+        with sentry_sdk.start_span(op="run_query_to_correct_tier"):
+            with sentry_sdk.start_span(op="decide_tier"):
+                try:
+                    routing_context.timer.mark(_START_ESTIMATION_MARK)
+                    target_tier, query_settings = self._decide_tier_and_query_settings(
+                        routing_context
+                    )
+                    routing_context.timer.mark(_END_ESTIMATION_MARK)
+                    self._record_value_in_span_and_DD(
+                        self.metrics.timing,
+                        "estimation_time_overhead",
+                        routing_context.timer.get_duration_between_marks(
+                            _START_ESTIMATION_MARK, _END_ESTIMATION_MARK
+                        ),
+                    )
+                    routing_context.target_tier = target_tier
+                    self.__merge_clickhouse_settings(routing_context, query_settings)
+                except Exception as e:
+                    # log some error metrics
+                    sentry_sdk.capture_exception(e)
+                    routing_context.target_tier = Tier.TIER_1
+
+            routing_context.query_settings.set_sampling_tier(
+                routing_context.target_tier
             )
-            routing_context.timer.mark(_END_ESTIMATION_MARK)
-            self._record_value_in_span_and_DD(
-                routing_context.metrics_backend.timing,
-                "estimation_time_overhead",
-                routing_context.timer.get_duration_between_marks(
-                    _START_ESTIMATION_MARK, _END_ESTIMATION_MARK
-                ),
-                {"tier": str(target_tier)},
-            )
-            routing_context.target_tier = target_tier
-            self.__merge_clickhouse_settings(routing_context, query_settings)
+            with sentry_sdk.start_span(op="run_selected_tier_query"):
+                output = self._run_query(routing_context)
+                routing_context.query_result = output
+            with sentry_sdk.start_span(op="output_metrics"):
+                try:
+                    self._output_metrics(routing_context)
+                except Exception as e:
+                    # log some error metrics
+                    sentry_sdk.capture_exception(e)
+                    pass
 
-        except Exception:
-            # log some error metrics
-            routing_context.target_tier = Tier.TIER_1
-
-        routing_context.query_settings.set_sampling_tier(routing_context.target_tier)
-        output = self._run_query(routing_context)
-        routing_context.query_result = output
-        try:
-            self._output_metrics(routing_context)
-        except Exception:
-            # log some error metrics
-            pass
-
-        return routing_context.query_result
+            return routing_context.query_result

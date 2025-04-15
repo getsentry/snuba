@@ -61,7 +61,7 @@ def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> Non
         query_result=MagicMock(spec=QueryResult),
         extra_info={},
     )
-    RoutingStrategyFailsToSelectTier().run_query(routing_context)
+    RoutingStrategyFailsToSelectTier().run_query_to_correct_tier(routing_context)
     assert routing_context.target_tier == Tier.TIER_1
 
 
@@ -75,7 +75,7 @@ def test_target_tier_is_set_in_routing_context() -> None:
         query_result=MagicMock(spec=QueryResult),
         extra_info={},
     )
-    RoutingStrategySelectsTier8().run_query(routing_context)
+    RoutingStrategySelectsTier8().run_query_to_correct_tier(routing_context)
     assert routing_context.target_tier == Tier.TIER_8
 
 
@@ -89,7 +89,7 @@ def test_merge_query_settings() -> None:
         query_result=MagicMock(spec=QueryResult),
         extra_info={},
     )
-    RoutingStrategyUpdatesQuerySettings().run_query(routing_context)
+    RoutingStrategyUpdatesQuerySettings().run_query_to_correct_tier(routing_context)
     assert routing_context.target_tier == Tier.TIER_8
     assert routing_context.query_settings.get_clickhouse_settings() == {
         "some_setting": "some_value"

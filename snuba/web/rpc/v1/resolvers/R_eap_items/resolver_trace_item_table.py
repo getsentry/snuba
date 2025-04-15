@@ -86,9 +86,11 @@ def aggregation_filter_to_expression(
             return op_expr(
                 aggregation_to_expression(
                     agg_filter.comparison_filter.conditional_aggregation,
-                    attribute_key_to_expression_eap_items
-                    if use_eap_items_table(request_meta)
-                    else attribute_key_to_expression,
+                    (
+                        attribute_key_to_expression_eap_items
+                        if use_eap_items_table(request_meta)
+                        else attribute_key_to_expression
+                    ),
                 ),
                 agg_filter.comparison_filter.val,
             )
@@ -131,9 +133,11 @@ def _convert_order_by(
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=attribute_key_to_expression_eap_items(x.column.key)
-                    if use_eap_items_table(request_meta)
-                    else attribute_key_to_expression(x.column.key),
+                    expression=(
+                        attribute_key_to_expression_eap_items(x.column.key)
+                        if use_eap_items_table(request_meta)
+                        else attribute_key_to_expression(x.column.key)
+                    ),
                 )
             )
         elif x.column.HasField("conditional_aggregation"):
@@ -142,9 +146,11 @@ def _convert_order_by(
                     direction=direction,
                     expression=aggregation_to_expression(
                         x.column.conditional_aggregation,
-                        attribute_key_to_expression_eap_items
-                        if use_eap_items_table(request_meta)
-                        else attribute_key_to_expression,
+                        (
+                            attribute_key_to_expression_eap_items
+                            if use_eap_items_table(request_meta)
+                            else attribute_key_to_expression
+                        ),
                     ),
                 )
             )
@@ -175,9 +181,11 @@ def _get_reliability_context_columns(
         context_columns = []
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items
-            if use_eap_items_table(request_meta)
-            else attribute_key_to_expression,
+            (
+                attribute_key_to_expression_eap_items
+                if use_eap_items_table(request_meta)
+                else attribute_key_to_expression
+            ),
         )
         if confidence_interval_column is not None:
             context_columns.append(
@@ -189,15 +197,19 @@ def _get_reliability_context_columns(
 
         average_sample_rate_column = get_average_sample_rate_column(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items
-            if use_eap_items_table(request_meta)
-            else attribute_key_to_expression,
+            (
+                attribute_key_to_expression_eap_items
+                if use_eap_items_table(request_meta)
+                else attribute_key_to_expression
+            ),
         )
         count_column = get_count_column(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items
-            if use_eap_items_table(request_meta)
-            else attribute_key_to_expression,
+            (
+                attribute_key_to_expression_eap_items
+                if use_eap_items_table(request_meta)
+                else attribute_key_to_expression
+            ),
         )
         context_columns.append(
             SelectedExpression(
@@ -234,9 +246,11 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     elif column.HasField("conditional_aggregation"):
         function_expr = aggregation_to_expression(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items
-            if use_eap_items_table(request_meta)
-            else attribute_key_to_expression,
+            (
+                attribute_key_to_expression_eap_items
+                if use_eap_items_table(request_meta)
+                else attribute_key_to_expression
+            ),
         )
         # aggregation label may not be set and the column label takes priority anyways.
         function_expr = replace(function_expr, alias=column.label)
@@ -292,17 +306,21 @@ def build_query(request: TraceItemTableRequest) -> Query:
             request.meta,
             trace_item_filters_to_expression(
                 request.filter,
-                attribute_key_to_expression_eap_items
-                if use_eap_items_table(request.meta)
-                else attribute_key_to_expression,
+                (
+                    attribute_key_to_expression_eap_items
+                    if use_eap_items_table(request.meta)
+                    else attribute_key_to_expression
+                ),
             ),
             *item_type_conds,
         ),
         order_by=_convert_order_by(request.order_by, request.meta),
         groupby=[
-            attribute_key_to_expression_eap_items(attr_key)
-            if use_eap_items_table(request.meta)
-            else attribute_key_to_expression(attr_key)
+            (
+                attribute_key_to_expression_eap_items(attr_key)
+                if use_eap_items_table(request.meta)
+                else attribute_key_to_expression(attr_key)
+            )
             for attr_key in request.group_by
         ],
         # Only support offset page tokens for now
@@ -310,17 +328,17 @@ def build_query(request: TraceItemTableRequest) -> Query:
         # protobuf sets limit to 0 by default if it is not set,
         # give it a default value that will actually return data
         limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
-        having=aggregation_filter_to_expression(
-            request.aggregation_filter, request.meta
-        )
-        if request.HasField("aggregation_filter")
-        else None,
+        having=(
+            aggregation_filter_to_expression(request.aggregation_filter, request.meta)
+            if request.HasField("aggregation_filter")
+            else None
+        ),
     )
     treeify_or_and_conditions(res)
-    apply_virtual_columns_eap_items(
-        res, request.virtual_column_contexts
-    ) if use_eap_items_table(request.meta) else apply_virtual_columns(
-        res, request.virtual_column_contexts
+    (
+        apply_virtual_columns_eap_items(res, request.virtual_column_contexts)
+        if use_eap_items_table(request.meta)
+        else apply_virtual_columns(res, request.virtual_column_contexts)
     )
     add_existence_check_to_subscriptable_references(res)
     return res
