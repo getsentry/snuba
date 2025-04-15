@@ -165,7 +165,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
             )
             routing_context.extra_info[
                 "estimated_target_tier_bytes_scanned"
-            ] = estimated_query_bytes_scanned_to_this_tier
+            ] = estimated_target_tier_bytes_scanned
             return target_tier
 
     def _run_query_on_most_downsampled_tier(
