@@ -159,6 +159,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                 self.__merge_clickhouse_settings(routing_context, query_settings)
             except Exception as e:
                 # log some error metrics
+                self.metrics.increment("estimation_failure")
                 sentry_sdk.capture_exception(e)
                 target_tier = Tier.TIER_1
 
@@ -172,6 +173,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                 self._output_metrics(routing_context)
             except Exception as e:
                 # log some error metrics
+                self.metrics.increment("metrics_failure")
                 sentry_sdk.capture_exception(e)
                 pass
         return routing_context.query_result

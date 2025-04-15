@@ -51,6 +51,20 @@ class RoutingStrategyUpdatesQuerySettings(BaseRoutingStrategy):
         pass
 
 
+class RoutingStrategyBadMetrics(BaseRoutingStrategy):
+    def _decide_tier_and_query_settings(
+        self, routing_context: RoutingContext
+    ) -> tuple[Tier, ClickhouseQuerySettings]:
+        return Tier.TIER_8, {"some_setting": "some_value"}
+
+    def _run_query(self, routing_context: RoutingContext) -> QueryResult:
+        return QueryResult(result=MagicMock(), extra=MagicMock())
+
+    def _output_metrics(self, routing_context: RoutingContext) -> None:
+        if 1 / 0 > 10:
+            return
+
+
 def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> None:
     routing_context = RoutingContext(
         in_msg=MagicMock(spec=RoutedRequestType),
@@ -91,3 +105,15 @@ def test_merge_query_settings() -> None:
     assert routing_context.query_settings.get_clickhouse_settings() == {
         "some_setting": "some_value"
     }
+
+
+def test_outputting_metrics_fails_open() -> None:
+    routing_context = RoutingContext(
+        in_msg=MagicMock(spec=RoutedRequestType),
+        timer=MagicMock(spec=Timer),
+        build_query=MagicMock(),
+        query_settings=HTTPQuerySettings(),
+        query_result=MagicMock(spec=QueryResult),
+        extra_info={},
+    )
+    RoutingStrategyBadMetrics().run_query_to_correct_tier(routing_context)
