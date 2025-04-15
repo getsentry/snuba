@@ -362,7 +362,7 @@ def run_query_to_correct_tier(
                 else:
                     res_without_user_data = exclude_user_data_from_res(res)
                     sentry_sdk.capture_message(
-                        f"non_dowmsampled_tier_scanned_0_bytes: {res_without_user_data}",
+                        f"non_downsampled_tier_scanned_0_bytes: {res_without_user_data}",
                         level="error",
                     )
                     metrics_backend.increment(
@@ -373,7 +373,7 @@ def run_query_to_correct_tier(
                     )
                     span.set_data(
                         _SAMPLING_IN_STORAGE_PREFIX
-                        + "non_dowmsampled_tier_scanned_0_bytes",
+                        + "non_downsampled_tier_scanned_0_bytes",
                         res_without_user_data,
                     )
 
