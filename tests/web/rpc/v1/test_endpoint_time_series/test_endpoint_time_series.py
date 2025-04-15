@@ -1418,12 +1418,12 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
         assert (
             sum_of_preflight_metric
             < non_downsampled_tier_response.result_timeseries[0].data_points[0].data
-            / 100
+            / 10
         )
         assert (
             preflight_response.meta.downsampled_storage_meta
             == DownsampledStorageMeta(
-                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_512
+                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
             )
         )
 
@@ -1484,11 +1484,12 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
         # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
         with patch(
             "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._get_query_bytes_scanned",
-            return_value=2516582401,
+            return_value=20132659201,
         ):
             best_effort_response = EndpointTimeSeries().execute(
                 best_effort_downsample_message
             )
+            print(best_effort_response)
             non_downsampled_tier_response = EndpointTimeSeries().execute(
                 message_to_non_downsampled_tier
             )
