@@ -614,6 +614,10 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     expression=column("trace_start_timestamp"),
                 ),
             ],
+            limitby=LimitBy(
+                columns=[column("trace_id")],
+                limit=int(_DEFAULT_ROW_LIMIT / len(trace_ids)),
+            ),
         )
 
         treeify_or_and_conditions(query)
