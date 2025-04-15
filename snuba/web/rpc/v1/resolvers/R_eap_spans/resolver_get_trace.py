@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from operator import attrgetter
 from typing import Any, Dict, Iterable
 
@@ -329,10 +329,12 @@ def _convert_results(
 
     for row in data:
         id = row.pop("id")
-        dt = datetime.fromtimestamp(row.pop("timestamp"), timezone.utc)
+        ts = row.pop("timestamp")
 
         timestamp = Timestamp()
-        timestamp.FromDatetime(dt)
+        # truncate to microseconds since we store microsecond precision only
+        # then transform to nanoseconds
+        timestamp.FromNanoseconds(int(ts * 1e6) * 1000)
 
         attributes: list[GetTraceResponse.Item.Attribute] = []
 
