@@ -1,6 +1,7 @@
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence
 
@@ -89,7 +90,7 @@ def fetch_node_info_from_host(host_info: HostInfo) -> Sequence[Node]:
             storage=host_info.storage_name,
         )
         return []
-    
+
     try:
         with node_info_lock:
             connection = get_ro_node_connection(
@@ -122,7 +123,7 @@ def fetch_node_info_from_host(host_info: HostInfo) -> Sequence[Node]:
             "Failed to fetch node info",
             exc_info=True,
             host=host_info.host,
-            port=host_info.port, 
+            port=host_info.port,
             storage=host_info.storage_name,
         )
         return []
@@ -154,13 +155,18 @@ def get_node_info() -> Sequence[Node]:
 
     with ThreadPoolExecutor() as executor:
         # Submit all tasks and get futures
-        futures = {executor.submit(fetch_node_info_from_host, host_info): host_info for host_info in hosts}
-        
+        futures = {
+            executor.submit(fetch_node_info_from_host, host_info): host_info
+            for host_info in hosts
+        }
+
         # Process futures as they complete with a timeout
         for future in list(futures.keys()):
             host_info = futures[future]
             try:
-                result = future.result(timeout=2)  # Set a 2-second timeout for each node
+                result = future.result(
+                    timeout=2
+                )  # Set a 2-second timeout for each node
                 node_info.extend(result)
             except FuturesTimeoutError:
                 # Mark the node as failed in the circuit breaker
