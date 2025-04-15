@@ -106,19 +106,18 @@ def _build_query(request: GetTraceRequest) -> Query:
         ),
         SelectedExpression(
             name="timestamp",
-            expression=f.CAST(
+            expression=f.cast(
                 attribute_key_to_expression_eap_items(
                     AttributeKey(
                         name="sentry.start_timestamp_precise",
                         type=AttributeKey.Type.TYPE_DOUBLE,
                     )
+                )
+                if use_eap_items_table(request.meta)
+                else column(
+                    "start_timestamp",
                 ),
-                "DateTime64(6)",
-                alias="timestamp",
-            )
-            if use_eap_items_table(request.meta)
-            else column(
-                "start_timestamp",
+                "Float64",
                 alias="timestamp",
             ),
         ),
@@ -330,10 +329,12 @@ def _convert_results(
 
     for row in data:
         id = row.pop("id")
-        dt = row.pop("timestamp")
+        ts = row.pop("timestamp")
 
         timestamp = Timestamp()
-        timestamp.FromDatetime(dt)
+        # truncate to microseconds since we store microsecond precision only
+        # then transform to nanoseconds
+        timestamp.FromNanoseconds(int(ts * 1e6) * 1000)
 
         attributes: list[GetTraceResponse.Item.Attribute] = []
 
