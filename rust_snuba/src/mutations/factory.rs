@@ -53,6 +53,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
                 &self.storage_config.clickhouse_cluster.database,
                 &self.storage_config.clickhouse_cluster.user,
                 &self.storage_config.clickhouse_cluster.password,
+                self.storage_config.clickhouse_cluster.secure,
                 self.batch_write_timeout,
             ),
             &self.clickhouse_concurrency,
