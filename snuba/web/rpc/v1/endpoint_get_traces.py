@@ -180,7 +180,8 @@ def _attribute_to_expression(
                 _get_attribute_expression(
                     "sentry.parent_span_id", AttributeKey.Type.TYPE_STRING, request_meta
                 ),
-                literal("0" * 16),
+                # root spans don't have a parent span set so the value defaults to empty string
+                literal(""),
             ),
             alias=alias,
         )
