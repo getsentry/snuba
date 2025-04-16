@@ -19,6 +19,7 @@ pub struct ClickhouseWriter {
     client: Client,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl ClickhouseWriter {
     pub fn new(
         hostname: &str,
