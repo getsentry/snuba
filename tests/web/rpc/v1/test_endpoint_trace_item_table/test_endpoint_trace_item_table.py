@@ -436,7 +436,12 @@ class TestTraceItemTable(BaseApiTest):
                 )
             ],
             page_token=PageToken(offset=60),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                downsampled_storage_meta=DownsampledStorageMeta(
+                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_1
+                ),
+            ),
         )
         assert response == expected_response
 
@@ -520,7 +525,12 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             page_token=PageToken(offset=60),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                downsampled_storage_meta=DownsampledStorageMeta(
+                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_1
+                ),
+            ),
         )
         assert response == expected_response
 
@@ -602,7 +612,12 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             page_token=PageToken(offset=60),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                downsampled_storage_meta=DownsampledStorageMeta(
+                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_1
+                ),
+            ),
         )
         assert response == expected_response
 
@@ -690,7 +705,12 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             page_token=PageToken(offset=limit),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                downsampled_storage_meta=DownsampledStorageMeta(
+                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_1
+                ),
+            ),
         )
         assert response.page_token == expected_response.page_token
         # make sure columns are ordered in the order they are requested
@@ -3264,43 +3284,6 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         snuba_set_config("use_eap_items_table", True)
         snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
 
-    def test_empty_downsampling_storage_config_does_not_have_downsampled_storage_meta(
-        self,
-    ) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
-        msg_timestamp = BASE_TIME - timedelta(minutes=1)
-        messages = [
-            gen_message(
-                msg_timestamp,
-            )
-            for _ in range(30)
-        ]
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
-
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-
-        empty_downsampled_storage_config_message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                downsampled_storage_config=DownsampledStorageConfig(),
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"))
-            ],
-        )
-        response = EndpointTraceItemTable().execute(
-            empty_downsampled_storage_config_message
-        )
-        assert not response.meta.HasField("downsampled_storage_meta")
-
     def test_preflight(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
@@ -3422,7 +3405,7 @@ class TestTraceItemTableEAPItems(TestTraceItemTable):
         )
         # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
         with patch(
-            "snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util._get_query_bytes_scanned",
+            "snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.linear_bytes_scanned_storage_routing.LinearBytesScannedRoutingStrategy._get_query_bytes_scanned",
             return_value=20132659201,
         ):
             best_effort_response = EndpointTraceItemTable().execute(best_effort_message)
