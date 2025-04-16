@@ -172,7 +172,6 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         self, routing_context: RoutingContext
     ) -> QueryResult:
         with sentry_sdk.start_span(op="_run_query_on_most_downsampled_tier") as span:
-            # i dont rly like how this breaks the flow of things can we just get rid of routing_context.target_tier?
             routing_context.query_settings.set_sampling_tier(
                 self._get_most_downsampled_tier()
             )
@@ -226,6 +225,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
             == self._get_most_downsampled_tier()
             and routing_context.query_result is not None
         ):
+            # this avoids double querying the most downsampled tier
             return routing_context.query_result
         return super()._run_query(routing_context)
 
@@ -235,34 +235,31 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         tags: Dict[str, str],
     ) -> None:
         assert routing_context.query_result
-        if self._get_query_bytes_scanned(routing_context.query_result) != 0:
-            estimated_target_tier_query_bytes_scanned = routing_context.extra_info[
-                "estimated_target_tier_bytes_scanned"
-            ]
-            estimation_error = (
-                estimated_target_tier_query_bytes_scanned
-                - self._get_query_bytes_scanned(routing_context.query_result)
-            )
+        actual = self._get_query_bytes_scanned(routing_context.query_result)
+        if actual == 0:
+            return
 
-            self._record_value_in_span_and_DD(
-                self.metrics.distribution,
-                "estimation_error_percentage",
-                abs(estimation_error)
-                / self._get_query_bytes_scanned(routing_context.query_result),
-                tags,
-            )
+        estimated = routing_context.extra_info.get(
+            "estimated_target_tier_bytes_scanned"
+        )
+        if estimated is None:
+            return
 
-            estimation_error_metric_name = (
-                "over_estimation_error"
-                if estimation_error > 0
-                else "under_estimation_error"
-            )
-            self._record_value_in_span_and_DD(
-                self.metrics.distribution,
-                estimation_error_metric_name,
-                abs(estimation_error),
-                tags,
-            )
+        error = estimated - actual
+        error_pct = abs(error) / actual
+
+        self._record_value_in_span_and_DD(
+            self.metrics.distribution,
+            "estimation_error_percentage",
+            error_pct,
+            tags,
+        )
+        self._record_value_in_span_and_DD(
+            self.metrics.distribution,
+            "over_estimation_error" if error > 0 else "under_estimation_error",
+            abs(error),
+            tags,
+        )
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         assert routing_context.query_result

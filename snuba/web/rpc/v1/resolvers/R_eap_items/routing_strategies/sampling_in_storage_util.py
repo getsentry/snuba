@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Optional, TypeAlias, TypeVar, Union
+from typing import Callable
 
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
@@ -14,11 +14,6 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.linear_bytes_scan
 from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.storage_routing import (
     RoutingContext,
 )
-
-T = TypeVar("T", TimeSeriesRequest, TraceItemTableRequest)
-MetricsBackendType: TypeAlias = Callable[
-    [str, Union[int, float], Optional[Dict[str, str]], Optional[str]], None
-]
 
 
 @with_span(op="function")

@@ -14,9 +14,6 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.storage_routing i
     RoutingContext,
 )
 
-DOESNT_MATTER_STR = "doesntmatter"
-DOESNT_MATTER_INT = 2
-
 
 @pytest.mark.redis_db
 @pytest.mark.parametrize(
@@ -51,3 +48,20 @@ def test_get_target_tier(
         context.extra_info["estimated_target_tier_bytes_scanned"]
         == expected_estimated_bytes_scanned
     )
+
+
+@pytest.mark.redis_db
+def test_target_tier_is_1_if_most_downsampled_query_bytes_scanned_is_0() -> None:
+    timer = MagicMock(spec=Timer)
+    strategy = LinearBytesScannedRoutingStrategy()
+    context = RoutingContext(MagicMock(), timer, MagicMock(), MagicMock())
+
+    state.set_config(
+        _SAMPLING_IN_STORAGE_PREFIX + "bytes_scanned_per_query_limit",
+        10000,
+    )
+    target_tier = strategy._get_target_tier(
+        most_downsampled_tier_query_result=QueryResult(result={"profile": {"progress_bytes": 0}}, extra={}),  # type: ignore
+        routing_context=context,
+    )
+    assert target_tier == Tier.TIER_1
