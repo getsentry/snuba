@@ -39,6 +39,7 @@ from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
 )
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     ExtrapolationContext,
     aggregation_to_expression,
@@ -256,8 +257,22 @@ def _proto_expression_to_ast_expression(
                 _proto_expression_to_ast_expression(expr.formula.left, request_meta),
                 _proto_expression_to_ast_expression(expr.formula.right, request_meta),
             )
-            formula_expr = replace(formula_expr, alias=expr.label)
-            return formula_expr
+            match expr.formula.WhichOneof("default_value"):
+                case None:
+                    pass
+                case "default_value_double":
+                    formula_expr = f.coalesce(
+                        formula_expr, expr.formula.default_value_double
+                    )
+                case "default_value_int64":
+                    formula_expr = f.coalesce(
+                        formula_expr, expr.formula.default_value_int64
+                    )
+                case default:
+                    raise BadSnubaRPCRequestException(
+                        f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
+                    )
+            return replace(formula_expr, alias=expr.label)
         case "literal":
             return literal(expr.literal.val_double)
         case default:

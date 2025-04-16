@@ -1136,6 +1136,89 @@ class TestTimeSeriesApi(BaseApiTest):
             expected_timeseries
         ]
 
+    def test_formula_default_value(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric_a", get_value=lambda x: 2)],
+        )
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            1800,
+            metrics=[DummyMetric("test_metric_b", get_value=lambda x: 1)],
+        )
+        granularity_secs = 60 * 10
+        query_duration_secs = 60 * 60
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration_secs)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_DIVIDE,
+                        left=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_FLOAT, name="test_metric_a"
+                                ),
+                            )
+                        ),
+                        right=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_FLOAT, name="test_metric_b"
+                                ),
+                            )
+                        ),
+                        default_value_double=-1.0,
+                    ),
+                    label="a / b",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration_secs, granularity_secs)
+        ]
+        expected_timeseries = TimeSeries(
+            label="a / b",
+            buckets=expected_buckets,
+            data_points=[
+                DataPoint(
+                    data=2,
+                    data_present=True,
+                ),
+                DataPoint(
+                    data=2,
+                    data_present=True,
+                ),
+                DataPoint(
+                    data=2,
+                    data_present=True,
+                ),
+                DataPoint(data=-1.0, data_present=True),
+                DataPoint(data=-1.0, data_present=True),
+                DataPoint(data=-1.0, data_present=True),
+            ],
+        )
+        assert response.result_timeseries == [expected_timeseries]
+
     def test_literal(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 300
