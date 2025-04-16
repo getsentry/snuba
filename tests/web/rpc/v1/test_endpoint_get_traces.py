@@ -54,7 +54,7 @@ def gen_message(
     span_op: str = "http.server",
     span_name: str = "root",
     is_segment: bool = False,
-    parent_span_id: str = "0" * 16,
+    parent_span_id: str | None = None,
     standalone_span: bool = False,
 ) -> Mapping[str, Any]:
     measurements = measurements or {}
@@ -68,7 +68,6 @@ def gen_message(
         "event_id": uuid.uuid4().hex,
         "exclusive_time_ms": 0.228,
         "is_segment": is_segment,
-        "parent_span_id": parent_span_id,
         "data": {
             "sentry.environment": "development",
             "sentry.release": _RELEASE_TAG,
@@ -134,6 +133,8 @@ def gen_message(
     }
     if not standalone_span:
         span["segment_id"] = trace_id[:16]
+    if parent_span_id is not None:
+        span["parent_span_id"] = parent_span_id
     return span
 
 
@@ -148,7 +149,7 @@ _SPANS = [
             else f"child {i % len(_TRACE_IDS) + 1} of {_SPAN_COUNT // len(_TRACE_IDS) - 1}"
         ),
         is_segment=i < len(_TRACE_IDS),
-        parent_span_id="0" * 16 if i < len(_TRACE_IDS) else "1" * 16,
+        parent_span_id=None if i < len(_TRACE_IDS) else "1" * 16,
     )
     for i in range(_SPAN_COUNT)
 ]
@@ -170,7 +171,6 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
                     span_op="lcp",
                     span_name="standalone",
                     is_segment=False,
-                    parent_span_id="0",
                     standalone_span=True,
                 )
                 for i in range(_SPAN_COUNT)
