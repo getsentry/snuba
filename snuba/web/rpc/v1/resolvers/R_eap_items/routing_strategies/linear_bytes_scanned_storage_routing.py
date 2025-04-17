@@ -184,6 +184,14 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 timer=routing_context.timer,
             )
 
+            most_downsampled_query_bytes_scanned = self._get_query_bytes_scanned(res)
+            if most_downsampled_query_bytes_scanned == 0:
+                self.metrics.increment(
+                    "scanned_zero_bytes_in_most_downsampled_tier",
+                    1,
+                    {"tier": str(self._get_most_downsampled_tier())},
+                )
+
             self._record_value_in_span_and_DD(
                 self.metrics.timing,
                 "query_bytes_scanned_from_most_downsampled_tier",
@@ -237,6 +245,11 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         assert routing_context.query_result
         actual = self._get_query_bytes_scanned(routing_context.query_result)
         if actual == 0:
+            self.metrics.increment(
+                "scanned_zero_bytes_in_target_tier",
+                1,
+                tags,
+            )
             return
 
         estimated = routing_context.extra_info.get(
