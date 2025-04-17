@@ -287,6 +287,12 @@ PRETTY_FORMAT_EXPRESSIONS = os.environ.get("PRETTY_FORMAT_EXPRESSIONS", "1") == 
 # situation eventually)
 RAISE_ON_ALLOCATION_POLICY_FAILURES = False
 
+# By default, routing strategies won't block requests from going through in a production
+# environment to not cause incidents unnecessarily. If something goes wrong with routing strategy
+# code, the request will still be able to go through (but it will create a dangerous
+# situation eventually)
+RAISE_ON_ROUTING_STRATEGY_FAILURES = False
+
 # By default, the readthrough cache won't block requests from going through in a production
 # environment to not cause incidents unnecessarily. If something goes wrong with redis or the readthrough cache
 # the request will still be able to go through as if the cache did not exist

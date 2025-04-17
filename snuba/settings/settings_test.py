@@ -31,6 +31,7 @@ PRETTY_FORMAT_EXPRESSIONS = os.environ.get("PRETTY_FORMAT_EXPRESSIONS", "1") == 
 # environment to not cause incidents unnecessarily. But if you're testing the policy, it
 # should fail on bad code
 RAISE_ON_ALLOCATION_POLICY_FAILURES = True
+RAISE_ON_ROUTING_STRATEGY_FAILURES = True
 RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = True
 
 # override replacer threshold to write to redis every time a replacement message is consumed
