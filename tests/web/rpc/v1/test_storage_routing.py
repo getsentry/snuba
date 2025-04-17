@@ -1,3 +1,4 @@
+import uuid
 from copy import deepcopy
 from unittest import mock
 from unittest.mock import MagicMock
@@ -25,6 +26,7 @@ def _get_in_msg() -> TimeSeriesRequest:
 
     return TimeSeriesRequest(
         meta=RequestMeta(
+            request_id=str(uuid.uuid4()),
             project_ids=[1, 2, 3],
             organization_id=1,
             cogs_category="something",
@@ -40,7 +42,11 @@ def _get_in_msg() -> TimeSeriesRequest:
 def get_query_result() -> QueryResult:
     return QueryResult(
         result={"profile": {"bytes": 420}, "data": [{"row": ["a", "b", "c"]}]},
-        extra={"stats": {}, "sql": "", "experiments": {}},
+        extra={
+            "stats": {"stat": 1},
+            "sql": "SELECT * FROM your_mom",  # this query times out on our largest cluster
+            "experiments": {},
+        },
     )
 
 
@@ -160,15 +166,46 @@ def test_metrics_output() -> None:
     class MetricsStrategy(RoutingStrategySelectsTier8):
         def _output_metrics(self, routing_context: RoutingContext) -> None:
             nonlocal metric
-            res = super()._output_metrics(routing_context)
             metric += 1
-            return res
+            self._record_value_in_span_and_DD(
+                routing_context=routing_context,
+                metrics_backend_func=self.metrics.increment,
+                name="my_metric",
+                value=1,
+                tags={"a": "b", "c": "d"},
+            )
 
     routing_context = deepcopy(ROUTING_CONTEXT)
     with mock.patch(
         "snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.storage_routing.record_query"
     ) as record_query:
-        # with mock.patch("snuba.state.record_query") as record_query:
-        MetricsStrategy().run_query_to_correct_tier(routing_context)
+        result = MetricsStrategy().run_query_to_correct_tier(routing_context)
         record_query.assert_called_once()
+        recorded_payload = record_query.mock_calls[0].args[0]
+        assert recorded_payload["dataset"] == "storage_routing"
+        assert recorded_payload["status"] == "TIER_8"
+        assert recorded_payload["request"]["referrer"] == "MetricsStrategy"
+        assert recorded_payload["query_list"][0]["stats"] == {
+            "extra_info": {
+                "sampling_in_storage_estimation_time_overhead": {
+                    "type": "timing",
+                    "value": 0,  # we decide the tier immediately so timing is very small
+                    "tags": None,
+                },
+                "sampling_in_storage_my_metric": {
+                    "type": "increment",
+                    "value": 1,
+                    "tags": {"a": "b", "c": "d"},
+                },
+            },
+            "clickhouse_settings": {},
+            "source_request_id": routing_context.in_msg.meta.request_id,
+            "result_info": {
+                "meta": {},
+                "profile": {"bytes": 420},
+                "sql": result.extra["sql"],
+                "stats": result.extra["stats"],
+            },
+            "routed_tier": "TIER_8",
+        }
         assert metric == 1

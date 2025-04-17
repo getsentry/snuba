@@ -50,12 +50,15 @@ class RoutingContext:
         if self.query_result:
             query_result["meta"] = self.query_result.result.get("meta", {})
             query_result["profile"] = self.query_result.result.get("profile", {})
+            query_result["stats"] = self.query_result.extra.get("stats")
+            query_result["sql"] = self.query_result.extra.get("sql")
 
         return {
+            "source_request_id": self.in_msg.meta.request_id,
             "extra_info": self.extra_info,
-            "clickhouse_settings_settings": self.query_settings.get_clickhouse_settings(),
+            "clickhouse_settings": self.query_settings.get_clickhouse_settings(),
             "result_info": query_result,
-            "routed_tier": self.query_settings.get_sampling_tier(),
+            "routed_tier": self.query_settings.get_sampling_tier().name,
         }
 
 
@@ -193,6 +196,11 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
         name = _SAMPLING_IN_STORAGE_PREFIX + name
         metrics_backend_func(name, value, tags, None)
         span = sentry_sdk.get_current_span()
+        routing_context.extra_info[name] = {
+            "type": metrics_backend_func.__name__,
+            "value": value,
+            "tags": tags,
+        }
         if span is not None:
             span.set_data(name, value)
 
