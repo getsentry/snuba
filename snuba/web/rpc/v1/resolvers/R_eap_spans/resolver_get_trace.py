@@ -41,9 +41,6 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression_eap_items,
 )
 
-_BUCKET_COUNT = 20
-
-
 NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
     "organization_id",
     "project_id",
