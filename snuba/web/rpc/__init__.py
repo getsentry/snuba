@@ -272,7 +272,7 @@ def list_all_endpoint_names() -> List[Tuple[str, str]]:
     ]
 
 
-_VERSIONS = ["v1alpha", "v1"]
+_VERSIONS = ["v1"]
 _TO_IMPORT = {
     p: os.path.join(os.path.dirname(os.path.realpath(__file__)), p) for p in _VERSIONS
 }
