@@ -350,9 +350,6 @@ def record_query(query_metadata: snuba_queries_v1.Querylog) -> None:
     try:
         producer = _kafka_producer()
         data = safe_dumps(query_metadata)
-        rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(
-            queries_list, 0, max_redis_queries - 1
-        ).execute()
         producer.poll(0)  # trigger queued delivery callbacks
         producer.produce(
             settings.KAFKA_TOPIC_MAP.get(Topic.QUERYLOG.value, Topic.QUERYLOG.value),
