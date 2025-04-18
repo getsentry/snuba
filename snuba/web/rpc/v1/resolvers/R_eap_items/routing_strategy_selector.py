@@ -1,6 +1,5 @@
 import json
-from dataclasses import dataclass, field
-from typing import Type
+from dataclasses import dataclass
 
 import sentry_sdk
 
@@ -8,17 +7,16 @@ from snuba.state import get_config
 from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.linear_bytes_scanned_storage_routing import (
     LinearBytesScannedRoutingStrategy,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing import (
-    BaseRoutingStrategy,
-)
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing import BaseRoutingStrategy
 
 _FLOATING_POINT_TOLERANCE = 1e-6
 _STORAGE_ROUTING_CONFIG_KEY = "storage_routing_config"
 
+
 @dataclass
 class StorageRoutingConfig:
     version: int
-    routing_strategy_and_percentage_routed: dict[Type[BaseRoutingStrategy], float]
+    routing_strategy_and_percentage_routed: dict[str, float]
 
     @classmethod
     def from_json(cls, config_json: str) -> "StorageRoutingConfig":
@@ -40,14 +38,16 @@ class StorageRoutingConfig:
                         f"Percentage for {strategy_name} needs to be a float between 0 and 1"
                     )
 
-                strategy_class = BaseRoutingStrategy.get_from_name(strategy_name)()  # type: ignore
-
+                try:
+                    BaseRoutingStrategy.get_from_name(strategy_name)()  # type: ignore
+                except Exception:
+                    raise ValueError(
+                        f"{strategy_name} does not inherit from BaseRoutingStrategy"
+                    )
                 routing_strategy_and_percentage_routed[strategy_name] = percentage
-                breakpoint()
 
                 total_percentage += percentage
 
-            breakpoint()
             if abs(total_percentage - 1.0) > _FLOATING_POINT_TOLERANCE:
                 raise ValueError("Total percentage must add up to 1.0")
 
@@ -70,5 +70,5 @@ _DEFAULT_STORAGE_ROUTING_CONFIG = StorageRoutingConfig(
 
 class RoutingStrategySelector:
     def get_storage_routing_strategy_config(self) -> StorageRoutingConfig:
-        config = str(get_config("storage_routing_config", "{}"))
+        config = str(get_config(_STORAGE_ROUTING_CONFIG_KEY, "{}"))
         return StorageRoutingConfig.from_json(config)

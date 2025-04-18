@@ -1,7 +1,7 @@
 import os
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, Type, TypeAlias, Union, cast, final
+from typing import Any, Callable, Dict, Optional, TypeAlias, Union, cast, final
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -286,4 +286,6 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
 
 routing_strategies_dir = os.path.join(os.path.dirname(__file__), "routing_strategies")
-import_submodules_in_directory(routing_strategies_dir, "snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies")
+import_submodules_in_directory(
+    routing_strategies_dir, "snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies"
+)

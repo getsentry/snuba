@@ -11,9 +11,7 @@ from snuba.web import QueryResult
 from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.linear_bytes_scanned_storage_routing import (
     LinearBytesScannedRoutingStrategy,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing import (
-    RoutingContext,
-)
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing import RoutingContext
 
 
 @with_span(op="function")
