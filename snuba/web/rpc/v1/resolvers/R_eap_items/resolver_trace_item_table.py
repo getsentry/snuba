@@ -30,6 +30,7 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_sampling_factor,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -89,6 +90,7 @@ def aggregation_filter_to_expression(
                     attribute_key_to_expression_eap_items
                     if use_eap_items_table(request_meta)
                     else attribute_key_to_expression,
+                    use_sampling_factor(request_meta),
                 ),
                 agg_filter.comparison_filter.val,
             )
@@ -145,6 +147,7 @@ def _convert_order_by(
                         attribute_key_to_expression_eap_items
                         if use_eap_items_table(request_meta)
                         else attribute_key_to_expression,
+                        use_sampling_factor(request_meta),
                     ),
                 )
             )
@@ -248,6 +251,7 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
             attribute_key_to_expression_eap_items
             if use_eap_items_table(request_meta)
             else attribute_key_to_expression,
+            use_sampling_factor(request_meta),
         )
         # aggregation label may not be set and the column label takes priority anyways.
         function_expr = replace(function_expr, alias=column.label)

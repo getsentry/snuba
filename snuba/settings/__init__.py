@@ -223,6 +223,9 @@ USE_EAP_ITEMS_TABLE = bool(os.environ.get("USE_EAP_ITEMS_TABLE", True))
 # Represents 12AM PST March 12, 2025. We can remove this setting once 30 days have passed since this date.
 USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS = 1741762800
 
+# Represents 10AM PST April 8, 2025 which is the date we started writing the sampling factor. We can remove this setting once 90 days have passed since this date.
+USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS = 1744131600
+
 # Processor/Writer Options
 
 

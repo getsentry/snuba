@@ -34,6 +34,7 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_sampling_factor,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -251,6 +252,7 @@ def _proto_expression_to_ast_expression(
                 attribute_key_to_expression_eap_items
                 if use_eap_items_table(request_meta)
                 else attribute_key_to_expression,
+                use_sampling_factor(request_meta),
             )
         case "formula":
             formula_expr = OP_TO_EXPR[expr.formula.op](
