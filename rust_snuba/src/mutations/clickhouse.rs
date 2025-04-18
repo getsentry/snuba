@@ -19,6 +19,7 @@ pub struct ClickhouseWriter {
     client: Client,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl ClickhouseWriter {
     pub fn new(
         hostname: &str,
@@ -27,6 +28,7 @@ impl ClickhouseWriter {
         database: &str,
         clickhouse_user: &str,
         clickhouse_password: &str,
+        clickhouse_secure: bool,
         batch_write_timeout: Option<Duration>,
     ) -> Self {
         let mut headers = HeaderMap::with_capacity(5);
@@ -45,7 +47,9 @@ impl ClickhouseWriter {
             HeaderValue::from_str(database).unwrap(),
         );
 
-        let url = format!("http://{hostname}:{http_port}");
+        let scheme = if clickhouse_secure { "https" } else { "http" };
+
+        let url = format!("{scheme}://{hostname}:{http_port}");
 
         let mut client_builder = ClientBuilder::new().default_headers(headers);
 
