@@ -1,4 +1,3 @@
-import json
 import uuid
 
 import pytest
@@ -15,13 +14,7 @@ redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 @pytest.mark.redis_db
 def test_rewrite_subscription_entity():
-    # Setup test data in Redis
-    test_data = {
-        "subscription1": {"some": "data"},
-        "subscription2": {"other": "data"},
-    }
-
-    # Create test data in Redis for spans
+    # Create eap_spans subscriptions
     for partition_id in [1, 2]:
         RedisSubscriptionDataStore(
             redis_client, EntityKey("eap_spans"), PartitionId(partition_id)
@@ -39,8 +32,15 @@ def test_rewrite_subscription_entity():
             ),
         )
 
-    # Create and execute job
-    run_job(JobSpec(1, "RewriteSubscriptionEntity"))
+    # Execute job
+    run_job(
+        JobSpec(
+            1,
+            "RewriteSubscriptionEntity",
+            False,
+            {"source_entity": "eap_spans", "target_entity": "eap_items"},
+        )
+    )
 
     # Verify data was moved correctly
     for partition_id in [1, 2]:
@@ -52,9 +52,14 @@ def test_rewrite_subscription_entity():
         )
 
         # Verify data was moved to items
-        for sub_id, stored_data in items_store.all():
+        for _, stored_data in items_store.all():
             assert stored_data is not None
-            assert json.loads(stored_data) == test_data
+            assert isinstance(stored_data, RPCSubscriptionData)
+            assert stored_data.entity.entity_key == EntityKey.EAP_ITEMS
+            assert (
+                stored_data.time_series_request
+                == "Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIyIQoaCAESDwgDEgt0ZXN0X21ldHJpYxoDc3VtIAEaA3N1bQ=="
+            )
 
             # Verify data was removed from spans
-            assert spans_store.get(sub_id) is None
+            assert spans_store.all() == []
