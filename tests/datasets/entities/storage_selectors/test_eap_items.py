@@ -10,7 +10,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 
 EAP_ITEMS_ENTITY = Entity(
     key=EntityKey("eap_items"),
-    schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+    schema=get_entity(EntityKey("eap_items")).get_data_model(),
     sample=None,
 )
 

@@ -55,7 +55,6 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression,
     attribute_key_to_expression_eap_items,
-    use_eap_items_table,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -153,14 +152,9 @@ def _get_attribute_expression(
     attribute_type: AttributeKey.Type.ValueType,
     request_meta: RequestMeta,
 ) -> Expression:
-    if use_eap_items_table(request_meta):
-        return attribute_key_to_expression_eap_items(
-            AttributeKey(name=attribute_name, type=attribute_type)
-        )
-    else:
-        return attribute_key_to_expression(
-            AttributeKey(name=attribute_name, type=attribute_type)
-        )
+    return attribute_key_to_expression_eap_items(
+        AttributeKey(name=attribute_name, type=attribute_type)
+    )
 
 
 def _attribute_to_expression(
@@ -180,8 +174,7 @@ def _attribute_to_expression(
                 _get_attribute_expression(
                     "sentry.parent_span_id", AttributeKey.Type.TYPE_STRING, request_meta
                 ),
-                # root spans don't have a parent span set so the value defaults to empty string
-                literal(""),
+                literal("0" * 16),
             ),
             alias=alias,
         )
@@ -440,9 +433,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> dict[str, int]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
-            attribute_key_to_expression_eap_items
-            if use_eap_items_table(request.meta)
-            else attribute_key_to_expression,
+            (attribute_key_to_expression_eap_items),
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(
@@ -456,35 +447,22 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             SelectedExpression(
                 name="timestamp",
                 expression=f.cast(
-                    column(
-                        "timestamp"
-                        if use_eap_items_table(request.meta)
-                        else "_sort_timestamp"
-                    ),
+                    column("timestamp"),
                     "UInt32",
                     alias="timestamp",
                 ),
             ),
         ]
-        if use_eap_items_table(request.meta):
-            exclude_standalone_span_conditions = (
-                exclude_standalone_span_conditions_for_eap_items()
-            )
+        exclude_standalone_span_conditions = (
+            exclude_standalone_span_conditions_for_eap_items()
+        )
 
-            entity = Entity(
-                key=EntityKey("eap_items"),
-                schema=get_entity(EntityKey("eap_items")).get_data_model(),
-                sample=None,
-            )
-        else:
-            exclude_standalone_span_conditions = (
-                EXCLUDE_STANDALONE_SPAN_CONDITIONS_FOR_EAP_SPANS
-            )
-            entity = Entity(
-                key=EntityKey("eap_spans"),
-                schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-                sample=None,
-            )
+        entity = Entity(
+            key=EntityKey("eap_items"),
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
+            sample=None,
+        )
+
         query = Query(
             from_clause=entity,
             selected_columns=selected_columns,
@@ -524,9 +502,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> list[GetTracesResponse.Trace]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
-            attribute_key_to_expression_eap_items
-            if use_eap_items_table(request.meta)
-            else attribute_key_to_expression,
+            (attribute_key_to_expression_eap_items),
         )
 
         selected_columns: list[SelectedExpression] = []
@@ -560,24 +536,15 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 )
             )
 
-        if use_eap_items_table(request.meta):
-            exclude_standalone_span_conditions = (
-                exclude_standalone_span_conditions_for_eap_items()
-            )
-            entity = Entity(
-                key=EntityKey("eap_items"),
-                schema=get_entity(EntityKey("eap_items")).get_data_model(),
-                sample=None,
-            )
-        else:
-            exclude_standalone_span_conditions = (
-                EXCLUDE_STANDALONE_SPAN_CONDITIONS_FOR_EAP_SPANS
-            )
-            entity = Entity(
-                key=EntityKey("eap_spans"),
-                schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-                sample=None,
-            )
+        exclude_standalone_span_conditions = (
+            exclude_standalone_span_conditions_for_eap_items()
+        )
+        entity = Entity(
+            key=EntityKey("eap_items"),
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
+            sample=None,
+        )
+
         timestamps = trace_ids.values()
         query = Query(
             from_clause=entity,
