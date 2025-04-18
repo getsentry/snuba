@@ -1,3 +1,4 @@
+import json
 import uuid
 from copy import deepcopy
 from unittest import mock
@@ -5,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_kafka_schemas import get_codec
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
@@ -207,5 +209,17 @@ def test_metrics_output() -> None:
                 "stats": result.extra["stats"],
             },
             "routed_tier": "TIER_8",
+            "final": False,
+            "cache_hit": 0,
+            "max_threads": routing_context.query_settings.get_clickhouse_settings().get(
+                "max_threads", 0
+            ),
+            "clickhouse_table": "na",
+            "query_id": "na",
+            "is_duplicate": 0,
+            "consistent": False,
         }
+        schema = get_codec("snuba-queries")
+        payload_bytes = json.dumps(recorded_payload).encode("utf-8")
+        schema.decode(payload_bytes)
         assert metric == 1
