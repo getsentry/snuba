@@ -80,7 +80,6 @@ from snuba.query.parser import (
     apply_column_aliases,
     expand_aliases,
     parse_subscriptables,
-    validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException, PostProcessingError
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
@@ -1514,7 +1513,6 @@ def _post_process(
 
 POST_PROCESSORS = [
     _parse_datetime_literals,
-    validate_aliases,
     parse_subscriptables,  # -> This should be part of the grammar
     apply_column_aliases,
     expand_aliases,

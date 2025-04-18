@@ -19,6 +19,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.logical import EntityQuery
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.parser import validate_aliases
 from snuba.request import Request
 
 
@@ -29,6 +30,7 @@ class EntityProcessingStage(
         self, pipe_input: QueryPipelineData[Request]
     ) -> ClickhouseQuery | CompositeQuery[Table]:
         query = pipe_input.data.query
+        validate_aliases(query)
         translated_storage_query = try_translate_storage_query(query)
         if translated_storage_query:
             return translated_storage_query
