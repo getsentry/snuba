@@ -10,9 +10,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.linear_bytes_scan
     _SAMPLING_IN_STORAGE_PREFIX,
     LinearBytesScannedRoutingStrategy,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.storage_routing import (
-    RoutingContext,
-)
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing import RoutingContext
 
 
 @pytest.mark.redis_db

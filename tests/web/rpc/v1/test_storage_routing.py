@@ -14,7 +14,7 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
-from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.storage_routing import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing import (
     BaseRoutingStrategy,
     ClickhouseQuerySettings,
     RoutingContext,
@@ -179,7 +179,7 @@ def test_metrics_output() -> None:
 
     routing_context = deepcopy(ROUTING_CONTEXT)
     with mock.patch(
-        "snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.storage_routing.record_query"
+        "snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.record_query"
     ) as record_query:
         result = MetricsStrategy().run_query_to_correct_tier(routing_context)
         record_query.assert_called_once()

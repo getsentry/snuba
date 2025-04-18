@@ -1,3 +1,4 @@
+import os
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, TypeAlias, Union, cast, final
@@ -21,7 +22,7 @@ from snuba.state import record_query
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import RegisteredClass
+from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 from snuba.web import QueryResult
 from snuba.web.query import run_query
 
@@ -152,6 +153,10 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             tags={"routing_strategy_name": self.__class__.__name__},
         )
 
+    @classmethod
+    def get_from_name(cls, name: str) -> "BaseRoutingStrategy":
+        return cast("BaseRoutingStrategy", cls.class_from_name(name))
+
     def _build_snuba_request(self, routing_context: RoutingContext) -> SnubaRequest:
         request = routing_context.in_msg
         if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
@@ -278,3 +283,9 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                 if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
                     raise e
         return routing_context.query_result
+
+
+routing_strategies_dir = os.path.join(os.path.dirname(__file__), "routing_strategies")
+import_submodules_in_directory(
+    routing_strategies_dir, "snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies"
+)
