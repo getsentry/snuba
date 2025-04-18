@@ -4,9 +4,6 @@ from dataclasses import dataclass
 import sentry_sdk
 
 from snuba.state import get_config
-from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.linear_bytes_scanned_storage_routing import (
-    LinearBytesScannedRoutingStrategy,
-)
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing import BaseRoutingStrategy
 
 _FLOATING_POINT_TOLERANCE = 1e-6
@@ -63,7 +60,7 @@ class StorageRoutingConfig:
 _DEFAULT_STORAGE_ROUTING_CONFIG = StorageRoutingConfig(
     version=1,
     routing_strategy_and_percentage_routed={
-        LinearBytesScannedRoutingStrategy: 1.0,
+        "LinearBytesScannedRoutingStrategy": 1.0,
     },
 )
 
