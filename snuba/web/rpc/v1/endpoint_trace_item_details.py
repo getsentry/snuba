@@ -23,7 +23,6 @@ from snuba.query.dsl import column, literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.state import get_int_config
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
@@ -41,10 +40,7 @@ from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    attribute_key_to_expression as spans_attribute_key_to_expression,
-)
-from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
-    attribute_key_to_expression as log_attribute_key_to_expression,
+    attribute_key_to_expression,
 )
 
 _BUCKET_COUNT = 40
@@ -56,13 +52,6 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
         sample=None,
     )
-    if (
-        request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG
-        and not get_int_config("use_new_logs_resolver", default=0)
-    ):
-        attribute_key_to_expression = log_attribute_key_to_expression
-    else:
-        attribute_key_to_expression = spans_attribute_key_to_expression
 
     res = Query(
         from_clause=entity,

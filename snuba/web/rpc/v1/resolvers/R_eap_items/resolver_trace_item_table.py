@@ -43,15 +43,15 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
+from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.sampling_in_storage_util import (
+    run_query_to_correct_tier,
+)
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     apply_virtual_columns,
     apply_virtual_columns_eap_items,
     attribute_key_to_expression,
     attribute_key_to_expression_eap_items,
     use_eap_items_table,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
-    run_query_to_correct_tier,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -215,10 +215,21 @@ def _get_reliability_context_columns(
 def _formula_to_expression(
     formula: Column.BinaryFormula, request_meta: RequestMeta
 ) -> Expression:
-    return OP_TO_EXPR[formula.op](
+    formula_expr = OP_TO_EXPR[formula.op](
         _column_to_expression(formula.left, request_meta),
         _column_to_expression(formula.right, request_meta),
     )
+    match formula.WhichOneof("default_value"):
+        case None:
+            return formula_expr
+        case "default_value_double":
+            return f.coalesce(formula_expr, formula.default_value_double)
+        case "default_value_int64":
+            return f.coalesce(formula_expr, formula.default_value_int64)
+        case default:
+            raise BadSnubaRPCRequestException(
+                f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
+            )
 
 
 def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expression:
@@ -347,7 +358,7 @@ class ResolverTraceItemTableEAPItems:
         )
 
         res = run_query_to_correct_tier(
-            in_msg, query_settings, timer, build_query, metrics_backend
+            in_msg, query_settings, timer, build_query  # type: ignore
         )
         column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
