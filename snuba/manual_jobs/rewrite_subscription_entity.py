@@ -19,7 +19,9 @@ class RewriteSubscriptionEntity(Job):
 
     def execute(self, logger: JobLogger) -> None:
         """
-        Executes the job to rewrite subscription entities.
+        Executes the job to migrate subscription entities, without
+        changing the underlying subscription data (as much as possible). This
+        does require the subscription data to be RPC-encoded (as in EAP).
         """
         partitions = redis_client.keys(f"subscriptions:{self.__source_entity.value}:*")
         for partition_hash_key in partitions:

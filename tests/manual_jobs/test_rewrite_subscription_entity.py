@@ -14,6 +14,8 @@ redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 @pytest.mark.redis_db
 def test_rewrite_subscription_entity():
+    request_contents = "Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIyIQoaCAESDwgDEgt0ZXN0X21ldHJpYxoDc3VtIAEaA3N1bQ=="
+
     # Create eap_spans subscriptions
     for partition_id in [1, 2]:
         RedisSubscriptionDataStore(
@@ -26,7 +28,7 @@ def test_rewrite_subscription_entity():
                 time_window_sec=300,
                 entity=EntityKey("eap_spans"),
                 metadata={},
-                time_series_request="Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIyIQoaCAESDwgDEgt0ZXN0X21ldHJpYxoDc3VtIAEaA3N1bQ==",
+                time_series_request=request_contents,
                 request_name="TimeSeriesRequest",
                 request_version="v1",
             ),
@@ -56,10 +58,7 @@ def test_rewrite_subscription_entity():
             assert stored_data is not None
             assert isinstance(stored_data, RPCSubscriptionData)
             assert stored_data.entity.entity_key == EntityKey.EAP_ITEMS
-            assert (
-                stored_data.time_series_request
-                == "Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIyIQoaCAESDwgDEgt0ZXN0X21ldHJpYxoDc3VtIAEaA3N1bQ=="
-            )
+            assert stored_data.time_series_request == request_contents
 
             # Verify data was removed from spans
             assert spans_store.all() == []
