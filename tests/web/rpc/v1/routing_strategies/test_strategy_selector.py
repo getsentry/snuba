@@ -18,8 +18,31 @@ class ToyRoutingStrategy2(BaseRoutingStrategy):
 
 
 @pytest.mark.redis_db
-def test_strategy_selector_selects_linear_bytes_scanned_strategy_if_fails_to_parse_config() -> None:
+def test_strategy_selector_selects_default_if_no_config() -> None:
     state.set_config(_STORAGE_ROUTING_CONFIG_KEY, "{}")
+    storage_routing_config = (
+        RoutingStrategySelector().get_storage_routing_strategy_config()
+    )
+    assert storage_routing_config == _DEFAULT_STORAGE_ROUTING_CONFIG
+
+
+@pytest.mark.redis_db
+def test_strategy_selector_selects_default_if_strategy_does_not_exist() -> None:
+    state.set_config(
+        _STORAGE_ROUTING_CONFIG_KEY, '{"version": "1", "DoesntExistStrategy": 1}'
+    )
+    storage_routing_config = (
+        RoutingStrategySelector().get_storage_routing_strategy_config()
+    )
+    assert storage_routing_config == _DEFAULT_STORAGE_ROUTING_CONFIG
+
+
+@pytest.mark.redis_db
+def test_strategy_selector_selects_default_if_percentages_do_not_add_up() -> None:
+    state.set_config(
+        _STORAGE_ROUTING_CONFIG_KEY,
+        '{"version": 1, "LinearBytesScannedRoutingStrategy": 0.1, "ToyRoutingStrategy1": 0.2, "ToyRoutingStrategy2": 0.10}',
+    )
     storage_routing_config = (
         RoutingStrategySelector().get_storage_routing_strategy_config()
     )
@@ -35,7 +58,6 @@ def test_valid_config_is_parsed_correctly() -> None:
     storage_routing_config = (
         RoutingStrategySelector().get_storage_routing_strategy_config()
     )
-    print(storage_routing_config)
     assert storage_routing_config.version == 1
     assert (
         storage_routing_config.routing_strategy_and_percentage_routed[
