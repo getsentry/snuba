@@ -132,6 +132,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                         * self._get_multiplier(tier)
                     )
                     self._record_value_in_span_and_DD(
+                        routing_context,
                         self.metrics.distribution,
                         "estimated_query_bytes_scanned_to_this_tier",
                         estimated_query_bytes_scanned_to_this_tier,
@@ -193,6 +194,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 )
 
             self._record_value_in_span_and_DD(
+                routing_context,
                 self.metrics.timing,
                 "query_bytes_scanned_from_most_downsampled_tier",
                 self._get_query_bytes_scanned(res, span),
@@ -262,12 +264,14 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         error_pct = abs(error) / actual
 
         self._record_value_in_span_and_DD(
+            routing_context,
             self.metrics.distribution,
             "estimation_error_percentage",
             error_pct,
             tags,
         )
         self._record_value_in_span_and_DD(
+            routing_context,
             self.metrics.distribution,
             "over_estimation_error" if error > 0 else "under_estimation_error",
             abs(error),
@@ -293,12 +297,14 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 routing_context, {"tier": str(target_tier)}
             )
             self._record_value_in_span_and_DD(
+                routing_context,
                 self.metrics.distribution,
                 f"actual_bytes_scanned_in_target_tier_{target_tier}",
                 self._get_query_bytes_scanned(routing_context.query_result),
                 tags={"tier": str(target_tier)},
             )
             self._record_value_in_span_and_DD(
+                routing_context,
                 self.metrics.timing,
                 f"time_to_run_query_in_target_tier_{target_tier}",
                 self._get_query_duration_ms(routing_context.query_result),
