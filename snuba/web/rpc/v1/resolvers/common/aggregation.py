@@ -301,11 +301,7 @@ def get_average_sample_rate_column(
         referenced_column=aggregation.label,
         metadata={},
     ).to_alias()
-    sampling_weight = (
-        f.divide(1, sampling_factor_column)
-        if use_sampling_factor
-        else sampling_weight_column
-    )
+    sampling_weight = _get_sampling_weight_expression(use_sampling_factor)
     field = attribute_key_to_expression(aggregation.key)
     condition_in_aggregation = _get_condition_in_aggregation(
         aggregation, attribute_key_to_expression
@@ -390,11 +386,7 @@ def _get_possible_percentiles_expression(
         aggregation, {"granularity": str(granularity), "width": str(width)}
     )
     alias_dict = {"alias": alias} if alias else {}
-    sampling_weight = (
-        f.divide(1, sampling_factor_column)
-        if use_sampling_factor
-        else sampling_weight_column
-    )
+    sampling_weight = _get_sampling_weight_expression(use_sampling_factor)
     return cf.quantilesTDigestWeighted(*possible_percentiles)(
         field,
         f.cast(
@@ -416,11 +408,7 @@ def get_extrapolated_function(
         aggregation, attribute_key_to_expression
     )
 
-    sampling_weight = (
-        f.divide(1, sampling_factor_column)
-        if use_sampling_factor
-        else sampling_weight_column
-    )
+    sampling_weight = _get_sampling_weight_expression(use_sampling_factor)
     function_map_sample_weighted: dict[
         Function.ValueType, CurriedFunctionCall | FunctionCall
     ] = {
@@ -565,11 +553,7 @@ def _get_ci_count(
         aggregation, attribute_key_to_expression
     )
     alias_dict = {"alias": alias} if alias else {}
-    sampling_weight = (
-        f.divide(1, sampling_factor_column)
-        if use_sampling_factor
-        else sampling_weight_column
-    )
+    sampling_weight = _get_sampling_weight_expression(use_sampling_factor)
     variance = f.sumIf(
         f.minus(
             f.multiply(sampling_weight, sampling_weight),
@@ -610,11 +594,7 @@ def _get_ci_sum(
         aggregation, attribute_key_to_expression
     )
     alias_dict = {"alias": alias} if alias else {}
-    sampling_weight = (
-        f.divide(1, sampling_factor_column)
-        if use_sampling_factor
-        else sampling_weight_column
-    )
+    sampling_weight = _get_sampling_weight_expression(use_sampling_factor)
     variance = f.sumIf(
         f.multiply(
             f.multiply(field, field),
@@ -666,11 +646,7 @@ def _get_ci_avg(
         aggregation, attribute_key_to_expression
     )
     alias_dict = {"alias": alias} if alias else {}
-    sampling_weight = (
-        f.divide(1, sampling_factor_column)
-        if use_sampling_factor
-        else sampling_weight_column
-    )
+    sampling_weight = _get_sampling_weight_expression(use_sampling_factor)
 
     expr_sum = f.sumIfOrNull(
         f.multiply(field, sampling_weight),
