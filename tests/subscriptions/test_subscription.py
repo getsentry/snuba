@@ -378,7 +378,7 @@ TESTS_CREATE_RPC_SUBSCRIPTIONS = [
                 time_window_secs=300,
                 resolution_secs=60,
             ),
-            EntityKey.EAP_SPANS,
+            EntityKey.EAP_ITEMS,
         ),
         id="EAP spans RPC subscription",
     ),
@@ -393,14 +393,14 @@ class TestEAPSpansRPCSubscriptionCreator:
     @pytest.mark.redis_db
     def test(self, subscription: SubscriptionData) -> None:
         dataset = PluggableDataset(name="eap", all_entities=[])
-        creator = SubscriptionCreator(dataset, EntityKey.EAP_SPANS)
+        creator = SubscriptionCreator(dataset, EntityKey.EAP_ITEMS)
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
                     get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-                    EntityKey.EAP_SPANS,
+                    EntityKey.EAP_ITEMS,
                     identifier.partition,
                 ).all(),
             )[0][1]

@@ -170,7 +170,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
     create_topics(admin_client, [SnubaTopic.EAP_SPANS_COMMIT_LOG])
 
     metrics_backend = TestingMetricsBackend()
-    entity_name = "eap_spans"
+    entity_name = "eap_items"
     entity = get_entity(EntityKey(entity_name))
     storage = entity.get_writable_storage()
     assert storage is not None
@@ -213,7 +213,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
     builder = scheduler_consumer.SchedulerBuilder(
         entity_name,
         str(uuid.uuid1().hex),
-        "eap_spans",
+        "eap_items",
         [],
         mock_scheduler_producer,
         "latest",
@@ -247,7 +247,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
             commit_log_topic,
             payload=commit_codec.encode(
                 Commit(
-                    "eap_spans",
+                    "eap_items",
                     Partition(commit_log_topic, partition),
                     offset,
                     ts,

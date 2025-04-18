@@ -9,7 +9,7 @@ from snuba.utils.hashes import fnv_1a
 
 class HashBucketFunctionTransformer(LogicalQueryProcessor):
     """
-    In eap_spans, we split up map columns for better performance.
+    In eap_items, we split up map columns for better performance.
     In the entity, attr_str Map(String, String) becomes
     attr_str_0 Map(String, String),
     attr_str_1 Map(String, String),
