@@ -23,9 +23,13 @@ class StorageRoutingConfig:
                 config_dict["version"], int
             ):
                 raise ValueError("please specify version as an integer")
+            if "config" not in config_dict or not isinstance(
+                config_dict["config"], dict
+            ):
+                raise ValueError("please specify config as a dict")
 
             version = config_dict["version"]
-            config_strategies = {k: v for k, v in config_dict.items() if k != "version"}
+            config_strategies = config_dict["config"]
 
             routing_strategy_and_percentage_routed = {}
             total_percentage = 0.0

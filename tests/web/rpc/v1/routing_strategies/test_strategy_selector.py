@@ -29,7 +29,8 @@ def test_strategy_selector_selects_default_if_no_config() -> None:
 @pytest.mark.redis_db
 def test_strategy_selector_selects_default_if_strategy_does_not_exist() -> None:
     state.set_config(
-        _STORAGE_ROUTING_CONFIG_KEY, '{"version": "1", "DoesntExistStrategy": 1}'
+        _STORAGE_ROUTING_CONFIG_KEY,
+        '{"version": 1, "config": {"NonExistentStrategy": 1}}',
     )
     storage_routing_config = (
         RoutingStrategySelector().get_storage_routing_strategy_config()
@@ -41,7 +42,7 @@ def test_strategy_selector_selects_default_if_strategy_does_not_exist() -> None:
 def test_strategy_selector_selects_default_if_percentages_do_not_add_up() -> None:
     state.set_config(
         _STORAGE_ROUTING_CONFIG_KEY,
-        '{"version": 1, "LinearBytesScannedRoutingStrategy": 0.1, "ToyRoutingStrategy1": 0.2, "ToyRoutingStrategy2": 0.10}',
+        '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.1, "ToyRoutingStrategy1": 0.2, "ToyRoutingStrategy2": 0.10}}',
     )
     storage_routing_config = (
         RoutingStrategySelector().get_storage_routing_strategy_config()
@@ -53,7 +54,7 @@ def test_strategy_selector_selects_default_if_percentages_do_not_add_up() -> Non
 def test_valid_config_is_parsed_correctly() -> None:
     state.set_config(
         _STORAGE_ROUTING_CONFIG_KEY,
-        '{"version": 1, "LinearBytesScannedRoutingStrategy": 0.1, "ToyRoutingStrategy1": 0.2, "ToyRoutingStrategy2": 0.70}',
+        '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.1, "ToyRoutingStrategy1": 0.2, "ToyRoutingStrategy2": 0.70}}',
     )
     storage_routing_config = (
         RoutingStrategySelector().get_storage_routing_strategy_config()
