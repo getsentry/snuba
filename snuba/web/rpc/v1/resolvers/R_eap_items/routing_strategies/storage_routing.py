@@ -62,13 +62,33 @@ class RoutingContext:
         }
 
 
+def _get_stats_dict(
+    routing_context: RoutingContext,
+) -> snuba_queries_v1._QueryMetadataStats:
+    return cast(
+        snuba_queries_v1._QueryMetadataStats,
+        {
+            "final": False,
+            "cache_hit": 0,
+            "max_threads": routing_context.query_settings.get_clickhouse_settings().get(
+                "max_threads", 0
+            ),
+            "clickhouse_table": "na",
+            "query_id": "na",
+            "is_duplicate": 0,
+            "consistent": False,
+            **routing_context.to_log_dict(),
+        },
+    )
+
+
 def _construct_hacky_querylog_payload(
     strategy: "BaseRoutingStrategy", routing_context: RoutingContext
 ) -> snuba_queries_v1.Querylog:
     cur_span = sentry_sdk.get_current_span()
     return {
         "request": {
-            "id": str(uuid.uuid4()),
+            "id": uuid.uuid4().hex,
             "app_id": "storage_routing",
             "body": MessageToDict(routing_context.in_msg),
             "referrer": strategy.__class__.__name__,
@@ -80,7 +100,7 @@ def _construct_hacky_querylog_payload(
         "status": routing_context.query_settings.get_sampling_tier().name,
         "request_status": "NA",
         "slo": "N/A",
-        "projects": list(routing_context.in_msg.meta.project_ids),
+        "projects": list(routing_context.in_msg.meta.project_ids) or [],
         "timing": routing_context.timer.for_json(),
         "snql_anonymized": "",
         "query_list": [
@@ -89,9 +109,7 @@ def _construct_hacky_querylog_payload(
                 "sql_anonymized": "",
                 "start_timestamp": routing_context.in_msg.meta.start_timestamp.seconds,
                 "end_timestamp": routing_context.in_msg.meta.end_timestamp.seconds,
-                "stats": cast(
-                    snuba_queries_v1._QueryMetadataStats, routing_context.to_log_dict()
-                ),
+                "stats": _get_stats_dict(routing_context),
                 "status": "0",
                 "trace_id": cur_span.trace_id if cur_span else "no_current_span",
                 "profile": {
