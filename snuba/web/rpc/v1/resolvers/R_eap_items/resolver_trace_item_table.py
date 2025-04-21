@@ -22,6 +22,7 @@ from snuba.query.dsl import column as snuba_column
 from snuba.query.dsl import literal, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
+from snuba.query.parser import validate_aliases
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -338,6 +339,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
         res, request.virtual_column_contexts
     )
     add_existence_check_to_subscriptable_references(res)
+    validate_aliases(res)
     return res
 
 
