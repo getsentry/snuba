@@ -175,7 +175,7 @@ def test_config_ordering_does_not_affect_routing_consistency() -> None:
 
     state.set_config(
         _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
-        '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.2, "ToyRoutingStrategy2": 0.55, "ToyRoutingStrategy1": 0.25}}',
+        '{"version": 1, "config": {"ToyRoutingStrategy1": 0.25, "LinearBytesScannedRoutingStrategy": 0.2, "ToyRoutingStrategy2": 0.55}}',
     )
 
     assert isinstance(
