@@ -41,6 +41,22 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression_eap_items,
 )
 
+NORMALIZED_COLUMNS_TO_INCLUDE = [
+    col.name
+    for col in get_entity(EntityKey("eap_spans")).get_data_model().columns
+    if col.name
+    not in [
+        "retention_days",
+        "sign",
+        "attr_str",
+        "attr_num",
+        "span_id",
+        "timestamp",
+        "time",
+    ]
+]
+
+
 NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
     "organization_id",
     "project_id",

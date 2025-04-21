@@ -22,6 +22,9 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, Attrib
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_get_trace import EndpointGetTrace
+from snuba.web.rpc.v1.resolvers.R_eap_spans.resolver_get_trace import (
+    NORMALIZED_COLUMNS_TO_INCLUDE,
+)
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -184,54 +187,14 @@ def get_attributes(span: Mapping[str, Any]) -> list[GetTraceResponse.Item.Attrib
                     value=attribute_value,
                 )
             )
-
-    ATTRS_EXTRACTED_FROM_ROOT = [
-        "organization_id",
-        "duration_ms",
-        "exclusive_time_ms",
-        "is_segment",
-        "segment_id",
-        "parent_span_id",
-        "end_timestamp",
-        "trace_id",
-        "project_id",
-        "start_timestamp",
-    ]
-
-    for key in ATTRS_EXTRACTED_FROM_ROOT:
-        attr_value_inner = span.get(key, "")
-        if isinstance(attr_value_inner, str):
-            attribute_key = AttributeKey(
-                name=key,
-                type=AttributeKey.Type.TYPE_STRING,
-            )
-            attribute_value = AttributeValue(
-                val_str=attr_value_inner,
-            )
-        elif isinstance(attr_value_inner, int) or isinstance(attr_value_inner, float):
-            attribute_key = AttributeKey(
-                name=key,
-                type=AttributeKey.Type.TYPE_DOUBLE,
-            )
-            attribute_value = AttributeValue(
-                val_double=attr_value_inner,
-            )
-        else:
-            raise TypeError(f"Unexpected type {type(attr_value_inner)} for key: {key}")
-
-        attributes.append(
-            GetTraceResponse.Item.Attribute(
-                key=attribute_key,
-                value=attribute_value,
-            )
-        )
-
     return attributes
 
 
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
+    spans_storage = get_storage(StorageKey("eap_spans"))
     items_storage = get_storage(StorageKey("eap_items"))
+    write_raw_unprocessed_events(spans_storage, _SPANS)  # type: ignore
     write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
 
 
@@ -311,63 +274,20 @@ class TestGetTrace(BaseApiTest):
             ],
         )
 
-        KV_COMPARE_IGNORE_LIST = {
-            "service",  # actual is 1, expecting empty
-            "segment_name",  # seems to contain data from span.data.segment.name, I think there's a manual alias somewhere
-            "name",  # contains data from span.description
-            "parent_span_id",  # set by service, I think?
-            "end_timestamp",  # set from end_timestamp_precise
-            "sampling_factor",  # returned by service, independent of input
-            "sampling_weight",  # returned by service, independent of input
-            "organization_id",  # breaks due to int/double comparison
-            "project_id",  # breaks due to int/double comparison
-            "start_timestamp",  # breaks due to int/double comparison
-        }
-
-        FUZZY_NUMERIC_COMPARE_LIST = {
-            "organization_id",
-            "project_id",
-            "start_timestamp",
-        }
-
-        actual_attributes = [
-            attribute
-            for attribute in response.item_groups[0].items[0].attributes
-            if attribute.key.name not in KV_COMPARE_IGNORE_LIST
-        ]
-
-        expected_attributes = [
-            attribute
-            for attribute in expected_response.item_groups[0].items[0].attributes
-            if attribute.key.name not in KV_COMPARE_IGNORE_LIST
-        ]
-
-        # easier to read if keys don't match
-        actual_attributes_keys = {attribute.key.name for attribute in actual_attributes}
-        expected_attributes_keys = {
-            attribute.key.name for attribute in expected_attributes
-        }
-        assert actual_attributes_keys == expected_attributes_keys
-
-        # Simple comparison attributes
-        assert list(actual_attributes) == list(expected_attributes)
-
-        actual_numerical_attributes = [
-            attribute
-            for attribute in actual_attributes
-            if attribute.key.name in FUZZY_NUMERIC_COMPARE_LIST
-        ]
-        expected_numerical_attributes = [
-            attribute
-            for attribute in expected_attributes
-            if attribute.key.name in FUZZY_NUMERIC_COMPARE_LIST
-        ]
-
-        # Fuzzy comparison of int-like double attributes
-        for actual, expected in zip(
-            actual_numerical_attributes, expected_numerical_attributes
-        ):
-            assert int(actual.value.val_double) == int(expected.value.val_double)
+        assert list(
+            [
+                attribute
+                for attribute in response.item_groups[0].items[0].attributes
+                if attribute.key.name not in NORMALIZED_COLUMNS_TO_INCLUDE
+            ]
+        ) == list(expected_response.item_groups[0].items[0].attributes)
+        assert set(
+            [
+                attribute.key.name
+                for attribute in response.item_groups[0].items[0].attributes
+                if attribute.key.name in NORMALIZED_COLUMNS_TO_INCLUDE
+            ]
+        ) == set(NORMALIZED_COLUMNS_TO_INCLUDE)
 
     def test_with_specific_attributes(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
