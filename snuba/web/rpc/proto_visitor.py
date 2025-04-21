@@ -5,7 +5,6 @@ from types import MethodType
 from typing import Any, Callable, Generic, TypeVar
 
 from google.protobuf.message import Message as ProtobufMessage
-from proto import Message
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
@@ -236,9 +235,9 @@ class GetExpressionAggregationsVisitor(ProtoVisitor):
 class ValidateLabelsVisitor(ProtoVisitor):
     def __init__(self) -> None:
         super().__init__()
-        self.label_to_expr: dict[str, Message] = {}
+        self.label_to_expr: dict[str, ProtobufMessage] = {}
 
-    def _register_label(self, label: str, e: Message) -> None:
+    def _register_label(self, label: str, e: ProtobufMessage) -> None:
         if label == "":
             return
         if label not in self.label_to_expr:
