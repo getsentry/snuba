@@ -18,6 +18,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.s
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategy_selector import (
     _DEFAULT_STORAGE_ROUTING_CONFIG,
     _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
+    _STORAGE_ROUTING_CONFIG_OVERRIDE_KEY,
     RoutingStrategySelector,
 )
 
@@ -163,6 +164,35 @@ def test_config_ordering_does_not_affect_routing_consistency() -> None:
     state.set_config(
         _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
         '{"version": 1, "config": {"ToyRoutingStrategy1": 0.25, "LinearBytesScannedRoutingStrategy": 0.2, "ToyRoutingStrategy2": 0.55}}',
+    )
+
+    assert isinstance(
+        RoutingStrategySelector().select_routing_strategy(routing_context),
+        ToyRoutingStrategy1,
+    )
+
+@pytest.mark.redis_db
+def test_selects_override_if_it_exists() -> None:
+    state.set_config(
+        _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
+        '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.25, "ToyRoutingStrategy1": 0.25, "ToyRoutingStrategy2": 0.25, "ToyRoutingStrategy3": 0.25}}',
+    )
+
+    state.set_config(
+        _STORAGE_ROUTING_CONFIG_OVERRIDE_KEY,
+        '{"10": {"version": 1, "config": {"ToyRoutingStrategy1": 0.95, "ToyRoutingStrategy2": 0.05}}}',
+    )
+
+    routing_context = RoutingContext(
+        in_msg=TimeSeriesRequest(
+            meta=RequestMeta(
+                organization_id=10,
+                project_ids=[11, 12],
+            ),
+        ),
+        timer=Timer(name="doesntmatter"),
+        build_query=build_query,  # type: ignore
+        query_settings=HTTPQuerySettings(),
     )
 
     assert isinstance(
