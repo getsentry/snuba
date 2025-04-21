@@ -174,6 +174,7 @@ def _attribute_to_expression(
                 _get_attribute_expression(
                     "sentry.parent_span_id", AttributeKey.Type.TYPE_STRING, request_meta
                 ),
+                # root spans don't have a parent span set so the value defaults to empty string
                 literal(""),
             ),
             alias=alias,
@@ -247,6 +248,7 @@ def _attribute_to_expression(
         elif key == TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT:
             return f.countIf(*conditions, alias=alias)
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
+            breakpoint()
             return _get_root_span_attribute(
                 "sentry.name", AttributeKey.Type.TYPE_STRING
             )
