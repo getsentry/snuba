@@ -179,7 +179,6 @@ def test_config_ordering_does_not_affect_routing_consistency() -> None:
         ToyRoutingStrategy1,
     )
 
-
 @pytest.mark.redis_db
 def test_selects_override_if_it_exists() -> None:
     state.set_config(

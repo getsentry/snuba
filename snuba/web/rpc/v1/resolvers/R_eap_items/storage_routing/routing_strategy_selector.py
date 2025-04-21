@@ -100,6 +100,14 @@ class RoutingStrategySelector:
             sentry_sdk.capture_message(f"Error getting storage routing config: {e}")
             return _DEFAULT_STORAGE_ROUTING_CONFIG
 
+    def get_overrides(self) -> dict[str, StorageRoutingConfig]:
+        overrides = json.loads(str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}")))
+        organization_id_and_overrides = {}
+        for organization_id, config in overrides:
+            organization_id_and_overrides[organization_id] = StorageRoutingConfig.from_json(config)
+        return organization_id_and_overrides
+
+
     def select_routing_strategy(
         self, routing_context: RoutingContext
     ) -> BaseRoutingStrategy:
