@@ -153,7 +153,7 @@ def test_selects_strategy_based_on_non_uniform_distribution() -> None:
 def test_config_ordering_does_not_affect_routing_consistency() -> None:
     state.set_config(
         _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
-        '{"version": 1, "config": {"ToyRoutingStrategy1": 0.15, "ToyRoutingStrategy2": 0.65, "LinearBytesScannedRoutingStrategy": 0.2}}',
+        '{"version": 1, "config": {"ToyRoutingStrategy1": 0.25, "ToyRoutingStrategy2": 0.55, "LinearBytesScannedRoutingStrategy": 0.2}}',
     )
 
     routing_context = RoutingContext(
@@ -170,15 +170,15 @@ def test_config_ordering_does_not_affect_routing_consistency() -> None:
 
     assert isinstance(
         RoutingStrategySelector().select_routing_strategy(routing_context),
-        ToyRoutingStrategy2,
+        ToyRoutingStrategy1,
     )
 
     state.set_config(
         _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
-        '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.2, "ToyRoutingStrategy2": 0.65,"ToyRoutingStrategy1": 0.15}}',
+        '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.2, "ToyRoutingStrategy2": 0.55, "ToyRoutingStrategy1": 0.25}}',
     )
 
     assert isinstance(
         RoutingStrategySelector().select_routing_strategy(routing_context),
-        ToyRoutingStrategy2,
+        ToyRoutingStrategy1,
     )
