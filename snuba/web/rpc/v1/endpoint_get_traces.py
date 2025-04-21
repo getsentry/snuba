@@ -174,7 +174,7 @@ def _attribute_to_expression(
                 _get_attribute_expression(
                     "sentry.parent_span_id", AttributeKey.Type.TYPE_STRING, request_meta
                 ),
-                literal("0" * 16),
+                literal(""),
             ),
             alias=alias,
         )
