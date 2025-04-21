@@ -14,6 +14,7 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     TimeSeriesRequestWrapper,
+    ValidateLabelsVisitor,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 
@@ -131,5 +132,6 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         )
         in_msg_wrapper = TimeSeriesRequestWrapper(in_msg)
         in_msg_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
+        in_msg_wrapper.accept(ValidateLabelsVisitor())
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)

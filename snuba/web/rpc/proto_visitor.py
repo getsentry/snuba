@@ -5,6 +5,7 @@ from types import MethodType
 from typing import Any, Callable, Generic, TypeVar
 
 from google.protobuf.message import Message as ProtobufMessage
+from proto import Message
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
@@ -20,6 +21,8 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeAggregation
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
+
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 
@@ -228,3 +231,33 @@ class GetExpressionAggregationsVisitor(ProtoVisitor):
             self.aggregations.append(
                 expression_wrapper.underlying_proto.conditional_aggregation
             )
+
+
+class ValidateLabelsVisitor(ProtoVisitor):
+    def __init__(self) -> None:
+        super().__init__()
+        self.label_to_expr: dict[str, Message] = {}
+
+    def _register_label(self, label: str, e: Message) -> None:
+        if label == "":
+            return
+        if label not in self.label_to_expr:
+            self.label_to_expr[label] = e
+        else:
+            if self.label_to_expr[label] != e:
+                raise BadSnubaRPCRequestException(f"duplicate labels detected: {label}")
+
+    def visit_TimeSeriesExpressionWrapper(self, e: TimeSeriesExpressionWrapper) -> None:
+        self._register_label(e.underlying_proto.label, e.underlying_proto)
+        # aggregations and conditional aggregations have another label in
+        # them separate from the expression object label. so we have to do that too
+        match e.underlying_proto.WhichOneof("expression"):
+            case "aggregation":
+                self._register_label(
+                    e.underlying_proto.aggregation.label, e.underlying_proto.aggregation
+                )
+            case "conditional_aggregation":
+                self._register_label(
+                    e.underlying_proto.conditional_aggregation.label,
+                    e.underlying_proto.conditional_aggregation,
+                )

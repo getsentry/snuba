@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 from clickhouse_driver.errors import ServerException
+from google.protobuf.json_format import ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
@@ -1638,3 +1639,157 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             response.meta.downsampled_storage_meta.tier
             != DownsampledStorageMeta.SELECTED_TIER_UNSPECIFIED
         )
+
+    def test_duplicate_labels(self) -> None:
+        """
+        This test ensures that duplicate labels across different expressions
+        raises an exception
+        """
+        myreq = {
+            "meta": {
+                "organizationId": "1",
+                "referrer": "api.organization-event-stats",
+                "projectIds": ["1"],
+                "startTimestamp": "2025-04-08T10:00:00Z",
+                "endTimestamp": "2025-04-08T10:04:00Z",
+                "traceItemType": "TRACE_ITEM_TYPE_SPAN",
+                "downsampledStorageConfig": {},
+            },
+            "granularitySecs": "60",
+            "expressions": [
+                {
+                    "formula": {
+                        "op": "OP_DIVIDE",
+                        "left": {
+                            "conditionalAggregation": {
+                                "aggregate": "FUNCTION_COUNT",
+                                "key": {
+                                    "type": "TYPE_STRING",
+                                    "name": "sentry.status_code",
+                                },
+                                "label": "error_request_count",
+                                "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED",
+                                "filter": {
+                                    "comparisonFilter": {
+                                        "key": {
+                                            "type": "TYPE_STRING",
+                                            "name": "sentry.status_code",
+                                        },
+                                        "op": "OP_IN",
+                                        "value": {
+                                            "valStrArray": {
+                                                "values": [
+                                                    "400",
+                                                    "401",
+                                                    "402",
+                                                    "403",
+                                                    "404",
+                                                    "405",
+                                                    "406",
+                                                    "407",
+                                                    "408",
+                                                    "409",
+                                                    "410",
+                                                    "411",
+                                                    "412",
+                                                    "413",
+                                                    "414",
+                                                    "415",
+                                                    "416",
+                                                    "417",
+                                                    "418",
+                                                    "421",
+                                                    "422",
+                                                    "423",
+                                                    "424",
+                                                    "425",
+                                                    "426",
+                                                    "428",
+                                                    "429",
+                                                    "431",
+                                                    "451",
+                                                ]
+                                            }
+                                        },
+                                    }
+                                },
+                            }
+                        },
+                        "right": {
+                            "aggregation": {
+                                "aggregate": "FUNCTION_COUNT",
+                                "key": {
+                                    "type": "TYPE_STRING",
+                                    "name": "sentry.status_code",
+                                },
+                                "label": "total_request_count",
+                                "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED",
+                            }
+                        },
+                    },
+                    "label": "http_response_rate(4)",
+                },
+                {
+                    "formula": {
+                        "op": "OP_DIVIDE",
+                        "left": {
+                            "conditionalAggregation": {
+                                "aggregate": "FUNCTION_COUNT",
+                                "key": {
+                                    "type": "TYPE_STRING",
+                                    "name": "sentry.status_code",
+                                },
+                                "label": "error_request_count",
+                                "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED",
+                                "filter": {
+                                    "comparisonFilter": {
+                                        "key": {
+                                            "type": "TYPE_STRING",
+                                            "name": "sentry.status_code",
+                                        },
+                                        "op": "OP_IN",
+                                        "value": {
+                                            "valStrArray": {
+                                                "values": [
+                                                    "500",
+                                                    "501",
+                                                    "502",
+                                                    "503",
+                                                    "504",
+                                                    "505",
+                                                    "506",
+                                                    "507",
+                                                    "508",
+                                                    "509",
+                                                    "510",
+                                                    "511",
+                                                ]
+                                            }
+                                        },
+                                    }
+                                },
+                            }
+                        },
+                        "right": {
+                            "aggregation": {
+                                "aggregate": "FUNCTION_COUNT",
+                                "key": {
+                                    "type": "TYPE_STRING",
+                                    "name": "sentry.status_code",
+                                },
+                                "label": "total_request_count",
+                                "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED",
+                            }
+                        },
+                    },
+                    "label": "http_response_rate(5)",
+                },
+            ],
+        }
+        msg = TimeSeriesRequest()
+        ParseDict(myreq, msg)
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="duplicate labels detected: error_request_count",
+        ):
+            EndpointTimeSeries().execute(msg)
