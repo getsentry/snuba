@@ -248,7 +248,6 @@ def _attribute_to_expression(
         elif key == TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT:
             return f.countIf(*conditions, alias=alias)
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
-            breakpoint()
             return _get_root_span_attribute(
                 "sentry.name", AttributeKey.Type.TYPE_STRING
             )
