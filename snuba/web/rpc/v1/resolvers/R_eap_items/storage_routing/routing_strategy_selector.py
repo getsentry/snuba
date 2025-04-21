@@ -1,7 +1,7 @@
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import OrderedDict
+from typing import Iterable, Tuple
 
 import sentry_sdk
 
@@ -24,8 +24,8 @@ class StorageRoutingConfig:
     version: int
     _routing_strategy_and_percentage_routed: dict[str, float]
 
-    def get_routing_strategy_and_percentage_routed(self) -> OrderedDict[str, float]:
-        return OrderedDict(sorted(self._routing_strategy_and_percentage_routed.items()))
+    def get_routing_strategy_and_percentage_routed(self) -> Iterable[Tuple[str, float]]:
+        return sorted(self._routing_strategy_and_percentage_routed.items())
 
     @classmethod
     def from_json(cls, config_json: str) -> "StorageRoutingConfig":
@@ -101,7 +101,7 @@ class RoutingStrategySelector:
         for (
             strategy_name,
             percentage,
-        ) in config.get_routing_strategy_and_percentage_routed().items():
+        ) in config.get_routing_strategy_and_percentage_routed():
             cumulative_buckets += percentage * _NUM_BUCKETS
             if bucket < cumulative_buckets:
                 return BaseRoutingStrategy.get_from_name(strategy_name)()
