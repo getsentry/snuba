@@ -1,7 +1,7 @@
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Iterable, Tuple
+from typing import Any, Iterable, Tuple
 
 import sentry_sdk
 
@@ -29,9 +29,8 @@ class StorageRoutingConfig:
         return sorted(self._routing_strategy_and_percentage_routed.items())
 
     @classmethod
-    def from_json(cls, config_json: str) -> "StorageRoutingConfig":
+    def from_json(cls, config_dict: dict[str, Any]) -> "StorageRoutingConfig":
         try:
-            config_dict = json.loads(config_json)
             if "version" not in config_dict or not isinstance(
                 config_dict["version"], int
             ):
@@ -84,23 +83,14 @@ _DEFAULT_STORAGE_ROUTING_CONFIG = StorageRoutingConfig(
 
 class RoutingStrategySelector:
     def get_storage_routing_config(self, organization_id: int) -> StorageRoutingConfig:
-        overrides = json.loads(str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}")))
-        if organization_id in overrides:
-            organization_id_and_overrides = {}
-            for organization_id, config in overrides:
-                organization_id_and_overrides[organization_id] = StorageRoutingConfig.from_json(overrides[organization_id])
-            return organization_id_and_overrides
+        overrides = json.loads(
+            str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}"))
+        )
+        if str(organization_id) in overrides.keys():
+            return StorageRoutingConfig.from_json(overrides[str(organization_id)])
 
         config = str(get_config(_DEFAULT_STORAGE_ROUTING_CONFIG_KEY, "{}"))
-        return StorageRoutingConfig.from_json(config)
-
-    def get_overrides(self) -> dict[str, StorageRoutingConfig]:
-        overrides = json.loads(str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}")))
-        organization_id_and_overrides = {}
-        for organization_id, config in overrides:
-            organization_id_and_overrides[organization_id] = StorageRoutingConfig.from_json(config)
-        return organization_id_and_overrides
-
+        return StorageRoutingConfig.from_json(json.loads(config))
 
     def select_routing_strategy(
         self, routing_context: RoutingContext
@@ -110,12 +100,9 @@ class RoutingStrategySelector:
             int(hashlib.md5(combined_org_and_project_ids.encode()).hexdigest(), 16)
             % _NUM_BUCKETS
         )
-
-        config = self.get_storage_routing_config()
-        overrides = self.get_overrides()
-        if str(routing_context.in_msg.meta.organization_id) in overrides:
-            config = overrides[str(routing_context.in_msg.meta.organization_id)]
-
+        config = self.get_storage_routing_config(
+            routing_context.in_msg.meta.organization_id
+        )
         cumulative_buckets = 0.0
         for (
             strategy_name,

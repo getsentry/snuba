@@ -20,6 +20,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategy_sel
     _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
     _STORAGE_ROUTING_CONFIG_OVERRIDE_KEY,
     RoutingStrategySelector,
+    StorageRoutingConfig,
 )
 
 
@@ -37,7 +38,7 @@ class ToyRoutingStrategy3(BaseRoutingStrategy):
 
 @pytest.mark.redis_db
 def test_strategy_selector_selects_default_if_no_config() -> None:
-    storage_routing_config = RoutingStrategySelector().get_storage_routing_config()
+    storage_routing_config = RoutingStrategySelector().get_storage_routing_config(1)
     assert storage_routing_config == _DEFAULT_STORAGE_ROUTING_CONFIG
 
 
@@ -47,7 +48,7 @@ def test_strategy_selector_selects_default_if_strategy_does_not_exist() -> None:
         _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
         '{"version": 1, "config": {"NonExistentStrategy": 1}}',
     )
-    storage_routing_config = RoutingStrategySelector().get_storage_routing_config()
+    storage_routing_config = RoutingStrategySelector().get_storage_routing_config(1)
     assert storage_routing_config == _DEFAULT_STORAGE_ROUTING_CONFIG
 
 
@@ -57,7 +58,7 @@ def test_strategy_selector_selects_default_if_percentages_do_not_add_up() -> Non
         _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
         '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.1, "ToyRoutingStrategy1": 0.2, "ToyRoutingStrategy2": 0.10}}',
     )
-    storage_routing_config = RoutingStrategySelector().get_storage_routing_config()
+    storage_routing_config = RoutingStrategySelector().get_storage_routing_config(1)
     assert storage_routing_config == _DEFAULT_STORAGE_ROUTING_CONFIG
 
 
@@ -67,7 +68,7 @@ def test_valid_config_is_parsed_correctly() -> None:
         _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
         '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.1, "ToyRoutingStrategy1": 0.2, "ToyRoutingStrategy2": 0.70}}',
     )
-    storage_routing_config = RoutingStrategySelector().get_storage_routing_config()
+    storage_routing_config = RoutingStrategySelector().get_storage_routing_config(1)
     assert storage_routing_config.version == 1
     assert storage_routing_config.get_routing_strategy_and_percentage_routed() == [
         ("LinearBytesScannedRoutingStrategy", 0.1),
@@ -171,6 +172,7 @@ def test_config_ordering_does_not_affect_routing_consistency() -> None:
         ToyRoutingStrategy1,
     )
 
+
 @pytest.mark.redis_db
 def test_selects_override_if_it_exists() -> None:
     state.set_config(
@@ -195,7 +197,12 @@ def test_selects_override_if_it_exists() -> None:
         query_settings=HTTPQuerySettings(),
     )
 
-    assert isinstance(
-        RoutingStrategySelector().select_routing_strategy(routing_context),
-        ToyRoutingStrategy1,
+    assert RoutingStrategySelector().get_storage_routing_config(
+        routing_context.in_msg.meta.organization_id
+    ) == StorageRoutingConfig(
+        version=1,
+        _routing_strategy_and_percentage_routed={
+            "ToyRoutingStrategy1": 0.95,
+            "ToyRoutingStrategy2": 0.05,
+        },
     )
