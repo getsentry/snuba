@@ -48,7 +48,7 @@ class StorageRoutingConfig:
                     )
 
                 try:
-                    BaseRoutingStrategy.get_from_name(strategy_name)()  # type: ignore
+                    BaseRoutingStrategy.get_from_name(strategy_name)()
                 except Exception:
                     raise ValueError(
                         f"{strategy_name} does not inherit from BaseRoutingStrategy"
