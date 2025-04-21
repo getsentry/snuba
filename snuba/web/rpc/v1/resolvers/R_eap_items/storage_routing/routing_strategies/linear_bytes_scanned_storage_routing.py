@@ -11,7 +11,7 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.util import with_span
 from snuba.web import QueryResult
 from snuba.web.query import run_query
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
     ClickhouseQuerySettings,
     RoutingContext,
