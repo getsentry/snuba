@@ -1,18 +1,23 @@
 import random
-from unittest.mock import Mock
 
 import pytest
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 
 from snuba import state
+from snuba.query.query_settings import HTTPQuerySettings
+from snuba.utils.metrics.timer import Timer
+from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series import build_query
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.linear_bytes_scanned_storage_routing import (
     LinearBytesScannedRoutingStrategy,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
+    RoutingContext,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategy_selector import (
     _DEFAULT_STORAGE_ROUTING_CONFIG,
-    _DEFUALT_STORAGE_ROUTING_CONFIG_KEY,
+    _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
     RoutingStrategySelector,
 )
 
@@ -38,7 +43,7 @@ def test_strategy_selector_selects_default_if_no_config() -> None:
 @pytest.mark.redis_db
 def test_strategy_selector_selects_default_if_strategy_does_not_exist() -> None:
     state.set_config(
-        _DEFUALT_STORAGE_ROUTING_CONFIG_KEY,
+        _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
         '{"version": 1, "config": {"NonExistentStrategy": 1}}',
     )
     storage_routing_config = RoutingStrategySelector().get_storage_routing_config()
@@ -48,7 +53,7 @@ def test_strategy_selector_selects_default_if_strategy_does_not_exist() -> None:
 @pytest.mark.redis_db
 def test_strategy_selector_selects_default_if_percentages_do_not_add_up() -> None:
     state.set_config(
-        _DEFUALT_STORAGE_ROUTING_CONFIG_KEY,
+        _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
         '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.1, "ToyRoutingStrategy1": 0.2, "ToyRoutingStrategy2": 0.10}}',
     )
     storage_routing_config = RoutingStrategySelector().get_storage_routing_config()
@@ -58,7 +63,7 @@ def test_strategy_selector_selects_default_if_percentages_do_not_add_up() -> Non
 @pytest.mark.redis_db
 def test_valid_config_is_parsed_correctly() -> None:
     state.set_config(
-        _DEFUALT_STORAGE_ROUTING_CONFIG_KEY,
+        _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
         '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.1, "ToyRoutingStrategy1": 0.2, "ToyRoutingStrategy2": 0.70}}',
     )
     storage_routing_config = RoutingStrategySelector().get_storage_routing_config()
@@ -86,13 +91,21 @@ def test_valid_config_is_parsed_correctly() -> None:
 @pytest.mark.redis_db
 def test_selects_same_strategy_for_same_org_and_project_ids() -> None:
     state.set_config(
-        _DEFUALT_STORAGE_ROUTING_CONFIG_KEY,
+        _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
         '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.25, "ToyRoutingStrategy1": 0.25, "ToyRoutingStrategy2": 0.25, "ToyRoutingStrategy3": 0.25}}',
     )
 
-    routing_context = Mock()
-    routing_context.in_msg.meta.organization_id = 11
-    routing_context.in_msg.meta.project_ids = [14, 15, 16]
+    routing_context = RoutingContext(
+        in_msg=TimeSeriesRequest(
+            meta=RequestMeta(
+                organization_id=11,
+                project_ids=[14, 15, 16],
+            ),
+        ),
+        timer=Timer(name="doesntmatter"),
+        build_query=build_query,  # type: ignore
+        query_settings=HTTPQuerySettings(),
+    )
 
     for _ in range(50):
         assert isinstance(
@@ -104,7 +117,7 @@ def test_selects_same_strategy_for_same_org_and_project_ids() -> None:
 @pytest.mark.redis_db
 def test_selects_strategy_based_on_non_uniform_distribution() -> None:
     state.set_config(
-        _DEFUALT_STORAGE_ROUTING_CONFIG_KEY,
+        _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
         '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.10, "ToyRoutingStrategy1": 0.90}}',
     )
 
@@ -113,12 +126,20 @@ def test_selects_strategy_based_on_non_uniform_distribution() -> None:
     selector = RoutingStrategySelector()
 
     for _ in range(1000):
-        routing_context = Mock()
-        routing_context.in_msg.meta.organization_id = random.randint(1, 1000)
-        routing_context.in_msg.meta.project_ids = [
-            random.randint(1, 1000)
-            for _ in range(random.randint(1, random.randint(1, 10)))
-        ]
+        routing_context = RoutingContext(
+            in_msg=TimeSeriesRequest(
+                meta=RequestMeta(
+                    organization_id=random.randint(1, 1000),
+                    project_ids=[
+                        random.randint(1, 1000)
+                        for _ in range(random.randint(1, random.randint(1, 10)))
+                    ],
+                ),
+            ),
+            timer=Timer(name="doesntmatter"),
+            build_query=build_query,  # type: ignore
+            query_settings=HTTPQuerySettings(),
+        )
         strategy = selector.select_routing_strategy(routing_context)
         strategy_counts[type(strategy)] += 1
 

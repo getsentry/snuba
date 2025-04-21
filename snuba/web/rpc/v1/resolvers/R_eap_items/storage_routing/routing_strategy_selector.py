@@ -1,6 +1,7 @@
 import hashlib
 import json
 from dataclasses import dataclass
+from typing import OrderedDict
 
 import sentry_sdk
 
@@ -14,14 +15,14 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.s
 )
 
 _FLOATING_POINT_TOLERANCE = 1e-6
-_DEFUALT_STORAGE_ROUTING_CONFIG_KEY = "default_storage_routing_config"
+_DEFAULT_STORAGE_ROUTING_CONFIG_KEY = "default_storage_routing_config"
 _NUM_BUCKETS = 100
 
 
 @dataclass
 class StorageRoutingConfig:
     version: int
-    routing_strategy_and_percentage_routed: dict[str, float]
+    routing_strategy_and_percentage_routed: OrderedDict[str, float]
 
     @classmethod
     def from_json(cls, config_json: str) -> "StorageRoutingConfig":
@@ -39,7 +40,7 @@ class StorageRoutingConfig:
             version = config_dict["version"]
             config_strategies = config_dict["config"]
 
-            routing_strategy_and_percentage_routed = {}
+            routing_strategy_and_percentage_routed = OrderedDict()
             total_percentage = 0.0
             for strategy_name, percentage in config_strategies.items():
                 if percentage < 0 or percentage > 1:
@@ -71,15 +72,15 @@ class StorageRoutingConfig:
 
 _DEFAULT_STORAGE_ROUTING_CONFIG = StorageRoutingConfig(
     version=1,
-    routing_strategy_and_percentage_routed={
-        "LinearBytesScannedRoutingStrategy": 1.0,
-    },
+    routing_strategy_and_percentage_routed=OrderedDict(
+        [("LinearBytesScannedRoutingStrategy", 1.0)],
+    ),
 )
 
 
 class RoutingStrategySelector:
     def get_storage_routing_config(self) -> StorageRoutingConfig:
-        config = str(get_config(_DEFUALT_STORAGE_ROUTING_CONFIG_KEY, "{}"))
+        config = str(get_config(_DEFAULT_STORAGE_ROUTING_CONFIG_KEY, "{}"))
         return StorageRoutingConfig.from_json(config)
 
     def select_routing_strategy(
