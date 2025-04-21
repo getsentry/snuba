@@ -22,7 +22,6 @@ from snuba.query.dsl import column as snuba_column
 from snuba.query.dsl import literal, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
-from snuba.query.parser import validate_aliases
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -44,6 +43,7 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_confidence_interval_column,
     get_count_column,
 )
+from snuba.web.rpc.v1.resolvers.common.common import validate_aliases
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.sampling_in_storage_util import (
     run_query_to_correct_tier,
