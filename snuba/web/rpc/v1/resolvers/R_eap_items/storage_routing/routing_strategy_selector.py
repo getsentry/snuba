@@ -38,11 +38,11 @@ class StorageRoutingConfig:
                 raise ValueError("please specify config as a dict")
 
             version = config_dict["version"]
-            config_strategies = config_dict["config"]
+            config_strategies = sorted(config_dict["config"].items())
 
             routing_strategy_and_percentage_routed = OrderedDict()
             total_percentage = 0.0
-            for strategy_name, percentage in config_strategies.items():
+            for strategy_name, percentage in config_strategies:
                 if percentage < 0 or percentage > 1:
                     raise ValueError(
                         f"Percentage for {strategy_name} needs to be a float between 0 and 1"
