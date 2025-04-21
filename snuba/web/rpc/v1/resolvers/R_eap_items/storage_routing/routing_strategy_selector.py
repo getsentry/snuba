@@ -22,7 +22,10 @@ _NUM_BUCKETS = 100
 @dataclass
 class StorageRoutingConfig:
     version: int
-    routing_strategy_and_percentage_routed: OrderedDict[str, float]
+    _routing_strategy_and_percentage_routed: dict[str, float]
+
+    def get_routing_strategy_and_percentage_routed(self) -> OrderedDict[str, float]:
+        return OrderedDict(sorted(self._routing_strategy_and_percentage_routed.items()))
 
     @classmethod
     def from_json(cls, config_json: str) -> "StorageRoutingConfig":
@@ -38,11 +41,11 @@ class StorageRoutingConfig:
                 raise ValueError("please specify config as a dict")
 
             version = config_dict["version"]
-            config_strategies = sorted(config_dict["config"].items())
+            config_strategies = config_dict["config"]
 
-            routing_strategy_and_percentage_routed = OrderedDict()
+            routing_strategy_and_percentage_routed = {}
             total_percentage = 0.0
-            for strategy_name, percentage in config_strategies:
+            for strategy_name, percentage in config_strategies.items():
                 if percentage < 0 or percentage > 1:
                     raise ValueError(
                         f"Percentage for {strategy_name} needs to be a float between 0 and 1"
@@ -63,7 +66,7 @@ class StorageRoutingConfig:
 
             return cls(
                 version=version,
-                routing_strategy_and_percentage_routed=routing_strategy_and_percentage_routed,
+                _routing_strategy_and_percentage_routed=routing_strategy_and_percentage_routed,
             )
         except Exception as e:
             sentry_sdk.capture_message(f"Error parsing storage routing config: {e}")
@@ -72,9 +75,9 @@ class StorageRoutingConfig:
 
 _DEFAULT_STORAGE_ROUTING_CONFIG = StorageRoutingConfig(
     version=1,
-    routing_strategy_and_percentage_routed=OrderedDict(
-        [("LinearBytesScannedRoutingStrategy", 1.0)],
-    ),
+    _routing_strategy_and_percentage_routed={
+        "LinearBytesScannedRoutingStrategy": 1.0,
+    },
 )
 
 
@@ -98,7 +101,7 @@ class RoutingStrategySelector:
         for (
             strategy_name,
             percentage,
-        ) in config.routing_strategy_and_percentage_routed.items():
+        ) in config.get_routing_strategy_and_percentage_routed().items():
             cumulative_buckets += percentage * _NUM_BUCKETS
             if bucket < cumulative_buckets:
                 return BaseRoutingStrategy.get_from_name(strategy_name)()

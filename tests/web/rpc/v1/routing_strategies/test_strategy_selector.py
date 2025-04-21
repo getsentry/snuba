@@ -69,19 +69,19 @@ def test_valid_config_is_parsed_correctly() -> None:
     storage_routing_config = RoutingStrategySelector().get_storage_routing_config()
     assert storage_routing_config.version == 1
     assert (
-        storage_routing_config.routing_strategy_and_percentage_routed[
+        storage_routing_config.get_routing_strategy_and_percentage_routed()[
             "LinearBytesScannedRoutingStrategy"
         ]
         == 0.1
     )
     assert (
-        storage_routing_config.routing_strategy_and_percentage_routed[
+        storage_routing_config.get_routing_strategy_and_percentage_routed()[
             "ToyRoutingStrategy1"
         ]
         == 0.2
     )
     assert (
-        storage_routing_config.routing_strategy_and_percentage_routed[
+        storage_routing_config.get_routing_strategy_and_percentage_routed()[
             "ToyRoutingStrategy2"
         ]
         == 0.7
