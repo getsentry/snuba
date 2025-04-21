@@ -11,6 +11,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.l
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
+    RoutedRequestType,
     RoutingContext,
 )
 
@@ -82,19 +83,26 @@ _DEFAULT_STORAGE_ROUTING_CONFIG = StorageRoutingConfig(
 
 
 class RoutingStrategySelector:
-    def get_storage_routing_config(self, organization_id: int) -> StorageRoutingConfig:
-        overrides = json.loads(
-            str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}"))
-        )
-        if str(organization_id) in overrides.keys():
-            override_config = StorageRoutingConfig.from_json(
-                overrides[str(organization_id)]
+    def get_storage_routing_config(
+        self, in_msg: RoutedRequestType
+    ) -> StorageRoutingConfig:
+        organization_id = str(in_msg.meta.organization_id)
+        try:
+            overrides = json.loads(
+                str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}"))
             )
-            if override_config.version == _DEFAULT_STORAGE_ROUTING_CONFIG.version:
-                return override_config
+            if organization_id in overrides.keys():
+                override_config = StorageRoutingConfig.from_json(
+                    overrides[organization_id]
+                )
+                if override_config.version == _DEFAULT_STORAGE_ROUTING_CONFIG.version:
+                    return override_config
 
-        config = str(get_config(_DEFAULT_STORAGE_ROUTING_CONFIG_KEY, "{}"))
-        return StorageRoutingConfig.from_json(json.loads(config))
+            config = str(get_config(_DEFAULT_STORAGE_ROUTING_CONFIG_KEY, "{}"))
+            return StorageRoutingConfig.from_json(json.loads(config))
+        except Exception as e:
+            sentry_sdk.capture_message(f"Error getting storage routing config: {e}")
+            return _DEFAULT_STORAGE_ROUTING_CONFIG
 
     def select_routing_strategy(
         self, routing_context: RoutingContext
@@ -104,9 +112,7 @@ class RoutingStrategySelector:
             int(hashlib.md5(combined_org_and_project_ids.encode()).hexdigest(), 16)
             % _NUM_BUCKETS
         )
-        config = self.get_storage_routing_config(
-            routing_context.in_msg.meta.organization_id
-        )
+        config = self.get_storage_routing_config(routing_context.in_msg)
         cumulative_buckets = 0.0
         for (
             strategy_name,

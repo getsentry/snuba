@@ -38,7 +38,9 @@ class ToyRoutingStrategy3(BaseRoutingStrategy):
 
 @pytest.mark.redis_db
 def test_strategy_selector_selects_default_if_no_config() -> None:
-    storage_routing_config = RoutingStrategySelector().get_storage_routing_config(1)
+    storage_routing_config = RoutingStrategySelector().get_storage_routing_config(
+        TimeSeriesRequest(meta=RequestMeta(organization_id=1))
+    )
     assert storage_routing_config == _DEFAULT_STORAGE_ROUTING_CONFIG
 
 
@@ -48,7 +50,9 @@ def test_strategy_selector_selects_default_if_strategy_does_not_exist() -> None:
         _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
         '{"version": 1, "config": {"NonExistentStrategy": 1}}',
     )
-    storage_routing_config = RoutingStrategySelector().get_storage_routing_config(1)
+    storage_routing_config = RoutingStrategySelector().get_storage_routing_config(
+        TimeSeriesRequest(meta=RequestMeta(organization_id=1))
+    )
     assert storage_routing_config == _DEFAULT_STORAGE_ROUTING_CONFIG
 
 
@@ -58,7 +62,9 @@ def test_strategy_selector_selects_default_if_percentages_do_not_add_up() -> Non
         _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
         '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.1, "ToyRoutingStrategy1": 0.2, "ToyRoutingStrategy2": 0.10}}',
     )
-    storage_routing_config = RoutingStrategySelector().get_storage_routing_config(1)
+    storage_routing_config = RoutingStrategySelector().get_storage_routing_config(
+        TimeSeriesRequest(meta=RequestMeta(organization_id=1))
+    )
     assert storage_routing_config == _DEFAULT_STORAGE_ROUTING_CONFIG
 
 
@@ -68,7 +74,9 @@ def test_valid_config_is_parsed_correctly() -> None:
         _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
         '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.1, "ToyRoutingStrategy1": 0.2, "ToyRoutingStrategy2": 0.70}}',
     )
-    storage_routing_config = RoutingStrategySelector().get_storage_routing_config(1)
+    storage_routing_config = RoutingStrategySelector().get_storage_routing_config(
+        TimeSeriesRequest(meta=RequestMeta(organization_id=1))
+    )
     assert storage_routing_config.version == 1
     assert storage_routing_config.get_routing_strategy_and_percentage_routed() == [
         ("LinearBytesScannedRoutingStrategy", 0.1),
@@ -198,7 +206,7 @@ def test_selects_override_if_it_exists() -> None:
     )
 
     assert RoutingStrategySelector().get_storage_routing_config(
-        routing_context.in_msg.meta.organization_id
+        routing_context.in_msg
     ) == StorageRoutingConfig(
         version=1,
         _routing_strategy_and_percentage_routed={
@@ -233,7 +241,7 @@ def test_does_not_override_if_version_is_different() -> None:
     )
 
     assert RoutingStrategySelector().get_storage_routing_config(
-        routing_context.in_msg.meta.organization_id
+        routing_context.in_msg
     ) == StorageRoutingConfig(
         version=1,
         _routing_strategy_and_percentage_routed={
@@ -270,7 +278,7 @@ def test_does_not_override_if_organization_id_is_different() -> None:
     )
 
     assert RoutingStrategySelector().get_storage_routing_config(
-        routing_context.in_msg.meta.organization_id
+        routing_context.in_msg
     ) == StorageRoutingConfig(
         version=1,
         _routing_strategy_and_percentage_routed={
