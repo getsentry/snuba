@@ -225,13 +225,6 @@ query_processors:
       prewhere_candidates:
         [trace_id]
   - processor: TupleUnaliaser
-  - processor: ClickhouseSettingsOverride
-    args:
-      settings:
-        max_memory_usage: 5000000000
-        max_rows_to_group_by: 1000000
-        group_by_overflow_mode: any
-        max_parallel_replicas: 3
 
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
