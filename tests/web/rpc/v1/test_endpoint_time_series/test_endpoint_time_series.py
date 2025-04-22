@@ -40,7 +40,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.parser.exceptions import AliasShadowingException
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -1789,5 +1788,7 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
         }
         msg = TimeSeriesRequest()
         ParseDict(myreq, msg)
-        with pytest.raises(AliasShadowingException):
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="duplicate labels detected"
+        ):
             EndpointTimeSeries().execute(msg)

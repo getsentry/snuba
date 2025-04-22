@@ -255,17 +255,19 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
             use_sampling_factor(request_meta),
         )
         # aggregation label may not be set and the column label takes priority anyways.
-        if column.label != "":
-            function_expr = replace(function_expr, alias=column.label)
-        else:
+        if column.label == "":
             function_expr = replace(function_expr, alias=None)
+        else:
+            function_expr = replace(function_expr, alias=column.label)
+
         return function_expr
     elif column.HasField("formula"):
         formula_expr = _formula_to_expression(column.formula, request_meta)
-        if column.label != "":
-            formula_expr = replace(formula_expr, alias=column.label)
-        else:
+
+        if column.label == "":
             formula_expr = replace(formula_expr, alias=None)
+        else:
+            formula_expr = replace(formula_expr, alias=column.label)
         return formula_expr
     elif column.HasField("literal"):
         return literal(column.literal.val_double)
