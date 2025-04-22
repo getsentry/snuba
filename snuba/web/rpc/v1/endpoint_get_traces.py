@@ -43,7 +43,6 @@ from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     base_conditions_and,
     project_id_and_org_conditions,
-    timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -437,7 +436,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     def _list_trace_ids(
         self,
         request: GetTracesRequest,
-    ) -> dict[str, int]:
+    ) -> list[str]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
             attribute_key_to_expression_eap_items
@@ -447,22 +446,8 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(
                 name="trace_id",
-                expression=f.cast(
+                expression=f.distinct(
                     column("trace_id"),
-                    "String",
-                    alias="trace_id",
-                ),
-            ),
-            SelectedExpression(
-                name="timestamp",
-                expression=f.cast(
-                    column(
-                        "timestamp"
-                        if use_eap_items_table(request.meta)
-                        else "_sort_timestamp"
-                    ),
-                    "UInt32",
-                    alias="timestamp",
                 ),
             ),
         ]
@@ -497,6 +482,18 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             order_by=[
                 OrderBy(
                     direction=OrderByDirection.DESC,
+                    expression=column("organization_id"),
+                ),
+                OrderBy(
+                    direction=OrderByDirection.DESC,
+                    expression=column("project_id"),
+                ),
+                OrderBy(
+                    direction=OrderByDirection.DESC,
+                    expression=column("item_type"),
+                ),
+                OrderBy(
+                    direction=OrderByDirection.DESC,
                     expression=column("timestamp"),
                 ),
             ],
@@ -512,15 +509,15 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             request=_build_snuba_request(request, query),
             timer=self._timer,
         )
-        trace_ids: dict[str, int] = {}
+        trace_ids: list[str] = []
         for row in results.result.get("data", []):
-            trace_ids[row["trace_id"]] = row["timestamp"]
+            trace_ids.append(row["trace_id"])
         return trace_ids
 
     def _get_metadata_for_traces(
         self,
         request: GetTracesRequest,
-        trace_ids: dict[str, int],
+        trace_ids: list[str],
     ) -> list[GetTracesResponse.Trace]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
@@ -578,25 +575,18 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 schema=get_entity(EntityKey("eap_spans")).get_data_model(),
                 sample=None,
             )
-        timestamps = trace_ids.values()
         query = Query(
             from_clause=entity,
             selected_columns=selected_columns,
             condition=and_cond(
                 project_id_and_org_conditions(request.meta),
-                timestamp_in_range_condition(
-                    min(timestamps) - _BUFFER_WINDOW,
-                    max(timestamps) + _BUFFER_WINDOW,
-                ),
                 in_cond(
                     f.cast(
                         column("trace_id"),
                         "String",
                         alias="trace_id",
                     ),
-                    literals_array(
-                        None, [literal(trace_id) for trace_id in trace_ids.keys()]
-                    ),
+                    literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
                 ),
                 # Exclude standalone spans until they are supported in the Trace View
                 exclude_standalone_span_conditions,
