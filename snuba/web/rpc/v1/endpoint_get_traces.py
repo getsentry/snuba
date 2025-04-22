@@ -22,7 +22,7 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import (
@@ -497,7 +497,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     expression=column("timestamp"),
                 ),
             ],
-            limitby=LimitBy(limit=1, columns=[column("trace_id")]),
             limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
             offset=request.page_token.offset,
         )
