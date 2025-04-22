@@ -31,8 +31,12 @@ class StorageRoutingConfig:
 
     @classmethod
     def from_json(cls, config_dict: dict[str, Any]) -> "StorageRoutingConfig":
+        if config_dict == {}:
+            return _DEFAULT_STORAGE_ROUTING_CONFIG
         try:
-            if "version" not in config_dict:
+            if "version" not in config_dict or not isinstance(
+                config_dict["version"], int
+            ):
                 raise ValueError("please specify version as an integer")
             if "config" not in config_dict or not isinstance(
                 config_dict["config"], dict
