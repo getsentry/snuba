@@ -22,6 +22,7 @@ from snuba.query.dsl import column as snuba_column
 from snuba.query.dsl import literal, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
+from snuba.query.parser import validate_aliases
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -254,11 +255,17 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
             use_sampling_factor(request_meta),
         )
         # aggregation label may not be set and the column label takes priority anyways.
-        function_expr = replace(function_expr, alias=column.label)
+        if column.label != "":
+            function_expr = replace(function_expr, alias=column.label)
+        else:
+            function_expr = replace(function_expr, alias=None)
         return function_expr
     elif column.HasField("formula"):
         formula_expr = _formula_to_expression(column.formula, request_meta)
-        formula_expr = replace(formula_expr, alias=column.label)
+        if column.label != "":
+            formula_expr = replace(formula_expr, alias=column.label)
+        else:
+            formula_expr = replace(formula_expr, alias=None)
         return formula_expr
     elif column.HasField("literal"):
         return literal(column.literal.val_double)
@@ -338,6 +345,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
         res, request.virtual_column_contexts
     )
     add_existence_check_to_subscriptable_references(res)
+    validate_aliases(res)
     return res
 
 

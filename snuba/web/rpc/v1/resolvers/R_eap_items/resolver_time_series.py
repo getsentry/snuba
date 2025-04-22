@@ -27,6 +27,7 @@ from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
+from snuba.query.parser import validate_aliases
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -376,6 +377,7 @@ def build_query(request: TimeSeriesRequest) -> Query:
         ],
     )
     treeify_or_and_conditions(res)
+    validate_aliases(res)
     return res
 
 
