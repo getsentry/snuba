@@ -1,7 +1,7 @@
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Iterable, Tuple
+from typing import Any, Iterable, Tuple
 
 import sentry_sdk
 
@@ -11,11 +11,13 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.l
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
+    RoutedRequestType,
     RoutingContext,
 )
 
 _FLOATING_POINT_TOLERANCE = 1e-6
 _DEFAULT_STORAGE_ROUTING_CONFIG_KEY = "default_storage_routing_config"
+_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY = "storage_routing_config_override"
 _NUM_BUCKETS = 100
 
 
@@ -28,9 +30,8 @@ class StorageRoutingConfig:
         return sorted(self._routing_strategy_and_percentage_routed.items())
 
     @classmethod
-    def from_json(cls, config_json: str) -> "StorageRoutingConfig":
+    def from_json(cls, config_dict: dict[str, Any]) -> "StorageRoutingConfig":
         try:
-            config_dict = json.loads(config_json)
             if "version" not in config_dict or not isinstance(
                 config_dict["version"], int
             ):
@@ -82,21 +83,32 @@ _DEFAULT_STORAGE_ROUTING_CONFIG = StorageRoutingConfig(
 
 
 class RoutingStrategySelector:
-    def get_storage_routing_config(self) -> StorageRoutingConfig:
-        config = str(get_config(_DEFAULT_STORAGE_ROUTING_CONFIG_KEY, "{}"))
-        return StorageRoutingConfig.from_json(config)
+    def get_storage_routing_config(
+        self, in_msg: RoutedRequestType
+    ) -> StorageRoutingConfig:
+        organization_id = str(in_msg.meta.organization_id)
+        try:
+            overrides = json.loads(
+                str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}"))
+            )
+            if organization_id in overrides.keys():
+                return StorageRoutingConfig.from_json(overrides[organization_id])
+
+            config = str(get_config(_DEFAULT_STORAGE_ROUTING_CONFIG_KEY, "{}"))
+            return StorageRoutingConfig.from_json(json.loads(config))
+        except Exception as e:
+            sentry_sdk.capture_message(f"Error getting storage routing config: {e}")
+            return _DEFAULT_STORAGE_ROUTING_CONFIG
 
     def select_routing_strategy(
         self, routing_context: RoutingContext
     ) -> BaseRoutingStrategy:
-        config = self.get_storage_routing_config()
-
         combined_org_and_project_ids = f"{routing_context.in_msg.meta.organization_id}:{'.'.join(str(pid) for pid in sorted(routing_context.in_msg.meta.project_ids))}"
         bucket = (
             int(hashlib.md5(combined_org_and_project_ids.encode()).hexdigest(), 16)
             % _NUM_BUCKETS
         )
-
+        config = self.get_storage_routing_config(routing_context.in_msg)
         cumulative_buckets = 0.0
         for (
             strategy_name,
