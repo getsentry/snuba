@@ -1,4 +1,5 @@
 import random
+from unittest.mock import patch
 
 import pytest
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
@@ -40,7 +41,12 @@ def test_strategy_selector_selects_default_if_no_config() -> None:
     storage_routing_config = RoutingStrategySelector().get_storage_routing_config(
         TimeSeriesRequest(meta=RequestMeta(organization_id=1))
     )
-    assert storage_routing_config == _DEFAULT_STORAGE_ROUTING_CONFIG
+    with patch("sentry_sdk.capture_message") as mock_sdk_capture_message:
+        storage_routing_config = RoutingStrategySelector().get_storage_routing_config(
+            TimeSeriesRequest(meta=RequestMeta(organization_id=1))
+        )
+        assert storage_routing_config == _DEFAULT_STORAGE_ROUTING_CONFIG
+        mock_sdk_capture_message.assert_not_called()
 
 
 @pytest.mark.redis_db
