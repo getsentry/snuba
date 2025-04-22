@@ -1,6 +1,5 @@
 from typing import Final, Mapping, Sequence, Set
 
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     VirtualColumnContext,
@@ -102,10 +101,6 @@ ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
     "sentry.start_timestamp": "sentry.start_timestamp_precise",
     "sentry.end_timestamp": "sentry.end_timestamp_precise",
 }
-
-
-def use_eap_items_table(request_meta: RequestMeta) -> bool:
-    return True
 
 
 def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
