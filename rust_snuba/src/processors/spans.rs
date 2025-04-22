@@ -43,6 +43,7 @@ pub(crate) struct FromSpanMessage {
     pub(crate) event_id: Option<Uuid>,
     pub(crate) exclusive_time_ms: f64,
     pub(crate) is_segment: bool,
+    pub(crate) kind: Option<String>,
     pub(crate) measurements: Option<BTreeMap<String, FromMeasurementValue>>,
     pub(crate) data: Option<BTreeMap<String, Value>>,
     pub(crate) parent_span_id: Option<String>,

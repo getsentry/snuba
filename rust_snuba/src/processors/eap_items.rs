@@ -246,6 +246,10 @@ impl From<FromSpanMessage> for EAPItem {
             res.attributes
                 .insert_bool("sentry.is_segment".to_string(), from.is_segment);
 
+            if let Some(kind) = from.kind {
+                res.attributes.insert_str("kind".to_string(), kind);
+            }
+
             if let Some(parent_span_id) = from.parent_span_id {
                 res.attributes
                     .insert_str("sentry.parent_span_id".to_string(), parent_span_id);
@@ -289,6 +293,7 @@ mod tests {
     "event_id": "d826225de75d42d6b2f01b957d51f18f",
     "exclusive_time_ms": 0.228,
     "is_segment": true,
+    "kind": "server",
     "data": {
         "sentry.environment": "development",
         "sentry.release": "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b",

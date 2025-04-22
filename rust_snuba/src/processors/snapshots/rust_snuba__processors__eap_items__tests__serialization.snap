@@ -74,6 +74,7 @@ expression: item
     "sentry.status_code": "200"
   },
   "attributes_string_19": {
+    "kind": "server",
     "sentry.op": "http.server"
   },
   "attributes_string_20": {
