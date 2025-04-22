@@ -72,10 +72,8 @@ def populate_eap_spans_storage(num_rows: int) -> None:
             res["measurements"][f"b_measurement_{i:03}"] = {"value": 10}  # type: ignore
         return res
 
-    spans_storage = get_storage(StorageKey("eap_spans"))
     items_storage = get_storage(StorageKey("eap_items"))
     messages = [generate_span_event_message(i) for i in range(num_rows)]
-    write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
@@ -249,7 +247,6 @@ class TestTraceItemAttributeNames(BaseApiTest):
         true = True
         start = BASE_TIME.timestamp()
         end = BASE_TIME.timestamp() + 1
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
         messages = [
             {
@@ -314,7 +311,6 @@ class TestTraceItemAttributeNames(BaseApiTest):
             },
         ]
 
-        write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
         req = TraceItemAttributeNamesRequest(

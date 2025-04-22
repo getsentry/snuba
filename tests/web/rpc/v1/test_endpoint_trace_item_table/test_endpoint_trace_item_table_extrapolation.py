@@ -129,7 +129,6 @@ BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timed
 @pytest.mark.redis_db
 class TestTraceItemTableWithExtrapolation(BaseApiTest):
     def test_aggregation_on_attribute_column_backward_compat(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
         start = BASE_TIME
         tags = {"custom_tag": "blah"}
@@ -151,7 +150,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         messages_no_measurement = [
             gen_message(start - timedelta(minutes=i), tags=tags) for i in range(5)
         ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
         write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -244,7 +242,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert abs(measurement_p90 - 4) < 0.01  # weighted p90 - 4
 
     def test_aggregation_on_attribute_column(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
         start = BASE_TIME
         messages_w_measurement = [
@@ -264,7 +261,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         messages_no_measurement = [
             gen_message(start - timedelta(minutes=i)) for i in range(5)
         ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
         write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -357,7 +353,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert abs(measurement_p90 - 4) < 0.01  # weighted p90 - 4
 
     def test_conditional_aggregation_on_attribute_column(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
         start = BASE_TIME
         messages_w_measurement = [
@@ -379,7 +374,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             gen_message(start - timedelta(minutes=i), tags={"custom_tag": "blah"})
             for i in range(5)
         ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
         write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -451,7 +445,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         )  # weighted average - (1*2 + 3*8) / (2+8)
 
     def test_count_reliability_backward_compat(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
         start = BASE_TIME
         tags = {"custom_tag": "blah"}
@@ -471,7 +464,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         messages_no_measurement = [
             gen_message(start - timedelta(minutes=i), tags=tags) for i in range(5)
         ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
         write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -510,7 +502,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert measurement_reliability == Reliability.RELIABILITY_HIGH
 
     def test_count_reliability(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
         start = BASE_TIME
         tags = {"custom_tag": "blah"}
@@ -530,7 +521,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         messages_no_measurement = [
             gen_message(start - timedelta(minutes=i), tags=tags) for i in range(5)
         ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
         write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -569,7 +559,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert measurement_reliability == Reliability.RELIABILITY_HIGH
 
     def test_count_reliability_with_group_by_backward_compat(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
         start = BASE_TIME
         messages_w_measurement = [
@@ -589,7 +578,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             gen_message(start - timedelta(minutes=i), tags={"key": "bar"})
             for i in range(5)
         ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
         write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -688,7 +676,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert measurement_reliabilities == [Reliability.RELIABILITY_LOW]
 
     def test_count_reliability_with_group_by(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
         start = BASE_TIME
         messages_w_measurement = [
@@ -708,7 +695,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             gen_message(start - timedelta(minutes=i), tags={"key": "bar"})
             for i in range(5)
         ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
         write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -877,7 +863,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         ]
 
     def test_aggregation_with_nulls(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
         start = BASE_TIME
         messages_a = [
@@ -902,7 +887,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
             for i in range(5)
         ]
-        write_raw_unprocessed_events(spans_storage, messages_a + messages_b)  # type: ignore
         write_raw_unprocessed_events(items_storage, messages_a + messages_b)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))

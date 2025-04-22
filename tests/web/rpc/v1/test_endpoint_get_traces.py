@@ -156,25 +156,23 @@ _SPANS = [
 
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
-    spans_storage = get_storage(StorageKey("eap_spans"))
     items_storage = get_storage(StorageKey("eap_items"))
 
-    for storage in {spans_storage, items_storage}:
-        write_raw_unprocessed_events(storage, _SPANS)  # type: ignore
-        write_raw_unprocessed_events(
-            storage,  # type: ignore
-            [
-                gen_message(
-                    dt=_BASE_TIME + timedelta(minutes=i),
-                    trace_id=uuid.uuid4().hex,
-                    span_op="lcp",
-                    span_name="standalone",
-                    is_segment=False,
-                    standalone_span=True,
-                )
-                for i in range(_SPAN_COUNT)
-            ],
-        )
+    write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
+    write_raw_unprocessed_events(
+        items_storage,  # type: ignore
+        [
+            gen_message(
+                dt=_BASE_TIME + timedelta(minutes=i),
+                trace_id=uuid.uuid4().hex,
+                span_op="lcp",
+                span_name="standalone",
+                is_segment=False,
+                standalone_span=True,
+            )
+            for i in range(_SPAN_COUNT)
+        ],
+    )
 
 
 @pytest.mark.clickhouse_db

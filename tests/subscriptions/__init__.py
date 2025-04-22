@@ -169,7 +169,6 @@ class BaseSubscriptionTest:
             ],
         )
 
-        spans_storage = get_writable_storage(StorageKey("eap_spans"))
         items_storage = get_writable_storage(StorageKey("eap_items"))
         messages = [
             gen_span_message(self.base_time + timedelta(minutes=tick))
@@ -178,7 +177,6 @@ class BaseSubscriptionTest:
         extra_messages = [
             gen_span_message(self.base_time - timedelta(hours=4)) for _ in range(2)
         ]
-        write_raw_unprocessed_events(spans_storage, extra_messages + messages)
         write_raw_unprocessed_events(items_storage, extra_messages + messages)
 
 

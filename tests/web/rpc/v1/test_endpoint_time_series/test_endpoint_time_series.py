@@ -133,9 +133,7 @@ def store_spans_timeseries(
         dt = start_datetime + timedelta(seconds=secs)
         numerical_attributes = {m.name: m.get_value(secs) for m in metrics}
         messages.append(gen_span_message(dt, tags, numerical_attributes))
-    spans_storage = get_storage(StorageKey("eap_spans"))
     items_storage = get_storage(StorageKey("eap_items"))
-    write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 

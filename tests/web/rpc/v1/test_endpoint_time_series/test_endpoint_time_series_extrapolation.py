@@ -122,9 +122,7 @@ def store_timeseries(
         numerical_attributes = {m.name: m.get_value(secs) for m in metrics}
         measurements_dict = {m.name: {"value": m.get_value(secs)} for m in measurements}
         messages.append(gen_message(dt, tags, numerical_attributes, measurements_dict))
-    spans_storage = get_storage(StorageKey("eap_spans"))
     items_storage = get_storage(StorageKey("eap_items"))
-    write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
