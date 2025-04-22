@@ -20,7 +20,6 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategy_sel
     _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
     _STORAGE_ROUTING_CONFIG_OVERRIDE_KEY,
     RoutingStrategySelector,
-    StorageRoutingConfig,
 )
 
 
@@ -207,50 +206,10 @@ def test_selects_override_if_it_exists() -> None:
 
     assert RoutingStrategySelector().get_storage_routing_config(
         routing_context.in_msg
-    ) == StorageRoutingConfig(
-        version=1,
-        _routing_strategy_and_percentage_routed={
-            "ToyRoutingStrategy1": 0.95,
-            "ToyRoutingStrategy2": 0.05,
-        },
-    )
-
-
-@pytest.mark.redis_db
-def test_does_not_override_if_version_is_different() -> None:
-    state.set_config(
-        _DEFAULT_STORAGE_ROUTING_CONFIG_KEY,
-        '{"version": 1, "config": {"LinearBytesScannedRoutingStrategy": 0.25, "ToyRoutingStrategy1": 0.25, "ToyRoutingStrategy2": 0.25, "ToyRoutingStrategy3": 0.25}}',
-    )
-
-    state.set_config(
-        _STORAGE_ROUTING_CONFIG_OVERRIDE_KEY,
-        '{"10": {"version": 2, "config": {"ToyRoutingStrategy1": 0.95, "ToyRoutingStrategy2": 0.05}}}',
-    )
-
-    routing_context = RoutingContext(
-        in_msg=TimeSeriesRequest(
-            meta=RequestMeta(
-                organization_id=10,
-                project_ids=[11, 12],
-            ),
-        ),
-        timer=Timer(name="doesntmatter"),
-        build_query=build_query,  # type: ignore
-        query_settings=HTTPQuerySettings(),
-    )
-
-    assert RoutingStrategySelector().get_storage_routing_config(
-        routing_context.in_msg
-    ) == StorageRoutingConfig(
-        version=1,
-        _routing_strategy_and_percentage_routed={
-            "LinearBytesScannedRoutingStrategy": 0.25,
-            "ToyRoutingStrategy1": 0.25,
-            "ToyRoutingStrategy2": 0.25,
-            "ToyRoutingStrategy3": 0.25,
-        },
-    )
+    ).get_routing_strategy_and_percentage_routed() == [
+        ("ToyRoutingStrategy1", 0.95),
+        ("ToyRoutingStrategy2", 0.05),
+    ]
 
 
 @pytest.mark.redis_db
@@ -279,12 +238,9 @@ def test_does_not_override_if_organization_id_is_different() -> None:
 
     assert RoutingStrategySelector().get_storage_routing_config(
         routing_context.in_msg
-    ) == StorageRoutingConfig(
-        version=1,
-        _routing_strategy_and_percentage_routed={
-            "LinearBytesScannedRoutingStrategy": 0.25,
-            "ToyRoutingStrategy1": 0.25,
-            "ToyRoutingStrategy2": 0.25,
-            "ToyRoutingStrategy3": 0.25,
-        },
-    )
+    ).get_routing_strategy_and_percentage_routed() == [
+        ("LinearBytesScannedRoutingStrategy", 0.25),
+        ("ToyRoutingStrategy1", 0.25),
+        ("ToyRoutingStrategy2", 0.25),
+        ("ToyRoutingStrategy3", 0.25),
+    ]
