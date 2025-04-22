@@ -41,8 +41,8 @@ class ClickhouseSettingsOverride(ClickhouseQueryProcessor):
             new_settings.update(self.__settings)
             new_settings.update(query_settings.get_clickhouse_settings())
 
-        if get_str_config("ignore_clickhouse_settings_override", default=""):
-            ignored_settings = get_str_config("ignore_clickhouse_settings_override")
+        ignored_settings = get_str_config("ignore_clickhouse_settings_override")
+        if ignored_settings:
             new_settings = {
                 setting: value
                 for setting, value in new_settings.items()
