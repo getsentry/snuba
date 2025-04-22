@@ -17,7 +17,6 @@ from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     EndpointTraceItemAttributeNames,
 )
 from tests.base import BaseApiTest
-from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 
 BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(
@@ -350,14 +349,3 @@ class TestTraceItemAttributeNames(BaseApiTest):
             ]
         ]
         assert res.attributes == expected
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-class TestTraceItemAttributeNamesEAPItems(TestTraceItemAttributeNames):
-    @pytest.fixture(autouse=True)
-    def use_eap_items_table(
-        self, snuba_set_config: SnubaSetConfig, redis_db: None
-    ) -> None:
-        snuba_set_config("use_eap_items_attrs_table_start_timestamp_seconds", 0)
-        snuba_set_config("use_eap_items_attrs_table_all", True)

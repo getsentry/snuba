@@ -24,7 +24,6 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
-from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 
 
@@ -829,18 +828,3 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 ],
             ),
         ]
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-class TestTimeSeriesApiWithExtrapolationEAPItems(TestTimeSeriesApiWithExtrapolation):
-    """
-    Run the tests again, but this time on the eap_items table as well to ensure it also works.
-    """
-
-    @pytest.fixture(autouse=True)
-    def use_eap_items_table(
-        self, snuba_set_config: SnubaSetConfig, redis_db: None
-    ) -> None:
-        snuba_set_config("use_eap_items_table", True)
-        snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
