@@ -510,7 +510,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         )
         trace_ids: list[str] = []
         for row in results.result.get("data", []):
-            trace_ids.append(row["trace_id"])
+            trace_ids.append(list(row.values())[0])
         return trace_ids
 
     def _get_metadata_for_traces(
