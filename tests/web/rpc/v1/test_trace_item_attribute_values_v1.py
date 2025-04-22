@@ -14,7 +14,6 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.trace_item_attribute_values import AttributeValuesRequest
 from tests.base import BaseApiTest
-from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 
 BASE_TIME = datetime.now(timezone.utc).replace(
@@ -148,32 +147,6 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         res = AttributeValuesRequest().execute(req)
         assert res.values == []
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-class TestAttributeValuesEAPItems(TestTraceItemAttributes):
-    """
-    Run the tests again, but this time on the eap_items table as well to ensure it also works.
-    """
-
-    @pytest.fixture(autouse=True)
-    def use_eap_items_table(
-        self, snuba_set_config: SnubaSetConfig, redis_db: None
-    ) -> None:
-        snuba_set_config("use_eap_items_attrs_table__1", True)
-        snuba_set_config("use_eap_items_attrs_table_start_timestamp_seconds", 0)
-
-    # NOTE: pagination of values doesn't work with the new approach of getting attribute values
-    # (straight from the source table) without significant performance degradation
-    # as of 2025-03-14, this functionality has also not been used. As such for now, it's better to
-    # ship an autocomplete that is mostly functional minus this paginatin feature. Instead we rely on the
-    # user to add more characters in the value_substring_match
-    def test_page_token(self, setup_teardown: Any) -> None:
-        pass
-
-    def test_page_token_filter_offset(self) -> None:
-        pass
 
     def test_transaction(self) -> None:
         req = TraceItemAttributeValuesRequest(
