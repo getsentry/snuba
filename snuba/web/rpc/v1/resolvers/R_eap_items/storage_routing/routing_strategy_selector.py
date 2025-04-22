@@ -92,11 +92,7 @@ class RoutingStrategySelector:
                 str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}"))
             )
             if organization_id in overrides.keys():
-                override_config = StorageRoutingConfig.from_json(
-                    overrides[organization_id]
-                )
-                if override_config.version == _DEFAULT_STORAGE_ROUTING_CONFIG.version:
-                    return override_config
+                return StorageRoutingConfig.from_json(overrides[organization_id])
 
             config = str(get_config(_DEFAULT_STORAGE_ROUTING_CONFIG_KEY, "{}"))
             return StorageRoutingConfig.from_json(json.loads(config))
