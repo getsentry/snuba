@@ -25,15 +25,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import (
-    and_cond,
-    column,
-    in_cond,
-    literal,
-    literals_array,
-    not_cond,
-    or_cond,
-)
+from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
 from snuba.query.expressions import Expression, SubscriptableReference
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -43,6 +35,7 @@ from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     base_conditions_and,
     project_id_and_org_conditions,
+    timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -52,7 +45,6 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    attribute_key_to_expression,
     attribute_key_to_expression_eap_items,
 )
 
@@ -443,24 +435,20 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 ),
             )
         ]
-        exclude_standalone_span_conditions = (
-            exclude_standalone_span_conditions_for_eap_items()
-        )
-
         entity = Entity(
             key=EntityKey("eap_items"),
             schema=get_entity(EntityKey("eap_items")).get_data_model(),
             sample=None,
         )
-
         query = Query(
             from_clause=entity,
             selected_columns=selected_columns,
             condition=base_conditions_and(
                 request.meta,
                 trace_item_filters_expression,
+                SPAN_ITEM_TYPE_CONDITION,
                 # Exclude standalone spans until they are supported in the Trace View
-                exclude_standalone_span_conditions,
+                exclude_standalone_span_conditions_for_eap_items(),
             ),
             order_by=[
                 OrderBy(
@@ -537,9 +525,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 )
             )
 
-        exclude_standalone_span_conditions = (
-            exclude_standalone_span_conditions_for_eap_items()
-        )
         entity = Entity(
             key=EntityKey("eap_items"),
             schema=get_entity(EntityKey("eap_items")).get_data_model(),
@@ -551,6 +536,10 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             selected_columns=selected_columns,
             condition=and_cond(
                 project_id_and_org_conditions(request.meta),
+                timestamp_in_range_condition(
+                    request.meta.start_timestamp.seconds,
+                    request.meta.end_timestamp.seconds,
+                ),
                 in_cond(
                     f.cast(
                         column("trace_id"),
@@ -559,8 +548,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     ),
                     literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
                 ),
+                SPAN_ITEM_TYPE_CONDITION,
                 # Exclude standalone spans until they are supported in the Trace View
-                exclude_standalone_span_conditions,
+                exclude_standalone_span_conditions_for_eap_items(),
             ),
             groupby=[
                 _attribute_to_expression(
@@ -589,31 +579,19 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         return _convert_results(request, results.result.get("data", []))
 
 
-SEGMENT_ID_ATTRIBUTE = AttributeKey(
-    name="sentry.segment_id",
-    type=AttributeKey.Type.TYPE_STRING,
-)
-
-
 def exclude_standalone_span_conditions_for_eap_items() -> Expression:
-    segment_id_expression = attribute_key_to_expression_eap_items(SEGMENT_ID_ATTRIBUTE)
+    segment_id_expression = attribute_key_to_expression_eap_items(
+        AttributeKey(
+            name="sentry.segment_id",
+            type=AttributeKey.Type.TYPE_STRING,
+        )
+    )
     if isinstance(segment_id_expression, SubscriptableReference):
         return f.mapContains(segment_id_expression.column, segment_id_expression.key)
     raise BadSnubaRPCRequestException("can't convert this attribute into an expression")
 
 
-EXCLUDE_STANDALONE_SPAN_CONDITIONS_FOR_EAP_SPANS = not_cond(
-    in_cond(
-        attribute_key_to_expression(SEGMENT_ID_ATTRIBUTE),
-        literals_array(
-            None,
-            [
-                literal(v)
-                for v in {
-                    "0",
-                    "00",
-                }
-            ],
-        ),
-    ),
+SPAN_ITEM_TYPE_CONDITION = f.equals(
+    column("item_type"),
+    TraceItemType.TRACE_ITEM_TYPE_SPAN,
 )
