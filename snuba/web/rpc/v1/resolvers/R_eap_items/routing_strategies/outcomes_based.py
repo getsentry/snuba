@@ -107,13 +107,24 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             request=snuba_request,
             timer=routing_context.timer,
         )
+        routing_context.extra_info["estimation_sql"] = res.extra.get("sql", "")
         return cast(int, res.result.get("data", [{}])[0].get("num_items", 0))
 
     def _get_max_items_before_downsampling(self) -> int:
         default = 1_000_000_000
         return (
             state.get_int_config(
-                f"{self.__class__.__name__}.max_items_before_downsampling",
+                f"{self.config_key()}.max_items_before_downsampling",
+                default,
+            )
+            or default
+        )
+
+    def _get_min_timerange_to_query_outcomes(self) -> int:
+        default = 3600 * 4
+        return (
+            state.get_int_config(
+                f"{self.config_key()}.min_timerange_to_query_outcomes",
                 default,
             )
             or default
@@ -122,15 +133,20 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
     def _decide_tier_and_query_settings(
         self, routing_context: RoutingContext
     ) -> tuple[Tier, ClickhouseQuerySettings]:
-        # SELECT category, outcome, sum(quantity),  FROM outcomes_hourly_dist WHERE timestamp > now() - 3600 AND org_id=1 AND project_id=1 AND outcome=0 AND category=16 GROUP BY category, outcome LIMIT 100
-        # Check if time range is less than 6 hours
+        # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
         start_ts = routing_context.in_msg.meta.start_timestamp.seconds
         end_ts = routing_context.in_msg.meta.end_timestamp.seconds
         time_range_secs = end_ts - start_ts
-        if time_range_secs < 3600 * 4:
-            routing_context.extra_info["small_time_range"] = True
+        min_timerange_to_query_outcomes = self._get_min_timerange_to_query_outcomes()
+        if time_range_secs < min_timerange_to_query_outcomes:
+            routing_context.extra_info[
+                "min_timerange_to_query_outcomes"
+            ] = min_timerange_to_query_outcomes
+            routing_context.extra_info["time_range_secs"] = time_range_secs
             return Tier.TIER_1, {}
 
+        # see how many items this combo of orgs/projects has actually ingested for the timerange,
+        # downsample if it's too many
         ingested_items = self.get_ingested_items_for_timerange(routing_context)
         routing_context.extra_info["ingested_items"] = ingested_items
         max_items_before_downsampling = self._get_max_items_before_downsampling()
