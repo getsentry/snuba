@@ -3,9 +3,11 @@ from typing import Any, Dict
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
+from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
@@ -20,7 +22,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing import RoutingContex
 from tests.helpers import write_raw_unprocessed_events
 
 BASE_TIME = datetime.now(UTC).replace(
-    hour=8, minute=0, second=0, microsecond=0
+    hour=0, minute=0, second=0, microsecond=0
 ) - timedelta(hours=24)
 _PROJECT_ID = 1
 _ORG_ID = 1
@@ -47,8 +49,7 @@ def gen_span_ingest_outcome(time: datetime, num: int) -> Dict[str, int | str | N
         "org_id": _PROJECT_ID,
         "project_id": _ORG_ID,
         "key_id": None,
-        "timestamp": time.isoformat(),
-        "time": time.isoformat(),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         "outcome": 0,
         "reason": None,
         "event_id": None,
@@ -74,7 +75,7 @@ def test_outcomes_based_routing_normal_mode(store_outcomes_data: Any) -> None:
     strategy = OutcomesBasedRoutingStrategy()
 
     request = TraceItemTableRequest(meta=_get_request_meta())
-    request.meta.downsampled_storage_config.mode = 2  # NORMAL mode
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
 
     routing_context = RoutingContext(
         in_msg=request,
@@ -85,4 +86,27 @@ def test_outcomes_based_routing_normal_mode(store_outcomes_data: Any) -> None:
 
     tier, settings = strategy._decide_tier_and_query_settings(routing_context)
     assert tier == Tier.TIER_1
+    assert settings == {}
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_outcomes_based_routing_downsample(store_outcomes_data: Any) -> None:
+    state.set_config(
+        "OutcomesBasedRoutingStrategy.max_items_before_downsampling", 5_000_000
+    )
+    strategy = OutcomesBasedRoutingStrategy()
+
+    request = TraceItemTableRequest(meta=_get_request_meta())
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+
+    routing_context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        build_query=build_query,  # type: ignore
+        query_settings=HTTPQuerySettings(),
+    )
+
+    tier, settings = strategy._decide_tier_and_query_settings(routing_context)
+    assert tier == Tier.TIER_8
     assert settings == {}

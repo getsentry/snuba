@@ -133,7 +133,11 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         ingested_items = self.get_ingested_items_for_timerange(routing_context)
         routing_context.extra_info["ingested_items"] = ingested_items
-        if ingested_items > self._get_max_items_before_downsampling():
+        max_items_before_downsampling = self._get_max_items_before_downsampling()
+        routing_context.extra_info[
+            "max_items_before_downsampling"
+        ] = max_items_before_downsampling
+        if ingested_items > max_items_before_downsampling:
             return Tier.TIER_8, {}
         return Tier.TIER_1, {}
 
