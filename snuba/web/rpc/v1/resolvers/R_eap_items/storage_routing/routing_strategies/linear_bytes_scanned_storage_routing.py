@@ -34,15 +34,15 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         sentry_timeout_ms = cast(
             int,
             state.get_int_config(
-                _SAMPLING_IN_STORAGE_PREFIX + "sentry_timeout", default=30000
+                _SAMPLING_IN_STORAGE_PREFIX + "sentry_timeout", default=5000
             ),
-        )  # 30s = 30000ms
+        )  # 5s
         error_budget_ms = cast(
             int,
             state.get_int_config(
-                _SAMPLING_IN_STORAGE_PREFIX + "error_budget", default=5000
+                _SAMPLING_IN_STORAGE_PREFIX + "error_budget", default=500
             ),
-        )  # 5s = 5000ms
+        )  # 0.5s
         return sentry_timeout_ms - error_budget_ms
 
     def _get_most_downsampled_tier(self) -> Tier:
@@ -54,11 +54,14 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
             / _DOWNSAMPLING_TIER_MULTIPLIERS[self._get_most_downsampled_tier()]
         )
 
-    def _is_preflight_mode(self, routing_context: RoutingContext) -> bool:
+    def _is_normal_mode(self, routing_context: RoutingContext) -> bool:
+        if not routing_context.in_msg.meta.HasField("downsampled_storage_config"):
+            return False
+        mode = routing_context.in_msg.meta.downsampled_storage_config.mode
         return (
-            routing_context.in_msg.meta.HasField("downsampled_storage_config")
-            and routing_context.in_msg.meta.downsampled_storage_config.mode
-            == DownsampledStorageConfig.MODE_PREFLIGHT
+            mode == DownsampledStorageConfig.MODE_NORMAL
+            or mode == DownsampledStorageConfig.MODE_PREFLIGHT
+            or mode == DownsampledStorageConfig.MODE_BEST_EFFORT
         )
 
     def _exclude_user_data_from_res(self, res: QueryResult) -> Dict[str, Any]:
@@ -212,9 +215,6 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         ):
             return Tier.TIER_1, {}
 
-        if self._is_preflight_mode(routing_context):
-            return self._get_most_downsampled_tier(), {}
-
         routing_context.query_result = self._run_query_on_most_downsampled_tier(
             routing_context
         )
@@ -230,13 +230,6 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         )
 
     def _run_query(self, routing_context: RoutingContext) -> QueryResult:
-        if (
-            routing_context.query_settings.get_sampling_tier()
-            == self._get_most_downsampled_tier()
-            and routing_context.query_result is not None
-        ):
-            # this avoids double querying the most downsampled tier
-            return routing_context.query_result
         return super()._run_query(routing_context)
 
     def _emit_estimation_error_info(
@@ -291,8 +284,8 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 1,
                 {"tier": str(target_tier)},
             )
-        if not self._is_preflight_mode(routing_context):
 
+        if self._is_normal_mode(routing_context):
             self._emit_estimation_error_info(
                 routing_context, {"tier": str(target_tier)}
             )

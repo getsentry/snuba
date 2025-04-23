@@ -1312,88 +1312,121 @@ class TestTimeSeriesApi(BaseApiTest):
             expected_formula_timeseries,
         ]
 
-    def test_preflight(self) -> None:
-        # store a a test metric with a value of 1, every second of one hour
-        granularity_secs = 3600
-        query_duration = granularity_secs * 1
-        store_spans_timeseries(
-            BASE_TIME,
-            1,
-            query_duration,
-            metrics=[DummyMetric("test_preflight_metric", get_value=lambda x: 1)],
-        )
 
-        aggregations = [
-            AttributeAggregation(
-                aggregate=Function.FUNCTION_SUM,
-                key=AttributeKey(
-                    type=AttributeKey.TYPE_FLOAT, name="test_preflight_metric"
-                ),
-                label="sum",
-                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-            ),
-        ]
-
-        preflight_message = TimeSeriesRequest(
+class TestUtils:
+    def test_no_duplicate_labels(self) -> None:
+        message = TimeSeriesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_PREFLIGHT
-                ),
+                debug=True,
             ),
-            aggregations=aggregations,
-            granularity_secs=granularity_secs,
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_AVG,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=1,
         )
 
-        message_to_non_downsampled_tier = TimeSeriesRequest(
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTimeSeries().execute(message)
+
+    @pytest.mark.parametrize(
+        ("start_ts", "end_ts", "granularity"),
+        [
+            (BASE_TIME, BASE_TIME + timedelta(hours=1), 1),
+            (BASE_TIME, BASE_TIME + timedelta(hours=24), 15),
+            (BASE_TIME, BASE_TIME + timedelta(hours=1), 0),
+            (BASE_TIME + timedelta(hours=1), BASE_TIME, 0),
+            (BASE_TIME, BASE_TIME + timedelta(hours=1), 3 * 3600),
+        ],
+    )
+    def test_bad_granularity(
+        self, start_ts: datetime, end_ts: datetime, granularity: int
+    ) -> None:
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(start_ts.timestamp())),
+                end_timestamp=Timestamp(seconds=int(end_ts.timestamp())),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=granularity,
+        )
+
+        with pytest.raises(BadSnubaRPCRequestException):
+            _validate_time_buckets(message)
+
+    def test_adjust_buckets(self) -> None:
+        message = TimeSeriesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp()) + 65),
+                debug=True,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
-            aggregations=aggregations,
-            granularity_secs=granularity_secs,
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=15,
         )
 
-        preflight_response = EndpointTimeSeries().execute(preflight_message)
-        non_downsampled_tier_response = EndpointTimeSeries().execute(
-            message_to_non_downsampled_tier
-        )
+        _validate_time_buckets(message)
+        # add another bucket to fit into granularity_secs
+        assert message.meta.end_timestamp.seconds == int(BASE_TIME.timestamp()) + 75
 
-        if preflight_response.result_timeseries == []:
-            sum_of_preflight_metric = 0.0
-        else:
-            sum_of_preflight_metric = (
-                preflight_response.result_timeseries[0].data_points[0].data
-            )
 
-        assert (
-            sum_of_preflight_metric
-            < non_downsampled_tier_response.result_timeseries[0].data_points[0].data
-            / 10
-        )
-        assert (
-            preflight_response.meta.downsampled_storage_meta
-            == DownsampledStorageMeta(
-                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
-            )
-        )
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
+    """
+    Run the tests again, but this time on the eap_items table as well to ensure it also works.
+    """
 
-    def test_best_effort_route_to_tier_64(self) -> None:
+    @pytest.fixture(autouse=True)
+    def use_eap_items_table(
+        self, snuba_set_config: SnubaSetConfig, redis_db: None
+    ) -> None:
+        snuba_set_config("use_eap_items_table", True)
+        snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
+
+    def test_normal_mode_route_to_tier_64(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 3600
         query_duration = granularity_secs * 1
@@ -1477,7 +1510,8 @@ class TestTimeSeriesApi(BaseApiTest):
             assert (
                 best_effort_response.meta.downsampled_storage_meta
                 == DownsampledStorageMeta(
-                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
+                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64,
+                    can_go_to_higher_accuracy_tier=True,
                 )
             )
 
