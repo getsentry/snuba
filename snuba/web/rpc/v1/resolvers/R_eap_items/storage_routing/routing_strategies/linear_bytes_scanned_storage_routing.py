@@ -33,15 +33,11 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
     def _get_time_budget_ms(self) -> float:
         sentry_timeout_ms = cast(
             int,
-            state.get_int_config(
-                _SAMPLING_IN_STORAGE_PREFIX + "sentry_timeout", default=30000
-            ),
+            state.get_int_config(self.config_key() + "_sentry_timeout", default=30000),
         )  # 30s = 30000ms
         error_budget_ms = cast(
             int,
-            state.get_int_config(
-                _SAMPLING_IN_STORAGE_PREFIX + "error_budget", default=5000
-            ),
+            state.get_int_config(self.config_key() + "_error_budget", default=5000),
         )  # 5s = 5000ms
         return sentry_timeout_ms - error_budget_ms
 
@@ -97,7 +93,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         return cast(
             int,
             state.get_int_config(
-                _SAMPLING_IN_STORAGE_PREFIX + "bytes_scanned_per_query_limit",
+                self.config_key() + "_bytes_scanned_per_query_limit",
                 default=161061273600,
             ),
         )

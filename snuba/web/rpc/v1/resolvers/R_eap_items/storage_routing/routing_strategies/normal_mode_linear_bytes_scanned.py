@@ -1,5 +1,4 @@
-from dataclasses import asdict
-from typing import Any, Callable, Dict, Optional, TypeAlias, Union, cast
+from typing import Callable, Dict, Optional, TypeAlias, Union, cast
 
 import sentry_sdk
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
@@ -33,15 +32,11 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
     def _get_time_budget_ms(self) -> float:
         sentry_timeout_ms = cast(
             int,
-            state.get_int_config(
-                _SAMPLING_IN_STORAGE_PREFIX + "sentry_timeout", default=5000
-            ),
+            state.get_int_config(self.config_key() + "_sentry_timeout", default=5000),
         )  # 5s
         error_budget_ms = cast(
             int,
-            state.get_int_config(
-                _SAMPLING_IN_STORAGE_PREFIX + "error_budget", default=500
-            ),
+            state.get_int_config(self.config_key() + "_error_budget", default=500),
         )  # 0.5s
         return sentry_timeout_ms - error_budget_ms
 
@@ -64,34 +59,10 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
             or mode == DownsampledStorageConfig.MODE_BEST_EFFORT
         )
 
-    def _exclude_user_data_from_res(self, res: QueryResult) -> Dict[str, Any]:
-        result_dict = asdict(res)
-        result_dict["result"] = {
-            k: v for k, v in result_dict["result"].items() if k != "data"
-        }
-        return result_dict
-
     def _get_query_bytes_scanned(
         self, res: QueryResult, span: Span | None = None
     ) -> int:
-        profile_dict = res.result.get("profile") or {}
-        progress_bytes = profile_dict.get("progress_bytes")
-
-        if progress_bytes is not None:
-            return cast(int, progress_bytes)
-
-        error_type = (
-            "QueryResult_contains_no_profile"
-            if profile_dict is None
-            else "QueryResult_contains_no_progress_bytes"
-        )
-        res_without_user_data = self._exclude_user_data_from_res(res)
-        sentry_sdk.capture_message(
-            f"{error_type}: {res_without_user_data}", level="error"
-        )
-        if span:
-            span.set_data(error_type, res_without_user_data)
-        return 0
+        return cast(int, res.result.get("profile", {}).get("progress_bytes", 0) * 1000)  # type: ignore
 
     def _get_query_duration_ms(self, res: QueryResult) -> float:
         return cast(float, res.result.get("profile", {}).get("elapsed", 0) * 1000)  # type: ignore
@@ -100,7 +71,7 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         return cast(
             int,
             state.get_int_config(
-                _SAMPLING_IN_STORAGE_PREFIX + "bytes_scanned_per_query_limit",
+                self.config_key() + "_bytes_scanned_per_query_limit",
                 default=161061273600,
             ),
         )
@@ -219,18 +190,14 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
             routing_context
         )
 
-        query_settings = {
-            "max_execution_time": self._get_time_budget_ms() / 1000,
-            "timeout_overflow_mode": "break",
-        }
-
         return (
             self._get_target_tier(routing_context.query_result, routing_context),
-            query_settings,
+            {},
         )
 
     def _emit_routing_mistake(self, mistake_reason: str, tags: Dict[str, str]) -> None:
-        self.metrics.increment(mistake_reason, 1, tags)
+        tags["reason"] = mistake_reason
+        self.metrics.increment("routing_mistake", 1, tags)
 
     def _emit_estimation_error_info(
         self,
@@ -275,10 +242,11 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         assert routing_context.query_result
         target_tier = routing_context.query_settings.get_sampling_tier()
         query_duration_ms = self._get_query_duration_ms(routing_context.query_result)
-        tags = {"tier": str(target_tier)}
 
         if query_duration_ms >= 0.98 * self._get_time_budget_ms():
-            self._emit_routing_mistake("timeout_overflow_mode_was_hit", tags)
+            self._emit_routing_mistake(
+                "normal_mode_query_exceeds_time_budget", {"tier": str(target_tier)}
+            )
 
         if self._is_normal_mode(routing_context):
             self._emit_estimation_error_info(
@@ -306,5 +274,6 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 >= 0.2
             ):
                 self._emit_routing_mistake(
-                    "query_should_run_on_higher_accuracy_tier", tags
+                    "query_should_run_on_higher_accuracy_tier",
+                    {"tier": str(target_tier)},
                 )
