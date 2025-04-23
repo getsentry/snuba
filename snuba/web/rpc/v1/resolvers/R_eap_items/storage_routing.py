@@ -132,15 +132,6 @@ def _construct_hacky_querylog_payload(
 
 
 class BaseRoutingStrategy(metaclass=RegisteredClass):
-    """
-    TODO:
-
-        - built in timings for all stages of the strategy
-        - emitting metrics to span and metrics backend
-        - standardized way to get parameter values
-        - output metrics should log error metrics
-    """
-
     @classmethod
     def config_key(cls) -> str:
         return cls.__name__
@@ -236,6 +227,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
     def __output_metrics(self, routing_context: RoutingContext) -> None:
         self._output_metrics(routing_context)
         # send the routing context extra info to the querylog
+        # TODO: always emit bytes scanned by the query and the elapsed time as metrics
         record_query(_construct_hacky_querylog_payload(self, routing_context))
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
