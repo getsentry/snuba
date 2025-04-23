@@ -20,7 +20,7 @@ attr_num = NestedColumn("attr_num")
 test_data = [
     (
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "p90(x)", cf.quantile(0.9)(attr_num["x"], alias="p90(x)")
@@ -28,7 +28,7 @@ test_data = [
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "p90(x)",
@@ -43,13 +43,13 @@ test_data = [
     ),
     (
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression("avg(x)", f.avg(attr_num["x"], alias="avg(x)")),
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "avg(x)",
@@ -64,7 +64,7 @@ test_data = [
     ),
     (
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "sum(x)",
@@ -76,7 +76,7 @@ test_data = [
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "sum(x)",
