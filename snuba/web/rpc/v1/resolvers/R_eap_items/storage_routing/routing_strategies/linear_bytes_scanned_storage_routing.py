@@ -34,15 +34,15 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         sentry_timeout_ms = cast(
             int,
             state.get_int_config(
-                _SAMPLING_IN_STORAGE_PREFIX + "sentry_timeout", default=5000
+                _SAMPLING_IN_STORAGE_PREFIX + "sentry_timeout", default=30000
             ),
-        )  # 5s
+        )  # 30s = 30000ms
         error_budget_ms = cast(
             int,
             state.get_int_config(
-                _SAMPLING_IN_STORAGE_PREFIX + "error_budget", default=500
+                _SAMPLING_IN_STORAGE_PREFIX + "error_budget", default=5000
             ),
-        )  # 0.5s
+        )  # 5s = 5000ms
         return sentry_timeout_ms - error_budget_ms
 
     def _get_most_downsampled_tier(self) -> Tier:
@@ -54,14 +54,11 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
             / _DOWNSAMPLING_TIER_MULTIPLIERS[self._get_most_downsampled_tier()]
         )
 
-    def _is_normal_mode(self, routing_context: RoutingContext) -> bool:
-        if not routing_context.in_msg.meta.HasField("downsampled_storage_config"):
-            return False
-        mode = routing_context.in_msg.meta.downsampled_storage_config.mode
+    def _is_preflight_mode(self, routing_context: RoutingContext) -> bool:
         return (
-            mode == DownsampledStorageConfig.MODE_NORMAL
-            or mode == DownsampledStorageConfig.MODE_PREFLIGHT
-            or mode == DownsampledStorageConfig.MODE_BEST_EFFORT
+            routing_context.in_msg.meta.HasField("downsampled_storage_config")
+            and routing_context.in_msg.meta.downsampled_storage_config.mode
+            == DownsampledStorageConfig.MODE_PREFLIGHT
         )
 
     def _exclude_user_data_from_res(self, res: QueryResult) -> Dict[str, Any]:
@@ -215,6 +212,9 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         ):
             return Tier.TIER_1, {}
 
+        if self._is_preflight_mode(routing_context):
+            return self._get_most_downsampled_tier(), {}
+
         routing_context.query_result = self._run_query_on_most_downsampled_tier(
             routing_context
         )
@@ -230,6 +230,13 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         )
 
     def _run_query(self, routing_context: RoutingContext) -> QueryResult:
+        if (
+            routing_context.query_settings.get_sampling_tier()
+            == self._get_most_downsampled_tier()
+            and routing_context.query_result is not None
+        ):
+            # this avoids double querying the most downsampled tier
+            return routing_context.query_result
         return super()._run_query(routing_context)
 
     def _emit_estimation_error_info(
@@ -275,13 +282,16 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         assert routing_context.query_result
         target_tier = routing_context.query_settings.get_sampling_tier()
         query_duration_ms = self._get_query_duration_ms(routing_context.query_result)
-        if self._is_normal_mode(routing_context):
-            if query_duration_ms >= 0.98 * self._get_time_budget_ms():
-                self.metrics.increment(
-                    "timeout_overflow_mode_was_hit",
-                    1,
-                    {"tier": str(target_tier)},
-                )
+        if (
+            query_duration_ms
+            >= self._get_time_budget_ms() - 0.02 * self._get_time_budget_ms()
+        ):
+            self.metrics.increment(
+                "timeout_overflow_mode_was_hit",
+                1,
+                {"tier": str(target_tier)},
+            )
+        if not self._is_preflight_mode(routing_context):
 
             self._emit_estimation_error_info(
                 routing_context, {"tier": str(target_tier)}
@@ -297,18 +307,6 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 routing_context,
                 self.metrics.timing,
                 f"time_to_run_query_in_target_tier_{target_tier}",
-                query_duration_ms,
+                self._get_query_duration_ms(routing_context.query_result),
                 tags={"tier": str(target_tier)},
             )
-
-            if (
-                target_tier != Tier.TIER_1
-                and (self._get_time_budget_ms() - query_duration_ms)
-                / self._get_time_budget_ms()
-                >= 0.2
-            ):
-                self.metrics.increment(
-                    "query_should_run_on_higher_accuracy_tier",
-                    1,
-                    {"tier": str(target_tier)},
-                )
