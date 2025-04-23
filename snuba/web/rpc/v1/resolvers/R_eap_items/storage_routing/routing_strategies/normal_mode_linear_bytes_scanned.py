@@ -62,7 +62,7 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
     def _get_query_bytes_scanned(
         self, res: QueryResult, span: Span | None = None
     ) -> int:
-        return cast(int, res.result.get("profile", {}).get("progress_bytes", 0) * 1000)  # type: ignore
+        return cast(int, res.result.get("profile", {}).get("progress_bytes", 0))  # type: ignore
 
     def _get_query_duration_ms(self, res: QueryResult) -> float:
         return cast(float, res.result.get("profile", {}).get("elapsed", 0) * 1000)  # type: ignore
@@ -195,10 +195,6 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
             {},
         )
 
-    def _emit_routing_mistake(self, mistake_reason: str, tags: Dict[str, str]) -> None:
-        tags["reason"] = mistake_reason
-        self.metrics.increment("routing_mistake", 1, tags)
-
     def _emit_estimation_error_info(
         self,
         routing_context: RoutingContext,
@@ -244,8 +240,15 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         query_duration_ms = self._get_query_duration_ms(routing_context.query_result)
 
         if query_duration_ms >= 0.98 * self._get_time_budget_ms():
-            self._emit_routing_mistake(
-                "normal_mode_query_exceeds_time_budget", {"tier": str(target_tier)}
+            self._record_value_in_span_and_DD(
+                routing_context,
+                self.metrics.increment,
+                "routing_mistake",
+                1,
+                tags={
+                    "tier": str(target_tier),
+                    "reason": "normal_mode_query_exceeds_time_budget",
+                },
             )
 
         if self._is_normal_mode(routing_context):
@@ -273,7 +276,13 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 / self._get_time_budget_ms()
                 >= 0.2
             ):
-                self._emit_routing_mistake(
-                    "query_should_run_on_higher_accuracy_tier",
-                    {"tier": str(target_tier)},
+                self._record_value_in_span_and_DD(
+                    routing_context,
+                    self.metrics.increment,
+                    "routing_mistake",
+                    1,
+                    tags={
+                        "tier": str(target_tier),
+                        "reason": "query_should_run_on_higher_accuracy_tier",
+                    },
                 )

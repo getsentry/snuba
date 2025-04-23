@@ -7,7 +7,6 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.linear_bytes_scanned_storage_routing import (
-    _SAMPLING_IN_STORAGE_PREFIX,
     LinearBytesScannedRoutingStrategy,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
@@ -36,7 +35,7 @@ def test_get_target_tier(
     context = RoutingContext(MagicMock(), timer, MagicMock(), MagicMock())
 
     state.set_config(
-        _SAMPLING_IN_STORAGE_PREFIX + "bytes_scanned_per_query_limit",
+        "LinearBytesScannedRoutingStrategy_bytes_scanned_per_query_limit",
         bytes_scanned_limit,
     )
     target_tier = strategy._get_target_tier(
@@ -57,7 +56,7 @@ def test_target_tier_is_1_if_most_downsampled_query_bytes_scanned_is_0() -> None
     context = RoutingContext(MagicMock(), timer, MagicMock(), MagicMock())
 
     state.set_config(
-        _SAMPLING_IN_STORAGE_PREFIX + "bytes_scanned_per_query_limit",
+        "LinearBytesScannedRoutingStrategy_bytes_scanned_per_query_limit",
         10000,
     )
     target_tier = strategy._get_target_tier(
