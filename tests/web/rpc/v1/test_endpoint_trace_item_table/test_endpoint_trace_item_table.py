@@ -3166,76 +3166,7 @@ class TestTraceItemTable(BaseApiTest):
             AttributeValue(val_str="a") for _ in range(10)
         ] + [AttributeValue(val_str="default") for _ in range(5)]
 
-    def test_preflight(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
-        msg_timestamp = BASE_TIME - timedelta(minutes=1)
-        messages = [
-            gen_message(
-                msg_timestamp,
-                tags={"preflighttag": "preflight"},
-                randomize_span_id=True,
-            )
-            for _ in range(3600)
-        ]
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
-
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-
-        columns = [
-            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="preflighttag"))
-        ]
-        preflight_message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_PREFLIGHT
-                ),
-            ),
-            columns=columns,
-        )
-
-        message_to_non_downsampled_tier = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            columns=[
-                Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="preflighttag")
-                )
-            ],
-        )
-
-        preflight_response = EndpointTraceItemTable().execute(preflight_message)
-        non_downsampled_tier_response = EndpointTraceItemTable().execute(
-            message_to_non_downsampled_tier
-        )
-        assert (
-            len(preflight_response.column_values[0].results)
-            < len(non_downsampled_tier_response.column_values[0].results) / 10
-        )
-        assert (
-            preflight_response.meta.downsampled_storage_meta
-            == DownsampledStorageMeta(
-                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
-            )
-        )
-
-    def test_best_effort_route_to_tier_64(self) -> None:
+    def test_normal_mode_route_to_tier_64(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
@@ -3304,11 +3235,12 @@ class TestTraceItemTable(BaseApiTest):
             assert (
                 best_effort_response.meta.downsampled_storage_meta
                 == DownsampledStorageMeta(
-                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
+                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64,
+                    can_go_to_higher_accuracy_tier=True,
                 )
             )
 
-    def test_best_effort_end_to_end(self) -> None:
+    def test_normal_mode_end_to_end(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
@@ -3335,7 +3267,7 @@ class TestTraceItemTable(BaseApiTest):
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                    mode=DownsampledStorageConfig.MODE_NORMAL
                 ),
             ),
             columns=[

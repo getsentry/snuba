@@ -1312,88 +1312,7 @@ class TestTimeSeriesApi(BaseApiTest):
             expected_formula_timeseries,
         ]
 
-    def test_preflight(self) -> None:
-        # store a a test metric with a value of 1, every second of one hour
-        granularity_secs = 3600
-        query_duration = granularity_secs * 1
-        store_spans_timeseries(
-            BASE_TIME,
-            1,
-            query_duration,
-            metrics=[DummyMetric("test_preflight_metric", get_value=lambda x: 1)],
-        )
-
-        aggregations = [
-            AttributeAggregation(
-                aggregate=Function.FUNCTION_SUM,
-                key=AttributeKey(
-                    type=AttributeKey.TYPE_FLOAT, name="test_preflight_metric"
-                ),
-                label="sum",
-                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-            ),
-        ]
-
-        preflight_message = TimeSeriesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_PREFLIGHT
-                ),
-            ),
-            aggregations=aggregations,
-            granularity_secs=granularity_secs,
-        )
-
-        message_to_non_downsampled_tier = TimeSeriesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            aggregations=aggregations,
-            granularity_secs=granularity_secs,
-        )
-
-        preflight_response = EndpointTimeSeries().execute(preflight_message)
-        non_downsampled_tier_response = EndpointTimeSeries().execute(
-            message_to_non_downsampled_tier
-        )
-
-        if preflight_response.result_timeseries == []:
-            sum_of_preflight_metric = 0.0
-        else:
-            sum_of_preflight_metric = (
-                preflight_response.result_timeseries[0].data_points[0].data
-            )
-
-        assert (
-            sum_of_preflight_metric
-            < non_downsampled_tier_response.result_timeseries[0].data_points[0].data
-            / 10
-        )
-        assert (
-            preflight_response.meta.downsampled_storage_meta
-            == DownsampledStorageMeta(
-                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
-            )
-        )
-
-    def test_best_effort_route_to_tier_64(self) -> None:
+    def test_normal_mode_route_to_tier_64(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 3600
         query_duration = granularity_secs * 1
@@ -1477,7 +1396,8 @@ class TestTimeSeriesApi(BaseApiTest):
             assert (
                 best_effort_response.meta.downsampled_storage_meta
                 == DownsampledStorageMeta(
-                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
+                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64,
+                    can_go_to_higher_accuracy_tier=True,
                 )
             )
 
