@@ -1,3 +1,4 @@
+import json
 import uuid
 from copy import deepcopy
 from unittest import mock
@@ -5,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_kafka_schemas import get_codec
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
@@ -12,7 +14,7 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
-from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.storage_routing import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
     ClickhouseQuerySettings,
     RoutingContext,
@@ -177,7 +179,7 @@ def test_metrics_output() -> None:
 
     routing_context = deepcopy(ROUTING_CONTEXT)
     with mock.patch(
-        "snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.storage_routing.record_query"
+        "snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing.record_query"
     ) as record_query:
         result = MetricsStrategy().run_query_to_correct_tier(routing_context)
         record_query.assert_called_once()
@@ -207,5 +209,17 @@ def test_metrics_output() -> None:
                 "stats": result.extra["stats"],
             },
             "routed_tier": "TIER_8",
+            "final": False,
+            "cache_hit": 0,
+            "max_threads": routing_context.query_settings.get_clickhouse_settings().get(
+                "max_threads", 0
+            ),
+            "clickhouse_table": "na",
+            "query_id": "na",
+            "is_duplicate": 0,
+            "consistent": False,
         }
+        schema = get_codec("snuba-queries")
+        payload_bytes = json.dumps(recorded_payload).encode("utf-8")
+        schema.decode(payload_bytes)
         assert metric == 1

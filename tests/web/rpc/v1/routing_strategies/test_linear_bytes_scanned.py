@@ -6,11 +6,11 @@ from snuba import state
 from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
-from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.linear_bytes_scanned_storage_routing import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.linear_bytes_scanned_storage_routing import (
     _SAMPLING_IN_STORAGE_PREFIX,
     LinearBytesScannedRoutingStrategy,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.storage_routing import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
 )
 

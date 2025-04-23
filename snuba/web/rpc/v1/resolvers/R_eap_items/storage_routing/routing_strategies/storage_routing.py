@@ -1,6 +1,7 @@
+import os
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, TypeAlias, Union, cast, final
+from typing import Any, Callable, Dict, Optional, Type, TypeAlias, Union, cast, final
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -21,7 +22,7 @@ from snuba.state import record_query
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import RegisteredClass
+from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 from snuba.web import QueryResult
 from snuba.web.query import run_query
 
@@ -62,13 +63,33 @@ class RoutingContext:
         }
 
 
+def _get_stats_dict(
+    routing_context: RoutingContext,
+) -> snuba_queries_v1._QueryMetadataStats:
+    return cast(
+        snuba_queries_v1._QueryMetadataStats,
+        {
+            "final": False,
+            "cache_hit": 0,
+            "max_threads": routing_context.query_settings.get_clickhouse_settings().get(
+                "max_threads", 0
+            ),
+            "clickhouse_table": "na",
+            "query_id": "na",
+            "is_duplicate": 0,
+            "consistent": False,
+            **routing_context.to_log_dict(),
+        },
+    )
+
+
 def _construct_hacky_querylog_payload(
     strategy: "BaseRoutingStrategy", routing_context: RoutingContext
 ) -> snuba_queries_v1.Querylog:
     cur_span = sentry_sdk.get_current_span()
     return {
         "request": {
-            "id": str(uuid.uuid4()),
+            "id": uuid.uuid4().hex,
             "app_id": "storage_routing",
             "body": MessageToDict(routing_context.in_msg),
             "referrer": strategy.__class__.__name__,
@@ -80,7 +101,7 @@ def _construct_hacky_querylog_payload(
         "status": routing_context.query_settings.get_sampling_tier().name,
         "request_status": "NA",
         "slo": "N/A",
-        "projects": list(routing_context.in_msg.meta.project_ids),
+        "projects": list(routing_context.in_msg.meta.project_ids) or [],
         "timing": routing_context.timer.for_json(),
         "snql_anonymized": "",
         "query_list": [
@@ -89,9 +110,7 @@ def _construct_hacky_querylog_payload(
                 "sql_anonymized": "",
                 "start_timestamp": routing_context.in_msg.meta.start_timestamp.seconds,
                 "end_timestamp": routing_context.in_msg.meta.end_timestamp.seconds,
-                "stats": cast(
-                    snuba_queries_v1._QueryMetadataStats, routing_context.to_log_dict()
-                ),
+                "stats": _get_stats_dict(routing_context),
                 "status": "0",
                 "trace_id": cur_span.trace_id if cur_span else "no_current_span",
                 "profile": {
@@ -133,6 +152,10 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             "routing_strategy",
             tags={"routing_strategy_name": self.__class__.__name__},
         )
+
+    @classmethod
+    def get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
+        return cast("Type[BaseRoutingStrategy]", cls.class_from_name(name))
 
     def _build_snuba_request(self, routing_context: RoutingContext) -> SnubaRequest:
         request = routing_context.in_msg
@@ -260,3 +283,9 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                 if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
                     raise e
         return routing_context.query_result
+
+
+import_submodules_in_directory(
+    os.path.dirname(os.path.realpath(__file__)),
+    "snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies",
+)

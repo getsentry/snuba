@@ -44,7 +44,7 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
-from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.sampling_in_storage_util import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.sampling_in_storage_util import (
     run_query_to_correct_tier,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
