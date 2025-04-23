@@ -172,9 +172,10 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             return
         profile = routing_context.query_result.result.get("profile", {}) or {}
         if elapsed := profile.get("elapsed"):
+            elapsed_ms = elapsed * 1000
             time_budget = self._get_time_budget_ms()
             routing_context.extra_info["time_budget"] = time_budget
-            if elapsed > time_budget:
+            if elapsed_ms > time_budget:
                 self._record_value_in_span_and_DD(
                     routing_context=routing_context,
                     metrics_backend_func=self.metrics.increment,
@@ -183,7 +184,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                     tags={"reason": "timeout"},
                 )
             elif routing_context.query_settings.get_sampling_tier() != Tier.TIER_1:
-                if elapsed < 0.2 * time_budget:
+                if elapsed_ms < 0.8 * time_budget:
                     self._record_value_in_span_and_DD(
                         routing_context=routing_context,
                         metrics_backend_func=self.metrics.increment,

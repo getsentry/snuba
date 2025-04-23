@@ -127,7 +127,7 @@ def test_outcomes_based_routing_metrics_success(store_outcomes_data: Any) -> Non
         build_query=build_query,  # type: ignore
         query_settings=HTTPQuerySettings(),
         query_result=QueryResult(
-            result={"profile": {"elapsed": 1000}},
+            result={"profile": {"elapsed": 1}},
             extra={"stats": {}, "sql": "", "experiments": {}},
         ),
     )
@@ -153,7 +153,7 @@ def test_outcomes_based_routing_metrics_timeout(store_outcomes_data: Any) -> Non
         build_query=build_query,  # type: ignore
         query_settings=HTTPQuerySettings(),
         query_result=QueryResult(
-            result={"profile": {"elapsed": 10000}},
+            result={"profile": {"elapsed": 10}},
             extra={"stats": {}, "sql": "", "experiments": {}},
         ),
     )
@@ -180,7 +180,7 @@ def test_outcomes_based_routing_metrics_sampled_too_low(
         build_query=build_query,  # type: ignore
         query_settings=HTTPQuerySettings(),
         query_result=QueryResult(
-            result={"profile": {"elapsed": 100}},
+            result={"profile": {"elapsed": 5}},
             extra={"stats": {}, "sql": "", "experiments": {}},
         ),
     )
