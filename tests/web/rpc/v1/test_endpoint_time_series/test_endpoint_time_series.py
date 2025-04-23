@@ -47,7 +47,6 @@ from snuba.web.rpc.v1.endpoint_time_series import (
     _validate_time_buckets,
 )
 from tests.base import BaseApiTest
-from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 
 
@@ -134,9 +133,7 @@ def store_spans_timeseries(
         dt = start_datetime + timedelta(seconds=secs)
         numerical_attributes = {m.name: m.get_value(secs) for m in metrics}
         messages.append(gen_span_message(dt, tags, numerical_attributes))
-    spans_storage = get_storage(StorageKey("eap_spans"))
     items_storage = get_storage(StorageKey("eap_items"))
-    write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
@@ -1315,120 +1312,6 @@ class TestTimeSeriesApi(BaseApiTest):
             expected_formula_timeseries,
         ]
 
-
-class TestUtils:
-    def test_no_duplicate_labels(self) -> None:
-        message = TimeSeriesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                debug=True,
-            ),
-            aggregations=[
-                AttributeAggregation(
-                    aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
-                    label="sum",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                ),
-                AttributeAggregation(
-                    aggregate=Function.FUNCTION_AVG,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
-                    label="sum",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                ),
-            ],
-            granularity_secs=1,
-        )
-
-        with pytest.raises(BadSnubaRPCRequestException):
-            EndpointTimeSeries().execute(message)
-
-    @pytest.mark.parametrize(
-        ("start_ts", "end_ts", "granularity"),
-        [
-            (BASE_TIME, BASE_TIME + timedelta(hours=1), 1),
-            (BASE_TIME, BASE_TIME + timedelta(hours=24), 15),
-            (BASE_TIME, BASE_TIME + timedelta(hours=1), 0),
-            (BASE_TIME + timedelta(hours=1), BASE_TIME, 0),
-            (BASE_TIME, BASE_TIME + timedelta(hours=1), 3 * 3600),
-        ],
-    )
-    def test_bad_granularity(
-        self, start_ts: datetime, end_ts: datetime, granularity: int
-    ) -> None:
-        message = TimeSeriesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=int(start_ts.timestamp())),
-                end_timestamp=Timestamp(seconds=int(end_ts.timestamp())),
-                debug=True,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            aggregations=[
-                AttributeAggregation(
-                    aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
-                    label="sum",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                ),
-            ],
-            granularity_secs=granularity,
-        )
-
-        with pytest.raises(BadSnubaRPCRequestException):
-            _validate_time_buckets(message)
-
-    def test_adjust_buckets(self) -> None:
-        message = TimeSeriesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp()) + 65),
-                debug=True,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            aggregations=[
-                AttributeAggregation(
-                    aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
-                    label="sum",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                ),
-            ],
-            granularity_secs=15,
-        )
-
-        _validate_time_buckets(message)
-        # add another bucket to fit into granularity_secs
-        assert message.meta.end_timestamp.seconds == int(BASE_TIME.timestamp()) + 75
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
-    """
-    Run the tests again, but this time on the eap_items table as well to ensure it also works.
-    """
-
-    @pytest.fixture(autouse=True)
-    def use_eap_items_table(
-        self, snuba_set_config: SnubaSetConfig, redis_db: None
-    ) -> None:
-        snuba_set_config("use_eap_items_table", True)
-        snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
-
     def test_preflight(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 3600
@@ -1566,7 +1449,7 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
         )
         # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
         with patch(
-            "snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.linear_bytes_scanned_storage_routing.LinearBytesScannedRoutingStrategy._get_query_bytes_scanned",
+            "snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.linear_bytes_scanned_storage_routing.LinearBytesScannedRoutingStrategy._get_query_bytes_scanned",
             return_value=20132659201,
         ):
             best_effort_response = EndpointTimeSeries().execute(
@@ -1638,3 +1521,102 @@ class TestTimeSeriesApiEAPItems(TestTimeSeriesApi):
             response.meta.downsampled_storage_meta.tier
             != DownsampledStorageMeta.SELECTED_TIER_UNSPECIFIED
         )
+
+
+class TestUtils:
+    def test_no_duplicate_labels(self) -> None:
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                debug=True,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_AVG,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=1,
+        )
+
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTimeSeries().execute(message)
+
+    @pytest.mark.parametrize(
+        ("start_ts", "end_ts", "granularity"),
+        [
+            (BASE_TIME, BASE_TIME + timedelta(hours=1), 1),
+            (BASE_TIME, BASE_TIME + timedelta(hours=24), 15),
+            (BASE_TIME, BASE_TIME + timedelta(hours=1), 0),
+            (BASE_TIME + timedelta(hours=1), BASE_TIME, 0),
+            (BASE_TIME, BASE_TIME + timedelta(hours=1), 3 * 3600),
+        ],
+    )
+    def test_bad_granularity(
+        self, start_ts: datetime, end_ts: datetime, granularity: int
+    ) -> None:
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(start_ts.timestamp())),
+                end_timestamp=Timestamp(seconds=int(end_ts.timestamp())),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=granularity,
+        )
+
+        with pytest.raises(BadSnubaRPCRequestException):
+            _validate_time_buckets(message)
+
+    def test_adjust_buckets(self) -> None:
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp()) + 65),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=15,
+        )
+
+        _validate_time_buckets(message)
+        # add another bucket to fit into granularity_secs
+        assert message.meta.end_timestamp.seconds == int(BASE_TIME.timestamp()) + 75

@@ -36,8 +36,8 @@ _VALID_GRANULARITY_SECS = set(
     ]
 )
 
-# MAX 5 minute granularity over 7 days
-_MAX_BUCKETS_IN_REQUEST = 2016
+# MAX 15 minute granularity over 28 days
+_MAX_BUCKETS_IN_REQUEST = 2688
 
 
 def _enforce_no_duplicate_labels(request: TimeSeriesRequest) -> None:
