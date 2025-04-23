@@ -87,6 +87,10 @@ def _construct_hacky_querylog_payload(
     strategy: "BaseRoutingStrategy", routing_context: RoutingContext
 ) -> snuba_queries_v1.Querylog:
     cur_span = sentry_sdk.get_current_span()
+    query_result = routing_context.query_result or QueryResult(
+        {}, {"stats": {}, "sql": "", "experiments": {}}
+    )
+    profile = query_result.result.get("profile", {}) or {}
     return {
         "request": {
             "id": uuid.uuid4().hex,
@@ -122,7 +126,11 @@ def _construct_hacky_querylog_payload(
                     "array_join_cols": [],
                     "groupby_cols": [],
                 },
-                "result_profile": {"bytes": 0, "progress_bytes": 0, "elapsed": 0},
+                "result_profile": {
+                    "bytes": cast(int, profile.get("bytes", 0)),
+                    "progress_bytes": cast(int, profile.get("progress_bytes", 0)),
+                    "elapsed": cast(float, profile.get("elapsed", 0)),
+                },
                 "request_status": "na",
                 "slo": "na",
             }
@@ -226,8 +234,26 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
     @final
     def __output_metrics(self, routing_context: RoutingContext) -> None:
         self._output_metrics(routing_context)
-        # send the routing context extra info to the querylog
-        # TODO: always emit bytes scanned by the query and the elapsed time as metrics
+        query_result = routing_context.query_result or QueryResult(
+            {}, {"stats": {}, "sql": "", "experiments": {}}
+        )
+        profile = query_result.result.get("profile", {}) or {}
+        if elapsed := profile.get("elapsed"):
+            self._record_value_in_span_and_DD(
+                routing_context=routing_context,
+                metrics_backend_func=self.metrics.timing,
+                name="query_timing",
+                value=elapsed,
+                tags={"tier": routing_context.query_settings.get_sampling_tier().name},
+            )
+        if bytes_scanned := profile.get("progress_bytes"):
+            self._record_value_in_span_and_DD(
+                routing_context=routing_context,
+                metrics_backend_func=self.metrics.timing,
+                name="query_bytes_scanned",
+                value=bytes_scanned,
+                tags={"tier": routing_context.query_settings.get_sampling_tier().name},
+            )
         record_query(_construct_hacky_querylog_payload(self, routing_context))
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
