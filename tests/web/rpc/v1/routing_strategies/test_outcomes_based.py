@@ -18,7 +18,9 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.outcomes_based im
     Outcome,
     OutcomesBasedRoutingStrategy,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing import RoutingContext
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
+    RoutingContext,
+)
 from tests.helpers import write_raw_unprocessed_events
 
 BASE_TIME = datetime.now(UTC).replace(
@@ -66,7 +68,7 @@ def store_outcomes_data() -> None:
         time = BASE_TIME - timedelta(hours=hour)
         messages.append(gen_span_ingest_outcome(time, 1_000_000))
 
-    write_raw_unprocessed_events(outcomes_storage, messages)
+    write_raw_unprocessed_events(outcomes_storage, messages)  # type: ignore
 
 
 @pytest.mark.clickhouse_db

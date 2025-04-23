@@ -24,7 +24,7 @@ from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
     treeify_or_and_conditions,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
     ClickhouseQuerySettings,
     RoutingContext,
