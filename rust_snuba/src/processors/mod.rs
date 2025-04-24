@@ -1,3 +1,4 @@
+mod eap_items;
 mod eap_items_span;
 pub(crate) mod eap_spans;
 mod errors;
@@ -70,6 +71,7 @@ define_processing_functions! {
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
     ("ProfileChunksProcessor", "snuba-profile-chunks", ProcessingFunctionType::ProcessingFunction(profile_chunks::process_message)),
     ("EAPItemsSpanProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(eap_items_span::process_message)),
+    ("EAPItemsProcessor", "snuba-items", ProcessingFunctionType::ProcessingFunction(eap_items::process_message)),
 }
 
 // COGS is recorded for these processors
@@ -165,7 +167,11 @@ mod tests {
                     settings.add_redaction(".**[\"sentry.timestamp_precise\"]", "<item timestamp>");
                 }
 
-                settings.set_description(std::str::from_utf8(example.payload()).unwrap());
+                // This payload is protobuf (so binary), not JSON (so text).
+                if *topic_name != "snuba-items" {
+                    settings.set_description(std::str::from_utf8(example.payload()).unwrap());
+                }
+
                 let _guard = settings.bind_to_scope();
 
                 let payload = KafkaPayload::new(None, None, Some(example.payload().to_vec()));

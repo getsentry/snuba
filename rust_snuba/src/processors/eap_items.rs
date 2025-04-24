@@ -1,0 +1,189 @@
+use anyhow::Context;
+use chrono::DateTime;
+use seq_macro::seq;
+use serde::Serialize;
+use std::collections::HashMap;
+use uuid::Uuid;
+
+use prost::Message;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_protos::snuba::v1::any_value::Value;
+use sentry_protos::snuba::v1::TraceItem;
+
+use crate::config::ProcessorConfig;
+use crate::processors::utils::enforce_retention;
+use crate::types::{InsertBatch, KafkaMessageMetadata};
+
+pub fn process_message(
+    msg: KafkaPayload,
+    _metadata: KafkaMessageMetadata,
+    config: &ProcessorConfig,
+) -> anyhow::Result<InsertBatch> {
+    let payload: &[u8] = msg.payload().context("Expected payload")?;
+    let trace_item: TraceItem = TraceItem::decode(payload)?;
+    let origin_timestamp = DateTime::from_timestamp(trace_item.received.unwrap().seconds, 0);
+    let retention_days = Some(enforce_retention(
+        Some(trace_item.retention_days as u16),
+        &config.env_config,
+    ));
+    let mut eap_item = EAPItem::try_from(trace_item)?;
+
+    eap_item.retention_days = retention_days;
+
+    InsertBatch::from_rows([eap_item], origin_timestamp)
+}
+
+#[derive(Debug, Default, Serialize)]
+struct EAPItem {
+    organization_id: u64,
+    project_id: u64,
+    item_type: u8,
+    timestamp: u32,
+    trace_id: Uuid,
+    item_id: u128,
+    sampling_weight: u64,
+    sampling_factor: f64,
+    retention_days: Option<u16>,
+
+    #[serde(flatten)]
+    attributes: AttributeMap,
+}
+
+impl TryFrom<TraceItem> for EAPItem {
+    type Error = anyhow::Error;
+
+    fn try_from(from: TraceItem) -> Result<Self, Self::Error> {
+        let mut eap_item = EAPItem {
+            organization_id: from.organization_id,
+            project_id: from.project_id,
+            item_type: from.item_type as u8,
+            trace_id: Uuid::parse_str(&from.trace_id)?,
+            item_id: read_item_id(from.item_id),
+            timestamp: from.timestamp.unwrap().seconds as u32,
+            ..Default::default()
+        };
+
+        for (key, value) in from.attributes {
+            match value.value {
+                Some(Value::StringValue(string)) => eap_item.attributes.insert_string(key, string),
+                Some(Value::DoubleValue(double)) => eap_item.attributes.insert_float(key, double),
+                Some(Value::IntValue(int)) => eap_item.attributes.insert_int(key, int),
+                Some(Value::BoolValue(bool)) => eap_item.attributes.insert_bool(key, bool),
+                Some(Value::BytesValue(bytes)) => (),
+                Some(Value::ArrayValue(array)) => (),
+                Some(Value::KvlistValue(kvlist)) => (),
+                None => (),
+            }
+        }
+
+        Ok(eap_item)
+    }
+}
+
+fn fnv_1a(input: &[u8]) -> u32 {
+    const FNV_1A_PRIME: u32 = 16777619;
+    const FNV_1A_OFFSET_BASIS: u32 = 2166136261;
+
+    let mut res = FNV_1A_OFFSET_BASIS;
+    for byt in input {
+        res ^= *byt as u32;
+        res = res.wrapping_mul(FNV_1A_PRIME);
+    }
+
+    res
+}
+
+fn read_item_id(from: Vec<u8>) -> u128 {
+    let (item_id_bytes, _) = from.split_at(std::mem::size_of::<u128>());
+    u128::from_le_bytes(item_id_bytes.try_into().unwrap())
+}
+
+macro_rules! seq_attrs {
+    ($($tt:tt)*) => {
+        seq!(N in 0..40 {
+            $($tt)*
+        });
+    }
+}
+
+seq_attrs! {
+#[derive(Debug, Default, Serialize)]
+pub(crate) struct AttributeMap {
+    attributes_bool: HashMap<String, bool>,
+    attributes_int: HashMap<String, i64>,
+    #(
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_string_~N: HashMap<String, String>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_float_~N: HashMap<String, f64>,
+    )*
+}
+}
+
+impl AttributeMap {
+    pub fn insert_string(&mut self, k: String, v: String) {
+        seq_attrs! {
+            let attr_str_buckets = [
+                #(
+                &mut self.attributes_string_~N,
+                )*
+            ];
+        };
+
+        attr_str_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_str_buckets.len()].insert(k, v);
+    }
+
+    pub fn insert_float(&mut self, k: String, v: f64) {
+        seq_attrs! {
+            let attr_num_buckets = [
+                #(
+                &mut self.attributes_float_~N,
+                )*
+            ];
+        }
+
+        attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()].insert(k, v);
+    }
+
+    pub fn insert_bool(&mut self, k: String, v: bool) {
+        // double write as float and bool
+        self.insert_float(k.clone(), v as u8 as f64);
+        self.attributes_bool.insert(k, v);
+    }
+
+    pub fn insert_int(&mut self, k: String, v: i64) {
+        // double write as float and int
+        self.insert_float(k.clone(), v as f64);
+        self.attributes_int.insert(k, v);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::SystemTime;
+
+    use super::*;
+
+    #[test]
+    fn test_fnv_1a() {
+        assert_eq!(fnv_1a("test".as_bytes()), 2949673445)
+    }
+
+    #[test]
+    fn test_valid_item() {
+        let schema = sentry_kafka_schemas::get_schema("snuba-items", None).unwrap();
+        let examples = schema.examples();
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        for example in examples {
+            let payload = KafkaPayload::new(None, None, Some(example.payload().to_vec()));
+            process_message(payload, meta.clone(), &ProcessorConfig::default())
+                .expect("The message should be processed");
+        }
+    }
+}
