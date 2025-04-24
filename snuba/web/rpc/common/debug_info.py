@@ -32,6 +32,7 @@ def _construct_meta_if_downsampled(
                 DownsampledStorageMeta.SelectedTier,
                 "SELECTED_" + highest_sampling_tier.name,
             ),
+            can_go_to_higher_accuracy_tier=highest_sampling_tier != Tier.TIER_1,
         )
         if highest_sampling_tier != Tier.TIER_NO_TIER
         else None
