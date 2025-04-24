@@ -32,14 +32,18 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.s
 
 
 # TODO import these from sentry-relay
-class Outcome:
+class OutcomeCategory:
     SPAN_INDEXED = 16
     LOG_ITEM = 23
 
 
+class Outcome:
+    ACCEPTED = 0
+
+
 _ITEM_TYPE_TO_OUTCOME = {
-    TraceItemType.TRACE_ITEM_TYPE_SPAN: Outcome.SPAN_INDEXED,
-    TraceItemType.TRACE_ITEM_TYPE_LOG: Outcome.LOG_ITEM,
+    TraceItemType.TRACE_ITEM_TYPE_SPAN: OutcomeCategory.SPAN_INDEXED,
+    TraceItemType.TRACE_ITEM_TYPE_LOG: OutcomeCategory.LOG_ITEM,
 }
 
 
@@ -77,12 +81,12 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                     routing_context.in_msg.meta.start_timestamp.seconds,
                     routing_context.in_msg.meta.end_timestamp.seconds,
                 ),
-                f.equals(column("outcome"), 0),
+                f.equals(column("outcome"), Outcome.ACCEPTED),
                 f.equals(
                     column("category"),
                     _ITEM_TYPE_TO_OUTCOME.get(
                         routing_context.in_msg.meta.trace_item_type,
-                        Outcome.SPAN_INDEXED,
+                        OutcomeCategory.SPAN_INDEXED,
                     ),
                 ),
             ),

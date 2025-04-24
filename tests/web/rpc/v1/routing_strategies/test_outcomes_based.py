@@ -16,7 +16,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.outcomes_based import (
-    Outcome,
+    OutcomeCategory,
     OutcomesBasedRoutingStrategy,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
@@ -57,7 +57,7 @@ def gen_span_ingest_outcome(time: datetime, num: int) -> Dict[str, int | str | N
         "reason": None,
         "event_id": None,
         "quantity": num,
-        "category": Outcome.SPAN_INDEXED,
+        "category": OutcomeCategory.SPAN_INDEXED,
     }
 
 
