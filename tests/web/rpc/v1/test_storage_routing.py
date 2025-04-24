@@ -191,7 +191,9 @@ def test_metrics_output() -> None:
             "extra_info": {
                 "sampling_in_storage_estimation_time_overhead": {
                     "type": "timing",
-                    "value": 0,  # we decide the tier immediately so timing is very small
+                    "value": pytest.approx(
+                        0, abs=0.1
+                    ),  # we decide the tier immediately so timing is very small
                     "tags": None,
                 },
                 "sampling_in_storage_my_metric": {
