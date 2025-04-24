@@ -249,7 +249,7 @@ schema:
         name: symbolicated_in_app,
         type: UInt,
         args: { schema_modifiers: [nullable], size: 8 },
-      },
+      }
     ]
   local_table_name: errors_local
   dist_table_name: errors_dist_ro
