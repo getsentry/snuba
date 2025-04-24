@@ -32,8 +32,8 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
     def _get_time_budget_ms(self) -> float:
         sentry_timeout_ms = cast(
             int,
-            state.get_int_config(self.config_key() + "_sentry_timeout", default=5000),
-        )  # 5s
+            state.get_int_config(self.config_key() + "_sentry_timeout", default=8000),
+        )  # 8s
         error_budget_ms = cast(
             int,
             state.get_int_config(self.config_key() + "_error_budget", default=500),
