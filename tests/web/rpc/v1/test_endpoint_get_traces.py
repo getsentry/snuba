@@ -31,7 +31,6 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
 from tests.base import BaseApiTest
-from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 
 _RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
@@ -157,25 +156,23 @@ _SPANS = [
 
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
-    spans_storage = get_storage(StorageKey("eap_spans"))
     items_storage = get_storage(StorageKey("eap_items"))
 
-    for storage in {spans_storage, items_storage}:
-        write_raw_unprocessed_events(storage, _SPANS)  # type: ignore
-        write_raw_unprocessed_events(
-            storage,  # type: ignore
-            [
-                gen_message(
-                    dt=_BASE_TIME + timedelta(minutes=i),
-                    trace_id=uuid.uuid4().hex,
-                    span_op="lcp",
-                    span_name="standalone",
-                    is_segment=False,
-                    standalone_span=True,
-                )
-                for i in range(_SPAN_COUNT)
-            ],
-        )
+    write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
+    write_raw_unprocessed_events(
+        items_storage,  # type: ignore
+        [
+            gen_message(
+                dt=_BASE_TIME + timedelta(minutes=i),
+                trace_id=uuid.uuid4().hex,
+                span_op="lcp",
+                span_name="standalone",
+                is_segment=False,
+                standalone_span=True,
+            )
+            for i in range(_SPAN_COUNT)
+        ],
+    )
 
 
 @pytest.mark.clickhouse_db
@@ -758,18 +755,3 @@ class TestGetTraces(BaseApiTest):
             BadSnubaRPCRequestException, match="Cannot ignore case on non-string values"
         ):
             EndpointGetTraces().execute(message)
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-class TestGetTracesEAPItems(TestGetTraces):
-    """
-    Run the tests again, but this time on the eap_items table as well to ensure it also works.
-    """
-
-    @pytest.fixture(autouse=True)
-    def use_eap_items_table(
-        self, snuba_set_config: SnubaSetConfig, redis_db: None
-    ) -> None:
-        snuba_set_config("use_eap_items_table", True)
-        snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
