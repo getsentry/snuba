@@ -407,6 +407,7 @@ struct ErrorRow {
     #[serde(rename = "flags.value")]
     flags_value: Vec<String>,
     timestamp: u32,
+    timestamp_ms: u64,
     title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     trace_id: Option<Uuid>,
@@ -733,7 +734,8 @@ impl ErrorRow {
             span_id,
             tags_key,
             tags_value,
-            timestamp: from.datetime.0,
+            timestamp: (from.datetime.0 / 1000) as u32,
+            timestamp_ms: from.datetime.0,
             title: from.data.title.0.unwrap_or_default(),
             trace_id: from_trace_context.trace_id,
             trace_sampled: from_trace_context.sampled.map(|v| v as u8),
