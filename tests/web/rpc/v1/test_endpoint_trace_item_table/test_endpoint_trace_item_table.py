@@ -3231,7 +3231,8 @@ class TestTraceItemTable(BaseApiTest):
         assert (
             preflight_response.meta.downsampled_storage_meta
             == DownsampledStorageMeta(
-                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
+                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64,
+                can_go_to_higher_accuracy_tier=True,
             )
         )
 
@@ -3304,11 +3305,12 @@ class TestTraceItemTable(BaseApiTest):
             assert (
                 best_effort_response.meta.downsampled_storage_meta
                 == DownsampledStorageMeta(
-                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64
+                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64,
+                    can_go_to_higher_accuracy_tier=True,
                 )
             )
 
-    def test_best_effort_end_to_end(self) -> None:
+    def test_normal_mode_end_to_end(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
@@ -3335,7 +3337,7 @@ class TestTraceItemTable(BaseApiTest):
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                    mode=DownsampledStorageConfig.MODE_NORMAL
                 ),
             ),
             columns=[
