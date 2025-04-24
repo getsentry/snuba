@@ -57,7 +57,6 @@ def write_raw_unprocessed_events(
         )
         assert processed_message is not None
         processed_messages.append(processed_message)
-
     write_processed_messages(storage, processed_messages)
 
 
