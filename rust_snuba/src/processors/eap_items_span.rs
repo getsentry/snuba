@@ -29,7 +29,7 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
     let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
-    let mut span: EAPItem = msg.into();
+    let mut span: EAPItemSpan = msg.into();
 
     span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
 
@@ -98,7 +98,7 @@ pub(crate) struct PrimaryKey {
 }
 
 #[derive(Debug, Default, Serialize)]
-pub(crate) struct EAPItem {
+pub(crate) struct EAPItemSpan {
     #[serde(flatten)]
     pub(crate) primary_key: PrimaryKey,
 
@@ -125,8 +125,8 @@ fn fnv_1a(input: &[u8]) -> u32 {
     res
 }
 
-impl From<FromSpanMessage> for EAPItem {
-    fn from(from: FromSpanMessage) -> EAPItem {
+impl From<FromSpanMessage> for EAPItemSpan {
+    fn from(from: FromSpanMessage) -> EAPItemSpan {
         let item_id = u128::from_str_radix(&from.span_id, 16).unwrap_or_else(|_| {
             panic!(
                 "Failed to parse span_id into u128. span_id: {}",
@@ -380,7 +380,7 @@ mod tests {
     #[test]
     fn test_serialization() {
         let msg: FromSpanMessage = serde_json::from_slice(SPAN_KAFKA_MESSAGE.as_bytes()).unwrap();
-        let item: EAPItem = msg.into();
+        let item: EAPItemSpan = msg.into();
         insta::with_settings!({sort_maps => true}, {
             insta::assert_json_snapshot!(item)
         });
@@ -389,7 +389,7 @@ mod tests {
     #[test]
     fn test_sentry_description_to_raw_description() {
         let msg: FromSpanMessage = serde_json::from_slice(SPAN_KAFKA_MESSAGE.as_bytes()).unwrap();
-        let item: EAPItem = msg.into();
+        let item: EAPItemSpan = msg.into();
 
         // Check that the sentry.description tag is written into description
         assert_eq!(

@@ -1,6 +1,6 @@
 version: v1
 kind: writable_storage
-name: eap_items
+name: eap_items_span
 
 storage:
   key: eap_items
@@ -243,7 +243,7 @@ mandatory_condition_checkers:
       field_name: organization_id
 
 stream_loader:
-  processor: EAPItemsProcessor
+  processor: EAPItemsSpanProcessor
   default_topic: snuba-spans
   commit_log_topic: snuba-eap-spans-commit-log
   subscription_scheduler_mode: global
