@@ -2,7 +2,7 @@ import uuid
 from typing import cast
 
 from google.protobuf.json_format import MessageToDict
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba import state
 from snuba.attribution.appid import AppID
@@ -35,6 +35,12 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.s
 class Outcome:
     SPAN_INDEXED = 16
     LOG_ITEM = 23
+
+
+_ITEM_TYPE_TO_OUTCOME = {
+    TraceItemType.TRACE_ITEM_TYPE_SPAN: Outcome.SPAN_INDEXED,
+    TraceItemType.TRACE_ITEM_TYPE_LOG: Outcome.LOG_ITEM,
+}
 
 
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
@@ -72,14 +78,11 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                     routing_context.in_msg.meta.end_timestamp.seconds,
                 ),
                 f.equals(column("outcome"), 0),
-                in_cond(
+                f.equals(
                     column("category"),
-                    literals_array(
-                        alias=None,
-                        literals=[
-                            literal(Outcome.SPAN_INDEXED),
-                            literal(Outcome.LOG_ITEM),
-                        ],
+                    _ITEM_TYPE_TO_OUTCOME.get(
+                        routing_context.in_msg.meta.trace_item_type,
+                        Outcome.SPAN_INDEXED,
                     ),
                 ),
             ),
