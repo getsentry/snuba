@@ -70,6 +70,7 @@ define_processing_functions! {
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
     ("ProfileChunksProcessor", "snuba-profile-chunks", ProcessingFunctionType::ProcessingFunction(profile_chunks::process_message)),
     ("EAPItemsProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(eap_items::process_message)),
+    ("EAPItemsSpanProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(eap_items::process_message)),
 }
 
 // COGS is recorded for these processors
