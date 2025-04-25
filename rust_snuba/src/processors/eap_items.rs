@@ -41,7 +41,6 @@ struct EAPItem {
     timestamp: u32,
     trace_id: Uuid,
     item_id: u128,
-    sampling_weight: u64,
     sampling_factor: f64,
     retention_days: Option<u16>,
 
@@ -60,7 +59,9 @@ impl TryFrom<TraceItem> for EAPItem {
             trace_id: Uuid::parse_str(&from.trace_id)?,
             item_id: read_item_id(from.item_id),
             timestamp: from.timestamp.unwrap().seconds as u32,
-            ..Default::default()
+            attributes: Default::default(),
+            retention_days: Default::default(),
+            sampling_factor: 1.0,
         };
 
         for (key, value) in from.attributes {
@@ -69,9 +70,9 @@ impl TryFrom<TraceItem> for EAPItem {
                 Some(Value::DoubleValue(double)) => eap_item.attributes.insert_float(key, double),
                 Some(Value::IntValue(int)) => eap_item.attributes.insert_int(key, int),
                 Some(Value::BoolValue(bool)) => eap_item.attributes.insert_bool(key, bool),
-                Some(Value::BytesValue(bytes)) => (),
-                Some(Value::ArrayValue(array)) => (),
-                Some(Value::KvlistValue(kvlist)) => (),
+                Some(Value::BytesValue(_)) => (),
+                Some(Value::ArrayValue(_)) => (),
+                Some(Value::KvlistValue(_)) => (),
                 None => (),
             }
         }
