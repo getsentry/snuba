@@ -18,6 +18,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.s
 @pytest.mark.parametrize(
     "most_downsampled_query_bytes_scanned, bytes_scanned_limit, expected_tier, expected_estimated_bytes_scanned",
     [
+        (100, 99, Tier.TIER_64, 100),
         (100, 200, Tier.TIER_64, 100),
         (100, 900, Tier.TIER_8, 800),
         (100, 6500, Tier.TIER_1, 6400),

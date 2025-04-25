@@ -97,37 +97,41 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 most_downsampled_tier_query_bytes_scanned
                 * self._get_multiplier(target_tier)
             )
-            for tier in sorted(Tier, reverse=True)[:-1]:
-                with sentry_sdk.start_span(
-                    op=f"_get_target_tier.Tier_{tier}"
-                ) as tier_specific_span:
-                    estimated_query_bytes_scanned_to_this_tier = (
-                        most_downsampled_tier_query_bytes_scanned
-                        * self._get_multiplier(tier)
-                    )
-                    self._record_value_in_span_and_DD(
-                        routing_context,
-                        self.metrics.distribution,
-                        "estimated_query_bytes_scanned_to_this_tier",
-                        estimated_query_bytes_scanned_to_this_tier,
-                        {"tier": str(tier)},
-                    )
-                    bytes_scanned_limit = self._get_bytes_scanned_limit()
-                    if (
-                        estimated_query_bytes_scanned_to_this_tier
-                        <= bytes_scanned_limit
-                    ):
-                        target_tier = tier
-                        estimated_target_tier_bytes_scanned = (
-                            estimated_query_bytes_scanned_to_this_tier
+            if (
+                most_downsampled_tier_query_bytes_scanned
+                < self._get_bytes_scanned_limit()
+            ):
+                for tier in sorted(Tier, reverse=True)[:-1]:
+                    with sentry_sdk.start_span(
+                        op=f"_get_target_tier.Tier_{tier}"
+                    ) as tier_specific_span:
+                        estimated_query_bytes_scanned_to_this_tier = (
+                            most_downsampled_tier_query_bytes_scanned
+                            * self._get_multiplier(tier)
                         )
-                    tier_specific_span.set_data(
-                        _SAMPLING_IN_STORAGE_PREFIX + "target_tier", target_tier
-                    )
-                    tier_specific_span.set_data(
-                        _SAMPLING_IN_STORAGE_PREFIX + "bytes_scanned_limit",
-                        bytes_scanned_limit,
-                    )
+                        self._record_value_in_span_and_DD(
+                            routing_context,
+                            self.metrics.distribution,
+                            "estimated_query_bytes_scanned_to_this_tier",
+                            estimated_query_bytes_scanned_to_this_tier,
+                            {"tier": str(tier)},
+                        )
+                        bytes_scanned_limit = self._get_bytes_scanned_limit()
+                        if (
+                            estimated_query_bytes_scanned_to_this_tier
+                            <= bytes_scanned_limit
+                        ):
+                            target_tier = tier
+                            estimated_target_tier_bytes_scanned = (
+                                estimated_query_bytes_scanned_to_this_tier
+                            )
+                        tier_specific_span.set_data(
+                            _SAMPLING_IN_STORAGE_PREFIX + "target_tier", target_tier
+                        )
+                        tier_specific_span.set_data(
+                            _SAMPLING_IN_STORAGE_PREFIX + "bytes_scanned_limit",
+                            bytes_scanned_limit,
+                        )
             self.metrics.increment(
                 _SAMPLING_IN_STORAGE_PREFIX + "target_tier",
                 1,
