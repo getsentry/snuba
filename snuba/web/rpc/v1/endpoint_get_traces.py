@@ -274,6 +274,8 @@ def _attribute_to_expression(
             return _get_earliest_frontend_span_attribute(
                 "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
             )
+        elif key == TraceAttribute.Key.KEY_TRACE_ID:
+            return column("trace_id", alias="hex_trace_id")
         else:
             return f.cast(column(attribute_name), clickhouse_type, alias=alias)
 
@@ -541,11 +543,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     request.meta.end_timestamp.seconds,
                 ),
                 in_cond(
-                    f.cast(
-                        column("trace_id"),
-                        "String",
-                        alias="trace_id",
-                    ),
+                    column("trace_id"),
                     literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
                 ),
                 SPAN_ITEM_TYPE_CONDITION,
