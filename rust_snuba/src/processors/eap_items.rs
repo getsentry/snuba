@@ -20,7 +20,7 @@ pub fn process_message(
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload: &[u8] = msg.payload().context("Expected payload")?;
-    let trace_item: TraceItem = TraceItem::decode(payload)?;
+    let trace_item = TraceItem::decode(payload)?;
     let origin_timestamp = DateTime::from_timestamp(trace_item.received.unwrap().seconds, 0);
     let retention_days = Some(enforce_retention(
         Some(trace_item.retention_days as u16),
@@ -52,13 +52,14 @@ impl TryFrom<TraceItem> for EAPItem {
     type Error = anyhow::Error;
 
     fn try_from(from: TraceItem) -> Result<Self, Self::Error> {
+        let timestamp = from.timestamp.context("Expected a timestamp")?;
         let mut eap_item = EAPItem {
             organization_id: from.organization_id,
             project_id: from.project_id,
             item_type: from.item_type as u8,
             trace_id: Uuid::parse_str(&from.trace_id)?,
             item_id: read_item_id(from.item_id),
-            timestamp: from.timestamp.unwrap().seconds as u32,
+            timestamp: timestamp.seconds as u32,
             attributes: Default::default(),
             retention_days: Default::default(),
             sampling_factor: 1.0,
@@ -162,7 +163,8 @@ impl AttributeMap {
 
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
+    use prost_types::Timestamp;
+    use sentry_protos::snuba::v1::TraceItemType;
 
     use super::*;
 
@@ -172,19 +174,25 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_item() {
-        let schema = sentry_kafka_schemas::get_schema("snuba-items", None).unwrap();
-        let examples = schema.examples();
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
+    fn test_item_id_is_properly_decoded() {
+        let item_id = Uuid::new_v4();
+        let trace_item = TraceItem {
+            attributes: Default::default(),
+            item_id: item_id.as_u128().to_le_bytes().to_vec(),
+            item_type: TraceItemType::Span.into(),
+            organization_id: 1,
+            project_id: 1,
+            received: Default::default(),
+            retention_days: 1,
+            timestamp: Some(Timestamp {
+                seconds: 1745562493,
+                nanos: 0,
+            }),
+            trace_id: Uuid::new_v4().to_string(),
         };
+        let eap_item = EAPItem::try_from(trace_item);
 
-        for example in examples {
-            let payload = KafkaPayload::new(None, None, Some(example.payload().to_vec()));
-            process_message(payload, meta.clone(), &ProcessorConfig::default())
-                .expect("The message should be processed");
-        }
+        assert!(eap_item.is_ok());
+        assert_eq!(item_id.as_u128(), eap_item.unwrap().item_id);
     }
 }
