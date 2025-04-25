@@ -21,12 +21,24 @@ pub fn enforce_retention(value: Option<u16>, config: &EnvConfig) -> u16 {
     retention_days
 }
 
-fn ensure_valid_datetime<'de, D>(deserializer: D) -> Result<u64, D::Error>
+fn ensure_valid_datetime<'de, D>(deserializer: D) -> Result<u32, D::Error>
 where
     D: Deserializer<'de>,
 {
     let value = String::deserialize(deserializer)?;
+    let naive = NaiveDateTime::parse_from_str(&value, PAYLOAD_DATETIME_FORMAT);
+    let seconds_since_epoch = match naive {
+        Ok(naive_dt) => DateTime::from_naive_utc_and_offset(naive_dt, Utc),
+        Err(_) => Utc::now(),
+    };
+    Ok(seconds_since_epoch.timestamp() as u32)
+}
 
+fn ensure_valid_datetime_64<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
     let naive = NaiveDateTime::parse_from_str(&value, PAYLOAD_DATETIME_FORMAT);
     let milliseconds_since_epoch = match naive {
         Ok(naive_dt) => {
@@ -44,6 +56,13 @@ where
 #[derive(Debug, Deserialize, JsonSchema, Default, Serialize)]
 pub struct StringToIntDatetime(
     #[serde(deserialize_with = "ensure_valid_datetime")]
+    #[schemars(with = "String")]
+    pub u32,
+);
+
+#[derive(Debug, Deserialize, JsonSchema, Default, Serialize)]
+pub struct StringToIntDatetime64(
+    #[serde(deserialize_with = "ensure_valid_datetime_64")]
     #[schemars(with = "String")]
     pub u64,
 );

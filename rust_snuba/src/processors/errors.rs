@@ -15,7 +15,7 @@ use uuid::Uuid;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{enforce_retention, StringToIntDatetime};
+use crate::processors::utils::{enforce_retention, StringToIntDatetime64};
 use crate::types::{
     InsertBatch, InsertOrReplacement, KafkaMessageMetadata, ReplacementData, RowData,
 };
@@ -109,7 +109,7 @@ struct ReplacementEvent {
 struct ErrorMessage {
     data: ErrorData,
     #[serde(default)]
-    datetime: StringToIntDatetime,
+    datetime: StringToIntDatetime64,
     event_id: Uuid,
     group_id: u64,
     message: String,
