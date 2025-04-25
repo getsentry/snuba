@@ -288,7 +288,11 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
             routing_context.query_settings.set_sampling_tier(target_tier)
 
-        with sentry_sdk.start_span(op="run_selected_tier_query"):
+        with sentry_sdk.start_span(op="run_selected_tier_query") as run_span:
+            run_span.set_data(
+                f"{_SAMPLING_IN_STORAGE_PREFIX}.selected_tier",
+                routing_context.query_settings.get_sampling_tier().name,
+            )
             output = self._run_query(routing_context)
             routing_context.query_result = output
         with sentry_sdk.start_span(op="output_metrics"):
