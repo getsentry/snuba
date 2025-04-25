@@ -11,8 +11,8 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series import build_query
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.linear_bytes_scanned_storage_routing import (
-    LinearBytesScannedRoutingStrategy,
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.normal_mode_linear_bytes_scanned import (
+    NormalModeLinearBytesScannedRoutingStrategy,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
@@ -36,11 +36,11 @@ def test_get_target_tier(
     expected_estimated_bytes_scanned: int,
 ) -> None:
     timer = MagicMock(spec=Timer)
-    strategy = LinearBytesScannedRoutingStrategy()
+    strategy = NormalModeLinearBytesScannedRoutingStrategy()
     context = RoutingContext(MagicMock(), timer, MagicMock(), MagicMock())
 
     state.set_config(
-        "LinearBytesScannedRoutingStrategy_bytes_scanned_per_query_limit",
+        "NormalModeLinearBytesScannedRoutingStrategy_bytes_scanned_per_query_limit",
         bytes_scanned_limit,
     )
     target_tier = strategy._get_target_tier(
@@ -68,8 +68,9 @@ def test_most_downsampled_tier_query_bytes_scanned_exceeds_limit() -> None:
         build_query=build_query,  # type: ignore
         query_settings=HTTPQuerySettings(),
     )
+
     state.set_config(
-        "LinearBytesScannedRoutingStrategy_bytes_scanned_per_query_limit",
+        "NormalModeLinearBytesScannedRoutingStrategy_bytes_scanned_per_query_limit",
         99,
     )
 
@@ -82,7 +83,7 @@ def test_most_downsampled_tier_query_bytes_scanned_exceeds_limit() -> None:
         extra={"stats": {}, "sql": "", "experiments": {}},
     )
 
-    strategy = LinearBytesScannedRoutingStrategy()
+    strategy = NormalModeLinearBytesScannedRoutingStrategy()
 
     with patch.object(
         strategy,
@@ -97,11 +98,11 @@ def test_most_downsampled_tier_query_bytes_scanned_exceeds_limit() -> None:
 @pytest.mark.redis_db
 def test_target_tier_is_1_if_most_downsampled_query_bytes_scanned_is_0() -> None:
     timer = MagicMock(spec=Timer)
-    strategy = LinearBytesScannedRoutingStrategy()
+    strategy = NormalModeLinearBytesScannedRoutingStrategy()
     context = RoutingContext(MagicMock(), timer, MagicMock(), MagicMock())
 
     state.set_config(
-        "LinearBytesScannedRoutingStrategy_bytes_scanned_per_query_limit",
+        "NormalModeLinearBytesScannedRoutingStrategy_bytes_scanned_per_query_limit",
         10000,
     )
     target_tier = strategy._get_target_tier(
@@ -109,3 +110,19 @@ def test_target_tier_is_1_if_most_downsampled_query_bytes_scanned_is_0() -> None
         routing_context=context,
     )
     assert target_tier == Tier.TIER_1
+
+
+def test_preflight_and_best_effort_mode_are_normal_mode() -> None:
+    timer = MagicMock(spec=Timer)
+    strategy = NormalModeLinearBytesScannedRoutingStrategy()
+    context = RoutingContext(MagicMock(), timer, MagicMock(), MagicMock())
+
+    context.in_msg.meta.downsampled_storage_config.mode = (
+        DownsampledStorageConfig.MODE_PREFLIGHT
+    )
+    assert strategy._is_normal_mode(context)
+
+    context.in_msg.meta.downsampled_storage_config.mode = (
+        DownsampledStorageConfig.MODE_BEST_EFFORT
+    )
+    assert strategy._is_normal_mode(context)

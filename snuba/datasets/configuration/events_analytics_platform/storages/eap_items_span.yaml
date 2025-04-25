@@ -1,9 +1,11 @@
+# This is a placeholder config for the eap-items-span consumer.
+# This consumer will be replaced by eap-items soon.
 version: v1
 kind: writable_storage
 name: eap_items_span
 
 storage:
-  key: eap_items
+  key: eap_items_span
   set_key: events_analytics_platform
 
 readiness_state: complete
