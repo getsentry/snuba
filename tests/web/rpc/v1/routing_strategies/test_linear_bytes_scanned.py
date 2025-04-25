@@ -68,11 +68,15 @@ def test_most_downsampled_tier_query_bytes_scanned_exceeds_limit() -> None:
         build_query=build_query,  # type: ignore
         query_settings=HTTPQuerySettings(),
     )
+    state.set_config(
+        "LinearBytesScannedRoutingStrategy_bytes_scanned_per_query_limit",
+        99,
+    )
 
     high_bytes_query_result = QueryResult(
         result={
             "profile": {
-                "progress_bytes": 200000000000,
+                "progress_bytes": 100,
             }
         },
         extra={"stats": {}, "sql": "", "experiments": {}},
