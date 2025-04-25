@@ -49,6 +49,7 @@ expression: snapshot_payload
     "tags.key": [],
     "tags.value": [],
     "timestamp": 1678209849,
+    "timestamp": 1678209849.987,
     "title": "",
     "transaction_name": "",
     "type": "error",
