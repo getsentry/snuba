@@ -15,7 +15,8 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
-from snuba.web.rpc.v1.resolvers.R_eap_items.routing_strategies.outcomes_based import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.outcomes_based import (
+    Outcome,
     OutcomeCategory,
     OutcomesBasedRoutingStrategy,
 )
@@ -53,7 +54,7 @@ def gen_span_ingest_outcome(time: datetime, num: int) -> Dict[str, int | str | N
         "project_id": _ORG_ID,
         "key_id": None,
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-        "outcome": 0,
+        "outcome": Outcome.ACCEPTED,
         "reason": None,
         "event_id": None,
         "quantity": num,
