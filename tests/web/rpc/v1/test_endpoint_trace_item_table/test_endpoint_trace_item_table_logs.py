@@ -152,7 +152,7 @@ class TestTraceItemTableForLogs(BaseApiTest):
             meta=ResponseMeta(
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 downsampled_storage_meta=DownsampledStorageMeta(
-                    can_go_to_higher_accuracy_tier=False,
+                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_1
                 ),
             ),
         )
