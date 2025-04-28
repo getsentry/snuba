@@ -33,7 +33,7 @@ pyo3 = { version = "0.18.1", features = ["chrono"] }
 reqwest = { version = "0.11.11", features = ["stream"] }
 sentry = { version = "0.32.0", features = ["anyhow", "tracing"] }
 sentry-kafka-schemas = "1.2.0"
-sentry_protos = "0.1.72"
+sentry_protos = "0.1.73"
 prost = "0.13"
 prost-types = "0.13.3"
 serde = { version = "1.0", features = ["derive"] }

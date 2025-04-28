@@ -41,11 +41,14 @@ struct EAPItem {
     timestamp: u32,
     trace_id: Uuid,
     item_id: u128,
-    sampling_factor: f64,
-    retention_days: Option<u16>,
 
     #[serde(flatten)]
     attributes: AttributeMap,
+
+    sampling_factor: f64,
+    sampling_weight: u64,
+
+    retention_days: Option<u16>,
 }
 
 impl TryFrom<TraceItem> for EAPItem {
@@ -63,6 +66,7 @@ impl TryFrom<TraceItem> for EAPItem {
             attributes: Default::default(),
             retention_days: Default::default(),
             sampling_factor: 1.0,
+            sampling_weight: 1,
         };
 
         for (key, value) in from.attributes {
@@ -77,6 +81,18 @@ impl TryFrom<TraceItem> for EAPItem {
                 None => (),
             }
         }
+
+        if from.client_sample_rate > 0.0 {
+            eap_item.sampling_factor *= from.client_sample_rate;
+        }
+
+        if from.server_sample_rate > 0.0 {
+            eap_item.sampling_factor *= from.server_sample_rate;
+        }
+
+        // Lower precision to compensate floating point errors.
+        eap_item.sampling_weight = (1.0 / eap_item.sampling_factor).round() as u64;
+        eap_item.sampling_factor = (eap_item.sampling_factor * 1e9).round() / 1e9;
 
         Ok(eap_item)
     }
@@ -189,6 +205,8 @@ mod tests {
                 nanos: 0,
             }),
             trace_id: Uuid::new_v4().to_string(),
+            client_sample_rate: 1.0,
+            server_sample_rate: 1.0,
         };
         let eap_item = EAPItem::try_from(trace_item);
 
