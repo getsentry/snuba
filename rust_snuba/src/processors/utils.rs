@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 // Equivalent to "%Y-%m-%dT%H:%M:%S.%fZ" in python
 // Notice the differennce of .%fZ vs %.fZ, this comes from a difference in how rust's chrono handles the format
-pub const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.fZ";
+const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.fZ";
 
 pub fn enforce_retention(value: Option<u16>, config: &EnvConfig) -> u16 {
     let mut retention_days = value.unwrap_or(config.default_retention_days);
