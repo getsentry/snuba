@@ -252,18 +252,6 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         target_tier = routing_context.query_settings.get_sampling_tier()
         query_duration_ms = self._get_query_duration_ms(routing_context.query_result)
 
-        if query_duration_ms >= 0.98 * self._get_time_budget_ms():
-            self._record_value_in_span_and_DD(
-                routing_context,
-                self.metrics.increment,
-                "routing_mistake",
-                1,
-                tags={
-                    "tier": str(target_tier),
-                    "reason": "normal_mode_query_exceeds_time_budget",
-                },
-            )
-
         if self._is_normal_mode(routing_context):
             self._emit_estimation_error_info(
                 routing_context, {"tier": str(target_tier)}
@@ -283,19 +271,28 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 tags={"tier": str(target_tier)},
             )
 
-            if (
-                target_tier != Tier.TIER_1
-                and (self._get_time_budget_ms() - query_duration_ms)
-                / self._get_time_budget_ms()
-                >= 0.2
-            ):
+            if query_duration_ms >= self._get_time_budget_ms():
                 self._record_value_in_span_and_DD(
-                    routing_context,
-                    self.metrics.increment,
-                    "routing_mistake",
-                    1,
-                    tags={
-                        "tier": str(target_tier),
-                        "reason": "query_should_run_on_higher_accuracy_tier",
-                    },
+                    routing_context=routing_context,
+                    metrics_backend_func=self.metrics.increment,
+                    name="routing_mistake",
+                    value=1,
+                    tags={"reason": "timeout"},
+                )
+            elif target_tier != Tier.TIER_1:
+                if query_duration_ms < 0.8 * self._get_time_budget_ms():
+                    self._record_value_in_span_and_DD(
+                        routing_context=routing_context,
+                        metrics_backend_func=self.metrics.increment,
+                        name="routing_mistake",
+                        value=1,
+                        tags={"reason": "sampled_too_low"},
+                    )
+            else:
+                self._record_value_in_span_and_DD(
+                    routing_context=routing_context,
+                    metrics_backend_func=self.metrics.increment,
+                    name="routing_success",
+                    value=1,
+                    tags={},
                 )
