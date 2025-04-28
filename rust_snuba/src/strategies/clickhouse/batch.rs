@@ -126,7 +126,7 @@ impl BatchFactory {
         let client = self.client.clone();
 
         let result_handle = self.handle.spawn(async move {
-            let sleep_time = 0;
+            let mut sleep_time = 0;
             while receiver.is_empty() && !receiver.is_closed() {
                 // continously check on the receiver stream, only when it's
                 // not empty do we write to clickhouse
@@ -238,8 +238,11 @@ impl HttpBatch {
         drop(self.sender.take());
         if let Some(handle) = self.result_handle.take() {
             // timeout on writing a batch to clickhouse after 2 minutes
-            if let Err(_) = timeout(Duration::from_millis(120000), handle).await {
-                anyhow::bail!("Timedout writing to clickhouse");
+            match timeout(Duration::from_millis(120000), handle).await {
+                Ok(res) => res??,
+                Err(_) => {
+                    anyhow::bail!("Timedout writing to clickhouse");
+                }
             }
             Ok(true)
         } else {
