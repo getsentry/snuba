@@ -119,6 +119,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 most_downsampled_tier_query_bytes_scanned
                 * self._get_multiplier(target_tier)
             )
+
             for tier in sorted(Tier, reverse=True)[:-1]:
                 with sentry_sdk.start_span(
                     op=f"_get_target_tier.Tier_{tier}"
@@ -214,6 +215,18 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         routing_context.query_result = self._run_query_on_most_downsampled_tier(
             routing_context
         )
+
+        if (
+            self._get_query_bytes_scanned(routing_context.query_result)
+            >= self._get_bytes_scanned_limit()
+        ):
+            self._record_value_in_span_and_DD(
+                routing_context,
+                self.metrics.increment,
+                "most_downsampled_tier_query_bytes_scanned_exceeds_limit",
+                1,
+            )
+            return self._get_most_downsampled_tier(), {}
 
         query_settings = {
             "max_execution_time": self._get_time_budget_ms() / 1000,

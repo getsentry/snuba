@@ -46,8 +46,13 @@ impl TaskRunner<BytesInsertBatch<HttpBatch>, BytesInsertBatch<()>, anyhow::Error
 
             let write_start = SystemTime::now();
 
-            tracing::debug!("performing write");
+            tracing::info!("performing write of {} rows {} bytes", num_rows, num_bytes);
             http_batch.finish().await.map_err(RunTaskError::Other)?;
+            tracing::info!(
+                "finished performing write of {} rows {} bytes",
+                num_rows,
+                num_bytes
+            );
 
             let write_finish = SystemTime::now();
 
