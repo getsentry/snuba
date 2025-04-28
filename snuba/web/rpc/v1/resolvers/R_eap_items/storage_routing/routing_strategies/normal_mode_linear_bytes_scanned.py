@@ -271,7 +271,7 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                 tags={"tier": str(target_tier)},
             )
 
-            if query_duration_ms >= 0.98 * self._get_time_budget_ms():
+            if query_duration_ms >= self._get_time_budget_ms():
                 self._record_value_in_span_and_DD(
                     routing_context=routing_context,
                     metrics_backend_func=self.metrics.increment,
