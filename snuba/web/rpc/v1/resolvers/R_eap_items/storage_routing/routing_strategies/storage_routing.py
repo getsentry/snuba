@@ -1,6 +1,7 @@
 import os
 import uuid
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Callable, Dict, Optional, Type, TypeAlias, Union, cast, final
 
 import sentry_sdk
@@ -35,6 +36,12 @@ MetricsBackendType: TypeAlias = Callable[
 
 RoutedRequestType = Union[TimeSeriesRequest, TraceItemTableRequest]
 ClickhouseQuerySettings = Dict[str, Any]
+
+
+class RoutingEvaluationResult(Enum):
+    TIMEOUT = "timeout"
+    SAMPLED_TOO_LOW = "sampled_too_low"
+    SUCCESS = "success"
 
 
 @dataclass
@@ -258,6 +265,29 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
+
+    def _get_time_budget_ms(self) -> float:
+        raise NotImplementedError
+
+    def _emit_routing_decision(
+        self, routing_context: RoutingContext, reason: RoutingEvaluationResult
+    ) -> None:
+        if reason == RoutingEvaluationResult.SUCCESS:
+            self._record_value_in_span_and_DD(
+                routing_context=routing_context,
+                metrics_backend_func=self.metrics.increment,
+                name="routing_success",
+                value=1,
+                tags={"reason": reason.value},
+            )
+        else:
+            self._record_value_in_span_and_DD(
+                routing_context=routing_context,
+                metrics_backend_func=self.metrics.increment,
+                name="routing_mistake",
+                value=1,
+                tags={"reason": reason.value},
+            )
 
     @final
     @with_span(op="function")

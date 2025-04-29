@@ -14,6 +14,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.s
     BaseRoutingStrategy,
     ClickhouseQuerySettings,
     RoutingContext,
+    RoutingEvaluationResult,
 )
 
 _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
@@ -109,7 +110,7 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                     self._record_value_in_span_and_DD(
                         routing_context,
                         self.metrics.distribution,
-                        "estimated_query_bytes_scanned_to_this_tier",
+                        "estimated_query_bytes_scanned_to_tier_{tier}",
                         estimated_query_bytes_scanned_to_this_tier,
                         {"tier": str(tier)},
                     )
@@ -272,27 +273,15 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
             )
 
             if query_duration_ms >= self._get_time_budget_ms():
-                self._record_value_in_span_and_DD(
-                    routing_context=routing_context,
-                    metrics_backend_func=self.metrics.increment,
-                    name="routing_mistake",
-                    value=1,
-                    tags={"reason": "timeout"},
+                self._emit_routing_decision(
+                    routing_context, RoutingEvaluationResult.TIMEOUT
                 )
             elif target_tier != Tier.TIER_1:
                 if query_duration_ms < 0.8 * self._get_time_budget_ms():
-                    self._record_value_in_span_and_DD(
-                        routing_context=routing_context,
-                        metrics_backend_func=self.metrics.increment,
-                        name="routing_mistake",
-                        value=1,
-                        tags={"reason": "sampled_too_low"},
+                    self._emit_routing_decision(
+                        routing_context, RoutingEvaluationResult.SAMPLED_TOO_LOW
                     )
             else:
-                self._record_value_in_span_and_DD(
-                    routing_context=routing_context,
-                    metrics_backend_func=self.metrics.increment,
-                    name="routing_success",
-                    value=1,
-                    tags={},
+                self._emit_routing_decision(
+                    routing_context, RoutingEvaluationResult.SUCCESS
                 )

@@ -28,6 +28,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.s
     BaseRoutingStrategy,
     ClickhouseQuerySettings,
     RoutingContext,
+    RoutingEvaluationResult,
 )
 
 
@@ -183,27 +184,15 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             time_budget = self._get_time_budget_ms()
             routing_context.extra_info["time_budget"] = time_budget
             if elapsed_ms > time_budget:
-                self._record_value_in_span_and_DD(
-                    routing_context=routing_context,
-                    metrics_backend_func=self.metrics.increment,
-                    name="routing_mistake",
-                    value=1,
-                    tags={"reason": "timeout"},
+                self._emit_routing_decision(
+                    routing_context, RoutingEvaluationResult.TIMEOUT
                 )
             elif routing_context.query_settings.get_sampling_tier() != Tier.TIER_1:
                 if elapsed_ms < 0.8 * time_budget:
-                    self._record_value_in_span_and_DD(
-                        routing_context=routing_context,
-                        metrics_backend_func=self.metrics.increment,
-                        name="routing_mistake",
-                        value=1,
-                        tags={"reason": "sampled_too_low"},
+                    self._emit_routing_decision(
+                        routing_context, RoutingEvaluationResult.SAMPLED_TOO_LOW
                     )
             else:
-                self._record_value_in_span_and_DD(
-                    routing_context=routing_context,
-                    metrics_backend_func=self.metrics.increment,
-                    name="routing_success",
-                    value=1,
-                    tags={},
+                self._emit_routing_decision(
+                    routing_context, RoutingEvaluationResult.SUCCESS
                 )
