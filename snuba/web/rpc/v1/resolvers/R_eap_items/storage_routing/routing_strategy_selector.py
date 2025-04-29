@@ -79,7 +79,7 @@ class StorageRoutingConfig:
 _DEFAULT_STORAGE_ROUTING_CONFIG = StorageRoutingConfig(
     version=1,
     _routing_strategy_and_percentage_routed={
-        "LinearBytesScannedRoutingStrategy": 1.0,
+        "OutcomesBasedRoutingStrategy": 1.0,
     },
 )
 
