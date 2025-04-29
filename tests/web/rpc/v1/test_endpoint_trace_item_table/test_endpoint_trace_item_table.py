@@ -3166,6 +3166,7 @@ class TestTraceItemTable(BaseApiTest):
             AttributeValue(val_str="a") for _ in range(10)
         ] + [AttributeValue(val_str="default") for _ in range(5)]
 
+    @pytest.mark.xfail(reason="Outcomes based strategy does not care about query mode")
     def test_preflight(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
@@ -3235,6 +3236,7 @@ class TestTraceItemTable(BaseApiTest):
             )
         )
 
+    @pytest.mark.xfail(reason="Outcomes based strategy does not care about query mode")
     def test_best_effort_route_to_tier_64(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)

@@ -1312,6 +1312,7 @@ class TestTimeSeriesApi(BaseApiTest):
             expected_formula_timeseries,
         ]
 
+    @pytest.mark.xfail(reason="Outcomes based strategy does not care about query mode")
     def test_preflight(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 3600
@@ -1393,6 +1394,7 @@ class TestTimeSeriesApi(BaseApiTest):
             )
         )
 
+    @pytest.mark.xfail(reason="Outcomes based strategy does not care about query mode")
     def test_best_effort_route_to_tier_64(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 3600
