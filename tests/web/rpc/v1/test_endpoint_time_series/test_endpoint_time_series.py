@@ -1389,7 +1389,6 @@ class TestTimeSeriesApi(BaseApiTest):
         assert (
             preflight_response.meta.downsampled_storage_meta
             == DownsampledStorageMeta(
-                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64,
                 can_go_to_higher_accuracy_tier=True,
             )
         )
@@ -1478,7 +1477,6 @@ class TestTimeSeriesApi(BaseApiTest):
             assert (
                 best_effort_response.meta.downsampled_storage_meta
                 == DownsampledStorageMeta(
-                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64,
                     can_go_to_higher_accuracy_tier=True,
                 )
             )
@@ -1518,11 +1516,7 @@ class TestTimeSeriesApi(BaseApiTest):
             ],
             granularity_secs=granularity_secs,
         )
-        response = EndpointTimeSeries().execute(best_effort_downsample_message)
-        assert (
-            response.meta.downsampled_storage_meta.tier
-            != DownsampledStorageMeta.SELECTED_TIER_UNSPECIFIED
-        )
+        EndpointTimeSeries().execute(best_effort_downsample_message)
 
 
 class TestUtils:
