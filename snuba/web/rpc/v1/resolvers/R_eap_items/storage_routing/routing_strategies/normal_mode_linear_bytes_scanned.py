@@ -109,7 +109,7 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                     self._record_value_in_span_and_DD(
                         routing_context,
                         self.metrics.distribution,
-                        "estimated_query_bytes_scanned_to_this_tier",
+                        f"estimated_query_bytes_scanned_to_tier_{tier}",
                         estimated_query_bytes_scanned_to_this_tier,
                         {"tier": str(tier)},
                     )
