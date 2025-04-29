@@ -16,6 +16,10 @@ from snuba.web.rpc.proto_visitor import (
     TimeSeriesRequestWrapper,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
+from snuba.web.rpc.v1.visitors.visitor_v2 import (
+    PrefixLabelsVisitor,
+    ValidateAliasVisitor,
+)
 
 _VALID_GRANULARITY_SECS = set(
     [
@@ -131,7 +135,7 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         )
         in_msg_wrapper = TimeSeriesRequestWrapper(in_msg)
         in_msg_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
-        # ValidateAliasVisitor().visit(in_msg)
-        # PrefixLabelsVisitor().visit(in_msg)
+        ValidateAliasVisitor().visit(in_msg)
+        PrefixLabelsVisitor().visit(in_msg)
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)
