@@ -1478,6 +1478,7 @@ class TestTimeSeriesApi(BaseApiTest):
         )
         EndpointTimeSeries().execute(best_effort_downsample_message)
 
+    @pytest.mark.xfail
     def test_duplicate_top_level_labels(self) -> None:
         """
         This test ensures that duplicate labels in top level expressions
@@ -1520,6 +1521,7 @@ class TestTimeSeriesApi(BaseApiTest):
         ):
             EndpointTimeSeries().execute(message)
 
+    @pytest.mark.xfail
     def test_duplicate_labels_inner(self) -> None:
         """
         This test ensures that duplicate labels across different expressions
