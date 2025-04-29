@@ -250,49 +250,8 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         assert routing_context.query_result
         target_tier = routing_context.query_settings.get_sampling_tier()
-        query_duration_ms = self._get_query_duration_ms(routing_context.query_result)
 
         if self._is_normal_mode(routing_context):
             self._emit_estimation_error_info(
                 routing_context, {"tier": str(target_tier)}
             )
-            self._record_value_in_span_and_DD(
-                routing_context,
-                self.metrics.distribution,
-                "actual_bytes_scanned_in_target_tier",
-                self._get_query_bytes_scanned(routing_context.query_result),
-                tags={"tier": str(target_tier)},
-            )
-            self._record_value_in_span_and_DD(
-                routing_context,
-                self.metrics.timing,
-                "time_to_run_query_in_target_tier",
-                query_duration_ms,
-                tags={"tier": str(target_tier)},
-            )
-
-            if query_duration_ms >= self._get_time_budget_ms():
-                self._record_value_in_span_and_DD(
-                    routing_context=routing_context,
-                    metrics_backend_func=self.metrics.increment,
-                    name="routing_mistake",
-                    value=1,
-                    tags={"reason": "timeout"},
-                )
-            elif target_tier != Tier.TIER_1:
-                if query_duration_ms < 0.8 * self._get_time_budget_ms():
-                    self._record_value_in_span_and_DD(
-                        routing_context=routing_context,
-                        metrics_backend_func=self.metrics.increment,
-                        name="routing_mistake",
-                        value=1,
-                        tags={"reason": "sampled_too_low"},
-                    )
-            else:
-                self._record_value_in_span_and_DD(
-                    routing_context=routing_context,
-                    metrics_backend_func=self.metrics.increment,
-                    name="routing_success",
-                    value=1,
-                    tags={},
-                )
