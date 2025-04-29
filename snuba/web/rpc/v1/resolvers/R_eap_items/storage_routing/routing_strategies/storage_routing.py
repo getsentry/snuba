@@ -261,6 +261,20 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
 
+    def _get_sampled_too_low_threshold(self) -> int:
+        default = 1000
+        return (
+            state.get_int_config(
+                f"{self.config_key()}.sampled_too_low_threshold",
+                state.get_int_config(
+                    f"{DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX}.sampled_too_low_threshold",
+                    default,
+                )
+                or default,
+            )
+            or default
+        )
+
     def _get_time_budget_ms(self) -> int:
         """
         Get the time budget for the query, Each strategy can have its own
@@ -297,7 +311,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                 )
             elif (
                 routing_context.query_settings.get_sampling_tier() != Tier.TIER_1
-                and elapsed_ms < 1000
+                and elapsed_ms < self._get_sampled_too_low_threshold()
             ):
                 self._record_value_in_span_and_DD(
                     routing_context=routing_context,

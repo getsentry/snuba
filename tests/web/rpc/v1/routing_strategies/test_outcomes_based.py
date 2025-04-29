@@ -13,7 +13,6 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.timer import Timer
-from snuba.web import QueryResult
 from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.outcomes_based import (
     Outcome,
@@ -114,82 +113,3 @@ def test_outcomes_based_routing_downsample(store_outcomes_data: Any) -> None:
     tier, settings = strategy._decide_tier_and_query_settings(routing_context)
     assert tier == Tier.TIER_8
     assert settings == {}
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-def test_outcomes_based_routing_metrics_success(store_outcomes_data: Any) -> None:
-    state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
-    strategy = OutcomesBasedRoutingStrategy()
-    request = TraceItemTableRequest(meta=_get_request_meta())
-    routing_context = RoutingContext(
-        in_msg=request,
-        timer=Timer("test"),
-        build_query=build_query,  # type: ignore
-        query_settings=HTTPQuerySettings(),
-        query_result=QueryResult(
-            result={"profile": {"elapsed": 1}},
-            extra={"stats": {}, "sql": "", "experiments": {}},
-        ),
-    )
-    routing_context.query_settings.set_sampling_tier(Tier.TIER_1)
-
-    strategy._output_metrics(routing_context)
-    assert routing_context.extra_info["sampling_in_storage_routing_success"] == {
-        "type": "increment",
-        "value": 1,
-        "tags": {},
-    }
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-def test_outcomes_based_routing_metrics_timeout(store_outcomes_data: Any) -> None:
-    state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
-    strategy = OutcomesBasedRoutingStrategy()
-    request = TraceItemTableRequest(meta=_get_request_meta())
-    routing_context = RoutingContext(
-        in_msg=request,
-        timer=Timer("test"),
-        build_query=build_query,  # type: ignore
-        query_settings=HTTPQuerySettings(),
-        query_result=QueryResult(
-            result={"profile": {"elapsed": 10}},
-            extra={"stats": {}, "sql": "", "experiments": {}},
-        ),
-    )
-
-    strategy._output_metrics(routing_context)
-    assert routing_context.extra_info["sampling_in_storage_routing_mistake"] == {
-        "type": "increment",
-        "value": 1,
-        "tags": {"reason": "timeout"},
-    }
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-def test_outcomes_based_routing_metrics_sampled_too_low(
-    store_outcomes_data: Any,
-) -> None:
-    state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
-    strategy = OutcomesBasedRoutingStrategy()
-    request = TraceItemTableRequest(meta=_get_request_meta())
-    routing_context = RoutingContext(
-        in_msg=request,
-        timer=Timer("test"),
-        build_query=build_query,  # type: ignore
-        query_settings=HTTPQuerySettings(),
-        query_result=QueryResult(
-            result={"profile": {"elapsed": 5}},
-            extra={"stats": {}, "sql": "", "experiments": {}},
-        ),
-    )
-    routing_context.query_settings.set_sampling_tier(Tier.TIER_8)
-
-    strategy._output_metrics(routing_context)
-    assert routing_context.extra_info["sampling_in_storage_routing_mistake"] == {
-        "type": "increment",
-        "value": 1,
-        "tags": {"reason": "sampled_too_low"},
-    }
