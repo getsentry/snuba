@@ -10,6 +10,7 @@ from sentry_kafka_schemas import get_codec
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
+from snuba import state
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.timer import Timer
@@ -41,9 +42,12 @@ def _get_in_msg() -> TimeSeriesRequest:
     )
 
 
-def get_query_result() -> QueryResult:
+def get_query_result(elapsed_ms: int = 1000) -> QueryResult:
     return QueryResult(
-        result={"profile": {"bytes": 420}, "data": [{"row": ["a", "b", "c"]}]},
+        result={
+            "profile": {"bytes": 420, "elapsed": elapsed_ms / 1000},
+            "data": [{"row": ["a", "b", "c"]}],
+        },
         extra={
             "stats": {"stat": 1},
             "sql": "SELECT * FROM your_mom",  # this query times out on our largest cluster
@@ -128,6 +132,7 @@ ROUTING_CONTEXT = RoutingContext(
 )
 
 
+@pytest.mark.redis_db
 def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> None:
     with mock.patch("snuba.settings.RAISE_ON_ROUTING_STRATEGY_FAILURES", False):
         routing_context = deepcopy(ROUTING_CONTEXT)
@@ -135,12 +140,14 @@ def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> Non
         assert routing_context.query_settings.get_sampling_tier() == Tier.TIER_1
 
 
+@pytest.mark.redis_db
 def test_target_tier_is_set_in_routing_context() -> None:
     routing_context = deepcopy(ROUTING_CONTEXT)
     RoutingStrategySelectsTier8().run_query_to_correct_tier(routing_context)
     assert routing_context.query_settings.get_sampling_tier() == Tier.TIER_8
 
 
+@pytest.mark.redis_db
 def test_merge_query_settings() -> None:
     routing_context = deepcopy(ROUTING_CONTEXT)
     RoutingStrategyUpdatesQuerySettings().run_query_to_correct_tier(routing_context)
@@ -150,6 +157,7 @@ def test_merge_query_settings() -> None:
     }
 
 
+@pytest.mark.redis_db
 def test_outputting_metrics_fails_open() -> None:
     with mock.patch("snuba.settings.RAISE_ON_ROUTING_STRATEGY_FAILURES", False):
         routing_context = deepcopy(ROUTING_CONTEXT)
@@ -162,6 +170,7 @@ def test_failed_query() -> None:
         RoutingStrategyQueryFails().run_query_to_correct_tier(routing_context)
 
 
+@pytest.mark.redis_db
 def test_metrics_output() -> None:
     metric = 0
 
@@ -187,6 +196,7 @@ def test_metrics_output() -> None:
         assert recorded_payload["dataset"] == "storage_routing"
         assert recorded_payload["status"] == "TIER_8"
         assert recorded_payload["request"]["referrer"] == "MetricsStrategy"
+
         assert recorded_payload["query_list"][0]["stats"] == {
             "extra_info": {
                 "sampling_in_storage_estimation_time_overhead": {
@@ -201,12 +211,23 @@ def test_metrics_output() -> None:
                     "value": 1,
                     "tags": {"a": "b", "c": "d"},
                 },
+                "sampling_in_storage_query_timing": {
+                    "type": "timing",
+                    "value": 1.0,
+                    "tags": {"tier": "TIER_8"},
+                },
+                "sampling_in_storage_routing_success": {
+                    "type": "increment",
+                    "value": 1,
+                    "tags": {},
+                },
+                "time_budget": 8000,
             },
             "clickhouse_settings": {},
             "source_request_id": routing_context.in_msg.meta.request_id,
             "result_info": {
                 "meta": {},
-                "profile": {"bytes": 420},
+                "profile": {"bytes": 420, "elapsed": 1.0},
                 "sql": result.extra["sql"],
                 "stats": result.extra["stats"],
             },
@@ -225,3 +246,54 @@ def test_metrics_output() -> None:
         payload_bytes = json.dumps(recorded_payload).encode("utf-8")
         schema.decode(payload_bytes)
         assert metric == 1
+
+
+@pytest.mark.redis_db
+def test_get_time_budget() -> None:
+    strategy = RoutingStrategySelectsTier8()
+
+    # Test case 1: No config specified - should return default 8000
+
+    assert strategy._get_time_budget_ms() == 8000
+
+    # Test case 2: Global config specified - should return global value
+    state.set_config("StorageRouting.time_budget_ms", 5000)
+    assert strategy._get_time_budget_ms() == 5000
+
+    # Test case 3: Strategy specific config specified - should return strategy value
+    state.set_config("RoutingStrategySelectsTier8.time_budget_ms", 3000)
+    assert strategy._get_time_budget_ms() == 3000
+
+
+@pytest.mark.redis_db
+def test_strategy_exceeeds_time_budget() -> None:
+    class TooLongStrategy(RoutingStrategySelectsTier8):
+        def _run_query(self, routing_context: RoutingContext) -> QueryResult:
+            return get_query_result(12000)
+
+    state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
+    strategy = TooLongStrategy()
+    routing_context = deepcopy(ROUTING_CONTEXT)
+    strategy.run_query_to_correct_tier(routing_context)
+    assert routing_context.extra_info["sampling_in_storage_routing_mistake"] == {
+        "type": "increment",
+        "value": 1,
+        "tags": {"reason": "time_budget_exceeded"},
+    }
+
+
+@pytest.mark.redis_db
+def test_outcomes_based_routing_metrics_sampled_too_low() -> None:
+    class TooFastStrategy(RoutingStrategySelectsTier8):
+        def _run_query(self, routing_context: RoutingContext) -> QueryResult:
+            return get_query_result(900)
+
+    state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
+    strategy = TooFastStrategy()
+    routing_context = deepcopy(ROUTING_CONTEXT)
+    strategy.run_query_to_correct_tier(routing_context)
+    assert routing_context.extra_info["sampling_in_storage_routing_mistake"] == {
+        "type": "increment",
+        "value": 1,
+        "tags": {"reason": "sampled_too_low"},
+    }
