@@ -219,7 +219,7 @@ def test_metrics_output() -> None:
                 "sampling_in_storage_routing_success": {
                     "type": "increment",
                     "value": 1,
-                    "tags": {},
+                    "tags": {"tier": "TIER_8"},
                 },
                 "time_budget": 8000,
             },
@@ -278,7 +278,7 @@ def test_strategy_exceeeds_time_budget() -> None:
     assert routing_context.extra_info["sampling_in_storage_routing_mistake"] == {
         "type": "increment",
         "value": 1,
-        "tags": {"reason": "time_budget_exceeded"},
+        "tags": {"reason": "time_budget_exceeded", "tier": "TIER_8"},
     }
 
 
@@ -295,5 +295,5 @@ def test_outcomes_based_routing_metrics_sampled_too_low() -> None:
     assert routing_context.extra_info["sampling_in_storage_routing_mistake"] == {
         "type": "increment",
         "value": 1,
-        "tags": {"reason": "sampled_too_low"},
+        "tags": {"reason": "sampled_too_low", "tier": "TIER_8"},
     }

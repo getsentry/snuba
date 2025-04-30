@@ -160,6 +160,17 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         routing_context.extra_info[
             "max_items_before_downsampling"
         ] = max_items_before_downsampling
-        if ingested_items > max_items_before_downsampling:
+        if (
+            ingested_items > max_items_before_downsampling
+            and ingested_items <= max_items_before_downsampling * 10
+        ):
             return Tier.TIER_8, {}
+        elif (
+            ingested_items > max_items_before_downsampling * 10
+            and ingested_items <= max_items_before_downsampling * 100
+        ):
+            return Tier.TIER_64, {}
+        elif ingested_items > max_items_before_downsampling * 100:
+            return Tier.TIER_512, {}
+
         return Tier.TIER_1, {}
