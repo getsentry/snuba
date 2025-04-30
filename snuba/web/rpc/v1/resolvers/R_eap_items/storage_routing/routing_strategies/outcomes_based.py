@@ -2,6 +2,7 @@ import uuid
 from typing import cast
 
 from google.protobuf.json_format import MessageToDict
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba import state
@@ -140,6 +141,12 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
     def _decide_tier_and_query_settings(
         self, routing_context: RoutingContext
     ) -> tuple[Tier, ClickhouseQuerySettings]:
+        if (
+            not routing_context.in_msg.meta.HasField("downsampled_storage_config")
+            or routing_context.in_msg.meta.downsampled_storage_config.mode
+            == DownsampledStorageConfig.MODE_UNSPECIFIED
+        ):
+            return Tier.TIER_1, {}
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
         start_ts = routing_context.in_msg.meta.start_timestamp.seconds
         end_ts = routing_context.in_msg.meta.end_timestamp.seconds
