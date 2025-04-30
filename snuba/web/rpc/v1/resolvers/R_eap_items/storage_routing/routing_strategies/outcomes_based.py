@@ -62,6 +62,14 @@ def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
 
 
 class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
+    def _is_highest_accuracy_mode(self, routing_context: RoutingContext) -> bool:
+        if not routing_context.in_msg.meta.HasField("downsampled_storage_config"):
+            return False
+        return (
+            routing_context.in_msg.meta.downsampled_storage_config.mode
+            == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+        )
+
     def get_ingested_items_for_timerange(self, routing_context: RoutingContext) -> int:
         entity = Entity(
             key=EntityKey("outcomes"),
@@ -141,11 +149,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
     def _decide_tier_and_query_settings(
         self, routing_context: RoutingContext
     ) -> tuple[Tier, ClickhouseQuerySettings]:
-        if (
-            not routing_context.in_msg.meta.HasField("downsampled_storage_config")
-            or routing_context.in_msg.meta.downsampled_storage_config.mode
-            == DownsampledStorageConfig.MODE_UNSPECIFIED
-        ):
+        if self._is_highest_accuracy_mode(routing_context):
             return Tier.TIER_1, {}
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
         start_ts = routing_context.in_msg.meta.start_timestamp.seconds
