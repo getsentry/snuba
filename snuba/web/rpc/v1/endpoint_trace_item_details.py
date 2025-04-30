@@ -177,7 +177,7 @@ def _convert_results(
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_str=v)))
     for k, v in row["attributes_float"].items():
         attrs.append(
-            TraceItemDetailsAttribute(name=k, value=AttributeValue(val_float=v))
+            TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v))
         )
     for k, v in row["attributes_int"].items():
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_int=v)))
