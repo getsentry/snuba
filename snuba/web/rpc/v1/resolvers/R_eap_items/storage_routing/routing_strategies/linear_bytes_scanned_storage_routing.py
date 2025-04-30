@@ -228,7 +228,6 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
 
         query_settings = {
             "max_execution_time": self._get_time_budget_ms() / 1000,
-            "timeout_overflow_mode": "break",
         }
 
         return (
@@ -288,16 +287,6 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         assert routing_context.query_result
         target_tier = routing_context.query_settings.get_sampling_tier()
-        query_duration_ms = self._get_query_duration_ms(routing_context.query_result)
-        if (
-            query_duration_ms
-            >= self._get_time_budget_ms() - 0.02 * self._get_time_budget_ms()
-        ):
-            self.metrics.increment(
-                "timeout_overflow_mode_was_hit",
-                1,
-                {"tier": str(target_tier)},
-            )
         if not self._is_preflight_mode(routing_context):
 
             self._emit_estimation_error_info(

@@ -235,7 +235,6 @@ query_processors:
       settings:
         max_execution_time: 25
         timeout_before_checking_execution_speed: 0
-        timeout_overflow_mode: 'break'
 
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
