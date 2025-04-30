@@ -145,7 +145,7 @@ def test_trim_time_range() -> None:
         spans_storage,  # type: ignore
         [
             gen_item_message(
-                dt=_BASE_TIME - timedelta(days=i),
+                start_timestamp=_BASE_TIME - timedelta(days=i),
             )
             for i in range(90)
         ],

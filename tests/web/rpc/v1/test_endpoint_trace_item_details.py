@@ -92,7 +92,7 @@ def setup_spans_in_db(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_items"))
     messages = [
         gen_item_message(
-            dt=BASE_TIME - timedelta(minutes=i),
+            start_timestamp=BASE_TIME - timedelta(minutes=i),
             attributes={
                 "str_tag": AnyValue(string_value=f"num: {i}"),
                 "double_tag": AnyValue(double_value=float(i) / 2.0),

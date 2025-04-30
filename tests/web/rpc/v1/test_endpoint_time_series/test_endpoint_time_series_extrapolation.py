@@ -59,14 +59,17 @@ def store_timeseries(
     messages = []
     for secs in range(0, len_secs, period_secs):
         dt = start_datetime + timedelta(seconds=secs)
-        numbers = {m.name: AnyValue(double_value=m.get_value(secs)) for m in metrics}
-        metrics = {
-            m.name: AnyValue(double_value=m.get_value(secs)) for m in measurements
+        numbers = {
+            m.name: AnyValue(double_value=float(m.get_value(secs))) for m in metrics
+        }
+        protobuf_metrics = {
+            m.name: AnyValue(double_value=float(m.get_value(secs)))
+            for m in measurements
         }
         messages.append(
             gen_item_message(
                 start_timestamp=dt,
-                attributes=numbers | metrics,
+                attributes=numbers | protobuf_metrics,
             ),
         )
     items_storage = get_storage(StorageKey("eap_items"))

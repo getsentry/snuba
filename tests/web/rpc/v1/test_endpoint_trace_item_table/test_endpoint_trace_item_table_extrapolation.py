@@ -31,10 +31,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.test_endpoint_trace_item_table.test_endpoint_trace_item_table import (
-    write_eap_span,
-)
-from tests.web.rpc.v1.test_utils import gen_item_message
+from tests.web.rpc.v1.test_utils import gen_item_message, write_eap_span
 
 BASE_TIME = datetime.now().replace(
     tzinfo=UTC,
@@ -80,8 +77,9 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage, messages_w_measurement + messages_no_measurement
-        )  # type: ignore
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -205,8 +203,9 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage, messages_w_measurement + messages_no_measurement
-        )  # type: ignore
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -327,8 +326,9 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage, messages_w_measurement + messages_no_measurement
-        )  # type: ignore
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -429,8 +429,9 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage, messages_w_measurement + messages_no_measurement
-        )  # type: ignore
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=10)).timestamp())
@@ -499,8 +500,9 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage, messages_w_measurement + messages_no_measurement
-        )  # type: ignore
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -566,8 +568,9 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage, messages_w_measurement + messages_no_measurement
-        )  # type: ignore
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -693,8 +696,9 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage, messages_w_measurement + messages_no_measurement
-        )  # type: ignore
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -805,7 +809,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         )
         write_eap_span(
             span_ts,
-            attributes={"kyles_measurement": 7},
+            raw_attributes={"kyles_measurement": 7},
             count=2,
         )
 
@@ -895,7 +899,10 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                     },
                 )
             )
-        write_raw_unprocessed_events(items_storage, messages_a + messages_b)  # type: ignore
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            messages_a + messages_b,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=10)).timestamp())

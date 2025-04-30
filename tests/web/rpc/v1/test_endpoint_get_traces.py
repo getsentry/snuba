@@ -61,7 +61,7 @@ _SPANS = [
             ),
             "is_segment": AnyValue(bool_value=i < len(_TRACE_IDS)),
             "parent_span_id": AnyValue(
-                string_value=None if i < len(_TRACE_IDS) else "1" * 16
+                string_value="" if i < len(_TRACE_IDS) else "1" * 16
             ),
         },
     )
@@ -78,7 +78,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
         items_storage,  # type: ignore
         [
             gen_item_message(
-                dt=_BASE_TIME + timedelta(minutes=i),
+                start_timestamp=_BASE_TIME + timedelta(minutes=i),
                 trace_id=uuid.uuid4().hex,
                 attributes={
                     "span_op": AnyValue(string_value="lcp"),

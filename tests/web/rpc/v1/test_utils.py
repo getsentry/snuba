@@ -68,7 +68,7 @@ _DEFAULT_ATTRIBUTES = {
 
 def write_eap_span(
     start_timestamp: datetime,
-    raw_attributes: dict[str, str | float | int | bool] | None = None,
+    raw_attributes: dict[str, str | float | int | bool] = {},
     server_sample_rate: float = 1.0,
     count: int = 1,
 ) -> None:
@@ -110,6 +110,7 @@ def gen_item_message(
     start_timestamp: datetime,
     attributes: dict[str, AnyValue] = {},
     type: TraceItemType.ValueType = TraceItemType.TRACE_ITEM_TYPE_SPAN,
+    trace_id: str = uuid.uuid4().hex,
     server_sample_rate: float = 1.0,
     client_sample_rate: float = 1.0,
     end_timestamp: Optional[datetime] = None,
@@ -139,7 +140,7 @@ def gen_item_message(
         project_id=1,
         item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
         timestamp=item_timestamp,
-        trace_id=uuid.uuid4().hex,
+        trace_id=trace_id,
         item_id=uuid.uuid4().int.to_bytes(16, byteorder="little"),
         received=received,
         retention_days=90,

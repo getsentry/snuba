@@ -54,46 +54,55 @@ COMMON_META = RequestMeta(
 @pytest.fixture(autouse=True)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
+    start_timestamp = BASE_TIME
     messages = [
         gen_item_message(
+            start_timestamp=start_timestamp,
             attributes={
                 "tag1": AnyValue(string_value="herp"),
                 "tag2": AnyValue(string_value="herp"),
             },
         ),
         gen_item_message(
+            start_timestamp=start_timestamp,
             attributes={
                 "tag1": AnyValue(string_value="herpderp"),
                 "tag2": AnyValue(string_value="herp"),
             },
         ),
         gen_item_message(
+            start_timestamp=start_timestamp,
             attributes={
                 "tag1": AnyValue(string_value="durp"),
                 "tag3": AnyValue(string_value="herp"),
             },
         ),
         gen_item_message(
+            start_timestamp=start_timestamp,
             attributes={
                 "tag1": AnyValue(string_value="blah"),
                 "tag2": AnyValue(string_value="herp"),
             },
         ),
         gen_item_message(
+            start_timestamp=start_timestamp,
             attributes={
                 "tag1": AnyValue(string_value="derpderp"),
                 "tag2": AnyValue(string_value="derp"),
             },
         ),
         gen_item_message(
+            start_timestamp=start_timestamp,
             attributes={"tag2": AnyValue(string_value="hehe")},
         ),
         gen_item_message(
+            start_timestamp=start_timestamp,
             attributes={
                 "tag1": AnyValue(string_value="some_last_value"),
             },
         ),
         gen_item_message(
+            start_timestamp=start_timestamp,
             attributes={
                 "sentry.transaction": AnyValue(string_value="*foo"),
             },

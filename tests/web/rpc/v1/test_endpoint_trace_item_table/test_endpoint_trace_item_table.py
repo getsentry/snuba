@@ -1691,19 +1691,24 @@ class TestTraceItemTable(BaseApiTest):
         messages = (
             [
                 gen_item_message(
-                    msg_timestamp, tags={"kylestag": AnyValue(string_value="val1")}
+                    msg_timestamp,
+                    attributes={
+                        "kylestag": AnyValue(string_value="val1"),
+                    },
                 )
                 for i in range(3)
             ]
             + [
                 gen_item_message(
-                    msg_timestamp, tags={"kylestag": AnyValue(string_value="val2")}
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val2")},
                 )
                 for i in range(12)
             ]
             + [
                 gen_item_message(
-                    msg_timestamp, tags={"kylestag": AnyValue(string_value="val3")}
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val3")},
                 )
                 for i in range(30)
             ]
@@ -2004,19 +2009,22 @@ class TestTraceItemTable(BaseApiTest):
         messages = (
             [
                 gen_item_message(
-                    msg_timestamp, tags={"kylestag": AnyValue(string_value="val1")}
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val1")},
                 )
                 for i in range(3)
             ]
             + [
                 gen_item_message(
-                    msg_timestamp, tags={"kylestag": AnyValue(string_value="val2")}
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val2")},
                 )
                 for i in range(12)
             ]
             + [
                 gen_item_message(
-                    msg_timestamp, tags={"kylestag": AnyValue(string_value="val3")}
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val3")},
                 )
                 for i in range(30)
             ]
