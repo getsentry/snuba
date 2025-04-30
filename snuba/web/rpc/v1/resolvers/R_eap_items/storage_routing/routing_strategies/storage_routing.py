@@ -307,7 +307,10 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                     metrics_backend_func=self.metrics.increment,
                     name="routing_mistake",
                     value=1,
-                    tags={"reason": "time_budget_exceeded"},
+                    tags={
+                        "reason": "time_budget_exceeded",
+                        "tier": routing_context.query_settings.get_sampling_tier().name,
+                    },
                 )
             elif (
                 routing_context.query_settings.get_sampling_tier() != Tier.TIER_1
@@ -318,7 +321,10 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                     metrics_backend_func=self.metrics.increment,
                     name="routing_mistake",
                     value=1,
-                    tags={"reason": "sampled_too_low"},
+                    tags={
+                        "reason": "sampled_too_low",
+                        "tier": routing_context.query_settings.get_sampling_tier().name,
+                    },
                 )
             else:
                 self._record_value_in_span_and_DD(
@@ -326,7 +332,9 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                     metrics_backend_func=self.metrics.increment,
                     name="routing_success",
                     value=1,
-                    tags={},
+                    tags={
+                        "tier": routing_context.query_settings.get_sampling_tier().name
+                    },
                 )
 
     @final

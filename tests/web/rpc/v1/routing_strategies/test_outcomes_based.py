@@ -113,3 +113,14 @@ def test_outcomes_based_routing_downsample(store_outcomes_data: Any) -> None:
     tier, settings = strategy._decide_tier_and_query_settings(routing_context)
     assert tier == Tier.TIER_8
     assert settings == {}
+    state.set_config(
+        "OutcomesBasedRoutingStrategy.max_items_before_downsampling", 500_000
+    )
+    tier, settings = strategy._decide_tier_and_query_settings(routing_context)
+    assert tier == Tier.TIER_64
+
+    state.set_config(
+        "OutcomesBasedRoutingStrategy.max_items_before_downsampling", 50_000
+    )
+    tier, settings = strategy._decide_tier_and_query_settings(routing_context)
+    assert tier == Tier.TIER_512
