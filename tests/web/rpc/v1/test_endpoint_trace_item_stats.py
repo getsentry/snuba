@@ -1,7 +1,5 @@
-import random
-import uuid
 from datetime import datetime, timedelta
-from typing import Any, Mapping
+from typing import Any
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -18,95 +16,14 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
 )
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_stats import EndpointTraceItemStats
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
-
-_RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
-_SERVER_NAME = "D23CXQ4GK2.local"
-
-
-def gen_message(
-    dt: datetime,
-    measurements: dict[str, dict[str, float]] | None = None,
-    tags: dict[str, str] | None = None,
-) -> Mapping[str, Any]:
-    measurements = measurements or {}
-    tags = tags or {}
-    return {
-        "description": "/api/0/relays/projectconfigs/",
-        "duration_ms": 152,
-        "event_id": "d826225de75d42d6b2f01b957d51f18f",
-        "exclusive_time_ms": 0.228,
-        "is_segment": True,
-        "data": {
-            "sentry.environment": "development",
-            "sentry.release": _RELEASE_TAG,
-            "thread.name": "uWSGIWorker1Core0",
-            "thread.id": "8522009600",
-            "sentry.segment.name": "/api/0/relays/projectconfigs/",
-            "sentry.sdk.name": "sentry.python.django",
-            "sentry.sdk.version": "2.7.0",
-            "my.float.field": 101.2,
-            "my.int.field": 2000,
-            "my.neg.field": -100,
-            "my.neg.float.field": -101.2,
-            "my.true.bool.field": True,
-            "my.false.bool.field": False,
-        },
-        "measurements": {
-            "num_of_spans": {"value": 50.0},
-            "eap.measurement": {"value": random.choice([1, 100, 1000])},
-            **measurements,
-        },
-        "organization_id": 1,
-        "origin": "auto.http.django",
-        "project_id": 1,
-        "received": 1721319572.877828,
-        "retention_days": 90,
-        "segment_id": "8873a98879faf06d",
-        "sentry_tags": {
-            "category": "http",
-            "environment": "development",
-            "op": "http.server",
-            "platform": "python",
-            "release": _RELEASE_TAG,
-            "sdk.name": "sentry.python.django",
-            "sdk.version": "2.7.0",
-            "status": "ok",
-            "status_code": "200",
-            "thread.id": "8522009600",
-            "thread.name": "uWSGIWorker1Core0",
-            "trace.status": "ok",
-            "transaction": "/api/0/relays/projectconfigs/",
-            "transaction.method": "POST",
-            "transaction.op": "http.server",
-            "user": "ip:127.0.0.1",
-        },
-        "span_id": "123456781234567D",
-        "tags": {
-            "http.status_code": "200",
-            "relay_endpoint_version": "3",
-            "relay_id": "88888888-4444-4444-8444-cccccccccccc",
-            "relay_no_cache": "False",
-            "relay_protocol_version": "3",
-            "relay_use_post_or_schedule": "True",
-            "relay_use_post_or_schedule_rejected": "version",
-            "server_name": _SERVER_NAME,
-            "spans_over_limit": "False",
-            "color": random.choice(["red", "green", "blue"]),
-            "location": random.choice(["mobile", "frontend", "backend"]),
-            **tags,
-        },
-        "trace_id": uuid.uuid4().hex,
-        "start_timestamp_ms": int(dt.timestamp()) * 1000 - int(random.gauss(1000, 200)),
-        "start_timestamp_precise": dt.timestamp(),
-        "end_timestamp_precise": dt.timestamp() + 1,
-    }
-
+from tests.web.rpc.v1.test_utils import gen_item_message
 
 BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
     minutes=180
@@ -118,9 +35,9 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
     start = BASE_TIME
     messages = [
-        gen_message(
+        gen_item_message(
             start - timedelta(minutes=i),
-            tags={"low_cardinality": f"{i // 40}"},
+            attributes={"low_cardinality": AnyValue(string_value=f"{i // 40}")},
         )
         for i in range(120)
     ]

@@ -1,6 +1,5 @@
-import uuid
 from datetime import UTC, datetime, timedelta, timezone
-from typing import Any, Mapping
+from typing import Any
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -9,12 +8,14 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.trace_item_attribute_values import AttributeValuesRequest
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
+from tests.web.rpc.v1.test_utils import gen_item_message
 
 BASE_TIME = datetime.now(timezone.utc).replace(
     minute=0, second=0, microsecond=0
@@ -50,43 +51,53 @@ COMMON_META = RequestMeta(
 )
 
 
-def gen_message(tags: Mapping[str, str]) -> Mapping[str, Any]:
-    return {
-        "description": "/api/0/relays/projectconfigs/",
-        "duration_ms": 152,
-        "event_id": "d826225de75d42d6b2f01b957d51f18f",
-        "exclusive_time_ms": 0.228,
-        "is_segment": True,
-        "data": {},
-        "measurements": {},
-        "organization_id": 1,
-        "origin": "auto.http.django",
-        "project_id": 1,
-        "received": 1721319572.877828,
-        "retention_days": 90,
-        "segment_id": "8873a98879faf06d",
-        "sentry_tags": {},
-        "span_id": uuid.uuid4().hex,
-        "tags": tags,
-        "trace_id": uuid.uuid4().hex,
-        "start_timestamp_ms": int(BASE_TIME.timestamp() * 1000),
-        "start_timestamp_precise": BASE_TIME.timestamp(),
-        "end_timestamp_precise": BASE_TIME.timestamp() + 1,
-    }
-
-
 @pytest.fixture(autouse=True)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
     messages = [
-        gen_message({"tag1": "herp", "tag2": "herp"}),
-        gen_message({"tag1": "herpderp", "tag2": "herp"}),
-        gen_message({"tag1": "durp", "tag3": "herp"}),
-        gen_message({"tag1": "blah", "tag2": "herp"}),
-        gen_message({"tag1": "derpderp", "tag2": "derp"}),
-        gen_message({"tag2": "hehe"}),
-        gen_message({"tag1": "some_last_value"}),
-        gen_message({"sentry.transaction": "*foo"}),
+        gen_item_message(
+            attributes={
+                "tag1": AnyValue(string_value="herp"),
+                "tag2": AnyValue(string_value="herp"),
+            },
+        ),
+        gen_item_message(
+            attributes={
+                "tag1": AnyValue(string_value="herpderp"),
+                "tag2": AnyValue(string_value="herp"),
+            },
+        ),
+        gen_item_message(
+            attributes={
+                "tag1": AnyValue(string_value="durp"),
+                "tag3": AnyValue(string_value="herp"),
+            },
+        ),
+        gen_item_message(
+            attributes={
+                "tag1": AnyValue(string_value="blah"),
+                "tag2": AnyValue(string_value="herp"),
+            },
+        ),
+        gen_item_message(
+            attributes={
+                "tag1": AnyValue(string_value="derpderp"),
+                "tag2": AnyValue(string_value="derp"),
+            },
+        ),
+        gen_item_message(
+            attributes={"tag2": AnyValue(string_value="hehe")},
+        ),
+        gen_item_message(
+            attributes={
+                "tag1": AnyValue(string_value="some_last_value"),
+            },
+        ),
+        gen_item_message(
+            attributes={
+                "sentry.transaction": AnyValue(string_value="*foo"),
+            },
+        ),
     ]
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 

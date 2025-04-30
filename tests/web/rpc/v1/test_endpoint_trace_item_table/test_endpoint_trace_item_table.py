@@ -2,7 +2,7 @@ import random
 import uuid
 from datetime import datetime, timedelta
 from math import inf
-from typing import Any, Mapping
+from typing import Any
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -51,6 +51,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     OrFilter,
     TraceItemFilter,
 )
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -63,124 +64,12 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import (
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
-
-_RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
-_SERVER_NAME = "D23CXQ4GK2.local"
-
-
-def gen_message(
-    dt: datetime,
-    measurements: dict[str, dict[str, float]] | None = None,
-    tags: dict[str, str] | None = None,
-    randomize_span_id: bool = False,
-) -> Mapping[str, Any]:
-    measurements = measurements or {}
-    tags = tags or {}
-    return {
-        "description": "/api/0/relays/projectconfigs/",
-        "duration_ms": 152,
-        "event_id": "d826225de75d42d6b2f01b957d51f18f",
-        "exclusive_time_ms": 0.228,
-        "is_segment": True,
-        "data": {
-            "sentry.environment": "development",
-            "sentry.release": _RELEASE_TAG,
-            "thread.name": "uWSGIWorker1Core0",
-            "thread.id": "8522009600",
-            "sentry.segment.name": "/api/0/relays/projectconfigs/",
-            "sentry.sdk.name": "sentry.python.django",
-            "sentry.sdk.version": "2.7.0",
-            "my.float.field": 101.2,
-            "my.int.field": 2000,
-            "my.neg.field": -100,
-            "my.neg.float.field": -101.2,
-            "my.true.bool.field": True,
-            "my.false.bool.field": False,
-        },
-        "measurements": {
-            "num_of_spans": {"value": 50.0},
-            "eap.measurement": {"value": random.choice([1, 100, 1000])},
-            **measurements,
-        },
-        "organization_id": 1,
-        "origin": "auto.http.django",
-        "project_id": 1,
-        "received": 1721319572.877828,
-        "retention_days": 90,
-        "segment_id": "8873a98879faf06d",
-        "sentry_tags": {
-            "category": "http",
-            "environment": "development",
-            "op": "http.server",
-            "platform": "python",
-            "release": _RELEASE_TAG,
-            "sdk.name": "sentry.python.django",
-            "sdk.version": "2.7.0",
-            "status": "ok",
-            "status_code": "200",
-            "thread.id": "8522009600",
-            "thread.name": "uWSGIWorker1Core0",
-            "trace.status": "ok",
-            "transaction": "/api/0/relays/projectconfigs/",
-            "transaction.method": "POST",
-            "transaction.op": "http.server",
-            "user": "ip:127.0.0.1",
-        },
-        "span_id": uuid.uuid4().hex if randomize_span_id else "123456781234567d",
-        "tags": {
-            "relay_endpoint_version": "3",
-            "relay_id": "88888888-4444-4444-8444-cccccccccccc",
-            "relay_no_cache": "False",
-            "relay_protocol_version": "3",
-            "relay_use_post_or_schedule": "True",
-            "relay_use_post_or_schedule_rejected": "version",
-            "server_name": _SERVER_NAME,
-            "spans_over_limit": "False",
-            "color": random.choice(["red", "green", "blue"]),
-            "location": random.choice(["mobile", "frontend", "backend"]),
-            **tags,
-        },
-        "trace_id": uuid.uuid4().hex,
-        "start_timestamp_ms": int(dt.timestamp()) * 1000 - int(random.gauss(1000, 200)),
-        "start_timestamp_precise": dt.timestamp(),
-        "end_timestamp_precise": dt.timestamp() + 1,
-    }
-
-
-def write_eap_span(
-    timestamp: datetime,
-    attributes: dict[str, str | float] | None = None,
-    count: int = 1,
-) -> None:
-    """
-    This is a helper function to write a single or multiple eap-spans to the database.
-    It uses gen_message to generate the spans and then writes them to the database.
-
-    Args:
-        timestamp: The timestamp of the span to write.
-        attributes: attributes to go on the span.
-        count: the number of these spans to write.
-    """
-    # convert attributes parameter into measurements and tags (what gen_message expects)
-    measurements = None
-    tags = None
-    if attributes is not None:
-        measurements = {}
-        tags = {}
-        for key, value in attributes.items():
-            if isinstance(value, str):
-                tags[key] = value
-            else:
-                measurements[key] = {"value": value}
-
-    write_raw_unprocessed_events(
-        get_storage(StorageKey("eap_items")),  # type: ignore
-        [
-            gen_message(timestamp, measurements=measurements, tags=tags)
-            for _ in range(count)
-        ],
-    )
-
+from tests.web.rpc.v1.test_utils import (
+    RELEASE_TAG,
+    SERVER_NAME,
+    gen_item_message,
+    write_eap_span,
+)
 
 BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
     minutes=180
@@ -191,7 +80,7 @@ BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timed
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
     start = BASE_TIME
-    messages = [gen_message(start - timedelta(minutes=i)) for i in range(120)]
+    messages = [gen_item_message(start - timedelta(minutes=i)) for i in range(120)]
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
@@ -421,7 +310,7 @@ class TestTraceItemTable(BaseApiTest):
             column_values=[
                 TraceItemColumnValues(
                     attribute_name="server_name",
-                    results=[AttributeValue(val_str=_SERVER_NAME) for _ in range(60)],
+                    results=[AttributeValue(val_str=SERVER_NAME) for _ in range(60)],
                 )
             ],
             page_token=PageToken(offset=60),
@@ -670,7 +559,7 @@ class TestTraceItemTable(BaseApiTest):
                 VirtualColumnContext(
                     from_column_name="sentry.release",
                     to_column_name="sentry.release_version",
-                    value_map={_RELEASE_TAG: "4.2.0.69"},
+                    value_map={RELEASE_TAG: "4.2.0.69"},
                 ),
             ],
         )
@@ -1237,22 +1126,26 @@ class TestTraceItemTable(BaseApiTest):
 
     def test_aggregation_on_attribute_column_backward_compat(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
-        start = BASE_TIME
-        measurement_val = 420.0
-        measurement = {"custom_measurement": {"value": measurement_val}}
-        tags = {"custom_tag": "blah"}
-        messages_w_measurement = [
-            gen_message(
-                start - timedelta(minutes=i), measurements=measurement, tags=tags
+        metrics = {"custom_measurement": AnyValue(double_value=420.0)}
+        attributes = {"custom_tag": AnyValue(string_value="blah")}
+        messages = []
+        for i in range(120):
+            start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
+            messages.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes=attributes | metrics,
+                ),
             )
-            for i in range(120)
-        ]
-        messages_no_measurement = [
-            gen_message(start - timedelta(minutes=i), tags=tags) for i in range(120)
-        ]
+            messages.append(
+                gen_item_message(
+                    start_timestamp,
+                    attributes=attributes,
+                )
+            )
         write_raw_unprocessed_events(
             items_storage,  # type: ignore
-            messages_w_measurement + messages_no_measurement,
+            messages,
         )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -1288,22 +1181,26 @@ class TestTraceItemTable(BaseApiTest):
 
     def test_aggregation_on_attribute_column(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
-        start = BASE_TIME
-        measurement_val = 420.0
-        measurement = {"custom_measurement": {"value": measurement_val}}
-        tags = {"custom_tag": "blah"}
-        messages_w_measurement = [
-            gen_message(
-                start - timedelta(minutes=i), measurements=measurement, tags=tags
+        metrics = {"custom_measurement": AnyValue(double_value=420.0)}
+        attributes = {"custom_tag": AnyValue(string_value="blah")}
+        messages = []
+        for i in range(120):
+            start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
+            messages.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes=attributes | metrics,
+                ),
             )
-            for i in range(120)
-        ]
-        messages_no_measurement = [
-            gen_message(start - timedelta(minutes=i), tags=tags) for i in range(120)
-        ]
+            messages.append(
+                gen_item_message(
+                    start_timestamp,
+                    attributes=attributes,
+                )
+            )
         write_raw_unprocessed_events(
             items_storage,  # type: ignore
-            messages_w_measurement + messages_no_measurement,
+            messages,
         )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -1684,9 +1581,27 @@ class TestTraceItemTable(BaseApiTest):
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
-            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(12)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
+            [
+                gen_item_message(
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val1")},
+                )
+                for i in range(3)
+            ]
+            + [
+                gen_item_message(
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val2")},
+                )
+                for i in range(12)
+            ]
+            + [
+                gen_item_message(
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val3")},
+                )
+                for i in range(30)
+            ]
         )
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
@@ -1774,9 +1689,24 @@ class TestTraceItemTable(BaseApiTest):
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
-            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(12)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
+            [
+                gen_item_message(
+                    msg_timestamp, tags={"kylestag": AnyValue(string_value="val1")}
+                )
+                for i in range(3)
+            ]
+            + [
+                gen_item_message(
+                    msg_timestamp, tags={"kylestag": AnyValue(string_value="val2")}
+                )
+                for i in range(12)
+            ]
+            + [
+                gen_item_message(
+                    msg_timestamp, tags={"kylestag": AnyValue(string_value="val3")}
+                )
+                for i in range(30)
+            ]
         )
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
@@ -1860,9 +1790,27 @@ class TestTraceItemTable(BaseApiTest):
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
-            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(4)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(3)]
+            [
+                gen_item_message(
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val1")},
+                )
+                for i in range(3)
+            ]
+            + [
+                gen_item_message(
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val2")},
+                )
+                for i in range(4)
+            ]
+            + [
+                gen_item_message(
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val3")},
+                )
+                for i in range(3)
+            ]
         )
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
@@ -1938,11 +1886,13 @@ class TestTraceItemTable(BaseApiTest):
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
-            gen_message(
-                msg_timestamp, measurements={"client_sample_rate": {"value": 0.1}}
+            gen_item_message(
+                msg_timestamp,
+                server_sample_rate=0.1,
             ),
-            gen_message(
-                msg_timestamp, measurements={"client_sample_rate": {"value": 0.85}}
+            gen_item_message(
+                msg_timestamp,
+                server_sample_rate=0.85,
             ),
         ]
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
@@ -2052,9 +2002,24 @@ class TestTraceItemTable(BaseApiTest):
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
-            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(12)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
+            [
+                gen_item_message(
+                    msg_timestamp, tags={"kylestag": AnyValue(string_value="val1")}
+                )
+                for i in range(3)
+            ]
+            + [
+                gen_item_message(
+                    msg_timestamp, tags={"kylestag": AnyValue(string_value="val2")}
+                )
+                for i in range(12)
+            ]
+            + [
+                gen_item_message(
+                    msg_timestamp, tags={"kylestag": AnyValue(string_value="val3")}
+                )
+                for i in range(30)
+            ]
         )
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
@@ -2218,9 +2183,27 @@ class TestTraceItemTable(BaseApiTest):
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
-            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(12)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
+            [
+                gen_item_message(
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val1")},
+                )
+                for i in range(3)
+            ]
+            + [
+                gen_item_message(
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val2")},
+                )
+                for i in range(12)
+            ]
+            + [
+                gen_item_message(
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val3")},
+                )
+                for i in range(30)
+            ]
         )
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
@@ -2383,9 +2366,27 @@ class TestTraceItemTable(BaseApiTest):
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
-            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(12)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
+            [
+                gen_item_message(
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val1")},
+                )
+                for i in range(3)
+            ]
+            + [
+                gen_item_message(
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val2")},
+                )
+                for i in range(12)
+            ]
+            + [
+                gen_item_message(
+                    msg_timestamp,
+                    attributes={"kylestag": AnyValue(string_value="val3")},
+                )
+                for i in range(30)
+            ]
         )
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
@@ -3166,158 +3167,13 @@ class TestTraceItemTable(BaseApiTest):
             AttributeValue(val_str="a") for _ in range(10)
         ] + [AttributeValue(val_str="default") for _ in range(5)]
 
-    def test_preflight(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
-        msg_timestamp = BASE_TIME - timedelta(minutes=1)
-        messages = [
-            gen_message(
-                msg_timestamp,
-                tags={"preflighttag": "preflight"},
-                randomize_span_id=True,
-            )
-            for _ in range(3600)
-        ]
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
-
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-
-        columns = [
-            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="preflighttag"))
-        ]
-        preflight_message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_PREFLIGHT
-                ),
-            ),
-            columns=columns,
-        )
-
-        message_to_non_downsampled_tier = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            columns=[
-                Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="preflighttag")
-                )
-            ],
-        )
-
-        preflight_response = EndpointTraceItemTable().execute(preflight_message)
-        non_downsampled_tier_response = EndpointTraceItemTable().execute(
-            message_to_non_downsampled_tier
-        )
-        assert (
-            len(preflight_response.column_values[0].results)
-            < len(non_downsampled_tier_response.column_values[0].results) / 10
-        )
-        assert (
-            preflight_response.meta.downsampled_storage_meta
-            == DownsampledStorageMeta(
-                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64,
-                can_go_to_higher_accuracy_tier=True,
-            )
-        )
-
-    def test_best_effort_route_to_tier_64(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
-        msg_timestamp = BASE_TIME - timedelta(minutes=1)
-        messages = [
-            gen_message(
-                msg_timestamp,
-                tags={"tier64tag": "tier64tag"},
-                randomize_span_id=True,
-            )
-            for _ in range(3600)
-        ]
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
-
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-
-        columns = [
-            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="tier64tag"))
-        ]
-
-        # sends a best effort request and a non-downsampled request to ensure their responses are different
-        best_effort_message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
-                ),
-            ),
-            columns=columns,
-        )
-        message_to_non_downsampled_tier = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            columns=columns,
-        )
-        # this forces the query to route to tier 64. take a look at _get_target_tier to find out why
-        with patch(
-            "snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.linear_bytes_scanned_storage_routing.LinearBytesScannedRoutingStrategy._get_query_bytes_scanned",
-            return_value=20132659201,
-        ):
-            best_effort_response = EndpointTraceItemTable().execute(best_effort_message)
-            non_downsampled_tier_response = EndpointTraceItemTable().execute(
-                message_to_non_downsampled_tier
-            )
-
-            # tier 1's results should be 3600, so tier 64's results should be around 3600 / 64 (give or take due to random sampling)
-            assert (
-                len(non_downsampled_tier_response.column_values[0].results) / 200
-                <= len(best_effort_response.column_values[0].results)
-                <= len(non_downsampled_tier_response.column_values[0].results) / 16
-            )
-            assert (
-                best_effort_response.meta.downsampled_storage_meta
-                == DownsampledStorageMeta(
-                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64,
-                    can_go_to_higher_accuracy_tier=True,
-                )
-            )
-
     def test_normal_mode_end_to_end(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
-            gen_message(
+            gen_item_message(
                 msg_timestamp,
-                tags={"endtoend": "endtoend"},
-                randomize_span_id=True,
+                attributes={"endtoend": AnyValue(string_value="endtoend")},
             )
             for _ in range(3600)
         ]
@@ -3354,10 +3210,9 @@ class TestTraceItemTable(BaseApiTest):
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
-            gen_message(
+            gen_item_message(
                 msg_timestamp,
-                tags={"endtoend": "endtoend"},
-                randomize_span_id=True,
+                attributes={"endtoend": AnyValue(string_value="endtoend")},
             )
             for _ in range(3600)
         ]

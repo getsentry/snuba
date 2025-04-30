@@ -1,7 +1,5 @@
 import random
-import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -16,6 +14,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
 )
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -23,78 +22,7 @@ from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     EndpointTraceItemAttributeNames,
 )
 from tests.helpers import write_raw_unprocessed_events
-
-_RELEASE_TAG = "4.2.0"
-
-
-def gen_message(
-    project_id: int,
-    dt: datetime,
-    measurements: dict[str, dict[str, float]] | None = None,
-    tags: dict[str, str] | None = None,
-) -> Mapping[str, Any]:
-    measurements = measurements or {}
-    tags = tags or {}
-    return {
-        "description": "/api/0/relays/projectconfigs/",
-        "duration_ms": 152,
-        "event_id": "d826225de75d42d6b2f01b957d51f18f",
-        "exclusive_time_ms": 0.228,
-        "is_segment": True,
-        "data": {
-            "sentry.environment": "development",
-            "sentry.release": "abcde",
-            "thread.name": "uWSGIWorker1Core0",
-            "thread.id": "8522009600",
-            "sentry.segment.name": "/api/0/relays/projectconfigs/",
-            "sentry.sdk.name": "sentry.python.django",
-            "sentry.sdk.version": "2.7.0",
-            "my.float.field": 101.2,
-            "my.int.field": 2000,
-            "my.neg.field": -100,
-            "my.neg.float.field": -101.2,
-            "my.true.bool.field": True,
-            "my.false.bool.field": False,
-        },
-        "measurements": {
-            "num_of_spans": {"value": 50.0},
-            "eap.measurement": {"value": random.choice([1, 100, 1000])},
-            **measurements,
-        },
-        "organization_id": 1,
-        "origin": "auto.http.django",
-        "project_id": project_id,
-        "received": 1721319572.877828,
-        "retention_days": 90,
-        "segment_id": "8873a98879faf06d",
-        "sentry_tags": {
-            "category": "http",
-            "environment": "development",
-            "op": "http.server",
-            "platform": "python",
-            "release": _RELEASE_TAG,
-            "sdk.name": "sentry.python.django",
-            "sdk.version": "2.7.0",
-            "status": "ok",
-            "status_code": "200",
-            "thread.id": "8522009600",
-            "thread.name": "uWSGIWorker1Core0",
-            "trace.status": "ok",
-            "transaction": "/api/0/relays/projectconfigs/",
-            "transaction.method": "POST",
-            "transaction.op": "http.server",
-            "user": "ip:127.0.0.1",
-        },
-        "span_id": uuid.uuid4().hex,
-        "tags": {
-            **tags,
-        },
-        "trace_id": uuid.uuid4().hex,
-        "start_timestamp_ms": int(dt.timestamp()) * 1000 - int(random.gauss(1000, 200)),
-        "start_timestamp_precise": dt.timestamp(),
-        "end_timestamp_precise": dt.timestamp() + 1,
-    }
-
+from tests.web.rpc.v1.test_utils import gen_item_message
 
 BASE_TIME = datetime.now(timezone.utc).replace(
     minute=0, second=0, microsecond=0
@@ -125,15 +53,16 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     for attr_set in range(num_attr_sets):
         for _ in range(num_messages_per_set):
             messages.append(
-                gen_message(
-                    1,
-                    start,
-                    measurements={
-                        f"test_measure_{attr_set}_{i}": {"value": random.random()}
+                gen_item_message(
+                    start_timestamp=start,
+                    attributes={
+                        f"test_measure_{attr_set}_{i}": AnyValue(
+                            double_value=random.random()
+                        )
                         for i in range(num_attributes_per_item)
-                    },
-                    tags={
-                        f"test_tag_{attr_set}_{i}": "value"
+                    }
+                    | {
+                        f"test_tag_{attr_set}_{i}": AnyValue(string_attribute="value")
                         for i in range(num_attributes_per_item)
                     },
                 )
