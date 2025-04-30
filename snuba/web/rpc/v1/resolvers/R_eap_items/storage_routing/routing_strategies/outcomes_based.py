@@ -2,7 +2,6 @@ import uuid
 from typing import cast
 
 from google.protobuf.json_format import MessageToDict
-from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba import state
@@ -62,14 +61,6 @@ def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
 
 
 class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
-    def _is_highest_accuracy_mode(self, routing_context: RoutingContext) -> bool:
-        if not routing_context.in_msg.meta.HasField("downsampled_storage_config"):
-            return False
-        return (
-            routing_context.in_msg.meta.downsampled_storage_config.mode
-            == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
-        )
-
     def get_ingested_items_for_timerange(self, routing_context: RoutingContext) -> int:
         entity = Entity(
             key=EntityKey("outcomes"),
