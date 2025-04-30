@@ -29,17 +29,6 @@ MetricsBackendType: TypeAlias = Callable[
 
 
 class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
-    def _get_time_budget_ms(self) -> float:
-        sentry_timeout_ms = cast(
-            int,
-            state.get_int_config(self.config_key() + "_sentry_timeout", default=8000),
-        )  # 8s
-        error_budget_ms = cast(
-            int,
-            state.get_int_config(self.config_key() + "_error_budget", default=500),
-        )  # 0.5s
-        return sentry_timeout_ms - error_budget_ms
-
     def _get_most_downsampled_tier(self) -> Tier:
         return Tier.TIER_64
 
@@ -109,7 +98,7 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
                     self._record_value_in_span_and_DD(
                         routing_context,
                         self.metrics.distribution,
-                        "estimated_query_bytes_scanned_to_this_tier",
+                        f"estimated_query_bytes_scanned_to_tier_{tier}",
                         estimated_query_bytes_scanned_to_this_tier,
                         {"tier": str(tier)},
                     )
@@ -250,52 +239,8 @@ class NormalModeLinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         assert routing_context.query_result
         target_tier = routing_context.query_settings.get_sampling_tier()
-        query_duration_ms = self._get_query_duration_ms(routing_context.query_result)
-
-        if query_duration_ms >= 0.98 * self._get_time_budget_ms():
-            self._record_value_in_span_and_DD(
-                routing_context,
-                self.metrics.increment,
-                "routing_mistake",
-                1,
-                tags={
-                    "tier": str(target_tier),
-                    "reason": "normal_mode_query_exceeds_time_budget",
-                },
-            )
 
         if self._is_normal_mode(routing_context):
             self._emit_estimation_error_info(
                 routing_context, {"tier": str(target_tier)}
             )
-            self._record_value_in_span_and_DD(
-                routing_context,
-                self.metrics.distribution,
-                "actual_bytes_scanned_in_target_tier",
-                self._get_query_bytes_scanned(routing_context.query_result),
-                tags={"tier": str(target_tier)},
-            )
-            self._record_value_in_span_and_DD(
-                routing_context,
-                self.metrics.timing,
-                "time_to_run_query_in_target_tier",
-                query_duration_ms,
-                tags={"tier": str(target_tier)},
-            )
-
-            if (
-                target_tier != Tier.TIER_1
-                and (self._get_time_budget_ms() - query_duration_ms)
-                / self._get_time_budget_ms()
-                >= 0.2
-            ):
-                self._record_value_in_span_and_DD(
-                    routing_context,
-                    self.metrics.increment,
-                    "routing_mistake",
-                    1,
-                    tags={
-                        "tier": str(target_tier),
-                        "reason": "query_should_run_on_higher_accuracy_tier",
-                    },
-                )

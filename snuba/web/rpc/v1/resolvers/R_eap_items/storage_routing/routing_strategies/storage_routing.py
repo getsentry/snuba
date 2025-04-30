@@ -10,7 +10,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
-from snuba import environment, settings
+from snuba import environment, settings, state
 from snuba.attribution import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.pluggable_dataset import PluggableDataset
@@ -29,6 +29,7 @@ from snuba.web.query import run_query
 _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
 _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
 _END_ESTIMATION_MARK = "end_sampling_in_storage_estimation"
+DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX = "StorageRouting"
 MetricsBackendType: TypeAlias = Callable[
     [str, Union[int, float], Optional[Dict[str, str]], Optional[str]], None
 ]
@@ -233,6 +234,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
     @final
     def __output_metrics(self, routing_context: RoutingContext) -> None:
+        self._emit_routing_mistake(routing_context)
         self._output_metrics(routing_context)
         query_result = routing_context.query_result or QueryResult(
             {}, {"stats": {}, "sql": "", "experiments": {}}
@@ -258,6 +260,82 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
+
+    def _get_sampled_too_low_threshold(self) -> int:
+        default = 1000
+        return (
+            state.get_int_config(
+                f"{self.config_key()}.sampled_too_low_threshold",
+                state.get_int_config(
+                    f"{DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX}.sampled_too_low_threshold",
+                    default,
+                )
+                or default,
+            )
+            or default
+        )
+
+    def _get_time_budget_ms(self) -> int:
+        """
+        Get the time budget for the query, Each strategy can have its own
+        time budget overridden or can default to a global one set in runtime config
+        """
+        default = 8000
+        return (
+            state.get_int_config(
+                f"{self.config_key()}.time_budget_ms",
+                state.get_int_config(
+                    f"{DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX}.time_budget_ms",
+                    default,
+                )
+                or default,
+            )
+            or default
+        )
+
+    def _emit_routing_mistake(self, routing_context: RoutingContext) -> None:
+        if not routing_context.query_result:
+            return
+        profile = routing_context.query_result.result.get("profile", {}) or {}
+        if elapsed := profile.get("elapsed"):
+            elapsed_ms = elapsed * 1000
+            time_budget = self._get_time_budget_ms()
+            routing_context.extra_info["time_budget"] = time_budget
+            if elapsed_ms > time_budget:
+                self._record_value_in_span_and_DD(
+                    routing_context=routing_context,
+                    metrics_backend_func=self.metrics.increment,
+                    name="routing_mistake",
+                    value=1,
+                    tags={
+                        "reason": "time_budget_exceeded",
+                        "tier": routing_context.query_settings.get_sampling_tier().name,
+                    },
+                )
+            elif (
+                routing_context.query_settings.get_sampling_tier() != Tier.TIER_1
+                and elapsed_ms < self._get_sampled_too_low_threshold()
+            ):
+                self._record_value_in_span_and_DD(
+                    routing_context=routing_context,
+                    metrics_backend_func=self.metrics.increment,
+                    name="routing_mistake",
+                    value=1,
+                    tags={
+                        "reason": "sampled_too_low",
+                        "tier": routing_context.query_settings.get_sampling_tier().name,
+                    },
+                )
+            else:
+                self._record_value_in_span_and_DD(
+                    routing_context=routing_context,
+                    metrics_backend_func=self.metrics.increment,
+                    name="routing_success",
+                    value=1,
+                    tags={
+                        "tier": routing_context.query_settings.get_sampling_tier().name
+                    },
+                )
 
     @final
     @with_span(op="function")

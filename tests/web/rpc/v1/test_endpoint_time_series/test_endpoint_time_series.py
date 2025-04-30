@@ -1270,6 +1270,7 @@ class TestTimeSeriesApi(BaseApiTest):
             expected_formula_timeseries,
         ]
 
+    @pytest.mark.xfail(reason="Outcomes based strategy does not care about query mode")
     def test_preflight(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 3600
@@ -1347,11 +1348,11 @@ class TestTimeSeriesApi(BaseApiTest):
         assert (
             preflight_response.meta.downsampled_storage_meta
             == DownsampledStorageMeta(
-                tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64,
                 can_go_to_higher_accuracy_tier=True,
             )
         )
 
+    @pytest.mark.xfail(reason="Outcomes based strategy does not care about query mode")
     def test_best_effort_route_to_tier_64(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 3600
@@ -1436,7 +1437,6 @@ class TestTimeSeriesApi(BaseApiTest):
             assert (
                 best_effort_response.meta.downsampled_storage_meta
                 == DownsampledStorageMeta(
-                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_64,
                     can_go_to_higher_accuracy_tier=True,
                 )
             )
@@ -1476,11 +1476,7 @@ class TestTimeSeriesApi(BaseApiTest):
             ],
             granularity_secs=granularity_secs,
         )
-        response = EndpointTimeSeries().execute(best_effort_downsample_message)
-        assert (
-            response.meta.downsampled_storage_meta.tier
-            != DownsampledStorageMeta.SELECTED_TIER_UNSPECIFIED
-        )
+        EndpointTimeSeries().execute(best_effort_downsample_message)
 
 
 class TestUtils:

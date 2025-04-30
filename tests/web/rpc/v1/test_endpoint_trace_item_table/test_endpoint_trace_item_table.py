@@ -317,7 +317,7 @@ class TestTraceItemTable(BaseApiTest):
             meta=ResponseMeta(
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 downsampled_storage_meta=DownsampledStorageMeta(
-                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_1
+                    can_go_to_higher_accuracy_tier=False,
                 ),
             ),
         )
@@ -406,7 +406,7 @@ class TestTraceItemTable(BaseApiTest):
             meta=ResponseMeta(
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 downsampled_storage_meta=DownsampledStorageMeta(
-                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_1
+                    can_go_to_higher_accuracy_tier=False,
                 ),
             ),
         )
@@ -493,7 +493,7 @@ class TestTraceItemTable(BaseApiTest):
             meta=ResponseMeta(
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 downsampled_storage_meta=DownsampledStorageMeta(
-                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_1
+                    can_go_to_higher_accuracy_tier=False,
                 ),
             ),
         )
@@ -586,7 +586,7 @@ class TestTraceItemTable(BaseApiTest):
             meta=ResponseMeta(
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 downsampled_storage_meta=DownsampledStorageMeta(
-                    tier=DownsampledStorageMeta.SelectedTier.SELECTED_TIER_1
+                    can_go_to_higher_accuracy_tier=False,
                 ),
             ),
         )
@@ -3200,11 +3200,7 @@ class TestTraceItemTable(BaseApiTest):
                 Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="endtoend"))
             ],
         )
-        response = EndpointTraceItemTable().execute(best_effort_message)
-        assert (
-            response.meta.downsampled_storage_meta.tier
-            != DownsampledStorageMeta.SELECTED_TIER_UNSPECIFIED
-        )
+        EndpointTraceItemTable().execute(best_effort_message)
 
     def test_downsampling_uses_hexintcolumnprocessor(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))

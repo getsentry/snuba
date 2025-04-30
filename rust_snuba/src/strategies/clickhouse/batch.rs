@@ -6,6 +6,7 @@ use std::mem;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -125,11 +126,14 @@ impl BatchFactory {
         let client = self.client.clone();
 
         let result_handle = self.handle.spawn(async move {
+            let mut sleep_time = 0;
             while receiver.is_empty() && !receiver.is_closed() {
                 // continously check on the receiver stream, only when it's
                 // not empty do we write to clickhouse
+                sleep_time += 800;
                 sleep(Duration::from_millis(800)).await;
             }
+            gauge!("rust_consumer.receiver_sleep_time_ms", sleep_time as u64);
 
             if !receiver.is_empty() {
                 // only make the request to clickhouse if there is data
@@ -233,7 +237,13 @@ impl HttpBatch {
         // finish stream
         drop(self.sender.take());
         if let Some(handle) = self.result_handle.take() {
-            handle.await??;
+            // timeout on writing a batch to clickhouse after 2 minutes
+            match timeout(Duration::from_millis(120000), handle).await {
+                Ok(res) => res??,
+                Err(_) => {
+                    anyhow::bail!("Timedout writing to clickhouse");
+                }
+            }
             Ok(true)
         } else {
             Ok(false)
