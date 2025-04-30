@@ -3,6 +3,9 @@ from typing import Callable
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 
+from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.timer import Timer
@@ -34,3 +37,33 @@ def run_query_to_correct_tier(
         routing_context
     )
     return selected_strategy.run_query_to_correct_tier(routing_context)
+
+
+def get_eap_cluster_load() -> float:
+    query = """
+SELECT
+    max(load_average.value / cpu_counts.num_cpus * 100) AS max_normalized_load
+FROM (
+    SELECT
+        hostName() AS host,
+        value,
+        metric
+    FROM clusterAllReplicas('snuba-events-analytics-platform', 'system', asynchronous_metrics)
+    WHERE metric = 'LoadAverage1'
+) AS load_average
+JOIN (
+    SELECT
+        hostName() AS host,
+        max(toInt32(replaceAll(metric, 'OSNiceTimeCPU', ''))) + 1 AS num_cpus
+    FROM clusterAllReplicas('snuba-events-analytics-platform', 'system', asynchronous_metrics)
+    WHERE metric LIKE 'OSNiceTimeCPU%'
+    GROUP BY host
+) AS cpu_counts
+ON load_average.host = cpu_counts.host
+    """
+    eap_cluster = get_storage(StorageKey("eap_items")).get_cluster()
+    return float(
+        eap_cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+        .execute(query)
+        .results[0][0]
+    )
