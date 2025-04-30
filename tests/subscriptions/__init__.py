@@ -101,7 +101,7 @@ class BaseSubscriptionTest:
 def __entity_eq__(self: Entity, other: object) -> bool:
     if not isinstance(other, Entity):
         return False
-    return isinstance(self, other)
+    return isinstance(self, type(other))
 
 
 Entity.__eq__ = __entity_eq__  # type: ignore
