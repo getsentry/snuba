@@ -288,7 +288,6 @@ class TestTraceItemDetails(BaseApiTest):
 
         assert set(x.name for x in res.attributes) == {
             "sentry.body",
-            "sentry.span_id",
             "sentry.severity_text",
             "sentry.severity_number",
             "sentry.organization_id",
