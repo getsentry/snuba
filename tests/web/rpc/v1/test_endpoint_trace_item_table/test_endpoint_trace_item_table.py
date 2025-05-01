@@ -1,5 +1,4 @@
 import random
-import uuid
 from datetime import datetime, timedelta
 from math import inf
 from typing import Any
@@ -65,22 +64,59 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import (
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (
+    BASE_TIME,
+    END_TIMESTAMP,
     RELEASE_TAG,
     SERVER_NAME,
+    START_TIMESTAMP,
     gen_item_message,
     write_eap_span,
 )
 
-BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
-    minutes=180
-)
+_SPAN_COUNT = 120
 
 
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
-    start = BASE_TIME
-    messages = [gen_item_message(start - timedelta(minutes=i)) for i in range(120)]
+    messages = [
+        gen_item_message(
+            start_timestamp=BASE_TIME + timedelta(minutes=i),
+            item_id=int("123456781234567d", 16).to_bytes(16, byteorder="little"),
+            attributes={
+                "color": AnyValue(
+                    string_value=random.choice(
+                        [
+                            "red",
+                            "green",
+                            "blue",
+                        ]
+                    )
+                ),
+                "eap.measurement": AnyValue(
+                    int_value=random.choice(
+                        [
+                            1,
+                            100,
+                            1000,
+                        ]
+                    )
+                ),
+                "location": AnyValue(
+                    string_value=random.choice(
+                        [
+                            "mobile",
+                            "frontend",
+                            "backend",
+                        ]
+                    )
+                ),
+                "custom_measurement": AnyValue(double_value=420.0),
+                "custom_tag": AnyValue(string_value="blah"),
+            },
+        )
+        for i in range(_SPAN_COUNT)
+    ]
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
@@ -97,7 +133,7 @@ class TestTraceItemTable(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=ts,
-                end_timestamp=ts,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -135,7 +171,7 @@ class TestTraceItemTable(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=ts,
-                end_timestamp=ts,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -184,7 +220,7 @@ class TestTraceItemTable(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=ts,
-                end_timestamp=ts,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 downsampled_storage_config=DownsampledStorageConfig(
                     mode=DownsampledStorageConfig.MODE_BEST_EFFORT
@@ -243,7 +279,7 @@ class TestTraceItemTable(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=ts,
-                end_timestamp=ts,
+                end_timestamp=END_TIMESTAMP,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -271,16 +307,14 @@ class TestTraceItemTable(BaseApiTest):
         assert response.status_code == 400, error_proto
 
     def test_with_data(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
-                project_ids=[1, 2, 3],
+                project_ids=[1],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
@@ -305,15 +339,16 @@ class TestTraceItemTable(BaseApiTest):
             ],
         )
         response = EndpointTraceItemTable().execute(message)
-
         expected_response = TraceItemTableResponse(
             column_values=[
                 TraceItemColumnValues(
                     attribute_name="server_name",
-                    results=[AttributeValue(val_str=SERVER_NAME) for _ in range(60)],
+                    results=[
+                        AttributeValue(val_str=SERVER_NAME) for _ in range(_SPAN_COUNT)
+                    ],
                 )
             ],
-            page_token=PageToken(offset=60),
+            page_token=PageToken(offset=_SPAN_COUNT),
             meta=ResponseMeta(
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 downsampled_storage_meta=DownsampledStorageMeta(
@@ -321,21 +356,19 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ),
         )
-        assert response == expected_response
+        assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_booleans_and_number_compares_backward_compat(
         self, setup_teardown: Any
     ) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
-                project_ids=[1, 2, 3],
+                project_ids=[1],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
@@ -393,16 +426,16 @@ class TestTraceItemTable(BaseApiTest):
             column_values=[
                 TraceItemColumnValues(
                     attribute_name="sentry.is_segment",
-                    results=[AttributeValue(val_bool=True) for _ in range(60)],
+                    results=[AttributeValue(val_bool=True) for _ in range(61)],
                 ),
                 TraceItemColumnValues(
                     attribute_name="sentry.span_id",
                     results=[
-                        AttributeValue(val_str="123456781234567d") for _ in range(60)
+                        AttributeValue(val_str="123456781234567d") for _ in range(61)
                     ],
                 ),
             ],
-            page_token=PageToken(offset=60),
+            page_token=PageToken(offset=61),
             meta=ResponseMeta(
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 downsampled_storage_meta=DownsampledStorageMeta(
@@ -410,19 +443,17 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ),
         )
-        assert response == expected_response
+        assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_booleans_and_number_compares(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
-                project_ids=[1, 2, 3],
+                project_ids=[1],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
@@ -480,16 +511,16 @@ class TestTraceItemTable(BaseApiTest):
             column_values=[
                 TraceItemColumnValues(
                     attribute_name="sentry.is_segment",
-                    results=[AttributeValue(val_bool=True) for _ in range(60)],
+                    results=[AttributeValue(val_bool=True) for _ in range(61)],
                 ),
                 TraceItemColumnValues(
                     attribute_name="sentry.span_id",
                     results=[
-                        AttributeValue(val_str="123456781234567d") for _ in range(60)
+                        AttributeValue(val_str="123456781234567d") for _ in range(61)
                     ],
                 ),
             ],
-            page_token=PageToken(offset=60),
+            page_token=PageToken(offset=61),
             meta=ResponseMeta(
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 downsampled_storage_meta=DownsampledStorageMeta(
@@ -500,8 +531,6 @@ class TestTraceItemTable(BaseApiTest):
         assert response == expected_response
 
     def test_with_virtual_columns(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         limit = 5
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -509,8 +538,8 @@ class TestTraceItemTable(BaseApiTest):
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
@@ -603,16 +632,14 @@ class TestTraceItemTable(BaseApiTest):
         )
 
     def test_order_by_virtual_columns(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -652,16 +679,14 @@ class TestTraceItemTable(BaseApiTest):
         assert sorted(result_colors) == result_colors
 
     def test_table_with_aggregates_backward_compat(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
-                project_ids=[1, 2, 3],
+                project_ids=[1],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -735,16 +760,14 @@ class TestTraceItemTable(BaseApiTest):
         ]
 
     def test_table_with_aggregates(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -821,16 +844,14 @@ class TestTraceItemTable(BaseApiTest):
     def test_table_with_columns_not_in_groupby_backward_compat(
         self, setup_teardown: Any
     ) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -862,16 +883,14 @@ class TestTraceItemTable(BaseApiTest):
             EndpointTraceItemTable().execute(message)
 
     def test_table_with_columns_not_in_groupby(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -903,16 +922,14 @@ class TestTraceItemTable(BaseApiTest):
             EndpointTraceItemTable().execute(message)
 
     def test_order_by_non_selected_backward_compat(self) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -958,16 +975,14 @@ class TestTraceItemTable(BaseApiTest):
             EndpointTraceItemTable().execute(message)
 
     def test_order_by_non_selected(self) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -1013,16 +1028,14 @@ class TestTraceItemTable(BaseApiTest):
             EndpointTraceItemTable().execute(message)
 
     def test_order_by_aggregation_backward_compat(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -1069,16 +1082,14 @@ class TestTraceItemTable(BaseApiTest):
         assert sorted(measurements) == measurements
 
     def test_order_by_aggregation(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -1124,40 +1135,18 @@ class TestTraceItemTable(BaseApiTest):
         measurements = [v.val_double for v in response.column_values[1].results]
         assert sorted(measurements) == measurements
 
-    def test_aggregation_on_attribute_column_backward_compat(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
-        metrics = {"custom_measurement": AnyValue(double_value=420.0)}
-        attributes = {"custom_tag": AnyValue(string_value="blah")}
-        messages = []
-        for i in range(120):
-            start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
-            messages.append(
-                gen_item_message(
-                    start_timestamp=start_timestamp,
-                    attributes=attributes | metrics,
-                ),
-            )
-            messages.append(
-                gen_item_message(
-                    start_timestamp,
-                    attributes=attributes,
-                )
-            )
-        write_raw_unprocessed_events(
-            items_storage,  # type: ignore
-            messages,
-        )
-
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+    def test_aggregation_on_attribute_column_backward_compat(
+        self,
+        setup_teardown: Any,
+    ) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -1165,54 +1154,32 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                            type=AttributeKey.TYPE_FLOAT,
+                            name="custom_measurement",
                         ),
                         label="avg(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
             ],
-            order_by=[],
             limit=5,
         )
         response = EndpointTraceItemTable().execute(message)
         measurement_avg = [v.val_double for v in response.column_values[0].results][0]
         assert measurement_avg == 420
 
-    def test_aggregation_on_attribute_column(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
-        metrics = {"custom_measurement": AnyValue(double_value=420.0)}
-        attributes = {"custom_tag": AnyValue(string_value="blah")}
-        messages = []
-        for i in range(120):
-            start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
-            messages.append(
-                gen_item_message(
-                    start_timestamp=start_timestamp,
-                    attributes=attributes | metrics,
-                ),
-            )
-            messages.append(
-                gen_item_message(
-                    start_timestamp,
-                    attributes=attributes,
-                )
-            )
-        write_raw_unprocessed_events(
-            items_storage,  # type: ignore
-            messages,
-        )
-
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+    def test_aggregation_on_attribute_column(
+        self,
+        setup_teardown: Any,
+    ) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -1235,16 +1202,15 @@ class TestTraceItemTable(BaseApiTest):
         assert measurement_avg == 420
 
     def test_different_column_label_and_attr_name_backward_compat(
-        self, setup_teardown: Any
+        self,
+        setup_teardown: Any,
     ) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 organization_id=1,
                 project_ids=[1],
-                start_timestamp=hour_ago,
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 referrer="something",
                 cogs_category="something",
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
@@ -1270,15 +1236,16 @@ class TestTraceItemTable(BaseApiTest):
         assert response.column_values[0].attribute_name == "description"
         assert response.column_values[1].attribute_name == "count()"
 
-    def test_different_column_label_and_attr_name(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
+    def test_different_column_label_and_attr_name(
+        self,
+        setup_teardown: Any,
+    ) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 organization_id=1,
                 project_ids=[1],
-                start_timestamp=hour_ago,
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 referrer="something",
                 cogs_category="something",
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
@@ -1314,15 +1281,13 @@ class TestTraceItemTable(BaseApiTest):
         and how alias was added to CAST.
         """
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
         err_req = {
             "meta": {
                 "organizationId": "1",
                 "referrer": "api.organization-events",
                 "projectIds": ["1"],
-                "startTimestamp": hour_ago.ToJsonString(),
-                "endTimestamp": ts.ToJsonString(),
+                "startTimestamp": START_TIMESTAMP.ToJsonString(),
+                "endTimestamp": END_TIMESTAMP.ToJsonString(),
                 "traceItemType": "TRACE_ITEM_TYPE_SPAN",
             },
             "columns": [
@@ -1391,128 +1356,15 @@ class TestTraceItemTable(BaseApiTest):
         # just ensuring it doesnt raise an exception
         EndpointTraceItemTable().execute(err_msg)
 
-    def test_same_column_name(self) -> None:
-        dt = BASE_TIME - timedelta(minutes=5)
-        items_storage = get_storage(StorageKey("eap_items"))
-        messages = [
-            {
-                "description": "foo",
-                "duration_ms": 152,
-                "event_id": "d826225de75d42d6b2f01b957d51f18f",
-                "exclusive_time_ms": 0.228,
-                "is_segment": True,
-                "data": {},
-                "measurements": {
-                    "foo": {"value": 5},
-                },
-                "organization_id": 1,
-                "origin": "auto.http.django",
-                "project_id": 1,
-                "received": 1721319572.877828,
-                "retention_days": 90,
-                "segment_id": "8873a98879faf06d",
-                "sentry_tags": {
-                    "status": "success",
-                },
-                "span_id": "123456781234567D",
-                "tags": {"foo": "five", "rachelkey": "rachelval"},
-                "trace_id": uuid.uuid4().hex,
-                "start_timestamp_ms": int(dt.timestamp()) * 1000
-                - int(random.gauss(1000, 200)),
-                "start_timestamp_precise": dt.timestamp(),
-                "end_timestamp_precise": dt.timestamp() + 1,
-            }
-        ]
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
-        err_req = {
-            "meta": {
-                "organizationId": "1",
-                "referrer": "api.organization-events",
-                "projectIds": ["1"],
-                "startTimestamp": hour_ago.ToJsonString(),
-                "endTimestamp": ts.ToJsonString(),
-                "traceItemType": "TRACE_ITEM_TYPE_SPAN",
-            },
-            "columns": [
-                {
-                    "key": {"type": "TYPE_STRING", "name": "sentry.name"},
-                    "label": "description",
-                },
-                {
-                    "key": {"type": "TYPE_INT", "name": "foo"},
-                    "label": "tags[foo,number]",
-                },
-                {
-                    "key": {"type": "TYPE_STRING", "name": "foo"},
-                    "label": "tags[foo,string]",
-                },
-                {"key": {"type": "TYPE_STRING", "name": "foo"}, "label": "tags[foo]"},
-                {
-                    "key": {"type": "TYPE_STRING", "name": "sentry.span_id"},
-                    "label": "id",
-                },
-                {
-                    "key": {"type": "TYPE_STRING", "name": "project.name"},
-                    "label": "project.name",
-                },
-                {
-                    "aggregation": {
-                        "aggregate": "FUNCTION_COUNT",
-                        "key": {"type": "TYPE_STRING", "name": "sentry.name"},
-                    },
-                    "label": "count()",
-                },
-            ],
-            "orderBy": [
-                {
-                    "column": {
-                        "key": {"type": "TYPE_STRING", "name": "sentry.name"},
-                        "label": "description",
-                    }
-                }
-            ],
-            "groupBy": [
-                {"type": "TYPE_STRING", "name": "sentry.name"},
-                {"type": "TYPE_INT", "name": "foo"},
-                {"type": "TYPE_STRING", "name": "foo"},
-                {"type": "TYPE_STRING", "name": "foo"},
-                {"type": "TYPE_STRING", "name": "sentry.span_id"},
-                {"type": "TYPE_STRING", "name": "project.name"},
-            ],
-            "virtualColumnContexts": [
-                {
-                    "fromColumnName": "sentry.project_id",
-                    "toColumnName": "project.name",
-                    "valueMap": {"4555075531898880": "bar"},
-                }
-            ],
-        }
-
-        err_msg = ParseDict(err_req, TraceItemTableRequest())
-        result = EndpointTraceItemTable().execute(err_msg)
-
-        assert result.column_values[1].attribute_name == "tags[foo,number]"
-        assert result.column_values[1].results[0].val_int == 5
-
-        assert result.column_values[2].attribute_name == "tags[foo,string]"
-        assert result.column_values[2].results[0].val_str == "five"
-
-        assert result.column_values[3].attribute_name == "tags[foo]"
-        assert result.column_values[3].results[0].val_str == "five"
-
     def test_table_with_disallowed_group_by_columns(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -1536,16 +1388,14 @@ class TestTraceItemTable(BaseApiTest):
     def test_table_with_group_by_columns_without_aggregation(
         self, setup_teardown: Any
     ) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -1568,9 +1418,7 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
-    def test_aggregation_filter_basic_backward_compat(
-        self, setup_teardown: Any
-    ) -> None:
+    def test_aggregation_filter_basic_backward_compat(self) -> None:
         """
         This test ensures that aggregates are properly filtered out
         when using an aggregation filter `val > 350`.
@@ -1579,14 +1427,14 @@ class TestTraceItemTable(BaseApiTest):
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
         items_storage = get_storage(StorageKey("eap_items"))
-        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        msg_timestamp = BASE_TIME + timedelta(minutes=1)
         messages = (
             [
                 gen_item_message(
                     msg_timestamp,
                     attributes={"kylestag": AnyValue(string_value="val1")},
                 )
-                for i in range(3)
+                for _ in range(3)
             ]
             + [
                 gen_item_message(
@@ -1605,17 +1453,14 @@ class TestTraceItemTable(BaseApiTest):
         )
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-
         message = TraceItemTableRequest(
             meta=RequestMeta(
-                project_ids=[1, 2, 3],
+                project_ids=[1],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -1678,7 +1523,7 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
-    def test_aggregation_filter_basic(self, setup_teardown: Any) -> None:
+    def test_aggregation_filter_basic(self) -> None:
         """
         This test ensures that aggregates are properly filtered out
         when using an aggregation filter `val > 350`.
@@ -1715,17 +1560,14 @@ class TestTraceItemTable(BaseApiTest):
         )
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -1819,17 +1661,14 @@ class TestTraceItemTable(BaseApiTest):
         )
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -1902,17 +1741,14 @@ class TestTraceItemTable(BaseApiTest):
         ]
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -2031,17 +1867,14 @@ class TestTraceItemTable(BaseApiTest):
         )
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-
         base_message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -2215,17 +2048,14 @@ class TestTraceItemTable(BaseApiTest):
         )
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-
         base_message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -2398,17 +2228,14 @@ class TestTraceItemTable(BaseApiTest):
         )
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -2479,16 +2306,14 @@ class TestTraceItemTable(BaseApiTest):
 
     def test_offset_pagination(self, setup_teardown: Any) -> None:
         def make_request(page_token: PageToken) -> TraceItemTableRequest:
-            ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-            hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
             return TraceItemTableRequest(
                 meta=RequestMeta(
                     project_ids=[1, 2, 3],
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
-                    start_timestamp=Timestamp(seconds=hour_ago),
-                    end_timestamp=ts,
+                    start_timestamp=START_TIMESTAMP,
+                    end_timestamp=END_TIMESTAMP,
                     request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                     trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
@@ -2542,7 +2367,7 @@ class TestTraceItemTable(BaseApiTest):
             time = datetime.fromisoformat(val.val_str)
             assert time > last_timestamp
 
-    def test_sparse_aggregate(self, setup_teardown: Any) -> None:
+    def test_sparse_aggregate(self) -> None:
         """
         This test ensures that when aggregates are done, groups that dont have the attribute being
         aggregated over are not included in the response.
@@ -2568,16 +2393,14 @@ class TestTraceItemTable(BaseApiTest):
         write_eap_span(span_ts, {"animal_type": "cat"}, 12)
         write_eap_span(span_ts, {"animal_type": "dog", "bark.db": 100}, 2)
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -2657,16 +2480,14 @@ class TestTraceItemTable(BaseApiTest):
         write_eap_span(span_ts, {"kyles_measurement": 6}, 10)
         write_eap_span(span_ts, {"kyles_measurement": 7}, 2)
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -2726,16 +2547,14 @@ class TestTraceItemTable(BaseApiTest):
         write_eap_span(span_ts, {"kyles_measurement": 3, "my_other_attribute": 2}, 2)
         write_eap_span(span_ts, {"kyles_measurement": 10, "my_other_attribute": 3}, 1)
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -2807,16 +2626,14 @@ class TestTraceItemTable(BaseApiTest):
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_span(span_ts, {"attr1": "value1"}, 10)
         write_eap_span(span_ts, {"attr1": "value1", "attr2": "value2"}, 10)
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -2848,16 +2665,14 @@ class TestTraceItemTable(BaseApiTest):
     def test_nonexistent_attribute(setup_teardown: Any) -> None:
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_span(span_ts, {"animal_type": "duck"}, 10)
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -2892,16 +2707,14 @@ class TestTraceItemTable(BaseApiTest):
             span_ts = BASE_TIME - timedelta(seconds=i + 1)
             write_eap_span(span_ts, {"http.status_code": "502"}, 1)
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=12)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -2964,16 +2777,14 @@ class TestTraceItemTable(BaseApiTest):
     def test_formula_aggregation(self) -> None:
         write_eap_span(BASE_TIME, {"kyles_tag": "a", "const_1": 1}, 10)
         write_eap_span(BASE_TIME, {"kyles_tag": "b", "const_1": 1}, 5)
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=12)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -3041,17 +2852,18 @@ class TestTraceItemTable(BaseApiTest):
         ]
 
     def test_span_id_column(self) -> None:
-        write_eap_span(BASE_TIME)
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=12)).timestamp())
+        write_eap_span(
+            BASE_TIME,
+            item_id=int("123456781234567d", 16).to_bytes(16, byteorder="little"),
+        )
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -3082,16 +2894,14 @@ class TestTraceItemTable(BaseApiTest):
     def test_literal(self) -> None:
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_span(span_ts, {"measurement": 2}, 10)
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -3139,16 +2949,14 @@ class TestTraceItemTable(BaseApiTest):
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_span(span_ts, {"attr1": "1"}, 10)
         write_eap_span(span_ts, {"attr2": "2"}, 5)
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -3187,17 +2995,14 @@ class TestTraceItemTable(BaseApiTest):
         ]
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-
         best_effort_message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 downsampled_storage_config=DownsampledStorageConfig(
@@ -3222,17 +3027,14 @@ class TestTraceItemTable(BaseApiTest):
         ]
         write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-
         best_effort_message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 downsampled_storage_config=DownsampledStorageConfig(
@@ -3262,16 +3064,14 @@ class TestTraceItemTable(BaseApiTest):
         write_eap_span(span_ts, {"env": "dev", "num_cats": 2})
         write_eap_span(span_ts, {"num_cats": 3})
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -3320,16 +3120,14 @@ class TestTraceItemTable(BaseApiTest):
         write_eap_span(span_ts, {"numerator": 5})
         write_eap_span(span_ts, {"numerator": 1, "denominator": 0})
 
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[

@@ -1,4 +1,3 @@
-import random
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Optional
@@ -21,12 +20,9 @@ END_TIMESTAMP = Timestamp(seconds=int((BASE_TIME + timedelta(hours=3)).timestamp
 
 _DEFAULT_ATTRIBUTES = {
     "category": AnyValue(string_value="http"),
-    "color": AnyValue(string_value=random.choice(["red", "green", "blue"])),
     "description": AnyValue(string_value="/api/0/relays/projectconfigs/"),
-    "eap.measurement": AnyValue(int_value=random.choice([1, 100, 1000])),
     "environment": AnyValue(string_value="development"),
     "http.status_code": AnyValue(string_value="200"),
-    "location": AnyValue(string_value=random.choice(["mobile", "frontend", "backend"])),
     "my.false.bool.field": AnyValue(bool_value=False),
     "my.float.field": AnyValue(double_value=101.2),
     "my.int.field": AnyValue(int_value=2000),
@@ -46,6 +42,7 @@ _DEFAULT_ATTRIBUTES = {
     "relay_use_post_or_schedule_rejected": AnyValue(string_value="version"),
     "sdk.name": AnyValue(string_value="sentry.python.django"),
     "sdk.version": AnyValue(string_value="2.7.0"),
+    "sentry.category": AnyValue(string_value="some"),
     "sentry.duration_ms": AnyValue(int_value=152),
     "sentry.environment": AnyValue(string_value="development"),
     "sentry.event_id": AnyValue(string_value="d826225de75d42d6b2f01b957d51f18f"),
@@ -73,8 +70,9 @@ _DEFAULT_ATTRIBUTES = {
 def write_eap_span(
     start_timestamp: datetime,
     raw_attributes: dict[str, str | float | int | bool] = {},
-    server_sample_rate: float = 1.0,
     count: int = 1,
+    server_sample_rate: float = 1.0,
+    item_id: bytes = None,
 ) -> None:
     """
     This is a helper function to write a single or multiple eap-spans to the database.
@@ -104,6 +102,7 @@ def write_eap_span(
                 start_timestamp=start_timestamp,
                 attributes=attributes,
                 server_sample_rate=server_sample_rate,
+                item_id=item_id,
             )
             for _ in range(count)
         ],
@@ -114,11 +113,12 @@ def gen_item_message(
     start_timestamp: datetime,
     attributes: dict[str, AnyValue] = {},
     type: TraceItemType.ValueType = TraceItemType.TRACE_ITEM_TYPE_SPAN,
-    trace_id: str = uuid.uuid4().hex,
+    trace_id: Optional[str] = None,
     server_sample_rate: float = 1.0,
     client_sample_rate: float = 1.0,
     end_timestamp: Optional[datetime] = None,
     remove_default_attributes: bool = False,
+    item_id: Optional[bytes] = None,
 ) -> bytes:
     item_timestamp = Timestamp()
     item_timestamp.FromDatetime(start_timestamp)
@@ -142,13 +142,17 @@ def gen_item_message(
             ),
         }
     )
+    if item_id is None:
+        item_id = uuid.uuid4().int.to_bytes(16, byteorder="little")
+    if trace_id is None:
+        trace_id = uuid.uuid4().hex
     return TraceItem(
         organization_id=1,
         project_id=1,
         item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
         timestamp=item_timestamp,
         trace_id=trace_id,
-        item_id=uuid.uuid4().int.to_bytes(16, byteorder="little"),
+        item_id=item_id,
         received=received,
         retention_days=90,
         server_sample_rate=server_sample_rate,
