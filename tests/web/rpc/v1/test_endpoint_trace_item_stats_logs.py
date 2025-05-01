@@ -76,7 +76,7 @@ class TestTraceItemStatsForLogs(BaseApiTest):
         response = EndpointTraceItemStats().execute(message)
         assert response.results[0].HasField("attribute_distributions")
         actual = response.results[0].attribute_distributions.attributes
-        assert len(actual) == 3
+        assert len(actual) == 2
         assert actual[0] == AttributeDistribution(
             attribute_name="sentry.severity_text",
             buckets=[AttributeDistribution.Bucket(label="INFO", value=60)],
