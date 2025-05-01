@@ -104,7 +104,7 @@ def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
                 tags={
                     "bool_tag": i % 2 == 0,
                     "int_tag": i,
-                    "double_tag": float(i) / 2.0,
+                    "double_tag": 1234567890.123,
                     "str_tag": f"num: {i}",
                 },
             )
@@ -124,7 +124,7 @@ def setup_spans_in_db(clickhouse_db: None, redis_db: None) -> None:
                     "str_tag": f"num: {i}",
                 },
                 numerical_attributes={
-                    "double_tag": float(i) / 2.0,
+                    "double_tag": 1234567890.123,
                 },
             )
         )
@@ -301,6 +301,11 @@ class TestTraceItemDetails(BaseApiTest):
             "int_tag",
             "str_tag",
         }
+        assert [
+            attr.value.val_double
+            for attr in res.attributes
+            if attr.name == "double_tag"
+        ] == [pytest.approx(1234567890.123)]
 
     def test_endpoint_on_spans(self, setup_spans_in_db: Any) -> None:
         end = Timestamp()
@@ -377,3 +382,8 @@ class TestTraceItemDetails(BaseApiTest):
             "sentry.duration_ms",
             "sentry.is_segment",
         }
+        assert [
+            attr.value.val_double
+            for attr in res.attributes
+            if attr.name == "double_tag"
+        ] == [pytest.approx(1234567890.123)]
