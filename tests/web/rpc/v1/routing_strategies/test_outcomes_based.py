@@ -32,7 +32,9 @@ _ORG_ID = 1
 
 
 def _get_request_meta(
-    start: datetime | None = None, end: datetime | None = None
+    start: datetime | None = None,
+    end: datetime | None = None,
+    downsampled_storage_config: DownsampledStorageConfig | None = None,
 ) -> RequestMeta:
     start = start or BASE_TIME - timedelta(hours=24)
     end = end or BASE_TIME
@@ -44,6 +46,7 @@ def _get_request_meta(
         start_timestamp=Timestamp(seconds=int(start.timestamp())),
         end_timestamp=Timestamp(seconds=int(end.timestamp())),
         trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        downsampled_storage_config=downsampled_storage_config,
     )
 
 
@@ -124,3 +127,24 @@ def test_outcomes_based_routing_downsample(store_outcomes_data: Any) -> None:
     )
     tier, settings = strategy._decide_tier_and_query_settings(routing_context)
     assert tier == Tier.TIER_512
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_outcomes_based_routing_highest_accuracy_mode(store_outcomes_data: Any) -> None:
+    strategy = OutcomesBasedRoutingStrategy()
+
+    request = TraceItemTableRequest(meta=_get_request_meta())
+    request.meta.downsampled_storage_config.mode = (
+        DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+    )
+    routing_context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        build_query=build_query,  # type: ignore
+        query_settings=HTTPQuerySettings(),
+    )
+
+    tier, settings = strategy._decide_tier_and_query_settings(routing_context)
+    assert tier == Tier.TIER_1
+    assert settings == {}

@@ -140,6 +140,8 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
     def _decide_tier_and_query_settings(
         self, routing_context: RoutingContext
     ) -> tuple[Tier, ClickhouseQuerySettings]:
+        if self._is_highest_accuracy_mode(routing_context):
+            return Tier.TIER_1, {}
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
         start_ts = routing_context.in_msg.meta.start_timestamp.seconds
         end_ts = routing_context.in_msg.meta.end_timestamp.seconds

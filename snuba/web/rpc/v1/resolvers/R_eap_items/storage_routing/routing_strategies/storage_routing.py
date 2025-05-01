@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Optional, Type, TypeAlias, Union, cast, 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
@@ -157,6 +158,14 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
     def get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
         return cast("Type[BaseRoutingStrategy]", cls.class_from_name(name))
 
+    def _is_highest_accuracy_mode(self, routing_context: RoutingContext) -> bool:
+        if not routing_context.in_msg.meta.HasField("downsampled_storage_config"):
+            return False
+        return (
+            routing_context.in_msg.meta.downsampled_storage_config.mode
+            == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+        )
+
     def _build_snuba_request(self, routing_context: RoutingContext) -> SnubaRequest:
         request = routing_context.in_msg
         if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
@@ -294,7 +303,9 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
         )
 
     def _emit_routing_mistake(self, routing_context: RoutingContext) -> None:
-        if not routing_context.query_result:
+        if not routing_context.query_result or self._is_highest_accuracy_mode(
+            routing_context
+        ):
             return
         profile = routing_context.query_result.result.get("profile", {}) or {}
         if elapsed := profile.get("elapsed"):

@@ -79,7 +79,7 @@ def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
                 tags={
                     "bool_tag": i % 2 == 0,
                     "int_tag": i,
-                    "double_tag": float(i) / 2.0,
+                    "double_tag": 1234567890.123,
                     "str_tag": f"num: {i}",
                 },
             )
@@ -95,7 +95,7 @@ def setup_spans_in_db(clickhouse_db: None, redis_db: None) -> None:
             start_timestamp=BASE_TIME - timedelta(minutes=i),
             attributes={
                 "str_tag": AnyValue(string_value=f"num: {i}"),
-                "double_tag": AnyValue(double_value=float(i) / 2.0),
+                "double_tag": AnyValue(double_value=1234567890.123),
             },
         )
         for i in range(120)
@@ -275,7 +275,7 @@ class TestTraceItemDetails(BaseApiTest):
             "int_tag",
             "str_tag",
         }:
-            assert k in attributes_returned
+            assert k in attributes_returned, k
 
     def test_endpoint_on_spans(self, setup_spans_in_db: Any) -> None:
         end = Timestamp()
@@ -351,4 +351,4 @@ class TestTraceItemDetails(BaseApiTest):
             "sentry.trace_id",
             "str_tag",
         }:
-            assert k in attributes_returned
+            assert k in attributes_returned, k
