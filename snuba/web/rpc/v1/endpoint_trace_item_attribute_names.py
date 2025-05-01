@@ -38,10 +38,6 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
-from snuba.web.rpc.v1.legacy.attributes_common import should_use_items_attrs
-from snuba.web.rpc.v1.legacy.trace_item_attribute_names import (
-    convert_to_snuba_request as legacy_convert_to_snuba_request,
-)
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import ATTRIBUTE_MAPPINGS
 
 # max value the user can provide for 'limit' in their request
@@ -57,10 +53,6 @@ UNSEARCHABLE_ATTRIBUTE_KEYS = [
 ]
 
 NON_STORED_ATTRIBUTE_KEYS = ["sentry.service"]
-
-
-def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
-    return legacy_convert_to_snuba_request(req)
 
 
 class AttributeKeyCollector(ProtoVisitor):
@@ -385,30 +377,18 @@ class EndpointTraceItemAttributeNames(
     ) -> TraceItemAttributeNamesResponse:
         if not in_msg.meta.request_id:
             in_msg.meta.request_id = str(uuid.uuid4())
-        if in_msg.HasField("intersecting_attributes_filter") or should_use_items_attrs(
-            in_msg.meta
-        ):
-            snuba_request = get_co_occurring_attributes(in_msg)
-            res = run_query(
-                dataset=PluggableDataset(name="eap", all_entities=[]),
-                request=snuba_request,
-                timer=self._timer,
-            )
 
-            response = TraceItemAttributeNamesResponse(
-                attributes=convert_co_occurring_results_to_attributes(in_msg, res),
-                meta=extract_response_meta(
-                    in_msg.meta.request_id, in_msg.meta.debug, [res], [self._timer]
-                ),
-            )
-            return response
-        else:
-            snuba_request = convert_to_snuba_request(in_msg)
-            res = run_query(
-                dataset=PluggableDataset(name="eap", all_entities=[]),
-                request=snuba_request,
-                timer=self._timer,
-            )
+        snuba_request = get_co_occurring_attributes(in_msg)
+        res = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=snuba_request,
+            timer=self._timer,
+        )
 
-            response = self._build_response(in_msg, res)
-            return response
+        response = TraceItemAttributeNamesResponse(
+            attributes=convert_co_occurring_results_to_attributes(in_msg, res),
+            meta=extract_response_meta(
+                in_msg.meta.request_id, in_msg.meta.debug, [res], [self._timer]
+            ),
+        )
+        return response

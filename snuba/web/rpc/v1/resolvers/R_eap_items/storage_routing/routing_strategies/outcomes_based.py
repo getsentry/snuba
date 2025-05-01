@@ -137,16 +137,6 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             or default
         )
 
-    def _get_time_budget_ms(self) -> int:
-        default = 8000
-        return (
-            state.get_int_config(
-                f"{self.config_key()}.time_budget_ms",
-                default,
-            )
-            or default
-        )
-
     def _decide_tier_and_query_settings(
         self, routing_context: RoutingContext
     ) -> tuple[Tier, ClickhouseQuerySettings]:
@@ -170,40 +160,17 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         routing_context.extra_info[
             "max_items_before_downsampling"
         ] = max_items_before_downsampling
-        if ingested_items > max_items_before_downsampling:
+        if (
+            ingested_items > max_items_before_downsampling
+            and ingested_items <= max_items_before_downsampling * 10
+        ):
             return Tier.TIER_8, {}
-        return Tier.TIER_1, {}
+        elif (
+            ingested_items > max_items_before_downsampling * 10
+            and ingested_items <= max_items_before_downsampling * 100
+        ):
+            return Tier.TIER_64, {}
+        elif ingested_items > max_items_before_downsampling * 100:
+            return Tier.TIER_512, {}
 
-    def _output_metrics(self, routing_context: RoutingContext) -> None:
-        if not routing_context.query_result:
-            return
-        profile = routing_context.query_result.result.get("profile", {}) or {}
-        if elapsed := profile.get("elapsed"):
-            elapsed_ms = elapsed * 1000
-            time_budget = self._get_time_budget_ms()
-            routing_context.extra_info["time_budget"] = time_budget
-            if elapsed_ms > time_budget:
-                self._record_value_in_span_and_DD(
-                    routing_context=routing_context,
-                    metrics_backend_func=self.metrics.increment,
-                    name="routing_mistake",
-                    value=1,
-                    tags={"reason": "timeout"},
-                )
-            elif routing_context.query_settings.get_sampling_tier() != Tier.TIER_1:
-                if elapsed_ms < 0.8 * time_budget:
-                    self._record_value_in_span_and_DD(
-                        routing_context=routing_context,
-                        metrics_backend_func=self.metrics.increment,
-                        name="routing_mistake",
-                        value=1,
-                        tags={"reason": "sampled_too_low"},
-                    )
-            else:
-                self._record_value_in_span_and_DD(
-                    routing_context=routing_context,
-                    metrics_backend_func=self.metrics.increment,
-                    name="routing_success",
-                    value=1,
-                    tags={},
-                )
+        return Tier.TIER_1, {}

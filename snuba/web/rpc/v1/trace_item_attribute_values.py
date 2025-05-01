@@ -31,10 +31,6 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import base_conditions_and, treeify_or_and_conditions
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.legacy.attributes_common import should_use_items_attrs
-from snuba.web.rpc.v1.legacy.trace_item_attribute_values import (
-    build_snuba_request as build_snuba_request_legacy,
-)
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression_eap_items,
 )
@@ -126,8 +122,6 @@ def _build_query(
 def _build_snuba_request(
     request: TraceItemAttributeValuesRequest,
 ) -> SnubaRequest:
-    if not should_use_items_attrs(request.meta):
-        return build_snuba_request_legacy(request)
     return SnubaRequest(
         id=uuid.uuid4(),
         original_body=MessageToDict(request),
