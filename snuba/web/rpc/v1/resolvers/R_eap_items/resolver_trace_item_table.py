@@ -122,10 +122,10 @@ def _convert_order_by(
     request_meta: RequestMeta,
 ) -> Sequence[OrderBy]:
     if len(order_by) == 1:
-        order_by = order_by[0]
-        if order_by.column.key == "timestamp":
+        order = order_by[0]
+        if order.column.key == "sentry.timestamp":
             direction = (
-                OrderByDirection.DESC if order_by.descending else OrderByDirection.ASC
+                OrderByDirection.DESC if order.descending else OrderByDirection.ASC
             )
             return [
                 OrderBy(
