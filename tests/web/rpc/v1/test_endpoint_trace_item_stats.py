@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 import pytest
-from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     AttributeDistribution,
     AttributeDistributionsRequest,
@@ -23,21 +22,25 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_stats import EndpointTraceItemStats
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.test_utils import gen_item_message
-
-BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
-    minutes=180
+from tests.web.rpc.v1.test_utils import (
+    BASE_TIME,
+    END_TIMESTAMP,
+    START_TIMESTAMP,
+    gen_item_message,
 )
 
 
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
-    start = BASE_TIME
     messages = [
         gen_item_message(
-            start - timedelta(minutes=i),
-            attributes={"low_cardinality": AnyValue(string_value=f"{i // 40}")},
+            start_timestamp=BASE_TIME - timedelta(minutes=i),
+            attributes={
+                "low_cardinality": AnyValue(string_value=f"{i // 40}"),
+                "sentry.sdk.name": AnyValue(string_value="sentry.python.django"),
+            },
+            remove_default_attributes=True,
         )
         for i in range(120)
     ]
@@ -48,21 +51,21 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
 @pytest.mark.redis_db
 class TestTraceItemAttributesStats(BaseApiTest):
     def test_basic(self) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         message = TraceItemStatsRequest(
             meta=RequestMeta(
-                project_ids=[1, 2, 3],
+                project_ids=[1],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=ts,
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             stats_types=[
                 StatsType(
                     attribute_distributions=AttributeDistributionsRequest(
-                        max_buckets=10, max_attributes=100
+                        max_buckets=10,
+                        max_attributes=100,
                     )
                 )
             ],
@@ -77,22 +80,21 @@ class TestTraceItemAttributesStats(BaseApiTest):
         assert response.status_code == 200, error_proto
 
     def test_basic_with_data(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=3)).timestamp())
         message = TraceItemStatsRequest(
             meta=RequestMeta(
-                project_ids=[1, 2, 3],
+                project_ids=[1],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             stats_types=[
                 StatsType(
                     attribute_distributions=AttributeDistributionsRequest(
-                        max_buckets=10, max_attributes=100
+                        max_buckets=10,
+                        max_attributes=100,
                     )
                 )
             ],
@@ -101,7 +103,10 @@ class TestTraceItemAttributesStats(BaseApiTest):
         expected_sdk_name_stats = AttributeDistribution(
             attribute_name="sentry.sdk.name",
             buckets=[
-                AttributeDistribution.Bucket(label="sentry.python.django", value=120)
+                AttributeDistribution.Bucket(
+                    label="sentry.python.django",
+                    value=120,
+                )
             ],
         )
 
@@ -130,41 +135,38 @@ class TestTraceItemAttributesStats(BaseApiTest):
         assert match
 
     def test_backwards_compatibility(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=3)).timestamp())
         message = TraceItemStatsRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             stats_types=[
                 StatsType(
                     attribute_distributions=AttributeDistributionsRequest(
-                        max_buckets=10, max_attributes=100
+                        max_buckets=10,
+                        max_attributes=100,
                     )
                 )
             ],
         )
 
         response = EndpointTraceItemStats().execute(message)
-        assert len(response.results[0].attribute_distributions.attributes) == 30
+        assert len(response.results[0].attribute_distributions.attributes) == 2
 
     def test_with_filter(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=3)).timestamp())
         message = TraceItemStatsRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
@@ -179,7 +181,8 @@ class TestTraceItemAttributesStats(BaseApiTest):
             stats_types=[
                 StatsType(
                     attribute_distributions=AttributeDistributionsRequest(
-                        max_buckets=10, max_attributes=100
+                        max_buckets=10,
+                        max_attributes=100,
                     )
                 )
             ],

@@ -1,6 +1,6 @@
 import random
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -13,6 +13,11 @@ from tests.helpers import write_raw_unprocessed_events
 
 RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
 SERVER_NAME = "D23CXQ4GK2.local"
+BASE_TIME = datetime.now(tz=UTC).replace(minute=0, second=0, microsecond=0) - timedelta(
+    minutes=180
+)
+START_TIMESTAMP = Timestamp(seconds=int((BASE_TIME - timedelta(hours=3)).timestamp()))
+END_TIMESTAMP = Timestamp(seconds=int((BASE_TIME + timedelta(hours=3)).timestamp()))
 
 _DEFAULT_ATTRIBUTES = {
     "category": AnyValue(string_value="http"),
@@ -113,6 +118,7 @@ def gen_item_message(
     server_sample_rate: float = 1.0,
     client_sample_rate: float = 1.0,
     end_timestamp: Optional[datetime] = None,
+    remove_default_attributes: bool = False,
 ) -> bytes:
     item_timestamp = Timestamp()
     item_timestamp.FromDatetime(start_timestamp)
@@ -120,6 +126,8 @@ def gen_item_message(
     received.GetCurrentTime()
     if end_timestamp is None:
         end_timestamp = start_timestamp + timedelta(seconds=1)
+    if remove_default_attributes is False:
+        attributes = _DEFAULT_ATTRIBUTES | attributes
     attributes.update(
         {
             "sentry.end_timestamp_precise": AnyValue(
@@ -145,5 +153,5 @@ def gen_item_message(
         retention_days=90,
         server_sample_rate=server_sample_rate,
         client_sample_rate=client_sample_rate,
-        attributes=_DEFAULT_ATTRIBUTES | attributes,
+        attributes=attributes,
     ).SerializeToString()
