@@ -278,7 +278,6 @@ def get_co_occurring_attributes(
     treeify_or_and_conditions(query)
     settings = HTTPQuerySettings()
     settings.push_clickhouse_setting("max_execution_time", 1)
-    settings.push_clickhouse_setting("timeout_overflow_mode", "break")
     snuba_request = SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
