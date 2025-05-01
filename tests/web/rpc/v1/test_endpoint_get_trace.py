@@ -42,8 +42,8 @@ _SPANS = [
         start_timestamp=_BASE_TIME + timedelta(minutes=i),
         trace_id=_TRACE_ID,
         attributes={
-            "span_op": AnyValue(string_value="http.server" if i == 0 else "db"),
-            "span_name": AnyValue(
+            "sentry.op": AnyValue(string_value="http.server" if i == 0 else "db"),
+            "sentry.raw_description": AnyValue(
                 string_value="root" if i == 0 else f"child {i + 1} of {_SPAN_COUNT}",
             ),
             "is_segment": AnyValue(bool_value=i == 0),
