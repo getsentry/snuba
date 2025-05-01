@@ -27,8 +27,11 @@ from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
 
-BASE_TIME = datetime.utcnow().replace(
-    hour=8, minute=0, second=0, microsecond=0, tzinfo=UTC
+BASE_TIME = datetime.now(tz=UTC).replace(
+    hour=8,
+    minute=0,
+    second=0,
+    microsecond=0,
 ) - timedelta(hours=24)
 
 
@@ -41,19 +44,13 @@ class DummyMetric:
     get_value: Callable[[SecsFromSeriesStart], float]
 
 
-@dataclass
-class DummyMeasurement:
-    name: str
-    get_value: Callable[[SecsFromSeriesStart], float]
-
-
 def store_timeseries(
     start_datetime: datetime,
     period_secs: int,
     len_secs: int,
     metrics: list[DummyMetric],
     tags: dict[str, str] | None = None,
-    measurements: list[DummyMeasurement] = [],
+    server_sample_rate: float | Callable[[SecsFromSeriesStart], float] = 1.0,
 ) -> None:
     tags = tags or {}
     messages = []
@@ -62,14 +59,15 @@ def store_timeseries(
         numbers = {
             m.name: AnyValue(double_value=float(m.get_value(secs))) for m in metrics
         }
-        protobuf_metrics = {
-            m.name: AnyValue(double_value=float(m.get_value(secs)))
-            for m in measurements
-        }
+        if callable(server_sample_rate):
+            real_server_sample_rate = server_sample_rate(secs)
+        else:
+            real_server_sample_rate = server_sample_rate
         messages.append(
             gen_item_message(
                 start_timestamp=dt,
-                attributes=numbers | protobuf_metrics,
+                attributes=numbers,
+                server_sample_rate=real_server_sample_rate,
             ),
         )
     items_storage = get_storage(StorageKey("eap_items"))
@@ -88,11 +86,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 50)],
-            measurements=[
-                DummyMeasurement(
-                    "client_sample_rate", get_value=lambda s: 1
-                )  # 100% sample rate should result in reliable extrapolation
-            ],
+            server_sample_rate=1.0,  # 100% sample rate should result in reliable extrapolation
         )
 
         message = TimeSeriesRequest(
@@ -208,11 +202,6 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 0)],
-            measurements=[
-                DummyMeasurement(
-                    "client_sample_rate", get_value=lambda s: 1
-                )  # 100% sample rate should result in reliable extrapolation
-            ],
         )
 
         message = TimeSeriesRequest(
@@ -269,9 +258,6 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 0)],
-            measurements=[
-                DummyMeasurement("client_sample_rate", get_value=lambda s: 1)
-            ],
         )
 
         message = TimeSeriesRequest(
@@ -325,9 +311,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             10,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
-            measurements=[
-                DummyMeasurement("client_sample_rate", get_value=lambda s: 0.0001)
-            ],
+            server_sample_rate=0.0001,
         )
 
         message = TimeSeriesRequest(
@@ -383,12 +367,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 55 - (x % 120))],
-            measurements=[
-                DummyMeasurement(
-                    "client_sample_rate",
-                    get_value=lambda s: 0.0001,  # 0.01% sample rate should be unreliable
-                )
-            ],
+            server_sample_rate=0.0001,  # 0.01% sample rate should be unreliable
         )
 
         message = TimeSeriesRequest(
@@ -451,12 +430,6 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             query_duration // 2,
             query_duration,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
-            measurements=[
-                DummyMeasurement(
-                    "client_sample_rate",
-                    get_value=lambda s: 1.0,
-                )
-            ],
         )
 
         message = TimeSeriesRequest(
@@ -520,12 +493,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             3600,
             # for each time interval we distribute the values from -55 to 64 to keep the avg close to 0
             metrics=[DummyMetric("test_metric", get_value=lambda x: (x % 120) - 55)],
-            measurements=[
-                DummyMeasurement(
-                    "client_sample_rate",
-                    get_value=lambda s: 0.0001,  # 0.01% sample rate should be unreliable
-                )
-            ],
+            server_sample_rate=0.0001,  # 0.01% sample rate should be unreliable
         )
 
         message = TimeSeriesRequest(
@@ -581,12 +549,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: (x % 120) - 85)],
-            measurements=[
-                DummyMeasurement(
-                    "client_sample_rate",
-                    get_value=lambda s: 0.0001,  # 0.01% sample rate should be unreliable
-                )
-            ],
+            server_sample_rate=0.0001,  # 0.01% sample rate should be unreliable
         )
 
         message = TimeSeriesRequest(
@@ -641,18 +604,12 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             60,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
-            measurements=[
-                DummyMeasurement(
-                    # for each time bucket we store an event with 1% sampling rate and 100% sampling rate
-                    "client_sample_rate",
-                    get_value=lambda s: 0.01 if (s / 60) % 2 == 0 else 1,
-                )
-            ],
+            server_sample_rate=lambda s: 0.01 if (s / 60) % 2 == 0 else 1.0,
         )
 
         message = TimeSeriesRequest(
             meta=RequestMeta(
-                project_ids=[1, 2, 3],
+                project_ids=[1],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
@@ -683,12 +640,12 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 buckets=expected_buckets,
                 data_points=[
                     DataPoint(
-                        data=1 / 0.01
-                        + 1,  # 2 events (1 with 1% sampling rate and 1 with 100% sampling rate)
+                        # 2 events (1 with 1% sampling rate and 1 with 100% sampling rate)
+                        data=1 / 0.01 + 1,
                         data_present=True,
                         reliability=Reliability.RELIABILITY_LOW,
-                        avg_sampling_rate=2
-                        / 101,  # weighted average = (1 + 1)/(1/0.01 + 1) = 2/101
+                        # weighted average = (1 + 1)/(1/0.01 + 1) = 2/101
+                        avg_sampling_rate=2 / 101,
                         sample_count=2,
                     )
                     for _ in range(len(expected_buckets))
@@ -707,12 +664,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("my_test_metric", get_value=lambda x: metric_value)],
-            measurements=[
-                DummyMeasurement(
-                    "client_sample_rate",
-                    get_value=lambda s: sample_rate,
-                )
-            ],
+            server_sample_rate=lambda s: sample_rate,
         )
 
         message = TimeSeriesRequest(

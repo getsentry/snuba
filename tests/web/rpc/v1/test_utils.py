@@ -152,6 +152,5 @@ def gen_item_message(
         received=received,
         retention_days=90,
         server_sample_rate=server_sample_rate,
-        client_sample_rate=client_sample_rate,
         attributes=attributes,
     ).SerializeToString()
