@@ -96,6 +96,7 @@ def setup_spans_in_db(clickhouse_db: None, redis_db: None) -> None:
             attributes={
                 "str_tag": AnyValue(string_value=f"num: {i}"),
                 "double_tag": AnyValue(double_value=1234567890.123),
+                "sentry.segment_id": AnyValue(string_value=uuid.uuid4().hex[:16]),
             },
         )
         for i in range(120)
