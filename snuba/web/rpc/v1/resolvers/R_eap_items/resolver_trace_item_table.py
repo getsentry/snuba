@@ -123,7 +123,7 @@ def _convert_order_by(
 ) -> Sequence[OrderBy]:
     if len(order_by) == 1:
         order = order_by[0]
-        if order.column.key == "sentry.timestamp":
+        if order.column.key.name == "sentry.timestamp":
             direction = (
                 OrderByDirection.DESC if order.descending else OrderByDirection.ASC
             )
