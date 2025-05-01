@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from operator import attrgetter
-from typing import Any, Mapping
+from typing import Any
 
 import pytest
 from google.protobuf.json_format import MessageToDict
@@ -63,7 +63,7 @@ _PROTOBUF_TO_SENTRY_PROTOS = {
 
 
 def get_attributes(
-    span: Mapping[str, AnyValue],
+    span: TraceItem,
 ) -> list[GetTraceResponse.Item.Attribute]:
     attributes: list[GetTraceResponse.Item.Attribute] = [
         GetTraceResponse.Item.Attribute(
