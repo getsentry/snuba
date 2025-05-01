@@ -32,7 +32,9 @@ _ORG_ID = 1
 
 
 def _get_request_meta(
-    start: datetime | None = None, end: datetime | None = None
+    start: datetime | None = None,
+    end: datetime | None = None,
+    downsampled_storage_config: DownsampledStorageConfig | None = None,
 ) -> RequestMeta:
     start = start or BASE_TIME - timedelta(hours=24)
     end = end or BASE_TIME
@@ -44,25 +46,7 @@ def _get_request_meta(
         start_timestamp=Timestamp(seconds=int(start.timestamp())),
         end_timestamp=Timestamp(seconds=int(end.timestamp())),
         trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-    )
-
-
-def _get_highest_accuracy_request_meta(
-    start: datetime | None = None, end: datetime | None = None
-) -> RequestMeta:
-    start = start or BASE_TIME - timedelta(hours=24)
-    end = end or BASE_TIME
-    return RequestMeta(
-        project_ids=[_PROJECT_ID],
-        organization_id=_ORG_ID,
-        cogs_category="something",
-        referrer="something",
-        start_timestamp=Timestamp(seconds=int(start.timestamp())),
-        end_timestamp=Timestamp(seconds=int(end.timestamp())),
-        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-        downsampled_storage_config=DownsampledStorageConfig(
-            mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY,
-        ),
+        downsampled_storage_config=downsampled_storage_config,
     )
 
 
@@ -150,7 +134,7 @@ def test_outcomes_based_routing_downsample(store_outcomes_data: Any) -> None:
 def test_outcomes_based_routing_highest_accuracy_mode(store_outcomes_data: Any) -> None:
     strategy = OutcomesBasedRoutingStrategy()
 
-    request = TraceItemTableRequest(meta=_get_highest_accuracy_request_meta())
+    request = TraceItemTableRequest(meta=_get_request_meta())
     request.meta.downsampled_storage_config.mode = (
         DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
     )
