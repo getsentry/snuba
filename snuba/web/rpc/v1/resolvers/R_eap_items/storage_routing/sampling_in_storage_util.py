@@ -40,7 +40,19 @@ def run_query_to_correct_tier(
 
 
 def get_eap_cluster_load() -> float:
-    query = """
+    eap_cluster = get_storage(StorageKey.EAP_ITEMS).get_cluster()
+    if eap_cluster.is_single_node():
+        query = """
+SELECT
+    toFloat32(value)/ (SELECT
+                max(toInt32(replaceAll(metric, 'OSNiceTimeCPU', ''))) + 1 as num_cpus
+            FROM system.asynchronous_metrics
+            WHERE metric LIKE '%OSNiceTimeCPU%') * 100 as normalized_load
+FROM system.asynchronous_metrics
+WHERE metric = 'LoadAverage1'
+        """
+    else:
+        query = f"""
 SELECT
     max(load_average.value / cpu_counts.num_cpus * 100) AS max_normalized_load
 FROM (
@@ -48,20 +60,20 @@ FROM (
         hostName() AS host,
         value,
         metric
-    FROM clusterAllReplicas('snuba-events-analytics-platform', 'system', asynchronous_metrics)
+    FROM clusterAllReplicas('{eap_cluster.get_clickhouse_cluster_name()}', 'system', asynchronous_metrics)
     WHERE metric = 'LoadAverage1'
 ) AS load_average
 JOIN (
     SELECT
         hostName() AS host,
         max(toInt32(replaceAll(metric, 'OSNiceTimeCPU', ''))) + 1 AS num_cpus
-    FROM clusterAllReplicas('snuba-events-analytics-platform', 'system', asynchronous_metrics)
+    FROM clusterAllReplicas('{eap_cluster.get_clickhouse_cluster_name()}', 'system', asynchronous_metrics)
     WHERE metric LIKE 'OSNiceTimeCPU%'
     GROUP BY host
 ) AS cpu_counts
 ON load_average.host = cpu_counts.host
     """
-    eap_cluster = get_storage(StorageKey("eap_items")).get_cluster()
+
     return float(
         eap_cluster.get_query_connection(ClickhouseClientSettings.QUERY)
         .execute(query)
