@@ -41,53 +41,12 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression_eap_items,
 )
 
-NORMALIZED_COLUMNS_TO_INCLUDE = [
-    col.name
-    for col in get_entity(EntityKey("eap_spans")).get_data_model().columns
-    if col.name
-    not in [
-        "retention_days",
-        "sign",
-        "attr_str",
-        "attr_num",
-        "span_id",
-        "timestamp",
-        "time",
-    ]
-]
-
-
 NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
     "organization_id",
     "project_id",
     "trace_id",
-    "sampling_weight",
+    "sampling_factor",
 ]
-
-# Map of eap_items attributes to eap_spans attributes to preserve backwards compatibility
-EAP_ITEMS_ATTRIBUTE_MAP = {
-    "sentry.raw_description": "name",
-    "sentry.transaction": "segment_name",
-    "sentry.start_timestamp_precise": "start_timestamp",
-    "sentry.end_timestamp_precise": "end_timestamp",
-    "sentry.duration_ms": "duration_ms",
-    "sentry.event_id": "event_id",
-    "sentry.exclusive_time_ms": "exclusive_time_ms",
-    "sentry.is_segment": "is_segment",
-    "sentry.parent_span_id": "parent_span_id",
-    "sentry.profile_id": "profile_id",
-    "sentry.received": "received",
-    "sentry.segment_id": "segment_id",
-}
-
-# Attributes that we store in eap_items but not eap_spans
-ATTRIBUTES_TO_SKIP_FROM_EAP_ITEMS = [
-    "event_id",
-    "received",
-]
-
-# Attributes to hexify
-HEX_COLUMNS = ["parent_span_id", "segment_id"]
 
 
 def _build_query(request: GetTraceRequest) -> Query:
@@ -159,24 +118,6 @@ def _build_query(request: GetTraceRequest) -> Query:
                     ),
                 ),
                 (NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS),
-            )
-        )
-
-        # special case for sampling_factor and service since we don't store them in eap_items
-        selected_columns.append(
-            SelectedExpression(
-                name="sampling_factor",
-                expression=f.divide(
-                    literal(1),
-                    f.CAST(column("sampling_weight"), "Float64"),
-                    alias="sampling_factor",
-                ),
-            )
-        )
-        selected_columns.append(
-            SelectedExpression(
-                name="service",
-                expression=f.CAST(column("project_id"), "String", alias="service"),
             )
         )
 
@@ -307,28 +248,12 @@ def _convert_results(
                 )
             )
 
-        # marks which hex columns we've seen
-        seen_hex_columns = set()
         for key, value in row.items():
             if isinstance(value, dict):
                 for k, v in value.items():
-                    k = EAP_ITEMS_ATTRIBUTE_MAP.get(k, k)
-                    if k in ATTRIBUTES_TO_SKIP_FROM_EAP_ITEMS:
-                        continue
-
-                    if k in HEX_COLUMNS:
-                        seen_hex_columns.add(k)
                     add_attribute(k, v)
             else:
-                if key.lstrip("sentry.") in HEX_COLUMNS and value == "":
-                    value = "0" * 16
                 add_attribute(key, value)
-
-        # this is a hack to get backwards compatibility to work, remove eventually
-        if add_hex_columns:
-            for k in HEX_COLUMNS:
-                if k not in seen_hex_columns:
-                    add_attribute(k, "0" * 16)
 
         item = GetTraceResponse.Item(
             id=id,

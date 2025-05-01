@@ -17,20 +17,18 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     TraceItemType,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
-from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_get_trace import EndpointGetTrace
 from snuba.web.rpc.v1.resolvers.R_eap_spans.resolver_get_trace import (
-    NORMALIZED_COLUMNS_TO_INCLUDE,
+    _value_to_attribute,
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.test_utils import gen_item_message
+from tests.web.rpc.v1.test_utils import SERVER_NAME, gen_item_message
 
-_RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
-_SERVER_NAME = "D23CXQ4GK2.local"
 _TRACE_ID = uuid.uuid4().hex
 _BASE_TIME = datetime.now(tz=timezone.utc).replace(
     minute=0,
@@ -54,55 +52,57 @@ _SPANS = [
     for i in range(_SPAN_COUNT)
 ]
 
+_PROTOBUF_TO_SENTRY_PROTOS = {
+    "string_value": ("val_str", AttributeKey.Type.TYPE_STRING),
+    "double_value": ("val_double", AttributeKey.Type.TYPE_DOUBLE),
+    # we store integers as double
+    "int_value": ("val_double", AttributeKey.Type.TYPE_DOUBLE),
+    # we store boolean as double
+    "bool_value": ("val_double", AttributeKey.Type.TYPE_DOUBLE),
+}
 
-def get_attributes(span: Mapping[str, Any]) -> list[GetTraceResponse.Item.Attribute]:
-    attributes: list[GetTraceResponse.Item.Attribute] = []
-    for key, value in span.get("measurements", {}).items():
-        attribute_key = AttributeKey(
-            name=key,
-            type=AttributeKey.Type.TYPE_DOUBLE,
-        )
-        attribute_value = AttributeValue(
-            val_double=value["value"],
-        )
+
+def get_attributes(
+    span: Mapping[str, AnyValue],
+) -> list[GetTraceResponse.Item.Attribute]:
+    attributes: list[GetTraceResponse.Item.Attribute] = [
+        GetTraceResponse.Item.Attribute(
+            key=AttributeKey(
+                name="sampling_factor",
+                type=AttributeKey.Type.TYPE_DOUBLE,
+            ),
+            value=AttributeValue(val_double=1.0),
+        ),
+    ]
+
+    for key in {"organization_id", "project_id", "trace_id"}:
+        attribute_key, attribute_value = _value_to_attribute(key, getattr(span, key))
         attributes.append(
             GetTraceResponse.Item.Attribute(
                 key=attribute_key,
                 value=attribute_value,
             )
         )
-
-    for field in {"tags", "sentry_tags", "data"}:
-        for key, value in span.get(field, {}).items():
-            if field == "sentry_tags":
-                key = f"sentry.{key}"
-            if key == "sentry.transaction":
-                continue
-            if isinstance(value, str):
-                attribute_key = AttributeKey(
-                    name=key,
-                    type=AttributeKey.Type.TYPE_STRING,
-                )
-                attribute_value = AttributeValue(
-                    val_str=value,
-                )
-            elif isinstance(value, int) or isinstance(value, float):
-                attribute_key = AttributeKey(
-                    name=key,
-                    type=AttributeKey.Type.TYPE_DOUBLE,
-                )
-                attribute_value = AttributeValue(
-                    val_double=value,
-                )
-            else:
-                continue
-
-            attributes.append(
-                GetTraceResponse.Item.Attribute(
-                    key=attribute_key,
-                    value=attribute_value,
-                )
+    for key, value in span.attributes.items():
+        value_type = value.WhichOneof("value")
+        if value_type:
+            attribute_key = AttributeKey(
+                name=key,
+                type=_PROTOBUF_TO_SENTRY_PROTOS[value_type][1],
             )
+            args = {
+                _PROTOBUF_TO_SENTRY_PROTOS[value_type][0]: getattr(value, value_type)
+            }
+        else:
+            continue
+
+        attribute_value = AttributeValue(**args)
+        attributes.append(
+            GetTraceResponse.Item.Attribute(
+                key=attribute_key,
+                value=attribute_value,
+            )
+        )
     return attributes
 
 
@@ -138,7 +138,7 @@ class TestGetTrace(BaseApiTest):
             error_proto.ParseFromString(response.data)
         assert response.status_code == 200, error_proto
 
-    def test_with_data(self, setup_teardown: Any) -> None:
+    def test_with_data_all_attributes(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         message = GetTraceRequest(
@@ -159,14 +159,7 @@ class TestGetTrace(BaseApiTest):
             ],
         )
         response = EndpointGetTrace().execute(message)
-        timestamps: list[Timestamp] = []
-        for span in _SPANS:
-            timestamp = Timestamp()
-            # truncate to microseconds since we store microsecond precision only
-            # then transform to nanoseconds
-            timestamp.FromNanoseconds(int(span["start_timestamp_precise"] * 1e6) * 1000)
-            timestamps.append(timestamp)
-
+        spans, timestamps = generate_spans_and_timestamps()
         expected_response = GetTraceResponse(
             meta=ResponseMeta(request_id=_REQUEST_ID),
             trace_id=_TRACE_ID,
@@ -175,33 +168,20 @@ class TestGetTrace(BaseApiTest):
                     item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                     items=[
                         GetTraceResponse.Item(
-                            id=span["span_id"],
+                            id=get_span_id(span),
                             timestamp=timestamp,
                             attributes=sorted(
                                 get_attributes(span),
                                 key=attrgetter("key.name"),
                             ),
                         )
-                        for timestamp, span in zip(timestamps, _SPANS)
+                        for timestamp, span in zip(timestamps, spans)
                     ],
                 ),
             ],
         )
 
-        assert list(
-            [
-                attribute
-                for attribute in response.item_groups[0].items[0].attributes
-                if attribute.key.name not in NORMALIZED_COLUMNS_TO_INCLUDE
-            ]
-        ) == list(expected_response.item_groups[0].items[0].attributes)
-        assert set(
-            [
-                attribute.key.name
-                for attribute in response.item_groups[0].items[0].attributes
-                if attribute.key.name in NORMALIZED_COLUMNS_TO_INCLUDE
-            ]
-        ) == set(NORMALIZED_COLUMNS_TO_INCLUDE)
+        assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_specific_attributes(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
@@ -234,12 +214,7 @@ class TestGetTrace(BaseApiTest):
             ],
         )
         response = EndpointGetTrace().execute(message)
-        timestamps: list[Timestamp] = []
-        for span in _SPANS:
-            timestamp = Timestamp()
-            timestamp.FromNanoseconds(int(span["start_timestamp_precise"] * 1e6) * 1000)
-            timestamps.append(timestamp)
-
+        spans, timestamps = generate_spans_and_timestamps()
         expected_response = GetTraceResponse(
             meta=ResponseMeta(request_id=_REQUEST_ID),
             trace_id=_TRACE_ID,
@@ -248,7 +223,7 @@ class TestGetTrace(BaseApiTest):
                     item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                     items=[
                         GetTraceResponse.Item(
-                            id=span["span_id"],
+                            id=get_span_id(span),
                             timestamp=timestamp,
                             attributes=[
                                 GetTraceResponse.Item.Attribute(
@@ -257,7 +232,7 @@ class TestGetTrace(BaseApiTest):
                                         type=AttributeKey.Type.TYPE_STRING,
                                     ),
                                     value=AttributeValue(
-                                        val_str="0" * 16,
+                                        val_str="",
                                     ),
                                 ),
                                 GetTraceResponse.Item.Attribute(
@@ -266,14 +241,35 @@ class TestGetTrace(BaseApiTest):
                                         type=AttributeKey.Type.TYPE_STRING,
                                     ),
                                     value=AttributeValue(
-                                        val_str=_SERVER_NAME,
+                                        val_str=SERVER_NAME,
                                     ),
                                 ),
                             ],
                         )
-                        for timestamp, span in zip(timestamps, _SPANS)
+                        for timestamp, span in zip(timestamps, spans)
                     ],
                 ),
             ],
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
+
+
+def generate_spans_and_timestamps() -> tuple[list[TraceItem], list[Timestamp]]:
+    timestamps: list[Timestamp] = []
+    spans: list[TraceItem] = []
+    for payload in _SPANS:
+        span = TraceItem()
+        span.ParseFromString(payload)
+        timestamp = Timestamp()
+        timestamp.FromNanoseconds(
+            int(span.attributes["sentry.start_timestamp_precise"].double_value * 1e6)
+            * 1000
+        )
+        timestamps.append(timestamp)
+        spans.append(span)
+    return spans, timestamps
+
+
+def get_span_id(span: TraceItem) -> str:
+    # cut the 0x prefix and the first 8 bytes
+    return hex(int.from_bytes(span.item_id, byteorder="little"))[-16:]

@@ -51,7 +51,6 @@ _DEFAULT_ATTRIBUTES = {
     "sentry.sdk.name": AnyValue(string_value="sentry.python.django"),
     "sentry.sdk.version": AnyValue(string_value="2.7.0"),
     "sentry.segment.name": AnyValue(string_value="/api/0/relays/projectconfigs/"),
-    "sentry.segment_id": AnyValue(string_value="8873a98879faf06d"),
     "server_name": AnyValue(string_value=SERVER_NAME),
     "spans_over_limit": AnyValue(string_value="False"),
     "status": AnyValue(string_value="ok"),
