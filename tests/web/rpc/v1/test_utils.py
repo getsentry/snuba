@@ -72,7 +72,7 @@ def write_eap_span(
     raw_attributes: dict[str, str | float | int | bool] = {},
     count: int = 1,
     server_sample_rate: float = 1.0,
-    item_id: bytes = None,
+    item_id: Optional[bytes] = None,
 ) -> None:
     """
     This is a helper function to write a single or multiple eap-spans to the database.
