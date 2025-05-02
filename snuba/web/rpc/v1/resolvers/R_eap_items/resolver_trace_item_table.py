@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import Sequence
+from typing import Sequence, Set
 
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationComparisonFilter,
@@ -118,9 +118,28 @@ def aggregation_filter_to_expression(
 
 
 def _convert_order_by(
+    groupby: Set[str],
     order_by: Sequence[TraceItemTableRequest.OrderBy],
     request_meta: RequestMeta,
 ) -> Sequence[OrderBy]:
+    if len(order_by) == 1:
+        order = order_by[0]
+        if order.column.key.name == "sentry.timestamp":
+            direction = (
+                OrderByDirection.DESC if order.descending else OrderByDirection.ASC
+            )
+            order_by_columns = []
+            for col in ["organization_id", "project_id", "item_type", "timestamp"]:
+                if col in groupby:
+                    order_by_columns.append(
+                        OrderBy(
+                            direction=direction,
+                            expression=snuba_column(col),
+                        )
+                    )
+
+            return order_by_columns
+
     res: list[OrderBy] = []
     for x in order_by:
         direction = OrderByDirection.DESC if x.descending else OrderByDirection.ASC
@@ -270,6 +289,12 @@ def build_query(request: TraceItemTableRequest) -> Query:
     item_type_conds = [
         f.equals(snuba_column("item_type"), request.meta.trace_item_type)
     ]
+    groupby = (
+        [
+            attribute_key_to_expression_eap_items(attr_key)
+            for attr_key in request.group_by
+        ],
+    )
     res = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -281,11 +306,8 @@ def build_query(request: TraceItemTableRequest) -> Query:
             ),
             *item_type_conds,
         ),
-        order_by=_convert_order_by(request.order_by, request.meta),
-        groupby=[
-            attribute_key_to_expression_eap_items(attr_key)
-            for attr_key in request.group_by
-        ],
+        order_by=_convert_order_by(set(groupby), request.order_by, request.meta),
+        groupby=groupby,
         # Only support offset page tokens for now
         offset=request.page_token.offset,
         # protobuf sets limit to 0 by default if it is not set,
