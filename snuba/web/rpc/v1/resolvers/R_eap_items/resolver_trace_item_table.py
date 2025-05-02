@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import Sequence, Set
+from typing import List, Sequence
 
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationComparisonFilter,
@@ -118,19 +118,13 @@ def aggregation_filter_to_expression(
 
 
 def _convert_order_by(
-    groupby: Set[str],
+    groupby: List[Expression],
     order_by: Sequence[TraceItemTableRequest.OrderBy],
     request_meta: RequestMeta,
 ) -> Sequence[OrderBy]:
     if len(order_by) == 1:
         order = order_by[0]
-        if (
-            order.column.key.name == "sentry.timestamp"
-            and "organization_id" in groupby
-            and "project_id" in groupby
-            and "item_type" in groupby
-            and "timestamp" in groupby
-        ):
+        if order.column.key.name == "sentry.timestamp" and len(groupby) == 0:
             direction = (
                 OrderByDirection.DESC if order.descending else OrderByDirection.ASC
             )
@@ -317,7 +311,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
             *item_type_conds,
         ),
         order_by=_convert_order_by(
-            set(exp.alias for exp in groupby if exp.alias is not None),
+            groupby,
             request.order_by,
             request.meta,
         ),
