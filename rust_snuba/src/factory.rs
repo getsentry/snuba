@@ -23,10 +23,12 @@ use sentry_kafka_schemas::Schema;
 use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
+use crate::runtime_config::get_str_config;
 use crate::strategies::accountant::RecordCogs;
 use crate::strategies::clickhouse::batch::{BatchFactory, HttpBatch};
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
+use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
 use crate::strategies::processor::{
     get_schema, make_rust_processor, make_rust_processor_with_replacements, validate_schema,
@@ -237,7 +239,28 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
         if let Some(path) = &self.health_check_file {
-            Box::new(HealthCheck::new(next_step, path))
+            {
+                let snuba_health_check_groups =
+                    get_str_config("snuba_health_check_consumer_groups")
+                        .ok()
+                        .flatten()
+                        .unwrap_or_default();
+
+                let consumer_groups: Vec<&str> = snuba_health_check_groups
+                    .split(',')
+                    .map(|s| s.trim())
+                    .collect();
+
+                if consumer_groups.contains(&self.physical_consumer_group.as_str()) {
+                    tracing::info!(
+                        "Using Snuba HealthCheck for consumer group: {}",
+                        self.physical_consumer_group
+                    );
+                    Box::new(SnubaHealthCheck::new(next_step, path))
+                } else {
+                    Box::new(HealthCheck::new(next_step, path))
+                }
+            }
         } else {
             Box::new(next_step)
         }
