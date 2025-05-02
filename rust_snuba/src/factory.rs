@@ -23,7 +23,6 @@ use sentry_kafka_schemas::Schema;
 use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
-use crate::runtime_config::get_str_config;
 use crate::strategies::accountant::RecordCogs;
 use crate::strategies::clickhouse::batch::{BatchFactory, HttpBatch};
 use crate::strategies::clickhouse::ClickhouseWriterStep;
@@ -62,6 +61,8 @@ pub struct ConsumerStrategyFactory {
     pub custom_envoy_request_timeout: Option<u64>,
     pub join_timeout_ms: Option<u64>,
 }
+
+const SNUBA_HEALTH_CHECK_CONSUMER_GROUPS: [&str; 1] = ["snuba_generic_metrics_distributions"];
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
     fn update_partitions(&self, partitions: &HashMap<Partition, u64>) {
@@ -240,18 +241,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         );
         if let Some(path) = &self.health_check_file {
             {
-                let snuba_health_check_groups =
-                    get_str_config("snuba_health_check_consumer_groups")
-                        .ok()
-                        .flatten()
-                        .unwrap_or_default();
-
-                let consumer_groups: Vec<&str> = snuba_health_check_groups
-                    .split(',')
-                    .map(|s| s.trim())
-                    .collect();
-
-                if consumer_groups.contains(&self.physical_consumer_group.as_str()) {
+                if SNUBA_HEALTH_CHECK_CONSUMER_GROUPS
+                    .contains(&self.physical_consumer_group.as_str())
+                {
                     tracing::info!(
                         "Using Snuba HealthCheck for consumer group: {}",
                         self.physical_consumer_group
