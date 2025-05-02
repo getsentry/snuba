@@ -60,7 +60,7 @@ where
             .ok()
             .flatten()
             .unwrap_or("0".to_string())
-            == "1".to_string()
+            == "1"
         {
             // If we are receiving a commit request, it means we are making progress and this can be considered a healthy state
             if let Ok(Some(_commit_request)) = poll_result.as_ref() {
