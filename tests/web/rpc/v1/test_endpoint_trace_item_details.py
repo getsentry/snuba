@@ -263,7 +263,6 @@ class TestTraceItemDetails(BaseApiTest):
 
         for k in {
             "sentry.body",
-            "sentry.span_id",
             "sentry.severity_text",
             "sentry.severity_number",
             "sentry.organization_id",

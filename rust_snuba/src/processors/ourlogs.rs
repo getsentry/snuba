@@ -26,7 +26,6 @@ pub(crate) struct FromLogMessage {
 
     //optional attributes
     trace_id: Option<Uuid>,
-    span_id: Option<String>, //hex encoded
     attributes: Option<BTreeMap<String, FromAttribute>>,
     severity_text: Option<String>,
     severity_number: Option<u8>,
@@ -153,10 +152,6 @@ impl From<FromLogMessage> for EAPItemSpan {
         );
         res.attributes
             .insert_str("sentry.body".to_string(), from.body);
-        if let Some(span_id) = from.span_id {
-            res.attributes
-                .insert_str("sentry.span_id".to_string(), span_id)
-        }
 
         if let Some(attributes) = from.attributes {
             for (k, v) in attributes {

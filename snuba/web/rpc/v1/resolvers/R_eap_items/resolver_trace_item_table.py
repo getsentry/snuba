@@ -121,6 +121,31 @@ def _convert_order_by(
     order_by: Sequence[TraceItemTableRequest.OrderBy],
     request_meta: RequestMeta,
 ) -> Sequence[OrderBy]:
+    if len(order_by) == 1:
+        order = order_by[0]
+        if order.column.key.name == "sentry.timestamp":
+            direction = (
+                OrderByDirection.DESC if order.descending else OrderByDirection.ASC
+            )
+            return [
+                OrderBy(
+                    direction=direction,
+                    expression=snuba_column("organization_id"),
+                ),
+                OrderBy(
+                    direction=direction,
+                    expression=snuba_column("project_id"),
+                ),
+                OrderBy(
+                    direction=direction,
+                    expression=snuba_column("item_type"),
+                ),
+                OrderBy(
+                    direction=direction,
+                    expression=snuba_column("timestamp"),
+                ),
+            ]
+
     res: list[OrderBy] = []
     for x in order_by:
         direction = OrderByDirection.DESC if x.descending else OrderByDirection.ASC
@@ -149,6 +174,7 @@ def _convert_order_by(
                     expression=_formula_to_expression(x.column.formula, request_meta),
                 )
             )
+
     return res
 
 
@@ -324,7 +350,10 @@ class ResolverTraceItemTableEAPItems:
         )
 
         res = run_query_to_correct_tier(
-            in_msg, query_settings, timer, build_query  # type: ignore
+            in_msg,
+            query_settings,
+            timer,
+            build_query,  # type: ignore
         )
         column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
