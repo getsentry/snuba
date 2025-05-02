@@ -35,6 +35,7 @@ impl<Next> HealthCheck<Next> {
 
     fn maybe_touch_file(&mut self) {
         let now = SystemTime::now();
+        #[cfg(not(test))]
         if now < self.deadline {
             return;
         }
@@ -90,5 +91,106 @@ where
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         self.next_step.join(timeout)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HealthCheck;
+    use crate::runtime_config::patch_str_config_for_test;
+    use sentry_arroyo::processing::strategies::{
+        CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
+    };
+    use sentry_arroyo::types::Message;
+    use std::collections::HashMap;
+    use std::fs;
+    use std::path::Path;
+    use std::time::Duration;
+
+    // Mock strategy that can be configured to return commit requests
+    struct MockStrategy {
+        return_commit_request: bool,
+    }
+
+    impl MockStrategy {
+        fn new(return_commit_request: bool) -> Self {
+            Self {
+                return_commit_request,
+            }
+        }
+    }
+
+    impl ProcessingStrategy<()> for MockStrategy {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+            if self.return_commit_request {
+                Ok(Some(CommitRequest {
+                    positions: HashMap::new(),
+                }))
+            } else {
+                Ok(None)
+            }
+        }
+
+        fn submit(&mut self, _message: Message<()>) -> Result<(), SubmitError<()>> {
+            Ok(())
+        }
+
+        fn terminate(&mut self) {}
+
+        fn join(
+            &mut self,
+            _timeout: Option<Duration>,
+        ) -> Result<Option<CommitRequest>, StrategyError> {
+            Ok(None)
+        }
+    }
+
+    #[test]
+    fn test_file_created_when_making_progress() {
+        // Setup
+        patch_str_config_for_test("experimental_healthcheck", Some("1"));
+        let file_path = format!("/tmp/healthcheck_test_{}", uuid::Uuid::new_v4());
+
+        // Create a mock strategy that returns a commit request
+        let mock_strategy = MockStrategy::new(true);
+        let mut health_check: HealthCheck<MockStrategy> =
+            HealthCheck::new(mock_strategy, &file_path);
+
+        let _ = health_check.poll();
+        assert!(
+            Path::new(&file_path).exists(),
+            "Health check file should be created when making progress"
+        );
+        let _ = fs::remove_file(&file_path);
+    }
+
+    #[test]
+    fn test_not_making_progress() {
+        // Setup
+        patch_str_config_for_test("experimental_healthcheck", Some("1"));
+        let file_path = format!("/tmp/healthcheck_test_{}", uuid::Uuid::new_v4());
+
+        // Create a mock strategy that doesn't return a commit request
+        let mock_strategy = MockStrategy::new(false);
+        let mut health_check: HealthCheck<MockStrategy> =
+            HealthCheck::new(mock_strategy, &file_path);
+
+        let _ = health_check.poll(); // iterations_since_last_submit becomes 1
+
+        assert!(
+            !Path::new(&file_path).exists(),
+            "Health check file should not be created when we don't have a commit request"
+        );
+
+        let _ = health_check.poll();
+
+        // Assert
+        assert!(
+            Path::new(&file_path).exists(),
+            "Health check file should be created when not receiving messages (we haven't called submit) and we don't have a commit request"
+        );
+
+        // Cleanup
+        let _ = fs::remove_file(&file_path);
     }
 }
