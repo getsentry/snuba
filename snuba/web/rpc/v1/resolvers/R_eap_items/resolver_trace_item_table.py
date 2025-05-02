@@ -302,12 +302,9 @@ def build_query(request: TraceItemTableRequest) -> Query:
     item_type_conds = [
         f.equals(snuba_column("item_type"), request.meta.trace_item_type)
     ]
-    groupby = (
-        [
-            attribute_key_to_expression_eap_items(attr_key)
-            for attr_key in request.group_by
-        ],
-    )
+    groupby = [
+        attribute_key_to_expression_eap_items(attr_key) for attr_key in request.group_by
+    ]
     res = Query(
         from_clause=entity,
         selected_columns=selected_columns,
