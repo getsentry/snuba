@@ -54,6 +54,8 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query import OrderBy, OrderByDirection
+from snuba.query.dsl import column as snuba_column
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -61,6 +63,7 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
     _apply_labels_to_columns,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -1234,6 +1237,71 @@ class TestTraceItemTable(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         measurements = [v.val_double for v in response.column_values[1].results]
         assert sorted(measurements) == measurements
+
+    def test_order_by_full_sort_key_if_no_groupby(self) -> None:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(hours=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                        )
+                    )
+                )
+            ],
+        )
+        assert build_query(message).get_orderby() == [
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=snuba_column("organization_id"),
+            ),
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=snuba_column("project_id"),
+            ),
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=snuba_column("item_type"),
+            ),
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=snuba_column("timestamp"),
+            ),
+        ]
+
+    def test_does_not_sort_by_full_sort_key_if_groupby_exists(self) -> None:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(hours=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.name")],
+        )
+        assert build_query(message).get_orderby() == []
 
     def test_aggregation_on_attribute_column_backward_compat(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
