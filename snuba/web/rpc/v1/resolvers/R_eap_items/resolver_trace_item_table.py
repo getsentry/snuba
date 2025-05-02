@@ -316,7 +316,9 @@ def build_query(request: TraceItemTableRequest) -> Query:
             ),
             *item_type_conds,
         ),
-        order_by=_convert_order_by(set(groupby), request.order_by, request.meta),
+        order_by=_convert_order_by(
+            set(exp.alias for exp in groupby), request.order_by, request.meta
+        ),
         groupby=groupby,
         # Only support offset page tokens for now
         offset=request.page_token.offset,
