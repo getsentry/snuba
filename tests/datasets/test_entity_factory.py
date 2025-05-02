@@ -54,6 +54,7 @@ ENTITY_KEYS = [
     EntityKey.UPTIME_CHECKS,
     EntityKey.EAP_ITEMS,
     EntityKey.EAP_ITEMS_LOG,
+    EntityKey.EAP_ITEMS_SPAN,
 ]
 
 
