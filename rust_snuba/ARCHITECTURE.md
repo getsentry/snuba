@@ -83,19 +83,16 @@ Known issues:
 
 ```mermaid
 flowchart TD
-    A['Snuba CLI, Python] --> B[consumer via PyO3/Maturin]
-    B --> C[Snuba Rust Consumer]
-
-    C --> D1[HealthCheck Step]
+    D1[HealthCheck Step]
     D1 --> D2[SetJoinTimeout to 0 ms - Enter the idempotency Zone]
     D2 --> E[Message Transformers]
     E --> F[Reduce Step - Open & Stream Rows to ClickHouse]
-    F --> W[reqwest Client task]
-    H <--> W
+    F --> W[MPSC channel, one per batch]
+    W --> W1[writer task, one per batch, drives reqwest client that pulls from channel]
+    W1 --> H
     F --> G[SetJoinTimeout to ∞ ms - Exit the idempotency Zone]
     G --> H[ClickhouseWriterStep - Finalize & Confirm Batch]
 
-    H --> I1[Write to ClickHouse]
     H --> I2[Produce to COGS Topic]
     I2 --> I3[Produce to Commit Log Topic]
 ```
