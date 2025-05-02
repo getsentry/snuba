@@ -124,21 +124,34 @@ def _convert_order_by(
 ) -> Sequence[OrderBy]:
     if len(order_by) == 1:
         order = order_by[0]
-        if order.column.key.name == "sentry.timestamp":
+        if (
+            order.column.key.name == "sentry.timestamp"
+            and "organization_id" in groupby
+            and "project_id" in groupby
+            and "item_type" in groupby
+            and "timestamp" in groupby
+        ):
             direction = (
                 OrderByDirection.DESC if order.descending else OrderByDirection.ASC
             )
-            order_by_columns = []
-            for col in ["organization_id", "project_id", "item_type", "timestamp"]:
-                if col in groupby:
-                    order_by_columns.append(
-                        OrderBy(
-                            direction=direction,
-                            expression=snuba_column(col),
-                        )
-                    )
-
-            return order_by_columns
+            return [
+                OrderBy(
+                    direction=direction,
+                    expression=snuba_column("organization_id"),
+                ),
+                OrderBy(
+                    direction=direction,
+                    expression=snuba_column("project_id"),
+                ),
+                OrderBy(
+                    direction=direction,
+                    expression=snuba_column("item_type"),
+                ),
+                OrderBy(
+                    direction=direction,
+                    expression=snuba_column("timestamp"),
+                ),
+            ]
 
     res: list[OrderBy] = []
     for x in order_by:
