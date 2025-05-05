@@ -19,10 +19,17 @@ sources of truth for config.
 
 `rust_snuba` then uses the Rust port of Arroyo to define its own consumer. The following steps (processing strategies) exist (see `factory.rs`):
 
-1. `HealthCheck` step, touches a file in irregular intervals to signal to k8s
-   that the consumer is still alive.
+1. `HealthCheck` step, touches a file as part of the main event loop to signal
+   to k8s that the consumer is still alive.
 2. `SetJoinTimeout` step, resets the join timeout to 0 for the next steps. This
    marks a section where it's ok to drop in-flight progress during rebalancing.
+
+   * Message transformation (i.e. JSON parsing) has no side-effects, can be safely retried.
+   * The reduce/batching step can be retried because even though it opens a
+     connection to ClickHouse, the INSERT is not committed yet. You can open a
+     socket to ClickHouse and start writing rows, and for as long as you don't
+     explicitly close the request with an empty chunk (which happens in
+     `ClickhouseWriterStep`), the rows will not be visible.
 3. Message transformers, basically a threadpool to parse messages, validate
    them and turn them into rows. This can call both back into Python code for
    when the MessageProcessor hasn't been ported to Rust yet, but most datasets
@@ -77,9 +84,9 @@ Known issues:
   idleness, causing the consumer to crash after e.g. 30 seconds of it being
   stuck.
 * There can be backpressure between writing a row into the channel and sending
-  it to ClickHouse. If this backpressure continues for a very long time, the
-  consumer will panic instead of exerting backpressure further. So far this has
-  never happened.
+  it to ClickHouse, meaning the channel will "fill up". If this backpressure
+  continues for a very long time, the consumer will panic instead of exerting
+  backpressure further. So far this has never happened.
 
 ```mermaid
 flowchart TD
