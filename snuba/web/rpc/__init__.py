@@ -28,7 +28,6 @@ from snuba.web.rpc.common.exceptions import (
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
 
-MAXIMUM_TIME_RANGE_IN_DAYS = 30
 _TIME_PERIOD_HOURS_BUCKETS = [
     1,
     24,
@@ -155,8 +154,8 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 tags = {"endpoint": str(self.__class__.__name__)}
                 if self._uses_storage_routing(in_msg):
                     tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
-                        in_msg.meta.downsampled_storage_config.mode
-                    )  # type: ignore
+                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
+                    )
                 self.metrics.increment("timeout_query", 1, tags)
                 sentry_sdk.capture_exception(e)
             if (
@@ -166,8 +165,8 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 tags = {"endpoint": str(self.__class__.__name__)}
                 if self._uses_storage_routing(in_msg):
                     tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
-                        in_msg.meta.downsampled_storage_config.mode
-                    )  # type: ignore
+                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
+                    )
                 self.metrics.increment("estimated_execution_timeout", 1, tags)
                 sentry_sdk.capture_exception(e)
             out = self.response_class()()
