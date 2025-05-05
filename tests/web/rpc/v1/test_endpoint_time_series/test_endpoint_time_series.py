@@ -1,7 +1,6 @@
-import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable, MutableMapping
+from typing import Any, Callable
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -36,6 +35,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
 )
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -48,63 +48,7 @@ from snuba.web.rpc.v1.endpoint_time_series import (
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
-
-
-def gen_span_message(
-    dt: datetime, tags: dict[str, str], numerical_attributes: dict[str, float]
-) -> MutableMapping[str, Any]:
-    return {
-        "description": "/api/0/relays/projectconfigs/",
-        "duration_ms": 152,
-        "event_id": "d826225de75d42d6b2f01b957d51f18f",
-        "exclusive_time_ms": 0.228,
-        "is_segment": True,
-        "data": {
-            "sentry.environment": "development",
-            "sentry.release": "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b",
-            "thread.name": "uWSGIWorker1Core0",
-            "thread.id": "8522009600",
-            "sentry.segment.name": "/api/0/relays/projectconfigs/",
-            "sentry.sdk.name": "sentry.python.django",
-            "sentry.sdk.version": "2.7.0",
-            **numerical_attributes,
-        },
-        "measurements": {
-            "num_of_spans": {"value": 50.0},
-            "client_sample_rate": {"value": 1},
-        },
-        "organization_id": 1,
-        "origin": "auto.http.django",
-        "project_id": 1,
-        "received": 1721319572.877828,
-        "retention_days": 90,
-        "segment_id": "8873a98879faf06d",
-        "sentry_tags": {
-            "category": "http",
-            "environment": "development",
-            "op": "http.server",
-            "platform": "python",
-            "release": "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b",
-            "sdk.name": "sentry.python.django",
-            "sdk.version": "2.7.0",
-            "status": "ok",
-            "status_code": "200",
-            "thread.id": "8522009600",
-            "thread.name": "uWSGIWorker1Core0",
-            "trace.status": "ok",
-            "transaction": "/api/0/relays/projectconfigs/",
-            "transaction.method": "POST",
-            "transaction.op": "http.server",
-            "user": "ip:127.0.0.1",
-        },
-        "span_id": uuid.uuid4().hex,
-        "tags": tags,
-        "trace_id": uuid.uuid4().hex,
-        "start_timestamp_ms": int(dt.timestamp()) * 1000,
-        "start_timestamp_precise": dt.timestamp(),
-        "end_timestamp_precise": dt.timestamp() + 1,
-    }
-
+from tests.web.rpc.v1.test_utils import gen_item_message
 
 BASE_TIME = datetime.utcnow().replace(
     hour=8, minute=0, second=0, microsecond=0, tzinfo=UTC
@@ -125,15 +69,17 @@ def store_spans_timeseries(
     period_secs: int,
     len_secs: int,
     metrics: list[DummyMetric],
-    tags: dict[str, str] | None = None,
+    attributes: dict[str, AnyValue] = {},
 ) -> None:
-    tags = tags or {}
     messages = []
     for secs in range(0, len_secs, period_secs):
         dt = start_datetime + timedelta(seconds=secs)
-        numerical_attributes = {m.name: m.get_value(secs) for m in metrics}
-        messages.append(gen_span_message(dt, tags, numerical_attributes))
+        a = attributes | {
+            m.name: AnyValue(double_value=m.get_value(secs)) for m in metrics
+        }
+        messages.append(gen_item_message(dt, a))
     items_storage = get_storage(StorageKey("eap_items"))
+
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
@@ -384,21 +330,30 @@ class TestTimeSeriesApi(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
-            tags={"consumer_group": "a", "environment": "prod"},
+            attributes={
+                "consumer_group": AnyValue(string_value="a"),
+                "environment": AnyValue(string_value="prod"),
+            },
         )
         store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 10)],
-            tags={"consumer_group": "z", "environment": "prod"},
+            attributes={
+                "consumer_group": AnyValue(string_value="z"),
+                "environment": AnyValue(string_value="prod"),
+            },
         )
         store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 100)],
-            tags={"consumer_group": "z", "environment": "dev"},
+            attributes={
+                "consumer_group": AnyValue(string_value="z"),
+                "environment": AnyValue(string_value="dev"),
+            },
         )
 
         message = TimeSeriesRequest(
@@ -600,7 +555,7 @@ class TestTimeSeriesApi(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
-            tags={"customer": "bob"},
+            attributes={"customer": AnyValue(string_value="bob")},
         )
 
         store_spans_timeseries(
@@ -608,7 +563,7 @@ class TestTimeSeriesApi(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 999)],
-            tags={"customer": "alice"},
+            attributes={"customer": AnyValue(string_value="alice")},
         )
 
         message = TimeSeriesRequest(
@@ -699,7 +654,7 @@ class TestTimeSeriesApi(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
-            tags={"customer": "bOb"},
+            attributes={"customer": AnyValue(string_value="bOb")},
         )
 
         store_spans_timeseries(
@@ -707,7 +662,7 @@ class TestTimeSeriesApi(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 999)],
-            tags={"customer": "aLiCe"},
+            attributes={"customer": AnyValue(string_value="aLiCe")},
         )
 
         message = TimeSeriesRequest(
@@ -801,7 +756,7 @@ class TestTimeSeriesApi(BaseApiTest):
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
-            tags={"customer": "bob"},
+            attributes={"customer": AnyValue(string_value="bob")},
         )
         message = TimeSeriesRequest(
             meta=RequestMeta(
@@ -968,13 +923,16 @@ class TestTimeSeriesApi(BaseApiTest):
 
         metrics_mock = MagicMock()
         monkeypatch.setattr(RPCEndpoint, "metrics", property(lambda x: metrics_mock))
-        with patch(
-            "clickhouse_driver.client.Client.execute",
-            side_effect=ServerException(
-                "DB::Exception: Received from snuba-events-analytics-platform-1-1:1111. DB::Exception: Memory limit (for query) exceeded: would use 1.11GiB (attempt to allocate chunk of 111111 bytes), maximum: 1.11 GiB. Blahblahblahblahblahblahblah",
-                code=241,
+        with (
+            patch(
+                "clickhouse_driver.client.Client.execute",
+                side_effect=ServerException(
+                    "DB::Exception: Received from snuba-events-analytics-platform-1-1:1111. DB::Exception: Memory limit (for query) exceeded: would use 1.11GiB (attempt to allocate chunk of 111111 bytes), maximum: 1.11 GiB. Blahblahblahblahblahblahblah",
+                    code=241,
+                ),
             ),
-        ), patch("snuba.web.rpc.sentry_sdk.capture_exception") as sentry_sdk_mock:
+            patch("snuba.web.rpc.sentry_sdk.capture_exception") as sentry_sdk_mock,
+        ):
             with pytest.raises(QueryException) as e:
                 EndpointTimeSeries().execute(message)
             assert "DB::Exception: Memory limit (for query) exceeded" in str(e.value)
