@@ -111,7 +111,7 @@ def old_materialized_view_name(weight: int) -> str:
 def old_materialized_view_expression(sampling_weight: int) -> str:
     column_names_str = ", ".join(
         [
-            f"{c}"
+            f"{c.name}"
             for c in COLUMNS
             if c.name != "sampling_weight" and c.name != "sampling_factor"
         ]
@@ -131,7 +131,11 @@ def new_materialized_view_name(weight: int) -> str:
 
 def new_materialized_view_expression(sampling_weight: int) -> str:
     column_names_str = ", ".join(
-        [f"{c}" for c in COLUMNS if c != "sampling_weight" and c != "sampling_factor"]
+        [
+            f"{c.name}"
+            for c in COLUMNS
+            if c.name != "sampling_weight" and c.name != "sampling_factor"
+        ]
     )
     return (
         f"SELECT {column_names_str}, "
