@@ -1,7 +1,9 @@
+import random
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from operator import itemgetter
+from typing import Any, Mapping
 
 import pytest
 from google.protobuf.json_format import MessageToDict
@@ -23,7 +25,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
 )
-from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -31,39 +32,123 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.test_utils import gen_item_message
 
+_RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
+_SERVER_NAME = "D23CXQ4GK2.local"
 _TRACE_IDS = [uuid.uuid4().hex for _ in range(10)]
 _BASE_TIME = datetime.now(tz=timezone.utc).replace(
     minute=0,
     second=0,
     microsecond=0,
-) - timedelta(hours=2)
+) - timedelta(minutes=180)
 _SPAN_COUNT = 120
 _REQUEST_ID = uuid.uuid4().hex
-_SPANS = [
-    gen_item_message(
-        start_timestamp=_BASE_TIME + timedelta(minutes=i),
-        trace_id=_TRACE_IDS[i % len(_TRACE_IDS)],
-        attributes={
-            "sentry.op": AnyValue(
-                string_value="navigation" if i < len(_TRACE_IDS) else "db"
-            ),
-            "sentry.raw_description": AnyValue(
-                string_value=(
-                    "root"
-                    if i < len(_TRACE_IDS)
-                    else f"child {i % len(_TRACE_IDS) + 1} of {_SPAN_COUNT // len(_TRACE_IDS) - 1}"
-                )
-            ),
-            "is_segment": AnyValue(bool_value=i < len(_TRACE_IDS)),
-            "sentry.segment_id": AnyValue(
-                string_value=_TRACE_IDS[i % len(_TRACE_IDS)][:16],
-            ),
-            "sentry.parent_span_id": AnyValue(
-                string_value="" if i < len(_TRACE_IDS) else "1" * 16
-            ),
+
+
+def gen_message(
+    dt: datetime,
+    trace_id: str,
+    measurements: dict[str, dict[str, float]] | None = None,
+    tags: dict[str, str] | None = None,
+    span_op: str = "http.server",
+    span_name: str = "root",
+    is_segment: bool = False,
+    parent_span_id: str | None = None,
+    standalone_span: bool = False,
+) -> Mapping[str, Any]:
+    measurements = measurements or {}
+    tags = tags or {}
+    timestamp = dt.timestamp()
+    if not is_segment:
+        timestamp += random.random()
+    span = {
+        "description": span_name,
+        "duration_ms": 1000,
+        "event_id": uuid.uuid4().hex,
+        "exclusive_time_ms": 0.228,
+        "is_segment": is_segment,
+        "data": {
+            "sentry.environment": "development",
+            "sentry.release": _RELEASE_TAG,
+            "thread.name": "uWSGIWorker1Core0",
+            "thread.id": "8522009600",
+            "sentry.segment.name": "/api/0/relays/projectconfigs/",
+            "sentry.sdk.name": "sentry.python.django",
+            "sentry.sdk.version": "2.7.0",
+            "my.float.field": 101.2,
+            "my.int.field": 2000,
+            "my.neg.field": -100,
+            "my.neg.float.field": -101.2,
+            "my.true.bool.field": True,
+            "my.false.bool.field": False,
         },
+        "measurements": {
+            "num_of_spans": {"value": 50.0},
+            "eap.measurement": {"value": random.choice([1, 100, 1000])},
+            **measurements,
+        },
+        "organization_id": 1,
+        "origin": "auto.http.django",
+        "project_id": 1,
+        "received": 1721319572.877828,
+        "retention_days": 90,
+        "sentry_tags": {
+            "category": "http",
+            "environment": "development",
+            "op": span_op,
+            "platform": "python",
+            "release": _RELEASE_TAG,
+            "sdk.name": "sentry.python.django",
+            "sdk.version": "2.7.0",
+            "status": "ok",
+            "status_code": "200",
+            "thread.id": "8522009600",
+            "thread.name": "uWSGIWorker1Core0",
+            "trace.status": "ok",
+            "transaction": "/api/0/relays/projectconfigs/",
+            "transaction.method": "POST",
+            "transaction.op": "http.server",
+            "user": "ip:127.0.0.1",
+        },
+        "span_id": uuid.uuid4().hex[:16],
+        "tags": {
+            "http.status_code": "200",
+            "relay_endpoint_version": "3",
+            "relay_id": "88888888-4444-4444-8444-cccccccccccc",
+            "relay_no_cache": "False",
+            "relay_protocol_version": "3",
+            "relay_use_post_or_schedule": "True",
+            "relay_use_post_or_schedule_rejected": "version",
+            "server_name": _SERVER_NAME,
+            "spans_over_limit": "False",
+            "color": random.choice(["red", "green", "blue"]),
+            "location": random.choice(["mobile", "frontend", "backend"]),
+            **tags,
+        },
+        "trace_id": trace_id,
+        "start_timestamp_ms": int(timestamp * 1000),
+        "start_timestamp_precise": timestamp,
+        "end_timestamp_precise": timestamp + 1,
+    }
+    if not standalone_span:
+        span["segment_id"] = trace_id[:16]
+    if parent_span_id is not None:
+        span["parent_span_id"] = parent_span_id
+    return span
+
+
+_SPANS = [
+    gen_message(
+        dt=_BASE_TIME + timedelta(minutes=i),
+        trace_id=_TRACE_IDS[i % len(_TRACE_IDS)],
+        span_op="navigation" if i < len(_TRACE_IDS) else "db",
+        span_name=(
+            "root"
+            if i < len(_TRACE_IDS)
+            else f"child {i % len(_TRACE_IDS) + 1} of {_SPAN_COUNT // len(_TRACE_IDS) - 1}"
+        ),
+        is_segment=i < len(_TRACE_IDS),
+        parent_span_id=None if i < len(_TRACE_IDS) else "1" * 16,
     )
     for i in range(_SPAN_COUNT)
 ]
@@ -77,14 +162,13 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     write_raw_unprocessed_events(
         items_storage,  # type: ignore
         [
-            gen_item_message(
-                start_timestamp=_BASE_TIME + timedelta(minutes=i),
+            gen_message(
+                dt=_BASE_TIME + timedelta(minutes=i),
                 trace_id=uuid.uuid4().hex,
-                attributes={
-                    "span_op": AnyValue(string_value="lcp"),
-                    "span_name": AnyValue(string_value="standalone"),
-                    "is_segment": AnyValue(bool_value=False),
-                },
+                span_op="lcp",
+                span_name="standalone",
+                is_segment=False,
+                standalone_span=True,
             )
             for i in range(_SPAN_COUNT)
         ],
@@ -99,7 +183,7 @@ class TestGetTraces(BaseApiTest):
         ts.GetCurrentTime()
         message = GetTracesRequest(
             meta=RequestMeta(
-                project_ids=[1],
+                project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
@@ -125,13 +209,20 @@ class TestGetTraces(BaseApiTest):
     def test_with_data(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
-        (
-            start_timestamp_per_trace_id,
-            trace_id_per_start_timestamp,
-        ) = generate_trace_id_timestamp_data()
+        start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
+        for s in _SPANS:
+            start_timestamp_per_trace_id[s["trace_id"]] = min(
+                start_timestamp_per_trace_id[s["trace_id"]],
+                s["start_timestamp_precise"],
+            )
+        trace_id_per_start_timestamp: dict[float, str] = {
+            timestamp: trace_id
+            for trace_id, timestamp in start_timestamp_per_trace_id.items()
+        }
+
         message = GetTracesRequest(
             meta=RequestMeta(
-                project_ids=[1],
+                project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
@@ -170,10 +261,10 @@ class TestGetTraces(BaseApiTest):
 
     def test_with_data_and_limit(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
-        three_hours_later = int((_BASE_TIME + timedelta(hours=10)).timestamp())
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         message = GetTracesRequest(
             meta=RequestMeta(
-                project_ids=[1],
+                project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
@@ -189,11 +280,10 @@ class TestGetTraces(BaseApiTest):
             limit=1,
         )
         response = EndpointGetTraces().execute(message)
-        spans = generate_spans()
-        last_span = spans[0]
-        for span in spans:
-            if span.timestamp.seconds >= last_span.timestamp.seconds:
-                last_span = span
+        last_span = sorted(
+            _SPANS,
+            key=itemgetter("start_timestamp_ms"),
+        )[len(_SPANS) - 1]
         expected_response = GetTracesResponse(
             traces=[
                 GetTracesResponse.Trace(
@@ -202,7 +292,7 @@ class TestGetTraces(BaseApiTest):
                             key=TraceAttribute.Key.KEY_TRACE_ID,
                             type=AttributeKey.Type.TYPE_STRING,
                             value=AttributeValue(
-                                val_str=last_span.trace_id,
+                                val_str=last_span["trace_id"],
                             ),
                         )
                     ],
@@ -218,7 +308,7 @@ class TestGetTraces(BaseApiTest):
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         message = GetTracesRequest(
             meta=RequestMeta(
-                project_ids=[1],
+                project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
@@ -272,24 +362,26 @@ class TestGetTraces(BaseApiTest):
     def test_with_data_and_aggregated_fields_all_keys(
         self, setup_teardown: Any
     ) -> None:
-        start_timestamp = Timestamp(
-            seconds=int((_BASE_TIME - timedelta(hours=10)).timestamp())
-        )
-        end_timestamp = Timestamp(
-            seconds=int((_BASE_TIME + timedelta(hours=10)).timestamp())
-        )
-        (
-            start_timestamp_per_trace_id,
-            trace_id_per_start_timestamp,
-        ) = generate_trace_id_timestamp_data()
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+        start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
+        for s in _SPANS:
+            start_timestamp_per_trace_id[s["trace_id"]] = min(
+                start_timestamp_per_trace_id[s["trace_id"]],
+                s["start_timestamp_precise"],
+            )
+        trace_id_per_start_timestamp: dict[float, str] = {
+            timestamp: trace_id
+            for trace_id, timestamp in start_timestamp_per_trace_id.items()
+        }
         message = GetTracesRequest(
             meta=RequestMeta(
-                project_ids=[1],
+                project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=start_timestamp,
-                end_timestamp=end_timestamp,
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
                 request_id=_REQUEST_ID,
             ),
             attributes=[
@@ -408,7 +500,7 @@ class TestGetTraces(BaseApiTest):
                             key=TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS,
                             type=AttributeKey.TYPE_INT,
                             value=AttributeValue(
-                                val_int=152,
+                                val_int=1000,
                             ),
                         ),
                         TraceAttribute(
@@ -436,7 +528,7 @@ class TestGetTraces(BaseApiTest):
                             key=TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS,
                             type=AttributeKey.TYPE_INT,
                             value=AttributeValue(
-                                val_int=152,
+                                val_int=1000,
                             ),
                         ),
                         TraceAttribute(
@@ -457,7 +549,7 @@ class TestGetTraces(BaseApiTest):
                             key=TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_DURATION_MS,
                             type=AttributeKey.TYPE_INT,
                             value=AttributeValue(
-                                val_int=152,
+                                val_int=1000,
                             ),
                         ),
                     ],
@@ -474,13 +566,19 @@ class TestGetTraces(BaseApiTest):
     def test_with_data_and_aggregated_fields(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
-        (
-            start_timestamp_per_trace_id,
-            trace_id_per_start_timestamp,
-        ) = generate_trace_id_timestamp_data()
+        start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
+        for s in _SPANS:
+            start_timestamp_per_trace_id[s["trace_id"]] = min(
+                start_timestamp_per_trace_id[s["trace_id"]],
+                s["start_timestamp_precise"],
+            )
+        trace_id_per_start_timestamp: dict[float, str] = {
+            timestamp: trace_id
+            for trace_id, timestamp in start_timestamp_per_trace_id.items()
+        }
         message = GetTracesRequest(
             meta=RequestMeta(
-                project_ids=[1],
+                project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
@@ -540,13 +638,19 @@ class TestGetTraces(BaseApiTest):
     ) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
-        (
-            start_timestamp_per_trace_id,
-            trace_id_per_start_timestamp,
-        ) = generate_trace_id_timestamp_data()
+        start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
+        for s in _SPANS:
+            start_timestamp_per_trace_id[s["trace_id"]] = min(
+                start_timestamp_per_trace_id[s["trace_id"]],
+                s["start_timestamp_precise"],
+            )
+        trace_id_per_start_timestamp: dict[float, str] = {
+            timestamp: trace_id
+            for trace_id, timestamp in start_timestamp_per_trace_id.items()
+        }
         message = GetTracesRequest(
             meta=RequestMeta(
-                project_ids=[1],
+                project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
@@ -607,9 +711,16 @@ class TestGetTraces(BaseApiTest):
     ) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+        start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
+        for s in _SPANS:
+            start_timestamp_per_trace_id[s["trace_id"]] = min(
+                start_timestamp_per_trace_id[s["trace_id"]],
+                s["start_timestamp_precise"],
+            )
+
         message = GetTracesRequest(
             meta=RequestMeta(
-                project_ids=[1],
+                project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
@@ -644,28 +755,3 @@ class TestGetTraces(BaseApiTest):
             BadSnubaRPCRequestException, match="Cannot ignore case on non-string values"
         ):
             EndpointGetTraces().execute(message)
-
-
-def generate_spans() -> list[TraceItem]:
-    spans: list[TraceItem] = []
-    for payload in _SPANS:
-        span = TraceItem()
-        span.ParseFromString(payload)
-        spans.append(span)
-    return spans
-
-
-def generate_trace_id_timestamp_data() -> tuple[dict[str, float], dict[float, str]]:
-    start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
-    for payload in _SPANS:
-        s = TraceItem()
-        s.ParseFromString(payload)
-        start_timestamp_per_trace_id[s.trace_id] = min(
-            start_timestamp_per_trace_id[s.trace_id],
-            s.attributes["sentry.start_timestamp_precise"].double_value,
-        )
-    trace_id_per_start_timestamp: dict[float, str] = {
-        timestamp: trace_id
-        for trace_id, timestamp in start_timestamp_per_trace_id.items()
-    }
-    return start_timestamp_per_trace_id, trace_id_per_start_timestamp

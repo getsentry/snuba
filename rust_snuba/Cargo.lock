@@ -3254,8 +3254,6 @@ dependencies = [
  "once_cell",
  "parking_lot",
  "procspawn",
- "prost",
- "prost-types",
  "pyo3",
  "regex",
  "reqwest",
@@ -3264,7 +3262,6 @@ dependencies = [
  "sentry",
  "sentry-kafka-schemas",
  "sentry_arroyo",
- "sentry_protos",
  "sentry_usage_accountant",
  "seq-macro",
  "serde",
@@ -3593,9 +3590,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_protos"
-version = "0.1.74"
+version = "0.1.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0aefff68057c87dc1054563870fc268c04266a9143c51f424a98faf548330d6"
+checksum = "6b2a036b77e9fd7894ff4f0ac130dad3ca651e5359b2952ddb432638c6ec7958"
 dependencies = [
  "glob",
  "prost",

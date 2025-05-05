@@ -23,13 +23,9 @@ class RustCompatProcessor(DatasetMessageProcessor):
     def process_message(
         self, message: Any, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
-        if self.__processor_name == "EAPItemsProcessor":
-            payload = message
-        else:
-            payload = json.dumps(message).encode("utf8")
         insert_payload, replacement_payload = self.__process_message(
             self.__processor_name,
-            payload,
+            json.dumps(message).encode("utf8"),
             metadata.partition,
             metadata.offset,
             int(metadata.timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000),
