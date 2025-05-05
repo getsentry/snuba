@@ -9,7 +9,11 @@ from dateutil.tz import tz
 
 from snuba import state
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import ClickhousePool, transform_datetime
+from snuba.clickhouse.native import (
+    ClickhousePool,
+    transform_datetime,
+    transform_datetime64_ms,
+)
 
 
 def test_transform_datetime() -> None:
@@ -23,6 +27,40 @@ def test_transform_datetime() -> None:
         transform_datetime(now.replace(tzinfo=tz.tzoffset("PST", offset)) + offset)
         == fmt
     )
+
+
+def test_transform_datetime64_ms() -> None:
+    # Test with no microseconds
+    now_no_micro = datetime(2020, 1, 2, 3, 4, 5)
+    fmt_no_micro = "2020-01-02T03:04:05+00:00"
+    assert transform_datetime64_ms(now_no_micro) == fmt_no_micro
+
+    # Test with zero milliseconds
+    now_zero_ms = datetime(2020, 1, 2, 3, 4, 5, 0)
+    fmt_zero_ms = "2020-01-02T03:04:05+00:00"
+    assert transform_datetime64_ms(now_zero_ms) == fmt_zero_ms
+
+    # Test with milliseconds
+    now_ms = datetime(2020, 1, 2, 3, 4, 5, 123000)
+    fmt_ms = "2020-01-02T03:04:05.123+00:00"
+    assert transform_datetime64_ms(now_ms) == fmt_ms
+
+    # Test with microseconds (should truncate to milliseconds)
+    now_us = datetime(2020, 1, 2, 3, 4, 5, 123456)
+    fmt_ms = "2020-01-02T03:04:05.123+00:00"
+    assert transform_datetime64_ms(now_us) == fmt_ms
+
+    # Test with different timezone
+    offset = timedelta(hours=8)
+    assert (
+        transform_datetime64_ms(
+            now_ms.replace(tzinfo=tz.tzoffset("PST", offset)) + offset
+        )
+        == fmt_ms
+    )
+
+    # Test with UTC timezone
+    assert transform_datetime64_ms(now_ms.replace(tzinfo=tz.tzutc())) == fmt_ms
 
 
 @pytest.mark.redis_db

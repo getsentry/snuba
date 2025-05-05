@@ -430,6 +430,27 @@ def transform_datetime(value: datetime) -> str:
     return value.isoformat()
 
 
+def transform_datetime64_ms(value: datetime) -> str:
+    """
+    Convert a timezone-naive datetime object into an ISO 8601 formatted date
+    and time string representation, specifically for DateTime64(3) fields.
+    This ensures millisecond precision is preserved.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=tz.tzutc())
+    else:
+        value = value.astimezone(tz.tzutc())
+
+    # Format with millisecond precision
+    base = value.strftime("%Y-%m-%dT%H:%M:%S")
+    timezone = f"{value.strftime('%z')[:3]}:{value.strftime('%z')[3:]}"
+
+    # Only add milliseconds if they're not zero
+    if value.microsecond:
+        return f"{base}.{value.strftime('%f')[:3]}{timezone}"
+    return f"{base}{timezone}"
+
+
 def transform_uuid(value: UUID) -> str:
     """
     Convert a UUID object into a string representation.
@@ -441,6 +462,7 @@ transform_column_types = build_result_transformer(
     [
         (re.compile(r"^Date(\(.+\))?$"), transform_date),
         (re.compile(r"^DateTime(\(.+\))?$"), transform_datetime),
+        (re.compile(r"^DateTime64\(3\)$"), transform_datetime64_ms),
         (re.compile(r"^UUID$"), transform_uuid),
     ]
 )
