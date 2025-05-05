@@ -14,7 +14,6 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
-from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -22,7 +21,6 @@ from snuba.web.rpc.v1.endpoint_trace_item_details import EndpointTraceItemDetail
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.test_utils import gen_item_message
 
 _REQUEST_ID = uuid.uuid4().hex
 _TRACE_ID = str(uuid.uuid4())
@@ -62,6 +60,33 @@ def gen_log_message(
     }
 
 
+def gen_span_message(
+    dt: datetime,
+    tags: Mapping[str, Union[int, float, str, bool]],
+    numerical_attributes: dict[str, float],
+) -> MutableMapping[str, Any]:
+    return {
+        "data": numerical_attributes,
+        "description": "/api/0/relays/projectconfigs/",
+        "duration_ms": 152,
+        "event_id": "d826225de75d42d6b2f01b957d51f18f",
+        "exclusive_time_ms": 0.228,
+        "is_segment": True,
+        "organization_id": 1,
+        "origin": "auto.http.django",
+        "project_id": 1,
+        "received": 1721319572.877828,
+        "retention_days": 90,
+        "segment_id": "8873a98879faf06d",
+        "tags": tags,
+        "span_id": uuid.uuid4().hex,
+        "trace_id": _TRACE_ID,
+        "start_timestamp_ms": int(dt.timestamp()) * 1000,
+        "start_timestamp_precise": dt.timestamp(),
+        "end_timestamp_precise": dt.timestamp() + 1,
+    }
+
+
 BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(
     minutes=180
 )
@@ -90,18 +115,19 @@ def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
 @pytest.fixture(autouse=False)
 def setup_spans_in_db(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_items"))
-    messages = [
-        gen_item_message(
-            start_timestamp=BASE_TIME - timedelta(minutes=i),
-            attributes={
-                "str_tag": AnyValue(string_value=f"num: {i}"),
-                "double_tag": AnyValue(double_value=1234567890.123),
-                "sentry.segment_id": AnyValue(string_value=uuid.uuid4().hex[:16]),
-            },
+    messages = []
+    for i in range(120):
+        messages.append(
+            gen_span_message(
+                dt=BASE_TIME - timedelta(minutes=i),
+                tags={
+                    "str_tag": f"num: {i}",
+                },
+                numerical_attributes={
+                    "double_tag": 1234567890.123,
+                },
+            )
         )
-        for i in range(120)
-    ]
-
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
 
@@ -259,9 +285,8 @@ class TestTraceItemDetails(BaseApiTest):
                 trace_id=trace_id,
             )
         )
-        attributes_returned = {x.name for x in res.attributes}
 
-        for k in {
+        assert set(x.name for x in res.attributes) == {
             "sentry.body",
             "sentry.severity_text",
             "sentry.severity_number",
@@ -274,8 +299,12 @@ class TestTraceItemDetails(BaseApiTest):
             "double_tag",
             "int_tag",
             "str_tag",
-        }:
-            assert k in attributes_returned, k
+        }
+        assert [
+            attr.value.val_double
+            for attr in res.attributes
+            if attr.name == "double_tag"
+        ] == [pytest.approx(1234567890.123)]
 
     def test_endpoint_on_spans(self, setup_spans_in_db: Any) -> None:
         end = Timestamp()
@@ -332,23 +361,28 @@ class TestTraceItemDetails(BaseApiTest):
                 trace_id=trace_id,
             )
         )
-        attributes_returned = {x.name for x in res.attributes}
 
-        for k in {
-            "double_tag",
-            "sentry.duration_ms",
-            "sentry.end_timestamp_precise",
-            "sentry.event_id",
-            "sentry.exclusive_time_ms",
-            "sentry.is_segment",
-            "sentry.item_type",
+        assert set(x.name for x in res.attributes) == {
+            "sentry.trace_id",
             "sentry.organization_id",
             "sentry.project_id",
-            "sentry.raw_description",
-            "sentry.received",
+            "sentry.item_type",
             "sentry.segment_id",
-            "sentry.start_timestamp_precise",
-            "sentry.trace_id",
+            "sentry.raw_description",
+            "sentry.event_id",
             "str_tag",
-        }:
-            assert k in attributes_returned, k
+            "sentry.end_timestamp_precise",
+            "sentry.duration_ms",
+            "sentry.received",
+            "sentry.exclusive_time_ms",
+            "sentry.start_timestamp_precise",
+            "sentry.is_segment",
+            "double_tag",
+            "sentry.duration_ms",
+            "sentry.is_segment",
+        }
+        assert [
+            attr.value.val_double
+            for attr in res.attributes
+            if attr.name == "double_tag"
+        ] == [pytest.approx(1234567890.123)]

@@ -65,7 +65,6 @@ class Topic(Enum):
     DEAD_LETTER_GROUP_ATTRIBUTES = "snuba-dead-letter-group-attributes"
 
     SPANS = "snuba-spans"
-    ITEMS = "snuba-items"
     EAP_SPANS_COMMIT_LOG = "snuba-eap-spans-commit-log"
     SUBSCRIPTION_SCHEDULED_EAP_SPANS = "scheduled-subscriptions-eap-spans"
     SUBSCRIPTION_RESULTS_EAP_SPANS = "eap-spans-subscription-results"

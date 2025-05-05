@@ -36,7 +36,10 @@ TESTS = [
         SnQLSubscriptionData(
             project_id=1,
             query=(
-                "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a') "
+                "MATCH (events) "
+                "SELECT count() AS count "
+                "WHERE "
+                "platform IN tuple('a') "
             ),
             time_window_sec=500 * 60,
             resolution_sec=60,

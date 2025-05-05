@@ -10,7 +10,7 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::de::{MapAccess, Visitor};
 
 use crate::config::ProcessorConfig;
-use crate::processors::eap_items_span::{EAPItemSpan, PrimaryKey};
+use crate::processors::eap_items::{EAPItem, PrimaryKey};
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
@@ -107,15 +107,15 @@ pub fn process_message(
         (msg.observed_timestamp_nanos / 1_000_000_000) as i64,
         (msg.observed_timestamp_nanos % 1_000_000_000) as u32,
     );
-    let mut item: EAPItemSpan = msg.into();
+    let mut item: EAPItem = msg.into();
 
     item.retention_days = Some(enforce_retention(item.retention_days, &config.env_config));
 
     InsertBatch::from_rows([item], origin_timestamp)
 }
 
-impl From<FromLogMessage> for EAPItemSpan {
-    fn from(from: FromLogMessage) -> EAPItemSpan {
+impl From<FromLogMessage> for EAPItem {
+    fn from(from: FromLogMessage) -> EAPItem {
         let mut res = Self {
             primary_key: PrimaryKey {
                 organization_id: from.organization_id,
