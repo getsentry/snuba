@@ -1,7 +1,6 @@
 import time
-import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any, Mapping, Type
+from typing import Type
 from unittest.mock import patch
 
 import pytest
@@ -23,6 +22,7 @@ from snuba.web.rpc import (
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.backends.metrics import TestingMetricsBackend
 from tests.helpers import write_raw_unprocessed_events
+from tests.web.rpc.v1.test_utils import gen_item_message
 
 
 class RPCException(Exception):
@@ -137,29 +137,6 @@ _BASE_TIME = datetime.now(tz=UTC).replace(
 )
 
 
-def gen_message(
-    dt: datetime,
-) -> Mapping[str, Any]:
-    return {
-        "description": "/api/0/relays/projectconfigs/",
-        "duration_ms": 152,
-        "event_id": "d826225de75d42d6b2f01b957d51f18f",
-        "exclusive_time_ms": 0.228,
-        "is_segment": True,
-        "organization_id": 1,
-        "origin": "auto.http.django",
-        "project_id": 1,
-        "received": 1721319572.877828,
-        "retention_days": 90,
-        "segment_id": "8873a98879faf06d",
-        "span_id": "123456781234567D",
-        "trace_id": uuid.uuid4().hex,
-        "start_timestamp_ms": int(dt.timestamp() * 1000),
-        "start_timestamp_precise": dt.timestamp(),
-        "end_timestamp_precise": dt.timestamp() + 1,
-    }
-
-
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_trim_time_range() -> None:
@@ -167,8 +144,8 @@ def test_trim_time_range() -> None:
     write_raw_unprocessed_events(
         spans_storage,  # type: ignore
         [
-            gen_message(
-                dt=_BASE_TIME - timedelta(days=i),
+            gen_item_message(
+                start_timestamp=_BASE_TIME - timedelta(days=i),
             )
             for i in range(90)
         ],
