@@ -1,8 +1,14 @@
 import json
 import traceback
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Generator, List, Sequence, Tuple, Union
+from unittest.mock import MagicMock, patch
 
+import jwt
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from flask.testing import FlaskClient
 from snuba_sdk.legacy import json_to_snql
 
 from snuba import settings, state
@@ -52,9 +58,11 @@ def create_databases() -> None:
             storage_sets=cluster["storage_sets"],
             single_node=cluster["single_node"],
             cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
-            distributed_cluster_name=cluster["distributed_cluster_name"]
-            if "distributed_cluster_name" in cluster
-            else None,
+            distributed_cluster_name=(
+                cluster["distributed_cluster_name"]
+                if "distributed_cluster_name" in cluster
+                else None
+            ),
         )
 
         database_name = cluster["database"]
@@ -325,3 +333,79 @@ def snuba_set_config(request: pytest.FixtureRequest) -> SnubaSetConfig:
 def disable_query_cache(snuba_set_config: SnubaSetConfig, redis_db: None) -> None:
     snuba_set_config("use_cache", False)
     snuba_set_config("use_readthrough_query_cache", 0)
+
+
+# JWT Test constants
+TEST_AUDIENCE = "test-audience"
+TEST_EMAIL = "test@example.com"
+TEST_SUB = "12345"
+
+
+@pytest.fixture
+def key_pair() -> tuple[bytes, bytes]:
+    """Generate a fresh ES256 key pair for each test run"""
+    private_key = ec.generate_private_key(ec.SECP256K1())
+    public_key = private_key.public_key()
+
+    # Convert to PEM format
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+
+    return private_pem, public_pem
+
+
+@pytest.fixture
+def mock_settings() -> Generator[MagicMock, None, None]:
+    with patch("snuba.admin.jwt.settings") as mock_settings:
+        mock_settings.ADMIN_AUTH_JWT_AUDIENCE = TEST_AUDIENCE
+        yield mock_settings
+
+
+@pytest.fixture
+def mock_certs(key_pair: tuple[bytes, bytes]) -> Generator[MagicMock, None, None]:
+    _, public_key = key_pair
+    with patch("snuba.admin.jwt._certs") as mock_certs:
+        mock_certs.return_value = public_key.decode("utf-8")
+        yield mock_certs
+
+
+@pytest.fixture
+def admin_api(
+    mock_settings: MagicMock, mock_certs: MagicMock, key_pair: tuple[bytes, bytes]
+) -> FlaskClient:
+    """Returns a Flask test client with valid JWT authentication"""
+    with patch("snuba.admin.auth.settings.ADMIN_AUTH_PROVIDER", "IAP"):
+        from snuba.admin.views import application
+
+        private_key, _ = key_pair
+        token = create_test_token(private_key)
+        client = application.test_client()
+        client.environ_base["HTTP_X_GOOG_IAP_JWT_ASSERTION"] = token
+        return client
+
+
+def create_test_token(
+    private_key: bytes,
+    *,
+    email: str = TEST_EMAIL,
+    sub: str = TEST_SUB,
+    audience: str = TEST_AUDIENCE,
+    exp_delta: timedelta = timedelta(hours=1),
+) -> str:
+    """Helper function to create a test JWT token"""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "email": email,
+        "sub": sub,
+        "aud": audience,
+        "exp": now + exp_delta,
+        "iat": now,
+    }
+    return jwt.encode(payload, private_key.decode("utf-8"), algorithm="ES256")
