@@ -1,12 +1,10 @@
 import os
 from bisect import bisect_left
-from datetime import timedelta
 from typing import Generic, List, Tuple, Type, TypeVar, cast, final
 
 import sentry_sdk
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
-from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
@@ -141,17 +139,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             span.description = self.config_key()
         self.__before_execute(in_msg)
         error = None
-        if (
-            hasattr(in_msg, "meta")
-            and hasattr(in_msg.meta, "start_timestamp")
-            and hasattr(in_msg.meta, "end_timestamp")
-        ):
-            start = in_msg.meta.start_timestamp.ToDatetime()
-            end = in_msg.meta.end_timestamp.ToDatetime()
-            if (end - start).days > MAXIMUM_TIME_RANGE_IN_DAYS:
-                timestamp = Timestamp()
-                timestamp.FromDatetime(end - timedelta(days=MAXIMUM_TIME_RANGE_IN_DAYS))
-                in_msg.meta.start_timestamp.CopyFrom(timestamp)
         try:
             out = self._execute(in_msg)
         except QueryException as e:
@@ -167,7 +154,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             ):
                 tags = {"endpoint": str(self.__class__.__name__)}
                 if self._uses_storage_routing(in_msg):
-                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(in_msg.meta.downsampled_storage_config.mode)  # type: ignore
+                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
+                        in_msg.meta.downsampled_storage_config.mode
+                    )  # type: ignore
                 self.metrics.increment("timeout_query", 1, tags)
                 sentry_sdk.capture_exception(e)
             if (
@@ -176,7 +165,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             ):
                 tags = {"endpoint": str(self.__class__.__name__)}
                 if self._uses_storage_routing(in_msg):
-                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(in_msg.meta.downsampled_storage_config.mode)  # type: ignore
+                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
+                        in_msg.meta.downsampled_storage_config.mode
+                    )  # type: ignore
                 self.metrics.increment("estimated_execution_timeout", 1, tags)
                 sentry_sdk.capture_exception(e)
             out = self.response_class()()
