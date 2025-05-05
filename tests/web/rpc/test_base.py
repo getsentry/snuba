@@ -1,8 +1,6 @@
 import time
-
 from datetime import timedelta
 from typing import Type
-
 from unittest.mock import patch
 
 import pytest
@@ -17,7 +15,6 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.backends.metrics import TestingMetricsBackend
-
 from tests.web.rpc.v1.test_utils import BASE_TIME
 
 
@@ -125,7 +122,7 @@ def test_list_all_endpoint_names() -> None:
     assert ("MyRPC", "v1") in endpoint_names
     assert ("ErrorRPC", "v1") in endpoint_names
 
-    
+
 _REFERRER = "something"
 
 
