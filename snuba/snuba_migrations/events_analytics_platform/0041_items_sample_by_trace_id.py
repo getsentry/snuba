@@ -18,36 +18,37 @@ def attributes_column_name(attribute_type: str, i: int) -> str:
     return f"attributes_{attribute_type}_{i}"
 
 
-COLUMNS: List[Column[Modifiers]] = (
+COLUMNS: List[Column[Modifiers]] = [
+    Column("organization_id", UInt(64)),
+    Column("project_id", UInt(64)),
+    Column("item_type", UInt(8)),
+    Column("timestamp", DateTime(Modifiers(codecs=["DoubleDelta", "ZSTD(1)"]))),
+    Column("trace_id", UUID()),
+    Column("item_id", UInt(128)),
+    Column("sampling_weight", UInt(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
+    Column("sampling_factor", Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
+    Column(
+        "retention_days",
+        UInt(16, modifiers=Modifiers(codecs=["T64", "ZSTD(1)"])),
+    ),
+    Column(
+        "attributes_bool",
+        Map(
+            String(),
+            Bool(),
+        ),
+    ),
+    Column(
+        "attributes_int",
+        Map(
+            String(),
+            Int(64),
+        ),
+    ),
+]
+
+COLUMNS.extend(
     [
-        Column("organization_id", UInt(64)),
-        Column("project_id", UInt(64)),
-        Column("item_type", UInt(8)),
-        Column("timestamp", DateTime(Modifiers(codecs=["DoubleDelta", "ZSTD(1)"]))),
-        Column("trace_id", UUID()),
-        Column("item_id", UInt(128)),
-        Column("sampling_weight", UInt(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
-        Column("sampling_factor", Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
-        Column(
-            "retention_days",
-            UInt(16, modifiers=Modifiers(codecs=["T64", "ZSTD(1)"])),
-        ),
-        Column(
-            "attributes_bool",
-            Map(
-                String(),
-                Bool(),
-            ),
-        ),
-        Column(
-            "attributes_int",
-            Map(
-                String(),
-                Int(64),
-            ),
-        ),
-    ]
-    + [
         Column(
             attributes_column_name("string", i),
             Map(
@@ -60,7 +61,9 @@ COLUMNS: List[Column[Modifiers]] = (
         )
         for i in range(num_attr_buckets)
     ]
-    + [
+)
+COLUMNS.extend(
+    [
         Column(
             hash_map_column_name("string", i),
             Array(
@@ -82,7 +85,10 @@ COLUMNS: List[Column[Modifiers]] = (
         )
         for i in range(num_attr_buckets)
     ]
-    + [
+)
+
+COLUMNS.extend(
+    [
         Column(
             hash_map_column_name("float", i),
             Array(
