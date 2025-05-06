@@ -8,6 +8,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
@@ -51,6 +52,7 @@ def populate_eap_spans_storage(num_rows: int) -> None:
             id * NUM_ATTR_PER_SPAN_PER_TYPE + NUM_ATTR_PER_SPAN_PER_TYPE,
         ):
             attributes[f"a_tag_{i:03}"] = AnyValue(string_value="blah")
+            attributes[f"c_tag_{i:03}"] = AnyValue(string_value="blah")
             attributes[f"b_measurement_{i:03}"] = AnyValue(double_value=10)
         return gen_item_message(
             start_timestamp=BASE_TIME + timedelta(minutes=id),
@@ -179,7 +181,10 @@ class TestTraceItemAttributeNames(BaseApiTest):
         expected = [
             TraceItemAttributeNamesResponse.Attribute(
                 name="a_tag_028", type=AttributeKey.Type.TYPE_STRING
-            )
+            ),
+            TraceItemAttributeNamesResponse.Attribute(
+                name="c_tag_028", type=AttributeKey.Type.TYPE_STRING
+            ),
         ]
         assert res.attributes == expected
 
@@ -255,3 +260,39 @@ class TestTraceItemAttributeNames(BaseApiTest):
             "sentry.service",
         }:
             assert attr_name in attributes_returned, attr_name
+
+    def test_basic_co_occurring_attrs(self) -> None:
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            limit=TOTAL_GENERATED_ATTR_PER_TYPE,
+            intersecting_attributes_filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="a_tag_000")
+                )
+            ),
+            value_substring_match="000",
+            type=AttributeKey.Type.TYPE_STRING,
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        expected = [
+            TraceItemAttributeNamesResponse.Attribute(
+                name="a_tag_000", type=AttributeKey.Type.TYPE_STRING
+            ),
+            TraceItemAttributeNamesResponse.Attribute(
+                name="c_tag_000", type=AttributeKey.Type.TYPE_STRING
+            ),
+        ]
+        for attr in res.attributes:
+            print(attr)
+        assert res.attributes == expected
