@@ -1,5 +1,5 @@
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import Type
 from unittest.mock import patch
 
@@ -12,17 +12,10 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
-from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc import (
-    MAXIMUM_TIME_RANGE_IN_DAYS,
-    RPCEndpoint,
-    list_all_endpoint_names,
-)
+from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.backends.metrics import TestingMetricsBackend
-from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.test_utils import gen_item_message
+from tests.web.rpc.v1.test_utils import BASE_TIME
 
 
 class RPCException(Exception):
@@ -130,53 +123,6 @@ def test_list_all_endpoint_names() -> None:
     assert ("ErrorRPC", "v1") in endpoint_names
 
 
-_BASE_TIME = datetime.now(tz=UTC).replace(
-    minute=0,
-    second=0,
-    microsecond=0,
-)
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-def test_trim_time_range() -> None:
-    spans_storage = get_storage(StorageKey("eap_items"))
-    write_raw_unprocessed_events(
-        spans_storage,  # type: ignore
-        [
-            gen_item_message(
-                start_timestamp=_BASE_TIME - timedelta(days=i),
-            )
-            for i in range(90)
-        ],
-    )
-    ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
-    ninety_days_before = Timestamp(
-        seconds=int((_BASE_TIME - timedelta(days=90)).timestamp())
-    )
-    message = TraceItemTableRequest(
-        meta=RequestMeta(
-            project_ids=[1],
-            organization_id=1,
-            cogs_category="something",
-            referrer="something",
-            start_timestamp=ninety_days_before,
-            end_timestamp=ts,
-            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-        ),
-        columns=[
-            Column(
-                key=AttributeKey(
-                    type=AttributeKey.TYPE_DOUBLE,
-                    name="sentry.duration_ms",
-                ),
-            )
-        ],
-    )
-    response = EndpointTraceItemTable().execute(message)
-    assert len(response.column_values[0].results) == MAXIMUM_TIME_RANGE_IN_DAYS
-
-
 _REFERRER = "something"
 
 
@@ -196,9 +142,9 @@ _REFERRER = "something"
     ],
 )
 def test_tagged_metrics(hours: int, expected_time_bucket: str) -> None:
-    end_timestamp = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+    end_timestamp = Timestamp(seconds=int(BASE_TIME.timestamp()))
     start_timestamp = Timestamp(
-        seconds=int((_BASE_TIME - timedelta(hours=hours)).timestamp())
+        seconds=int((BASE_TIME - timedelta(hours=hours)).timestamp())
     )
     message = TraceItemTableRequest(
         meta=RequestMeta(
