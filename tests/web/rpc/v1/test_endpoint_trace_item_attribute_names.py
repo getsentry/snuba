@@ -293,6 +293,4 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 name="c_tag_000", type=AttributeKey.Type.TYPE_STRING
             ),
         ]
-        for attr in res.attributes:
-            print(attr)
         assert res.attributes == expected
