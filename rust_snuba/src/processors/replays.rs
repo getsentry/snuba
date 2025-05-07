@@ -146,7 +146,11 @@ pub fn deserialize_message(
                 os_name: event.contexts.os.name.unwrap_or_default(),
                 os_version: event.contexts.os.version.unwrap_or_default(),
                 ota_updates_channel: event.contexts.ota_updates.channel.unwrap_or_default(),
-                ota_updates_runtime_version: event.contexts.ota_updates.runtime_version.unwrap_or_default(),
+                ota_updates_runtime_version: event
+                    .contexts
+                    .ota_updates
+                    .runtime_version
+                    .unwrap_or_default(),
                 ota_updates_update_id: event.contexts.ota_updates.update_id.unwrap_or_default(),
                 partition,
                 platform: event.platform.unwrap_or("".to_string()),
