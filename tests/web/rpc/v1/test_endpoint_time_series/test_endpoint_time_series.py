@@ -39,6 +39,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.state import set_config
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -1001,7 +1002,7 @@ class TestTimeSeriesApi(BaseApiTest):
             label="avg",
             buckets=expected_buckets,
             data_points=[
-                DataPoint(data=1, data_present=True, sample_count=300)
+                DataPoint(data=1, data_present=True)
                 for _ in range(len(expected_buckets))
             ],
         )
@@ -1520,12 +1521,12 @@ class TestTimeSeriesApi(BaseApiTest):
         ):
             EndpointTimeSeries().execute(message)
 
-    @pytest.mark.xfail
     def test_duplicate_labels_inner(self) -> None:
         """
         This test ensures that duplicate labels across different expressions
         doesnt cause incorrect behavior
         """
+        set_config("enable_clear_labels_eap", 1)
         granularity_secs = 30
         query_duration = granularity_secs * 4
         metric1_value = 3
@@ -1640,6 +1641,65 @@ class TestTimeSeriesApi(BaseApiTest):
         assert (
             sorted(res.result_timeseries, key=lambda e: e.label) == expected_timeseries
         )
+
+    def test_agg_label_diff_from_expr_label(self) -> None:
+        """
+        ensure that when the label of the aggregate differs from the label of the expression,
+        it still works
+        """
+        set_config("enable_clear_labels_eap", 1)
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                        ),
+                        label="otherlabel",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                    label="label",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        assert response.result_timeseries == [
+            TimeSeries(
+                label="label",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=300, data_present=True, sample_count=300)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
 
 
 class TestUtils:

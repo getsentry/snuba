@@ -55,73 +55,61 @@ class ValidateAliasVisitor(TimeSeriesRequestVisitor):
                 self.expression_labels.add(new_label)
 
 
-class PrefixLabelsVisitor(TimeSeriesRequestVisitor):
+class RemoveInnerExpressionLabelsVisitor(TimeSeriesRequestVisitor):
     """
-    This vistor prefixes all labels in an expression with an identifier unique to the expression its in.
-    This is useful because it makes it so that if you have duplicate labels across different expressions,
-    its ok and doesnt cause issues. It requires all top level expressions to have a unique label.
-
-    example:
-    expression {
-        label: "expr_label"
-        formula {
-            column: "column_name"
-        }
-    }
-    will be transformed into:
-    expression {
-        label: "expr_label"
-        formula {
-            column: "expr_0.column_name"
-        }
+    Removes all labels inside expressions except for the top-level expression label.
     """
-
-    def __init__(self) -> None:
-        self.current_label_prefix = ""
-        super().__init__()
 
     def visit_TimeSeriesRequest(self, node: TimeSeriesRequest) -> None:
-        # validate that all top level expressions have unique label
-        seen_labels: set[str] = set()
         for expr in node.expressions:
-            if expr.label == "":
-                raise ValueError("Expression label is required")
-            elif expr.label in seen_labels:
-                raise ValueError(f"Duplicate expression label: {expr.label}")
-            seen_labels.add(expr.label)
-
-        # add prefix to all labels under the same expression
-        for expr in node.expressions:
-            self.current_label_prefix = expr.label
-            # instead of visiting the expression directly, we visit one level down
-            # what is inside of the expression. this is bc we dont want to modify the
-            # top level expressions, but we do want to modify the labels of the inner expressions
-            expr_type = expr.WhichOneof("expression")
-            if expr_type is None:
-                raise ValueError("Unknown expression type: None")
-            self.visit(getattr(expr, expr_type))
+            self.visit(expr)
 
     def visit_Expression(self, node: Expression) -> None:
-        if node.label != "":
-            node.label = f"{self.current_label_prefix}.{node.label}"
         expr_type = node.WhichOneof("expression")
         if expr_type is None:
             raise ValueError("Unknown expression type: None")
         self.visit(getattr(node, expr_type))
 
     def visit_AttributeAggregation(self, node: AttributeAggregation) -> None:
-        if node.label != "":
-            node.label = f"{self.current_label_prefix}.{node.label}"
+        node.label = ""
+
+    def visit_AttributeConditionalAggregation(
+        self, node: AttributeConditionalAggregation
+    ) -> None:
+        node.label = ""
 
     def visit_BinaryFormula(self, node: Expression.BinaryFormula) -> None:
         self.visit(node.left)
         self.visit(node.right)
 
+    def visit_Literal(self, node: Literal) -> None:
+        return
+
+
+class AddAggregateLabelsVisitor(TimeSeriesRequestVisitor):
+    """
+    Adds a label to aggregate and conditional aggregate expressions, that is the same as the label of
+    the expression.
+    """
+
+    def __init__(self) -> None:
+        self.current_label = ""
+        super().__init__()
+
+    def visit_TimeSeriesRequest(self, node: TimeSeriesRequest) -> None:
+        for expr in node.expressions:
+            self.visit(expr)
+
+    def visit_Expression(self, node: Expression) -> None:
+        self.current_label = node.label
+        expr_type = node.WhichOneof("expression")
+        if expr_type == "aggregation" or expr_type == "conditional_aggregation":
+            self.visit(getattr(node, expr_type))
+
+    def visit_AttributeAggregation(self, node: AttributeAggregation) -> None:
+        node.label = self.current_label
+
     def visit_AttributeConditionalAggregation(
         self, node: AttributeConditionalAggregation
     ) -> None:
-        if node.label != "":
-            node.label = f"{self.current_label_prefix}.{node.label}"
-
-    def visit_Literal(self, node: Literal) -> None:
-        return
+        node.label = self.current_label
