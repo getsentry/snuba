@@ -5,6 +5,7 @@ from snuba.migrations import migration, operations
 
 buckets = 40
 
+
 def get_hashed_keys_index_expression() -> str:
     column_expressions = []
     for i in range(buckets):
@@ -12,9 +13,6 @@ def get_hashed_keys_index_expression() -> str:
         column_expressions.append(hashed_keys)
 
     return f"arrayConcat({', '.join(column_expressions)})"
-
-
-
 
 
 class Migration(migration.ClickhouseNodeMigration):
