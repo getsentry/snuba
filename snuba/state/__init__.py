@@ -354,7 +354,7 @@ def record_query(query_metadata: snuba_queries_v1.Querylog) -> None:
             data.encode("utf-8"),
             on_delivery=_record_query_delivery_callback,
         )
-    except Exception as ex:
+    except (Exception, KafkaError) as ex:
         logger.exception("Could not record query due to error: %r", ex)
 
 
