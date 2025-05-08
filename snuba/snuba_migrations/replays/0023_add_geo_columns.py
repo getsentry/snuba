@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Iterator, Sequence, Tuple
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers
@@ -9,217 +9,69 @@ from snuba.migrations.operations import (
     OperationTarget,
     SqlOperation,
 )
-from snuba.utils import schemas
-from snuba.utils.schemas import Column
+from snuba.utils.schemas import Column, String
+
+new_columns: Sequence[Tuple[Column[MigrationModifiers], str]] = [
+    (
+        Column("user_geo_city", String(MigrationModifiers(nullable=True))),
+        "user",
+    ),
+    (
+        Column("user_geo_country_code", String(MigrationModifiers(nullable=True))),
+        "user_geo_city",
+    ),
+    (
+        Column("user_geo_region", String(MigrationModifiers(nullable=True))),
+        "user_geo_country_code",
+    ),
+    (
+        Column("user_geo_subdivision", String(MigrationModifiers(nullable=True))),
+        "user_geo_region",
+    ),
+]
 
 
 class Migration(ClickhouseNodeMigration):
     blocking = False
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
-        return [
-            AddColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_local",
-                column=Column(
-                    "geo_city",
-                    schemas.String(
-                        modifiers=MigrationModifiers(
-                            nullable=True,
-                            low_cardinality=False,
-                            default=None,
-                            materialized=None,
-                            codecs=None,
-                            ttl=None,
-                        )
-                    ),
-                ),
-                after="count_info_events",
-                target=OperationTarget.LOCAL,
-            ),
-            AddColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_dist",
-                column=Column(
-                    "geo_city",
-                    schemas.String(
-                        modifiers=MigrationModifiers(
-                            nullable=True,
-                            low_cardinality=False,
-                            default=None,
-                            materialized=None,
-                            codecs=None,
-                            ttl=None,
-                        )
-                    ),
-                ),
-                after="count_info_events",
-                target=OperationTarget.DISTRIBUTED,
-            ),
-            AddColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_local",
-                column=Column(
-                    "geo_country_code",
-                    schemas.String(
-                        modifiers=MigrationModifiers(
-                            nullable=True,
-                            low_cardinality=False,
-                            default=None,
-                            materialized=None,
-                            codecs=None,
-                            ttl=None,
-                        )
-                    ),
-                ),
-                after="geo_city",
-                target=OperationTarget.LOCAL,
-            ),
-            AddColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_dist",
-                column=Column(
-                    "geo_country_code",
-                    schemas.String(
-                        modifiers=MigrationModifiers(
-                            nullable=True,
-                            low_cardinality=False,
-                            default=None,
-                            materialized=None,
-                            codecs=None,
-                            ttl=None,
-                        )
-                    ),
-                ),
-                after="geo_city",
-                target=OperationTarget.DISTRIBUTED,
-            ),
-            AddColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_local",
-                column=Column(
-                    "geo_region",
-                    schemas.String(
-                        modifiers=MigrationModifiers(
-                            nullable=True,
-                            low_cardinality=False,
-                            default=None,
-                            materialized=None,
-                            codecs=None,
-                            ttl=None,
-                        )
-                    ),
-                ),
-                after="geo_country_code",
-                target=OperationTarget.LOCAL,
-            ),
-            AddColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_dist",
-                column=Column(
-                    "geo_region",
-                    schemas.String(
-                        modifiers=MigrationModifiers(
-                            nullable=True,
-                            low_cardinality=False,
-                            default=None,
-                            materialized=None,
-                            codecs=None,
-                            ttl=None,
-                        )
-                    ),
-                ),
-                after="geo_country_code",
-                target=OperationTarget.DISTRIBUTED,
-            ),
-            AddColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_local",
-                column=Column(
-                    "geo_subdivision",
-                    schemas.String(
-                        modifiers=MigrationModifiers(
-                            nullable=True,
-                            low_cardinality=False,
-                            default=None,
-                            materialized=None,
-                            codecs=None,
-                            ttl=None,
-                        )
-                    ),
-                ),
-                after="geo_region",
-                target=OperationTarget.LOCAL,
-            ),
-            AddColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_dist",
-                column=Column(
-                    "geo_subdivision",
-                    schemas.String(
-                        modifiers=MigrationModifiers(
-                            nullable=True,
-                            low_cardinality=False,
-                            default=None,
-                            materialized=None,
-                            codecs=None,
-                            ttl=None,
-                        )
-                    ),
-                ),
-                after="geo_region",
-                target=OperationTarget.DISTRIBUTED,
-            ),
-        ]
+        return list(forward_columns_iter())
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
-        return [
-            DropColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_dist",
-                column_name="geo_subdivision",
-                target=OperationTarget.DISTRIBUTED,
-            ),
-            DropColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_local",
-                column_name="geo_subdivision",
-                target=OperationTarget.LOCAL,
-            ),
-            DropColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_dist",
-                column_name="geo_region",
-                target=OperationTarget.DISTRIBUTED,
-            ),
-            DropColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_local",
-                column_name="geo_region",
-                target=OperationTarget.LOCAL,
-            ),
-            DropColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_dist",
-                column_name="geo_country_code",
-                target=OperationTarget.DISTRIBUTED,
-            ),
-            DropColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_local",
-                column_name="geo_country_code",
-                target=OperationTarget.LOCAL,
-            ),
-            DropColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_dist",
-                column_name="geo_city",
-                target=OperationTarget.DISTRIBUTED,
-            ),
-            DropColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_local",
-                column_name="geo_city",
-                target=OperationTarget.LOCAL,
-            ),
-        ]
+        return list(backward_columns_iter())
+
+
+def forward_columns_iter() -> Iterator[SqlOperation]:
+    for column, after in new_columns:
+        yield AddColumn(
+            storage_set=StorageSetKey.REPLAYS,
+            table_name="replays_local",
+            column=column,
+            after=after,
+            target=OperationTarget.LOCAL,
+        )
+
+        yield AddColumn(
+            storage_set=StorageSetKey.REPLAYS,
+            table_name="replays_dist",
+            column=column,
+            after=after,
+            target=OperationTarget.DISTRIBUTED,
+        )
+
+
+def backward_columns_iter() -> Iterator[SqlOperation]:
+    for column, _ in new_columns:
+        yield DropColumn(
+            storage_set=StorageSetKey.REPLAYS,
+            table_name="replays_dist",
+            target=OperationTarget.DISTRIBUTED,
+            column_name=column.name,
+        )
+
+        yield DropColumn(
+            storage_set=StorageSetKey.REPLAYS,
+            table_name="replays_local",
+            target=OperationTarget.LOCAL,
+            column_name=column.name,
+        )
