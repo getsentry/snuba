@@ -770,6 +770,11 @@ mod tests {
                     "brand": null,
                     "family": null,
                     "model": null
+                },
+                "ota_updates": {
+                    "channel": null,
+                    "runtime_version": null,
+                    "update_id": null
                 }
             }
         }"#;
