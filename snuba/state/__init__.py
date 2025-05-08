@@ -37,7 +37,6 @@ rds = get_redis_client(RedisClientKey.CONFIG)
 
 ratelimit_prefix = "snuba-ratelimit:"
 config_hash = "snuba-config"
-config_description_hash = "snuba-config-description"
 config_history_hash = "snuba-config-history"
 config_changes_list = "snuba-config-changes"
 config_changes_list_limit = 25
@@ -262,9 +261,17 @@ def get_config_changes() -> Sequence[Tuple[str, float, Optional[str], Any, Any]]
 # Config descriptions for runtime config UI
 
 
+def _get_description_hash(config_key: str) -> str:
+    return f"{config_key}-description"
+
+
 def set_config_description(
-    key: str, description: Optional[str] = None, user: Optional[str] = None
+    key: str,
+    description: Optional[str] = None,
+    user: Optional[str] = None,
+    config_key: str = config_hash,
 ) -> None:
+    config_description_hash = _get_description_hash(config_key)
     enc_desc = (
         "{}".format(description).encode("utf-8") if description is not None else None
     )
@@ -292,7 +299,8 @@ def set_config_description(
         logger.exception(e)
 
 
-def get_config_description(key: str) -> Optional[str]:
+def get_config_description(key: str, config_key: str = config_hash) -> Optional[str]:
+    config_description_hash = _get_description_hash(config_key)
     try:
         enc_desc = rds.hget(config_description_hash, key)
         return enc_desc.decode("utf-8") if enc_desc is not None else None
@@ -301,7 +309,10 @@ def get_config_description(key: str) -> Optional[str]:
         return None
 
 
-def get_all_config_descriptions() -> Mapping[str, Optional[str]]:
+def get_all_config_descriptions(
+    config_key: str = config_hash,
+) -> Mapping[str, Optional[str]]:
+    config_description_hash = _get_description_hash(config_key)
     try:
         all_descriptions = rds.hgetall(config_description_hash)
         return {
