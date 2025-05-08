@@ -600,7 +600,13 @@ mod tests {
                 "email": "email",
                 "ip_address": "127.0.0.1",
                 "id": "user_id",
-                "username": "username"
+                "username": "username",
+                "geo": {
+                    "city": "city",
+                    "country_code": "country_code",
+                    "region": "region",
+                    "subdivision": "subdivision"
+                }
             },
             "sdk": {
                 "name": "sdk",
@@ -662,6 +668,10 @@ mod tests {
         assert_eq!(&replay_row.user_id, "user_id");
         assert_eq!(&replay_row.user_name, "username");
         assert_eq!(&replay_row.user, "user_id");
+        assert_eq!(&replay_row.user_geo_city, "city");
+        assert_eq!(&replay_row.user_geo_country_code, "country_code");
+        assert_eq!(&replay_row.user_geo_region, "region");
+        assert_eq!(&replay_row.user_geo_subdivision, "subdivision");
         assert_eq!(
             replay_row.error_ids,
             vec![Uuid::parse_str("df11e6d952da470386a64340f13151c4").unwrap()]
