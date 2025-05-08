@@ -159,6 +159,10 @@ pub fn deserialize_message(
                 trace_ids: event.trace_ids.unwrap_or_default(),
                 urls: event.urls.unwrap_or_default(),
                 user,
+                user_geo_city: event.user.geo.city.unwrap_or_default(),
+                user_geo_country_code: event.user.geo.country_code.unwrap_or_default(),
+                user_geo_region: event.user.geo.region.unwrap_or_default(),
+                user_geo_subdivision: event.user.geo.subdivision.unwrap_or_default(),
                 user_email: event.user.email.unwrap_or_default(),
                 user_id: user_id.unwrap_or_default(),
                 user_name: event.user.username.unwrap_or_default(),
@@ -371,6 +375,20 @@ struct User {
     email: Option<String>,
     #[serde(default)]
     ip_address: Option<String>,
+    #[serde(default)]
+    geo: Option<Geo>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct Geo {
+    #[serde(default)]
+    city: Option<String>,
+    #[serde(default)]
+    country_code: Option<String>,
+    #[serde(default)]
+    region: Option<String>,
+    #[serde(default)]
+    subdivision: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -465,6 +483,10 @@ pub struct ReplayRow {
     title: Option<String>,
     trace_ids: Vec<Uuid>,
     urls: Vec<String>,
+    user_geo_city: String,
+    user_geo_country_code: String,
+    user_geo_region: String,
+    user_geo_subdivision: String,
     user_email: String,
     user_id: String,
     user_name: String,
@@ -775,6 +797,10 @@ mod tests {
         assert_eq!(&replay_row.replay_type, "");
         assert_eq!(&replay_row.sdk_name, "");
         assert_eq!(&replay_row.sdk_version, "");
+        assert_eq!(&replay_row.user_geo_city, "");
+        assert_eq!(&replay_row.user_geo_country_code, "");
+        assert_eq!(&replay_row.user_geo_region, "");
+        assert_eq!(&replay_row.user_geo_subdivision, "");
         assert_eq!(&replay_row.user_email, "");
         assert_eq!(&replay_row.user_id, "");
         assert_eq!(&replay_row.user_name, "");
