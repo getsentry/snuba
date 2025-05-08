@@ -118,4 +118,7 @@ class AddAggregateLabelsVisitor(TimeSeriesRequestVisitor):
 def preprocess_expression_labels(msg: TimeSeriesRequest) -> None:
     ValidateAliasVisitor().visit(msg)
     RemoveInnerExpressionLabelsVisitor().visit(msg)
+
+    # We need this visitor because the endpoint only behaves correctly if
+    # all aggregates have the exact same label as the expression they are in
     AddAggregateLabelsVisitor().visit(msg)
