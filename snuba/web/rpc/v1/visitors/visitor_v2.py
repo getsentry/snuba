@@ -113,3 +113,9 @@ class AddAggregateLabelsVisitor(TimeSeriesRequestVisitor):
         self, node: AttributeConditionalAggregation
     ) -> None:
         node.label = self.current_label
+
+
+def preprocess_expression_labels(msg: TimeSeriesRequest) -> None:
+    ValidateAliasVisitor().visit(msg)
+    RemoveInnerExpressionLabelsVisitor().visit(msg)
+    AddAggregateLabelsVisitor().visit(msg)
