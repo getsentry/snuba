@@ -376,7 +376,7 @@ struct User {
     #[serde(default)]
     ip_address: Option<String>,
     #[serde(default)]
-    geo: Option<Geo>,
+    geo: Geo,
 }
 
 #[derive(Debug, Default, Deserialize)]
