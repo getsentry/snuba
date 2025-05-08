@@ -748,7 +748,13 @@ mod tests {
                 "id": null,
                 "username": null,
                 "email": null,
-                "ip_address": null
+                "ip_address": null,
+                "geo": {
+                    "city": null,
+                    "country_code": null,
+                    "region": null,
+                    "subdivision": null
+                }
             },
             "sdk": {
                 "name": null,
@@ -807,14 +813,14 @@ mod tests {
         assert_eq!(&replay_row.replay_type, "");
         assert_eq!(&replay_row.sdk_name, "");
         assert_eq!(&replay_row.sdk_version, "");
-        assert_eq!(&replay_row.user_geo_city, "");
-        assert_eq!(&replay_row.user_geo_country_code, "");
-        assert_eq!(&replay_row.user_geo_region, "");
-        assert_eq!(&replay_row.user_geo_subdivision, "");
         assert_eq!(&replay_row.user_email, "");
         assert_eq!(&replay_row.user_id, "");
         assert_eq!(&replay_row.user_name, "");
         assert_eq!(&replay_row.user, "");
+        assert_eq!(&replay_row.user_geo_city, "");
+        assert_eq!(&replay_row.user_geo_country_code, "");
+        assert_eq!(&replay_row.user_geo_region, "");
+        assert_eq!(&replay_row.user_geo_subdivision, "");
         assert_eq!(replay_row.error_ids, vec![]);
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.ip_address_v4, None);
