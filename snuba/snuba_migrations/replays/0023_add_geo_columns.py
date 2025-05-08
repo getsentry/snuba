@@ -14,7 +14,7 @@ from snuba.utils.schemas import Column, String
 new_columns: Sequence[Tuple[Column[MigrationModifiers], str]] = [
     (
         Column("user_geo_city", String(MigrationModifiers(nullable=True))),
-        "user",
+        "user_email",
     ),
     (
         Column("user_geo_country_code", String(MigrationModifiers(nullable=True))),
