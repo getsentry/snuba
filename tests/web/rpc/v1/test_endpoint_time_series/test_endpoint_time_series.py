@@ -1484,6 +1484,7 @@ class TestTimeSeriesApi(BaseApiTest):
         This test ensures that duplicate labels in top level expressions
         raises exception
         """
+        set_config("enable_clear_labels_eap", 1)
         granularity_secs = 3600
         query_duration = granularity_secs * 1
         message = TimeSeriesRequest(
