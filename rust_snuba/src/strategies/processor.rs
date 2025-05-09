@@ -324,7 +324,7 @@ fn _validate_schema(
             }
         }
         SchemaType::Json => {
-            if let Err(error) = schema.validate_protobuf(payload) {
+            if let Err(error) = schema.validate_json(payload) {
                 Err(error)
             } else {
                 Ok(())
