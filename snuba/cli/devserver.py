@@ -115,11 +115,23 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
             ],
         ),
         (
-            "eap-items-span-consumer",
+            "eap-items-consumer",
             [
                 "snuba",
                 "rust-consumer",
                 "--storage=eap_items",
+                "--consumer-group=eap_items_group",
+                "--use-rust-processor",
+                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                f"--log-level={log_level}",
+            ],
+        ),
+        (
+            "eap-items-span-consumer",
+            [
+                "snuba",
+                "rust-consumer",
+                "--storage=eap_items_span",
                 "--consumer-group=eap_items_span_group",
                 "--use-rust-processor",
                 *COMMON_RUST_CONSUMER_DEV_OPTIONS,
