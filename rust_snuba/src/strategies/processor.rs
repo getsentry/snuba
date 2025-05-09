@@ -316,20 +316,8 @@ fn _validate_schema(
     };
 
     let Err(error) = (match schema.schema_type {
-        SchemaType::Protobuf => {
-            if let Err(error) = schema.validate_protobuf(payload) {
-                Err(error)
-            } else {
-                Ok(())
-            }
-        }
-        SchemaType::Json => {
-            if let Err(error) = schema.validate_json(payload) {
-                Err(error)
-            } else {
-                Ok(())
-            }
-        }
+        SchemaType::Protobuf => schema.validate_protobuf(payload).map(drop),
+        SchemaType::Json => schema.validate_json(payload).map(drop),
         _ => Err(SchemaError::InvalidType),
     }) else {
         return Ok(());
