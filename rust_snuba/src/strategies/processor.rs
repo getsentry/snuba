@@ -11,7 +11,7 @@ use sentry_arroyo::processing::strategies::run_task_in_threads::{
 };
 use sentry_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
 use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
-use sentry_kafka_schemas::{Schema, SchemaError};
+use sentry_kafka_schemas::{Schema, SchemaError, SchemaType};
 
 use crate::config::ProcessorConfig;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
@@ -315,9 +315,26 @@ fn _validate_schema(
         return Ok(());
     };
 
-    let Err(error) = schema.validate_json(payload) else {
+    let Err(error) = (match schema.schema_type {
+        SchemaType::Protobuf => {
+            if let Err(error) = schema.validate_protobuf(payload) {
+                Err(error)
+            } else {
+                Ok(())
+            }
+        }
+        SchemaType::Json => {
+            if let Err(error) = schema.validate_protobuf(payload) {
+                Err(error)
+            } else {
+                Ok(())
+            }
+        }
+        _ => Err(SchemaError::InvalidType),
+    }) else {
         return Ok(());
     };
+
     counter!("schema_validation.failed");
 
     sentry::with_scope(
