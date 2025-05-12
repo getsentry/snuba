@@ -67,7 +67,7 @@ _DEFAULT_ATTRIBUTES = {
 }
 
 
-def write_eap_span(
+def write_eap_item(
     start_timestamp: datetime,
     raw_attributes: dict[str, str | float | int | bool] = {},
     count: int = 1,

@@ -70,7 +70,7 @@ from tests.web.rpc.v1.test_utils import (
     SERVER_NAME,
     START_TIMESTAMP,
     gen_item_message,
-    write_eap_span,
+    write_eap_item,
 )
 
 _SPAN_COUNT = 120
@@ -2388,10 +2388,10 @@ class TestTraceItemTable(BaseApiTest):
         because the dog and cat columns dont have attribute "wing.count"
         """
         span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_span(span_ts, {"animal_type": "bird", "wing.count": 2}, 10)
-        write_eap_span(span_ts, {"animal_type": "chicken", "wing.count": 2}, 5)
-        write_eap_span(span_ts, {"animal_type": "cat"}, 12)
-        write_eap_span(span_ts, {"animal_type": "dog", "bark.db": 100}, 2)
+        write_eap_item(span_ts, {"animal_type": "bird", "wing.count": 2}, 10)
+        write_eap_item(span_ts, {"animal_type": "chicken", "wing.count": 2}, 5)
+        write_eap_item(span_ts, {"animal_type": "cat"}, 12)
+        write_eap_item(span_ts, {"animal_type": "dog", "bark.db": 100}, 2)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -2477,8 +2477,8 @@ class TestTraceItemTable(BaseApiTest):
         ex sum(my_attribute) / count(my_attribute)
         """
         span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_span(span_ts, {"kyles_measurement": 6}, 10)
-        write_eap_span(span_ts, {"kyles_measurement": 7}, 2)
+        write_eap_item(span_ts, {"kyles_measurement": 6}, 10)
+        write_eap_item(span_ts, {"kyles_measurement": 7}, 2)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -2543,9 +2543,9 @@ class TestTraceItemTable(BaseApiTest):
         ex: my_attribute + my_other_attribute
         """
         span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_span(span_ts, {"kyles_measurement": -1, "my_other_attribute": 1}, 4)
-        write_eap_span(span_ts, {"kyles_measurement": 3, "my_other_attribute": 2}, 2)
-        write_eap_span(span_ts, {"kyles_measurement": 10, "my_other_attribute": 3}, 1)
+        write_eap_item(span_ts, {"kyles_measurement": -1, "my_other_attribute": 1}, 4)
+        write_eap_item(span_ts, {"kyles_measurement": 3, "my_other_attribute": 2}, 2)
+        write_eap_item(span_ts, {"kyles_measurement": 10, "my_other_attribute": 3}, 1)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -2624,8 +2624,8 @@ class TestTraceItemTable(BaseApiTest):
 
     def test_not_filter(setup_teardown: Any) -> None:
         span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_span(span_ts, {"attr1": "value1"}, 10)
-        write_eap_span(span_ts, {"attr1": "value1", "attr2": "value2"}, 10)
+        write_eap_item(span_ts, {"attr1": "value1"}, 10)
+        write_eap_item(span_ts, {"attr1": "value1", "attr2": "value2"}, 10)
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -2664,7 +2664,7 @@ class TestTraceItemTable(BaseApiTest):
 
     def test_nonexistent_attribute(setup_teardown: Any) -> None:
         span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_span(span_ts, {"animal_type": "duck"}, 10)
+        write_eap_item(span_ts, {"animal_type": "duck"}, 10)
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -2702,10 +2702,10 @@ class TestTraceItemTable(BaseApiTest):
     def test_calculate_http_response_rate(self) -> None:
         for i in range(9):
             span_ts = BASE_TIME - timedelta(seconds=i + 1)
-            write_eap_span(span_ts, {"http.status_code": "200"}, 10)
+            write_eap_item(span_ts, {"http.status_code": "200"}, 10)
         for i in range(10):
             span_ts = BASE_TIME - timedelta(seconds=i + 1)
-            write_eap_span(span_ts, {"http.status_code": "502"}, 1)
+            write_eap_item(span_ts, {"http.status_code": "502"}, 1)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -2775,8 +2775,8 @@ class TestTraceItemTable(BaseApiTest):
         ]
 
     def test_formula_aggregation(self) -> None:
-        write_eap_span(BASE_TIME, {"kyles_tag": "a", "const_1": 1}, 10)
-        write_eap_span(BASE_TIME, {"kyles_tag": "b", "const_1": 1}, 5)
+        write_eap_item(BASE_TIME, {"kyles_tag": "a", "const_1": 1}, 10)
+        write_eap_item(BASE_TIME, {"kyles_tag": "b", "const_1": 1}, 5)
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -2852,7 +2852,7 @@ class TestTraceItemTable(BaseApiTest):
         ]
 
     def test_span_id_column(self) -> None:
-        write_eap_span(
+        write_eap_item(
             BASE_TIME,
             item_id=int("123456781234567d", 16).to_bytes(16, byteorder="little"),
         )
@@ -2893,7 +2893,7 @@ class TestTraceItemTable(BaseApiTest):
 
     def test_literal(self) -> None:
         span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_span(span_ts, {"measurement": 2}, 10)
+        write_eap_item(span_ts, {"measurement": 2}, 10)
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -2947,8 +2947,8 @@ class TestTraceItemTable(BaseApiTest):
 
     def test_virtual_column_with_missing_attribute(self) -> None:
         span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_span(span_ts, {"attr1": "1"}, 10)
-        write_eap_span(span_ts, {"attr2": "2"}, 5)
+        write_eap_item(span_ts, {"attr1": "1"}, 10)
+        write_eap_item(span_ts, {"attr2": "2"}, 5)
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -3060,9 +3060,9 @@ class TestTraceItemTable(BaseApiTest):
         This test filters by env != "prod" and ensures that both "env"="dev" and "env"=None (attribute doesnt exist on the span) are returned.
         """
         span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_span(span_ts, {"env": "prod", "num_cats": 1})
-        write_eap_span(span_ts, {"env": "dev", "num_cats": 2})
-        write_eap_span(span_ts, {"num_cats": 3})
+        write_eap_item(span_ts, {"env": "prod", "num_cats": 1})
+        write_eap_item(span_ts, {"env": "dev", "num_cats": 2})
+        write_eap_item(span_ts, {"num_cats": 3})
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -3116,9 +3116,9 @@ class TestTraceItemTable(BaseApiTest):
         ensures default values in formulas work
         """
         span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_span(span_ts, {"numerator": 10, "denominator": 2})
-        write_eap_span(span_ts, {"numerator": 5})
-        write_eap_span(span_ts, {"numerator": 1, "denominator": 0})
+        write_eap_item(span_ts, {"numerator": 10, "denominator": 2})
+        write_eap_item(span_ts, {"numerator": 5})
+        write_eap_item(span_ts, {"numerator": 1, "denominator": 0})
 
         message = TraceItemTableRequest(
             meta=RequestMeta(

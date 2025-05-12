@@ -138,18 +138,6 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                 f"--log-level={log_level}",
             ],
         ),
-        (
-            "eap-items-log-consumer",
-            [
-                "snuba",
-                "rust-consumer",
-                "--storage=eap_items_log",
-                "--consumer-group=eap_items_log_group",
-                "--use-rust-processor",
-                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
-                f"--log-level={log_level}",
-            ],
-        ),
     ]
 
     if settings.SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV:

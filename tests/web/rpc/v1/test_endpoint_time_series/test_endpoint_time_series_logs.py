@@ -32,7 +32,7 @@ BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timed
 
 @pytest.fixture(autouse=False)
 def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
-    logs_storage = get_storage(StorageKey("eap_items_log"))
+    logs_storage = get_storage(StorageKey("eap_items"))
     messages = []
     for i in range(240):
         # 1 log every 30s for the 2 hours
