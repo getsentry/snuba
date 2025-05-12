@@ -51,7 +51,6 @@ from snuba.utils.metrics.timer import Timer
 def build_rpc_subscription_data_from_proto(
     entity_key: EntityKey, metadata: Mapping[str, Any]
 ) -> SubscriptionData:
-
     return RPCSubscriptionData.from_proto(
         CreateSubscriptionRequestProto(
             time_series_request=TimeSeriesRequest(
@@ -83,14 +82,13 @@ def build_rpc_subscription_data_from_proto(
             time_window_secs=300,
             resolution_secs=60,
         ),
-        EntityKey.EAP_SPANS,
+        EntityKey.EAP_ITEMS,
     )
 
 
 def build_rpc_subscription_data(
     entity_key: EntityKey, metadata: Mapping[str, Any]
 ) -> SubscriptionData:
-
     tmp = RPCSubscriptionData(
         project_id=1,
         time_window_sec=300,
@@ -108,13 +106,13 @@ RPC_CASES = [
     pytest.param(
         build_rpc_subscription_data_from_proto,
         {"organization": 1},
-        EntityKey.EAP_SPANS,
+        EntityKey.EAP_ITEMS,
         id="rpc",
     ),
     pytest.param(
         build_rpc_subscription_data,
         {"organization": 1},
-        EntityKey.EAP_SPANS,
+        EntityKey.EAP_ITEMS,
         id="rpc",
     ),
 ]
@@ -123,7 +121,6 @@ RPC_CASES = [
 def build_snql_subscription_data(
     entity_key: EntityKey, metadata: Mapping[str, Any]
 ) -> SubscriptionData:
-
     return SnQLSubscriptionData(
         project_id=5,
         time_window_sec=500 * 60,
@@ -270,8 +267,8 @@ RESULTS_CASES = [
         id="snql_subscription",
     ),
     pytest.param(
-        build_rpc_subscription_data(entity_key=EntityKey.EAP_SPANS, metadata={}),
-        EntityKey.EAP_SPANS,
+        build_rpc_subscription_data(entity_key=EntityKey.EAP_ITEMS, metadata={}),
+        EntityKey.EAP_ITEMS,
         id="rpc_subscriptions",
     ),
 ]
@@ -459,7 +456,7 @@ def test_subscription_task_encoder_snql() -> None:
 
 def test_subscription_task_encoder_rpc() -> None:
     encoder = SubscriptionScheduledTaskEncoder()
-    subscription_data = build_rpc_subscription_data(EntityKey.EAP_SPANS, {})
+    subscription_data = build_rpc_subscription_data(EntityKey.EAP_ITEMS, {})
 
     subscription_id = uuid.UUID("91b46cb6224f11ecb2ddacde48001122")
 
@@ -468,7 +465,7 @@ def test_subscription_task_encoder_rpc() -> None:
     tick_upper_offset = 5
 
     subscription_with_metadata = SubscriptionWithMetadata(
-        EntityKey.EAP_SPANS,
+        EntityKey.EAP_ITEMS,
         Subscription(
             SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
         ),
