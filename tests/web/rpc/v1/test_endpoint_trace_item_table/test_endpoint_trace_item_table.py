@@ -1135,6 +1135,33 @@ class TestTraceItemTable(BaseApiTest):
         measurements = [v.val_double for v in response.column_values[1].results]
         assert sorted(measurements) == measurements
 
+    def test_order_by_does_not_error_if_groupby_exists(self) -> None:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                        ),
+                    )
+                ),
+            ],
+            group_by=[
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+            ],
+        )
+        EndpointTraceItemTable().execute(message)
+
     def test_aggregation_on_attribute_column_backward_compat(
         self,
         setup_teardown: Any,
