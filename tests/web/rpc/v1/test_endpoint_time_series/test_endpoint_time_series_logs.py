@@ -29,7 +29,7 @@ from tests.web.rpc.v1.test_utils import BASE_TIME, gen_item_message
 def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
     logs_storage = get_storage(StorageKey("eap_items"))
     messages = []
-    for i in range(240):
+    for i in range(120):
         timestamp = BASE_TIME - timedelta(seconds=30 * i)
         messages.append(
             gen_item_message(
