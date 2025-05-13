@@ -39,6 +39,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.state import set_config
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -1001,7 +1002,7 @@ class TestTimeSeriesApi(BaseApiTest):
             label="avg",
             buckets=expected_buckets,
             data_points=[
-                DataPoint(data=1, data_present=True, sample_count=300)
+                DataPoint(data=1, data_present=True)
                 for _ in range(len(expected_buckets))
             ],
         )
@@ -1477,6 +1478,229 @@ class TestTimeSeriesApi(BaseApiTest):
             granularity_secs=granularity_secs,
         )
         EndpointTimeSeries().execute(best_effort_downsample_message)
+
+    def test_duplicate_top_level_labels(self) -> None:
+        """
+        This test ensures that duplicate labels in top level expressions
+        raises exception
+        """
+        set_config("enable_clear_labels_eap", 1)
+        granularity_secs = 3600
+        query_duration = granularity_secs * 1
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="metric1"),
+                    ),
+                    label="mylabel",
+                ),
+                Expression(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="metric2"),
+                    ),
+                    label="mylabel",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="Duplicate expression label: mylabel"
+        ):
+            EndpointTimeSeries().execute(message)
+
+    def test_duplicate_labels_inner(self) -> None:
+        """
+        This test ensures that duplicate labels across different expressions
+        doesnt cause incorrect behavior
+        """
+        set_config("enable_clear_labels_eap", 1)
+        granularity_secs = 30
+        query_duration = granularity_secs * 4
+        metric1_value = 3
+        metric2_value = 7
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            query_duration,
+            metrics=[
+                DummyMetric("metric1", get_value=lambda x: metric1_value),
+                DummyMetric("metric2", get_value=lambda x: metric2_value),
+            ],
+        )
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            # this does:
+            # plus(metric1 AS part1, metric1 AS part2)
+            # plus(metric2 AS part1, metric2 AS part2)
+            # the 2 different expressions share labels for the inner parts of the formula
+            # (part1, part2 are the duplicated labels)
+            # previously this would causes incorrect behavior, this test ensures that it doesn't
+            expressions=[
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_ADD,
+                        left=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_FLOAT, name="metric1"
+                                ),
+                                label="part1",
+                            )
+                        ),
+                        right=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_FLOAT, name="metric1"
+                                ),
+                                label="part2",
+                            )
+                        ),
+                    ),
+                    label="metric1",
+                ),
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_ADD,
+                        left=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_FLOAT, name="metric2"
+                                ),
+                                label="part1",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            )
+                        ),
+                        right=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_FLOAT, name="metric2"
+                                ),
+                                label="part2",
+                            )
+                        ),
+                    ),
+                    label="metric2",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        res = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        expected_timeseries = [
+            TimeSeries(
+                label="metric1",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(
+                        data=granularity_secs * (metric1_value * 2), data_present=True
+                    )
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+            TimeSeries(
+                label="metric2",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(
+                        data=granularity_secs * (metric2_value * 2), data_present=True
+                    )
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
+        assert (
+            sorted(res.result_timeseries, key=lambda e: e.label) == expected_timeseries
+        )
+
+    def test_agg_label_diff_from_expr_label(self) -> None:
+        """
+        ensure that when the label of the aggregate differs from the label of the expression,
+        it still works
+        """
+        set_config("enable_clear_labels_eap", 1)
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                        ),
+                        label="otherlabel",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                    label="label",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        assert response.result_timeseries == [
+            TimeSeries(
+                label="label",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=300, data_present=True, sample_count=300)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
 
 
 class TestUtils:
