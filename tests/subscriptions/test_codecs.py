@@ -480,7 +480,7 @@ def test_subscription_task_encoder_rpc() -> None:
     assert encoded.value == (
         b"{"
         b'"timestamp":"1970-01-01T00:00:00",'
-        b'"entity":"eap_spans",'
+        b'"entity":"eap_items",'
         b'"task":{'
         b'"data":{"project_id":1,"time_window":300,"resolution":60,"time_series_request":"Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIyIQoaCAESDwgDEgt0ZXN0X21ldHJpYxoDc3VtIAEaA3N1bQ==","request_version":"v1","request_name":"TimeSeriesRequest","subscription_type":"rpc"}},'
         b'"tick_upper_offset":5'
