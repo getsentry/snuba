@@ -7,15 +7,15 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
     (
-        Column("ota_updates_channel", String(Modifiers(nullable=True))),
+        Column("ota_updates_channel", String()),
         "device_model",
     ),
     (
-        Column("ota_updates_runtime_version", String(Modifiers(nullable=True))),
+        Column("ota_updates_runtime_version", String()),
         "ota_updates_channel",
     ),
     (
-        Column("ota_updates_update_id", String(Modifiers(nullable=True))),
+        Column("ota_updates_update_id", String()),
         "ota_updates_runtime_version",
     ),
 ]
