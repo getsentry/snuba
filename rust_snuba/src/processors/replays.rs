@@ -714,9 +714,9 @@ mod tests {
         assert_eq!(replay_row.info_id, Uuid::nil());
         assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
-        assert_eq!(replay_row.ota_updates_channel, "channel");
-        assert_eq!(replay_row.ota_updates_runtime_version, "runtime_version");
-        assert_eq!(replay_row.ota_updates_update_id, "update_id");
+        assert_eq!(&replay_row.ota_updates_channel, "channel");
+        assert_eq!(&replay_row.ota_updates_runtime_version, "runtime_version");
+        assert_eq!(&replay_row.ota_updates_update_id, "update_id");
     }
 
     #[test]
@@ -853,9 +853,9 @@ mod tests {
         assert_eq!(replay_row.info_id, Uuid::nil());
         assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
-        assert_eq!(replay_row.ota_updates_channel, "");
-        assert_eq!(replay_row.ota_updates_runtime_version, "");
-        assert_eq!(replay_row.ota_updates_update_id, "");
+        assert_eq!(&replay_row.ota_updates_channel, "");
+        assert_eq!(&replay_row.ota_updates_runtime_version, "");
+        assert_eq!(&replay_row.ota_updates_update_id, "");
     }
 
     #[test]
