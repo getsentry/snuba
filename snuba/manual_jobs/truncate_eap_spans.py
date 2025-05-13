@@ -21,7 +21,7 @@ class TruncateEAPSpans(Job):
             ClickhouseClientSettings.MIGRATE,
             storage_node,
         )
-        logger.info("Run truncate table statement: {STATEMENT}")
+        logger.info(f"Run truncate table statement: {STATEMENT}")
         connection.execute(query=STATEMENT)
 
         logger.info("TRUNCATE completed")
