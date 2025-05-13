@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -15,19 +15,14 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     ExtrapolationMode,
     Function,
 )
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.test_endpoint_trace_item_table.test_endpoint_trace_item_table_logs import (
-    gen_log_message,
-)
-
-BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
-    minutes=180
-)
+from tests.web.rpc.v1.test_utils import BASE_TIME, gen_item_message
 
 
 @pytest.fixture(autouse=False)
@@ -35,17 +30,21 @@ def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
     logs_storage = get_storage(StorageKey("eap_items"))
     messages = []
     for i in range(240):
-        # 1 log every 30s for the 2 hours
+        timestamp = BASE_TIME - timedelta(seconds=30 * i)
         messages.append(
-            gen_log_message(
-                dt=BASE_TIME - timedelta(seconds=30 * i),
-                body=f"hello world {i}",
-                tags={
-                    "bool_tag": i % 2 == 0,
-                    "int_tag": i,
-                    "double_tag": float(i) / 2.0,
-                    "str_tag": f"num: {i}",
-                    "test_metric": 1.0,
+            gen_item_message(
+                start_timestamp=timestamp,
+                remove_default_attributes=True,
+                type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                attributes={
+                    "bool_tag": AnyValue(bool_value=i % 2 == 0),
+                    "double_tag": AnyValue(double_value=float(i) / 2.0),
+                    "int_tag": AnyValue(int_value=i),
+                    "str_tag": AnyValue(string_value=f"num: {i}"),
+                    "test_metric": AnyValue(double_value=1.0),
+                    "sentry.body": AnyValue(string_value=f"hello world {i}"),
+                    "sentry.severity_number": AnyValue(int_value=10),
+                    "sentry.severity_text": AnyValue(string_value="info"),
                 },
             )
         )
