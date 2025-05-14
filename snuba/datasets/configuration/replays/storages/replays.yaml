@@ -123,6 +123,18 @@ schema:
         type: String,
         args: { schema_modifiers: [nullable] },
       },
+      {
+        name: ota_updates_channel,
+        type: String,
+      },
+      {
+        name: ota_updates_runtime_version,
+        type: String,
+      },
+      {
+        name: ota_updates_update_id,
+        type: String,
+      },
       { name: sdk_name, type: String, args: { schema_modifiers: [nullable] } },
       {
         name: sdk_version,
