@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import atexit
-import base64
 import functools
 import logging
 import random
@@ -599,14 +598,14 @@ if application.debug or application.testing:
         writable_storage = entity.get_writable_storage()
         assert writable_storage is not None
         table_writer = writable_storage.get_table_writer()
-        messages = json.loads(http_request.data)
+
+        if http_request.files:
+            messages = [file.read() for _, file in http_request.files.items()]
+        else:
+            messages = json.loads(http_request.data)
 
         for index, message in enumerate(messages):
             offset = offset_base + index
-
-            if decode_base64:
-                message = base64.b64decode(message)
-
             processed_message = (
                 table_writer.get_stream_loader()
                 .get_processor()
