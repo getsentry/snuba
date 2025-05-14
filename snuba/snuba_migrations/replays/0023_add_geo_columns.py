@@ -1,7 +1,7 @@
 from typing import Iterator, Sequence, Tuple
 
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations.columns import MigrationModifiers
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.migration import ClickhouseNodeMigration
 from snuba.migrations.operations import (
     AddColumn,
@@ -11,11 +11,20 @@ from snuba.migrations.operations import (
 )
 from snuba.utils.schemas import Column, String
 
-new_columns: Sequence[Tuple[Column[MigrationModifiers], str]] = [
+new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
     (Column("user_geo_city", String()), "user_email"),
-    (Column("user_geo_country_code", String()), "user_geo_city"),
-    (Column("user_geo_region", String()), "user_geo_country_code"),
-    (Column("user_geo_subdivision", String()), "user_geo_region"),
+    (
+        Column("user_geo_country_code", String(Modifiers(low_cardinality=True))),
+        "user_geo_city",
+    ),
+    (
+        Column("user_geo_region", String(Modifiers(low_cardinality=True))),
+        "user_geo_country_code",
+    ),
+    (
+        Column("user_geo_subdivision", String(Modifiers(low_cardinality=True))),
+        "user_geo_region",
+    ),
 ]
 
 
