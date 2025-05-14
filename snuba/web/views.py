@@ -587,7 +587,11 @@ if application.debug or application.testing:
 
     application.url_map.converters["entity"] = EntityConverter
 
-    def _write_to_entity(*, entity: EntityType) -> RespTuple:
+    def _write_to_entity(
+        *,
+        entity: EntityType,
+        decode_base64: bool = False,
+    ) -> RespTuple:
         from snuba.processor import InsertBatch
 
         rows: MutableSequence[WriterTableRow] = []
@@ -595,11 +599,12 @@ if application.debug or application.testing:
         writable_storage = entity.get_writable_storage()
         assert writable_storage is not None
         table_writer = writable_storage.get_table_writer()
+        messages = json.loads(http_request.data)
 
-        for index, message in enumerate(json.loads(http_request.data)):
+        for index, message in enumerate(messages):
             offset = offset_base + index
 
-            if http_request.content_type == "application/x-protobuf":
+            if decode_base64:
                 message = base64.b64decode(message)
 
             processed_message = (
@@ -624,8 +629,17 @@ if application.debug or application.testing:
         return ("ok", 200, {"Content-Type": "text/plain"})
 
     @application.route("/tests/entities/<entity:entity>/insert", methods=["POST"])
-    def write_to_entity(*, entity: EntityType) -> RespTuple:
-        return _write_to_entity(entity=entity)
+    def write_json_to_entity(*, entity: EntityType) -> RespTuple:
+        return _write_to_entity(
+            entity=entity,
+        )
+
+    @application.route("/tests/entities/<entity:entity>/insert_bytes", methods=["POST"])
+    def write_bytes_to_entity(*, entity: EntityType) -> RespTuple:
+        return _write_to_entity(
+            entity=entity,
+            decode_base64=True,
+        )
 
     @application.route("/tests/<entity:entity>/eventstream", methods=["POST"])
     def eventstream(*, entity: Entity) -> RespTuple:
