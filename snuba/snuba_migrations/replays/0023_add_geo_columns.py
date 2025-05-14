@@ -12,22 +12,10 @@ from snuba.migrations.operations import (
 from snuba.utils.schemas import Column, String
 
 new_columns: Sequence[Tuple[Column[MigrationModifiers], str]] = [
-    (
-        Column("user_geo_city", String(MigrationModifiers(nullable=True))),
-        "user_email",
-    ),
-    (
-        Column("user_geo_country_code", String(MigrationModifiers(nullable=True))),
-        "user_geo_city",
-    ),
-    (
-        Column("user_geo_region", String(MigrationModifiers(nullable=True))),
-        "user_geo_country_code",
-    ),
-    (
-        Column("user_geo_subdivision", String(MigrationModifiers(nullable=True))),
-        "user_geo_region",
-    ),
+    (Column("user_geo_city", String()), "user_email"),
+    (Column("user_geo_country_code", String()), "user_geo_city"),
+    (Column("user_geo_region", String()), "user_geo_country_code"),
+    (Column("user_geo_subdivision", String()), "user_geo_region"),
 ]
 
 
