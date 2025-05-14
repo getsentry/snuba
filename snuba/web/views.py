@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+import base64
 import functools
 import logging
 import random
@@ -234,7 +235,6 @@ def health_envoy() -> Response:
 
 @application.route("/health")
 def health() -> Response:
-
     thorough = http_request.args.get("thorough", False)
     health_info = get_health_info(thorough)
 
@@ -598,6 +598,9 @@ if application.debug or application.testing:
 
         for index, message in enumerate(json.loads(http_request.data)):
             offset = offset_base + index
+
+            if http_request.content_type == "application/x-protobuf":
+                message = base64.b64decode(message)
 
             processed_message = (
                 table_writer.get_stream_loader()
