@@ -589,7 +589,6 @@ if application.debug or application.testing:
     def _write_to_entity(
         *,
         entity: EntityType,
-        decode_base64: bool = False,
     ) -> RespTuple:
         from snuba.processor import InsertBatch
 
@@ -637,7 +636,6 @@ if application.debug or application.testing:
     def write_bytes_to_entity(*, entity: EntityType) -> RespTuple:
         return _write_to_entity(
             entity=entity,
-            decode_base64=True,
         )
 
     @application.route("/tests/<entity:entity>/eventstream", methods=["POST"])
