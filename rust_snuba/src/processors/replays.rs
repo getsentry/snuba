@@ -145,6 +145,13 @@ pub fn deserialize_message(
                 offset,
                 os_name: event.contexts.os.name.unwrap_or_default(),
                 os_version: event.contexts.os.version.unwrap_or_default(),
+                ota_updates_channel: event.contexts.ota_updates.channel.unwrap_or_default(),
+                ota_updates_runtime_version: event
+                    .contexts
+                    .ota_updates
+                    .runtime_version
+                    .unwrap_or_default(),
+                ota_updates_update_id: event.contexts.ota_updates.update_id.unwrap_or_default(),
                 partition,
                 platform: event.platform.unwrap_or("".to_string()),
                 project_id: replay_message.project_id,
@@ -343,6 +350,8 @@ struct Contexts {
     os: Version,
     #[serde(default)]
     replay: ReplayContext,
+    #[serde(default)]
+    ota_updates: OTAUpdates,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -363,6 +372,16 @@ struct ReplayContext {
     error_sample_rate: Option<f64>,
     #[serde(default)]
     session_sample_rate: Option<f64>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct OTAUpdates {
+    #[serde(default)]
+    channel: Option<String>,
+    #[serde(default)]
+    runtime_version: Option<String>,
+    #[serde(default)]
+    update_id: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -463,6 +482,9 @@ pub struct ReplayRow {
     offset: u64,
     os_name: String,
     os_version: String,
+    ota_updates_channel: String,
+    ota_updates_runtime_version: String,
+    ota_updates_update_id: String,
     partition: u16,
     platform: String,
     project_id: u64,
@@ -590,6 +612,11 @@ mod tests {
                 "os": {
                     "name": "os",
                     "version": "v1"
+                },
+                "ota_updates": {
+                    "channel": "channel",
+                    "runtime_version": "runtime_version",
+                    "update_id": "update_id"
                 },
                 "replay": {
                     "error_sample_rate": 1,
@@ -719,6 +746,9 @@ mod tests {
         assert_eq!(replay_row.info_id, Uuid::nil());
         assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
+        assert_eq!(&replay_row.ota_updates_channel, "channel");
+        assert_eq!(&replay_row.ota_updates_runtime_version, "runtime_version");
+        assert_eq!(&replay_row.ota_updates_update_id, "update_id");
     }
 
     #[test]
@@ -778,6 +808,11 @@ mod tests {
                     "brand": null,
                     "family": null,
                     "model": null
+                },
+                "ota_updates": {
+                    "channel": null,
+                    "runtime_version": null,
+                    "update_id": null
                 }
             }
         }"#;
@@ -860,6 +895,9 @@ mod tests {
         assert_eq!(replay_row.info_id, Uuid::nil());
         assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
+        assert_eq!(&replay_row.ota_updates_channel, "");
+        assert_eq!(&replay_row.ota_updates_runtime_version, "");
+        assert_eq!(&replay_row.ota_updates_update_id, "");
     }
 
     #[test]
