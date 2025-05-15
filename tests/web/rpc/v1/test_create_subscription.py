@@ -229,7 +229,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         rpc_subscription_data = list(
             RedisSubscriptionDataStore(
                 get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-                EntityKey("eap_spans"),
+                EntityKey("eap_items"),
                 PartitionId(partition),
             ).all()
         )[0][1]

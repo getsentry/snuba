@@ -1,10 +1,8 @@
 mod eap_items;
-mod eap_items_span;
-pub(crate) mod eap_spans;
+pub(crate) mod eap_items_span;
 mod errors;
 mod functions;
 mod generic_metrics;
-mod ourlogs;
 mod outcomes;
 mod profile_chunks;
 mod profiles;
@@ -60,8 +58,6 @@ define_processing_functions! {
     ("ReplaysProcessor", "ingest-replay-events", ProcessingFunctionType::ProcessingFunction(replays::process_message)),
     ("UptimeMonitorChecksProcessor", "snuba-uptime-results", ProcessingFunctionType::ProcessingFunction(uptime_monitor_checks::process_message)),
     ("SpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(spans::process_message)),
-    ("EAPSpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(eap_spans::process_message)),
-    ("OurlogsMessageProcessor", "snuba-ourlogs", ProcessingFunctionType::ProcessingFunction(ourlogs::process_message)),
     ("OutcomesProcessor", "outcomes", ProcessingFunctionType::ProcessingFunction(outcomes::process_message)),
     ("GenericCountersMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_counter_message)),
     ("GenericSetsMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_set_message)),
@@ -160,11 +156,6 @@ mod tests {
 
                 if *topic_name == "events" {
                     settings.add_redaction(".*.message_timestamp", "<event timestamp>");
-                }
-
-                if *topic_name == "snuba-ourlogs" {
-                    settings.add_redaction(".*.item_id", "<item ID>"); //UUID7 has timestamp in it
-                    settings.add_redaction(".**[\"sentry.timestamp_precise\"]", "<item timestamp>");
                 }
 
                 // This payload is protobuf (so binary), not JSON (so text).
