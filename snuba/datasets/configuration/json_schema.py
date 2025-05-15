@@ -141,7 +141,9 @@ FIXED_STRING_SCHEMA = make_column_schema(
 
 
 NO_ARG_SCHEMA = make_column_schema(
-    column_type={"enum": ["String", "DateTime", "UUID", "IPv4", "IPv6"]},
+    column_type={
+        "enum": ["String", "DateTime", "UUID", "IPv4", "IPv6", "Bool", "Date"]
+    },
     args={
         "type": "object",
         "properties": {},
@@ -600,6 +602,11 @@ DELETION_SETTINGS_SCHEMA = {
             "type": "array",
             "items": {"type": "string"},
             "description": "Names of the tables to delete from.",
+        },
+        "allowed_columns": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Columns allowed in WHERE clause.",
         },
         "max_rows_to_delete": {
             "type": "integer",

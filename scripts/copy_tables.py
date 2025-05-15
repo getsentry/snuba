@@ -21,9 +21,9 @@ def _get_client(
 
 
 def get_regex_match(curr_create_table_statement: str) -> str:
-    match = re.search(r"\/clickhouse([a-z\/\-{}_]*)", curr_create_table_statement)
+    match = re.search(r"'(\/clickhouse\/.*?)'", curr_create_table_statement)
     assert match is not None
-    return match.group(0)
+    return match.group(1)
 
 
 def verify_zk_replica_path(
@@ -130,6 +130,9 @@ def copy_tables(
 
     if not tables:
         tables = [result[0] for result in source_client.execute("SHOW TABLES")]
+
+    # create local tables before MVs
+    tables = sorted(tables, key=lambda x: "_local" not in x)
 
     show_table_statements = OrderedDict()
     show_mv_statements = OrderedDict()

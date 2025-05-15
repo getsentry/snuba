@@ -260,20 +260,16 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
             rate_limit_params,
         )
 
-        if within_rate_limit:
-            suggestion = NO_SUGGESTION
-        else:
-            suggestion = SUGGESTION
         return QuotaAllowance(
             can_run=within_rate_limit,
-            max_threads=self.max_threads,
+            max_threads=self.max_threads if within_rate_limit else 0,
             explanation={"reason": why, "overrides": overrides},
             is_throttled=False,
             throttle_threshold=typing.cast(int, rate_limit_params.concurrent_limit),
             rejection_threshold=typing.cast(int, rate_limit_params.concurrent_limit),
             quota_used=rate_limit_stats.concurrent,
             quota_unit=QUOTA_UNIT,
-            suggestion=suggestion,
+            suggestion=NO_SUGGESTION if within_rate_limit else SUGGESTION,
         )
 
     def _update_quota_balance(

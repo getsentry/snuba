@@ -140,7 +140,7 @@ class ReadableTableStorage(ReadableStorage):
     ) -> None:
         self.__storage_key = storage_key
         self.__query_processors = query_processors or []
-        self.__deletion_settings = deletion_settings or DeletionSettings(0, [], 0)
+        self.__deletion_settings = deletion_settings or DeletionSettings(0, [], [], 0)
         self.__deletion_processors = deletion_processors or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
         self.__allocation_policies = allocation_policies or []

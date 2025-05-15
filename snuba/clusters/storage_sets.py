@@ -19,7 +19,6 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "SPANS": "spans",
     "EVENTS_ANALYTICS_PLATFORM": "events_analytics_platform",
     "GROUP_ATTRIBUTES": "group_attributes",
-    "METRICS_SUMMARIES": "metrics_summaries",
     "PROFILE_CHUNKS": "profile_chunks",
 }
 
@@ -87,7 +86,7 @@ DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset()
 # Joins can be performed across storage sets in the same group.
 JOINABLE_STORAGE_SETS: FrozenSet[FrozenSet[StorageSetKey]] = frozenset(
     {
-        frozenset({StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO, StorageSetKey.CDC}),
+        frozenset({StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO}),
         frozenset(
             {
                 StorageSetKey.EVENTS,

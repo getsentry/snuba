@@ -4,62 +4,97 @@ x-sentry-service-config:
   service_name: snuba
   dependencies:
     clickhouse:
-      description: "clickhouse"
+      description: Real time analytics database
     redis:
-      description: "redis"
+      description: Shared instance of redis used by sentry services
+      remote:
+        repo_name: sentry-shared-redis
+        branch: main
+        repo_link: https://github.com/getsentry/sentry-shared-redis.git
     kafka:
-      description: "kafka"
+      description: Shared instance of kafka used by sentry services
+      remote:
+        repo_name: sentry-shared-kafka
+        branch: main
+        repo_link: https://github.com/getsentry/sentry-shared-kafka.git
+    snuba:
+      description: Service that provides a rich data model on top of Clickhouse together with a fast ingestion consumer and a query optimizer
   modes:
-    default: [clickhouse, redis, kafka]
+    default: [redis, kafka, clickhouse]
+    containerized: [clickhouse, redis, kafka, snuba]
 
 services:
-  redis:
-    image: "redis:6.2.14-alpine"
-    healthcheck:
-      test: redis-cli ping
   clickhouse:
-    image: "altinity/clickhouse-server:23.8.11.29.altinitystable"
+    image: ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:23.8.11.29.altinitystable
     ulimits:
       nofile:
         soft: 262144
         hard: 262144
     ports:
-      - "9000:9000"
-      - "9009:9009"
-      - "8123:8123"
+      - 127.0.0.1:9000:9000
+      - 127.0.0.1:9009:9009
+      - 127.0.0.1:8123:8123
+    healthcheck:
+      test: wget -q -O - http://localhost:8123/ping
+      interval: 5s
+      timeout: 5s
+      retries: 3
     volumes:
-      - "clickhouse:/var/lib/clickhouse"
-      - "./clickhouse/config.xml:/etc/clickhouse-server/config.d/sentry.xml"
-  kafka:
-    image: "confluentinc/cp-kafka:7.6.1"
-    environment:
-      # https://docs.confluent.io/platform/current/installation/docker/config-reference.html#cp-kakfa-example
-      KAFKA_PROCESS_ROLES: "broker,controller"
-      KAFKA_CONTROLLER_QUORUM_VOTERS: "1001@127.0.0.1:29093"
-      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
-      KAFKA_NODE_ID: "1001"
-      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
-      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:29092,INTERNAL://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093"
-      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://127.0.0.1:29092,INTERNAL://kafka:9093,EXTERNAL://127.0.0.1:9092"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT"
-      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
-      KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: "1"
-      KAFKA_LOG_RETENTION_HOURS: "24"
-      KAFKA_MESSAGE_MAX_BYTES: "50000000" #50MB or bust
-      KAFKA_MAX_REQUEST_SIZE: "50000000" #50MB on requests apparently too
-      CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
-      KAFKA_LOG4J_LOGGERS: "kafka.cluster=WARN,kafka.controller=WARN,kafka.coordinator=WARN,kafka.log=WARN,kafka.server=WARN,state.change.logger=WARN"
-      KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
-      KAFKA_TOOLS_LOG4J_LOGLEVEL: "WARN"
-    ulimits:
-      nofile:
-        soft: 4096
-        hard: 4096
-    volumes:
-      - "kafka:/var/lib/kafka/data"
+      - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/sentry.xml
+    extra_hosts:
+      host.docker.internal: host-gateway
+    networks:
+      - devservices
+    labels:
+      - orchestrator=devservices
+    restart: unless-stopped
+
+  snuba:
+    image: ghcr.io/getsentry/snuba:latest
     ports:
-      - "9092:9092"
+      - 127.0.0.1:1218:1218
+      - 127.0.0.1:1219:1219
+    command:
+      - devserver
+      - --${SNUBA_NO_WORKERS:+no-workers}
+    healthcheck:
+      test: curl -f http://localhost:1218/health_envoy
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    environment:
+      PYTHONUNBUFFERED: 1
+      SNUBA_SETTINGS: docker
+      DEBUG: 1
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_HTTP_PORT: 8123
+      DEFAULT_BROKERS: kafka:9093
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 1
+      ENABLE_SENTRY_METRICS_DEV: ${ENABLE_SENTRY_METRICS_DEV:-}
+      ENABLE_PROFILES_CONSUMER: ${ENABLE_PROFILES_CONSUMER:-}
+      ENABLE_SPANS_CONSUMER: ${ENABLE_SPANS_CONSUMER:-}
+      ENABLE_ISSUE_OCCURRENCE_CONSUMER: ${ENABLE_ISSUE_OCCURRENCE_CONSUMER:-}
+      ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES: 1
+      ENABLE_GROUP_ATTRIBUTES_CONSUMER: ${ENABLE_GROUP_ATTRIBUTES_CONSUMER:-}
+      ENABLE_LW_DELETIONS_CONSUMER: ${ENABLE_LW_DELETIONS_CONSUMER:-}
+      SENTRY_SPOTLIGHT: 'http://host.docker.internal:8969/stream'
+    platform: linux/amd64
+    extra_hosts:
+      host.docker.internal: host-gateway
+    networks:
+      - devservices
+    labels:
+      - orchestrator=devservices
+    restart: unless-stopped
+
 volumes:
-  clickhouse:
-  kafka:
+  clickhouse-data:
+
+networks:
+  devservices:
+    name: devservices
+    external: true

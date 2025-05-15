@@ -16,7 +16,7 @@ from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.combined_scheduler_executor import (
     CombinedSchedulerExecutorFactory,
 )
-from snuba.subscriptions.data import PartitionId, SubscriptionData
+from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.types import Interval
 from snuba.subscriptions.utils import Tick
@@ -32,7 +32,7 @@ def create_subscription() -> None:
     entity = get_entity(EntityKey.EVENTS)
     store.create(
         uuid.uuid4(),
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=1,
             time_window_sec=60,
             resolution_sec=60,

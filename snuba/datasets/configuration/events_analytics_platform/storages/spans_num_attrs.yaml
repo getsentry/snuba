@@ -6,7 +6,7 @@ storage:
   key: spans_num_attrs
   set_key: events_analytics_platform
 
-readiness_state: partial
+readiness_state: complete
 
 schema:
   columns:
@@ -44,8 +44,8 @@ schema:
           },
       },
     ]
-  local_table_name: spans_num_attrs_2_local
-  dist_table_name: spans_num_attrs_2_dist
+  local_table_name: spans_num_attrs_3_local
+  dist_table_name: spans_num_attrs_3_dist
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
     args:
@@ -68,6 +68,10 @@ query_processors:
     args:
       columns: [trace_id]
   - processor: TupleUnaliaser
+  - processor: ClickhouseSettingsOverride
+    args:
+      settings:
+        max_execution_time: 30
 
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer

@@ -25,7 +25,6 @@ from snuba.query.matchers import (
     Param,
     String,
 )
-from snuba.utils.constants import ATTRIBUTE_BUCKETS
 from snuba.utils.hashes import fnv_1a
 
 
@@ -239,6 +238,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
     from_column_name: str
     to_col_table: Optional[str]
     to_col_name: str
+    num_attribute_buckets: int
 
     def attempt_map(
         self,
@@ -256,7 +256,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         if not isinstance(key.value, str):
             return None
 
-        bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
+        bucket_idx = fnv_1a(key.value.encode("utf-8")) % self.num_attribute_buckets
         return arrayElement(
             expression.alias,
             ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
@@ -384,5 +384,23 @@ class FunctionNameMapper(FunctionCallMapper):
             function_name=self.to_name,
             parameters=tuple(
                 exp.accept(children_translator) for exp in expression.parameters
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class ColumnToMilliseconds(ColumnToFunction):
+    def __init__(
+        self,
+        from_col_name: str,
+        to_col_name: str,
+    ) -> None:
+        super().__init__(
+            None,
+            from_col_name,
+            "divide",
+            (
+                ColumnExpr(None, None, to_col_name),
+                LiteralExpr(alias=None, value=1000),
             ),
         )

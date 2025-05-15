@@ -119,6 +119,18 @@ schema:
         type: String,
         args: { schema_modifiers: [nullable] },
       },
+      {
+        name: ota_updates_channel,
+        type: String,
+      },
+      {
+        name: ota_updates_runtime_version,
+        type: String,
+      },
+      {
+        name: ota_updates_update_id,
+        type: String,
+      },
       { name: sdk_name, type: String, args: { schema_modifiers: [nullable] } },
       {
         name: sdk_version,
@@ -183,13 +195,15 @@ query_processors:
     args:
       settings:
         max_rows_to_group_by: 1000000
-        group_by_overflow_mode: any
+        group_by_overflow_mode: break
   - processor: MappingOptimizer
     args:
       column_name: tags
       hash_map_name: _tags_hash_map
       killswitch: tags_hash_map_enabled
   - processor: EmptyTagConditionProcessor
+    args:
+      column_name: tags.key
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: tags

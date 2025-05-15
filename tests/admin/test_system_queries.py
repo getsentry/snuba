@@ -4,15 +4,11 @@ import pytest
 
 from snuba import settings
 from snuba.admin.auth_roles import ROLES, Role
-from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.system_queries import (
     UnauthorizedForSudo,
-    is_query_alter,
-    is_query_optimize,
-    is_query_select,
-    is_system_command,
+    is_valid_system_query,
     run_system_query_on_host_with_sql,
-    validate_system_query,
+    validate_query,
 )
 from snuba.admin.user import AdminUser
 
@@ -31,10 +27,38 @@ from snuba.admin.user import AdminUser
         "SELECT * FROM system.clusters LIMIT 100",  # limit
         "SELECT empty('str') FROM system.clusters LIMIT 100",  # literal str params
         "SELECT * FROM system.query_log WHERE event_time > toDateTime('2023-07-05 14:24:00') AND event_time < toDateTime('2023-07-05T14:34:00')",  # datetimes
+        """SELECT
+            count() as nb_query,
+            user,
+            query,
+            sum(memory_usage) AS memory,
+            normalized_query_hash
+        FROM
+            system.query_log
+        WHERE
+            (event_time >= (now() - toIntervalDay(1)))
+            AND query_kind = 'Select'
+            AND type = 'QueryFinish'
+            and user != 'monitoring-internal'
+        GROUP BY
+            normalized_query_hash,
+            query,
+            user
+        ORDER BY
+            memory DESC
+        """,
+        "SELECT hostname(), avg(query_duration_ms) FROM clusterAllReplicas('default', system.query_log) GROUP BY hostname()",
+        "SELECT count() FROM merge('system', '.*settings')",
     ],
 )
-def test_valid_system_query(sql_query: str) -> None:
-    validate_system_query(sql_query)
+@pytest.mark.clickhouse_db
+def test_is_valid_system_query(sql_query: str) -> None:
+    assert is_valid_system_query(
+        settings.CLUSTERS[0]["host"],
+        int(settings.CLUSTERS[0]["port"]),
+        "errors",
+        sql_query,
+    )
 
 
 @pytest.mark.parametrize(
@@ -47,34 +71,37 @@ def test_valid_system_query(sql_query: str) -> None:
         "SELECT 1; SELECT 2;"  # no multiple statements
         "SELECT * FROM system.clusters c INNER JOIN my_table m ON c.cluster == m.something",  # no join
         "SELECT * from system.as1",  # invalid system table format
+        """SELECT
+            count() as nb_query,
+            user,
+            query,
+            sum(memory_usage) AS memory,
+            normalized_query_hash
+        FROM
+            clusterAllReplicas(default, system.query_log)
+        WHERE
+            (event_time >= (now() - toIntervalDay(1)))
+            AND query_kind = 'Select'
+            AND type = 'QueryFinish'
+            and user != 'monitoring-internal'
+        GROUP BY
+            normalized_query_hash,
+            query,
+            user
+        ORDER BY
+            memory DESC;
+        """,
     ],
 )
+@pytest.mark.clickhouse_db
 def test_invalid_system_query(sql_query: str) -> None:
-    with pytest.raises(InvalidCustomQuery):
-        validate_system_query(sql_query)
-
-
-select_sql = """
-SELECT
-    table,
-    query,
-    format,
-    query_id,
-    bytes,
-    flush_time,
-    flush_query_id
-FROM
-    system.asynchronous_insert_log
-WHERE
-    status = 'Ok'
-    AND database = 'default'
-    AND flush_time > now() - toIntervalMinute(10)
-ORDER BY table, flush_time
-"""
-
-
-def test_is_query_select() -> None:
-    assert is_query_select(select_sql) == True
+    with pytest.raises(Exception):
+        is_valid_system_query(
+            settings.CLUSTERS[0]["host"],
+            int(settings.CLUSTERS[0]["port"]),
+            "errors",
+            sql_query,
+        )
 
 
 @pytest.mark.parametrize(
@@ -82,6 +109,9 @@ def test_is_query_select() -> None:
     [
         ("SYSSSSSSSTEM DO SOMETHING", False),
         ("SYSTEM STOP MERGES", True),
+        ("SYSTEM STOP TTL MERGES", True),
+        ("SYSTEM STOP TTL MERGES ON CLUSTER 'snuba-spans'", True),
+        ("KILL MUTATION WHERE mutation_id='0000000000'", True),
         ("system STOP MerGes", True),
         ("system SHUTDOWN", False),
         ("system KILL", False),
@@ -90,16 +120,31 @@ def test_is_query_select() -> None:
         ("OPTIMIZE TABLE eap_spans_local", True),
         ("optimize table eap_spans_local", True),
         ("optimize   TABLE eap_spans_local", True),
+        (
+            "SYSTEM DROP REPLICA 'snuba-events-analytics-platform-2-2' FROM ZKPATH '/clickhouse/tables/events_analytics_platform/2/default/eap_spans_2_local'",
+            True,
+        ),
     ],
 )
+@pytest.mark.clickhouse_db
 def test_sudo_queries(sudo_query: str, expected: bool) -> None:
-    assert (
-        is_system_command(sudo_query)
-        or is_query_alter(sudo_query)
-        or is_query_optimize(sudo_query)
-    ) == expected
-    with pytest.raises(InvalidCustomQuery):
-        validate_system_query(sudo_query)
+    if expected:
+        validate_query(
+            settings.CLUSTERS[0]["host"],
+            int(settings.CLUSTERS[0]["port"]),
+            "errors",
+            sudo_query,
+            True,
+        )  # Should no-op
+    else:
+        with pytest.raises(Exception):
+            validate_query(
+                settings.CLUSTERS[0]["host"],
+                int(settings.CLUSTERS[0]["port"]),
+                "errors",
+                sudo_query,
+                True,
+            )
 
 
 @pytest.mark.parametrize(

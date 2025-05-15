@@ -1,6 +1,6 @@
-ARG PYTHON_VERSION=3.11.8
+ARG PYTHON_VERSION=3.11.11
 
-FROM python:${PYTHON_VERSION}-slim-bookworm as build_base
+FROM python:${PYTHON_VERSION}-slim-bookworm AS build_base
 WORKDIR /usr/src/snuba
 
 ENV PIP_NO_CACHE_DIR=off \
@@ -26,6 +26,7 @@ RUN set -ex; \
         make \
         g++ \
         gnupg \
+        protobuf-compiler \
     '; \
     runtimeDeps=' \
         curl \
@@ -90,6 +91,7 @@ COPY ./scripts/rust-dummy-build.sh ./scripts/rust-dummy-build.sh
 RUN set -ex; \
     sh scripts/rust-dummy-build.sh; \
     cd ./rust_snuba/; \
+    rustup show active-toolchain || rustup toolchain install; \
     maturin build --release --compatibility linux --locked
 
 FROM build_rust_snuba_base AS build_rust_snuba
@@ -98,6 +100,7 @@ COPY --from=build_rust_snuba_deps /usr/src/snuba/rust_snuba/target/ ./rust_snuba
 COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
     cd ./rust_snuba/; \
+    rustup show active-toolchain || rustup toolchain install; \
     maturin build --release --compatibility linux --locked
 
 # Install nodejs and yarn and build the admin UI
@@ -150,7 +153,7 @@ EXPOSE 1218 1219
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
 CMD [ "api" ]
 
-FROM application_base as application
+FROM application_base AS application
 USER 0
 RUN set -ex; \
     apt-get purge -y --auto-remove $(cat /tmp/build-deps.txt); \

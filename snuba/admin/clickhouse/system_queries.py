@@ -49,23 +49,6 @@ def _run_sql_query_on_host(
     return query_result
 
 
-SYSTEM_QUERY_RE = re.compile(
-    r"""
-        ^ # Start
-        (SELECT|select)
-        \s
-        (?P<select_statement>[\w\s\',()*+\-\/:]+|\*)
-        \s
-        (FROM|from)
-        \s
-        system.[a-z_]+
-        (?P<extra>\s[\w\s,=()*+<>'%"\-\/:]+)?
-        ;? # Optional semicolon
-        $ # End
-    """,
-    re.VERBOSE,
-)
-
 DESCRIBE_QUERY_RE = re.compile(
     r"""
         ^ # Start
@@ -92,16 +75,39 @@ SHOW_QUERY_RE = re.compile(
     re.VERBOSE,
 )
 
+KILL_COMMAND_RE = re.compile(
+    r"""
+        ^
+        (KILL\sMUTATION\sWHERE)
+        \s
+        .*\s*=\s*.*
+        ;?
+        $
+    """,
+    re.IGNORECASE + re.VERBOSE,
+)
+
 SYSTEM_COMMAND_RE = re.compile(
     r"""
         ^
         (SYSTEM)
         \s
         (?!SHUTDOWN\b)(?!KILL\b)
-        [\w\s]+
+        [\w\s'\-_]+
         ;? # Optional semicolon
         $
     """,
+    re.IGNORECASE + re.VERBOSE,
+)
+
+SYSTEM_DROP_COMMAND_RE = re.compile(
+    r"""
+        ^
+        (SYSTEM\s+DROP\s+REPLICA)
+        [\w\s,=()*+<>'%\-\/:\.`]+
+        ;? # Optional semicolon
+        $
+    #""",
     re.IGNORECASE + re.VERBOSE,
 )
 
@@ -109,7 +115,7 @@ OPTIMIZE_QUERY_RE = re.compile(
     r"""^
         (OPTIMIZE\sTABLE)
         \s
-        [\w\s]+
+        [\w\s_\-']+
         ;? # Optional semicolon
         $
     """,
@@ -129,13 +135,64 @@ ALTER_QUERY_RE = re.compile(
 )
 
 
-def is_query_select(sql_query: str) -> bool:
+def is_query_using_only_system_tables(
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    sql_query: str,
+) -> bool:
     """
-    Simple validation to ensure query is a select command
+    Run the EXPLAIN QUERY TREE on the given sql_query and check that the only tables
+    in the query are system tables.
     """
-    sql_query = " ".join(sql_query.split())
-    match = SYSTEM_QUERY_RE.match(sql_query)
-    return True if match else False
+    sql_query = sql_query.strip().rstrip(";") if sql_query.endswith(";") else sql_query
+    explain_query_tree_query = (
+        f"EXPLAIN QUERY TREE {sql_query} SETTINGS allow_experimental_analyzer = 1"
+    )
+    explain_query_tree_result = _run_sql_query_on_host(
+        clickhouse_host, clickhouse_port, storage_name, explain_query_tree_query, False
+    )
+
+    for line in explain_query_tree_result.results:
+        line = line[0].strip()
+        # We don't allow table functions (except clusterAllReplicas/merge) for now as the clickhouse analyzer isn't good enough yet to resolve those tables
+        if (
+            line.startswith("TABLE_FUNCTION")
+            and "table_function_name: clusterAllReplicas" not in line
+            and "table_function_name: merge" not in line
+        ):
+            return False
+        if line.startswith("TABLE"):
+            match = re.search(r"table_name:\s*(\S+)", line, re.IGNORECASE)
+            if match:
+                table_name = match.group(1)
+                if not table_name.startswith("system."):
+                    return False
+
+    return True
+
+
+def is_valid_system_query(
+    clickhouse_host: str, clickhouse_port: int, storage_name: str, sql_query: str
+) -> bool:
+    """
+    Validation based on Query Tree and AST to ensure the query is a valid select query.
+    """
+    explain_ast_query = f"EXPLAIN AST {sql_query}"
+    disallowed_ast_nodes = ["AlterQuery", "AlterCommand", "DropQuery", "InsertQuery"]
+    explain_ast_result = _run_sql_query_on_host(
+        clickhouse_host, clickhouse_port, storage_name, explain_ast_query, False
+    )
+
+    for node in disallowed_ast_nodes:
+        if any(
+            line[0].lstrip().startswith(node) for line in explain_ast_result.results
+        ):
+            return False
+
+    return is_query_using_only_system_tables(
+        clickhouse_host, clickhouse_port, storage_name, sql_query
+    )
 
 
 def is_query_show(sql_query: str) -> bool:
@@ -161,8 +218,11 @@ def is_system_command(sql_query: str) -> bool:
     Validates whether we are running something like SYSTEM STOP MERGES
     """
     sql_query = " ".join(sql_query.split())
-    match = SYSTEM_COMMAND_RE.match(sql_query)
-    return True if match else False
+    matches = False
+    to_match = [SYSTEM_COMMAND_RE, KILL_COMMAND_RE, SYSTEM_DROP_COMMAND_RE]
+    for pattern in to_match:
+        matches |= bool(pattern.match(sql_query))
+    return matches
 
 
 def is_query_optimize(sql_query: str) -> bool:
@@ -183,6 +243,33 @@ def is_query_alter(sql_query: str) -> bool:
     return True if match else False
 
 
+def validate_query(
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    system_query_sql: str,
+    sudo_mode: bool,
+) -> None:
+    if is_query_describe(system_query_sql) or is_query_show(system_query_sql):
+        return
+
+    if sudo_mode and (
+        is_system_command(system_query_sql)
+        or is_query_alter(system_query_sql)
+        or is_query_optimize(system_query_sql)
+    ):
+        return
+
+    if is_valid_system_query(
+        clickhouse_host, clickhouse_port, storage_name, system_query_sql
+    ):
+        if sudo_mode:
+            raise InvalidCustomQuery("Query is valid but sudo is not allowed")
+        return
+
+    raise InvalidCustomQuery("Query is invalid")
+
+
 def run_system_query_on_host_with_sql(
     clickhouse_host: str,
     clickhouse_port: int,
@@ -200,20 +287,9 @@ def run_system_query_on_host_with_sql(
         if not can_sudo:
             raise UnauthorizedForSudo()
 
-    if is_query_select(system_query_sql):
-        validate_system_query(system_query_sql)
-    elif is_query_describe(system_query_sql):
-        pass
-    elif is_query_show(system_query_sql):
-        pass
-    elif sudo_mode and (
-        is_system_command(system_query_sql)
-        or is_query_alter(system_query_sql)
-        or is_query_optimize(system_query_sql)
-    ):
-        pass
-    else:
-        raise InvalidCustomQuery("Query is invalid")
+    validate_query(
+        clickhouse_host, clickhouse_port, storage_name, system_query_sql, sudo_mode
+    )
 
     try:
         return _run_sql_query_on_host(
@@ -240,36 +316,3 @@ def run_system_query_on_host_with_sql(
                 },
                 notify=sudo_mode,
             )
-
-
-def validate_system_query(sql_query: str) -> None:
-    """
-    Simple validation to ensure query only attempts to access system tables and not
-    any others. Will be replaced by AST parser eventually.
-
-    Raises InvalidCustomQuery if query is invalid or not allowed.
-    """
-    sql_query = " ".join(sql_query.split())
-
-    disallowed_keywords = ["select", "insert", "join"]
-
-    match = SYSTEM_QUERY_RE.match(sql_query)
-
-    if match is None:
-        raise InvalidCustomQuery("Query is invalid")
-
-    select_statement = match.group("select_statement")
-
-    # Extremely quick and dirty way of ensuring there is not a nested select, insert or a join
-    for kw in disallowed_keywords:
-        if kw in select_statement.lower():
-            raise InvalidCustomQuery(f"{kw} is not allowed here")
-
-    extra = match.group("extra")
-
-    # Unfortunately "extra" is pretty permissive right now, just ensure
-    # there is no attempt to do a select, insert or join in there
-    if extra is not None:
-        for kw in disallowed_keywords:
-            if kw in extra.lower():
-                raise InvalidCustomQuery(f"{kw} is not allowed here")

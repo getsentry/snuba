@@ -1,11 +1,12 @@
 import concurrent
+import hashlib
 import multiprocessing
 import os
 import threading
 import time
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Mapping, Optional, Sequence
 
 import structlog
@@ -72,7 +73,7 @@ def run_optimize(
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
 
-    partitions = get_partitions_to_optimize(
+    partitions = get_partitions_from_clickhouse(
         clickhouse, storage, database, table, before
     )
     partition_names = [partition.name for partition in partitions]
@@ -95,14 +96,17 @@ def run_optimize_cron_job(
     clickhouse_host: str,
     tracker: OptimizedPartitionTracker,
     before: Optional[datetime] = None,
+    divide_partitions_count: int = 1,
 ) -> int:
     """
     The sophisticated form of running an optimize final on a storage.
 
-    The sophistication include:
+    The sophistication includes:
     1. Being able to run multiple optimize final jobs concurrently.
     2. Being able to set time boundaries for different phases of optimization.
     3. Being able to work with stateful optimization states.
+    4. Splitting partitions up into `divide_partitions_count` groups so that each
+       optimize cron job only optimizes a subset of partitions.
     """
     start = time.time()
     schema = storage.get_schema()
@@ -123,9 +127,19 @@ def run_optimize_cron_job(
     except NoOptimizedStateException:
         # We don't have any recorded state of partitions needing optimization
         # for today. So we need to build it.
-        partitions = get_partitions_to_optimize(
+        partitions = get_partitions_from_clickhouse(
             clickhouse, storage, database, table, before
         )
+
+        if divide_partitions_count > 1:
+            partitions = [
+                partition
+                for partition in partitions
+                if should_optimize_partition_today(
+                    partition.name, divide_partitions_count
+                )
+            ]
+
         if len(partitions) == 0:
             logger.info("No partitions need optimization")
             return 0
@@ -157,13 +171,39 @@ def run_optimize_cron_job(
     return len(partitions_to_optimize)
 
 
-def get_partitions_to_optimize(
+def get_partitions_from_clickhouse(
     clickhouse: ClickhousePool,
     storage: ReadableTableStorage,
     database: str,
     table: str,
     before: Optional[datetime] = None,
 ) -> Sequence[util.Part]:
+    """
+    Get the partitions from ClickHouse that are active and would benefit from OPTIMIZE
+    by querying the system.parts table. This filters as little as possible,
+    but only returns partitions that contain more than 1 active part. It does not,
+    for example, consider logic like `should_optimize_partition_today`.
+
+    It validates:
+    - The specified table exists.
+    - In a table using the Replicated*MergeTree engine family, the client is connected
+      to a replica with leader status (ClickHouse is a multi-leader system and
+      most nodes should set `is_leader = 1` during normal operation). If the pool
+      isn't connected to a leader, then it can't apply OPTIMIZE.
+
+    Arguments:
+        clickhouse: The ClickHouse connection pool to use.
+        storage: The storage definition to locate table partitions.
+        database: The ClickHouse database to query.
+        table: The storage table to get the partitions from.
+        before: (optional) The cutoff time, after which partitions should not be considered.
+            If omitted, all partitions are considered.
+
+    Returns:
+        A list of partitions that are active and would benefit from OPTIMIZE, that are
+        older than `before` (if provided). The list is ordered primarily by active parts
+        count in order to give preference to "less optimized" partitions.
+    """
     response = clickhouse.execute(
         """
         SELECT engine
@@ -347,7 +387,7 @@ def optimize_partitions(
     """
 
     for partition in partitions:
-        if cutoff_time is not None and datetime.now() > cutoff_time:
+        if cutoff_time is not None and datetime.now(UTC) > cutoff_time:
             logger.info(
                 f"Optimize job is running past provided cutoff time"
                 f" {cutoff_time}. Cancelling.",
@@ -373,11 +413,13 @@ def optimize_partitions(
 
         start = time.time()
         clickhouse.execute(query, retryable=False)
+        duration = time.time() - start
         metrics.timing(
             "optimized_part",
-            time.time() - start,
+            duration,
             tags=_get_metrics_tags(table, clickhouse_host),
         )
+        logger.info(f"Optimized partition: {partition} in {duration}s")
 
 
 def is_busy_merging(clickhouse: ClickhousePool, database: str, table: str) -> bool:
@@ -398,3 +440,31 @@ def is_busy_merging(clickhouse: ClickhousePool, database: str, table: str) -> bo
             return True
 
     return False
+
+
+def _hash_partition(partition_name: str) -> int:
+    sha1 = hashlib.sha1()
+    sha1.update(partition_name.encode())
+    return int(sha1.hexdigest(), 16)
+
+
+def _days_since_epoch(current_time: Optional[datetime] = None) -> int:
+    if current_time is None:
+        current_time = datetime.now(UTC)
+    return int(current_time.timestamp() / 86400)
+
+
+def should_optimize_partition_today(
+    partition_name: str, divide_partitions_count: int
+) -> bool:
+    """
+    Determines if a partition should be optimized today based on the partition name
+    and the current day of year.
+    """
+    if divide_partitions_count <= 1:
+        return True
+
+    return (
+        _hash_partition(partition_name) % divide_partitions_count
+        == _days_since_epoch() % divide_partitions_count
+    )

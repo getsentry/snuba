@@ -81,6 +81,16 @@ allocation_policies:
         is_enforced: 1
         throttled_thread_number: 1
         org_limit_bytes_scanned: 100000
+  - name: BytesScannedRejectingPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - project_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
+
   - name: ReferrerGuardRailPolicy
     args:
       required_tenant_types:
@@ -96,7 +106,7 @@ delete_allocation_policies:
         - referrer
         - project_id
       default_config_overrides:
-        is_enforced: 0
+        is_enforced: 1
 
 query_processors:
   - processor: MappingOptimizer
@@ -105,6 +115,8 @@ query_processors:
       hash_map_name: _tags_hash_map
       killswitch: tags_hash_map_enabled
   - processor: EmptyTagConditionProcessor
+    args:
+      column_name: tags.key
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: tags
@@ -124,9 +136,12 @@ query_processors:
 
 deletion_settings:
   is_enabled: 1
-  max_rows_to_delete: 100000
+  max_rows_to_delete: 2000000
   tables:
     - search_issues_local_v2
+  allowed_columns:
+    - project_id
+    - group_id
 
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer

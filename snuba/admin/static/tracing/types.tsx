@@ -1,6 +1,7 @@
-type TracingRequest = {
-  storage: string;
+export type TracingRequest = {
   sql: string;
+  storage: string;
+  gather_profile_events: boolean;
 };
 
 type TracingResult = {

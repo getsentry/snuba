@@ -10,17 +10,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         name: Checkout master for diffing
         with:
           ref: master
           fetch-depth: 200
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         name: Checkout HEAD of code that may have migration changes
         with:
           clean: false
           fetch-depth: 200
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install dependencies
@@ -31,7 +31,7 @@ jobs:
         run: |
           SNUBA_SETTINGS=test_distributed python scripts/ddl-changes.py
       - name: Generate SQL for migration
-        uses: getsentry/action-migrations@v1.0.8
+        uses: getsentry/action-migrations@v1.2.2
         env:
           SNUBA_SETTINGS: test_distributed
         with:
