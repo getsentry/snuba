@@ -16,8 +16,10 @@ import SnubaExplain from "SnubaAdmin/snuba_explain";
 import Welcome from "SnubaAdmin/welcome";
 import DeleteTool from "SnubaAdmin/delete_tool";
 import ViewCustomJobs from "SnubaAdmin/manual_jobs";
-import DatabaseClusters from "./database_clusters";
+import DatabaseClusters from "SnubaAdmin/database_clusters";
 import RpcEndpoints from "SnubaAdmin/rpc_endpoints";
+import CapacityBasedRouting from "SnubaAdmin/capacity_based_routing";
+
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
@@ -31,6 +33,11 @@ const NAV_ITEMS = [
     id: "capacity-management",
     display: "🪫 Capacity Management",
     component: CapacityManagement,
+  },
+  {
+    id: "cbrs",
+    display: "🔀 Capacity Based Routing",
+    component: CapacityBasedRouting,
   },
   {
     id: "snql-to-sql",
@@ -112,6 +119,7 @@ const NAV_ITEMS = [
     display: "🗂️ Database Clusters",
     component: DatabaseClusters,
   },
+
 ];
 
 export { NAV_ITEMS };
