@@ -31,7 +31,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.test_utils import gen_item_message, write_eap_span
+from tests.web.rpc.v1.test_utils import gen_item_message, write_eap_item
 
 BASE_TIME = datetime.now().replace(
     tzinfo=UTC,
@@ -801,13 +801,13 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         Reliabilities will not be returned.
         """
         span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_span(
+        write_eap_item(
             span_ts,
             {"kyles_measurement": 6},
             server_sample_rate=0.5,
             count=10,
         )
-        write_eap_span(
+        write_eap_item(
             span_ts,
             raw_attributes={"kyles_measurement": 7},
             count=2,
