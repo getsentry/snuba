@@ -233,7 +233,6 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
     ) -> TimeSeriesRequest:
-
         request_class = EndpointTimeSeries().request_class()()
         request_class.ParseFromString(base64.b64decode(self.time_series_request))
 
@@ -283,6 +282,9 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> RPCSubscriptionData:
+        if entity_key == "eap_spans":
+            entity_key = "eap_items_span"
+
         entity: Entity = get_entity(entity_key)
         metadata = {}
         for key in data.keys():
