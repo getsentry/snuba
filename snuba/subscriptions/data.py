@@ -282,9 +282,6 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> RPCSubscriptionData:
-        if entity_key == "eap_spans":
-            entity_key = "eap_items_span"
-
         entity: Entity = get_entity(entity_key)
         metadata = {}
         for key in data.keys():

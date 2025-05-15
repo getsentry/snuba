@@ -114,8 +114,12 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
 
         scheduled_subscription_dict = rapidjson.loads(payload_value.decode("utf-8"))
 
-        entity_key = EntityKey(scheduled_subscription_dict["entity"])
+        entity_name = scheduled_subscription_dict["entity"]
 
+        if entity_name == "eap_spans":
+            entity_name = "eap_items_span"
+
+        entity_key = EntityKey(entity_name)
         data = scheduled_subscription_dict["task"]["data"]
         subscription: SubscriptionData
         if data.get("subscription_type") == SubscriptionType.RPC.value:
