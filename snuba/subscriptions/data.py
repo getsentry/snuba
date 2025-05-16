@@ -233,6 +233,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
     ) -> TimeSeriesRequest:
+
         request_class = EndpointTimeSeries().request_class()()
         request_class.ParseFromString(base64.b64decode(self.time_series_request))
 
