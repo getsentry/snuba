@@ -169,6 +169,10 @@ pub fn deserialize_message(
                 user_email: event.user.email.unwrap_or_default(),
                 user_id: user_id.unwrap_or_default(),
                 user_name: event.user.username.unwrap_or_default(),
+                user_geo_city: event.user.geo.city.unwrap_or_default(),
+                user_geo_country_code: event.user.geo.country_code.unwrap_or_default(),
+                user_geo_region: event.user.geo.region.unwrap_or_default(),
+                user_geo_subdivision: event.user.geo.subdivision.unwrap_or_default(),
                 segment_id,
                 title,
                 tags_key,
@@ -390,6 +394,20 @@ struct User {
     email: Option<String>,
     #[serde(default)]
     ip_address: Option<String>,
+    #[serde(default)]
+    geo: Geo,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct Geo {
+    #[serde(default)]
+    city: Option<String>,
+    #[serde(default)]
+    country_code: Option<String>,
+    #[serde(default)]
+    region: Option<String>,
+    #[serde(default)]
+    subdivision: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -491,6 +509,10 @@ pub struct ReplayRow {
     user_id: String,
     user_name: String,
     user: String,
+    user_geo_city: String,
+    user_geo_country_code: String,
+    user_geo_region: String,
+    user_geo_subdivision: String,
     viewed_by_id: u64,
     warning_id: Uuid,
 }
@@ -605,7 +627,13 @@ mod tests {
                 "email": "email",
                 "ip_address": "127.0.0.1",
                 "id": "user_id",
-                "username": "username"
+                "username": "username",
+                "geo": {
+                    "city": "city",
+                    "country_code": "country_code",
+                    "region": "region",
+                    "subdivision": "subdivision"
+                }
             },
             "sdk": {
                 "name": "sdk",
@@ -667,6 +695,10 @@ mod tests {
         assert_eq!(&replay_row.user_id, "user_id");
         assert_eq!(&replay_row.user_name, "username");
         assert_eq!(&replay_row.user, "user_id");
+        assert_eq!(&replay_row.user_geo_city, "city");
+        assert_eq!(&replay_row.user_geo_country_code, "country_code");
+        assert_eq!(&replay_row.user_geo_region, "region");
+        assert_eq!(&replay_row.user_geo_subdivision, "subdivision");
         assert_eq!(
             replay_row.error_ids,
             vec![Uuid::parse_str("df11e6d952da470386a64340f13151c4").unwrap()]
@@ -746,7 +778,13 @@ mod tests {
                 "id": null,
                 "username": null,
                 "email": null,
-                "ip_address": null
+                "ip_address": null,
+                "geo": {
+                    "city": null,
+                    "country_code": null,
+                    "region": null,
+                    "subdivision": null
+                }
             },
             "sdk": {
                 "name": null,
@@ -814,6 +852,10 @@ mod tests {
         assert_eq!(&replay_row.user_id, "");
         assert_eq!(&replay_row.user_name, "");
         assert_eq!(&replay_row.user, "");
+        assert_eq!(&replay_row.user_geo_city, "");
+        assert_eq!(&replay_row.user_geo_country_code, "");
+        assert_eq!(&replay_row.user_geo_region, "");
+        assert_eq!(&replay_row.user_geo_subdivision, "");
         assert_eq!(replay_row.error_ids, vec![]);
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.ip_address_v4, None);
