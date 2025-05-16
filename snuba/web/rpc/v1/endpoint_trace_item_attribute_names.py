@@ -273,6 +273,9 @@ def get_co_occurring_attributes(
         ],
         # chosen arbitrarily to be a high number
         limit=request.limit,
+        offset=request.page_token.offset
+        if request.page_token.HasField("offset")
+        else 0,
     )
 
     treeify_or_and_conditions(query)
