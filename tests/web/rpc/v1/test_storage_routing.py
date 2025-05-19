@@ -20,9 +20,6 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.s
     ClickhouseQuerySettings,
     RoutingContext,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.sampling_in_storage_util import (
-    get_eap_cluster_load,
-)
 
 
 def _get_in_msg() -> TimeSeriesRequest:
@@ -300,8 +297,3 @@ def test_outcomes_based_routing_metrics_sampled_too_low() -> None:
         "value": 1,
         "tags": {"reason": "sampled_too_low", "tier": "TIER_8"},
     }
-
-
-@pytest.mark.clickhouse_db
-def test_get_eap_cluster_load() -> None:
-    get_eap_cluster_load()

@@ -178,6 +178,7 @@ class RedisClusters(TypedDict):
     optimize: RedisClusterConfig | None
     admin_auth: RedisClusterConfig | None
     manual_jobs: RedisClusterConfig | None
+    cluster_load: RedisClusterConfig | None
 
 
 REDIS_CLUSTERS: RedisClusters = {
@@ -190,6 +191,7 @@ REDIS_CLUSTERS: RedisClusters = {
     "optimize": None,
     "admin_auth": None,
     "manual_jobs": None,
+    "cluster_load": None,
 }
 
 # Query Recording Options

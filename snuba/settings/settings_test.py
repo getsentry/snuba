@@ -63,6 +63,7 @@ REDIS_CLUSTERS = {
         (8, "optimize"),
         (9, "admin_auth"),
         (10, "manual_jobs"),
+        (11, "cluster_load"),
     ]
 }
 VALIDATE_DATASET_YAMLS_ON_STARTUP = True

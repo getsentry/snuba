@@ -115,6 +115,7 @@ class RedisClientKey(Enum):
     OPTIMIZE = "optimize"
     ADMIN_AUTH = "admin_auth"
     MANUAL_JOBS = "manual_jobs"
+    CLUSTER_LOAD = "cluster_load"
 
 
 _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
@@ -144,6 +145,9 @@ _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
     ),
     RedisClientKey.MANUAL_JOBS: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["manual_jobs"]
+    ),
+    RedisClientKey.CLUSTER_LOAD: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["cluster_load"]
     ),
 }
 
