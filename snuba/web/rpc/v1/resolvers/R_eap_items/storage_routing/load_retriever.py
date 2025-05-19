@@ -1,4 +1,7 @@
+import inspect
 import json
+from functools import wraps
+from typing import Any, Callable
 
 import sentry_sdk
 
@@ -8,7 +11,6 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-_redis_client = get_redis_client(RedisClientKey.CLUSTER_LOAD)
 metrics = MetricsWrapper(
     environment.metrics,
     "snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.load_retriever",
@@ -37,19 +39,47 @@ class LoadInfo:
         )
 
 
-def get_cluster_load(
+def cache(
+    *, ttl_secs: int = 60
+) -> Callable[[Callable[..., LoadInfo]], Callable[..., LoadInfo]]:
+    def decorator(func: Callable[..., LoadInfo]) -> Callable[..., LoadInfo]:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+
+            bound_args = inspect.signature(func).bind(*args, **kwargs)
+            bound_args.apply_defaults()
+
+            cache_key_parts = [func.__name__]
+            for param_name, param_value in bound_args.arguments.items():
+                cache_key_parts.append(f"{param_name}:{param_value}")
+
+            cache_key = ":".join(cache_key_parts)
+
+            redis_client = get_redis_client(RedisClientKey.CACHE)
+
+            # Try to fetch the result from Redis
+            cached_result = redis_client.get(cache_key)
+            if cached_result:
+                return LoadInfo.from_dict(json.loads(cached_result))
+
+            # If not in cache, call the function and cache the result
+            result = func(*args, **kwargs)
+            redis_client.set(cache_key, json.dumps(result.to_dict()), ex=ttl_secs)
+
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+@cache(ttl_secs=60)
+def get_cluster_loadinfo(
     storage_set_key: StorageSetKey = StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
 ) -> LoadInfo:
     try:
         cluster = get_cluster(storage_set_key)
         cluster_name = str(cluster.get_clickhouse_cluster_name())
-        cached_load_info = _redis_client.get(cluster_name)
-        if cached_load_info:
-            deserialized_cached_load_info = json.loads(cached_load_info)
-            return LoadInfo(
-                cluster_load=deserialized_cached_load_info["cluster_load"],
-                concurrent_queries=deserialized_cached_load_info["concurrent_queries"],
-            )
 
         if cluster.is_single_node():
             cluster_load_query = """
@@ -111,7 +141,6 @@ def get_cluster_load(
         load_info = LoadInfo(
             cluster_load=cluster_load, concurrent_queries=concurrent_queries
         )
-        _redis_client.set(cluster_name, json.dumps(load_info.to_dict()), ex=60)
         metrics.gauge(
             "cluster_load", load_info.cluster_load, tags={"cluster_name": cluster_name}
         )

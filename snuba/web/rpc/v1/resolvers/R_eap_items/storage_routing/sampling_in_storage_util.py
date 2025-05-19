@@ -9,7 +9,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
 from snuba.web import QueryResult
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.load_retriever import (
-    get_cluster_load,
+    get_cluster_loadinfo,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
@@ -33,7 +33,9 @@ def run_query_to_correct_tier(
         query_settings=query_settings,
     )
 
-    get_cluster_load()
+    # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
+    # the result is currently not used in storage routing
+    get_cluster_loadinfo()
 
     selected_strategy = RoutingStrategySelector().select_routing_strategy(
         routing_context
