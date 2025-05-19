@@ -8,7 +8,9 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
 from snuba.web import QueryResult
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.load_retriever import get_cluster_load
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.load_retriever import (
+    get_cluster_load,
+)
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
 )
@@ -31,7 +33,7 @@ def run_query_to_correct_tier(
         query_settings=query_settings,
     )
 
-    load_info = get_cluster_load()  # type: ignore
+    get_cluster_load()
 
     selected_strategy = RoutingStrategySelector().select_routing_strategy(
         routing_context

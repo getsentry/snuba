@@ -9,7 +9,10 @@ from snuba.redis import RedisClientKey, get_redis_client
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 _redis_client = get_redis_client(RedisClientKey.CLUSTER_LOAD)
-metrics = MetricsWrapper(environment.metrics, "snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.load_retriever")
+metrics = MetricsWrapper(
+    environment.metrics,
+    "snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.load_retriever",
+)
 
 
 class LoadInfo:
@@ -23,17 +26,20 @@ class LoadInfo:
     def to_dict(self) -> dict[str, float | int]:
         return {
             "cluster_load": self.cluster_load,
-            "concurrent_queries": self.concurrent_queries
+            "concurrent_queries": self.concurrent_queries,
         }
 
     @classmethod
     def from_dict(cls, load_info_dict: dict[str, float | int]) -> "LoadInfo":
         return cls(
             cluster_load=load_info_dict["cluster_load"],
-            concurrent_queries=int(load_info_dict["concurrent_queries"])
+            concurrent_queries=int(load_info_dict["concurrent_queries"]),
         )
 
-def get_cluster_load(storage_set_key: StorageSetKey = StorageSetKey.EVENTS_ANALYTICS_PLATFORM) -> LoadInfo | None:
+
+def get_cluster_load(
+    storage_set_key: StorageSetKey = StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
+) -> LoadInfo:
     try:
         cluster = get_cluster(storage_set_key)
         cluster_name = str(cluster.get_clickhouse_cluster_name())
@@ -42,7 +48,7 @@ def get_cluster_load(storage_set_key: StorageSetKey = StorageSetKey.EVENTS_ANALY
             deserialized_cached_load_info = json.loads(cached_load_info)
             return LoadInfo(
                 cluster_load=deserialized_cached_load_info["cluster_load"],
-                concurrent_queries=deserialized_cached_load_info["concurrent_queries"]
+                concurrent_queries=deserialized_cached_load_info["concurrent_queries"],
             )
 
         if cluster.is_single_node():
@@ -102,10 +108,18 @@ def get_cluster_load(storage_set_key: StorageSetKey = StorageSetKey.EVENTS_ANALY
             .execute(concurrent_queries_query)
             .results[0][0]
         )
-        load_info = LoadInfo(cluster_load=cluster_load, concurrent_queries=concurrent_queries)
+        load_info = LoadInfo(
+            cluster_load=cluster_load, concurrent_queries=concurrent_queries
+        )
         _redis_client.set(cluster_name, json.dumps(load_info.to_dict()), ex=60)
-        metrics.gauge("cluster_load", load_info.cluster_load, tags={"cluster_name": cluster_name})
-        metrics.gauge("concurrent_queries", load_info.concurrent_queries, tags={"cluster_name": cluster_name})
+        metrics.gauge(
+            "cluster_load", load_info.cluster_load, tags={"cluster_name": cluster_name}
+        )
+        metrics.gauge(
+            "concurrent_queries",
+            load_info.concurrent_queries,
+            tags={"cluster_name": cluster_name},
+        )
         return load_info
 
     except Exception as e:
