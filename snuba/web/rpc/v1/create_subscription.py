@@ -40,7 +40,7 @@ class CreateSubscriptionRequest(
         )
 
         dataset = PluggableDataset(name="eap", all_entities=[])
-        entity_key = EntityKey("eap_items")
+        entity_key = EntityKey("eap_items_span")
 
         subscription = RPCSubscriptionData.from_proto(in_msg, entity_key=entity_key)
         identifier = SubscriptionCreator(dataset, entity_key).create(

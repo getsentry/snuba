@@ -70,7 +70,8 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
 
     metrics_backend = TestingMetricsBackend()
     entity_name = "events"
-    entity = get_entity(EntityKey(entity_name))
+    entity_key = EntityKey(entity_name)
+    entity = get_entity(entity_key)
     storage = entity.get_writable_storage()
     assert storage is not None
     stream_loader = storage.get_table_writer().get_stream_loader()
@@ -83,7 +84,6 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
     from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
     from snuba.subscriptions.store import RedisSubscriptionDataStore
 
-    entity_key = EntityKey(entity_name)
     partition_index = 0
 
     store = RedisSubscriptionDataStore(
@@ -168,21 +168,21 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
 @pytest.mark.redis_db
 def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
     commit_log_topic_name_physical = "snuba-eap-spans-commit-log-test"
-    data_topic_name_physical = "snuba-items-test"
+    data_topic_name_physical = "snuba-spans-test"
     followed_consumer_group = "eap_items_consumers"
 
     settings.KAFKA_TOPIC_MAP = {
-        "snuba-items": data_topic_name_physical,
+        "snuba-spans": data_topic_name_physical,
         "snuba-eap-spans-commit-log": commit_log_topic_name_physical,
     }
     importlib.reload(scheduler_consumer)
 
     admin_client = AdminClient(get_default_kafka_configuration())
-    create_topics(admin_client, [SnubaTopic.ITEMS], 2)
+    create_topics(admin_client, [SnubaTopic.SPANS], 2)
     create_topics(admin_client, [SnubaTopic.EAP_SPANS_COMMIT_LOG], 1)
 
     metrics_backend = TestingMetricsBackend()
-    entity_name = "eap_items"
+    entity_name = "eap_items_span"
     entity = get_entity(EntityKey(entity_name))
     storage = entity.get_writable_storage()
     assert storage is not None
