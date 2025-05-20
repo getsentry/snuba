@@ -131,7 +131,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
         # However, a 128 bit integer cannot be represented as a 16 character hex string (16 characters can at most represent a 64 bit integer). Hence,
         # by default we represent item_id as a 32 character hex string. Since the user expects 16 characters and we know that a span_id will currently never use the full 128 bits,
         # it's safe to get rid of the first 16 characters since we know those will just be padding.
-        if attr_key.name == "sentry.span_id":
+        if attr_key.name in {"sentry.span_id", "sentry.item_id"}:
             return f.right(
                 column(converted_attr_name[len(COLUMN_PREFIX) :]), 16, alias=alias
             )
