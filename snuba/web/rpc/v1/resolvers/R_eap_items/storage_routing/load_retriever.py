@@ -152,6 +152,7 @@ def get_cluster_loadinfo(
         return load_info
 
     except Exception as e:
+        print(f"Error getting clusterloadinfoo: {e}")
         metrics.increment("get_cluster_load_failure")
         sentry_sdk.capture_exception(e)
         return LoadInfo(cluster_load=-1.0, concurrent_queries=-1)
