@@ -45,25 +45,31 @@ def cache(
     def decorator(func: Callable[..., LoadInfo]) -> Callable[..., LoadInfo]:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> LoadInfo:
-            bound_args = inspect.signature(func).bind(*args, **kwargs)
-            bound_args.apply_defaults()
+            result = None
+            try:
+                bound_args = inspect.signature(func).bind(*args, **kwargs)
+                bound_args.apply_defaults()
 
-            cache_key_parts = [func.__name__]
-            for param_name, param_value in bound_args.arguments.items():
-                cache_key_parts.append(f"{param_name}:{param_value}")
+                cache_key_parts = [func.__name__]
+                for param_name, param_value in bound_args.arguments.items():
+                    cache_key_parts.append(f"{param_name}:{param_value}")
 
-            cache_key = ":".join(cache_key_parts)
+                cache_key = ":".join(cache_key_parts)
 
-            redis_client = get_redis_client(RedisClientKey.CACHE)
+                redis_client = get_redis_client(RedisClientKey.CACHE)
 
-            cached_result = redis_client.get(cache_key)
-            if cached_result:
-                return LoadInfo.from_dict(json.loads(cached_result))
+                cached_result = redis_client.get(cache_key)
+                if cached_result:
+                    return LoadInfo.from_dict(json.loads(cached_result))
 
-            result = func(*args, **kwargs)
-            redis_client.set(cache_key, json.dumps(result.to_dict()), ex=ttl_secs)
+                result = func(*args, **kwargs)
+                redis_client.set(cache_key, json.dumps(result.to_dict()), ex=ttl_secs)
 
-            return result
+                return result
+            except Exception as e:
+                metrics.increment("get_cluster_loadinfo_caching_failure")
+                sentry_sdk.capture_exception(e)
+                return result if result is not None else func(*args, **kwargs)
 
         return wrapper
 
@@ -148,7 +154,8 @@ def get_cluster_loadinfo(
         return load_info
 
     except Exception as e:
-        print(f"Error getting clusterloadinfoo: {e}")
-        metrics.increment("get_cluster_load_failure")
+        metrics.increment(
+            "get_cluster_loadinfo_failure", tags={"cluster_name": cluster_name}
+        )
         sentry_sdk.capture_exception(e)
         return LoadInfo(cluster_load=-1.0, concurrent_queries=-1)
