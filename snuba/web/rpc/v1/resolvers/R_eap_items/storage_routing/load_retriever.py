@@ -128,16 +128,21 @@ def get_cluster_loadinfo(
             );
             """
 
+        print(f"cluster_load_query: {cluster_load_query}")
+        print(f"concurrent_queries_query: {concurrent_queries_query}")
+
         cluster_load = float(
             cluster.get_query_connection(ClickhouseClientSettings.QUERY)
             .execute(cluster_load_query)
             .results[0][0]
         )
+        print("clusterload query finished")
         concurrent_queries = int(
             cluster.get_query_connection(ClickhouseClientSettings.QUERY)
             .execute(concurrent_queries_query)
             .results[0][0]
         )
+        print("concurrent queries query finished")
         load_info = LoadInfo(
             cluster_load=cluster_load, concurrent_queries=concurrent_queries
         )
