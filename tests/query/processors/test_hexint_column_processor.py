@@ -51,7 +51,7 @@ tests = [
             Column(None, None, "column1"),
             FunctionCall(None, "toString", (Literal(None, "a" * 16),)),
         ),
-        "equals(lower(hex(column1)), toString('aaaaaaaaaaaaaaaa'))",
+        "equals(replaceRegexpOne(lower(hex(column1)), '^[0]+', ''), toString('aaaaaaaaaaaaaaaa'))",
         id="non_optimizable_condition_pattern",
     ),
     pytest.param(
@@ -60,7 +60,7 @@ tests = [
             Column(None, None, "column1"),
             FunctionCall(None, "toString", (Literal(None, f"00{'a' * 14}"),)),
         ),
-        "equals(lower(hex(column1)), toString('00aaaaaaaaaaaaaa'))",
+        "equals(replaceRegexpOne(lower(hex(column1)), '^[0]+', ''), toString('00aaaaaaaaaaaaaa'))",
         id="non_optimizable_condition_pattern_with_leading_zeroes",
     ),
 ]
@@ -82,13 +82,21 @@ def test_hexint_column_processor(unprocessed: Expression, formatted_value: str) 
             "column1",
             FunctionCall(
                 None,
-                "lower",
+                "replaceRegexpOne",
                 (
                     FunctionCall(
                         None,
-                        "hex",
-                        (Column(None, None, "column1"),),
+                        "lower",
+                        (
+                            FunctionCall(
+                                None,
+                                "hex",
+                                (Column(None, None, "column1"),),
+                            ),
+                        ),
                     ),
+                    Literal(None, "^[0]+"),
+                    Literal(None, ""),
                 ),
             ),
         )
