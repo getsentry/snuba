@@ -255,6 +255,11 @@ schema:
         type: DateTime64,
         args: { schema_modifiers: [nullable], precision: 3 },
       },
+      {
+        name: sample_weight,
+        type: Float,
+        args: { schema_modifiers: [nullable], size: 64 },
+      },
     ]
   local_table_name: errors_local
   dist_table_name: errors_dist_ro
