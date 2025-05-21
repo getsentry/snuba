@@ -119,10 +119,10 @@ def get_cluster_loadinfo(
     ON load_average.host = cpu_counts.host
         """
             concurrent_queries_query = f"""
-            SELECT sum(count) AS concurrent_queries
+            SELECT sum(toUInt64(count)) AS concurrent_queries
             FROM clusterAllReplicas('{cluster.get_clickhouse_cluster_name()}',
                 (
-                    SELECT count() AS count
+                    SELECT toString(count()) AS count
                     FROM system.processes
                 )
             );
