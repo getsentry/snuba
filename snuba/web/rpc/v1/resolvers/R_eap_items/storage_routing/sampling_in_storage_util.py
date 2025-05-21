@@ -3,6 +3,7 @@ from typing import Callable
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 
+from snuba import state
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.timer import Timer
@@ -35,7 +36,9 @@ def run_query_to_correct_tier(
 
     # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
     # the result is currently not used in storage routing
-    get_cluster_loadinfo()
+    # can turn off on Snuba Admin
+    if state.get_config("storage_routing.enable_get_cluster_loadinfo", True):
+        get_cluster_loadinfo()
 
     selected_strategy = RoutingStrategySelector().select_routing_strategy(
         routing_context

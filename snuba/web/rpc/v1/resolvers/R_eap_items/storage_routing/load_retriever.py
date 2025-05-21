@@ -62,6 +62,7 @@ def cache(
                 if cached_result:
                     return LoadInfo.from_dict(json.loads(cached_result))
 
+                # it is expected that func has error handling, so we don't need to handle it here
                 result = func(*args, **kwargs)
                 redis_client.set(cache_key, json.dumps(result.to_dict()), ex=ttl_secs)
 
