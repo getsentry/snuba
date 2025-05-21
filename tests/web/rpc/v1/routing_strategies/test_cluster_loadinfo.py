@@ -35,6 +35,5 @@ def test_get_cluster_load_error_handling() -> None:
         mock_execute.side_effect = Exception("Test error")
         load_info = get_cluster_loadinfo()
         assert load_info is not None
-        print(load_info, load_info.cluster_load, load_info.concurrent_queries)
         assert load_info.cluster_load == -1.0
         assert load_info.concurrent_queries == -1

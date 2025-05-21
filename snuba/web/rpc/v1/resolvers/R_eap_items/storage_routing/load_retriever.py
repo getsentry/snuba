@@ -40,12 +40,11 @@ class LoadInfo:
 
 
 def cache(
-    *, ttl_secs: int = 60
+    ttl_secs: int = 60,
 ) -> Callable[[Callable[..., LoadInfo]], Callable[..., LoadInfo]]:
     def decorator(func: Callable[..., LoadInfo]) -> Callable[..., LoadInfo]:
         @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-
+        def wrapper(*args: Any, **kwargs: Any) -> LoadInfo:
             bound_args = inspect.signature(func).bind(*args, **kwargs)
             bound_args.apply_defaults()
 
@@ -57,12 +56,10 @@ def cache(
 
             redis_client = get_redis_client(RedisClientKey.CACHE)
 
-            # Try to fetch the result from Redis
             cached_result = redis_client.get(cache_key)
             if cached_result:
                 return LoadInfo.from_dict(json.loads(cached_result))
 
-            # If not in cache, call the function and cache the result
             result = func(*args, **kwargs)
             redis_client.set(cache_key, json.dumps(result.to_dict()), ex=ttl_secs)
 
@@ -126,24 +123,20 @@ def get_cluster_loadinfo(
             )
             """
 
-        print(f"cluster_load_query: {cluster_load_query}")
-        print(f"concurrent_queries_query: {concurrent_queries_query}")
-
         cluster_load = float(
             cluster.get_query_connection(ClickhouseClientSettings.QUERY)
             .execute(cluster_load_query)
             .results[0][0]
         )
-        print("clusterload query finished")
         concurrent_queries = int(
             cluster.get_query_connection(ClickhouseClientSettings.QUERY)
             .execute(concurrent_queries_query)
             .results[0][0]
         )
-        print("concurrent queries query finished")
         load_info = LoadInfo(
             cluster_load=cluster_load, concurrent_queries=concurrent_queries
         )
+
         metrics.gauge(
             "cluster_load", load_info.cluster_load, tags={"cluster_name": cluster_name}
         )
