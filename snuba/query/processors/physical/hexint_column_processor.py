@@ -37,20 +37,23 @@ class HexIntColumnProcessor(BaseTypeConverter):
     def _process_expressions(self, exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in self.columns:
             hex = f.hex(column(exp.column_name))
-            return f.lower(
-                f.leftPad(
-                    hex,
-                    if_cond(
-                        f.greater(
-                            f.length(hex),
+            return FunctionCall(
+                exp.alias,
+                "lower",
+                (
+                    f.leftPad(
+                        hex,
+                        if_cond(
+                            f.greater(
+                                f.length(hex),
+                                literal(16),
+                            ),
+                            literal(32),
                             literal(16),
                         ),
-                        literal(32),
-                        literal(16),
+                        literal("0"),
                     ),
-                    literal("0"),
                 ),
-                alias=exp.alias,
             )
         return exp
 
