@@ -1,5 +1,20 @@
 # Changelog
 
+## 25.5.1
+
+### Various fixes & improvements
+
+- chore(ci): Bump sentry-related dependencies more aggressively (#6769) by @untitaker
+- ref(rust-snuba): Add architecture doc (#7151) by @untitaker
+- feat(trace-items): Support page tokens in trace item attributes endpo… (#7182) by @Zylphrex
+- Revert "fix(eap): Translate eap_spans to eap_items_span for subscriptions (#7181)" (ce427610) by @getsentry-bot
+- chore(eap-alerts): Clean up devserver args to reflect correct entity (#7185) by @shruthilayaj
+- feat(replay): update processor for user_geo fields (#7175) by @aliu39
+- chore: Create subscriptiosn eith eap items spans entity (#7183) by @shruthilayaj
+- feat(replay): update entity/storage yamls for user_geo fields (#7174) by @aliu39
+- fix(eap): Translate eap_spans to eap_items_span for subscriptions (#7181) by @phacops
+- meta: Bump new development version (baa701cd)
+
 ## 25.5.0
 
 ### Various fixes & improvements
