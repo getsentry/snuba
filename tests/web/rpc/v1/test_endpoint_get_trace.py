@@ -41,7 +41,11 @@ _SPANS = [
     gen_item_message(
         start_timestamp=_BASE_TIME + timedelta(minutes=i),
         trace_id=_TRACE_ID,
-        item_id=int(uuid.uuid4().hex[:16], 16).to_bytes(16, "little"),
+        item_id=int(uuid.uuid4().hex[:16], 16).to_bytes(
+            16,
+            byteorder="little",
+            signed=False,
+        ),
         attributes={
             "sentry.op": AnyValue(string_value="http.server" if i == 0 else "db"),
             "sentry.raw_description": AnyValue(
@@ -273,6 +277,10 @@ def generate_spans_and_timestamps() -> tuple[list[TraceItem], list[Timestamp]]:
 
 def get_span_id(span: TraceItem) -> str:
     # cut the 0x prefix
-    span_id = hex(int.from_bytes(span.item_id, byteorder="little"))[2:]
-    padded = span_id.rjust(16, "0")
-    return padded
+    return hex(
+        int.from_bytes(
+            span.item_id,
+            byteorder="little",
+            signed=False,
+        )
+    )[2:]

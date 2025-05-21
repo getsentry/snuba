@@ -36,13 +36,21 @@ class HexIntColumnProcessor(BaseTypeConverter):
         if isinstance(exp, Column) and exp.column_name in self.columns:
             return FunctionCall(
                 exp.alias,
-                "lower",
+                "replaceRegexpOne",
                 (
                     FunctionCall(
                         None,
-                        "hex",
-                        (Column(None, None, exp.column_name),),
+                        "lower",
+                        (
+                            FunctionCall(
+                                None,
+                                "hex",
+                                (Column(None, None, exp.column_name),),
+                            ),
+                        ),
                     ),
+                    Literal(None, "^[0]+"),
+                    Literal(None, ""),
                 ),
             )
         return exp
