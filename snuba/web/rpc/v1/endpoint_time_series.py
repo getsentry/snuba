@@ -3,14 +3,21 @@ import uuid
 from typing import Type
 
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
+    Expression,
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
+from snuba.state import get_int_config
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.proto_visitor import (
+    AggregationToConditionalAggregationVisitor,
+    TimeSeriesRequestWrapper,
+)
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
+from snuba.web.rpc.v1.visitors.visitor_v2 import preprocess_expression_labels
 
 _VALID_GRANULARITY_SECS = set(
     [
@@ -23,14 +30,16 @@ _VALID_GRANULARITY_SECS = set(
         15 * 60,
         30 * 60,  # minutes
         1 * 3600,
+        2 * 3600,
         3 * 3600,
+        4 * 3600,
         12 * 3600,
         24 * 3600,  # hours
     ]
 )
 
-# MAX 5 minute granularity over 7 days
-_MAX_BUCKETS_IN_REQUEST = 2016
+# MAX 15 minute granularity over 28 days
+_MAX_BUCKETS_IN_REQUEST = 2688
 
 
 def _enforce_no_duplicate_labels(request: TimeSeriesRequest) -> None:
@@ -73,6 +82,19 @@ def _validate_time_buckets(request: TimeSeriesRequest) -> None:
         )
 
 
+def _convert_aggregations_to_expressions(
+    request: TimeSeriesRequest,
+) -> TimeSeriesRequest:
+    if len(request.aggregations) > 0:
+        new_req = TimeSeriesRequest()
+        new_req.CopyFrom(request)
+        new_req.ClearField("aggregations")
+        for agg in request.aggregations:
+            new_req.expressions.append(Expression(aggregation=agg, label=agg.label))
+        return new_req
+    return request
+
+
 class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
     @classmethod
     def version(cls) -> str:
@@ -100,9 +122,18 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         )
         _enforce_no_duplicate_labels(in_msg)
         _validate_time_buckets(in_msg)
+
         if in_msg.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
             raise BadSnubaRPCRequestException(
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
             )
+        in_msg = _convert_aggregations_to_expressions(in_msg)
+        aggregation_to_conditional_aggregation_visitor = (
+            AggregationToConditionalAggregationVisitor()
+        )
+        in_msg_wrapper = TimeSeriesRequestWrapper(in_msg)
+        in_msg_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
+        if bool(get_int_config("enable_clear_labels_eap", 0)):
+            preprocess_expression_labels(in_msg)
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)

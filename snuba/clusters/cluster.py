@@ -426,7 +426,8 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             ClickhouseNode(*host)
             for host in self.get_query_connection(ClickhouseClientSettings.QUERY)
             .execute(
-                f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}"
+                f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}",
+                retryable=True,
             )
             .results
         ]
@@ -439,6 +440,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
 
     def get_http_port(self) -> int:
         return self.__http_port
+
+    def get_secure(self) -> bool:
+        return self.__secure
 
 
 CLUSTERS = [

@@ -225,10 +225,14 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
     """
 
     def __init__(
-        self, max_allowed_aggregations: int, disallowed_aggregations: Sequence[str]
+        self,
+        max_allowed_aggregations: int,
+        disallowed_aggregations: Sequence[str],
+        allows_group_by_without_condition: bool = False,
     ) -> None:
         self.max_allowed_aggregations = max_allowed_aggregations
         self.disallowed_aggregations = disallowed_aggregations
+        self.allows_group_by_without_condition = allows_group_by_without_condition
 
     @staticmethod
     def _validate_groupby_fields_have_matching_conditions(
@@ -295,7 +299,10 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
                     f"invalid clause {field} in subscription query"
                 )
 
-        if "groupby" not in self.disallowed_aggregations:
+        if (
+            "groupby" not in self.disallowed_aggregations
+            and not self.allows_group_by_without_condition
+        ):
             self._validate_groupby_fields_have_matching_conditions(query, alias)
 
 

@@ -6,6 +6,7 @@ use std::mem;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -40,9 +41,11 @@ impl BatchFactory {
         concurrency: &ConcurrencyConfig,
         clickhouse_user: &str,
         clickhouse_password: &str,
+        clickhouse_secure: bool,
         batch_write_timeout: Option<Duration>,
+        custom_envoy_request_timeout: Option<u64>,
     ) -> Self {
-        let mut headers = HeaderMap::with_capacity(5);
+        let mut headers = HeaderMap::with_capacity(6);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
         headers.insert(
@@ -57,11 +60,19 @@ impl BatchFactory {
             "X-ClickHouse-Database",
             HeaderValue::from_str(database).unwrap(),
         );
+        if let Some(custom_envoy_request_timeout) = custom_envoy_request_timeout {
+            headers.insert(
+                "x-envoy-upstream-rq-per-try-timeout-ms",
+                HeaderValue::from_str(&custom_envoy_request_timeout.to_string()).unwrap(),
+            );
+        }
 
         let mut query_params = String::new();
         query_params.push_str("load_balancing=in_order&insert_distributed_sync=1");
 
-        let url = format!("http://{hostname}:{http_port}?{query_params}");
+        let scheme = if clickhouse_secure { "https" } else { "http" };
+
+        let url = format!("{scheme}://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
         let client = if let Some(timeout_duration) = batch_write_timeout {
@@ -106,11 +117,14 @@ impl BatchFactory {
         let client = self.client.clone();
 
         let result_handle = self.handle.spawn(async move {
+            let mut sleep_time = 0;
             while receiver.is_empty() && !receiver.is_closed() {
                 // continously check on the receiver stream, only when it's
                 // not empty do we write to clickhouse
+                sleep_time += 800;
                 sleep(Duration::from_millis(800)).await;
             }
+            gauge!("rust_consumer.receiver_sleep_time_ms", sleep_time as u64);
 
             if !receiver.is_empty() {
                 // only make the request to clickhouse if there is data
@@ -214,7 +228,13 @@ impl HttpBatch {
         // finish stream
         drop(self.sender.take());
         if let Some(handle) = self.result_handle.take() {
-            handle.await??;
+            // timeout on writing a batch to clickhouse after 2 minutes
+            match timeout(Duration::from_millis(120000), handle).await {
+                Ok(res) => res??,
+                Err(_) => {
+                    anyhow::bail!("Timedout writing to clickhouse");
+                }
+            }
             Ok(true)
         } else {
             Ok(false)
@@ -258,6 +278,7 @@ mod tests {
             "default",
             "",
             None,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -292,6 +313,7 @@ mod tests {
             "default",
             "",
             None,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -325,6 +347,7 @@ mod tests {
             "default",
             "",
             None,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -355,6 +378,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            None,
             None,
         );
 
@@ -391,6 +415,7 @@ mod tests {
             // pass in an unreasonably short timeout
             // which prevents the client request from reaching Clickhouse
             Some(Duration::from_millis(0)),
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -424,6 +449,7 @@ mod tests {
             "",
             // pass in a reasonable timeout
             Some(Duration::from_millis(1000)),
+            None,
         );
 
         let mut batch = factory.new_batch();

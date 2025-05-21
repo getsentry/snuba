@@ -14,16 +14,23 @@ from snuba.query.processors.logical.hash_bucket_functions import (
     HashBucketFunctionTransformer,
 )
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.utils.constants import ATTRIBUTE_BUCKETS
 
 test_data = [
     (
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "keys",
                     FunctionCall("alias", "mapKeys", (Column(None, None, "attr_str"),)),
+                ),
+                SelectedExpression(
+                    "arrayElement",
+                    FunctionCall(
+                        None,
+                        "arrayElement",
+                        (Column(None, None, "attr_str"), literal("blah")),
+                    ),
                 ),
                 SelectedExpression(
                     "unrelated",
@@ -40,7 +47,7 @@ test_data = [
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "keys",
@@ -51,8 +58,16 @@ test_data = [
                             FunctionCall(
                                 None, "mapKeys", (Column(None, None, f"attr_str_{i}"),)
                             )
-                            for i in range(ATTRIBUTE_BUCKETS)
+                            for i in range(5)
                         ),
+                    ),
+                ),
+                SelectedExpression(
+                    "arrayElement",
+                    FunctionCall(
+                        None,
+                        "arrayElement",
+                        (Column(None, None, "attr_str_2"), literal("blah")),
                     ),
                 ),
                 SelectedExpression(
@@ -72,7 +87,7 @@ test_data = [
     ),
     (
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "values",
@@ -95,7 +110,7 @@ test_data = [
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "values",
@@ -108,7 +123,7 @@ test_data = [
                                 "mapValues",
                                 (Column(None, None, f"attr_str_{i}"),),
                             )
-                            for i in range(ATTRIBUTE_BUCKETS)
+                            for i in range(5)
                         ),
                     ),
                 ),
@@ -129,7 +144,7 @@ test_data = [
     ),
     (
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "unrelated",
@@ -152,7 +167,7 @@ test_data = [
             ),
         ),
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "unrelated",
@@ -175,7 +190,7 @@ test_data = [
                                     "mapValues",
                                     (Column(None, None, f"attr_str_{i}"),),
                                 )
-                                for i in range(ATTRIBUTE_BUCKETS)
+                                for i in range(5)
                             ),
                         )
                     ),
@@ -186,7 +201,7 @@ test_data = [
     ),
     (
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "unrelated",
@@ -200,7 +215,7 @@ test_data = [
             ),
         ),
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "unrelated",
@@ -220,7 +235,9 @@ test_data = [
 @pytest.mark.parametrize("pre_format, expected_query", test_data)
 def test_format_expressions(pre_format: Query, expected_query: Query) -> None:
     copy = deepcopy(pre_format)
-    HashBucketFunctionTransformer("attr_str").process_query(copy, HTTPQuerySettings())
+    HashBucketFunctionTransformer("attr_str", num_attribute_buckets=5).process_query(
+        copy, HTTPQuerySettings()
+    )
     assert copy.get_selected_columns() == expected_query.get_selected_columns()
     assert copy.get_groupby() == expected_query.get_groupby()
     assert copy.get_condition() == expected_query.get_condition()

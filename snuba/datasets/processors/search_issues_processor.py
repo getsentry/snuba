@@ -177,26 +177,26 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
     def _process_contexts(
         self, event_data: IssueEventData, processed: MutableMapping[str, Any]
     ) -> None:
-        contexts = event_data.get("contexts", {})
+        contexts = event_data.get("contexts", {}) or {}
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
         )
 
         # promote fields within contexts to a top-level column
-        trace = contexts.get("trace", {})
+        trace = contexts.get("trace", {}) or {}
         if trace.get("trace_id") is not None:
             trace_id = _unicodify(trace["trace_id"])
             if trace_id is not None:
                 processed["trace_id"] = ensure_uuid(trace_id)
 
-        profile = contexts.get("profile", {})
+        profile = contexts.get("profile", {}) or {}
         if profile.get("profile_id") is not None:
             profile_id = _unicodify(profile["profile_id"])
             if profile_id is not None:
                 processed["profile_id"] = ensure_uuid(profile_id)
 
-        replay = contexts.get("replay", {})
+        replay = contexts.get("replay", {}) or {}
         if replay.get("replay_id") is not None:
             replay_id = _unicodify(replay["replay_id"])
             if replay_id is not None:

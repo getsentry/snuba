@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -35,8 +36,10 @@ class ErrorEvent:
     trace_sampled: bool | None
     environment: str
     replay_id: uuid.UUID | None
+    flags: list[Mapping[str, Any]]
     received_timestamp: datetime
     errors: Sequence[Mapping[str, Any]] | None
+    symbolicated_in_app: bool | None = None
 
     def serialize(self) -> tuple[int, str, Mapping[str, Any]]:
         serialized_event: dict[str, Any] = {
@@ -135,6 +138,7 @@ class ErrorEvent:
                     ]
                 },
                 "contexts": {
+                    "flags": {"values": self.flags},
                     "runtime": {
                         "version": "3.7.6",
                         "type": "runtime",
@@ -240,6 +244,7 @@ class ErrorEvent:
                 "title": "ClickHouseError: [171] DB::Exception: Block structure mismatch",
                 "type": "error",
                 "version": "7",
+                "symbolicated_in_app": self.symbolicated_in_app,
             },
         }
 
@@ -334,6 +339,9 @@ class ErrorEvent:
             "message_timestamp": int(
                 self.timestamp.replace(tzinfo=timezone.utc).timestamp()
             ),
+            "timestamp_ms": int(
+                self.timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000
+            ),
             "retention_days": 90,
             "deleted": 0,
             "group_id": self.group_id,
@@ -377,7 +385,14 @@ class ErrorEvent:
             "modules.version": ["1.13.2", "0.2.0", "0.6.0"],
             "transaction_name": "",
             "num_processing_errors": len(self.errors) if self.errors is not None else 0,
+            "flags.key": [],
+            "flags.value": [],
         }
+
+        if self.flags:
+            for flag in self.flags:
+                expected_result["flags.key"].append(flag["flag"])
+                expected_result["flags.value"].append(json.dumps(flag["result"]))
 
         if self.replay_id:
             expected_result["replay_id"] = str(self.replay_id)
@@ -423,6 +438,7 @@ class TestErrorsProcessor:
                 "subdivision": "fake_subdivision",
             },
             errors=None,
+            flags=[],
         )
 
     def test_errors_basic(self) -> None:
@@ -465,6 +481,7 @@ class TestErrorsProcessor:
             },
             replay_id=uuid.uuid4(),
             errors=None,
+            flags=[],
         )
 
         payload = message.serialize()
@@ -503,6 +520,7 @@ class TestErrorsProcessor:
             },
             replay_id=None,
             errors=None,
+            flags=[],
         )
         replay_id = uuid.uuid4()
         payload = message.serialize()
@@ -548,6 +566,7 @@ class TestErrorsProcessor:
             },
             replay_id=replay_id,
             errors=None,
+            flags=[],
         )
 
         payload = message.serialize()
@@ -591,6 +610,7 @@ class TestErrorsProcessor:
             },
             replay_id=None,
             errors=None,
+            flags=[],
         )
         invalid_replay_id = "imnotavaliduuid"
         payload = message.serialize()
@@ -649,6 +669,7 @@ class TestErrorsProcessor:
                 ]
             },
             errors=None,
+            flags=[],
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
@@ -703,6 +724,7 @@ class TestErrorsProcessor:
                 ]
             },
             errors=None,
+            flags=[],
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
@@ -743,6 +765,7 @@ class TestErrorsProcessor:
             replay_id=None,
             threads=None,
             errors=None,
+            flags=[],
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
@@ -794,6 +817,7 @@ class TestErrorsProcessor:
             replay_id=None,
             threads=None,
             errors=[{"type": "one"}, {"type": "two"}, {"type": "three"}],
+            flags=[],
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
@@ -815,3 +839,178 @@ class TestErrorsProcessor:
         assert self.processor.process_message(payload, meta) == InsertBatch(
             [result], ANY
         )
+
+    def test_errors_with_flags(self) -> None:
+        timestamp, recieved = self.__get_timestamps()
+        message = ErrorEvent(
+            event_id=str(uuid.UUID("dcb9d002cac548c795d1c9adbfc68040")),
+            organization_id=1,
+            project_id=2,
+            group_id=100,
+            platform="python",
+            message="",
+            trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
+            timestamp=timestamp,
+            received_timestamp=recieved,
+            release="1.0.0",
+            dist="dist",
+            environment="prod",
+            email="foo@bar.com",
+            ip_address="127.0.0.1",
+            user_id="myself",
+            username="me",
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
+            replay_id=None,
+            threads=None,
+            errors=[{"type": "one"}, {"type": "two"}, {"type": "three"}],
+            flags=[{"flag": "abc", "result": True}],
+        )
+        payload = message.serialize()
+        meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+
+        result = message.build_result(meta)
+        result["num_processing_errors"] = 3
+
+        assert self.processor.process_message(payload, meta) == InsertBatch(
+            [result], ANY
+        )
+
+        # ensure old behavior where data.errors=None won't set 'num_processing_errors'
+        message.errors = None
+        payload = message.serialize()
+        meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+
+        result = message.build_result(meta)
+
+        assert self.processor.process_message(payload, meta) == InsertBatch(
+            [result], ANY
+        )
+
+    def test_errors_with_malformed_flags(self) -> None:
+        timestamp, recieved = self.__get_timestamps()
+        message = ErrorEvent(
+            event_id=str(uuid.UUID("dcb9d002cac548c795d1c9adbfc68040")),
+            organization_id=1,
+            project_id=2,
+            group_id=100,
+            platform="python",
+            message="",
+            trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
+            timestamp=timestamp,
+            received_timestamp=recieved,
+            release="1.0.0",
+            dist="dist",
+            environment="prod",
+            email="foo@bar.com",
+            ip_address="127.0.0.1",
+            user_id="myself",
+            username="me",
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
+            replay_id=None,
+            threads=None,
+            errors=[{"type": "one"}, {"type": "two"}, {"type": "three"}],
+            flags=[],
+        )
+        payload = message.serialize()
+        meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+
+        # Assert malformed context type is ignored.
+        payload[2]["data"]["contexts"]["flags"] = {"key": "value"}
+        result = self.processor.process_message(payload, meta)
+        assert result.rows[0]["flags.key"] == []
+        assert result.rows[0]["flags.value"] == []
+
+        # Assert malformed values type is ignored.
+        payload[2]["data"]["contexts"]["flags"] = {"values": None}
+        result = self.processor.process_message(payload, meta)
+        assert result.rows[0]["flags.key"] == []
+        assert result.rows[0]["flags.value"] == []
+
+        # Assert malformed item type is ignored.
+        payload[2]["data"]["contexts"]["flags"] = {"values": [None]}
+        result = self.processor.process_message(payload, meta)
+        assert result.rows[0]["flags.key"] == []
+        assert result.rows[0]["flags.value"] == []
+
+        # Assert incorrect item contents is ignored.
+        payload[2]["data"]["contexts"]["flags"] = {"values": [{"key": "value"}]}
+        result = self.processor.process_message(payload, meta)
+        assert result.rows[0]["flags.key"] == []
+        assert result.rows[0]["flags.value"] == []
+
+        # Assert missing "result" key means the whole item is ignored.
+        payload[2]["data"]["contexts"]["flags"] = {"values": [{"flag": "value"}]}
+        result = self.processor.process_message(payload, meta)
+        assert result.rows[0]["flags.key"] == []
+        assert result.rows[0]["flags.value"] == []
+
+        # Assert missing "flag" key means the whole item is ignored.
+        payload[2]["data"]["contexts"]["flags"] = {"values": [{"result": "value"}]}
+        result = self.processor.process_message(payload, meta)
+        assert result.rows[0]["flags.key"] == []
+        assert result.rows[0]["flags.value"] == []
+
+    def test_symbolicated_in_app_passed_through(self) -> None:
+        timestamp, recieved = self.__get_timestamps()
+
+        def test_symbolicated_in_app_value(value: bool | None) -> None:
+            # Create a message with the specified symbolicated_in_app value
+            message = ErrorEvent(
+                event_id=str(uuid.UUID("dcb9d002cac548c795d1c9adbfc68040")),
+                organization_id=1,
+                project_id=2,
+                group_id=100,
+                platform="python",
+                message="",
+                trace_id=str(uuid.uuid4()),
+                trace_sampled=False,
+                timestamp=timestamp,
+                received_timestamp=recieved,
+                release="1.0.0",
+                dist="dist",
+                environment="prod",
+                email="foo@bar.com",
+                ip_address="127.0.0.1",
+                user_id="myself",
+                username="me",
+                geo={
+                    "country_code": "XY",
+                    "region": "fake_region",
+                    "city": "fake_city",
+                    "subdivision": "fake_subdivision",
+                },
+                replay_id=None,
+                threads=None,
+                errors=None,
+                flags=[],
+                symbolicated_in_app=value,
+            )
+
+            # Serialize the message and set up metadata
+            payload = message.serialize()
+            meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+
+            # Process the message
+            processed = self.processor.process_message(payload, meta)
+
+            # Verify the result
+            assert processed is not None
+            assert len(processed.rows) == 1
+            assert processed.rows[0].get("symbolicated_in_app") == value
+
+        # Test all three cases
+        test_symbolicated_in_app_value(True)
+        test_symbolicated_in_app_value(False)
+        test_symbolicated_in_app_value(None)

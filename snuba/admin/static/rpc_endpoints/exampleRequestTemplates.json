@@ -1,22 +1,5 @@
 {
   "default": {},
-  "TraceItemAttributesRequest": {
-    "v1alpha": {
-      "meta": {
-        "project_ids": [
-          1
-        ],
-        "organization_id": 1,
-        "cogs_category": "snuba-admin",
-        "referrer": "snuba-admin",
-        "start_timestamp": "2024-10-03T00:00:00Z",
-        "end_timestamp": "2024-10-06T00:00:00Z"
-      },
-      "limit": 10,
-      "offset": 0,
-      "type": "TYPE_STRING"
-    }
-  },
   "AttributeValuesRequest": {
     "v1": {
       "meta": {
@@ -34,21 +17,6 @@
         "name": "http.status_code"
       },
       "limit": 5
-    },
-    "v1alpha": {
-      "meta": {
-        "project_ids": [
-          1
-        ],
-        "organization_id": 1,
-        "cogs_category": "snuba-admin",
-        "referrer": "snuba-admin",
-        "start_timestamp": "2024-10-03T00:00:00Z",
-        "end_timestamp": "2024-10-06T00:00:00Z"
-      },
-      "name": "http.status_code",
-      "limit": 5,
-      "offset": 0
     }
   },
   "EndpointTraceItemTable": {
@@ -82,51 +50,6 @@
         }
       ],
       "limit": 100
-    }
-  },
-  "AggregateBucketRequest": {
-    "v1alpha": {
-      "meta": {
-        "project_ids": [
-          1
-        ],
-        "organization_id": 1,
-        "start_timestamp": "2024-10-03T00:00:00Z",
-        "end_timestamp": "2024-10-04T00:00:00Z"
-      },
-      "key": {
-        "name": "sentry.duration_ms",
-        "type": "TYPE_INT"
-      },
-      "aggregate": "FUNCTION_P99",
-      "granularity_secs": 900
-    }
-  },
-  "SpanSamplesRequest": {
-    "v1alpha": {
-      "meta": {
-        "project_ids": [
-          1
-        ],
-        "organization_id": 1,
-        "start_timestamp": "2024-10-03T00:00:00Z",
-        "end_timestamp": "2024-10-04T00:00:00Z"
-      },
-      "filter": {
-        "existsFilter": {
-          "key": {
-            "type": "TYPE_STRING",
-            "name": "color"
-          }
-        }
-      },
-      "keys": [
-        {
-          "type": "TYPE_STRING",
-          "name": "server_name"
-        }
-      ],
-      "limit": 61
     }
   },
   "EndpointTraceItemAttributeNames": {

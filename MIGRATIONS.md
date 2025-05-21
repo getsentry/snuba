@@ -93,15 +93,6 @@ The `snuba migrations` CLI tool should be used to manage migrations.
 * if faking a blocking migration, use `--force` as well
 * if faking a specific migration, use the `snuba migrations run` command with `--fake`, and it will only update the status for that migration
 
-### Adding a new node
-
-`snuba migrations add-node --type <type> --storage-set <storage_sets>`
-
-- Runs all ClickHouse migrations on a new node so it can be added to an existing ClickHouse cluster
-- Since adding a node without any tables on it to an existing cluster will cause all queries to fail we need to run the migrations first
-- The type and storage sets should correspond to the cluster where that node will eventually be added
-- If non default username/password is required, the credentials for the ClickHouse node should be passed via environment variables
-- For obvious reasons, this command is only relevant for multi node clusters
 
 ## Writing migrations
 

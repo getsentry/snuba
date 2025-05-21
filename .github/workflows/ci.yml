@@ -88,6 +88,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         name: Checkout code
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run linter
         run: |
           make lint-rust format-rust-ci
@@ -154,44 +158,39 @@ jobs:
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
+      - run: docker buildx create --driver docker-container --use
+
       - name: Build snuba docker image for CI
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          # push: true
-          load: true
-          target: testing
-          tags: |
-            ghcr.io/getsentry/snuba-ci:${{ github.sha }}
-            ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
-            ghcr.io/getsentry/snuba-ci:latest
-          cache-from: |
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
-          # cache-to is re-implemented using the next step, to run conditionally for contributors
-          outputs: type=docker,dest=/tmp/snuba-ci.tar
-
-      - name: Load snuba-ci image
         run: |
-          docker load --input /tmp/snuba-ci.tar
-          docker image ls -a
+          set -euxo pipefail
 
-      - name: Publish snuba-ci image to registry
-        id: publish
-        if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
-        # outside contributors won't be able to push to the docker registry
-        # ignore the failures in this step
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
-        run: |
-          # Useful to speed up CI
-          docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
-          docker push ghcr.io/getsentry/snuba-ci:${{ github.sha }}
-          echo 'image_tag=ghcr.io/getsentry/snuba-ci:${{ github.sha }}' >> "$GITHUB_OUTPUT"
-          if [ "${{ steps.branch.outputs.branch }}" == 'master' ]; then
-            # The latest tag should only be published on `master`
-            docker push ghcr.io/getsentry/snuba-ci:latest
+          args=()
+
+          if [ ${{ github.event_name }} = 'push' ]; then
+            args+=(
+              --tag ghcr.io/getsentry/snuba-ci:latest
+              --cache-to type=registry,ref=ghcr.io/getsentry/snuba-ci:latest,mode=max
+              --push
+            )
           fi
+
+          if [ ${{ github.event.pull_request.head.repo.full_name }} = ${{ github.repository }} ]; then
+            args+=(
+              --cache-to type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }},mode=max
+            )
+          fi
+
+          docker buildx build \
+            --pull \
+            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
+            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
+            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:latest \
+            --tag ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
+            --tag ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
+            --target testing \
+            "${args[@]}" \
+            -o type=docker,dest=/tmp/snuba-ci.tar \
+            .
 
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
@@ -209,7 +208,7 @@ jobs:
     needs: [linting, snuba-image]
     name: Tests and code coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     strategy:
       matrix:
         snuba_settings:
@@ -330,7 +329,6 @@ jobs:
         uses: ./.github/actions/setup-sentry
         with:
           workdir: sentry
-          use-new-devservices: true
           mode: minimal
 
       - name: Start snuba
@@ -368,22 +366,22 @@ jobs:
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
-          pytest -k 'not __In' tests/snuba \
+          pytest -k 'not __In' \
+              tests/snuba \
+              tests/sentry/snuba \
               tests/sentry/eventstream/kafka \
               tests/sentry/post_process_forwarder \
-              tests/sentry/snuba \
               tests/sentry/eventstore/snuba \
               tests/sentry/search/events \
               tests/sentry/event_manager \
               tests/sentry/api/endpoints/test_organization_profiling_functions.py \
               tests/sentry/integrations/slack/test_unfurl.py \
-              tests/snuba/api/endpoints/test_organization_events_stats_span_indexed.py \
-              tests/snuba/api/endpoints/test_organization_events_stats_mep.py \
-              tests/sentry/sentry_metrics/querying \
-              tests/snuba/test_snql_snuba.py \
-              tests/snuba/test_metrics_layer.py \
+              tests/sentry/uptime/endpoints/test_project_uptime_alert_check_index.py \
+              tests/sentry/uptime/endpoints/test_organization_uptime_stats.py \
+              tests/sentry/api/endpoints/test_organization_traces.py \
               tests/sentry/api/endpoints/test_organization_spans_fields.py \
-              tests/snuba/api/endpoints/test_organization_events_span_indexed.py \
+              tests/sentry/api/endpoints/test_organization_spans_fields_stats.py \
+              tests/sentry/sentry_metrics/querying \
               -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run CI module tests
@@ -402,6 +400,7 @@ jobs:
         version:
           [
             "24.3.5.47.altinitystable",
+            "24.8.11.51285.altinitystable",
           ]
 
     steps:
@@ -432,63 +431,6 @@ jobs:
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
-  self-hosted-end-to-end:
-    needs: snuba-image
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/self-hosted@master
-        with:
-          project_name: snuba
-          image_url: ${{ needs.snuba-image.outputs.image_tag }}
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  publish-to-dockerhub:
-    name: Publish Snuba to DockerHub
-    runs-on: ubuntu-20.04
-    if: ${{ (github.ref_name == 'master') }}
-    steps:
-      - uses: actions/checkout@v4 # v3.1.0
-      - name: Pull the test image
-        id: image_pull
-        env:
-          IMAGE_URL: us-central1-docker.pkg.dev/sentryio/snuba/image:${{ github.sha }}
-        shell: bash
-        run: |
-          echo "We poll for the Docker image that the GCB/GHA build produces until it succeeds or this job times out."
-          echo "Polling for $IMAGE_URL"
-          timeout 20m bash -c 'until docker pull "$IMAGE_URL" 2>/dev/null; do sleep 10; done'
-      - name: Get short SHA for docker tag
-        id: short_sha
-        shell: bash
-        run: |
-          SHORT_SHA=$(git rev-parse --short "$GITHUB_SHA")
-          if [[ -z "$SHORT_SHA" ]]; then
-            echo "Short SHA empty? Re-running rev-parse."
-            git rev-parse --short "$GITHUB_SHA"
-          else
-            echo "sha=$SHORT_SHA" >> $GITHUB_OUTPUT
-          fi
-      - name: Push built docker image
-        shell: bash
-        env:
-          SHORT_SHA: ${{ steps.short_sha.outputs.sha }}
-          IMAGE_URL: us-central1-docker.pkg.dev/sentryio/snuba/image:${{ github.sha }}
-        run: |
-          # only login if the password is set
-          if [[ "${{ secrets.DOCKER_HUB_RW_TOKEN }}" ]]; then echo "${{ secrets.DOCKER_HUB_RW_TOKEN }}" | docker login --username=sentrybuilder --password-stdin; fi
-          # We push 3 tags to Dockerhub:
-          # first, the full sha of the commit
-          docker tag ${IMAGE_URL} getsentry/snuba:${GITHUB_SHA}
-          docker push getsentry/snuba:${GITHUB_SHA}
-          # second, the short sha of the commit
-          docker tag ${IMAGE_URL} getsentry/snuba:${SHORT_SHA}
-          docker push getsentry/snuba:${SHORT_SHA}
-          # finally, nightly
-          docker tag ${IMAGE_URL} getsentry/snuba:nightly
-          docker push getsentry/snuba:nightly
 
   validate-devservices-config:
     runs-on: ubuntu-24.04
@@ -497,7 +439,7 @@ jobs:
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       name: Checkout repository
-    - uses: getsentry/action-validate-devservices-config@6477ef1e9c96e456bfad726006e731f89fcd81db
+    - uses: getsentry/action-validate-devservices-config@02a078d1280293e6598cabfbd318a01609c12c83
       name: Validate devservices config
       with:
         requirements-file-path: requirements.txt

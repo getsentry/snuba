@@ -53,6 +53,7 @@ fn create_factory(
         clickhouse_cluster: ClickhouseConfig {
             host: "test".into(),
             port: 1234,
+            secure: false,
             http_port: 1234,
             user: "test".into(),
             password: "test".into(),
@@ -94,9 +95,11 @@ fn create_factory(
             physical_topic_name: "shared-resources-usage".to_string(),
             logical_topic_name: "shared-resources-usage".to_string(),
             broker_config: BrokerConfig::default(),
+            quantized_rebalance_consumer_group_delay_secs: None,
         },
         stop_at_timestamp: None,
         batch_write_timeout: None,
+        custom_envoy_request_timeout: None,
     };
     Box::new(factory)
 }

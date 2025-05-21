@@ -15,7 +15,7 @@ use uuid::Uuid;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{enforce_retention, StringToIntDatetime};
+use crate::processors::utils::{enforce_retention, StringToIntDatetime64};
 use crate::types::{
     InsertBatch, InsertOrReplacement, KafkaMessageMetadata, ReplacementData, RowData,
 };
@@ -109,7 +109,7 @@ struct ReplacementEvent {
 struct ErrorMessage {
     data: ErrorData,
     #[serde(default)]
-    datetime: StringToIntDatetime,
+    datetime: StringToIntDatetime64,
     event_id: Uuid,
     group_id: u64,
     message: String,
@@ -153,6 +153,8 @@ struct ErrorData {
     user: Option<User>,
     #[serde(default)]
     version: Option<String>,
+    #[serde(default)]
+    symbolicated_in_app: Option<bool>,
 }
 
 // Contexts
@@ -161,6 +163,8 @@ type GenericContext = BTreeMap<String, ContextStringify>;
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Contexts {
+    #[serde(default)]
+    flags: Option<FlagContext>,
     #[serde(default)]
     replay: Option<ReplayContext>,
     #[serde(default)]
@@ -181,6 +185,20 @@ struct TraceContext {
     parent_span_id: Option<String>,
     #[serde(flatten)]
     other: GenericContext,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+struct FlagContext {
+    #[serde(default)]
+    values: Option<Vec<Option<FlagContextItem>>>,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+struct FlagContextItem {
+    #[serde(default)]
+    flag: Unicodify,
+    #[serde(default)]
+    result: Unicodify,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -384,7 +402,12 @@ struct ErrorRow {
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
     tags_value: Vec<String>,
+    #[serde(rename = "flags.key")]
+    flags_key: Vec<String>,
+    #[serde(rename = "flags.value")]
+    flags_value: Vec<String>,
     timestamp: u32,
+    timestamp_ms: u64,
     title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     trace_id: Option<Uuid>,
@@ -398,6 +421,8 @@ struct ErrorRow {
     user_name: Option<String>,
     user: String,
     version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    symbolicated_in_app: Option<bool>,
 }
 
 impl ErrorRow {
@@ -563,6 +588,21 @@ impl ErrorRow {
             replay_id = Some(rid)
         }
 
+        // Split feature keys and values into two vectors if the context could be parsed.
+        let mut flags_key = Vec::new();
+        let mut flags_value = Vec::new();
+
+        if let Some(ctx) = from_context.flags {
+            if let Some(values) = ctx.values {
+                for item in values.into_iter().flatten() {
+                    if let (Some(k), Some(v)) = (item.flag.0, item.result.0) {
+                        flags_key.push(k);
+                        flags_value.push(v);
+                    }
+                }
+            }
+        };
+
         // Stacktrace.
 
         let exceptions = from
@@ -668,6 +708,8 @@ impl ErrorRow {
             exception_stacks_mechanism_type: stack_mechanism_types,
             exception_stacks_type: stack_types,
             exception_stacks_value: stack_values,
+            flags_key,
+            flags_value,
             group_id: from.group_id,
             http_method: from_request.method.0,
             http_referer,
@@ -692,7 +734,8 @@ impl ErrorRow {
             span_id,
             tags_key,
             tags_value,
-            timestamp: from.datetime.0,
+            timestamp: (from.datetime.0 / 1000) as u32,
+            timestamp_ms: from.datetime.0,
             title: from.data.title.0.unwrap_or_default(),
             trace_id: from_trace_context.trace_id,
             trace_sampled: from_trace_context.sampled.map(|v| v as u8),
@@ -703,6 +746,7 @@ impl ErrorRow {
             user_name: from_user.username.0,
             user: user.unwrap_or_default(),
             version: from.data.version,
+            symbolicated_in_app: from.data.symbolicated_in_app,
             ..Default::default()
         })
     }

@@ -119,7 +119,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
             time_window_secs=300,
             resolution_secs=60,
         ),
-        "Exactly one aggregation required",
+        "Exactly one expression required",
         id="Invalid subscription: multiple aggregations",
     ),
     pytest.param(
@@ -229,7 +229,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         rpc_subscription_data = list(
             RedisSubscriptionDataStore(
                 get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-                EntityKey("eap_spans"),
+                EntityKey("eap_items_span"),
                 PartitionId(partition),
             ).all()
         )[0][1]
