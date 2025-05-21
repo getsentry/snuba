@@ -125,15 +125,10 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
                 f"Attribute {attr_key.name} must be one of [{formatted_attribute_types}], got {AttributeKey.Type.Name(attr_key.type)}"
             )
 
-        # To maintain backwards compatibility with the old span_id column, we only need the last 16 characters of the item_id
-        # In eap_items, they're just integers, there's no issue fitting a 64 bit integer in a 128 bit integer.
-        # The problem is that this is just our internal representation, but when a user interacts with span_id through EAP, it's treated as a hex string with 16 characters.
-        # However, a 128 bit integer cannot be represented as a 16 character hex string (16 characters can at most represent a 64 bit integer). Hence,
-        # by default we represent item_id as a 32 character hex string. Since the user expects 16 characters and we know that a span_id will currently never use the full 128 bits,
-        # it's safe to get rid of the first 16 characters since we know those will just be padding.
-        if attr_key.name == "sentry.span_id":
-            return f.right(
-                column(converted_attr_name[len(COLUMN_PREFIX) :]), 16, alias=alias
+        if attr_key.name in {"sentry.span_id", "sentry.item_id"}:
+            return column(
+                converted_attr_name[len(COLUMN_PREFIX) :],
+                alias=alias,
             )
         elif attr_key.name == "sentry.sampling_factor":
             return f.divide(
