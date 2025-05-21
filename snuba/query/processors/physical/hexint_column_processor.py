@@ -36,21 +36,13 @@ class HexIntColumnProcessor(BaseTypeConverter):
         if isinstance(exp, Column) and exp.column_name in self.columns:
             return FunctionCall(
                 exp.alias,
-                "leftPad",
+                "lower",
                 (
                     FunctionCall(
                         None,
-                        "lower",
-                        (
-                            FunctionCall(
-                                None,
-                                "hex",
-                                (Column(None, None, exp.column_name),),
-                            ),
-                        ),
+                        "hex",
+                        (Column(None, None, exp.column_name),),
                     ),
-                    Literal(None, self._size),
-                    Literal(None, "0"),
                 ),
             )
         return exp
