@@ -1,5 +1,7 @@
 from typing import Set
 
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import column, if_cond, literal
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -34,24 +36,21 @@ class HexIntColumnProcessor(BaseTypeConverter):
 
     def _process_expressions(self, exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in self.columns:
-            return FunctionCall(
-                exp.alias,
-                "replaceRegexpOne",
-                (
-                    FunctionCall(
-                        None,
-                        "lower",
-                        (
-                            FunctionCall(
-                                None,
-                                "hex",
-                                (Column(None, None, exp.column_name),),
-                            ),
+            hex = f.hex(column(exp.column_name))
+            return f.lower(
+                f.leftPad(
+                    hex,
+                    if_cond(
+                        f.greater(
+                            f.length(hex),
+                            literal(16),
                         ),
+                        literal(32),
+                        literal(16),
                     ),
-                    Literal(None, "^[0]+"),
-                    Literal(None, ""),
+                    literal("0"),
                 ),
+                alias=exp.alias,
             )
         return exp
 

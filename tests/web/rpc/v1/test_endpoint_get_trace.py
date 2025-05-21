@@ -277,10 +277,6 @@ def generate_spans_and_timestamps() -> tuple[list[TraceItem], list[Timestamp]]:
 
 def get_span_id(span: TraceItem) -> str:
     # cut the 0x prefix
-    return hex(
-        int.from_bytes(
-            span.item_id,
-            byteorder="little",
-            signed=False,
-        )
-    )[2:]
+    return hex(int.from_bytes(span.item_id, byteorder="little", signed=False,))[
+        2:
+    ].rjust(16, "0")
