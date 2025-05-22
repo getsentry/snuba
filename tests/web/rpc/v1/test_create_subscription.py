@@ -235,7 +235,8 @@ class TestCreateSubscriptionApi(BaseApiTest):
                 EntityKey(
                     state.get_str_config(
                         "CreateSubscriptionRequest.entity_name",
-                    ),
+                    )
+                    or "eap_items",
                 ),
                 PartitionId(partition),
             ).all()
