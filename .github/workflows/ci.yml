@@ -346,7 +346,7 @@ jobs:
             -e CLICKHOUSE_HOST=clickhouse \
             -e CLICKHOUSE_PORT=9000 \
             -e CLICKHOUSE_HTTP_PORT=8123 \
-            -e REDIS_HOST=redis \
+            -e REDIS_HOST=redis-redis-1 \
             -e REDIS_PORT=6379 \
             -e REDIS_DB=1 \
             --name snuba-snuba-1 \
