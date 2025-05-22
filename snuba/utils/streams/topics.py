@@ -71,7 +71,7 @@ class Topic(Enum):
     EAP_MUTATIONS = "snuba-eap-mutations"
     OURLOGS = "snuba-ourlogs"
 
-    SNUBA_ITEMS = "snuba-items"
+    ITEMS = "snuba-items"
     SNUBA_ITEMS_COMMIT_LOG = "snuba-items-commit-log"
     SUBSCRIPTION_SCHEDULED_EAP_SPANS = "scheduled-subscriptions-eap-items"
     SUBSCRIPTION_RESULTS_EAP_SPANS = "subscription-results-eap-items"
