@@ -334,6 +334,7 @@ jobs:
       - name: Start snuba
         run: |
           # TODO(hubertdeng123): New devservices doesn't support running sentry without snuba yet, remove this when it does
+          docker ps
           docker stop snuba-snuba-1
           docker rm snuba-snuba-1
           docker run -d --rm \
@@ -351,6 +352,7 @@ jobs:
             --name snuba-snuba-1 \
             --network devservices \
             ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+          docker ps
           docker exec snuba-snuba-1 snuba migrations migrate --force
 
       - name: Run snuba tests
