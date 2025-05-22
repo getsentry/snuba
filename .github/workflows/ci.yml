@@ -363,6 +363,14 @@ jobs:
             -m snuba_ci \
             -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
+      - name: Inspect failure
+        if: failure()
+        run: |
+          if command -v devservices; then
+            devservices logs
+          fi
+          docker logs snuba-snuba-1
+
       - name: Run full tests
         # TODO: Adjust which changed files we care about
         if: needs.files-changed.outputs.api_changes == 'true'
