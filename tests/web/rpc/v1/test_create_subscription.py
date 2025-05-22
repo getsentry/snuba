@@ -23,6 +23,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, RPCSubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.web.rpc.v1.create_subscription import get_subscription_entity_name
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_endpoint_time_series.test_endpoint_time_series import (
     DummyMetric,
@@ -232,12 +233,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         rpc_subscription_data = list(
             RedisSubscriptionDataStore(
                 get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-                EntityKey(
-                    state.get_str_config(
-                        "CreateSubscriptionRequest.entity_name",
-                    )
-                    or "eap_items",
-                ),
+                EntityKey(get_subscription_entity_name()),
                 PartitionId(partition),
             ).all()
         )[0][1]
