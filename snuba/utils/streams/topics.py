@@ -72,9 +72,9 @@ class Topic(Enum):
     OURLOGS = "snuba-ourlogs"
 
     ITEMS = "snuba-items"
-    SNUBA_ITEMS_COMMIT_LOG = "snuba-items-commit-log"
-    SUBSCRIPTION_SCHEDULED_EAP_SPANS = "scheduled-subscriptions-eap-items"
-    SUBSCRIPTION_RESULTS_EAP_SPANS = "subscription-results-eap-items"
+    ITEMS_COMMIT_LOG = "snuba-items-commit-log"
+    SUBSCRIPTION_SCHEDULED_EAP_ITEMS = "scheduled-subscriptions-eap-items"
+    SUBSCRIPTION_RESULTS_EAP_ITEMS = "subscription-results-eap-items"
 
     LW_DELETIONS_GENERIC_EVENTS = "snuba-lw-deletions-generic-events"
 
