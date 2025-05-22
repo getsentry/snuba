@@ -36,7 +36,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
-from snuba import settings, state
+from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions import scheduler_consumer
@@ -49,10 +49,7 @@ from snuba.utils.streams.configuration_builder import (
     get_default_kafka_configuration,
 )
 from snuba.utils.streams.topics import Topic as SnubaTopic
-from snuba.web.rpc.v1.create_subscription import (
-    CreateSubscriptionRequest,
-    get_subscription_entity_name,
-)
+from snuba.web.rpc.v1.create_subscription import CreateSubscriptionRequest
 from tests.assertions import assert_changes
 from tests.backends.metrics import TestingMetricsBackend
 
@@ -166,16 +163,14 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
-    settings.TOPIC_PARTITION_COUNTS = {"snuba-items": 2}
+    settings.TOPIC_PARTITION_COUNTS = {"snuba-spans": 2}
     importlib.reload(scheduler_consumer)
 
     admin_client = AdminClient(get_default_kafka_configuration())
     create_topics(admin_client, [SnubaTopic.EAP_SPANS_COMMIT_LOG])
 
-    state.set_config("CreateSubscriptionRequest.entity_name", "eap_items")
-
     metrics_backend = TestingMetricsBackend()
-    entity_name = get_subscription_entity_name()
+    entity_name = "eap_items_span"
     entity = get_entity(EntityKey(entity_name))
     storage = entity.get_writable_storage()
     assert storage is not None

@@ -236,14 +236,14 @@ class TestCreateSubscriptionApi(BaseApiTest):
             )[0][1]
             assert isinstance(rpc_subscription_data, RPCSubscriptionData)
 
-        request_class = TimeSeriesRequest()
-        request_class.ParseFromString(
-            base64.b64decode(rpc_subscription_data.time_series_request)
-        )
-        assert rpc_subscription_data.time_window_sec == 300
-        assert rpc_subscription_data.resolution_sec == 60
-        assert rpc_subscription_data.request_name == "TimeSeriesRequest"
-        assert rpc_subscription_data.request_version == "v1"
+            request_class = TimeSeriesRequest()
+            request_class.ParseFromString(
+                base64.b64decode(rpc_subscription_data.time_series_request)
+            )
+            assert rpc_subscription_data.time_window_sec == 300
+            assert rpc_subscription_data.resolution_sec == 60
+            assert rpc_subscription_data.request_name == "TimeSeriesRequest"
+            assert rpc_subscription_data.request_version == "v1"
 
     @pytest.mark.parametrize(
         "create_subscription, error_message",
