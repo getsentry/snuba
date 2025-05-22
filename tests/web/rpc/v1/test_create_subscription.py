@@ -226,27 +226,28 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert response_class.subscription_id
         partition = int(response_class.subscription_id.split("/", 1)[0])
 
-        rpc_subscription_data = list(
-            RedisSubscriptionDataStore(
-                get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-                EntityKey("eap_items_span"),
-                PartitionId(partition),
-            ).all()
-        )[0][1]
+        for entity_name in {"eap_items_span", "eap_items"}:
+            rpc_subscription_data = list(
+                RedisSubscriptionDataStore(
+                    get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+                    EntityKey(entity_name),
+                    PartitionId(partition),
+                ).all()
+            )[0][1]
+            assert isinstance(rpc_subscription_data, RPCSubscriptionData)
 
-        assert isinstance(rpc_subscription_data, RPCSubscriptionData)
-
-        request_class = TimeSeriesRequest()
-        request_class.ParseFromString(
-            base64.b64decode(rpc_subscription_data.time_series_request)
-        )
-        assert rpc_subscription_data.time_window_sec == 300
-        assert rpc_subscription_data.resolution_sec == 60
-        assert rpc_subscription_data.request_name == "TimeSeriesRequest"
-        assert rpc_subscription_data.request_version == "v1"
+            request_class = TimeSeriesRequest()
+            request_class.ParseFromString(
+                base64.b64decode(rpc_subscription_data.time_series_request)
+            )
+            assert rpc_subscription_data.time_window_sec == 300
+            assert rpc_subscription_data.resolution_sec == 60
+            assert rpc_subscription_data.request_name == "TimeSeriesRequest"
+            assert rpc_subscription_data.request_version == "v1"
 
     @pytest.mark.parametrize(
-        "create_subscription, error_message", TESTS_INVALID_RPC_SUBSCRIPTIONS
+        "create_subscription, error_message",
+        TESTS_INVALID_RPC_SUBSCRIPTIONS,
     )
     def test_create_invalid_subscription(
         self, create_subscription: CreateSubscriptionRequestProto, error_message: str

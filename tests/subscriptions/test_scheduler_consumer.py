@@ -213,7 +213,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
     builder = scheduler_consumer.SchedulerBuilder(
         entity_name,
         str(uuid.uuid1().hex),
-        "eap_items_span",
+        "eap_items",
         [],
         mock_scheduler_producer,
         "latest",
@@ -247,7 +247,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
             commit_log_topic,
             payload=commit_codec.encode(
                 Commit(
-                    "eap_items_span",
+                    "eap_items",
                     Partition(commit_log_topic, partition),
                     offset,
                     ts,
