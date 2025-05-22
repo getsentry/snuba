@@ -18,12 +18,10 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Function,
 )
 
-from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, RPCSubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
-from snuba.web.rpc.v1.create_subscription import get_subscription_entity_name
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_endpoint_time_series.test_endpoint_time_series import (
     DummyMetric,
@@ -228,17 +226,15 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert response_class.subscription_id
         partition = int(response_class.subscription_id.split("/", 1)[0])
 
-        state.set_config("CreateSubscriptionRequest.entity_name", "eap_items")
-
-        rpc_subscription_data = list(
-            RedisSubscriptionDataStore(
-                get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-                EntityKey(get_subscription_entity_name()),
-                PartitionId(partition),
-            ).all()
-        )[0][1]
-
-        assert isinstance(rpc_subscription_data, RPCSubscriptionData)
+        for entity_name in {"eap_items_span", "eap_items"}:
+            rpc_subscription_data = list(
+                RedisSubscriptionDataStore(
+                    get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+                    EntityKey(entity_name),
+                    PartitionId(partition),
+                ).all()
+            )[0][1]
+            assert isinstance(rpc_subscription_data, RPCSubscriptionData)
 
         request_class = TimeSeriesRequest()
         request_class.ParseFromString(
