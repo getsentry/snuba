@@ -18,6 +18,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Function,
 )
 
+from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, RPCSubscriptionData
@@ -226,10 +227,16 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert response_class.subscription_id
         partition = int(response_class.subscription_id.split("/", 1)[0])
 
+        state.set_config("CreateSubscriptionRequest.entity_name", "eap_items")
+
         rpc_subscription_data = list(
             RedisSubscriptionDataStore(
                 get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-                EntityKey("eap_items"),
+                EntityKey(
+                    state.get_str_config(
+                        "CreateSubscriptionRequest.entity_name",
+                    ),
+                ),
                 PartitionId(partition),
             ).all()
         )[0][1]
@@ -246,7 +253,8 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert rpc_subscription_data.request_version == "v1"
 
     @pytest.mark.parametrize(
-        "create_subscription, error_message", TESTS_INVALID_RPC_SUBSCRIPTIONS
+        "create_subscription, error_message",
+        TESTS_INVALID_RPC_SUBSCRIPTIONS,
     )
     def test_create_invalid_subscription(
         self, create_subscription: CreateSubscriptionRequestProto, error_message: str
