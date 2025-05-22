@@ -163,14 +163,14 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
-    settings.TOPIC_PARTITION_COUNTS = {"snuba-spans": 2}
+    settings.TOPIC_PARTITION_COUNTS = {"snuba-items": 2}
     importlib.reload(scheduler_consumer)
 
     admin_client = AdminClient(get_default_kafka_configuration())
     create_topics(admin_client, [SnubaTopic.EAP_SPANS_COMMIT_LOG])
 
     metrics_backend = TestingMetricsBackend()
-    entity_name = "eap_items_span"
+    entity_name = "eap_items"
     entity = get_entity(EntityKey(entity_name))
     storage = entity.get_writable_storage()
     assert storage is not None
@@ -213,7 +213,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
     builder = scheduler_consumer.SchedulerBuilder(
         entity_name,
         str(uuid.uuid1().hex),
-        "eap_items_span",
+        "eap_items",
         [],
         mock_scheduler_producer,
         "latest",
@@ -247,7 +247,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
             commit_log_topic,
             payload=commit_codec.encode(
                 Commit(
-                    "eap_items_span",
+                    "eap_items",
                     Partition(commit_log_topic, partition),
                     offset,
                     ts,
