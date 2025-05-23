@@ -1,0 +1,298 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>The SnQL query language &#8212; Snuba 25.6.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="The MQL query language" href="mql.html" />
+    <link rel="prev" title="Querying Snuba" href="../query/overview.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="the-snql-query-language">
+<h1>The SnQL query language<a class="headerlink" href="#the-snql-query-language" title="Permalink to this heading">¶</a></h1>
+<p>This document describes the Snuba Query Language (SnQL). For more details on
+how to actually send a query to Snuba see <a class="reference internal" href="../query/overview.html"><span class="doc">Querying Snuba</span></a>.</p>
+<p>This is the query structure.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">MATCH</span> <span class="n">simple</span> <span class="o">|</span> <span class="n">join</span> <span class="o">|</span> <span class="n">subquery</span>
+<span class="n">SELECT</span> <span class="p">[</span><span class="n">expressions</span><span class="p">]</span> <span class="o">|</span> <span class="p">[</span><span class="n">aggregations</span> <span class="n">BY</span> <span class="n">expressions</span><span class="p">]</span>
+<span class="n">ARRAY</span> <span class="n">JOIN</span> <span class="p">[</span><span class="n">column</span><span class="p">]</span>
+<span class="n">WHERE</span> <span class="n">condition</span> <span class="p">[[</span><span class="n">AND</span> <span class="o">|</span> <span class="n">OR</span><span class="p">]</span> <span class="n">condition</span><span class="p">]</span><span class="o">*</span>
+<span class="n">HAVING</span> <span class="n">condition</span> <span class="p">[[</span><span class="n">AND</span> <span class="o">|</span> <span class="n">OR</span><span class="p">]</span> <span class="n">condition</span><span class="p">]</span><span class="o">*</span>
+<span class="n">ORDER</span> <span class="n">BY</span> <span class="n">expression</span> <span class="n">ASC</span><span class="o">|</span><span class="n">DESC</span> <span class="p">[,</span> <span class="n">expression</span> <span class="n">ASC</span><span class="o">|</span><span class="n">DESC</span><span class="p">]</span><span class="o">*</span>
+<span class="n">LIMIT</span> <span class="n">n</span> <span class="n">BY</span> <span class="p">[</span><span class="n">expressions</span><span class="p">]</span>
+<span class="n">LIMIT</span> <span class="n">n</span>
+<span class="n">OFFSET</span> <span class="n">n</span>
+<span class="n">GRANULARITY</span> <span class="n">n</span>
+<span class="n">TOTALS</span> <span class="n">boolean</span>
+</pre></div>
+</div>
+<p>These queries are sent as strings to the <code class="docutils literal notranslate"><span class="pre">/:dataset/snql</span></code> endpoint encoded in a
+JSON body of the form below.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;query&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;query&gt;&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;dataset&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;dataset&gt;&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;consistent&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="s2">&quot;turbo&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="s2">&quot;debug&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The dataset is implied through the url used for the query. All of the fields except
+for <code class="docutils literal notranslate"><span class="pre">query</span></code> are optional in the JSON body.</p>
+<section id="match">
+<h2>MATCH<a class="headerlink" href="#match" title="Permalink to this heading">¶</a></h2>
+<p>Our data model is represented by a graph of entities. This clause identifies
+the pattern of the subgraphs we are querying on. There are three types of
+MATCH clause that are currently supported:</p>
+<p><strong>Simple:</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">MATCH</span> <span class="pre">(&lt;entity&gt;</span> <span class="pre">[SAMPLE</span> <span class="pre">n])</span></code></p>
+<p>Or for datasets without entities:</p>
+<p><code class="docutils literal notranslate"><span class="pre">MATCH</span> <span class="pre">(STORAGE(&lt;storage&gt;)</span> <span class="pre">[SAMPLE</span> <span class="pre">n])</span></code></p>
+<p>This is equivalent to all of our current queries. This either queries data from
+a single entity or a single storage directly. It is possible to add an optional
+sample to the query by adding it with the entity.</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">MATCH</span> <span class="p">(</span><span class="n">events</span><span class="p">)</span> <span class="c1"># for entity queries</span>
+<span class="n">MATCH</span> <span class="p">(</span><span class="n">STORAGE</span><span class="p">(</span><span class="n">profile_chunks</span><span class="p">))</span> <span class="c1"># for storage queries.</span>
+</pre></div>
+</div>
+<p><strong>Subquery:</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">MATCH</span> <span class="pre">{</span> <span class="pre">&lt;query&gt;</span> <span class="pre">}</span></code></p>
+<p>Inside the curly braces can be another SnQL query in its entirety. Anything
+in the SELECT/BY clause of the subquery will be exposed in the outer query
+using the aliases specified.</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">MATCH</span> <span class="p">{</span>
+    <span class="n">MATCH</span> <span class="p">(</span><span class="n">transactions</span><span class="p">)</span>
+    <span class="n">SELECT</span> <span class="n">avg</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span> <span class="n">AS</span> <span class="n">avg_d</span> <span class="n">BY</span> <span class="n">transaction</span>
+<span class="p">}</span>
+<span class="n">SELECT</span> <span class="nb">max</span><span class="p">(</span><span class="n">avg_d</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Join:</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">MATCH</span> <span class="pre">(&lt;alias&gt;:</span> <span class="pre">&lt;entity&gt;</span> <span class="pre">[SAMPLE</span> <span class="pre">n])</span> <span class="pre">-[&lt;join&gt;]-&gt;</span> <span class="pre">(&lt;alias&gt;:</span> <span class="pre">&lt;entity&gt;</span> <span class="pre">[SAMPLE</span> <span class="pre">n])</span></code></p>
+<p>A join represents a multi node subgraph is a subgraph that includes
+multiple relationships between different nodes. We only support 1..n,
+n..1 and 1..1 directed relationships between nodes.</p>
+<p>With JOINs every entity must have an alias, which is a unique string.
+Sampling can also be applied to any of the entities in the join. The
+<code class="docutils literal notranslate"><span class="pre">&lt;join&gt;</span></code> is a string that is specified in the Entity in Snuba, and
+is a short hand for a set of join conditions. It’s possible to have more
+than one join clause, separated by commas.</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">MATCH</span>
+    <span class="p">(</span><span class="n">e</span><span class="p">:</span> <span class="n">events</span><span class="p">)</span> <span class="o">-</span><span class="p">[</span><span class="n">grouped</span><span class="p">]</span><span class="o">-&gt;</span> <span class="p">(</span><span class="n">g</span><span class="p">:</span> <span class="n">groupedmessage</span><span class="p">),</span>
+    <span class="p">(</span><span class="n">e</span><span class="p">:</span> <span class="n">events</span><span class="p">)</span> <span class="o">-</span><span class="p">[</span><span class="n">assigned</span><span class="p">]</span><span class="o">-&gt;</span> <span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">groupassignee</span><span class="p">)</span>
+<span class="n">SELECT</span> <span class="n">count</span><span class="p">()</span> <span class="n">AS</span> <span class="n">tot</span> <span class="n">BY</span> <span class="n">e</span><span class="o">.</span><span class="n">project_id</span><span class="p">,</span> <span class="n">g</span><span class="o">.</span><span class="n">id</span>
+<span class="n">WHERE</span> <span class="n">a</span><span class="o">.</span><span class="n">user_id</span> <span class="o">=</span> <span class="s2">&quot;somebody&quot;</span>
+</pre></div>
+</div>
+<p>The type of join (left/inner) and the join key are part of the data model
+and not part of the query. They are hard coded in the entity code.
+This is because not entity can be safely joined with any other entity
+in the distributed version of the underlying database.</p>
+<p>The tuples provided by the match clause to the where clause look exactly
+like the ones produced by conventional join clause.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span>
+    <span class="p">{</span><span class="s2">&quot;e.project_id&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>  <span class="s2">&quot;g.id&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">}</span>
+    <span class="p">{</span><span class="s2">&quot;e.project_id&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>  <span class="s2">&quot;g.id&quot;</span><span class="p">:</span> <span class="mi">11</span><span class="p">}</span>
+    <span class="p">{</span><span class="s2">&quot;e.project_id&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>  <span class="s2">&quot;g.id&quot;</span><span class="p">:</span> <span class="mi">20</span><span class="p">}</span>
+    <span class="o">...</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+</section>
+<section id="select-by">
+<h2>SELECT .. BY<a class="headerlink" href="#select-by" title="Permalink to this heading">¶</a></h2>
+<p>This clause specifies which results should be returned in the output.
+If there is an aggregation, when everything in the <code class="docutils literal notranslate"><span class="pre">BY</span></code> clause is
+treated as a grouping key.
+It is possible to have aggregations without a <code class="docutils literal notranslate"><span class="pre">BY</span></code> clause if we want
+to aggregate across the entire result set, but, in such case, nothing
+other than the aggregation can be in the <code class="docutils literal notranslate"><span class="pre">SELECT</span></code>.
+It’s not valid to have
+an empty <code class="docutils literal notranslate"><span class="pre">SELECT</span></code> clause, even if there is a <code class="docutils literal notranslate"><span class="pre">BY</span></code> clause.</p>
+<p>Expressions in the SELECT clause can be columns, arithmetic, functions
+or any combination of the three. If the query is a join, then each column
+must have a qualifying alias that matches one of the entity aliases in the
+MATCH clause.</p>
+</section>
+<section id="where">
+<h2>WHERE<a class="headerlink" href="#where" title="Permalink to this heading">¶</a></h2>
+<p>This is the filter of the query that happens <strong>before</strong> aggregations (like
+the WHERE in SQL).</p>
+<p>Conditions are infix expressions of the form <code class="docutils literal notranslate"><span class="pre">LHS</span> <span class="pre">OP</span> <span class="pre">RHS*</span></code>, where <code class="docutils literal notranslate"><span class="pre">LHS</span></code>
+and <code class="docutils literal notranslate"><span class="pre">RHS</span></code> are literal values or expressions. <code class="docutils literal notranslate"><span class="pre">OP</span></code> refers to a specific
+operator to compare the two values. These operators are one of
+<code class="docutils literal notranslate"><span class="pre">=,</span> <span class="pre">!=,</span> <span class="pre">&lt;,</span> <span class="pre">&lt;=,</span> <span class="pre">&gt;,</span> <span class="pre">&gt;=,</span> <span class="pre">IN,</span> <span class="pre">NOT</span> <span class="pre">IN,</span> <span class="pre">LIKE,</span> <span class="pre">NOT</span> <span class="pre">LIKE,</span> <span class="pre">IS</span> <span class="pre">NULL,</span> <span class="pre">IS</span> <span class="pre">NOT</span> <span class="pre">NULL</span></code>.
+Note that the <code class="docutils literal notranslate"><span class="pre">RHS</span></code> is optional when using an operator like <code class="docutils literal notranslate"><span class="pre">IS</span> <span class="pre">NULL</span></code>.</p>
+<p>Conditions can be combined using the boolean keywords <code class="docutils literal notranslate"><span class="pre">AND</span></code> or <code class="docutils literal notranslate"><span class="pre">OR</span></code>.
+They can also be grouped using <code class="docutils literal notranslate"><span class="pre">()</span></code>.</p>
+<p>Some conditions will be mandatory to provide a valid query depending on
+the entity. For example the Transactions entity requires a project id
+condition and a time range condition.</p>
+</section>
+<section id="having">
+<h2>HAVING<a class="headerlink" href="#having" title="Permalink to this heading">¶</a></h2>
+<p>Works like the WHERE clause but it is applied after the aggregations declared
+in the SELECT clause. So we can apply conditions on the result of an aggregation
+function here.</p>
+</section>
+<section id="order-by">
+<h2>ORDER BY<a class="headerlink" href="#order-by" title="Permalink to this heading">¶</a></h2>
+<p>Specify the expression(s) to order the result set on.</p>
+</section>
+<section id="limit-by-limit-offset">
+<h2>LIMIT BY/LIMIT/OFFSET<a class="headerlink" href="#limit-by-limit-offset" title="Permalink to this heading">¶</a></h2>
+<p>Pretty self explanatory, they take integers and set the corresponding
+values in the Clickhouse query. If a query doesn’t specify the limit or
+offset, they will be defaulted to 1000 and 0 respectively.</p>
+</section>
+<section id="granularity">
+<h2>GRANULARITY<a class="headerlink" href="#granularity" title="Permalink to this heading">¶</a></h2>
+<p>An integer representing the granularity to group time based results.</p>
+<p>Some of the entities in Snuba provides a magic column that you can use to group data by. The column gives a floored time value for each row so that rows in the same minute/hour/day/etc. can be grouped.</p>
+<p>The magic column for a given entity can be found by finding the TimeSeriesProcessor for the entity. Example, for errors, you can find the TimeSeriesProcessor defined <a class="reference external" href="https://github.com/getsentry/snuba/blob/master/snuba/datasets/entities/events.py#L186-L188">here</a>. You can see that the magic column is <cite>time</cite> and it uses the <cite>timestamp</cite> column for grouping.</p>
+<p>Granularity determines the number of seconds in each of these time buckets. Eg, to count the number of events by hour, you would do</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">MATCH</span><span class="p">(</span><span class="n">events</span><span class="p">)</span> <span class="n">count</span><span class="p">(</span><span class="n">event_id</span><span class="p">)</span> <span class="n">AS</span> <span class="n">event_count</span>
+<span class="n">BY</span> <span class="n">time</span>
+<span class="n">WHERE</span> <span class="n">timestamp</span> <span class="o">&gt;=</span> <span class="n">toDateTime</span><span class="p">(</span><span class="s1">&#39;2022-01-15T00:00:00.000000&#39;</span><span class="p">)</span> <span class="n">AND</span> <span class="n">timestamp</span> <span class="o">&lt;</span> <span class="n">toDateTime</span><span class="p">(</span><span class="s1">&#39;2022-01-21T00:00:00.000000&#39;</span><span class="p">)</span>
+<span class="n">GRANULARITY</span> <span class="mi">3600</span>
+</pre></div>
+</div>
+</section>
+<section id="totals">
+<h2>TOTALS<a class="headerlink" href="#totals" title="Permalink to this heading">¶</a></h2>
+<p>If set to True, the response from Snuba will have a <code class="docutils literal notranslate"><span class="pre">&quot;totals&quot;</span></code> key that
+contains the total values across all the selected rows.</p>
+</section>
+<section id="sample">
+<h2>SAMPLE<a class="headerlink" href="#sample" title="Permalink to this heading">¶</a></h2>
+<p>If a sampling rate isn’t provided by a node in the <code class="docutils literal notranslate"><span class="pre">MATCH</span></code> clause, then it
+can be specified here. In this case, Snuba will assign the sample right to
+one of the nodes in the query. A sample can be either a float between 0 and
+1, representing a percentage of rows to sample.</p>
+<p>Or it can be an integer greater 1 which represents the number of rows to sample.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/snuba.svg" alt="Logo"/>
+            </a></p>
+<h1 class="logo"><a href="../index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getstarted.html">Getting started with Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/datamodel.html">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/queryprocessing.html">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration/overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../query/overview.html">Querying Snuba</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">The SnQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mql.html">The MQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migrations/modes.html">Snuba Migration Modes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/environment.html">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/death_queries.html">Clickhouse Queries Of Death</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/schema_design.html">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html">Profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#regular-transaction-profiling">Regular transaction profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#on-demand-profiling">On-demand profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="../query/overview.html" title="previous chapter">Querying Snuba</a></li>
+      <li>Next: <a href="mql.html" title="next chapter">The MQL query language</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.1.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.13</a>
+      
+      |
+      <a href="../_sources/language/snql.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
