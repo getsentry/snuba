@@ -15,7 +15,7 @@ x-sentry-service-config:
       description: Shared instance of kafka used by sentry services
       remote:
         repo_name: sentry-shared-kafka
-        branch: main
+        branch: admin-client-kafka-fix
         repo_link: https://github.com/getsentry/sentry-shared-kafka.git
     snuba:
       description: Service that provides a rich data model on top of Clickhouse together with a fast ingestion consumer and a query optimizer
