@@ -56,7 +56,7 @@ def _build_query(request: GetTraceRequest) -> Query:
             expression=(
                 attribute_key_to_expression_eap_items(
                     AttributeKey(
-                        name="sentry.span_id", type=AttributeKey.Type.TYPE_STRING
+                        name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING
                     )
                 )
             ),

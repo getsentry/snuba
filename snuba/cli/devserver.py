@@ -138,18 +138,6 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                 f"--log-level={log_level}",
             ],
         ),
-        (
-            "eap-items-log-consumer",
-            [
-                "snuba",
-                "rust-consumer",
-                "--storage=eap_items_log",
-                "--consumer-group=eap_items_log_group",
-                "--use-rust-processor",
-                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
-                f"--log-level={log_level}",
-            ],
-        ),
     ]
 
     if settings.SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV:
@@ -209,9 +197,9 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                 [
                     "snuba",
                     "subscriptions-scheduler",
-                    "--entity=eap_spans",
+                    "--entity=eap_items_span",
                     "--consumer-group=snuba-eap_spans-subscriptions-scheduler",
-                    "--followed-consumer-group=eap_spans_group",
+                    "--followed-consumer-group=eap_items_span_group",
                     "--auto-offset-reset=latest",
                     f"--log-level={log_level}",
                     "--schedule-ttl=10",
@@ -223,7 +211,7 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                     "snuba",
                     "subscriptions-executor",
                     "--dataset=events_analytics_platform",
-                    "--entity=eap_spans",
+                    "--entity=eap_items_span",
                     "--consumer-group=snuba-eap_spans-subscription-executor",
                     "--auto-offset-reset=latest",
                     f"--log-level={log_level}",
@@ -271,9 +259,9 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                     "snuba",
                     "subscriptions-scheduler-executor",
                     "--dataset=events_analytics_platform",
-                    "--entity=eap_spans",
+                    "--entity=eap_items_span",
                     "--consumer-group=snuba-eap_spans-subscription-executor",
-                    "--followed-consumer-group=eap_spans_group",
+                    "--followed-consumer-group=eap_items_span_group",
                     "--auto-offset-reset=latest",
                     "--no-strict-offset-reset",
                     f"--log-level={log_level}",

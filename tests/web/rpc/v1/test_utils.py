@@ -67,7 +67,7 @@ _DEFAULT_ATTRIBUTES = {
 }
 
 
-def write_eap_span(
+def write_eap_item(
     start_timestamp: datetime,
     raw_attributes: dict[str, str | float | int | bool] = {},
     count: int = 1,
@@ -149,7 +149,7 @@ def gen_item_message(
     return TraceItem(
         organization_id=1,
         project_id=1,
-        item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        item_type=type,
         timestamp=item_timestamp,
         trace_id=trace_id,
         item_id=item_id,
