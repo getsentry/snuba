@@ -3,7 +3,7 @@ kind: cdc_storage
 name: groupassignees
 storage:
   key: groupassignees
-  set_key: cdc
+  set_key: events
 readiness_state: deprecate
 schema:
   columns:

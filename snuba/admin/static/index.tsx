@@ -96,3 +96,5 @@ function getTab(locationHash: string): string {
 
   return navItem.id;
 }
+
+export default {};

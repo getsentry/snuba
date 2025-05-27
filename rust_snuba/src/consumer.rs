@@ -3,15 +3,15 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 
-use rust_arroyo::backends::kafka::config::KafkaConfig;
-use rust_arroyo::backends::kafka::producer::KafkaProducer;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::metrics;
-use rust_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
+use sentry_arroyo::backends::kafka::config::KafkaConfig;
+use sentry_arroyo::backends::kafka::producer::KafkaProducer;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::metrics;
+use sentry_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
-use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
-use rust_arroyo::processing::StreamProcessor;
-use rust_arroyo::types::Topic;
+use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use sentry_arroyo::processing::StreamProcessor;
+use sentry_arroyo::types::Topic;
 
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -21,7 +21,6 @@ use crate::factory::ConsumerStrategyFactory;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
-use crate::mutations::factory::MutConsumerStrategyFactory;
 use crate::processors;
 use crate::rebalancing;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
@@ -40,13 +39,13 @@ pub fn consumer(
     enforce_schema: bool,
     max_poll_interval_ms: usize,
     async_inserts: bool,
-    mutations_mode: bool,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
-    max_bytes_before_external_group_by: Option<usize>,
-) {
+    max_dlq_buffer_length: Option<usize>,
+    custom_envoy_request_timeout: Option<u64>,
+) -> usize {
     py.allow_threads(|| {
         consumer_impl(
             consumer_group,
@@ -63,10 +62,10 @@ pub fn consumer(
             health_check_file,
             stop_at_timestamp,
             batch_write_timeout_ms,
-            max_bytes_before_external_group_by,
-            mutations_mode,
+            max_dlq_buffer_length,
+            custom_envoy_request_timeout,
         )
-    });
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -85,8 +84,8 @@ pub fn consumer_impl(
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
-    max_bytes_before_external_group_by: Option<usize>,
-    mutations_mode: bool,
+    max_dlq_buffer_length: Option<usize>,
+    custom_envoy_request_timeout: Option<u64>,
 ) -> usize {
     setup_logging();
 
@@ -206,7 +205,7 @@ pub fn consumer_impl(
                 max_invalid_ratio: None,
                 max_consecutive_count: None,
             },
-            None,
+            max_dlq_buffer_length,
         )
     });
 
@@ -235,60 +234,43 @@ pub fn consumer_impl(
 
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
 
-    let rebalance_delay_secs = rebalancing::get_rebalance_delay_secs(consumer_group);
+    let mut rebalance_delay_secs = consumer_config
+        .raw_topic
+        .quantized_rebalance_consumer_group_delay_secs;
+    let config_rebalance_delay_secs = rebalancing::get_rebalance_delay_secs(consumer_group);
+    if let Some(secs) = config_rebalance_delay_secs {
+        rebalance_delay_secs = Some(secs);
+    }
     if let Some(secs) = rebalance_delay_secs {
         rebalancing::delay_kafka_rebalance(secs)
     }
 
-    let processor = if mutations_mode {
-        let mut_factory = MutConsumerStrategyFactory {
-            storage_config: first_storage,
-            env_config,
-            logical_topic_name,
-            max_batch_size,
-            max_batch_time,
-            processing_concurrency: ConcurrencyConfig::new(concurrency),
-            clickhouse_concurrency: ConcurrencyConfig::new(clickhouse_concurrency),
-            async_inserts,
-            python_max_queue_depth,
-            use_rust_processor,
-            health_check_file: health_check_file.map(ToOwned::to_owned),
-            enforce_schema,
-            physical_consumer_group: consumer_group.to_owned(),
-            physical_topic_name: Topic::new(&consumer_config.raw_topic.physical_topic_name),
-            accountant_topic_config: consumer_config.accountant_topic,
-            batch_write_timeout,
-        };
-
-        StreamProcessor::with_kafka(config, mut_factory, topic, dlq_policy)
-    } else {
-        let factory = ConsumerStrategyFactory {
-            storage_config: first_storage,
-            env_config,
-            logical_topic_name,
-            max_batch_size,
-            max_batch_time,
-            processing_concurrency: ConcurrencyConfig::new(concurrency),
-            clickhouse_concurrency: ConcurrencyConfig::new(clickhouse_concurrency),
-            commitlog_concurrency: ConcurrencyConfig::new(2),
-            replacements_concurrency: ConcurrencyConfig::new(4),
-            async_inserts,
-            python_max_queue_depth,
-            use_rust_processor,
-            health_check_file: health_check_file.map(ToOwned::to_owned),
-            enforce_schema,
-            commit_log_producer,
-            replacements_config,
-            physical_consumer_group: consumer_group.to_owned(),
-            physical_topic_name: Topic::new(&consumer_config.raw_topic.physical_topic_name),
-            accountant_topic_config: consumer_config.accountant_topic,
-            stop_at_timestamp,
-            batch_write_timeout,
-            max_bytes_before_external_group_by,
-        };
-
-        StreamProcessor::with_kafka(config, factory, topic, dlq_policy)
+    let factory = ConsumerStrategyFactory {
+        storage_config: first_storage,
+        env_config,
+        logical_topic_name,
+        max_batch_size,
+        max_batch_time,
+        processing_concurrency: ConcurrencyConfig::new(concurrency),
+        clickhouse_concurrency: ConcurrencyConfig::new(clickhouse_concurrency),
+        commitlog_concurrency: ConcurrencyConfig::new(2),
+        replacements_concurrency: ConcurrencyConfig::new(4),
+        async_inserts,
+        python_max_queue_depth,
+        use_rust_processor,
+        health_check_file: health_check_file.map(ToOwned::to_owned),
+        enforce_schema,
+        commit_log_producer,
+        replacements_config,
+        physical_consumer_group: consumer_group.to_owned(),
+        physical_topic_name: Topic::new(&consumer_config.raw_topic.physical_topic_name),
+        accountant_topic_config: consumer_config.accountant_topic,
+        stop_at_timestamp,
+        batch_write_timeout,
+        custom_envoy_request_timeout,
     };
+
+    let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 
     let mut handle = processor.get_handle();
 
@@ -336,8 +318,9 @@ pub fn process_message(
 ) -> PyResult<(Option<PyInsert>, Option<PyReplacement>)> {
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
-    let func = processors::get_processing_function(name)
-        .ok_or(SnubaRustError::new_err("processor not found"))?;
+    let func = processors::get_processing_function(name).ok_or(SnubaRustError::new_err(
+        format!("processor '{}' not found", name),
+    ))?;
 
     let payload = KafkaPayload::new(None, None, Some(value));
     let timestamp = DateTime::<Utc>::from_timestamp_millis(millis_since_epoch).unwrap_or_default();

@@ -2,8 +2,8 @@ use crate::config::ProcessorConfig;
 use crate::processors::utils::StringToIntDatetime;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 use anyhow::Context;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::counter;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::counter;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -13,17 +13,30 @@ const OUTCOME_CLIENT_DISCARD: u8 = 5;
 const DEFAULT_CATEGORY: u8 = 1;
 
 const CLIENT_DISCARD_REASONS: &[&str] = &[
+    // an event was dropped due to downsampling caused by the system being under load
     "backpressure",
+    // an event was dropped in the `before_send` lifecycle method
     "before_send",
+    // a SDK internal cache (eg: offline event cache) overflowed
     "cache_overflow",
+    // an event was dropped by an event processor; may also be used for ignored exceptions / errors
     "event_processor",
+    // an event was dropped due to a lack of data in the event (eg: not enough samples in a profile)
     "insufficient_data",
+    // an event was dropped due to an internal SDK error (eg: web worker crash)
     "internal_sdk_error",
+    // events were dropped because of network errors and were not retried.
     "network_error",
+    // a SDK internal queue (eg: transport queue) overflowed
     "queue_overflow",
+    // the SDK dropped events because an earlier rate limit instructed the SDK to back off.
     "ratelimit_backoff",
+    // an event was dropped because of the configured sample rate.
     "sample_rate",
+    // an event was dropped because of an error when sending it (eg: 400 response)
     "send_error",
+    // an SDK internal buffer (eg. breadcrumbs buffer) overflowed
+    "buffer_overflow",
 ];
 
 pub fn process_message(
@@ -86,7 +99,7 @@ struct Outcome {
 mod tests {
     use super::*;
     use chrono::DateTime;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
+    use sentry_arroyo::backends::kafka::types::KafkaPayload;
     use std::time::SystemTime;
 
     #[test]

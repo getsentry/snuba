@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest as CreateSubscriptionRequestProto,
 )
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
@@ -51,7 +51,6 @@ from snuba.utils.metrics.timer import Timer
 def build_rpc_subscription_data_from_proto(
     entity_key: EntityKey, metadata: Mapping[str, Any]
 ) -> SubscriptionData:
-
     return RPCSubscriptionData.from_proto(
         CreateSubscriptionRequestProto(
             time_series_request=TimeSeriesRequest(
@@ -60,6 +59,7 @@ def build_rpc_subscription_data_from_proto(
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -82,37 +82,37 @@ def build_rpc_subscription_data_from_proto(
             time_window_secs=300,
             resolution_secs=60,
         ),
-        EntityKey.EAP_SPANS,
+        EntityKey.EAP_ITEMS,
     )
 
 
 def build_rpc_subscription_data(
     entity_key: EntityKey, metadata: Mapping[str, Any]
 ) -> SubscriptionData:
-
-    return RPCSubscriptionData(
+    tmp = RPCSubscriptionData(
         project_id=1,
         time_window_sec=300,
         resolution_sec=60,
         entity=get_entity(entity_key),
         metadata=metadata,
-        time_series_request="Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIaGggBEg8IAxILdGVzdF9tZXRyaWMaA3N1bSAB",
+        time_series_request="Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIyIQoaCAESDwgDEgt0ZXN0X21ldHJpYxoDc3VtIAEaA3N1bQ==",
         request_name="TimeSeriesRequest",
         request_version="v1",
     )
+    return tmp
 
 
 RPC_CASES = [
     pytest.param(
         build_rpc_subscription_data_from_proto,
         {"organization": 1},
-        EntityKey.EAP_SPANS,
+        EntityKey.EAP_ITEMS,
         id="rpc",
     ),
     pytest.param(
         build_rpc_subscription_data,
         {"organization": 1},
-        EntityKey.EAP_SPANS,
+        EntityKey.EAP_ITEMS,
         id="rpc",
     ),
 ]
@@ -121,7 +121,6 @@ RPC_CASES = [
 def build_snql_subscription_data(
     entity_key: EntityKey, metadata: Mapping[str, Any]
 ) -> SubscriptionData:
-
     return SnQLSubscriptionData(
         project_id=5,
         time_window_sec=500 * 60,
@@ -268,8 +267,8 @@ RESULTS_CASES = [
         id="snql_subscription",
     ),
     pytest.param(
-        build_rpc_subscription_data(entity_key=EntityKey.EAP_SPANS, metadata={}),
-        EntityKey.EAP_SPANS,
+        build_rpc_subscription_data(entity_key=EntityKey.EAP_ITEMS, metadata={}),
+        EntityKey.EAP_ITEMS,
         id="rpc_subscriptions",
     ),
 ]
@@ -457,7 +456,7 @@ def test_subscription_task_encoder_snql() -> None:
 
 def test_subscription_task_encoder_rpc() -> None:
     encoder = SubscriptionScheduledTaskEncoder()
-    subscription_data = build_rpc_subscription_data(EntityKey.EAP_SPANS, {})
+    subscription_data = build_rpc_subscription_data(EntityKey.EAP_ITEMS, {})
 
     subscription_id = uuid.UUID("91b46cb6224f11ecb2ddacde48001122")
 
@@ -466,7 +465,7 @@ def test_subscription_task_encoder_rpc() -> None:
     tick_upper_offset = 5
 
     subscription_with_metadata = SubscriptionWithMetadata(
-        EntityKey.EAP_SPANS,
+        EntityKey.EAP_ITEMS,
         Subscription(
             SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
         ),
@@ -481,9 +480,9 @@ def test_subscription_task_encoder_rpc() -> None:
     assert encoded.value == (
         b"{"
         b'"timestamp":"1970-01-01T00:00:00",'
-        b'"entity":"eap_spans",'
+        b'"entity":"eap_items",'
         b'"task":{'
-        b'"data":{"project_id":1,"time_window":300,"resolution":60,"time_series_request":"Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIaGggBEg8IAxILdGVzdF9tZXRyaWMaA3N1bSAB","request_version":"v1","request_name":"TimeSeriesRequest","subscription_type":"rpc"}},'
+        b'"data":{"project_id":1,"time_window":300,"resolution":60,"time_series_request":"Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIyIQoaCAESDwgDEgt0ZXN0X21ldHJpYxoDc3VtIAEaA3N1bQ==","request_version":"v1","request_name":"TimeSeriesRequest","subscription_type":"rpc"}},'
         b'"tick_upper_offset":5'
         b"}"
     )

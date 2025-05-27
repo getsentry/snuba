@@ -7,7 +7,7 @@ from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest as CreateSubscriptionRequestProto,
 )
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
@@ -45,10 +45,7 @@ TESTS_CREATE = [
         SnQLSubscriptionData(
             project_id=123,
             query=(
-                "MATCH (events) "
-                "SELECT count() AS count "
-                "WHERE "
-                "platform IN tuple('a')"
+                "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')"
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
@@ -64,10 +61,7 @@ TESTS_INVALID = [
         SnQLSubscriptionData(
             project_id=123,
             query=(
-                "MATCH (events) "
-                "SELECT count() AS count "
-                "WHERE "
-                "platfo IN tuple('a') "
+                "MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a') "
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
@@ -355,6 +349,7 @@ TESTS_CREATE_RPC_SUBSCRIPTIONS = [
                         organization_id=1,
                         cogs_category="something",
                         referrer="something",
+                        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                     ),
                     aggregations=[
                         AttributeAggregation(
@@ -377,7 +372,7 @@ TESTS_CREATE_RPC_SUBSCRIPTIONS = [
                 time_window_secs=300,
                 resolution_secs=60,
             ),
-            EntityKey.EAP_SPANS,
+            EntityKey.EAP_ITEMS,
         ),
         id="EAP spans RPC subscription",
     ),
@@ -392,14 +387,14 @@ class TestEAPSpansRPCSubscriptionCreator:
     @pytest.mark.redis_db
     def test(self, subscription: SubscriptionData) -> None:
         dataset = PluggableDataset(name="eap", all_entities=[])
-        creator = SubscriptionCreator(dataset, EntityKey.EAP_SPANS)
+        creator = SubscriptionCreator(dataset, EntityKey.EAP_ITEMS)
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
                     get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-                    EntityKey.EAP_SPANS,
+                    EntityKey.EAP_ITEMS,
                     identifier.partition,
                 ).all(),
             )[0][1]

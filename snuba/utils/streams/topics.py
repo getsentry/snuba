@@ -45,6 +45,7 @@ class Topic(Enum):
     PROFILE_CHUNKS = "snuba-profile-chunks"
 
     REPLAYEVENTS = "ingest-replay-events"
+    UPTIME_RESULTS = "snuba-uptime-results"
     GENERIC_METRICS = "snuba-generic-metrics"
     GENERIC_METRICS_SETS_COMMIT_LOG = "snuba-generic-metrics-sets-commit-log"
     GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG = (
@@ -68,6 +69,12 @@ class Topic(Enum):
     SUBSCRIPTION_SCHEDULED_EAP_SPANS = "scheduled-subscriptions-eap-spans"
     SUBSCRIPTION_RESULTS_EAP_SPANS = "eap-spans-subscription-results"
     EAP_MUTATIONS = "snuba-eap-mutations"
+    OURLOGS = "snuba-ourlogs"
+
+    ITEMS = "snuba-items"
+    ITEMS_COMMIT_LOG = "snuba-items-commit-log"
+    SUBSCRIPTION_SCHEDULED_EAP_ITEMS = "scheduled-subscriptions-eap-items"
+    SUBSCRIPTION_RESULTS_EAP_ITEMS = "subscription-results-eap-items"
 
     LW_DELETIONS_GENERIC_EVENTS = "snuba-lw-deletions-generic-events"
 

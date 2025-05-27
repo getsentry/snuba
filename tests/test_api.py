@@ -113,20 +113,22 @@ class SimpleAPITest(BaseApiTest):
                                             self.base_time + timedelta(minutes=tick)
                                         ).timetuple()
                                     ),
-                                    "tags": {
-                                        # Sentry
-                                        "environment": self.environments[
-                                            (tock * p) % len(self.environments)
-                                        ],
-                                        "sentry:release": str(tick),
-                                        "sentry:dist": "dist1",
-                                        "os.name": "windows",
-                                        "os.rooted": 1,
-                                        # User
-                                        "foo": "baz",
-                                        "foo.bar": "qux",
-                                        "os_name": "linux",
-                                    },
+                                    "tags": list(
+                                        {
+                                            # Sentry
+                                            "environment": self.environments[
+                                                (tock * p) % len(self.environments)
+                                            ],
+                                            "sentry:release": str(tick),
+                                            "sentry:dist": "dist1",
+                                            "os.name": "windows",
+                                            "os.rooted": 1,
+                                            # User
+                                            "foo": "baz",
+                                            "foo.bar": "qux",
+                                            "os_name": "linux",
+                                        }.items()
+                                    ),
                                     "exception": {
                                         "values": [
                                             {
@@ -623,7 +625,7 @@ class TestApi(SimpleAPITest):
                         "retention_days": settings.DEFAULT_RETENTION_DAYS,
                         "data": {
                             "received": calendar.timegm(self.base_time.timetuple()),
-                            "tags": {},
+                            "tags": [],
                             "exception": {
                                 "values": [
                                     {
@@ -2271,7 +2273,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                         "project_id": 1,
                         "time_window": int(timedelta(minutes=10).total_seconds()),
                         "resolution": int(timedelta(minutes=1).total_seconds()),
-                        "query": "MATCH (events) SELECT count() AS count BY project_id WHERE platform IN tuple('a')",
+                        "query": "MATCH (events) SELECT count() AS count BY project_id HAVING platform IN tuple('a')",
                     }
                 ).encode("utf-8"),
             )
@@ -2280,7 +2282,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         data = json.loads(resp.data)
         assert data == {
             "error": {
-                "message": "A maximum of 1 aggregation is allowed in the select",
+                "message": "invalid clause having in subscription query",
                 "type": "invalid_query",
             }
         }

@@ -10,7 +10,7 @@ from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
 )
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.error_pb2 import Error
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
@@ -25,7 +25,7 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_endpoint_time_series.test_endpoint_time_series import (
     DummyMetric,
-    store_timeseries,
+    store_spans_timeseries,
 )
 
 END_TIME = datetime.utcnow().replace(tzinfo=UTC)
@@ -41,6 +41,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -67,6 +68,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -93,6 +95,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -116,7 +119,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
             time_window_secs=300,
             resolution_secs=60,
         ),
-        "Exactly one aggregation required",
+        "Exactly one expression required",
         id="Invalid subscription: multiple aggregations",
     ),
     pytest.param(
@@ -127,6 +130,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 group_by=[
                     AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class")
@@ -156,6 +160,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -181,7 +186,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
 @pytest.mark.redis_db
 class TestCreateSubscriptionApi(BaseApiTest):
     def test_create_valid_subscription(self) -> None:
-        store_timeseries(
+        store_spans_timeseries(
             START_TIME,
             1,
             3600,
@@ -195,6 +200,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -223,7 +229,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         rpc_subscription_data = list(
             RedisSubscriptionDataStore(
                 get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-                EntityKey("eap_spans"),
+                EntityKey("eap_items_span"),
                 PartitionId(partition),
             ).all()
         )[0][1]
@@ -245,7 +251,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
     def test_create_invalid_subscription(
         self, create_subscription: CreateSubscriptionRequestProto, error_message: str
     ) -> None:
-        store_timeseries(
+        store_spans_timeseries(
             START_TIME,
             1,
             3600,

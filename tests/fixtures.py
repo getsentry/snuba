@@ -183,6 +183,7 @@ def get_raw_event() -> InsertEvent:
             "time_spent": None,
             "type": "error",
             "version": "6",
+            "symbolicated_in_app": True,
         },
     }
 

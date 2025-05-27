@@ -10,13 +10,13 @@ x-sentry-service-config:
       remote:
         repo_name: sentry-shared-redis
         branch: main
-        repo_link: git@github.com:getsentry/sentry-shared-redis.git
+        repo_link: https://github.com/getsentry/sentry-shared-redis.git
     kafka:
       description: Shared instance of kafka used by sentry services
       remote:
         repo_name: sentry-shared-kafka
         branch: main
-        repo_link: git@github.com:getsentry/sentry-shared-kafka.git
+        repo_link: https://github.com/getsentry/sentry-shared-kafka.git
     snuba:
       description: Service that provides a rich data model on top of Clickhouse together with a fast ingestion consumer and a query optimizer
   modes:
@@ -46,6 +46,8 @@ services:
       host.docker.internal: host-gateway
     networks:
       - devservices
+    labels:
+      - orchestrator=devservices
     restart: unless-stopped
 
   snuba:
@@ -53,7 +55,9 @@ services:
     ports:
       - 127.0.0.1:1218:1218
       - 127.0.0.1:1219:1219
-    command: [devserver]
+    command:
+      - devserver
+      - --${SNUBA_NO_WORKERS:+no-workers}
     healthcheck:
       test: curl -f http://localhost:1218/health_envoy
       interval: 5s
@@ -77,11 +81,14 @@ services:
       ENABLE_AUTORUN_MIGRATION_SEARCH_ISSUES: 1
       ENABLE_GROUP_ATTRIBUTES_CONSUMER: ${ENABLE_GROUP_ATTRIBUTES_CONSUMER:-}
       ENABLE_LW_DELETIONS_CONSUMER: ${ENABLE_LW_DELETIONS_CONSUMER:-}
+      SENTRY_SPOTLIGHT: 'http://host.docker.internal:8969/stream'
     platform: linux/amd64
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
       - devservices
+    labels:
+      - orchestrator=devservices
     restart: unless-stopped
 
 volumes:

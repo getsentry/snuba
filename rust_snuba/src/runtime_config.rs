@@ -4,8 +4,8 @@ use pyo3::prelude::{PyModule, Python};
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use rust_arroyo::timer;
-use rust_arroyo::utils::timing::Deadline;
+use sentry_arroyo::timer;
+use sentry_arroyo::utils::timing::Deadline;
 
 static CONFIG: RwLock<BTreeMap<String, (Option<String>, Deadline)>> = RwLock::new(BTreeMap::new());
 

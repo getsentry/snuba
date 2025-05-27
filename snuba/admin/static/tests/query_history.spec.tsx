@@ -19,14 +19,12 @@ describe("Query editor", () => {
         {"something": 1},
       ]);
     });
-    it("drops the first item once a sixth item is pushed", () => {
+    it("drops the first item once a fourth item is pushed", () => {
       const TEST_KEY = "test2"
-      for (const index of [1,2,3,4,5,6]) {
+      for (const index of [1,2,3,4]) {
         setRecentHistory(TEST_KEY, {"something": index});
       }
       expect(getRecentHistory(TEST_KEY)).toStrictEqual([
-        {"something": 6},
-        {"something": 5},
         {"something": 4},
         {"something": 3},
         {"something": 2},

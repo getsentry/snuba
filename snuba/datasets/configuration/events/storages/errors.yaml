@@ -77,6 +77,24 @@ schema:
           },
       },
       {
+        name: flags,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [{ name: key, type: String }, { name: value, type: String }],
+          },
+      },
+      {
+        name: _flags_hash_map,
+        type: Array,
+        args:
+          {
+            schema_modifiers: [readonly],
+            inner_type: { type: UInt, args: { size: 64 } },
+          },
+      },
+      {
         name: contexts,
         type: Nested,
         args:
@@ -227,6 +245,16 @@ schema:
         args: { schema_modifiers: [nullable], size: 64 },
       },
       { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
+      {
+        name: symbolicated_in_app,
+        type: UInt,
+        args: { schema_modifiers: [nullable], size: 8 },
+      },
+      {
+        name: timestamp_ms,
+        type: DateTime64,
+        args: { schema_modifiers: [nullable], precision: 3 },
+      },
     ]
   local_table_name: errors_local
   dist_table_name: errors_dist
@@ -310,10 +338,23 @@ query_processors:
       column_name: tags
       hash_map_name: _tags_hash_map
       killswitch: events_tags_hash_map_enabled
+  - processor: MappingOptimizer
+    args:
+      column_name: flags
+      hash_map_name: _flags_hash_map
+      killswitch: events_flags_hash_map_enabled
   - processor: EmptyTagConditionProcessor
+    args:
+      column_name: tags.key.key
+  - processor: EmptyTagConditionProcessor
+    args:
+      column_name: flags.key
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: tags
+  - processor: ArrayJoinKeyValueOptimizer
+    args:
+      column_name: flags
   - processor: PrewhereProcessor
     args:
       omit_if_final:

@@ -1,11 +1,12 @@
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
-use rust_arroyo::gauge;
-use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use sentry_arroyo::gauge;
+use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use std::mem;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -41,11 +42,12 @@ impl BatchFactory {
         concurrency: &ConcurrencyConfig,
         clickhouse_user: &str,
         clickhouse_password: &str,
+        clickhouse_secure: bool,
         async_inserts: bool,
         batch_write_timeout: Option<Duration>,
-        max_bytes_before_external_group_by: Option<usize>,
+        custom_envoy_request_timeout: Option<u64>,
     ) -> Self {
-        let mut headers = HeaderMap::with_capacity(5);
+        let mut headers = HeaderMap::with_capacity(6);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
         headers.insert(
@@ -60,6 +62,12 @@ impl BatchFactory {
             "X-ClickHouse-Database",
             HeaderValue::from_str(database).unwrap(),
         );
+        if let Some(custom_envoy_request_timeout) = custom_envoy_request_timeout {
+            headers.insert(
+                "x-envoy-upstream-rq-per-try-timeout-ms",
+                HeaderValue::from_str(&custom_envoy_request_timeout.to_string()).unwrap(),
+            );
+        }
 
         let mut query_params = String::new();
         query_params.push_str("load_balancing=in_order&insert_distributed_sync=1");
@@ -71,13 +79,9 @@ impl BatchFactory {
             }
         }
 
-        if let Some(max_bytes_before_external_group_by) = max_bytes_before_external_group_by {
-            let mut query_segment: String = "&max_bytes_before_external_group_by=".to_owned();
-            query_segment.push_str(&max_bytes_before_external_group_by.to_string());
-            query_params.push_str(&query_segment)
-        }
+        let scheme = if clickhouse_secure { "https" } else { "http" };
 
-        let url = format!("http://{hostname}:{http_port}?{query_params}");
+        let url = format!("{scheme}://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
         let client = if let Some(timeout_duration) = batch_write_timeout {
@@ -122,11 +126,14 @@ impl BatchFactory {
         let client = self.client.clone();
 
         let result_handle = self.handle.spawn(async move {
+            let mut sleep_time = 0;
             while receiver.is_empty() && !receiver.is_closed() {
                 // continously check on the receiver stream, only when it's
                 // not empty do we write to clickhouse
+                sleep_time += 800;
                 sleep(Duration::from_millis(800)).await;
             }
+            gauge!("rust_consumer.receiver_sleep_time_ms", sleep_time as u64);
 
             if !receiver.is_empty() {
                 // only make the request to clickhouse if there is data
@@ -230,7 +237,13 @@ impl HttpBatch {
         // finish stream
         drop(self.sender.take());
         if let Some(handle) = self.result_handle.take() {
-            handle.await??;
+            // timeout on writing a batch to clickhouse after 2 minutes
+            match timeout(Duration::from_millis(120000), handle).await {
+                Ok(res) => res??,
+                Err(_) => {
+                    anyhow::bail!("Timedout writing to clickhouse");
+                }
+            }
             Ok(true)
         } else {
             Ok(false)
@@ -274,6 +287,7 @@ mod tests {
             "default",
             "",
             false,
+            false,
             None,
             None,
         );
@@ -309,45 +323,10 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
             true,
             None,
             None,
-        );
-
-        let mut batch = factory.new_batch();
-
-        batch
-            .write_rows(&RowData::from_encoded_rows(vec![
-                br#"{"hello": "world"}"#.to_vec()
-            ]))
-            .unwrap();
-
-        concurrency.handle().block_on(batch.finish()).unwrap();
-
-        mock.assert();
-    }
-
-    #[test]
-    fn test_write_with_external_groupby() {
-        crate::testutils::initialize_python();
-        let server = MockServer::start();
-        let mock = server.mock(|when, then| {
-            when.method(POST).path("/").body("{\"hello\": \"world\"}\n");
-            then.status(200).body("hi");
-        });
-
-        let concurrency = ConcurrencyConfig::new(1);
-        let factory = BatchFactory::new(
-            &server.host(),
-            server.port(),
-            "testtable",
-            "testdb",
-            &concurrency,
-            "default",
-            "",
-            true,
-            None,
-            Some(500_000),
         );
 
         let mut batch = factory.new_batch();
@@ -381,6 +360,7 @@ mod tests {
             "default",
             "",
             false,
+            false,
             None,
             None,
         );
@@ -413,6 +393,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
             false,
             None,
             None,
@@ -448,6 +429,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
             true,
             // pass in an unreasonably short timeout
             // which prevents the client request from reaching Clickhouse
@@ -484,6 +466,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
             true,
             // pass in a reasonable timeout
             Some(Duration::from_millis(1000)),

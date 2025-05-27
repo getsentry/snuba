@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Sequence
 
 import pytest
@@ -132,7 +132,7 @@ def test_subdivide_partitions(
     )
 
 
-last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
+last_midnight = (datetime.now(UTC) + timedelta(minutes=10)).replace(
     hour=0, minute=0, second=0, microsecond=0
 )
 
@@ -232,14 +232,15 @@ def test_get_next_schedule(
 
 
 def test_get_next_schedule_raises_exception() -> None:
-    optimize_scheduler = OptimizeScheduler(default_parallel_threads=1)
-    with time_machine.travel(
-        last_midnight
-        + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)
-        + timedelta(minutes=20),
-        tick=False,
-    ):
-        with pytest.raises(OptimizedSchedulerTimeout):
-            optimize_scheduler.get_next_schedule(
-                ["(90,'2022-03-28')", "(90,'2022-03-21')"]
-            )
+    with time_machine.travel(last_midnight, tick=False):
+        optimize_scheduler = OptimizeScheduler(default_parallel_threads=1)
+        with time_machine.travel(
+            last_midnight
+            + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)
+            + timedelta(minutes=20),
+            tick=False,
+        ):
+            with pytest.raises(OptimizedSchedulerTimeout):
+                optimize_scheduler.get_next_schedule(
+                    ["(90,'2022-03-28')", "(90,'2022-03-21')"]
+                )

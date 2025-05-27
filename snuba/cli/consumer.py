@@ -153,6 +153,12 @@ logger = logging.getLogger(__name__)
     default=30000,
 )
 @click.option(
+    "--quantized-rebalance-consumer-group-delay-secs",
+    type=int,
+    default=None,
+    help="The time to delay before a consumer will start rebalancing ",
+)
+@click.option(
     "--health-check-file",
     default=None,
     type=str,
@@ -191,6 +197,7 @@ def consumer(
     log_level: Optional[str],
     profile_path: Optional[str],
     max_poll_interval_ms: int,
+    quantized_rebalance_consumer_group_delay_secs: Optional[int],
     health_check_file: Optional[str],
     group_instance_id: Optional[str],
 ) -> None:
@@ -236,6 +243,7 @@ def consumer(
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
         group_instance_id=group_instance_id,
+        quantized_rebalance_consumer_group_delay_secs=quantized_rebalance_consumer_group_delay_secs,
     )
 
     consumer_builder = ConsumerBuilder(

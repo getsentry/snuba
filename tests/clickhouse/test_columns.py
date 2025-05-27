@@ -7,6 +7,7 @@ from snuba.clickhouse.columns import (
     UUID,
     AggregateFunction,
     Array,
+    Bool,
     Column,
     ColumnType,
     Date,
@@ -172,6 +173,13 @@ TEST_CASES = [
         Enum([("a", 1), ("b", 2)]),
         "Nullable(Enum('a' = 1, 'b' = 2))",
         id="enums",
+    ),
+    pytest.param(
+        Bool(Modifier(nullable=True)),
+        Bool(),
+        Bool(),
+        "Nullable(Bool)",
+        id="bools",
     ),
 ]
 

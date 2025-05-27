@@ -217,6 +217,10 @@ def in_cond(
     return binary_condition("in", lhs, rhs, alias)
 
 
+def not_cond(expr: Expression, alias: Optional[str] = None) -> FunctionCall:
+    return FunctionCall(alias, "not", (expr,))
+
+
 # aggregate functions
 def count(column: Optional[Column] = None, alias: Optional[str] = None) -> FunctionCall:
     return FunctionCall(alias, "count", (column,) if column else ())
@@ -230,6 +234,15 @@ def countIf(
     return FunctionCall(
         alias, "countIf", (condition, column) if column else (condition,)
     )
+
+
+def if_cond(
+    condition: FunctionCall,
+    then_clause: Expression,
+    else_clause: Expression,
+    alias: Optional[str] = None,
+) -> FunctionCall:
+    return FunctionCall(alias, "if", (condition, then_clause, else_clause))
 
 
 def identity(expression: Expression, alias: Optional[str]) -> FunctionCall:

@@ -4,7 +4,7 @@ import json
 import logging
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Mapping, Optional
 from unittest import mock
 
@@ -16,14 +16,14 @@ from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.commit import Commit
 from arroyo.errors import ConsumerError
 from arroyo.types import BrokerValue, Partition, Topic
-from arroyo.utils.clock import TestingClock
+from arroyo.utils.clock import MockedClock
 from confluent_kafka.admin import AdminClient
 from py._path.local import LocalPath
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest as CreateSubscriptionRequestProto,
 )
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
@@ -170,7 +170,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
     create_topics(admin_client, [SnubaTopic.EAP_SPANS_COMMIT_LOG])
 
     metrics_backend = TestingMetricsBackend()
-    entity_name = "eap_spans"
+    entity_name = "eap_items_span"
     entity = get_entity(EntityKey(entity_name))
     storage = entity.get_writable_storage()
     assert storage is not None
@@ -187,6 +187,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -212,7 +213,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
     builder = scheduler_consumer.SchedulerBuilder(
         entity_name,
         str(uuid.uuid1().hex),
-        "eap_spans",
+        "eap_items_span",
         [],
         mock_scheduler_producer,
         "latest",
@@ -246,7 +247,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
             commit_log_topic,
             payload=commit_codec.encode(
                 Commit(
-                    "eap_spans",
+                    "eap_items_span",
                     Partition(commit_log_topic, partition),
                     offset,
                     ts,
@@ -284,7 +285,10 @@ def test_tick_time_shift() -> None:
     assert tick.time_shift(timedelta(hours=24).total_seconds()) == Tick(
         partition,
         offsets,
-        Interval(datetime(1970, 1, 2).timestamp(), datetime(1970, 1, 3).timestamp()),
+        Interval(
+            datetime(1970, 1, 2, tzinfo=UTC).timestamp(),
+            datetime(1970, 1, 3, tzinfo=UTC).timestamp(),
+        ),
     )
 
 
@@ -296,7 +300,7 @@ def test_tick_time_shift() -> None:
     ],
 )
 def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
-    clock = TestingClock()
+    clock = MockedClock()
     broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
 
     epoch = datetime.fromtimestamp(clock.time())
@@ -431,7 +435,7 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
 
 
 def test_tick_consumer_non_monotonic() -> None:
-    clock = TestingClock()
+    clock = MockedClock()
     broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
 
     epoch = datetime.fromtimestamp(clock.time())
@@ -553,7 +557,7 @@ def test_tick_consumer_non_monotonic() -> None:
 
 
 def test_invalid_commit_log_message(caplog: Any) -> None:
-    clock = TestingClock()
+    clock = MockedClock()
     broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
 
     topic = Topic("messages")
