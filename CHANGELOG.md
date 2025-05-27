@@ -1,5 +1,51 @@
 # Changelog
 
+## 25.5.1
+
+### Various fixes & improvements
+
+- chore(ci): Bump sentry-related dependencies more aggressively (#6769) by @untitaker
+- ref(rust-snuba): Add architecture doc (#7151) by @untitaker
+- feat(trace-items): Support page tokens in trace item attributes endpo… (#7182) by @Zylphrex
+- Revert "fix(eap): Translate eap_spans to eap_items_span for subscriptions (#7181)" (ce427610) by @getsentry-bot
+- chore(eap-alerts): Clean up devserver args to reflect correct entity (#7185) by @shruthilayaj
+- feat(replay): update processor for user_geo fields (#7175) by @aliu39
+- chore: Create subscriptiosn eith eap items spans entity (#7183) by @shruthilayaj
+- feat(replay): update entity/storage yamls for user_geo fields (#7174) by @aliu39
+- fix(eap): Translate eap_spans to eap_items_span for subscriptions (#7181) by @phacops
+- meta: Bump new development version (baa701cd)
+
+## 25.5.0
+
+### Various fixes & improvements
+
+- feat(replay): add migration for user geo fields (#7173) by @aliu39
+- chore(eap): Cleanup EAP span, log and mutation references (#7178) by @phacops
+- feat(api): Support multipart/form-data to receive binary data (#7180) by @phacops
+- fix(job): log correct query for truncating EAP spans (#7179) by @onewland
+- feat(replay): Add OTA Updates Context to the processor (#7166) by @krystofwoldrich
+- feat(replay): Add Dataset & Storage YAML for OTA Updates Context (#7165) by @krystofwoldrich
+- feat(replay): Add Migration for OTA Updates Context Columns (#7164) by @krystofwoldrich
+- feat(eap): Transform an order by on timestamp to the full sort key order to improve performance  (#7153) by @xurui-c
+- create manual job for truncating eap_spans_2_local tables (#7167) by @onewland
+- fix(rust): Validate schemas according to their type (#7176) by @phacops
+- fix: fix duplicate labels in RPC causing incorrect behavior (#7139) by @kylemumma
+- fix batch join timeout reading from env var (#7171) by @volokluev
+- fix(trace-items): Should return keys in filter (#7162) by @Zylphrex
+- chore(devservices): Bump version to 1.1.5 and add programs.conf file (#7161) by @hubertdeng123
+- chore(eap): Stop trimming query time ranges (#7159) by @phacops
+- Revert "Revert "feat(eap): Add an item consumer (#7122)"" (#7160) by @volokluev
+- Revert "feat(eap): Add an item consumer (#7122)" (0b2e3280) by @getsentry-bot
+- feat(eap): Add an item consumer (#7122) by @phacops
+- ref(consumer) only log when there are rows to write (#7155) by @MeredithAnya
+- Revert "feat(eap): Transform an order by on timestamp to the full sort key order to improve performance (#7149)" (b4fbd4c6) by @getsentry-bot
+- fix(eap): Remove max execution time from attribute names endpoint (#7152) by @volokluev
+- chore(eap): Add a eap_items_span entity for backwards compatibility (#7150) by @phacops
+- feat(eap): Transform an order by on timestamp to the full sort key order to improve performance (#7149) by @phacops
+- fix(ourlogs): Do not store span_id (#7148) by @colin-sentry
+
+_Plus 55 more_
+
 ## 25.4.0
 
 ### Various fixes & improvements

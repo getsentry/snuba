@@ -243,10 +243,10 @@ mandatory_condition_checkers:
 
 stream_loader:
   processor: EAPItemsProcessor
-  default_topic: snuba-spans
-  commit_log_topic: snuba-eap-spans-commit-log
+  default_topic: snuba-items
+  commit_log_topic: snuba-items-commit-log
   subscription_scheduler_mode: global
   subscription_synchronization_timestamp: orig_message_ts
-  subscription_scheduled_topic: scheduled-subscriptions-eap-spans
-  subscription_result_topic: eap-spans-subscription-results
+  subscription_scheduled_topic: scheduled-subscriptions-eap-items
+  subscription_result_topic: subscription-results-eap-items
   subscription_delay_seconds: 60

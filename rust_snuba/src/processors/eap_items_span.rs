@@ -1,12 +1,10 @@
 use anyhow::Context;
 use chrono::DateTime;
 use seq_macro::seq;
-use serde::{Deserialize, Serialize};
-use std::cmp::max;
+use serde::Serialize;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use schemars::JsonSchema;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde_json::Value;
 
@@ -15,11 +13,9 @@ use crate::processors::spans::FromSpanMessage;
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
-pub const ATTRS_SHARD_FACTOR: usize = 20;
-
 macro_rules! seq_attrs {
     ($($tt:tt)*) => {
-        seq!(N in 0..20 {
+        seq!(N in 0..40 {
             $($tt)*
         });
     }
@@ -30,23 +26,12 @@ pub fn process_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    if let Some(headers) = payload.headers() {
-        if let Some(ingest_in_eap) = headers.get("ingest_in_eap") {
-            if ingest_in_eap == b"false" {
-                return Ok(InsertBatch::skip());
-            }
-        }
-    }
-
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
     let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
-    let mut span: EAPSpan = msg.into();
+    let mut span: EAPItemSpan = msg.into();
 
-    span.retention_days = Some(max(
-        enforce_retention(span.retention_days, &config.env_config),
-        30,
-    ));
+    span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
 
     InsertBatch::from_rows([span], origin_timestamp)
 }
@@ -54,12 +39,14 @@ pub fn process_message(
 seq_attrs! {
 #[derive(Debug, Default, Serialize)]
 pub(crate) struct AttributeMap {
+    attributes_bool: HashMap<String, bool>,
+    attributes_int: HashMap<String, i64>,
     #(
     #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attr_str_~N: HashMap<String, String>,
+    attributes_string_~N: HashMap<String, String>,
 
     #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attr_num_~N: HashMap<String, f64>,
+    attributes_float_~N: HashMap<String, f64>,
     )*
 }
 }
@@ -69,7 +56,7 @@ impl AttributeMap {
         seq_attrs! {
             let attr_str_buckets = [
                 #(
-                &mut self.attr_str_~N,
+                &mut self.attributes_string_~N,
                 )*
             ];
         };
@@ -77,53 +64,52 @@ impl AttributeMap {
         attr_str_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_str_buckets.len()].insert(k, v);
     }
 
-    pub fn insert_num(&mut self, k: String, v: f64) {
+    pub fn insert_float(&mut self, k: String, v: f64) {
         seq_attrs! {
             let attr_num_buckets = [
                 #(
-                &mut self.attr_num_~N,
+                &mut self.attributes_float_~N,
                 )*
             ];
         }
 
         attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()].insert(k, v);
     }
+
+    pub fn insert_bool(&mut self, k: String, v: bool) {
+        // double write as float and bool
+        self.insert_float(k.clone(), v as u8 as f64);
+        self.attributes_bool.insert(k, v);
+    }
+
+    pub fn insert_int(&mut self, k: String, v: i64) {
+        // double write as float and int
+        self.insert_float(k.clone(), v as f64);
+        self.attributes_int.insert(k, v);
+    }
 }
 
 #[derive(Debug, Default, Serialize, Ord, PartialOrd, Eq, PartialEq, Clone)]
 pub(crate) struct PrimaryKey {
     pub organization_id: u64,
-    pub _sort_timestamp: u32,
-    pub trace_id: Uuid,
-    pub span_id: u64,
+    pub project_id: u64,
+    pub item_type: u8,
+    pub timestamp: u32,
 }
 
-/// the span object for the new "events analytics platform"
 #[derive(Debug, Default, Serialize)]
-struct EAPSpan {
+pub(crate) struct EAPItemSpan {
     #[serde(flatten)]
-    primary_key: PrimaryKey,
+    pub(crate) primary_key: PrimaryKey,
 
-    project_id: u64,
-    service: String, //currently just project ID as a string
-    #[serde(default)]
-    parent_span_id: u64,
-    segment_id: u64,      //aka transaction ID
-    segment_name: String, //aka transaction name
-    is_segment: bool,     //aka "is transaction"
-    start_timestamp: u64,
-    end_timestamp: u64,
-    duration_micro: u64,
-    exclusive_time_micro: u64,
-    retention_days: Option<u16>,
-    name: String, //aka description
-
-    sampling_factor: f64,
-    sampling_weight: u64, //remove eventually
-    sign: u8,             // 1 for additions, -1 for deletions - for this worker it should be 1
+    pub(crate) trace_id: Uuid,
+    pub(crate) item_id: u128,
+    pub(crate) sampling_weight: u64,
+    pub(crate) sampling_factor: f64,
+    pub(crate) retention_days: Option<u16>,
 
     #[serde(flatten)]
-    attributes: AttributeMap,
+    pub(crate) attributes: AttributeMap,
 }
 
 fn fnv_1a(input: &[u8]) -> u32 {
@@ -139,71 +125,36 @@ fn fnv_1a(input: &[u8]) -> u32 {
     res
 }
 
-#[derive(Debug, Default, Deserialize, JsonSchema)]
-pub(crate) struct FromPrimaryKey {
-    pub organization_id: u64,
-    pub start_timestamp: f64,
-    pub trace_id: Uuid,
-    pub span_id: String,
-}
-
-impl From<FromPrimaryKey> for PrimaryKey {
-    fn from(from: FromPrimaryKey) -> PrimaryKey {
-        PrimaryKey {
-            organization_id: from.organization_id,
-            _sort_timestamp: from.start_timestamp as u32,
-            trace_id: from.trace_id,
-            span_id: u64::from_str_radix(&from.span_id, 16).unwrap_or_default(),
-        }
-    }
-}
-
-impl From<FromSpanMessage> for EAPSpan {
-    fn from(from: FromSpanMessage) -> EAPSpan {
+impl From<FromSpanMessage> for EAPItemSpan {
+    fn from(from: FromSpanMessage) -> EAPItemSpan {
+        let item_id = u128::from_str_radix(&from.span_id, 16).unwrap_or_else(|_| {
+            panic!(
+                "Failed to parse span_id into u128. span_id: {}",
+                from.span_id
+            )
+        });
         let mut res = Self {
-            primary_key: FromPrimaryKey {
+            primary_key: PrimaryKey {
                 organization_id: from.organization_id,
-                start_timestamp: from.start_timestamp_ms as f64 / 1000.0,
-                trace_id: from.trace_id,
-                span_id: from.span_id,
-            }
-            .into(),
-            project_id: from.project_id,
-            service: from.project_id.to_string(),
-            parent_span_id: from
-                .parent_span_id
-                .map_or(0, |s| u64::from_str_radix(&s, 16).unwrap_or(0)),
-            segment_id: from
-                .segment_id
-                .map_or(0, |s| u64::from_str_radix(&s, 16).unwrap_or(0)),
-            is_segment: from.is_segment,
-            start_timestamp: (from.start_timestamp_precise * 1e6) as u64,
-            end_timestamp: (from.end_timestamp_precise * 1e6) as u64,
-            duration_micro: ((from.end_timestamp_precise - from.start_timestamp_precise) * 1e6)
-                as u64,
-            exclusive_time_micro: (from.exclusive_time_ms * 1e3) as u64,
-            retention_days: from.retention_days,
-            name: from.description.unwrap_or_default(),
-
+                project_id: from.project_id,
+                item_type: 1, // hardcoding "span" as type
+                timestamp: (from.start_timestamp_ms / 1000) as u32,
+            },
+            trace_id: from.trace_id,
+            item_id,
             sampling_weight: 1,
-            sampling_factor: 1.,
-            sign: 1,
+            sampling_factor: 1.0,
+            retention_days: from.retention_days,
 
             ..Default::default()
         };
 
         {
-            if let Some(profile_id) = from.profile_id {
-                res.attributes.insert_str(
-                    "sentry.profile_id".to_owned(),
-                    profile_id.as_simple().to_string(),
-                );
-            }
-
             if let Some(sentry_tags) = from.sentry_tags {
                 for (k, v) in sentry_tags {
-                    if k == "transaction" {
-                        res.segment_name = v;
+                    if k == "description" {
+                        res.attributes
+                            .insert_str("sentry.normalized_description".to_string(), v);
                     } else {
                         res.attributes.insert_str(format!("sentry.{k}"), v);
                     }
@@ -212,7 +163,12 @@ impl From<FromSpanMessage> for EAPSpan {
 
             if let Some(tags) = from.tags {
                 for (k, v) in tags {
-                    res.attributes.insert_str(k, v);
+                    if k == "description" {
+                        res.attributes
+                            .insert_str("sentry.normalized_description".to_string(), v);
+                    } else {
+                        res.attributes.insert_str(k, v);
+                    }
                 }
             }
 
@@ -221,11 +177,10 @@ impl From<FromSpanMessage> for EAPSpan {
                     match k.as_str() {
                         "client_sample_rate" if v.value > 0.0 => res.sampling_factor *= v.value,
                         "server_sample_rate" if v.value > 0.0 => res.sampling_factor *= v.value,
-                        _ => res.attributes.insert_num(k, v.value),
+                        _ => res.attributes.insert_float(k, v.value),
                     }
                 }
             }
-
             // lower precision to compensate floating point errors
             res.sampling_factor = (res.sampling_factor * 1e9).round() / 1e9;
             res.sampling_weight = (1.0 / res.sampling_factor).round() as u64;
@@ -240,15 +195,81 @@ impl From<FromSpanMessage> for EAPSpan {
                         Value::Object(object) => res
                             .attributes
                             .insert_str(k, serde_json::to_string(&object).unwrap_or_default()),
-                        Value::Number(number) => res
-                            .attributes
-                            .insert_num(k, number.as_f64().unwrap_or_default()),
-                        Value::Bool(true) => res.attributes.insert_num(k, 1.0),
-                        Value::Bool(false) => res.attributes.insert_num(k, 0.0),
+                        Value::Number(number) => {
+                            if number.is_i64() {
+                                res.attributes
+                                    .insert_int(k, number.as_i64().unwrap_or_default());
+                            } else if number.is_u64() {
+                                // as_i64() will return None if the u64 is too large to fit in i64
+                                res.attributes
+                                    .insert_int(k, number.as_i64().unwrap_or_default());
+                            } else {
+                                res.attributes
+                                    .insert_float(k, number.as_f64().unwrap_or_default());
+                            }
+                        }
+                        Value::Bool(b) => {
+                            // insert_bool double writes as a bool and float
+                            res.attributes.insert_bool(k.clone(), b);
+                        }
                         _ => (),
                     }
                 }
             }
+
+            if let Some(description) = from.description {
+                res.attributes
+                    .insert_str("sentry.raw_description".to_string(), description);
+            }
+
+            // insert int double writes as float and int
+            res.attributes
+                .insert_int("sentry.duration_ms".to_string(), from.duration_ms as i64);
+
+            res.attributes.insert_float(
+                "sentry.end_timestamp_precise".to_string(),
+                from.end_timestamp_precise,
+            );
+
+            if let Some(event_id) = from.event_id {
+                res.attributes.insert_str(
+                    "sentry.event_id".to_string(),
+                    event_id.as_simple().to_string(),
+                );
+            }
+
+            res.attributes.insert_float(
+                "sentry.exclusive_time_ms".to_string(),
+                from.exclusive_time_ms,
+            );
+
+            res.attributes
+                .insert_bool("sentry.is_segment".to_string(), from.is_segment);
+
+            if let Some(parent_span_id) = from.parent_span_id {
+                res.attributes
+                    .insert_str("sentry.parent_span_id".to_string(), parent_span_id);
+            }
+
+            if let Some(profile_id) = from.profile_id {
+                res.attributes.insert_str(
+                    "sentry.profile_id".to_owned(),
+                    profile_id.as_simple().to_string(),
+                );
+            }
+
+            res.attributes
+                .insert_float("sentry.received".to_string(), from.received);
+
+            if let Some(segment_id) = from.segment_id {
+                res.attributes
+                    .insert_str("sentry.segment_id".to_string(), segment_id);
+            }
+
+            res.attributes.insert_float(
+                "sentry.start_timestamp_precise".to_string(),
+                from.start_timestamp_precise,
+            );
         }
 
         res
@@ -302,6 +323,7 @@ mod tests {
     "retention_days": 90,
     "segment_id": "8873a98879faf06d",
     "sentry_tags": {
+        "description": "normalized_description",
         "category": "http",
         "environment": "development",
         "op": "http.server",
@@ -358,9 +380,31 @@ mod tests {
     #[test]
     fn test_serialization() {
         let msg: FromSpanMessage = serde_json::from_slice(SPAN_KAFKA_MESSAGE.as_bytes()).unwrap();
-        let span: EAPSpan = msg.into();
+        let item: EAPItemSpan = msg.into();
         insta::with_settings!({sort_maps => true}, {
-            insta::assert_json_snapshot!(span)
+            insta::assert_json_snapshot!(item)
         });
+    }
+
+    #[test]
+    fn test_sentry_description_to_raw_description() {
+        let msg: FromSpanMessage = serde_json::from_slice(SPAN_KAFKA_MESSAGE.as_bytes()).unwrap();
+        let item: EAPItemSpan = msg.into();
+
+        // Check that the sentry.description tag is written into description
+        assert_eq!(
+            item.attributes
+                .attributes_string_36
+                .get("sentry.normalized_description"),
+            Some(&"normalized_description".to_string())
+        );
+
+        // Check that description is written into raw_description
+        assert_eq!(
+            item.attributes
+                .attributes_string_11
+                .get("sentry.raw_description"),
+            Some(&"/api/0/relays/projectconfigs/".to_string())
+        );
     }
 }
