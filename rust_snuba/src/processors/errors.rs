@@ -689,7 +689,10 @@ impl ErrorRow {
             }
         }
 
-        let sample_weight = from.data.sample_rate.map_or(None, |rate| Some(1.0 / rate));
+        let sample_weight =
+            from.data
+                .sample_rate
+                .and_then(|rate| if rate == 0.0 { None } else { Some(1.0 / rate) });
 
         Ok(Self {
             contexts_key: contexts_keys,
@@ -752,7 +755,7 @@ impl ErrorRow {
             user: user.unwrap_or_default(),
             version: from.data.version,
             symbolicated_in_app: from.data.symbolicated_in_app,
-            sample_weight: sample_weight,
+            sample_weight,
             ..Default::default()
         })
     }
