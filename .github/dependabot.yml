@@ -23,7 +23,7 @@ updates:
     ignore:
       # sentry-kafka-schemas has its own lints to ensure it is reasonably
       # up-to-date -- we should rely on them
-      - dependency-name: "sentry-kafka-schemas"
+      - dependency-name: sentry-kafka-schemas
 
   - package-ecosystem: "docker"
     directory: "/"
@@ -39,15 +39,3 @@ updates:
       interval: "weekly"
       day: "sunday"
     open-pull-requests-limit: 10
-
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "daily"
-      timezone: America/Los_Angeles
-      time: '9:30'
-    groups:
-      sentry-dependencies:
-        patterns:
-          - 'sentry-sdk'
-          - 'sentry-arroyo'
