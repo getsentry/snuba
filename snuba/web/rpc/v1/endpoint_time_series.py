@@ -9,7 +9,6 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
-from snuba.state import get_int_config
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.proto_visitor import (
@@ -133,7 +132,6 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         )
         in_msg_wrapper = TimeSeriesRequestWrapper(in_msg)
         in_msg_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
-        if bool(get_int_config("enable_clear_labels_eap", 0)):
-            preprocess_expression_labels(in_msg)
+        preprocess_expression_labels(in_msg)
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)
