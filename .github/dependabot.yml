@@ -45,7 +45,7 @@ updates:
     schedule:
       interval: "daily"
       timezone: America/Los_Angeles
-      time: '9:30'
+      time: '09:30'
     groups:
       sentry-dependencies:
         patterns:
