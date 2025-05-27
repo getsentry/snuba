@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 import yaml
-from black import Mode, format_str  # type: ignore
+from black import Mode, format_str
 
 from snuba.migrations.autogeneration.diff import generate_python_migration
 
