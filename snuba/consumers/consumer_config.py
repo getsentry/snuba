@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Mapping, Optional, Sequence
 
 from snuba import settings
@@ -19,6 +19,7 @@ class ClickhouseClusterConfig:
     user: str
     password: str
     database: str
+    secure: bool
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class TopicConfig:
     broker_config: Mapping[str, Any]
     logical_topic_name: str
     physical_topic_name: str
+    quantized_rebalance_consumer_group_delay_secs: Optional[int]
 
 
 @dataclass(frozen=True)
@@ -85,11 +87,7 @@ def _add_to_topic_broker_config(
     # copy the broker config to avoid modifying the original
     broker_config = {k: v for k, v in topic_config.broker_config.items()}
     broker_config[param_key] = param_value
-    return TopicConfig(
-        broker_config=broker_config,
-        logical_topic_name=topic_config.logical_topic_name,
-        physical_topic_name=topic_config.physical_topic_name,
-    )
+    return replace(topic_config, broker_config=broker_config)
 
 
 def _resolve_topic_config(
@@ -97,6 +95,7 @@ def _resolve_topic_config(
     topic_spec: Optional[KafkaTopicSpec],
     cli_param: Optional[str],
     slice_id: Optional[int],
+    quantized_rebalance_consumer_group_delay_secs: Optional[int] = None,
 ) -> Optional[TopicConfig]:
     if topic_spec is None:
         if cli_param is not None:
@@ -117,6 +116,7 @@ def _resolve_topic_config(
         broker_config=broker,
         logical_topic_name=logical_topic_name,
         physical_topic_name=physical_topic_name,
+        quantized_rebalance_consumer_group_delay_secs=quantized_rebalance_consumer_group_delay_secs,
     )
 
 
@@ -157,6 +157,8 @@ def resolve_consumer_config(
     queued_max_messages_kbytes: Optional[int] = None,
     queued_min_messages: Optional[int] = None,
     group_instance_id: Optional[str] = None,
+    quantized_rebalance_consumer_group_delay_secs: Optional[int] = None,
+    custom_envoy_request_timeout: Optional[int] = None,
 ) -> ConsumerConfig:
     """
     Resolves the ClickHouse cluster and Kafka brokers, and the physical topic name
@@ -175,7 +177,11 @@ def resolve_consumer_config(
     default_topic_spec = stream_loader.get_default_topic_spec()
 
     resolved_raw_topic = _resolve_topic_config(
-        "main topic", default_topic_spec, raw_topic, slice_id
+        "main topic",
+        default_topic_spec,
+        raw_topic,
+        slice_id,
+        quantized_rebalance_consumer_group_delay_secs,
     )
 
     assert resolved_raw_topic is not None
@@ -270,6 +276,7 @@ def resolve_storage_config(
         http_port=cluster.get_http_port(),
         user=user,
         password=password,
+        secure=cluster.get_secure(),
         database=cluster.get_database(),
     )
 

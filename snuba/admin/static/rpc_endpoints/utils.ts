@@ -70,7 +70,7 @@ export const processTraceResults = async (
   if (result.meta?.queryInfo?.[0]?.traceLogs) {
     const traceResult = await api.summarizeTraceWithProfile(
       result.meta.queryInfo[0].traceLogs,
-      "eap_spans",
+      "eap_items",
       signal
     );
 

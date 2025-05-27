@@ -1764,6 +1764,57 @@ class TestDiscoverApi(BaseApiTest):
         assert len(data) == 1
         assert data == [{"trace_sampled": None, "num_processing_errors": 0}]
 
+    def test_symbolicated_in_app(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["symbolicated_in_app"],
+                    "conditions": [
+                        ["type", "=", "error"],
+                        ["symbolicated_in_app", "=", True],
+                    ],
+                    "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data["data"]) == 1
+        assert data["data"][0]["symbolicated_in_app"] == True
+
+    def test_timestamp_ms_query(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["timestamp_ms"],
+                    "conditions": [
+                        [
+                            "timestamp_ms",
+                            ">=",
+                            (self.base_time - self.skew).isoformat(),
+                        ],
+                        ["timestamp_ms", "<", (self.base_time + self.skew).isoformat()],
+                    ],
+                    "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data["data"]) == 1
+        assert "timestamp_ms" in data["data"][0]
+        assert data["data"][0]["timestamp_ms"] is not None
+
 
 class TestDiscoverAPIEntitySelection(TestDiscoverApi):
     """

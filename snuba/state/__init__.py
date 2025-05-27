@@ -41,7 +41,6 @@ config_description_hash = "snuba-config-description"
 config_history_hash = "snuba-config-history"
 config_changes_list = "snuba-config-changes"
 config_changes_list_limit = 25
-queries_list = "snuba-queries"
 rate_limit_config_key = "snuba-ratelimit-config:"
 
 # Rate Limiting and Deduplication
@@ -346,13 +345,9 @@ def _record_query_delivery_callback(
 
 
 def record_query(query_metadata: snuba_queries_v1.Querylog) -> None:
-    max_redis_queries = 200
     try:
         producer = _kafka_producer()
         data = safe_dumps(query_metadata)
-        rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(
-            queries_list, 0, max_redis_queries - 1
-        ).execute()
         producer.poll(0)  # trigger queued delivery callbacks
         producer.produce(
             settings.KAFKA_TOPIC_MAP.get(Topic.QUERYLOG.value, Topic.QUERYLOG.value),

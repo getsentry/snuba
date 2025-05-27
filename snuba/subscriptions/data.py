@@ -10,6 +10,7 @@ from enum import Enum
 from functools import partial
 from typing import (
     Any,
+    Generic,
     Iterator,
     List,
     Mapping,
@@ -17,10 +18,12 @@ from typing import (
     NewType,
     Optional,
     Tuple,
+    TypeVar,
     Union,
 )
 from uuid import UUID
 
+from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest,
 )
@@ -50,7 +53,18 @@ from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
+from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryResult
+from snuba.web.query import run_query
+from snuba.web.rpc.proto_visitor import (
+    GetExpressionAggregationsVisitor,
+    TimeSeriesExpressionWrapper,
+)
+from snuba.web.rpc.v1.endpoint_time_series import (
+    EndpointTimeSeries,
+    _convert_aggregations_to_expressions,
+)
 
 SUBSCRIPTION_REFERRER = "subscription"
 
@@ -79,6 +93,8 @@ logger = logging.getLogger("snuba.subscriptions")
 
 PartitionId = NewType("PartitionId", int)
 
+TRequest = TypeVar("TRequest")
+
 
 @dataclass(frozen=True)
 class SubscriptionIdentifier:
@@ -95,7 +111,7 @@ class SubscriptionIdentifier:
 
 
 @dataclass(frozen=True, kw_only=True)
-class SubscriptionData(ABC):
+class _SubscriptionData(ABC, Generic[TRequest]):
     project_id: int
     resolution_sec: int
     time_window_sec: int
@@ -127,14 +143,25 @@ class SubscriptionData(ABC):
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
-    ) -> Request:
+    ) -> TRequest:
+        raise NotImplementedError
+
+    @abstractmethod
+    def run_query(
+        self,
+        dataset: Dataset,
+        request: TRequest,
+        timer: Timer,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ) -> QueryResult:
         raise NotImplementedError
 
     @classmethod
     @abstractmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SubscriptionData:
+    ) -> _SubscriptionData[TRequest]:
         raise NotImplementedError
 
     @abstractmethod
@@ -143,7 +170,7 @@ class SubscriptionData(ABC):
 
 
 @dataclass(frozen=True, kw_only=True)
-class RPCSubscriptionData(SubscriptionData):
+class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
     """
     Represents the state of an RPC subscription.
     """
@@ -152,6 +179,17 @@ class RPCSubscriptionData(SubscriptionData):
 
     request_name: str
     request_version: str
+
+    def __post_init__(self) -> None:
+        # convert any use of aggregation to expressions
+        request = TimeSeriesRequest()
+        request.ParseFromString(base64.b64decode(self.time_series_request))
+        request = _convert_aggregations_to_expressions(request)
+        object.__setattr__(
+            self,
+            "time_series_request",
+            base64.b64encode(request.SerializeToString()).decode("utf-8"),
+        )
 
     def validate(self) -> None:
         super().validate()
@@ -169,16 +207,18 @@ class RPCSubscriptionData(SubscriptionData):
         if len(request.meta.project_ids) != 1:
             raise InvalidSubscriptionError("Multiple project IDs not supported.")
 
-        if not request.aggregations or len(request.aggregations) != 1:
-            raise InvalidSubscriptionError("Exactly one aggregation required.")
+        if not request.expressions or len(request.expressions) != 1:
+            raise InvalidSubscriptionError("Exactly one expression required.")
 
         if request.group_by:
             raise InvalidSubscriptionError("Group bys not supported.")
 
-        aggregation = request.aggregations[0]
-        if (
-            aggregation.extrapolation_mode
-            != ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
+        expression = request.expressions[0]
+        vis = GetExpressionAggregationsVisitor()
+        TimeSeriesExpressionWrapper(expression).accept(vis)
+        if any(
+            e.extrapolation_mode != ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
+            for e in vis.aggregations
         ):
             raise InvalidSubscriptionError(
                 f"Invalid extrapolation mode. Allowed extrapolation modes: {ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED}"
@@ -192,8 +232,52 @@ class RPCSubscriptionData(SubscriptionData):
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
-    ) -> Request:
-        raise NotImplementedError
+    ) -> TimeSeriesRequest:
+
+        request_class = EndpointTimeSeries().request_class()()
+        request_class.ParseFromString(base64.b64decode(self.time_series_request))
+
+        start_time_proto = Timestamp()
+        start_time_proto.FromDatetime(
+            timestamp - timedelta(seconds=self.time_window_sec)
+        )
+        end_time_proto = Timestamp()
+        end_time_proto.FromDatetime(timestamp)
+        request_class.meta.start_timestamp.CopyFrom(start_time_proto)
+        request_class.meta.end_timestamp.CopyFrom(end_time_proto)
+
+        request_class.meta.referrer = referrer
+
+        request_class.granularity_secs = self.time_window_sec
+
+        return request_class
+
+    def run_query(
+        self,
+        dataset: Dataset,
+        request: TimeSeriesRequest,
+        timer: Timer,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ) -> QueryResult:
+        response = EndpointTimeSeries().execute(request)
+        if not response.result_timeseries:
+            result: Result = {
+                "meta": [],
+                "data": [{request.expressions[0].label: None}],
+                "trace_output": "",
+            }
+            return QueryResult(
+                result=result, extra={"stats": {}, "sql": "", "experiments": {}}
+            )
+
+        timeseries = response.result_timeseries[0]
+        data = [{timeseries.label: timeseries.data_points[0].data}]
+
+        result = {"meta": [], "data": data, "trace_output": ""}
+        return QueryResult(
+            result=result, extra={"stats": {}, "sql": "", "experiments": {}}
+        )
 
     @classmethod
     def from_dict(
@@ -263,7 +347,7 @@ class RPCSubscriptionData(SubscriptionData):
 
 
 @dataclass(frozen=True, kw_only=True)
-class SnQLSubscriptionData(SubscriptionData):
+class SnQLSubscriptionData(_SubscriptionData[Request]):
     """
     Represents the state of a subscription.
     """
@@ -379,10 +463,26 @@ class SnQLSubscriptionData(SubscriptionData):
         )
         return request
 
+    def run_query(
+        self,
+        dataset: Dataset,
+        request: Request,
+        timer: Timer,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ) -> QueryResult:
+        return run_query(
+            dataset,
+            request,
+            timer,
+            robust=robust,
+            concurrent_queries_gauge=concurrent_queries_gauge,
+        )
+
     @classmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SubscriptionData:
+    ) -> SnQLSubscriptionData:
         entity: Entity = get_entity(entity_key)
 
         metadata = {}
@@ -407,6 +507,7 @@ class SnQLSubscriptionData(SubscriptionData):
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
             "query": self.query,
+            "subscription_type": SubscriptionType.SNQL.value,
         }
 
         subscription_processors = self.entity.get_subscription_processors()
@@ -414,6 +515,10 @@ class SnQLSubscriptionData(SubscriptionData):
             for processor in subscription_processors:
                 subscription_data_dict.update(processor.to_dict(self.metadata))
         return subscription_data_dict
+
+
+SubscriptionData = Union[RPCSubscriptionData, SnQLSubscriptionData]
+SubscriptionRequest = Union[Request, TimeSeriesRequest]
 
 
 class Subscription(NamedTuple):
@@ -461,9 +566,9 @@ class SubscriptionScheduler(ABC):
 
 class SubscriptionTaskResultFuture(NamedTuple):
     task: ScheduledSubscriptionTask
-    future: Future[Tuple[Request, Result]]
+    future: Future[Tuple[SubscriptionRequest, Result]]
 
 
 class SubscriptionTaskResult(NamedTuple):
     task: ScheduledSubscriptionTask
-    result: Tuple[Request, Result]
+    result: Tuple[SubscriptionRequest, Result]

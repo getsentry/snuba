@@ -1,0 +1,66 @@
+version: v1
+kind: writable_storage
+name: uptime_monitor_checks
+storage:
+  key: uptime_monitor_checks
+  set_key: events_analytics_platform
+readiness_state: complete
+schema:
+  columns:
+    [
+      { name: organization_id, type: UInt, args: { size: 64 } },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: environment, type: String, args: { schema_modifiers: [nullable, low_cardinality] } },
+      { name: uptime_subscription_id, type: UUID },
+      { name: uptime_check_id, type: UUID },
+      { name: scheduled_check_time, type: DateTime },
+      { name: timestamp, type: DateTime64, args: { precision: 3 } },
+      { name: duration_ms, type: UInt, args: { size: 64 } },
+      { name: region, type: String, args: { schema_modifiers: [low_cardinality] } },
+      { name: check_status, type: String, args: { schema_modifiers: [low_cardinality] } },
+      { name: check_status_reason, type: String, args: { schema_modifiers: [low_cardinality] } },
+      { name: http_status_code, type: UInt, args: { size: 16, schema_modifiers: [nullable] } },
+      { name: trace_id, type: UUID },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      { name: incident_status, type: UInt, args: { size: 16 } },
+    ]
+  local_table_name: uptime_monitor_checks_v2_local
+  dist_table_name: uptime_monitor_checks_v2_dist
+
+query_processors:
+  - processor: UUIDColumnProcessor
+    args:
+      columns: [trace_id]
+
+mandatory_condition_checkers:
+  - condition: ProjectIdEnforcer
+
+stream_loader:
+  processor: UptimeMonitorChecksProcessor
+  default_topic: snuba-uptime-results
+
+allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
+  - name: BytesScannedRejectingPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - project_id
+        - referrer
+      default_config_overrides:
+        is_active: 0
+        is_enforced: 0

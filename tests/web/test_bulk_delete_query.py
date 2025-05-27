@@ -109,6 +109,19 @@ def test_deletes_not_enabled_runtime_config() -> None:
 
 
 @pytest.mark.redis_db
+@patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
+@patch("snuba.web.bulk_delete_query.produce_delete_query")
+def test_deletes_killswitch(mock_produce_query: Mock, mock_enforce_rows: Mock) -> None:
+    storage = get_writable_storage(StorageKey("search_issues"))
+    conditions = {"project_id": [1], "group_id": [1, 2, 3, 4]}
+    attr_info = get_attribution_info()
+
+    set_config("lw_deletes_killswitch_search_issues", "[1]")
+    delete_from_storage(storage, conditions, attr_info)
+    mock_produce_query.assert_not_called()
+
+
+@pytest.mark.redis_db
 def test_delete_invalid_column_type() -> None:
     storage = get_writable_storage(StorageKey("search_issues"))
     conditions: dict[str, list[int | str]] = {

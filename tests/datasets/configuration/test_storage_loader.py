@@ -6,6 +6,7 @@ from typing import Any
 
 from snuba.clickhouse.columns import (
     Array,
+    Bool,
     Column,
     DateTime,
     DateTime64,
@@ -153,6 +154,7 @@ delete_allocation_policies:
             {"name": "int_col", "type": "UInt", "args": {"size": 64}},
             {"name": "float_col", "type": "Float", "args": {"size": 32}},
             {"name": "string_col", "type": "String"},
+            {"name": "bool_col", "type": "Bool"},
             {"name": "time_col", "type": "DateTime"},
             {
                 "name": "time64_col",
@@ -209,6 +211,7 @@ delete_allocation_policies:
             Column("int_col", UInt(64)),
             Column("float_col", Float(32)),
             Column("string_col", String()),
+            Column("bool_col", Bool()),
             Column("time_col", DateTime()),
             Column("time64_col", DateTime64(3, "America/New_York")),
             Column("nested_col", Nested([Column("sub_col", UInt(64))])),

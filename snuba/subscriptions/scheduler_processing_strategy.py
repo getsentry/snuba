@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import time
 from collections import deque
-from concurrent.futures import Future
 from datetime import datetime
 from typing import (
     Deque,
@@ -17,7 +16,7 @@ from typing import (
 )
 
 from arroyo import Message, Topic
-from arroyo.backends.abstract import Producer
+from arroyo.backends.abstract import Producer, ProducerFuture
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.types import BrokerValue, Commit
@@ -308,7 +307,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
 
 class TickSubscription(NamedTuple):
     tick_message: BrokerValue[CommittableTick]
-    subscription_future: Future[BrokerValue[KafkaPayload]]
+    subscription_future: ProducerFuture[BrokerValue[KafkaPayload]]
     offset_to_commit: Optional[int]
 
 
@@ -320,14 +319,15 @@ class ScheduledSubscriptionQueue:
     def __init__(self) -> None:
         self.__queues: Deque[
             Tuple[
-                BrokerValue[CommittableTick], Deque[Future[BrokerValue[KafkaPayload]]]
+                BrokerValue[CommittableTick],
+                Deque[ProducerFuture[BrokerValue[KafkaPayload]]],
             ]
         ] = deque()
 
     def append(
         self,
         tick_message: BrokerValue[CommittableTick],
-        futures: Deque[Future[BrokerValue[KafkaPayload]]],
+        futures: Deque[ProducerFuture[BrokerValue[KafkaPayload]]],
     ) -> None:
         if len(futures) > 0:
             self.__queues.append((tick_message, futures))

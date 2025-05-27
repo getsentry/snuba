@@ -141,12 +141,10 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Enable async inserts for ClickHouse",
 )
 @click.option(
-    "--mutations-mode",
-    is_flag=True,
-    default=False,
-    help="""
-    This is only to be used for the mutability consumer
-    """,
+    "--max-dlq-buffer-length",
+    type=int,
+    default=None,
+    help="Set a per-partition limit to the length of the DLQ buffer",
 )
 @click.option(
     "--health-check-file",
@@ -173,14 +171,16 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Optional timeout for batch writer client connecting and sending request to Clickhouse",
 )
 @click.option(
-    "--max-bytes-before-external-group-by",
+    "--custom-envoy-request-timeout",
     type=int,
     default=None,
-    help="""
-    Allow batching on disk for GROUP BY queries. This is a test mitigation for whether a
-    materialized view is causing OOM on inserts. If successful, this should be set in storage config.
-    If not successful, this option should be removed.
-    """,
+    help="Optional request timeout value for Snuba -> Envoy -> Clickhouse connection",
+)
+@click.option(
+    "--quantized-rebalance-consumer-group-delay-secs",
+    type=int,
+    default=None,
+    help="Quantized rebalancing means that during deploys, rebalancing is triggered across all pods within a consumer group at the same time. The value is used by the pods to align their group join/leave activity to some multiple of the delay",
 )
 def rust_consumer(
     *,
@@ -211,8 +211,9 @@ def rust_consumer(
     enforce_schema: bool,
     stop_at_timestamp: Optional[int],
     batch_write_timeout_ms: Optional[int],
-    max_bytes_before_external_group_by: Optional[int],
-    mutations_mode: bool
+    max_dlq_buffer_length: Optional[int],
+    quantized_rebalance_consumer_group_delay_secs: Optional[int],
+    custom_envoy_request_timeout: Optional[int],
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -232,6 +233,8 @@ def rust_consumer(
         queued_min_messages=queued_min_messages,
         slice_id=slice_id,
         group_instance_id=group_instance_id,
+        quantized_rebalance_consumer_group_delay_secs=quantized_rebalance_consumer_group_delay_secs,
+        custom_envoy_request_timeout=custom_envoy_request_timeout,
     )
 
     consumer_config_raw = json.dumps(asdict(consumer_config))
@@ -259,12 +262,12 @@ def rust_consumer(
         enforce_schema,
         max_poll_interval_ms,
         async_inserts,
-        mutations_mode,
         python_max_queue_depth,
         health_check_file,
         stop_at_timestamp,
         batch_write_timeout_ms,
-        max_bytes_before_external_group_by,
+        max_dlq_buffer_length,
+        custom_envoy_request_timeout,
     )
 
     sys.exit(exitcode)

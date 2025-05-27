@@ -1,44 +1,35 @@
 {
-    "default": {},
-    "TraceItemAttributesRequest": {
-      "v1alpha": {
-          "meta": {
-              "project_ids": [1],
-              "organization_id": 1,
-              "cogs_category": "something",
-              "referrer": "something",
-              "start_timestamp": "2024-10-03T00:00:00Z",
-              "end_timestamp": "2024-10-06T00:00:00Z"
-          },
-          "limit": 10,
-          "offset": 0,
-          "type": "TYPE_STRING"
-      }
-    },
-    "AttributeValuesRequest": {
-      "v1alpha": {
-          "meta": {
-              "project_ids": [1],
-              "organization_id": 1,
-              "cogs_category": "something",
-              "referrer": "something",
-              "start_timestamp": "2024-10-03T00:00:00Z",
-              "end_timestamp": "2024-10-06T00:00:00Z"
-          },
-          "name": "http.status_code",
-          "limit": 5,
-          "offset": 0
-      }
-    },
-    "EndpointTraceItemTable": {
-      "v1": {
+  "default": {},
+  "AttributeValuesRequest": {
+    "v1": {
       "meta": {
-        "project_ids": [1],
+        "project_ids": [
+          1
+        ],
         "organization_id": 1,
-        "cogs_category": "something",
-        "referrer": "something",
-        "start_timestamp":"2024-10-03T00:00:00Z",
-        "end_timestamp":"2024-10-31T00:00:00Z"
+        "cogs_category": "snuba-admin",
+        "referrer": "snuba-admin",
+        "start_timestamp": "2024-10-03T00:00:00Z",
+        "end_timestamp": "2024-10-06T00:00:00Z"
+      },
+      "key": {
+        "type": "TYPE_STRING",
+        "name": "http.status_code"
+      },
+      "limit": 5
+    }
+  },
+  "EndpointTraceItemTable": {
+    "v1": {
+      "meta": {
+        "project_ids": [
+          1
+        ],
+        "organization_id": 1,
+        "cogs_category": "snuba-admin",
+        "referrer": "snuba-admin",
+        "start_timestamp": "2024-10-03T00:00:00Z",
+        "end_timestamp": "2024-10-31T00:00:00Z"
       },
       "columns": [
         {
@@ -58,23 +49,93 @@
           }
         }
       ],
-        "limit": 100
-      }
-    },
-    "AggregateBucketRequest": {
-      "v1alpha": {
+      "limit": 100
+    }
+  },
+  "EndpointTraceItemAttributeNames": {
+    "v1": {
       "meta": {
-       "project_ids": [1],
+        "project_ids": [
+          1
+        ],
         "organization_id": 1,
-        "start_timestamp":"2024-10-03T00:00:00Z",
-        "end_timestamp":"2024-10-04T00:00:00Z"
+        "start_timestamp": "2024-10-03T00:00:00Z",
+        "end_timestamp": "2024-10-04T00:00:00Z"
       },
-      "key": {
-        "name": "sentry.duration_ms",
-        "type": "TYPE_INT"
+      "limit": 30,
+      "type": "TYPE_STRING"
+    }
+  },
+  "EndpointTimeSeries": {
+    "v1": {
+      "meta": {
+        "project_ids": [
+          1
+        ],
+        "organization_id": 1,
+        "start_timestamp": "2024-10-03T00:00:00Z",
+        "end_timestamp": "2024-10-04T00:00:00Z"
       },
-      "aggregate": "FUNCTION_P99",
-      "granularity_secs": 900
+      "aggregations": [
+        {
+          "aggregate": "FUNCTION_SUM",
+          "key": {
+            "type": "TYPE_FLOAT",
+            "name": "test_metric"
+          },
+          "label": "sum",
+          "extrapolationMode": "EXTRAPOLATION_MODE_NONE"
+        },
+        {
+          "aggregate": "FUNCTION_AVG",
+          "key": {
+            "type": "TYPE_FLOAT",
+            "name": "test_metric"
+          },
+          "label": "avg",
+          "extrapolationMode": "EXTRAPOLATION_MODE_NONE"
+        }
+      ],
+      "granularitySecs": "300"
+    }
+  },
+  "CreateSubscriptionRequest": {
+    "v1": {
+      "timeSeriesRequest": {
+        "meta": {
+          "project_ids": [
+            1
+          ],
+          "organization_id": 1,
+          "start_timestamp": "2024-10-03T00:00:00Z",
+          "end_timestamp": "2024-10-04T00:00:00Z"
+        },
+        "filter": {
+          "comparisonFilter": {
+            "key": {
+              "type": "TYPE_STRING",
+              "name": "foo"
+            },
+            "op": "OP_NOT_EQUALS",
+            "value": {
+              "valStr": "bar"
+            }
+          }
+        },
+        "aggregations": [
+          {
+            "aggregate": "FUNCTION_SUM",
+            "key": {
+              "type": "TYPE_FLOAT",
+              "name": "test_metric"
+            },
+            "label": "sum",
+            "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED"
+          }
+        ]
+      },
+      "timeWindowSecs": 300,
+      "resolutionSecs": 60
     }
   }
 }

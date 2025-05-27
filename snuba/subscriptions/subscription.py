@@ -1,28 +1,18 @@
 from datetime import datetime
 from uuid import UUID, uuid1
 
-from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
-
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import enforce_table_writer, get_entity
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.request import Request
 from snuba.subscriptions.data import (
     PartitionId,
-    RPCSubscriptionData,
-    SnQLSubscriptionData,
     SubscriptionData,
     SubscriptionIdentifier,
 )
 from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
-from snuba.subscriptions.rpc_helpers import (
-    build_rpc_request,
-    run_rpc_subscription_query,
-)
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import run_query
 
 redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
@@ -60,17 +50,8 @@ class SubscriptionCreator:
         return identifier
 
     def _test_request(self, data: SubscriptionData, timer: Timer) -> None:
-        request: Request | TimeSeriesRequest
-        if isinstance(data, SnQLSubscriptionData):
-            request = data.build_request(self.dataset, datetime.utcnow(), None, timer)
-            run_query(self.dataset, request, timer)
-        if isinstance(data, RPCSubscriptionData):
-            request = build_rpc_request(
-                datetime.utcnow(),
-                data.time_window_sec,
-                data.time_series_request,
-            )
-            run_rpc_subscription_query(request)
+        request = data.build_request(self.dataset, datetime.utcnow(), None, timer)
+        data.run_query(self.dataset, request, timer)  # type: ignore
 
 
 class SubscriptionDeleter:

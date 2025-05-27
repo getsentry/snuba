@@ -3,6 +3,8 @@ kind: dataset
 name: events_analytics_platform
 
 entities:
-  - eap_spans
   - spans_num_attrs
   - spans_str_attrs
+  - uptime_checks
+  - eap_items
+  - eap_items_span

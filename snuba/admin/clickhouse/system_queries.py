@@ -75,16 +75,39 @@ SHOW_QUERY_RE = re.compile(
     re.VERBOSE,
 )
 
+KILL_COMMAND_RE = re.compile(
+    r"""
+        ^
+        (KILL\sMUTATION\sWHERE)
+        \s
+        .*\s*=\s*.*
+        ;?
+        $
+    """,
+    re.IGNORECASE + re.VERBOSE,
+)
+
 SYSTEM_COMMAND_RE = re.compile(
     r"""
         ^
         (SYSTEM)
         \s
         (?!SHUTDOWN\b)(?!KILL\b)
-        [\w\s]+
+        [\w\s'\-_]+
         ;? # Optional semicolon
         $
     """,
+    re.IGNORECASE + re.VERBOSE,
+)
+
+SYSTEM_DROP_COMMAND_RE = re.compile(
+    r"""
+        ^
+        (SYSTEM\s+DROP\s+REPLICA)
+        [\w\s,=()*+<>'%\-\/:\.`]+
+        ;? # Optional semicolon
+        $
+    #""",
     re.IGNORECASE + re.VERBOSE,
 )
 
@@ -92,7 +115,7 @@ OPTIMIZE_QUERY_RE = re.compile(
     r"""^
         (OPTIMIZE\sTABLE)
         \s
-        [\w\s]+
+        [\w\s_\-']+
         ;? # Optional semicolon
         $
     """,
@@ -132,8 +155,12 @@ def is_query_using_only_system_tables(
 
     for line in explain_query_tree_result.results:
         line = line[0].strip()
-        # We don't allow table functions for now as the clickhouse analyzer isn't good enough yet to resolve those tables
-        if line.startswith("TABLE_FUNCTION"):
+        # We don't allow table functions (except clusterAllReplicas/merge) for now as the clickhouse analyzer isn't good enough yet to resolve those tables
+        if (
+            line.startswith("TABLE_FUNCTION")
+            and "table_function_name: clusterAllReplicas" not in line
+            and "table_function_name: merge" not in line
+        ):
             return False
         if line.startswith("TABLE"):
             match = re.search(r"table_name:\s*(\S+)", line, re.IGNORECASE)
@@ -191,8 +218,11 @@ def is_system_command(sql_query: str) -> bool:
     Validates whether we are running something like SYSTEM STOP MERGES
     """
     sql_query = " ".join(sql_query.split())
-    match = SYSTEM_COMMAND_RE.match(sql_query)
-    return True if match else False
+    matches = False
+    to_match = [SYSTEM_COMMAND_RE, KILL_COMMAND_RE, SYSTEM_DROP_COMMAND_RE]
+    for pattern in to_match:
+        matches |= bool(pattern.match(sql_query))
+    return matches
 
 
 def is_query_optimize(sql_query: str) -> bool:

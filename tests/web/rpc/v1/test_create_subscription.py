@@ -1,5 +1,4 @@
 import base64
-import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -11,7 +10,7 @@ from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
 )
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.error_pb2 import Error
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
@@ -21,13 +20,15 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.subscriptions.data import PartitionId, RPCSubscriptionData
+from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_endpoint_time_series.test_endpoint_time_series import (
     DummyMetric,
-    store_timeseries,
+    store_spans_timeseries,
 )
 
-END_TIME = datetime.utcnow().replace(second=0, microsecond=0, tzinfo=UTC)
+END_TIME = datetime.utcnow().replace(tzinfo=UTC)
 START_TIME = END_TIME - timedelta(hours=1)
 
 
@@ -40,6 +41,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -66,6 +68,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -92,6 +95,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -115,7 +119,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
             time_window_secs=300,
             resolution_secs=60,
         ),
-        "Exactly one aggregation required",
+        "Exactly one expression required",
         id="Invalid subscription: multiple aggregations",
     ),
     pytest.param(
@@ -126,6 +130,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 group_by=[
                     AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class")
@@ -155,6 +160,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -180,7 +186,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
 @pytest.mark.redis_db
 class TestCreateSubscriptionApi(BaseApiTest):
     def test_create_valid_subscription(self) -> None:
-        store_timeseries(
+        store_spans_timeseries(
             START_TIME,
             1,
             3600,
@@ -194,6 +200,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -217,27 +224,26 @@ class TestCreateSubscriptionApi(BaseApiTest):
         response_class = CreateSubscriptionResponse()
         response_class.ParseFromString(response.data)
         assert response_class.subscription_id
-        partition = response_class.subscription_id.split("/", 1)[0]
-        entity_key = EntityKey("eap_spans")
+        partition = int(response_class.subscription_id.split("/", 1)[0])
 
-        redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
-        # TODO[fix]: querying the redis client like this directly is temporary
-        # because we don't have decode support for rpc queries in the codec yet.
-        stored_subscription_data = list(
-            redis_client.hgetall(
-                f"subscriptions:{entity_key.value}:{partition}"
-            ).items()
-        )[0]
-        subscription_request = stored_subscription_data[1]
-        subscription_data = json.loads(subscription_request.decode("utf-8"))
+        rpc_subscription_data = list(
+            RedisSubscriptionDataStore(
+                get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+                EntityKey("eap_items_span"),
+                PartitionId(partition),
+            ).all()
+        )[0][1]
 
-        time_series_request = subscription_data["time_series_request"]
+        assert isinstance(rpc_subscription_data, RPCSubscriptionData)
+
         request_class = TimeSeriesRequest()
-        request_class.ParseFromString(base64.b64decode(time_series_request))
-        assert subscription_data["time_window"] == 300
-        assert subscription_data["resolution"] == 60
-        assert subscription_data["request_name"] == "TimeSeriesRequest"
-        assert subscription_data["request_version"] == "v1"
+        request_class.ParseFromString(
+            base64.b64decode(rpc_subscription_data.time_series_request)
+        )
+        assert rpc_subscription_data.time_window_sec == 300
+        assert rpc_subscription_data.resolution_sec == 60
+        assert rpc_subscription_data.request_name == "TimeSeriesRequest"
+        assert rpc_subscription_data.request_version == "v1"
 
     @pytest.mark.parametrize(
         "create_subscription, error_message", TESTS_INVALID_RPC_SUBSCRIPTIONS
@@ -245,7 +251,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
     def test_create_invalid_subscription(
         self, create_subscription: CreateSubscriptionRequestProto, error_message: str
     ) -> None:
-        store_timeseries(
+        store_spans_timeseries(
             START_TIME,
             1,
             3600,

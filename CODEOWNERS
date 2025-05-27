@@ -17,6 +17,7 @@
 # rust_snuba
 /rust_snuba @getsentry/owners-snuba
 /rust_snuba/src/processors/replays.rs @getsentry/replay-backend
+/rust_snuba/src/processors/uptime_monitor_checks.rs @getsentry/crons
 
 # EAP-related
 /snuba/web/rpc @getsentry/events-analytics-platform @getsentry/owners-snuba

@@ -82,6 +82,10 @@ schema:
         type: String,
         args: { schema_modifiers: [nullable] },
       },
+      { name: user_geo_city, type: String },
+      { name: user_geo_country_code, type: String },
+      { name: user_geo_region, type: String },
+      { name: user_geo_subdivision, type: String },
       { name: viewed_by_id, type: UInt, args: { size: 64 } },
       { name: os_name, type: String, args: { schema_modifiers: [nullable] } },
       {
@@ -118,6 +122,18 @@ schema:
         name: device_model,
         type: String,
         args: { schema_modifiers: [nullable] },
+      },
+      {
+        name: ota_updates_channel,
+        type: String,
+      },
+      {
+        name: ota_updates_runtime_version,
+        type: String,
+      },
+      {
+        name: ota_updates_update_id,
+        type: String,
       },
       { name: sdk_name, type: String, args: { schema_modifiers: [nullable] } },
       {
@@ -183,13 +199,15 @@ query_processors:
     args:
       settings:
         max_rows_to_group_by: 1000000
-        group_by_overflow_mode: any
+        group_by_overflow_mode: break
   - processor: MappingOptimizer
     args:
       column_name: tags
       hash_map_name: _tags_hash_map
       killswitch: tags_hash_map_enabled
   - processor: EmptyTagConditionProcessor
+    args:
+      column_name: tags.key
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: tags

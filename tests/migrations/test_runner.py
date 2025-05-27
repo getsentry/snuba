@@ -15,7 +15,7 @@ from snuba.datasets.storages import factory
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
-from snuba.migrations.groups import MigrationGroup, get_group_loader
+from snuba.migrations.groups import OPTIONAL_GROUPS, MigrationGroup, get_group_loader
 from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
 from snuba.migrations.status import Status
@@ -34,7 +34,7 @@ def _drop_all_tables() -> None:
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
+def setup_teardown() -> Generator[None, None, None]:
     _drop_all_tables()
     yield
     _drop_all_tables()
@@ -48,7 +48,7 @@ def temp_settings() -> Any:
     importlib.reload(settings)
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_get_status() -> None:
     runner = Runner()
     assert runner.get_status(
@@ -68,7 +68,7 @@ def test_get_status() -> None:
     assert isinstance(status[1], datetime)
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_show_all() -> None:
     runner = Runner()
     assert all(
@@ -78,7 +78,10 @@ def test_show_all() -> None:
             for migration in group_migrations
         ]
     )
-    runner.run_all(force=True)
+    # only need to run migrations for the system table to
+    # test show_all, can fake the status for the rest
+    runner.run_all(force=True, group=MigrationGroup.SYSTEM)
+    runner.run_all(force=True, fake=True)
     assert all(
         [
             migration.status == Status.COMPLETED
@@ -88,7 +91,7 @@ def test_show_all() -> None:
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_show_all_for_groups() -> None:
     runner = Runner()
     migration_key = MigrationKey(MigrationGroup("system"), "0001_migrations")
@@ -108,27 +111,7 @@ def test_show_all_for_groups() -> None:
     assert all([migration.status == Status.COMPLETED for migration in migrations])
 
 
-@pytest.mark.clickhouse_db
-def test_show_all_nonexistent_migration() -> None:
-    runner = Runner()
-    assert all(
-        [
-            migration.status == Status.NOT_STARTED
-            for (_, group_migrations) in runner.show_all()
-            for migration in group_migrations
-        ]
-    )
-    runner.run_all(force=True)
-    assert all(
-        [
-            migration.status == Status.COMPLETED
-            for (_, group_migrations) in runner.show_all()
-            for migration in group_migrations
-        ]
-    )
-
-
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_run_migration() -> None:
     runner = Runner()
     runner.run_migration(
@@ -157,10 +140,10 @@ def test_run_migration() -> None:
     assert connection.execute("SHOW TABLES LIKE 'sentry_local'").results == []
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_reverse_migration() -> None:
     runner = Runner()
-    runner.run_all(force=True)
+    runner.run_all(force=True, group=MigrationGroup.EVENTS)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
@@ -185,7 +168,7 @@ def test_reverse_migration() -> None:
     ), "Table still exists"
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_get_pending_migrations() -> None:
     runner = Runner()
     total_migrations = get_total_migration_count()
@@ -196,7 +179,7 @@ def test_get_pending_migrations() -> None:
     assert len(runner._get_pending_migrations()) == total_migrations - 1
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_get_pending_migrations_for_group() -> None:
     runner = Runner()
     group = MigrationGroup.EVENTS
@@ -209,7 +192,7 @@ def test_get_pending_migrations_for_group() -> None:
     assert len(runner._get_pending_migrations_for_group(MigrationGroup.SYSTEM)) == 0
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_run_all_with_group() -> None:
     runner = Runner()
     group = MigrationGroup.EVENTS
@@ -230,10 +213,15 @@ def test_run_all_with_group() -> None:
     assert len(runner._get_pending_migrations()) == expected_pending_count
 
 
-@pytest.mark.clickhouse_db
-def test_run_all() -> None:
+@pytest.mark.custom_clickhouse_db
+def test_run_and_reverse_all() -> None:
+    """
+    Combines testing running all migrations, and then
+    reversing them all.
+    """
     runner = Runner()
-    assert len(runner._get_pending_migrations()) == get_total_migration_count()
+    all_migrations = runner._get_pending_migrations()
+    assert len(all_migrations) == get_total_migration_count()
 
     with pytest.raises(MigrationError):
         runner.run_all(force=False)
@@ -241,8 +229,18 @@ def test_run_all() -> None:
     runner.run_all(force=True)
     assert runner._get_pending_migrations() == []
 
+    for migration in reversed(all_migrations):
+        runner.reverse_migration(migration, force=True)
 
-@pytest.mark.clickhouse_db
+    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
+    assert (
+        connection.execute("SHOW TABLES").results == []
+    ), "All tables should be deleted"
+
+
+@pytest.mark.custom_clickhouse_db
 def test_run_all_using_through() -> None:
     """
     Using "through" allows migrating up to (including)
@@ -292,7 +290,7 @@ def test_run_all_using_through() -> None:
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_run_all_using_readiness() -> None:
     """
     Using "readiness_state" filtering groups by readiness state.
@@ -317,36 +315,60 @@ def test_run_all_using_readiness() -> None:
     assert len(runner._get_pending_migrations_for_group(group=group)) == 0
 
 
-@pytest.mark.clickhouse_db
-def test_reverse_all() -> None:
+@pytest.mark.custom_clickhouse_db
+def test_reverse_all_for_group() -> None:
+    """
+    Uses the PROFILES migration group to show that reversing all migrations
+    from one group will not affect other groups.
+    """
     runner = Runner()
-    all_migrations = runner._get_pending_migrations()
-    runner.run_all(force=True)
-    for migration in reversed(all_migrations):
-        runner.reverse_migration(migration, force=True)
-
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
+    )
+    # we don't want to include migrations (local/dist) tables when we compare
+    # table counts, since those don't get removed
+    sql = "SHOW TABLES LIKE 'profile%'"
+    runner.run_all(group=MigrationGroup.PROFILES, force=True)
+    initial_profile_tables = len(connection.execute(sql).results)
+    runner.run_all(group=MigrationGroup.PROFILE_CHUNKS, force=True)
+    total_profile_tables = len(connection.execute(sql).results)
+
+    runner.reverse_all(
+        group=MigrationGroup.PROFILE_CHUNKS, force=True, include_system=True
+    )
+
+    assert (
+        len(connection.execute(sql).results)
+        == total_profile_tables - initial_profile_tables
     )
     assert (
-        connection.execute("SHOW TABLES").results == []
-    ), "All tables should be deleted"
+        connection.execute("SHOW TABLES LIKE 'profile_chunks_local'").results == []
+    ), "'profile_chunks_local' table should be deleted"
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_reverse_idempotency_all() -> None:
-    # This test is to ensure that reversing a migration twice does not cause any
-    # issues or unintended side effects. This is important because we may need to reverse
-    # a migration multiple times in the event of a rollback.
+    """
+    This test is to ensure that reversing a migration twice does not cause any
+    issues or unintended side effects. This is important because we may need to reverse
+    a migration multiple times in the event of a rollback.
+
+    We only test reversing the most recent migration multiple times since the automated
+    pipeline should only be running one migration (per group) per deploy.
+    """
     runner = Runner()
-    all_migrations = runner._get_pending_migrations()
+    groups = get_active_migration_groups()
+    group_migrations = {
+        group.value: runner._get_pending_migrations_for_group(group) for group in groups
+    }
     runner.run_all(force=True)
-    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
-        ClickhouseClientSettings.MIGRATE
-    )
-    for migration in reversed(all_migrations):
-        runner.reverse_migration(migration, force=True)
+    for group, migrations in group_migrations.items():
+        if len(migrations) == 0:
+            continue
+        # get the most recent migration
+        migration = migrations[-1]
         if migration.group != MigrationGroup.SYSTEM:
+            runner.reverse_migration(migration, force=True)
 
             def reverse_twice() -> None:
                 # reverse again to ensure idempotency
@@ -379,12 +401,8 @@ def test_reverse_idempotency_all() -> None:
                 # Some groups do not have a cluster defined (e.g. test_migration)
                 reverse_twice()
 
-    assert (
-        connection.execute("SHOW TABLES").results == []
-    ), "All tables should be deleted"
 
-
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def get_total_migration_count() -> int:
     count = 0
     for group in get_active_migration_groups():
@@ -392,7 +410,7 @@ def get_total_migration_count() -> int:
     return count
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_get_active_migration_groups(temp_settings: Any) -> None:
     temp_settings.SKIPPED_MIGRATION_GROUPS = {"search_issues"}
     active_groups = get_active_migration_groups()
@@ -408,7 +426,7 @@ def test_get_active_migration_groups(temp_settings: Any) -> None:
     )  # should be skipped by readiness_state
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_reverse_in_progress() -> None:
     runner = Runner()
     runner.run_migration(
@@ -435,7 +453,7 @@ def test_reverse_in_progress() -> None:
     assert runner.get_status(migration_key)[0] == Status.NOT_STARTED
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_version() -> None:
     runner = Runner()
     runner.run_migration(
@@ -449,7 +467,7 @@ def test_version() -> None:
     assert runner._get_next_version(migration_key) == 3
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_no_schema_differences() -> None:
     settings.ENABLE_DEV_FEATURES = True
     importlib.reload(factory)
@@ -481,11 +499,14 @@ def test_no_schema_differences() -> None:
     importlib.reload(factory)
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_settings_skipped_group() -> None:
     from snuba.migrations import runner
 
-    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"test_migration"}):
+    # Skip as many migration groups as possible to speed up test
+    skipped_groups = {g.value for g in OPTIONAL_GROUPS}
+    skipped_groups.add("test_migration")
+    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", skipped_groups):
         runner.Runner().run_all(force=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
@@ -494,7 +515,7 @@ def test_settings_skipped_group() -> None:
     assert connection.execute("SHOW TABLES LIKE 'test_migration_local'").results == []
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.custom_clickhouse_db
 def test_check_inactive_replica() -> None:
     inactive_replica_query_result = ClickhouseResult(
         results=[
