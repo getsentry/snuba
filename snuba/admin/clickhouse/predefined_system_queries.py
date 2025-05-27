@@ -24,13 +24,32 @@ class CurrentMerges(SystemQuery):
 
 
 class CurrentMutations(SystemQuery):
-    """Currently executing merges"""
+    """Currently executing mutations"""
 
     sql = """
     SELECT
-        command
+        command,
+        parts_to_do_names,
+        parts_to_do
     FROM system.mutations
     WHERE is_done = 0
+    """
+
+
+class Mutations(SystemQuery):
+    """Both current and past mutations"""
+
+    sql = """
+    SELECT
+        table,
+        mutation_id,
+        command,
+        create_time,
+        parts_to_do,
+        is_done,
+        latest_fail_time,
+        latest_fail_reason
+    FROM system.mutations
     """
 
 
@@ -251,4 +270,69 @@ class AsyncInsertFlushErrors(SystemQuery):
     GROUP BY status, exception
     ORDER BY
         flush DESC
+    """
+
+
+class DistributedDDLQueue(SystemQuery):
+    """
+    Queries executed with ON CLUSTER parameter, most relevant
+    to lightweight delete queries.
+    """
+
+    sql = """
+    SELECT
+        initiator_host,
+        host,
+        cluster,
+        query,
+        query_create_time,
+        query_duration_ms
+    FROM system.distributed_ddl_queue
+    """
+
+
+class IndexSizes(SystemQuery):
+    sql = """
+    with table_sizes as (
+        select
+            table,
+            sum(column_data_compressed_bytes) dcb,
+            sum(column_data_uncompressed_bytes) dub
+        from system.parts_columns
+        where (active = 1)
+        group by
+            table
+    )
+    select
+        table,
+        name,
+        type,
+        expr,
+        granularity,
+        formatReadableSize(data_compressed_bytes as dcb) size,
+        formatReadableSize(data_uncompressed_bytes as dub) usize,
+        round(dcb / table_sizes.dcb * 100, 3) compressed_table_size_percent,
+        round(dub / table_sizes.dub * 100, 3) uncompressed_table_size_percent,
+        marks
+    from system.data_skipping_indices dsi
+    join table_sizes on table_sizes.table = dsi.table
+    order by usize desc
+    """
+
+
+class ExceptionQueries(SystemQuery):
+    """
+    Queries that have raised exceptions
+    """
+
+    sql = """
+    SELECT
+        query_id,
+        event_time,
+        query,
+        exception,
+        exception_code
+    FROM system.query_log
+    WHERE exception_code != 0
+    ORDER BY event_time DESC
     """

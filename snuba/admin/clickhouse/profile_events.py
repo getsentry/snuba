@@ -6,6 +6,7 @@ from typing import Dict, List, cast
 import structlog
 from flask import g
 
+from snuba.admin.clickhouse.common import InvalidNodeError
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import QueryTraceData, TraceOutput
 from snuba.utils.constants import (
@@ -39,14 +40,21 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
         attempt = 0
         wait_time = 1
         while attempt < PROFILE_EVENTS_MAX_ATTEMPTS:
-            system_query_result = run_system_query_on_host_with_sql(
-                query_trace_data.host,
-                int(query_trace_data.port),
-                storage,
-                sql,
-                False,
-                g.user,
-            )
+            try:
+                system_query_result = run_system_query_on_host_with_sql(
+                    query_trace_data.host,
+                    int(query_trace_data.port),
+                    storage,
+                    sql,
+                    False,
+                    g.user,
+                )
+            except InvalidNodeError as exc:
+                # this can happen for the abnormal storage sets like
+                # discover and errors_ro, where the query_trace_data host
+                # and port don't match the cluster definitions
+                logger.error(exc, exc_info=True)
+                break
 
             if system_query_result.results:
                 break

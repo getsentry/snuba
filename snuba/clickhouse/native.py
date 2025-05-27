@@ -81,6 +81,9 @@ class ClickhousePool(object):
         user: str,
         password: str,
         database: str,
+        secure: bool = False,
+        ca_certs: Optional[str] = None,
+        verify: Optional[bool] = False,
         connect_timeout: int = 1,
         send_receive_timeout: Optional[int] = 300,
         max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
@@ -91,6 +94,9 @@ class ClickhousePool(object):
         self.user = user
         self.password = password
         self.database = database
+        self.secure = secure
+        self.ca_certs = ca_certs
+        self.verify = verify
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
@@ -180,6 +186,8 @@ class ClickhousePool(object):
                             span.set_data(
                                 sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse"
                             )
+                            span.set_data("query_id", query_id)
+                            span.set_data("settings", settings)
                             return conn.execute(  # type: ignore
                                 query,
                                 params=params,
@@ -200,11 +208,11 @@ class ClickhousePool(object):
                         result_data = query_execute()
 
                     profile_data = ClickhouseProfile(
-                        bytes=conn.last_query.profile_info.bytes or 0,
-                        progress_bytes=conn.last_query.progress.bytes or 0,
-                        blocks=conn.last_query.profile_info.blocks or 0,
-                        rows=conn.last_query.profile_info.rows or 0,
+                        blocks=getattr(conn.last_query.profile_info, "blocks", 0),
+                        bytes=getattr(conn.last_query.profile_info, "bytes", 0),
                         elapsed=conn.last_query.elapsed or 0.0,
+                        progress_bytes=getattr(conn.last_query.progress, "bytes", 0),
+                        rows=getattr(conn.last_query.profile_info, "rows", 0),
                     )
                     if with_column_types:
                         result = ClickhouseResult(
@@ -380,6 +388,9 @@ class ClickhousePool(object):
             user=self.user,
             password=self.password,
             database=self.database,
+            secure=self.secure,
+            ca_certs=self.ca_certs,
+            verify=self.verify,
             connect_timeout=self.connect_timeout,
             send_receive_timeout=self.send_receive_timeout,
             settings=self.client_settings,

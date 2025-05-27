@@ -88,51 +88,6 @@ class TestReplacer:
 
         return [{"group_id": row[0], "count": row[1]} for row in data]
 
-    def test_unmerge_hierarchical_insert(self) -> None:
-        self.event["project_id"] = self.project_id
-        self.event["group_id"] = 1
-        self.event["primary_hash"] = "b" * 32
-        self.event["data"]["hierarchical_hashes"] = ["a" * 32]
-        write_unprocessed_events(self.storage, [self.event])
-
-        assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
-
-        timestamp = datetime.now(tz=timezone.utc)
-
-        project_id = self.project_id
-
-        message: Message[KafkaPayload] = Message(
-            BrokerValue(
-                KafkaPayload(
-                    None,
-                    json.dumps(
-                        (
-                            2,
-                            ReplacementType.END_UNMERGE_HIERARCHICAL,
-                            {
-                                "project_id": project_id,
-                                "previous_group_id": 1,
-                                "new_group_id": 2,
-                                "hierarchical_hash": "a" * 32,
-                                "primary_hash": "b" * 32,
-                                "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                            },
-                        )
-                    ).encode("utf-8"),
-                    [],
-                ),
-                Partition(Topic("replacements"), 1),
-                42,
-                datetime.now(),
-            )
-        )
-
-        processed = self.replacer.process_message(message)
-        assert processed is not None
-        self.replacer.flush_batch([processed])
-
-        assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 2}]
-
     def test_delete_tag_promoted_insert(self) -> None:
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1

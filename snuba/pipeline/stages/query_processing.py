@@ -1,6 +1,5 @@
 from typing import cast
 
-from snuba import state
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.plans.entity_processing import run_entity_processing_executor
 from snuba.datasets.plans.entity_validation import run_entity_validators
@@ -59,13 +58,13 @@ class StorageProcessingStage(
     def _apply_default_subscriptable_mapping(
         self, query: ClickhouseQuery | CompositeQuery[Table]
     ) -> None:
-        if state.get_config("apply_default_subscriptable_mapping", 1):
-            query.transform_expressions(transform_subscriptables)
+        query.transform_expressions(transform_subscriptables)
 
     def _process_data(
         self, pipe_input: QueryPipelineData[ClickhouseQuery | CompositeQuery[Table]]
     ) -> ClickhouseQuery | CompositeQuery[Table]:
-        self._apply_default_subscriptable_mapping(pipe_input.data)
+        if pipe_input.query_settings.get_apply_default_subscriptable_mapping():
+            self._apply_default_subscriptable_mapping(pipe_input.data)
         if isinstance(pipe_input.data, ClickhouseQuery):
             query_plan = build_best_plan(pipe_input.data, pipe_input.query_settings, [])
             return apply_storage_processors(query_plan, pipe_input.query_settings)

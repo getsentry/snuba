@@ -5,13 +5,13 @@ use anyhow::Error;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use pyo3::prelude::*;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::{
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
     StrategyError, SubmitError,
 };
-use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
-use rust_arroyo::utils::timing::Deadline;
+use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
+use sentry_arroyo::utils::timing::Deadline;
 use std::collections::{BTreeMap, VecDeque};
 use std::env;
 use std::sync::Arc;
@@ -287,7 +287,7 @@ impl FromPyObject<'_> for InvalidMessageMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rust_arroyo::testutils::TestStrategy;
+    use sentry_arroyo::testutils::TestStrategy;
 
     #[test]
     fn test_python() {

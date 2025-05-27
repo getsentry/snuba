@@ -20,7 +20,7 @@ attr_num = NestedColumn("attr_num")
 test_data = [
     (
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "p90(x)", cf.quantile(0.9)(attr_num["x"], alias="p90(x)")
@@ -28,7 +28,7 @@ test_data = [
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "p90(x)",
@@ -43,13 +43,13 @@ test_data = [
     ),
     (
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression("avg(x)", f.avg(attr_num["x"], alias="avg(x)")),
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "avg(x)",
@@ -57,6 +57,36 @@ test_data = [
                         attr_num["x"],
                         f.mapContains(column("attr_num", alias="_snuba_attr_num"), "x"),
                         alias="avg(x)",
+                    ),
+                ),
+            ],
+        ),
+    ),
+    (
+        Query(
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
+            selected_columns=[
+                SelectedExpression(
+                    "sum(x)",
+                    f.sum(
+                        f.multiply(attr_num["x"], column("sampling_weight")),
+                        alias="sum(x)",
+                    ),
+                ),
+            ],
+        ),
+        Query(
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
+            selected_columns=[
+                SelectedExpression(
+                    "sum(x)",
+                    f.sumIf(
+                        f.multiply(
+                            attr_num["x"],
+                            column("sampling_weight"),
+                        ),
+                        f.mapContains(column("attr_num", alias="_snuba_attr_num"), "x"),
+                        alias="sum(x)",
                     ),
                 ),
             ],
@@ -70,7 +100,7 @@ def test_query_processing(pre_format: Query, expected_query: Query) -> None:
     copy = deepcopy(pre_format)
     OptionalAttributeAggregationTransformer(
         attribute_column_names=["attr_num"],
-        aggregation_names=["avg"],
+        aggregation_names=["avg", "sum"],
         curried_aggregation_names=["quantile"],
     ).process_query(copy, HTTPQuerySettings())
     assert copy.get_selected_columns() == expected_query.get_selected_columns()

@@ -156,20 +156,16 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             "referrer": referrer,
         }
 
-        if can_run:
-            suggestion = NO_SUGGESTION
-        else:
-            suggestion = SUGGESTION
         return QuotaAllowance(
             can_run=can_run,
-            max_threads=num_threads,
+            max_threads=num_threads if can_run else 0,
             explanation=decision_explanation,
             is_throttled=is_throttled,
             throttle_threshold=requests_throttle_threshold,
             rejection_threshold=rate_limit_params.concurrent_limit,
             quota_used=rate_limit_stats.concurrent,
             quota_unit=QUOTA_UNIT,
-            suggestion=suggestion,
+            suggestion=NO_SUGGESTION if can_run else SUGGESTION,
         )
 
     def _update_quota_balance(

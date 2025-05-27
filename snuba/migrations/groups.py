@@ -4,6 +4,7 @@ from typing import Dict, Set
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.migrations.group_loader import (
+    CDCLoader,
     DiscoverLoader,
     EventsAnalyticsPlatformLoader,
     EventsLoader,
@@ -12,7 +13,6 @@ from snuba.migrations.group_loader import (
     GroupAttributesLoader,
     GroupLoader,
     MetricsLoader,
-    MetricsSummariesLoader,
     OutcomesLoader,
     ProfileChunksLoader,
     ProfilesLoader,
@@ -45,8 +45,8 @@ class MigrationGroup(Enum):
     SPANS = "spans"
     EVENTS_ANALYTICS_PLATFORM = "events_analytics_platform"
     GROUP_ATTRIBUTES = "group_attributes"
-    METRICS_SUMMARIES = "metrics_summaries"
     PROFILE_CHUNKS = "profile_chunks"
+    CDC = "cdc"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -62,7 +62,6 @@ OPTIONAL_GROUPS = {
     MigrationGroup.TEST_MIGRATION,
     MigrationGroup.SEARCH_ISSUES,
     MigrationGroup.GROUP_ATTRIBUTES,
-    MigrationGroup.METRICS_SUMMARIES,
     MigrationGroup.PROFILE_CHUNKS,
 }
 
@@ -85,12 +84,16 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         storage_sets_keys={StorageSetKey.MIGRATIONS},
         readiness_state=ReadinessState.COMPLETE,
     ),
+    MigrationGroup.CDC: _MigrationGroup(
+        loader=CDCLoader(),
+        storage_sets_keys={StorageSetKey.CDC},
+        readiness_state=ReadinessState.DEPRECATE,
+    ),
     MigrationGroup.EVENTS: _MigrationGroup(
         loader=EventsLoader(),
         storage_sets_keys={
             StorageSetKey.EVENTS,
             StorageSetKey.EVENTS_RO,
-            StorageSetKey.CDC,
         },
         readiness_state=ReadinessState.COMPLETE,
     ),
@@ -169,17 +172,12 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.EVENTS_ANALYTICS_PLATFORM: _MigrationGroup(
         loader=EventsAnalyticsPlatformLoader(),
         storage_sets_keys={StorageSetKey.EVENTS_ANALYTICS_PLATFORM},
-        readiness_state=ReadinessState.PARTIAL,
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.GROUP_ATTRIBUTES: _MigrationGroup(
         loader=GroupAttributesLoader(),
         storage_sets_keys={StorageSetKey.GROUP_ATTRIBUTES},
         readiness_state=ReadinessState.COMPLETE,
-    ),
-    MigrationGroup.METRICS_SUMMARIES: _MigrationGroup(
-        loader=MetricsSummariesLoader(),
-        storage_sets_keys={StorageSetKey.METRICS_SUMMARIES},
-        readiness_state=ReadinessState.PARTIAL,
     ),
     MigrationGroup.PROFILE_CHUNKS: _MigrationGroup(
         loader=ProfileChunksLoader(),

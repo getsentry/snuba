@@ -18,9 +18,11 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.storage import WritableTableStorage
 from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
 from snuba.lw_deletions.formatters import Formatter
+from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import get_int_config
 from snuba.utils.metrics import MetricsBackend
+from snuba.web import QueryException
 from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
 from snuba.web.delete_query import (
     ConditionsType,
@@ -46,6 +48,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
     ) -> None:
         self.__next_step = next_step
         self.__storage = storage
+        self.__storage_name = storage.get_storage_key().value
         self.__cluster_name = self.__storage.get_cluster().get_clickhouse_cluster_name()
         self.__tables = storage.get_deletion_settings().tables
         self.__formatter: Formatter = formatter
@@ -62,18 +65,25 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
 
         try:
             self._execute_delete(conditions)
-        except TooManyOngoingMutationsError:
+        except TooManyOngoingMutationsError as err:
             # backpressure is applied while we wait for the
             # currently ongoing mutations to finish
             self.__metrics.increment("too_many_ongoing_mutations")
+            logger.warning(str(err), exc_info=True)
             raise MessageRejected
+        except QueryException as err:
+            cause = err.__cause__
+            if isinstance(cause, AllocationPolicyViolations):
+                self.__metrics.increment("allocation_policy_violation")
+                raise MessageRejected
 
         self.__next_step.submit(message)
 
     def _get_attribute_info(self) -> AttributionInfo:
         return AttributionInfo(
             app_id=AppID("lw-deletes"),
-            tenant_ids={},
+            # concurrent allocation policies requires project or org id
+            tenant_ids={"project_id": 1},
             referrer="lw-deletes",
             team=None,
             feature=None,
@@ -169,7 +179,7 @@ class LWDeletionsConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]
     ) -> ProcessingStrategy[KafkaPayload]:
         batch_step = BatchStepCustom(
             max_batch_size=self.max_batch_size,
-            max_batch_time=self.max_batch_time_ms,
+            max_batch_time=(self.max_batch_time_ms / 1000),
             next_step=FormatQuery(
                 CommitOffsets(commit), self.storage, self.formatter, self.metrics
             ),
