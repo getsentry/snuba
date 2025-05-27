@@ -18,7 +18,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 test_data = [
     (
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "keys",
@@ -47,7 +47,7 @@ test_data = [
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "keys",
@@ -87,7 +87,7 @@ test_data = [
     ),
     (
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "values",
@@ -110,7 +110,7 @@ test_data = [
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "values",
@@ -144,7 +144,7 @@ test_data = [
     ),
     (
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "unrelated",
@@ -167,7 +167,7 @@ test_data = [
             ),
         ),
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "unrelated",
@@ -201,7 +201,7 @@ test_data = [
     ),
     (
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "unrelated",
@@ -215,7 +215,7 @@ test_data = [
             ),
         ),
         Query(
-            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "unrelated",

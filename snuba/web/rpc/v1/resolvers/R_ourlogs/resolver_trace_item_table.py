@@ -4,13 +4,9 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
-from snuba.state import get_int_config
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import (
     ResolverTraceItemTableEAPItems,
-)
-from snuba.web.rpc.v1.resolvers.R_ourlogs.old_resolvers.old_resolver_trace_item_table import (
-    OldResolverTraceItemTableOurlogs,
 )
 
 
@@ -20,10 +16,6 @@ class ResolverTraceItemTableOurlogs(ResolverTraceItemTable):
         return TraceItemType.TRACE_ITEM_TYPE_LOG
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
-        use_new_logs_resolver = bool(get_int_config("use_new_logs_resolver", default=0))
-        if use_new_logs_resolver:
-            return ResolverTraceItemTableEAPItems().resolve(
-                in_msg, self._timer, self._metrics_backend
-            )
-        else:
-            return OldResolverTraceItemTableOurlogs().resolve(in_msg, self._timer)
+        return ResolverTraceItemTableEAPItems().resolve(
+            in_msg, self._timer, self._metrics_backend
+        )

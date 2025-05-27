@@ -31,10 +31,6 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import base_conditions_and, treeify_or_and_conditions
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.legacy.attributes_common import should_use_items_attrs
-from snuba.web.rpc.v1.legacy.trace_item_attribute_values import (
-    build_snuba_request as build_snuba_request_legacy,
-)
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression_eap_items,
 )
@@ -86,8 +82,8 @@ def _build_query(
     This query will match the first 10000 occurrences of an attribute value and then deduplicate them,
     this gives a large speedup to the query at the cost of ordering and paginating all values
     """
-    if request.limit > 1000:
-        raise BadSnubaRPCRequestException("Limit can be at most 1000")
+    if request.limit > 10000:
+        raise BadSnubaRPCRequestException("Limit can be at most 10000")
 
     entity_key = EntityKey("eap_items")
     entity = Entity(
@@ -119,6 +115,9 @@ def _build_query(
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
         ],
         limit=request.limit,
+        offset=request.page_token.offset
+        if request.page_token.HasField("offset")
+        else 0,
     )
     return res
 
@@ -126,8 +125,6 @@ def _build_query(
 def _build_snuba_request(
     request: TraceItemAttributeValuesRequest,
 ) -> SnubaRequest:
-    if not should_use_items_attrs(request.meta):
-        return build_snuba_request_legacy(request)
     return SnubaRequest(
         id=uuid.uuid4(),
         original_body=MessageToDict(request),

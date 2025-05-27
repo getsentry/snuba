@@ -1368,12 +1368,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 
 [[package]]
-name = "glob"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
-
-[[package]]
 name = "gloo-timers"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2293,12 +2287,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "multimap"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "defc4c55412d89136f966bbb339008b474350e5e6e78d2714439c386b3137a03"
-
-[[package]]
 name = "native-tls"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2865,26 +2853,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prost-build"
-version = "0.13.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0f3e5beed80eb580c68e2c600937ac2c4eedabdfd5ef1e5b7ea4f3fba84497b"
-dependencies = [
- "heck 0.5.0",
- "itertools 0.11.0",
- "log",
- "multimap",
- "once_cell",
- "petgraph",
- "prettyplease",
- "prost",
- "prost-types",
- "regex",
- "syn 2.0.58",
- "tempfile",
-]
-
-[[package]]
 name = "prost-derive"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3254,6 +3222,8 @@ dependencies = [
  "once_cell",
  "parking_lot",
  "procspawn",
+ "prost",
+ "prost-types",
  "pyo3",
  "regex",
  "reqwest",
@@ -3262,6 +3232,7 @@ dependencies = [
  "sentry",
  "sentry-kafka-schemas",
  "sentry_arroyo",
+ "sentry_protos",
  "sentry_usage_accountant",
  "seq-macro",
  "serde",
@@ -3510,9 +3481,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-kafka-schemas"
-version = "1.2.0"
+version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deacc7e005fd4575b9ce467d77902916770ccd987fe8da57595571ef48834040"
+checksum = "4576dcac499df5fca7389b20016e0c195be4fd7b8ae52a1b3e6d52a8f2e0d251"
 dependencies = [
  "jsonschema",
  "prettyplease",
@@ -3590,17 +3561,14 @@ dependencies = [
 
 [[package]]
 name = "sentry_protos"
-version = "0.1.69"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b2a036b77e9fd7894ff4f0ac130dad3ca651e5359b2952ddb432638c6ec7958"
+checksum = "51f7779da50a2f2507527e81589ab556d0588a301734cab5adb989a479a139be"
 dependencies = [
- "glob",
  "prost",
  "prost-types",
- "regex",
  "tokio",
  "tonic",
- "tonic-build",
 ]
 
 [[package]]
@@ -4207,20 +4175,6 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
-]
-
-[[package]]
-name = "tonic-build"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9557ce109ea773b399c9b9e5dca39294110b74f1f342cb347a80d1fce8c26a11"
-dependencies = [
- "prettyplease",
- "proc-macro2",
- "prost-build",
- "prost-types",
- "quote",
- "syn 2.0.58",
 ]
 
 [[package]]

@@ -1,12 +1,10 @@
 from typing import Final, Mapping, Sequence, Set
 
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     VirtualColumnContext,
 )
 
-from snuba import settings, state
 from snuba.query import Query
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal, literals_array
@@ -105,52 +103,6 @@ ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
 }
 
 
-def use_eap_items_table(request_meta: RequestMeta) -> bool:
-    if request_meta.referrer.startswith("force_use_eap_spans_table"):
-        return False
-
-    if request_meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
-        return True
-
-    use_eap_items_orgs = state.get_str_config("use_eap_items_orgs")
-    eap_items_enabled_orgs = []
-    use_eap_items_for_all_orgs = True
-    if use_eap_items_orgs:
-        try:
-            eap_items_enabled_orgs = list(
-                map(int, use_eap_items_orgs.strip("[]").split(","))
-            )
-            use_eap_items_for_all_orgs = False
-        except ValueError:
-            pass
-
-    turned_on_for_org = (
-        use_eap_items_for_all_orgs
-        or request_meta.organization_id in eap_items_enabled_orgs
-    )
-
-    use_eap_items_table_start_timestamp_seconds = state.get_int_config(
-        "use_eap_items_table_start_timestamp_seconds",
-        settings.USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS,
-    )
-
-    assert use_eap_items_table_start_timestamp_seconds is not None
-    use_eap_items_table_start_timestamp_seconds = int(
-        use_eap_items_table_start_timestamp_seconds
-    )
-
-    if (
-        state.get_int_config("use_eap_items_table", settings.USE_EAP_ITEMS_TABLE)
-        and turned_on_for_org
-    ):
-        return (
-            request_meta.start_timestamp.seconds
-            >= use_eap_items_table_start_timestamp_seconds
-        )
-
-    return False
-
-
 def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
     alias = attr_key.name + "_" + AttributeKey.Type.Name(attr_key.type)
     if attr_key.name in NORMALIZED_COLUMNS:
@@ -173,15 +125,10 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
                 f"Attribute {attr_key.name} must be one of [{formatted_attribute_types}], got {AttributeKey.Type.Name(attr_key.type)}"
             )
 
-        # To maintain backwards compatibility with the old span_id column, we only need the last 16 characters of the item_id
-        # In eap_items, they're just integers, there's no issue fitting a 64 bit integer in a 128 bit integer.
-        # The problem is that this is just our internal representation, but when a user interacts with span_id through EAP, it's treated as a hex string with 16 characters.
-        # However, a 128 bit integer cannot be represented as a 16 character hex string (16 characters can at most represent a 64 bit integer). Hence,
-        # by default we represent item_id as a 32 character hex string. Since the user expects 16 characters and we know that a span_id will currently never use the full 128 bits,
-        # it's safe to get rid of the first 16 characters since we know those will just be padding.
-        if attr_key.name == "sentry.span_id":
-            return f.right(
-                column(converted_attr_name[len(COLUMN_PREFIX) :]), 16, alias=alias
+        if attr_key.name in {"sentry.span_id", "sentry.item_id"}:
+            return column(
+                converted_attr_name[len(COLUMN_PREFIX) :],
+                alias=alias,
             )
         elif attr_key.name == "sentry.sampling_factor":
             return f.divide(

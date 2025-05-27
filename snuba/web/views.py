@@ -234,7 +234,6 @@ def health_envoy() -> Response:
 
 @application.route("/health")
 def health() -> Response:
-
     thorough = http_request.args.get("thorough", False)
     health_info = get_health_info(thorough)
 
@@ -587,7 +586,10 @@ if application.debug or application.testing:
 
     application.url_map.converters["entity"] = EntityConverter
 
-    def _write_to_entity(*, entity: EntityType) -> RespTuple:
+    def _write_to_entity(
+        *,
+        entity: EntityType,
+    ) -> RespTuple:
         from snuba.processor import InsertBatch
 
         rows: MutableSequence[WriterTableRow] = []
@@ -596,9 +598,13 @@ if application.debug or application.testing:
         assert writable_storage is not None
         table_writer = writable_storage.get_table_writer()
 
-        for index, message in enumerate(json.loads(http_request.data)):
-            offset = offset_base + index
+        if http_request.files:
+            messages = [file.read() for _, file in http_request.files.items()]
+        else:
+            messages = json.loads(http_request.data)
 
+        for index, message in enumerate(messages):
+            offset = offset_base + index
             processed_message = (
                 table_writer.get_stream_loader()
                 .get_processor()
@@ -621,8 +627,16 @@ if application.debug or application.testing:
         return ("ok", 200, {"Content-Type": "text/plain"})
 
     @application.route("/tests/entities/<entity:entity>/insert", methods=["POST"])
-    def write_to_entity(*, entity: EntityType) -> RespTuple:
-        return _write_to_entity(entity=entity)
+    def write_json_to_entity(*, entity: EntityType) -> RespTuple:
+        return _write_to_entity(
+            entity=entity,
+        )
+
+    @application.route("/tests/entities/<entity:entity>/insert_bytes", methods=["POST"])
+    def write_bytes_to_entity(*, entity: EntityType) -> RespTuple:
+        return _write_to_entity(
+            entity=entity,
+        )
 
     @application.route("/tests/<entity:entity>/eventstream", methods=["POST"])
     def eventstream(*, entity: Entity) -> RespTuple:

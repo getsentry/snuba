@@ -1,7 +1,4 @@
-import random
-import uuid
-from datetime import datetime, timedelta
-from typing import Any, Mapping
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -27,133 +24,62 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ExistsFilter,
     TraceItemFilter,
 )
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
-from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.test_endpoint_trace_item_table.test_endpoint_trace_item_table import (
-    write_eap_span,
-)
+from tests.web.rpc.v1.test_utils import gen_item_message, write_eap_item
 
-_RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
-_SERVER_NAME = "D23CXQ4GK2.local"
-
-
-def gen_message(
-    dt: datetime,
-    measurements: dict[str, dict[str, float]] | None = None,
-    tags: dict[str, str] | None = None,
-) -> Mapping[str, Any]:
-    measurements = measurements or {}
-    tags = tags or {}
-    return {
-        "description": "/api/0/relays/projectconfigs/",
-        "duration_ms": 152,
-        "event_id": "d826225de75d42d6b2f01b957d51f18f",
-        "exclusive_time_ms": 0.228,
-        "is_segment": True,
-        "data": {
-            "sentry.environment": "development",
-            "sentry.release": _RELEASE_TAG,
-            "thread.name": "uWSGIWorker1Core0",
-            "thread.id": "8522009600",
-            "sentry.segment.name": "/api/0/relays/projectconfigs/",
-            "sentry.sdk.name": "sentry.python.django",
-            "sentry.sdk.version": "2.7.0",
-            "my.float.field": 101.2,
-            "my.int.field": 2000,
-            "my.neg.field": -100,
-            "my.neg.float.field": -101.2,
-            "my.true.bool.field": True,
-            "my.false.bool.field": False,
-        },
-        "measurements": {
-            "num_of_spans": {"value": 50.0},
-            "eap.measurement": {"value": random.choice([1, 100, 1000])},
-            **measurements,
-        },
-        "organization_id": 1,
-        "origin": "auto.http.django",
-        "project_id": 1,
-        "received": 1721319572.877828,
-        "retention_days": 90,
-        "segment_id": "8873a98879faf06d",
-        "sentry_tags": {
-            "category": "http",
-            "environment": "development",
-            "op": "http.server",
-            "platform": "python",
-            "release": _RELEASE_TAG,
-            "sdk.name": "sentry.python.django",
-            "sdk.version": "2.7.0",
-            "status": "ok",
-            "status_code": "200",
-            "thread.id": "8522009600",
-            "thread.name": "uWSGIWorker1Core0",
-            "trace.status": "ok",
-            "transaction": "/api/0/relays/projectconfigs/",
-            "transaction.method": "POST",
-            "transaction.op": "http.server",
-            "user": "ip:127.0.0.1",
-        },
-        "span_id": "123456781234567D",
-        "tags": {
-            "http.status_code": "200",
-            "relay_endpoint_version": "3",
-            "relay_id": "88888888-4444-4444-8444-cccccccccccc",
-            "relay_no_cache": "False",
-            "relay_protocol_version": "3",
-            "relay_use_post_or_schedule": "True",
-            "relay_use_post_or_schedule_rejected": "version",
-            "server_name": _SERVER_NAME,
-            "spans_over_limit": "False",
-            "color": random.choice(["red", "green", "blue"]),
-            "location": random.choice(["mobile", "frontend", "backend"]),
-            **tags,
-        },
-        "trace_id": uuid.uuid4().hex,
-        "start_timestamp_ms": int(dt.timestamp()) * 1000 - int(random.gauss(1000, 200)),
-        "start_timestamp_precise": dt.timestamp(),
-        "end_timestamp_precise": dt.timestamp() + 1,
-    }
-
-
-BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
-    minutes=180
-)
+BASE_TIME = datetime.now().replace(
+    tzinfo=UTC,
+    minute=0,
+    second=0,
+    microsecond=0,
+) - timedelta(minutes=180)
 
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestTraceItemTableWithExtrapolation(BaseApiTest):
     def test_aggregation_on_attribute_column_backward_compat(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
-        start = BASE_TIME
-        tags = {"custom_tag": "blah"}
-        messages_w_measurement = [
-            gen_message(
-                start - timedelta(minutes=i),
-                measurements={
-                    "custom_measurement": {
-                        "value": i
-                    },  # this results in values of 0, 1, 2, 3, and 4
-                    "server_sample_rate": {
-                        "value": 1.0 / (2**i)
-                    },  # this results in sampling weights of 1, 2, 4, 8, and 16
-                },
-                tags=tags,
+        attributes = {
+            "custom_tag": AnyValue(string_value="blah"),
+        }
+        messages_w_measurement, messages_no_measurement = [], []
+        for i in range(5):
+            start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
+            end_timestamp = start_timestamp + timedelta(seconds=1)
+            messages_w_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={
+                        "custom_measurement": AnyValue(
+                            int_value=i
+                        ),  # this results in values of 0, 1, 2, 3, and 4
+                    }
+                    | attributes,
+                    server_sample_rate=(
+                        1.0 / (2**i)
+                    ),  # this results in sampling weights of 1, 2, 4, 8, and 16
+                    end_timestamp=end_timestamp,
+                )
             )
-            for i in range(5)
-        ]
-        messages_no_measurement = [
-            gen_message(start - timedelta(minutes=i), tags=tags) for i in range(5)
-        ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
-        write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+            messages_no_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes=attributes,
+                    end_timestamp=end_timestamp,
+                )
+            )
+
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -245,28 +171,41 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert abs(measurement_p90 - 4) < 0.01  # weighted p90 - 4
 
     def test_aggregation_on_attribute_column(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
-        start = BASE_TIME
-        messages_w_measurement = [
-            gen_message(
-                start - timedelta(minutes=i),
-                measurements={
-                    "custom_measurement": {
-                        "value": i
-                    },  # this results in values of 0, 1, 2, 3, and 4
-                    "server_sample_rate": {
-                        "value": 1.0 / (2**i)
-                    },  # this results in sampling weights of 1, 2, 4, 8, and 16
-                },
+        attributes = {
+            "custom_tag": AnyValue(string_value="blah"),
+        }
+        messages_w_measurement, messages_no_measurement = [], []
+        for i in range(5):
+            start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
+            end_timestamp = start_timestamp + timedelta(seconds=1)
+            messages_w_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={
+                        "custom_measurement": AnyValue(
+                            int_value=i
+                        ),  # this results in values of 0, 1, 2, 3, and 4
+                    }
+                    | attributes,
+                    server_sample_rate=(
+                        1.0 / (2**i)
+                    ),  # this results in sampling weights of 1, 2, 4, 8, and 16
+                    end_timestamp=end_timestamp,
+                )
             )
-            for i in range(5)
-        ]
-        messages_no_measurement = [
-            gen_message(start - timedelta(minutes=i)) for i in range(5)
-        ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
-        write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+            messages_no_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes=attributes,
+                    end_timestamp=end_timestamp,
+                )
+            )
+
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -358,30 +297,38 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert abs(measurement_p90 - 4) < 0.01  # weighted p90 - 4
 
     def test_conditional_aggregation_on_attribute_column(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
-        start = BASE_TIME
-        messages_w_measurement = [
-            gen_message(
-                start - timedelta(minutes=i),
-                measurements={
-                    "custom_measurement": {
-                        "value": i
-                    },  # this results in values of 0, 1, 2, 3, and 4
-                    "server_sample_rate": {
-                        "value": 1.0 / (2**i)
-                    },  # this results in sampling weights of 1, 2, 4, 8, and 16
-                },
-                tags={"is_i_divisible_by_2": str(i % 2 == 0)},
+        messages_w_measurement, messages_no_measurement = [], []
+        for i in range(5):
+            start_timestamp = BASE_TIME - timedelta(minutes=i)
+            end_timestamp = start_timestamp + timedelta(seconds=1)
+            messages_w_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={
+                        "custom_measurement": AnyValue(
+                            int_value=i
+                        ),  # this results in values of 0, 1, 2, 3, and 4
+                        "is_i_divisible_by_2": AnyValue(string_value=str(i % 2 == 0)),
+                    },
+                    server_sample_rate=(
+                        1.0 / (2**i)
+                    ),  # this results in sampling weights of 1, 2, 4, 8, and 16
+                    end_timestamp=end_timestamp,
+                )
             )
-            for i in range(5)
-        ]
-        messages_no_measurement = [
-            gen_message(start - timedelta(minutes=i), tags={"custom_tag": "blah"})
-            for i in range(5)
-        ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
-        write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+            messages_no_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={"custom_tag": AnyValue(string_value="blah")},
+                    end_timestamp=end_timestamp,
+                )
+            )
+
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -452,31 +399,42 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         )  # weighted average - (1*2 + 3*8) / (2+8)
 
     def test_count_reliability_backward_compat(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
-        start = BASE_TIME
-        tags = {"custom_tag": "blah"}
-        messages_w_measurement = [
-            gen_message(
-                start - timedelta(minutes=i),
-                measurements={
-                    "custom_measurement": {
-                        "value": i
-                    },  # this results in values of 0, 1, 2, 3, and 4
-                    "server_sample_rate": {"value": 1.0},
-                },
-                tags=tags,
+        attributes = {
+            "custom_tag": AnyValue(string_value="blah"),
+        }
+        messages_w_measurement, messages_no_measurement = [], []
+        for i in range(5):
+            start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
+            end_timestamp = start_timestamp + timedelta(seconds=1)
+            messages_w_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={
+                        "custom_measurement": AnyValue(
+                            int_value=i
+                        ),  # this results in values of 0, 1, 2, 3, and 4
+                    }
+                    | attributes,
+                    server_sample_rate=1.0,
+                    end_timestamp=end_timestamp,
+                )
             )
-            for i in range(5)
-        ]
-        messages_no_measurement = [
-            gen_message(start - timedelta(minutes=i), tags=tags) for i in range(5)
-        ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
-        write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+            messages_no_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes=attributes,
+                    end_timestamp=end_timestamp,
+                )
+            )
+
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        hour_ago = int((BASE_TIME - timedelta(hours=10)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -492,7 +450,8 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_COUNT,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                            type=AttributeKey.TYPE_FLOAT,
+                            name="custom_measurement",
                         ),
                         label="count(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
@@ -504,6 +463,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         )
         response = EndpointTraceItemTable().execute(message)
         measurement_count = [v.val_double for v in response.column_values[0].results][0]
+        print(measurement_count)
         measurement_reliability = [v for v in response.column_values[0].reliabilities][
             0
         ]
@@ -511,28 +471,38 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert measurement_reliability == Reliability.RELIABILITY_HIGH
 
     def test_count_reliability(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
-        start = BASE_TIME
-        tags = {"custom_tag": "blah"}
-        messages_w_measurement = [
-            gen_message(
-                start - timedelta(minutes=i),
-                measurements={
-                    "custom_measurement": {
-                        "value": i
-                    },  # this results in values of 0, 1, 2, 3, and 4
-                    "server_sample_rate": {"value": 1.0},
-                },
-                tags=tags,
+        attributes = {
+            "custom_tag": AnyValue(string_value="blah"),
+        }
+        messages_w_measurement, messages_no_measurement = [], []
+        for i in range(5):
+            start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
+            end_timestamp = start_timestamp + timedelta(seconds=1)
+            messages_w_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={
+                        "custom_measurement": AnyValue(
+                            int_value=i
+                        ),  # this results in values of 0, 1, 2, 3, and 4
+                    }
+                    | attributes,
+                    end_timestamp=end_timestamp,
+                )
             )
-            for i in range(5)
-        ]
-        messages_no_measurement = [
-            gen_message(start - timedelta(minutes=i), tags=tags) for i in range(5)
-        ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
-        write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+            messages_no_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes=attributes,
+                    end_timestamp=end_timestamp,
+                )
+            )
+
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -570,28 +540,37 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert measurement_reliability == Reliability.RELIABILITY_HIGH
 
     def test_count_reliability_with_group_by_backward_compat(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
-        start = BASE_TIME
-        messages_w_measurement = [
-            gen_message(
-                start - timedelta(minutes=i),
-                measurements={
-                    "custom_measurement": {
-                        "value": i
-                    },  # this results in values of 0, 1, 2, 3, and 4
-                    "server_sample_rate": {"value": 1.0},
-                },
-                tags={"key": "foo"},
+        messages_w_measurement, messages_no_measurement = [], []
+        for i in range(5):
+            start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
+            end_timestamp = start_timestamp + timedelta(seconds=1)
+            messages_w_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={
+                        "custom_measurement": AnyValue(
+                            int_value=i
+                        ),  # this results in values of 0, 1, 2, 3, and 4
+                        "key": AnyValue(string_value="foo"),
+                    },
+                    end_timestamp=end_timestamp,
+                )
             )
-            for i in range(5)
-        ]
-        messages_no_measurement = [
-            gen_message(start - timedelta(minutes=i), tags={"key": "bar"})
-            for i in range(5)
-        ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
-        write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+            messages_no_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={
+                        "key": AnyValue(string_value="bar"),
+                    },
+                    end_timestamp=end_timestamp,
+                )
+            )
+
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -689,28 +668,37 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert measurement_reliabilities == [Reliability.RELIABILITY_LOW]
 
     def test_count_reliability_with_group_by(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
-        start = BASE_TIME
-        messages_w_measurement = [
-            gen_message(
-                start - timedelta(minutes=i),
-                measurements={
-                    "custom_measurement": {
-                        "value": i
-                    },  # this results in values of 0, 1, 2, 3, and 4
-                    "server_sample_rate": {"value": 1.0},
-                },
-                tags={"key": "foo"},
+        messages_w_measurement, messages_no_measurement = [], []
+        for i in range(5):
+            start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
+            end_timestamp = start_timestamp + timedelta(seconds=1)
+            messages_w_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={
+                        "custom_measurement": AnyValue(
+                            int_value=i
+                        ),  # this results in values of 0, 1, 2, 3, and 4
+                        "key": AnyValue(string_value="foo"),
+                    },
+                    end_timestamp=end_timestamp,
+                )
             )
-            for i in range(5)
-        ]
-        messages_no_measurement = [
-            gen_message(start - timedelta(minutes=i), tags={"key": "bar"})
-            for i in range(5)
-        ]
-        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
-        write_raw_unprocessed_events(items_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+            messages_no_measurement.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={
+                        "key": AnyValue(string_value="bar"),
+                    },
+                    end_timestamp=end_timestamp,
+                )
+            )
+
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            messages_w_measurement + messages_no_measurement,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -813,14 +801,23 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         Reliabilities will not be returned.
         """
         span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_span(span_ts, {"kyles_measurement": 6, "server_sample_rate": 0.5}, 10)
-        write_eap_span(span_ts, {"kyles_measurement": 7}, 2)
+        write_eap_item(
+            span_ts,
+            {"kyles_measurement": 6},
+            server_sample_rate=0.5,
+            count=10,
+        )
+        write_eap_item(
+            span_ts,
+            raw_attributes={"kyles_measurement": 7},
+            count=2,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
-                project_ids=[1, 2, 3],
+                project_ids=[1],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
@@ -878,36 +875,37 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         ]
 
     def test_aggregation_with_nulls(self) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
         items_storage = get_storage(StorageKey("eap_items"))
-        start = BASE_TIME
-        messages_a = [
-            gen_message(
-                start - timedelta(minutes=i),
-                measurements={
-                    "custom_measurement": {"value": 1},
-                    "server_sample_rate": {"value": 1.0},
-                },
-                tags={"custom_tag": "a"},
+        messages_a, messages_b = [], []
+        for i in range(5):
+            start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
+            messages_a.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={
+                        "custom_measurement": AnyValue(int_value=1),
+                        "server_sample_rate": AnyValue(double_value=1.0),
+                        "custom_tag": AnyValue(string_value="a"),
+                    },
+                )
             )
-            for i in range(5)
-        ]
-        messages_b = [
-            gen_message(
-                start - timedelta(minutes=i),
-                measurements={
-                    "custom_measurement2": {"value": 1},
-                    "server_sample_rate": {"value": 1.0},
-                },
-                tags={"custom_tag": "b"},
+            messages_b.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={
+                        "custom_measurement2": AnyValue(int_value=1),
+                        "server_sample_rate": AnyValue(double_value=1.0),
+                        "custom_tag": AnyValue(string_value="b"),
+                    },
+                )
             )
-            for i in range(5)
-        ]
-        write_raw_unprocessed_events(spans_storage, messages_a + messages_b)  # type: ignore
-        write_raw_unprocessed_events(items_storage, messages_a + messages_b)  # type: ignore
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            messages_a + messages_b,
+        )
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        hour_ago = int((BASE_TIME - timedelta(hours=10)).timestamp())
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -980,18 +978,3 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 ],
             ),
         ]
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-class TestTraceItemTableWithExtrapolationEAPItems(TestTraceItemTableWithExtrapolation):
-    """
-    Run the tests again, but this time on the eap_items table as well to ensure it also works.
-    """
-
-    @pytest.fixture(autouse=True)
-    def use_eap_items_table(
-        self, snuba_set_config: SnubaSetConfig, redis_db: None
-    ) -> None:
-        snuba_set_config("use_eap_items_table", True)
-        snuba_set_config("use_eap_items_table_start_timestamp_seconds", 0)
