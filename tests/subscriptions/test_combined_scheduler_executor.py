@@ -7,7 +7,7 @@ from unittest import mock
 import pytest
 from arroyo.backends.kafka import KafkaProducer
 from arroyo.types import BrokerValue, Message, Partition, Topic
-from py._path.local import LocalPath  # type: ignore
+from py._path.local import LocalPath
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
