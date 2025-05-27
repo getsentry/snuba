@@ -5,6 +5,7 @@ import logging
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any, Mapping, Optional
 from unittest import mock
 
@@ -18,7 +19,6 @@ from arroyo.errors import ConsumerError
 from arroyo.types import BrokerValue, Partition, Topic
 from arroyo.utils.clock import MockedClock
 from confluent_kafka.admin import AdminClient
-from py._path.local import LocalPath
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest as CreateSubscriptionRequestProto,
 )
@@ -57,7 +57,7 @@ commit_codec = CommitCodec()
 
 
 @pytest.mark.redis_db
-def test_scheduler_consumer(tmpdir: LocalPath) -> None:
+def test_scheduler_consumer(tmpdir: Path) -> None:
     settings.TOPIC_PARTITION_COUNTS = {"events": 2}
     importlib.reload(scheduler_consumer)
 
@@ -111,7 +111,7 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
         60 * 5,
         None,
         metrics_backend,
-        health_check_file=(tmpdir / "health.txt").strpath,
+        health_check_file=str(tmpdir / "health.txt"),
     )
     scheduler = builder.build_consumer()
     time.sleep(2)
@@ -154,7 +154,7 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
 
     scheduler._shutdown()
 
-    assert (tmpdir / "health.txt").check()
+    assert (tmpdir / "health.txt").exists()
     assert mock_scheduler_producer.produce.call_count == 2
 
     settings.TOPIC_PARTITION_COUNTS = {}
@@ -162,7 +162,7 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
+def test_scheduler_consumer_rpc_subscriptions(tmpdir: Path) -> None:
     settings.TOPIC_PARTITION_COUNTS = {"snuba-spans": 2}
     importlib.reload(scheduler_consumer)
 
@@ -221,7 +221,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
         60 * 5,
         None,
         metrics_backend,
-        health_check_file=(tmpdir / "health.txt").strpath,
+        health_check_file=str(tmpdir / "health.txt"),
     )
     scheduler = builder.build_consumer()
     time.sleep(2)
@@ -264,7 +264,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
 
     scheduler._shutdown()
 
-    assert (tmpdir / "health.txt").check()
+    assert (tmpdir / "health.txt").exists()
     assert mock_scheduler_producer.produce.call_count == 2
     payload = json.loads(mock_scheduler_producer.produce.call_args_list[0][0][1].value)
     assert payload["task"]["data"]["project_id"] == 1
