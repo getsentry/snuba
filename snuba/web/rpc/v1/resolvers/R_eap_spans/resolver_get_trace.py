@@ -38,87 +38,41 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverGetTrace
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    attribute_key_to_expression,
     attribute_key_to_expression_eap_items,
-    use_eap_items_table,
 )
-
-_BUCKET_COUNT = 20
-
-
-NORMALIZED_COLUMNS_TO_INCLUDE = [
-    col.name
-    for col in get_entity(EntityKey("eap_spans")).get_data_model().columns
-    if col.name
-    not in [
-        "retention_days",
-        "sign",
-        "attr_str",
-        "attr_num",
-        "span_id",
-        "timestamp",
-        "time",
-    ]
-]
 
 NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
     "organization_id",
     "project_id",
     "trace_id",
-    "sampling_weight",
+    "sampling_factor",
 ]
-
-# Map of eap_items attributes to eap_spans attributes to preserve backwards compatibility
-EAP_ITEMS_ATTRIBUTE_MAP = {
-    "sentry.raw_description": "name",
-    "sentry.transaction": "segment_name",
-    "sentry.start_timestamp_precise": "start_timestamp",
-    "sentry.end_timestamp_precise": "end_timestamp",
-    "sentry.duration_ms": "duration_ms",
-    "sentry.event_id": "event_id",
-    "sentry.exclusive_time_ms": "exclusive_time_ms",
-    "sentry.is_segment": "is_segment",
-    "sentry.parent_span_id": "parent_span_id",
-    "sentry.profile_id": "profile_id",
-    "sentry.received": "received",
-    "sentry.segment_id": "segment_id",
-}
-
-# Attributes that we store in eap_items but not eap_spans
-ATTRIBUTES_TO_SKIP_FROM_EAP_ITEMS = [
-    "event_id",
-    "received",
-]
-
-# Attributes to hexify
-HEX_COLUMNS = ["parent_span_id", "segment_id"]
 
 
 def _build_query(request: GetTraceRequest) -> Query:
     selected_columns: list[SelectedExpression] = [
         SelectedExpression(
             name="id",
-            expression=attribute_key_to_expression_eap_items(
-                AttributeKey(name="sentry.span_id", type=AttributeKey.Type.TYPE_STRING)
-            )
-            if use_eap_items_table(request.meta)
-            else column("span_id", alias="id"),
+            expression=(
+                attribute_key_to_expression_eap_items(
+                    AttributeKey(
+                        name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING
+                    )
+                )
+            ),
         ),
         SelectedExpression(
             name="timestamp",
-            expression=f.CAST(
-                attribute_key_to_expression_eap_items(
-                    AttributeKey(
-                        name="sentry.start_timestamp_precise",
-                        type=AttributeKey.Type.TYPE_DOUBLE,
+            expression=f.cast(
+                (
+                    attribute_key_to_expression_eap_items(
+                        AttributeKey(
+                            name="sentry.start_timestamp_precise",
+                            type=AttributeKey.Type.TYPE_DOUBLE,
+                        )
                     )
                 ),
-                "DateTime64(6)",
-                alias="timestamp",
-            )
-            if use_eap_items_table(request.meta)
-            else column(
-                "start_timestamp",
+                "Float64",
                 alias="timestamp",
             ),
         ),
@@ -132,53 +86,25 @@ def _build_query(request: GetTraceRequest) -> Query:
             selected_columns.append(
                 SelectedExpression(
                     name=attribute_key.name,
-                    expression=attribute_key_to_expression_eap_items(attribute_key)
-                    if use_eap_items_table(request.meta)
-                    else attribute_key_to_expression(attribute_key),
+                    expression=(attribute_key_to_expression_eap_items(attribute_key)),
                 )
             )
     else:
         selected_columns += [
             SelectedExpression(
-                name="attributes_string"
-                if use_eap_items_table(request.meta)
-                else "attrs_str",
+                name=("attributes_string"),
                 expression=FunctionCall(
-                    "attributes_string"
-                    if use_eap_items_table(request.meta)
-                    else "attrs_str",
+                    ("attributes_string"),
                     "mapConcat",
-                    tuple(
-                        column(
-                            f"attributes_string_{i}"
-                            if use_eap_items_table(request.meta)
-                            else f"attr_str_{i}"
-                        )
-                        for i in range(
-                            40 if use_eap_items_table(request.meta) else _BUCKET_COUNT
-                        )
-                    ),
+                    tuple(column(f"attributes_string_{i}") for i in range(40)),
                 ),
             ),
             SelectedExpression(
-                name="attributes_float"
-                if use_eap_items_table(request.meta)
-                else "attrs_num",
+                name=("attributes_float"),
                 expression=FunctionCall(
-                    "attributes_float"
-                    if use_eap_items_table(request.meta)
-                    else "attrs_num",
+                    ("attributes_float"),
                     "mapConcat",
-                    tuple(
-                        column(
-                            f"attributes_float_{i}"
-                            if use_eap_items_table(request.meta)
-                            else f"attr_num_{i}"
-                        )
-                        for i in range(
-                            40 if use_eap_items_table(request.meta) else _BUCKET_COUNT
-                        )
-                    ),
+                    tuple(column(f"attributes_float_{i}") for i in range(40)),
                 ),
             ),
         ]
@@ -191,42 +117,16 @@ def _build_query(request: GetTraceRequest) -> Query:
                         alias=f"selected_{col_name}",
                     ),
                 ),
-                NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS
-                if use_eap_items_table(request.meta)
-                else NORMALIZED_COLUMNS_TO_INCLUDE,
+                (NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS),
             )
         )
 
-        # special case for sampling_factor and service since we don't store them in eap_items
-        if use_eap_items_table(request.meta):
-            selected_columns.append(
-                SelectedExpression(
-                    name="sampling_factor",
-                    expression=f.divide(
-                        literal(1),
-                        f.CAST(column("sampling_weight"), "Float64"),
-                        alias="sampling_factor",
-                    ),
-                )
-            )
-            selected_columns.append(
-                SelectedExpression(
-                    name="service",
-                    expression=f.CAST(column("project_id"), "String", alias="service"),
-                )
-            )
-    if use_eap_items_table(request.meta):
-        entity = Entity(
-            key=EntityKey("eap_items"),
-            schema=get_entity(EntityKey("eap_items")).get_data_model(),
-            sample=None,
-        )
-    else:
-        entity = Entity(
-            key=EntityKey("eap_spans"),
-            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-            sample=None,
-        )
+    entity = Entity(
+        key=EntityKey("eap_items"),
+        schema=get_entity(EntityKey("eap_items")).get_data_model(),
+        sample=None,
+    )
+
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -330,10 +230,12 @@ def _convert_results(
 
     for row in data:
         id = row.pop("id")
-        dt = row.pop("timestamp")
+        ts = row.pop("timestamp")
 
         timestamp = Timestamp()
-        timestamp.FromDatetime(dt)
+        # truncate to microseconds since we store microsecond precision only
+        # then transform to nanoseconds
+        timestamp.FromNanoseconds(int(ts * 1e6) * 1000)
 
         attributes: list[GetTraceResponse.Item.Attribute] = []
 
@@ -346,28 +248,12 @@ def _convert_results(
                 )
             )
 
-        # marks which hex columns we've seen
-        seen_hex_columns = set()
         for key, value in row.items():
             if isinstance(value, dict):
                 for k, v in value.items():
-                    k = EAP_ITEMS_ATTRIBUTE_MAP.get(k, k)
-                    if k in ATTRIBUTES_TO_SKIP_FROM_EAP_ITEMS:
-                        continue
-
-                    if k in HEX_COLUMNS:
-                        seen_hex_columns.add(k)
                     add_attribute(k, v)
             else:
-                if key.lstrip("sentry.") in HEX_COLUMNS and value == "":
-                    value = "0" * 16
                 add_attribute(key, value)
-
-        # this is a hack to get backwards compatibility to work, remove eventually
-        if add_hex_columns:
-            for k in HEX_COLUMNS:
-                if k not in seen_hex_columns:
-                    add_attribute(k, "0" * 16)
 
         item = GetTraceResponse.Item(
             id=id,
