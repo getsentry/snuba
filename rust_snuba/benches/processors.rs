@@ -53,6 +53,7 @@ fn create_factory(
         clickhouse_cluster: ClickhouseConfig {
             host: "test".into(),
             port: 1234,
+            secure: false,
             http_port: 1234,
             user: "test".into(),
             password: "test".into(),
@@ -99,6 +100,7 @@ fn create_factory(
         },
         stop_at_timestamp: None,
         batch_write_timeout: None,
+        custom_envoy_request_timeout: None,
     };
     Box::new(factory)
 }

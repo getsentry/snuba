@@ -1,5 +1,144 @@
 # Changelog
 
+## 25.5.1
+
+### Various fixes & improvements
+
+- chore(ci): Bump sentry-related dependencies more aggressively (#6769) by @untitaker
+- ref(rust-snuba): Add architecture doc (#7151) by @untitaker
+- feat(trace-items): Support page tokens in trace item attributes endpo… (#7182) by @Zylphrex
+- Revert "fix(eap): Translate eap_spans to eap_items_span for subscriptions (#7181)" (ce427610) by @getsentry-bot
+- chore(eap-alerts): Clean up devserver args to reflect correct entity (#7185) by @shruthilayaj
+- feat(replay): update processor for user_geo fields (#7175) by @aliu39
+- chore: Create subscriptiosn eith eap items spans entity (#7183) by @shruthilayaj
+- feat(replay): update entity/storage yamls for user_geo fields (#7174) by @aliu39
+- fix(eap): Translate eap_spans to eap_items_span for subscriptions (#7181) by @phacops
+- meta: Bump new development version (baa701cd)
+
+## 25.5.0
+
+### Various fixes & improvements
+
+- feat(replay): add migration for user geo fields (#7173) by @aliu39
+- chore(eap): Cleanup EAP span, log and mutation references (#7178) by @phacops
+- feat(api): Support multipart/form-data to receive binary data (#7180) by @phacops
+- fix(job): log correct query for truncating EAP spans (#7179) by @onewland
+- feat(replay): Add OTA Updates Context to the processor (#7166) by @krystofwoldrich
+- feat(replay): Add Dataset & Storage YAML for OTA Updates Context (#7165) by @krystofwoldrich
+- feat(replay): Add Migration for OTA Updates Context Columns (#7164) by @krystofwoldrich
+- feat(eap): Transform an order by on timestamp to the full sort key order to improve performance  (#7153) by @xurui-c
+- create manual job for truncating eap_spans_2_local tables (#7167) by @onewland
+- fix(rust): Validate schemas according to their type (#7176) by @phacops
+- fix: fix duplicate labels in RPC causing incorrect behavior (#7139) by @kylemumma
+- fix batch join timeout reading from env var (#7171) by @volokluev
+- fix(trace-items): Should return keys in filter (#7162) by @Zylphrex
+- chore(devservices): Bump version to 1.1.5 and add programs.conf file (#7161) by @hubertdeng123
+- chore(eap): Stop trimming query time ranges (#7159) by @phacops
+- Revert "Revert "feat(eap): Add an item consumer (#7122)"" (#7160) by @volokluev
+- Revert "feat(eap): Add an item consumer (#7122)" (0b2e3280) by @getsentry-bot
+- feat(eap): Add an item consumer (#7122) by @phacops
+- ref(consumer) only log when there are rows to write (#7155) by @MeredithAnya
+- Revert "feat(eap): Transform an order by on timestamp to the full sort key order to improve performance (#7149)" (b4fbd4c6) by @getsentry-bot
+- fix(eap): Remove max execution time from attribute names endpoint (#7152) by @volokluev
+- chore(eap): Add a eap_items_span entity for backwards compatibility (#7150) by @phacops
+- feat(eap): Transform an order by on timestamp to the full sort key order to improve performance (#7149) by @phacops
+- fix(ourlogs): Do not store span_id (#7148) by @colin-sentry
+
+_Plus 55 more_
+
+## 25.4.0
+
+### Various fixes & improvements
+
+- fix(eap): Cast timestamp as a float to and then make it a datetime (#7072) by @phacops
+- feat(rust-snuba): Enable SSL in rdkafka (#7059) by @untitaker
+- ref: bump sentry-kafka-schemas to 1.2.0 (#7069) by @getsentry-bot
+- ref: bump sentry-protos to 0.1.69 (#7070) by @getsentry-bot
+- feat(sourecmaps) - Allow querying 'symbolicated_in_app' field on events and discover (#7063) by @yuvmen
+- Set timeout_overflow_mode to break on all tier 1 queries (#7065) by @volokluev
+- obs(snuba): add query settings to db span (#7064) by @volokluev
+- perf(sampling-in-storage): track timeout queries (#7061) by @xurui-c
+- Set timeout_before_checking_execution speed to 0 (#7062) by @volokluev
+- fix(sampling-in-storage): query scans 0 bytes (#7055) by @xurui-c
+- feat(group-by-alerts): Allow for group by's without conditions on the events dataset (#7057) by @JoshFerge
+- feat(eap): add a sample count threshold for percentile reliability (#7054) by @davidtsuk
+- feat(sourcemaps) - Add `symbolicated_in_app` column on errors (#7043) by @yuvmen
+- feat: remove logs resolver, endpoint itemstats (#7042) by @kylemumma
+- perf(sampling-in-storage): emit raw estimation error (#7051) by @xurui-c
+- fix(sourcemaps) - Added `symbolicated_in_app` column to errors_ro (#7052) by @yuvmen
+- fix(admin): Do not scrub UUIDs, hex strings and datetimes (#7053) by @untitaker
+- feat(sourcemaps) - Add new column `symbolicated_in_app` on errors (#7044) by @yuvmen
+- feat: eap timeseries works for logs (#7047) by @kylemumma
+- fix(sampling-in-storage): fix increment metric (#7049) by @xurui-c
+- fix(eap-items): add the sampling factor column to the distributed downsampled tables (#7048) by @davidtsuk
+- bump max clickhouse version to 24.8.14.10459 (#7046) by @MeredithAnya
+- fix(eap-items): Write to new sampling_factor column (#7020) by @davidtsuk
+- fix(eap-items): Update materialized views to include the sampling factor column (#7021) by @davidtsuk
+
+_Plus 60 more_
+
+## 25.3.0
+
+### Various fixes & improvements
+
+- feat(smart-autocomplete): Implement smart autocomplete functionality (#6960) by @volokluev
+- fix(eap): remove items_attribute_mv (#6968) by @volokluev
+- fix(eap): allow hashmaps to be used in the entity (#6967) by @volokluev
+- fix(eap-items): add attribute mappings for backwards compatibility (#6961) by @davidtsuk
+- feat: storage for new item_attrs table (#6944) by @kylemumma
+- feat: new mv for item_attrs (#6956) by @kylemumma
+- fix(admin): fix log profile events nonsense (#6965) by @volokluev
+- fix(eap): Return high reliability when sampling rate is 100% (#6954) by @jan-auer
+- fix(eap-items): swap description and raw_description (#6958) by @davidtsuk
+- fix(eap-items): make sure we are not overriding sentry.description (#6955) by @davidtsuk
+- ref(replay): add environment to ReplayClickEvent (#6946) by @michellewzhang
+- feat(smart_autocomplete): storage definition for new materialized view (#6951) by @volokluev
+- fix(eap): Update relative confidence calculation (#6935) by @jan-auer
+- feat: drop item_attrs mv (#6953) by @kylemumma
+- chore: increase timeout for some of the ci tests (#6952) by @kylemumma
+- Remove unsupported comments deploy.sh (#6950) by @volokluev
+- fix(eap-items): map sentry.name to sentry.description in eap_items (#6949) by @davidtsuk
+- Remove vector deployment again (#6948) by @volokluev
+- Revert "remove test-eap-mutations-vector from deploy script (#6947)" (342d8207) by @getsentry-bot
+- remove test-eap-mutations-vector from deploy script (#6947) by @volokluev
+- feat: item_attrs materialized views for new eap_items table (#6943) by @kylemumma
+- feat(eap-sampling): add mv migration for sampled views (#6940) by @volokluev
+- SRE-630: add snuba container selector for migration (#6945) by @mwarkentin
+- fix(gocd): Fix missing/changed container names (#6942) by @rgibert
+
+_Plus 52 more_
+
+## 25.2.0
+
+### Various fixes & improvements
+
+- feat(uptime): Add incident_status column to uptime_monitor_checks (#6886) by @evanpurkhiser
+- chore(eap): Enable all storages in every region (#6884) by @phacops
+- cleanup(gen-metrics): remove meta_tag_values_mv (#6882) by @onewland
+- Revert "Revert "remove generic_metrics/*/distributions_meta_tag_value… (#6883) by @onewland
+- chore(docs): update references to devservices (#6881) by @shellmayr
+- Revert "remove generic_metrics/*/distributions_meta_tag_values (#6878)" (2dea1189) by @getsentry-bot
+- remove generic_metrics/*/distributions_meta_tag_values (#6878) by @onewland
+- fix(snuba-admin): stop crashing when turning off profile events (#6879) by @volokluev
+- chore(eap): Restore missing materialized views (#6877) by @phacops
+- feat(eap): Add hash map of attribute keys to the items table (#6876) by @phacops
+- migrate(smart-autocomplete): Add a hashmap optimization + BF index to smart autocomplete table (#6875) by @volokluev
+- feat(consumer): add flag for custom envoy request timeout (#6874) by @onewland
+- fix(eap): Bad circular import in endpoint get traces (#6873) by @Zylphrex
+- chore: Upgrade clickhouse-driver to 0.2.9 (#6869) by @phacops
+- feat: eap support formulas in timeseries endpoint (#6854) by @kylemumma
+- feat(eap): Add a table to store items (#6850) by @phacops
+- feat(capman): Remove BytesScannedWindowAllocationPolicy from errors_ro (#6866) by @volokluev
+- fix(eap): reliabilities should be updated even when value is null (#6863) by @davidtsuk
+- Revert "cleanup(smart_autocomplete): remove smart autocomplete mv (#6867)" (0bdf9a9a) by @getsentry-bot
+- cleanup(smart_autocomplete): remove smart autocomplete mv (#6867) by @volokluev
+- fix: bump sentry kafka schema (#6864) by @JoshFerge
+- feat: Add a Bool column type (#6861) by @phacops
+- feat: Allow to use 128 bits integers (#6862) by @phacops
+- chore: bump sentry-kafka-schemas (#6857) by @JoshFerge
+
+_Plus 76 more_
+
 ## 25.1.0
 
 ### Various fixes & improvements

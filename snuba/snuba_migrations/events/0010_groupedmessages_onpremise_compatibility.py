@@ -37,7 +37,7 @@ def fix_order_by(_logger: logging.Logger) -> None:
 
     # Add the project_id column
     add_column_sql = operations.AddColumn(
-        storage_set=StorageSetKey.CDC,
+        storage_set=StorageSetKey.EVENTS,
         table_name=TABLE_NAME,
         column=Column("project_id", UInt(64)),
         after="record_deleted",
@@ -72,7 +72,7 @@ def fix_order_by(_logger: logging.Logger) -> None:
 
 
 def ensure_drop_temporary_tables(_logger: logging.Logger) -> None:
-    cluster = get_cluster(StorageSetKey.CDC)
+    cluster = get_cluster(StorageSetKey.EVENTS)
 
     if not cluster.is_single_node():
         return
@@ -80,13 +80,13 @@ def ensure_drop_temporary_tables(_logger: logging.Logger) -> None:
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
     clickhouse.execute(
         operations.DropTable(
-            storage_set=StorageSetKey.CDC,
+            storage_set=StorageSetKey.EVENTS,
             table_name=TABLE_NAME_NEW,
         ).format_sql()
     )
     clickhouse.execute(
         operations.DropTable(
-            storage_set=StorageSetKey.CDC,
+            storage_set=StorageSetKey.EVENTS,
             table_name=TABLE_NAME_OLD,
         ).format_sql()
     )

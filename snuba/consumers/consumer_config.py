@@ -19,6 +19,7 @@ class ClickhouseClusterConfig:
     user: str
     password: str
     database: str
+    secure: bool
 
 
 @dataclass(frozen=True)
@@ -157,6 +158,7 @@ def resolve_consumer_config(
     queued_min_messages: Optional[int] = None,
     group_instance_id: Optional[str] = None,
     quantized_rebalance_consumer_group_delay_secs: Optional[int] = None,
+    custom_envoy_request_timeout: Optional[int] = None,
 ) -> ConsumerConfig:
     """
     Resolves the ClickHouse cluster and Kafka brokers, and the physical topic name
@@ -274,6 +276,7 @@ def resolve_storage_config(
         http_port=cluster.get_http_port(),
         user=user,
         password=password,
+        secure=cluster.get_secure(),
         database=cluster.get_database(),
     )
 

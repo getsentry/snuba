@@ -38,24 +38,14 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverGetTrace
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
 )
 
-_BUCKET_COUNT = 20
-
-
-NORMALIZED_COLUMNS_TO_INCLUDE = [
-    col.name
-    for col in get_entity(EntityKey("eap_spans")).get_data_model().columns
-    if col.name
-    not in [
-        "retention_days",
-        "sign",
-        "attr_str",
-        "attr_num",
-        "span_id",
-        "timestamp",
-    ]
+NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
+    "organization_id",
+    "project_id",
+    "trace_id",
+    "sampling_factor",
 ]
 
 
@@ -63,12 +53,26 @@ def _build_query(request: GetTraceRequest) -> Query:
     selected_columns: list[SelectedExpression] = [
         SelectedExpression(
             name="id",
-            expression=column("span_id", alias="id"),
+            expression=(
+                attribute_key_to_expression_eap_items(
+                    AttributeKey(
+                        name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING
+                    )
+                )
+            ),
         ),
         SelectedExpression(
             name="timestamp",
-            expression=column(
-                "start_timestamp",
+            expression=f.cast(
+                (
+                    attribute_key_to_expression_eap_items(
+                        AttributeKey(
+                            name="sentry.start_timestamp_precise",
+                            type=AttributeKey.Type.TYPE_DOUBLE,
+                        )
+                    )
+                ),
+                "Float64",
                 alias="timestamp",
             ),
         ),
@@ -82,42 +86,47 @@ def _build_query(request: GetTraceRequest) -> Query:
             selected_columns.append(
                 SelectedExpression(
                     name=attribute_key.name,
-                    expression=attribute_key_to_expression(attribute_key),
+                    expression=(attribute_key_to_expression_eap_items(attribute_key)),
                 )
             )
     else:
         selected_columns += [
             SelectedExpression(
-                name="attrs_str",
+                name=("attributes_string"),
                 expression=FunctionCall(
-                    "attrs_str",
+                    ("attributes_string"),
                     "mapConcat",
-                    tuple(column(f"attr_str_{i}") for i in range(_BUCKET_COUNT)),
+                    tuple(column(f"attributes_string_{i}") for i in range(40)),
                 ),
             ),
             SelectedExpression(
-                name="attrs_num",
+                name=("attributes_float"),
                 expression=FunctionCall(
-                    "attrs_num",
+                    ("attributes_float"),
                     "mapConcat",
-                    tuple(column(f"attr_num_{i}") for i in range(_BUCKET_COUNT)),
+                    tuple(column(f"attributes_float_{i}") for i in range(40)),
                 ),
             ),
         ]
         selected_columns.extend(
-            [
-                SelectedExpression(
-                    name=col_name, expression=column(col_name, alias=col_name)
-                )
-                for col_name in NORMALIZED_COLUMNS_TO_INCLUDE
-            ]
+            map(
+                lambda col_name: SelectedExpression(
+                    name=col_name,
+                    expression=column(
+                        col_name,
+                        alias=f"selected_{col_name}",
+                    ),
+                ),
+                (NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS),
+            )
         )
 
     entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+        key=EntityKey("eap_items"),
+        schema=get_entity(EntityKey("eap_items")).get_data_model(),
         sample=None,
     )
+
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -128,11 +137,7 @@ def _build_query(request: GetTraceRequest) -> Query:
                 request.meta.end_timestamp.seconds,
             ),
             equals(
-                f.cast(
-                    column("trace_id"),
-                    "String",
-                    alias="trace_id",
-                ),
+                column("trace_id"),
                 literal(request.trace_id),
             ),
         ),
@@ -219,16 +224,18 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
 
 
 def _convert_results(
-    data: Iterable[Dict[str, Any]],
+    data: Iterable[Dict[str, Any]], add_hex_columns: bool = False
 ) -> list[GetTraceResponse.Item]:
     items: list[GetTraceResponse.Item] = []
 
     for row in data:
         id = row.pop("id")
-        dt = row.pop("timestamp")
+        ts = row.pop("timestamp")
 
         timestamp = Timestamp()
-        timestamp.FromDatetime(dt)
+        # truncate to microseconds since we store microsecond precision only
+        # then transform to nanoseconds
+        timestamp.FromNanoseconds(int(ts * 1e6) * 1000)
 
         attributes: list[GetTraceResponse.Item.Attribute] = []
 
@@ -272,7 +279,13 @@ class ResolverGetTraceEAPSpans(ResolverGetTrace):
             request=_build_snuba_request(in_msg),
             timer=self._timer,
         )
-        items = _convert_results(results.result.get("data", []))
+        item_conditions = [
+            i for i in in_msg.items if i.item_type == TraceItemType.TRACE_ITEM_TYPE_SPAN
+        ][0]
+        items = _convert_results(
+            results.result.get("data", []),
+            not item_conditions.attributes,
+        )
         item_groups: list[GetTraceResponse.ItemGroup] = [
             GetTraceResponse.ItemGroup(
                 item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,

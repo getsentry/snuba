@@ -46,7 +46,7 @@ def write_unprocessed_events(
 
 def write_raw_unprocessed_events(
     storage: WritableStorage,
-    events: Sequence[Union[InsertEvent, Mapping[str, Any]]],
+    events: Sequence[Union[InsertEvent, Mapping[str, Any] | bytes]],
 ) -> None:
     processor = storage.get_table_writer().get_stream_loader().get_processor()
 
@@ -57,7 +57,6 @@ def write_raw_unprocessed_events(
         )
         assert processed_message is not None
         processed_messages.append(processed_message)
-
     write_processed_messages(storage, processed_messages)
 
 

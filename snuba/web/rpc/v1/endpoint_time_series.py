@@ -9,9 +9,15 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
+from snuba.state import get_int_config
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.proto_visitor import (
+    AggregationToConditionalAggregationVisitor,
+    TimeSeriesRequestWrapper,
+)
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
+from snuba.web.rpc.v1.visitors.visitor_v2 import preprocess_expression_labels
 
 _VALID_GRANULARITY_SECS = set(
     [
@@ -32,8 +38,8 @@ _VALID_GRANULARITY_SECS = set(
     ]
 )
 
-# MAX 5 minute granularity over 7 days
-_MAX_BUCKETS_IN_REQUEST = 2016
+# MAX 15 minute granularity over 28 days
+_MAX_BUCKETS_IN_REQUEST = 2688
 
 
 def _enforce_no_duplicate_labels(request: TimeSeriesRequest) -> None:
@@ -122,5 +128,12 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
             )
         in_msg = _convert_aggregations_to_expressions(in_msg)
+        aggregation_to_conditional_aggregation_visitor = (
+            AggregationToConditionalAggregationVisitor()
+        )
+        in_msg_wrapper = TimeSeriesRequestWrapper(in_msg)
+        in_msg_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
+        if bool(get_int_config("enable_clear_labels_eap", 0)):
+            preprocess_expression_labels(in_msg)
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)

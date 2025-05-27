@@ -27,7 +27,10 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
-from snuba.web.rpc.common.common import trace_item_filters_to_expression
+from snuba.web.rpc.common.common import (
+    trace_item_filters_to_expression,
+    use_sampling_factor,
+)
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
@@ -44,8 +47,8 @@ from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
 
 def _get_aggregation_label(expr: Expression) -> str:
     match expr.WhichOneof("expression"):
-        case "aggregation":
-            return expr.aggregation.label
+        case "conditional_aggregation":
+            return expr.conditional_aggregation.label
         case "formula":
             raise BadSnubaRPCRequestException(
                 "formulas are not supported for uptime checks"
@@ -178,13 +181,14 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     aggregation_columns = []
     for expr in request.expressions:
         match expr.WhichOneof("expression"):
-            case "aggregation":
+            case "conditional_aggregation":
                 aggregation_columns.append(
                     SelectedExpression(
-                        name=expr.aggregation.label,
+                        name=expr.conditional_aggregation.label,
                         expression=aggregation_to_expression(
-                            expr.aggregation,
-                            attribute_key_to_expression(expr.aggregation.key),
+                            expr.conditional_aggregation,
+                            attribute_key_to_expression,
+                            use_sampling_factor(request.meta),
                         ),
                     )
                 )

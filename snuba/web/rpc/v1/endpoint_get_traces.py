@@ -9,7 +9,11 @@ from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import (
     GetTracesResponse,
     TraceAttribute,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
+    RequestMeta,
+    TraceItemType,
+)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
@@ -18,11 +22,11 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
-from snuba.query.expressions import Expression
+from snuba.query.expressions import Expression, SubscriptableReference
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -41,7 +45,7 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -134,32 +138,65 @@ _TYPES_TO_CLICKHOUSE: dict[
 }
 
 
-def _attribute_to_expression(
-    trace_attribute: TraceAttribute,
-    *conditions: Expression,
+def _get_attribute_expression(
+    attribute_name: str,
+    attribute_type: AttributeKey.Type.ValueType,
+    request_meta: RequestMeta,
 ) -> Expression:
-    def _get_root_span_attribute(attribute_name: str) -> Expression:
+    return attribute_key_to_expression_eap_items(
+        AttributeKey(name=attribute_name, type=attribute_type)
+    )
+
+
+def _attribute_to_expression(
+    trace_attribute: TraceAttribute, *conditions: Expression, request_meta: RequestMeta
+) -> Expression:
+    def _get_root_span_attribute(
+        attribute_name: str, attribute_type: AttributeKey.Type.ValueType
+    ) -> Expression:
         return f.argMinIf(
-            column(attribute_name),
-            column("start_timestamp"),
-            f.equals(column("parent_span_id"), literal("0" * 16)),
+            _get_attribute_expression(attribute_name, attribute_type, request_meta),
+            _get_attribute_expression(
+                "sentry.start_timestamp",
+                AttributeKey.Type.TYPE_DOUBLE,
+                request_meta,
+            ),
+            f.equals(
+                _get_attribute_expression(
+                    "sentry.parent_span_id", AttributeKey.Type.TYPE_STRING, request_meta
+                ),
+                # root spans don't have a parent span set so the value defaults to empty string
+                literal(""),
+            ),
             alias=alias,
         )
 
-    def _get_earliest_span_attribute(attribute_name: str) -> Expression:
+    def _get_earliest_span_attribute(
+        attribute_name: str, attribute_type: AttributeKey.Type.ValueType
+    ) -> Expression:
         return f.argMin(
-            column(attribute_name),
-            column("start_timestamp"),
+            _get_attribute_expression(attribute_name, attribute_type, request_meta),
+            _get_attribute_expression(
+                "sentry.start_timestamp",
+                AttributeKey.Type.TYPE_DOUBLE,
+                request_meta,
+            ),
             alias=alias,
         )
 
-    def _get_earliest_frontend_span_attribute(attribute_name: str) -> Expression:
-        span_op = attribute_key_to_expression(
-            AttributeKey(name="sentry.op", type=AttributeKey.Type.TYPE_STRING)
+    def _get_earliest_frontend_span_attribute(
+        attribute_name: str, attribute_type: AttributeKey.Type.ValueType
+    ) -> Expression:
+        span_op = _get_attribute_expression(
+            "sentry.op", AttributeKey.Type.TYPE_STRING, request_meta
         )
         return f.argMinIf(
-            column(attribute_name),
-            column("start_timestamp"),
+            _get_attribute_expression(attribute_name, attribute_type, request_meta),
+            _get_attribute_expression(
+                "sentry.start_timestamp",
+                AttributeKey.Type.TYPE_DOUBLE,
+                request_meta,
+            ),
             or_cond(
                 f.equals(span_op, literal("pageload")),
                 f.equals(span_op, literal("navigation")),
@@ -175,32 +212,70 @@ def _attribute_to_expression(
 
         if key == TraceAttribute.Key.KEY_START_TIMESTAMP:
             return f.cast(
-                f.min(column("start_timestamp")), clickhouse_type, alias=alias
+                f.min(
+                    _get_attribute_expression(
+                        "sentry.start_timestamp",
+                        AttributeKey.Type.TYPE_DOUBLE,
+                        request_meta,
+                    )
+                ),
+                clickhouse_type,
+                alias=alias,
             )
         elif key == TraceAttribute.Key.KEY_END_TIMESTAMP:
-            return f.cast(f.max(column("end_timestamp")), clickhouse_type, alias=alias)
+            return f.cast(
+                f.max(
+                    _get_attribute_expression(
+                        "sentry.end_timestamp",
+                        AttributeKey.Type.TYPE_DOUBLE,
+                        request_meta,
+                    )
+                ),
+                clickhouse_type,
+                alias=alias,
+            )
         elif key == TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT:
             return f.count(alias=alias)
         elif key == TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT:
             return f.countIf(*conditions, alias=alias)
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
-            return _get_root_span_attribute("name")
+            return _get_root_span_attribute(
+                "sentry.name", AttributeKey.Type.TYPE_STRING
+            )
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS:
-            return _get_root_span_attribute("duration_ms")
+            return _get_root_span_attribute(
+                "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
+            )
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_PROJECT_ID:
-            return _get_root_span_attribute("project_id")
+            return _get_root_span_attribute(
+                "sentry.project_id", AttributeKey.Type.TYPE_INT
+            )
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_NAME:
-            return _get_earliest_span_attribute("name")
+            return _get_earliest_span_attribute(
+                "sentry.name", AttributeKey.Type.TYPE_STRING
+            )
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_PROJECT_ID:
-            return _get_earliest_span_attribute("project_id")
+            return _get_earliest_span_attribute(
+                "sentry.project_id", AttributeKey.Type.TYPE_INT
+            )
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS:
-            return _get_earliest_span_attribute("duration_ms")
+            return _get_earliest_span_attribute(
+                "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
+            )
         elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN:
-            return _get_earliest_frontend_span_attribute("name")
+            return _get_earliest_frontend_span_attribute(
+                "sentry.name", AttributeKey.Type.TYPE_STRING
+            )
         elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_PROJECT_ID:
-            return _get_earliest_frontend_span_attribute("project_id")
+            return _get_earliest_frontend_span_attribute(
+                "sentry.project_id", AttributeKey.Type.TYPE_INT
+            )
         elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_DURATION_MS:
-            return _get_earliest_frontend_span_attribute("duration_ms")
+            return _get_earliest_frontend_span_attribute(
+                "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
+            )
+        elif key == TraceAttribute.Key.KEY_TRACE_ID:
+            return column("trace_id", alias="hex_trace_id")
         else:
             return f.cast(column(attribute_name), clickhouse_type, alias=alias)
 
@@ -349,32 +424,22 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     def _list_trace_ids(
         self,
         request: GetTracesRequest,
-    ) -> dict[str, int]:
+    ) -> list[str]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
-            attribute_key_to_expression,
+            (attribute_key_to_expression_eap_items),
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(
                 name="trace_id",
-                expression=f.cast(
+                expression=f.distinct(
                     column("trace_id"),
-                    "String",
-                    alias="trace_id",
                 ),
-            ),
-            SelectedExpression(
-                name="_sort_timestamp",
-                expression=f.cast(
-                    column("_sort_timestamp"),
-                    "UInt32",
-                    alias="_sort_timestamp",
-                ),
-            ),
+            )
         ]
         entity = Entity(
-            key=EntityKey("eap_spans"),
-            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+            key=EntityKey("eap_items"),
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
             sample=None,
         )
         query = Query(
@@ -383,15 +448,30 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             condition=base_conditions_and(
                 request.meta,
                 trace_item_filters_expression,
+                SPAN_ITEM_TYPE_CONDITION,
+                # Exclude standalone spans until they are supported in the Trace View
+                exclude_standalone_span_conditions_for_eap_items(),
             ),
             order_by=[
                 OrderBy(
                     direction=OrderByDirection.DESC,
-                    expression=column("_sort_timestamp"),
+                    expression=column("organization_id"),
+                ),
+                OrderBy(
+                    direction=OrderByDirection.DESC,
+                    expression=column("project_id"),
+                ),
+                OrderBy(
+                    direction=OrderByDirection.DESC,
+                    expression=column("item_type"),
+                ),
+                OrderBy(
+                    direction=OrderByDirection.DESC,
+                    expression=column("timestamp"),
                 ),
             ],
-            limitby=LimitBy(limit=1, columns=[column("trace_id")]),
             limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
+            offset=request.page_token.offset,
         )
 
         treeify_or_and_conditions(query)
@@ -401,19 +481,19 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             request=_build_snuba_request(request, query),
             timer=self._timer,
         )
-        trace_ids: dict[str, int] = {}
+        trace_ids: list[str] = []
         for row in results.result.get("data", []):
-            trace_ids[row["trace_id"]] = row["_sort_timestamp"]
+            trace_ids.append(list(row.values())[0])
         return trace_ids
 
     def _get_metadata_for_traces(
         self,
         request: GetTracesRequest,
-        trace_ids: dict[str, int],
+        trace_ids: list[str],
     ) -> list[GetTracesResponse.Trace]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
-            attribute_key_to_expression,
+            (attribute_key_to_expression_eap_items),
         )
 
         selected_columns: list[SelectedExpression] = []
@@ -427,6 +507,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     expression=_attribute_to_expression(
                         trace_attribute,
                         trace_item_filters_expression,
+                        request_meta=request.meta,
                     ),
                 )
             )
@@ -441,41 +522,40 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     expression=_attribute_to_expression(
                         trace_attribute,
                         trace_item_filters_expression,
+                        request_meta=request.meta,
                     ),
                 )
             )
 
         entity = Entity(
-            key=EntityKey("eap_spans"),
-            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+            key=EntityKey("eap_items"),
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
             sample=None,
         )
-        timestamps = trace_ids.values()
+
         query = Query(
             from_clause=entity,
             selected_columns=selected_columns,
             condition=and_cond(
                 project_id_and_org_conditions(request.meta),
                 timestamp_in_range_condition(
-                    min(timestamps) - _BUFFER_WINDOW,
-                    max(timestamps) + _BUFFER_WINDOW,
+                    request.meta.start_timestamp.seconds,
+                    request.meta.end_timestamp.seconds,
                 ),
                 in_cond(
-                    f.cast(
-                        column("trace_id"),
-                        "String",
-                        alias="trace_id",
-                    ),
-                    literals_array(
-                        None, [literal(trace_id) for trace_id in trace_ids.keys()]
-                    ),
+                    column("trace_id"),
+                    literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
                 ),
+                SPAN_ITEM_TYPE_CONDITION,
+                # Exclude standalone spans until they are supported in the Trace View
+                exclude_standalone_span_conditions_for_eap_items(),
             ),
             groupby=[
                 _attribute_to_expression(
                     TraceAttribute(
                         key=TraceAttribute.Key.KEY_TRACE_ID,
                     ),
+                    request_meta=request.meta,
                 ),
             ],
             order_by=[
@@ -495,3 +575,21 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         )
 
         return _convert_results(request, results.result.get("data", []))
+
+
+def exclude_standalone_span_conditions_for_eap_items() -> Expression:
+    segment_id_expression = attribute_key_to_expression_eap_items(
+        AttributeKey(
+            name="sentry.segment_id",
+            type=AttributeKey.Type.TYPE_STRING,
+        )
+    )
+    if isinstance(segment_id_expression, SubscriptableReference):
+        return f.mapContains(segment_id_expression.column, segment_id_expression.key)
+    raise BadSnubaRPCRequestException("can't convert this attribute into an expression")
+
+
+SPAN_ITEM_TYPE_CONDITION = f.equals(
+    column("item_type"),
+    TraceItemType.TRACE_ITEM_TYPE_SPAN,
+)

@@ -1,12 +1,11 @@
 import os
 from bisect import bisect_left
-from datetime import timedelta
 from typing import Generic, List, Tuple, Type, TypeVar, cast, final
 
 import sentry_sdk
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
-from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
@@ -21,6 +20,7 @@ from snuba.utils.registered_class import (
 )
 from snuba.web import QueryException
 from snuba.web.rpc.common.exceptions import (
+    BadSnubaRPCRequestException,
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
@@ -28,7 +28,6 @@ from snuba.web.rpc.common.exceptions import (
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
 
-MAXIMUM_TIME_RANGE_IN_DAYS = 30
 _TIME_PERIOD_HOURS_BUCKETS = [
     1,
     24,
@@ -122,6 +121,14 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         res.ParseFromString(bytestring)
         return res
 
+    def _uses_storage_routing(self, in_msg: Tin) -> bool:
+        return (
+            hasattr(in_msg, "meta")
+            and hasattr(in_msg.meta, "downsampled_storage_config")
+            and in_msg.meta.downsampled_storage_config.mode
+            != DownsampledStorageConfig.MODE_UNSPECIFIED
+        )
+
     @final
     def execute(self, in_msg: Tin) -> Tout:
         scope = sentry_sdk.get_current_scope()
@@ -131,17 +138,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             span.description = self.config_key()
         self.__before_execute(in_msg)
         error = None
-        if (
-            hasattr(in_msg, "meta")
-            and hasattr(in_msg.meta, "start_timestamp")
-            and hasattr(in_msg.meta, "end_timestamp")
-        ):
-            start = in_msg.meta.start_timestamp.ToDatetime()
-            end = in_msg.meta.end_timestamp.ToDatetime()
-            if (end - start).days > MAXIMUM_TIME_RANGE_IN_DAYS:
-                timestamp = Timestamp()
-                timestamp.FromDatetime(end - timedelta(days=MAXIMUM_TIME_RANGE_IN_DAYS))
-                in_msg.meta.start_timestamp.CopyFrom(timestamp)
         try:
             out = self._execute(in_msg)
         except QueryException as e:
@@ -150,6 +146,28 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 and e.extra["stats"]["error_code"] == 241
             ):
                 self.metrics.increment("OOM_query")
+                sentry_sdk.capture_exception(e)
+            if (
+                "error_code" in e.extra["stats"]
+                and e.extra["stats"]["error_code"] == 159
+            ):
+                tags = {"endpoint": str(self.__class__.__name__)}
+                if self._uses_storage_routing(in_msg):
+                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
+                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
+                    )
+                self.metrics.increment("timeout_query", 1, tags)
+                sentry_sdk.capture_exception(e)
+            if (
+                "error_code" in e.extra["stats"]
+                and e.extra["stats"]["error_code"] == 160
+            ):
+                tags = {"endpoint": str(self.__class__.__name__)}
+                if self._uses_storage_routing(in_msg):
+                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
+                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
+                    )
+                self.metrics.increment("estimated_execution_timeout", 1, tags)
                 sentry_sdk.capture_exception(e)
             out = self.response_class()()
             error = e
@@ -189,6 +207,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         if hasattr(meta, "referrer"):
             tags["referrer"] = meta.referrer
 
+        if self._uses_storage_routing(in_msg):
+            tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
+                in_msg.meta.downsampled_storage_config.mode
+            )
+
         return tags
 
     def _before_execute(self, in_msg: Tin) -> None:
@@ -205,10 +228,17 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            self.metrics.increment(
-                "request_error",
-                tags=self._timer.tags,
-            )
+            sentry_sdk.capture_exception(error)
+            if isinstance(error, BadSnubaRPCRequestException):
+                self.metrics.increment(
+                    "request_invalid",
+                    tags=self._timer.tags,
+                )
+            else:
+                self.metrics.increment(
+                    "request_error",
+                    tags=self._timer.tags,
+                )
             raise error
         else:
             self.metrics.increment(
@@ -232,7 +262,7 @@ def list_all_endpoint_names() -> List[Tuple[str, str]]:
     ]
 
 
-_VERSIONS = ["v1alpha", "v1"]
+_VERSIONS = ["v1"]
 _TO_IMPORT = {
     p: os.path.join(os.path.dirname(os.path.realpath(__file__)), p) for p in _VERSIONS
 }

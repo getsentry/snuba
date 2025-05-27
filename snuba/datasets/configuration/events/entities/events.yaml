@@ -218,6 +218,16 @@ schema:
       args: { schema_modifiers: [nullable], size: 64 },
     },
     { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
+    {
+      name: symbolicated_in_app,
+      type: UInt,
+      args: { schema_modifiers: [nullable], size: 8 },
+    },
+    {
+      name: timestamp_ms,
+      type: DateTime64,
+      args: { schema_modifiers: [nullable], precision: 3 },
+    },
   ]
 required_time_column: timestamp
 storages:
@@ -513,12 +523,12 @@ validators:
 subscription_validators:
   - validator: AggregationValidator
     args:
-      max_allowed_aggregations: 1
+      max_allowed_aggregations: 10
       disallowed_aggregations:
-        - groupby
         - having
         - orderby
       required_time_column: timestamp
+      allows_group_by_without_condition: true
 
 join_relationships:
   grouped:

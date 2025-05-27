@@ -4,7 +4,7 @@ name: uptime_monitor_checks
 storage:
   key: uptime_monitor_checks
   set_key: events_analytics_platform
-readiness_state: partial
+readiness_state: complete
 schema:
   columns:
     [
@@ -22,6 +22,7 @@ schema:
       { name: http_status_code, type: UInt, args: { size: 16, schema_modifiers: [nullable] } },
       { name: trace_id, type: UUID },
       { name: retention_days, type: UInt, args: { size: 16 } },
+      { name: incident_status, type: UInt, args: { size: 16 } },
     ]
   local_table_name: uptime_monitor_checks_v2_local
   dist_table_name: uptime_monitor_checks_v2_dist

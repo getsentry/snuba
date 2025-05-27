@@ -4,8 +4,10 @@ from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
+from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_stats import (
+    ResolverTraceItemStatsEAPItems,
+)
 
 
 class ResolverTraceItemStatsOurlogs(ResolverTraceItemStats):
@@ -14,4 +16,4 @@ class ResolverTraceItemStatsOurlogs(ResolverTraceItemStats):
         return TraceItemType.TRACE_ITEM_TYPE_LOG
 
     def resolve(self, in_msg: TraceItemStatsRequest) -> TraceItemStatsResponse:
-        raise BadSnubaRPCRequestException("aggregation is not supported for logs")
+        return ResolverTraceItemStatsEAPItems().resolve(in_msg, self._timer)

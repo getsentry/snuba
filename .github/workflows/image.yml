@@ -25,6 +25,7 @@ jobs:
         if [ ${{ github.event_name }} = 'push' ]; then
           args+=(
             --tag ghcr.io/getsentry/snuba:latest
+            --tag ghcr.io/getsentry/snuba:nightly
             --tag ghcr.io/getsentry/snuba:amd64-latest
             --cache-to type=registry,ref=ghcr.io/getsentry/snuba:buildcache,mode=max
             --push
@@ -55,7 +56,7 @@ jobs:
   publish-to-dockerhub:
     needs: build
     name: Publish Snuba to DockerHub
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4 # v3.1.0
       - name: Pull the test image

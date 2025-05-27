@@ -15,6 +15,7 @@ from snuba.core.initialize import initialize_snuba
 from snuba.datasets.factory import reset_dataset_factory
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
 from snuba.redis import all_redis_clients
 
@@ -74,6 +75,8 @@ def pytest_collection_modifyitems(items: Sequence[Any]) -> None:
     for item in items:
         if item.get_closest_marker("clickhouse_db"):
             item.fixturenames.append("clickhouse_db")
+        elif item.get_closest_marker("custom_clickhouse_db"):
+            item.fixturenames.append("custom_clickhouse_db")
         else:
             item.fixturenames.append("block_clickhouse_db")
 
@@ -187,8 +190,13 @@ def _clear_db() -> None:
         database = cluster.get_database()
 
         schema = storage.get_schema()
-        if isinstance(schema, WritableTableSchema):
-            table_name = schema.get_local_table_name()
+        if (
+            isinstance(schema, WritableTableSchema)
+            or storage_key == StorageKey.EAP_ITEMS_DOWNSAMPLE_8
+            or storage_key == StorageKey.EAP_ITEMS_DOWNSAMPLE_64
+            or storage_key == StorageKey.EAP_ITEMS_DOWNSAMPLE_512
+        ):
+            table_name = schema.get_local_table_name()  # type: ignore
 
             nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
             for node in nodes:
@@ -196,6 +204,21 @@ def _clear_db() -> None:
                     ClickhouseClientSettings.MIGRATE, node
                 )
                 connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
+
+
+@pytest.fixture
+def custom_clickhouse_db(
+    request: pytest.FixtureRequest,
+) -> Generator[None, None, None]:
+    if not request.node.get_closest_marker("custom_clickhouse_db"):
+        # Make people use the marker explicitly so `-m` works on CLI
+        pytest.fail(
+            "Need to use custom_clickhouse_db marker if custom_clickhouse_db fixture is used"
+        )
+    try:
+        yield
+    finally:
+        _clear_db()
 
 
 @pytest.fixture

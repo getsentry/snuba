@@ -38,6 +38,211 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
     "sentry.end_timestamp",
 }
 
+# These are attributes that were not stored in attr_str_ or attr_num_ in eap_spans because they were stored in columns.
+# Since we store these in the attribute columns in eap_items, we need to exclude them in endpoints that don't expect them to be in the attribute columns.
+ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS: Final[Set[str]] = {
+    "sentry.raw_description",
+    "sentry.transaction",
+    "sentry.start_timestamp_precise",
+    "sentry.end_timestamp_precise",
+    "sentry.duration_ms",
+    "sentry.event_id",
+    "sentry.exclusive_time_ms",
+    "sentry.is_segment",
+    "sentry.parent_span_id",
+    "sentry.profile_id",
+    "sentry.received",
+    "sentry.segment_id",
+}
+
+COLUMN_PREFIX: str = "sentry."
+
+NORMALIZED_COLUMNS_EAP_ITEMS: Final[
+    Mapping[str, Sequence[AttributeKey.Type.ValueType]]
+] = {
+    f"{COLUMN_PREFIX}organization_id": [AttributeKey.Type.TYPE_INT],
+    f"{COLUMN_PREFIX}project_id": [AttributeKey.Type.TYPE_INT],
+    f"{COLUMN_PREFIX}timestamp": [
+        AttributeKey.Type.TYPE_FLOAT,
+        AttributeKey.Type.TYPE_DOUBLE,
+        AttributeKey.Type.TYPE_INT,
+        AttributeKey.Type.TYPE_STRING,
+    ],
+    f"{COLUMN_PREFIX}trace_id": [
+        AttributeKey.Type.TYPE_STRING
+    ],  # this gets converted from a uuid to a string in a storage processor
+    f"{COLUMN_PREFIX}item_id": [AttributeKey.Type.TYPE_STRING],
+    f"{COLUMN_PREFIX}sampling_weight": [AttributeKey.Type.TYPE_DOUBLE],
+    f"{COLUMN_PREFIX}sampling_factor": [AttributeKey.Type.TYPE_DOUBLE],
+}
+
+PROTO_TYPE_TO_CLICKHOUSE_TYPE: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
+    AttributeKey.Type.TYPE_INT: "Int64",
+    AttributeKey.Type.TYPE_STRING: "String",
+    AttributeKey.Type.TYPE_DOUBLE: "Float64",
+    AttributeKey.Type.TYPE_FLOAT: "Float64",
+    AttributeKey.Type.TYPE_BOOLEAN: "Boolean",
+}
+
+PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
+    AttributeKey.Type.TYPE_INT: "attributes_float",
+    AttributeKey.Type.TYPE_STRING: "attributes_string",
+    AttributeKey.Type.TYPE_DOUBLE: "attributes_float",
+    AttributeKey.Type.TYPE_FLOAT: "attributes_float",
+    AttributeKey.Type.TYPE_BOOLEAN: "attributes_float",
+}
+
+# We have renamed some attributes in eap_items, so to avoid breaking changes we need to map the old names to the new names
+ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
+    "sentry.name": "sentry.raw_description",
+    "sentry.description": "sentry.normalized_description",
+    "sentry.span_id": "sentry.item_id",
+    "sentry.segment_name": "sentry.transaction",
+    "sentry.start_timestamp": "sentry.start_timestamp_precise",
+    "sentry.end_timestamp": "sentry.end_timestamp_precise",
+}
+
+
+def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
+    alias = attr_key.name + "_" + AttributeKey.Type.Name(attr_key.type)
+    if attr_key.name in NORMALIZED_COLUMNS:
+        alias = attr_key.name
+    if attr_key.type == AttributeKey.Type.TYPE_UNSPECIFIED:
+        raise BadSnubaRPCRequestException(
+            f"attribute key {attr_key.name} must have a type specified"
+        )
+
+    converted_attr_name = ATTRIBUTE_MAPPINGS.get(attr_key.name, attr_key.name)
+    if converted_attr_name in NORMALIZED_COLUMNS_EAP_ITEMS:
+        if attr_key.type not in NORMALIZED_COLUMNS_EAP_ITEMS[converted_attr_name]:
+            formatted_attribute_types = ", ".join(
+                map(
+                    AttributeKey.Type.Name,
+                    NORMALIZED_COLUMNS_EAP_ITEMS[converted_attr_name],
+                )
+            )
+            raise BadSnubaRPCRequestException(
+                f"Attribute {attr_key.name} must be one of [{formatted_attribute_types}], got {AttributeKey.Type.Name(attr_key.type)}"
+            )
+
+        if attr_key.name in {"sentry.span_id", "sentry.item_id"}:
+            return column(
+                converted_attr_name[len(COLUMN_PREFIX) :],
+                alias=alias,
+            )
+        elif attr_key.name == "sentry.sampling_factor":
+            return f.divide(
+                literal(1),
+                f.CAST(column("sampling_weight"), "Float64"),
+                alias=alias,
+            )
+
+        return f.CAST(
+            column(converted_attr_name[len(COLUMN_PREFIX) :]),
+            PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
+            alias=alias,
+        )
+
+    if attr_key.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
+        if attr_key.type == AttributeKey.Type.TYPE_BOOLEAN:
+            return f.CAST(
+                SubscriptableReference(
+                    column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
+                    key=literal(converted_attr_name),
+                    alias=None,
+                ),
+                "Nullable(Boolean)",
+                alias=alias,
+            )
+        elif attr_key.type == AttributeKey.Type.TYPE_INT:
+            return f.CAST(
+                SubscriptableReference(
+                    column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
+                    key=literal(converted_attr_name),
+                    alias=None,
+                ),
+                "Nullable(Int64)",
+                alias=alias,
+            )
+        return SubscriptableReference(
+            column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
+            key=literal(converted_attr_name),
+            alias=alias,
+        )
+
+    raise BadSnubaRPCRequestException(
+        f"Attribute {attr_key.name} has an unknown type: {AttributeKey.Type.Name(attr_key.type)}"
+    )
+
+
+def apply_virtual_columns_eap_items(
+    query: Query, virtual_column_contexts: Sequence[VirtualColumnContext]
+) -> None:
+    """Injects virtual column mappings into the clickhouse query. Works with NORMALIZED_COLUMNS on the table or
+    dynamic columns in attr_str
+
+    attr_num not supported because mapping on floats is a bad idea
+
+    Example:
+
+        SELECT
+          project_name AS `project_name`,
+          attr_str['release'] AS `release`,
+          attr_str['sentry.sdk.name'] AS `sentry.sdk.name`,
+        ... rest of query
+
+        contexts:
+            [   {from_column_name: project_id, to_column_name: project_name, value_map: {1: "sentry", 2: "snuba"}} ]
+
+
+        Query will be transformed into:
+
+        SELECT
+        -- see the project name column transformed and the value mapping injected
+          transform( CAST( project_id, 'String'), array( '1', '2'), array( 'sentry', 'snuba'), 'unknown') AS `project_name`,
+        --
+          attr_str['release'] AS `release`,
+          attr_str['sentry.sdk.name'] AS `sentry.sdk.name`,
+        ... rest of query
+
+    """
+
+    if not virtual_column_contexts:
+        return
+
+    mapped_column_to_context = {c.to_column_name: c for c in virtual_column_contexts}
+
+    def transform_expressions(expression: Expression) -> Expression:
+        # virtual columns will show up as `attr_str[virtual_column_name]` or `attr_num[virtual_column_name]`
+        if not isinstance(expression, SubscriptableReference):
+            return expression
+
+        if expression.column.column_name != "attributes_string":
+            return expression
+        context = mapped_column_to_context.get(str(expression.key.value))
+        if context:
+            attribute_expression = attribute_key_to_expression_eap_items(
+                AttributeKey(
+                    name=context.from_column_name,
+                    type=NORMALIZED_COLUMNS_EAP_ITEMS.get(
+                        context.from_column_name, [AttributeKey.TYPE_STRING]
+                    )[0],
+                )
+            )
+            return f.transform(
+                f.CAST(f.ifNull(attribute_expression, literal("")), "String"),
+                literals_array(None, [literal(k) for k in context.value_map.keys()]),
+                literals_array(None, [literal(v) for v in context.value_map.values()]),
+                literal(
+                    context.default_value if context.default_value != "" else "unknown"
+                ),
+                alias=context.to_column_name,
+            )
+
+        return expression
+
+    query.transform_expressions(transform_expressions)
+
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     def _build_label_mapping_key(attr_key: AttributeKey) -> str:
@@ -175,7 +380,7 @@ def apply_virtual_columns(
                 )
             )
             return f.transform(
-                f.CAST(attribute_expression, "String"),
+                f.CAST(f.ifNull(attribute_expression, literal("")), "String"),
                 literals_array(None, [literal(k) for k in context.value_map.keys()]),
                 literals_array(None, [literal(v) for v in context.value_map.values()]),
                 literal(
