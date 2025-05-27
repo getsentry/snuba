@@ -2105,6 +2105,9 @@ class TestCreateSubscriptionApi(BaseApiTest):
     entity_key = "events"
 
     def test(self) -> None:
+        settings.KAFKA_TOPIC_MAP = {
+            "events": "events-test-api",
+        }
         admin_client = AdminClient(get_default_kafka_configuration())
         create_topics(admin_client, [SnubaTopic.EVENTS])
 
@@ -2129,6 +2132,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert data == {
             "subscription_id": f"0/{expected_uuid.hex}",
         }
+        settings.KAFKA_TOPIC_MAP = {}
 
     def test_tenant_ids(self) -> None:
         expected_uuid = uuid.uuid1()
