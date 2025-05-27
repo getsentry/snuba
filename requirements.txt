@@ -1,6 +1,6 @@
 --index-url https://pypi.devinfra.sentry.io/simple
 
-black==22.6.0
+black==24.3.0
 blinker==1.5
 click==8.1.7
 clickhouse-driver==0.2.9
@@ -42,7 +42,7 @@ sql-metadata==2.11.0
 typing-extensions==4.12.2
 urllib3==2.2.3
 pyuwsgi==2.0.23
-Werkzeug==3.0.5
+Werkzeug==3.0.6
 PyYAML==6.0
 sqlparse==0.5.0
 google-api-python-client==2.88.0
