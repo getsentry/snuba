@@ -120,7 +120,7 @@ def create_span(
         "organization_id": ORGANIZATION_ID,
         "project_id": project_id,
         "trace_id": trace_id,
-        "span_id": int(uuid.uuid4().hex[:16], 16),
+        "span_id": str(int(uuid.uuid4().hex[:8], 16)),
         "parent_span_id": parent_span_id,
         "segment_id": segment_id,
         "profile_id": uuid.uuid4().hex,
@@ -173,7 +173,7 @@ def generate_span_branch(
         span = create_span(
             trace_id=trace_id,
             parent_span_id=parent_span_id,
-            segment_id=transaction_name,
+            segment_id=parent_span_id,
             is_segment=False,
             project_id=project_id,
             duration_ms=span_duration,
@@ -288,17 +288,25 @@ def create_kafka_producer(host: str, topic: str) -> tuple[Producer, Any]:
     kafka_producer = KafkaProducer(conf)
 
     def producer(messages: list[Span], dryrun: bool, verbose: bool) -> None:
+        futures = []
         for i, message in enumerate(messages):
             if verbose:
                 print(f"{i + 1} / {len(messages)}")
                 print(json.dumps(message))
             if not dryrun:
-                kafka_producer.produce(
-                    Topic(name=(topic)),
-                    KafkaPayload(
-                        key=None, value=json.dumps(message).encode("utf-8"), headers=[]
-                    ),
+                futures.append(
+                    kafka_producer.produce(
+                        Topic(name=(topic)),
+                        KafkaPayload(
+                            key=None,
+                            value=json.dumps(message).encode("utf-8"),
+                            headers=[],
+                        ),
+                    )
                 )
+
+        for future in futures:
+            future.result()
 
     return producer, kafka_producer
 

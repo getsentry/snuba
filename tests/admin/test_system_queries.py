@@ -6,9 +6,6 @@ from snuba import settings
 from snuba.admin.auth_roles import ROLES, Role
 from snuba.admin.clickhouse.system_queries import (
     UnauthorizedForSudo,
-    is_query_alter,
-    is_query_optimize,
-    is_system_command,
     is_valid_system_query,
     run_system_query_on_host_with_sql,
     validate_query,
@@ -50,6 +47,8 @@ from snuba.admin.user import AdminUser
         ORDER BY
             memory DESC
         """,
+        "SELECT hostname(), avg(query_duration_ms) FROM clusterAllReplicas('default', system.query_log) GROUP BY hostname()",
+        "SELECT count() FROM merge('system', '.*settings')",
     ],
 )
 @pytest.mark.clickhouse_db
@@ -110,6 +109,9 @@ def test_invalid_system_query(sql_query: str) -> None:
     [
         ("SYSSSSSSSTEM DO SOMETHING", False),
         ("SYSTEM STOP MERGES", True),
+        ("SYSTEM STOP TTL MERGES", True),
+        ("SYSTEM STOP TTL MERGES ON CLUSTER 'snuba-spans'", True),
+        ("KILL MUTATION WHERE mutation_id='0000000000'", True),
         ("system STOP MerGes", True),
         ("system SHUTDOWN", False),
         ("system KILL", False),
@@ -118,16 +120,23 @@ def test_invalid_system_query(sql_query: str) -> None:
         ("OPTIMIZE TABLE eap_spans_local", True),
         ("optimize table eap_spans_local", True),
         ("optimize   TABLE eap_spans_local", True),
+        (
+            "SYSTEM DROP REPLICA 'snuba-events-analytics-platform-2-2' FROM ZKPATH '/clickhouse/tables/events_analytics_platform/2/default/eap_spans_2_local'",
+            True,
+        ),
     ],
 )
 @pytest.mark.clickhouse_db
 def test_sudo_queries(sudo_query: str, expected: bool) -> None:
-    assert (
-        is_system_command(sudo_query)
-        or is_query_alter(sudo_query)
-        or is_query_optimize(sudo_query)
-    ) == expected
-    if not expected:
+    if expected:
+        validate_query(
+            settings.CLUSTERS[0]["host"],
+            int(settings.CLUSTERS[0]["port"]),
+            "errors",
+            sudo_query,
+            True,
+        )  # Should no-op
+    else:
         with pytest.raises(Exception):
             validate_query(
                 settings.CLUSTERS[0]["host"],

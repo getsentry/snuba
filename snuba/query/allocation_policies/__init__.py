@@ -110,13 +110,13 @@ class QuotaAllowance:
     quota_unit: str
     suggestion: str
 
+    # sets this value:
+    # https://clickhouse.com/docs/operations/settings/settings#max_bytes_to_read
+    # 0 means unlimited
+    max_bytes_to_read: int = field(default=0)
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
-    def __lt__(self, other: QuotaAllowance) -> bool:
-        if self.can_run and not other.can_run:
-            return False
-        return self.max_threads < other.max_threads
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, QuotaAllowance):
@@ -124,6 +124,7 @@ class QuotaAllowance:
         return (
             self.can_run == other.can_run
             and self.max_threads == other.max_threads
+            and self.max_bytes_to_read == other.max_bytes_to_read
             and self.explanation == other.explanation
             and self.is_throttled == other.is_throttled
             and self.throttle_threshold == other.throttle_threshold

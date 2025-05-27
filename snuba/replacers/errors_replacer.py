@@ -27,7 +27,6 @@ from sentry_kafka_schemas.schema_types.events_v1 import (
     EndDeleteGroupsMessageBody,
     EndDeleteTagMessageBody,
     EndMergeMessageBody,
-    EndUnmergeHierarchicalMessageBody,
     EndUnmergeMessageBody,
     ExcludeGroupsMessageBody,
     ReplaceGroupMessageBody,
@@ -193,7 +192,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             ReplacementType.START_DELETE_GROUPS,
             ReplacementType.START_MERGE,
             ReplacementType.START_UNMERGE,
-            ReplacementType.START_UNMERGE_HIERARCHICAL,
             ReplacementType.START_DELETE_TAG,
         ):
             return None
@@ -823,107 +821,6 @@ def _convert_hash(
 
 
 @dataclass
-class UnmergeHierarchicalReplacement(Replacement):
-    project_id: int
-    timestamp: datetime
-    primary_hash: str
-    hierarchical_hash: str
-    previous_group_id: int
-    new_group_id: int
-
-    all_columns: Sequence[FlattenedColumn]
-    state_name: ReplacerState
-
-    @classmethod
-    def parse_message(
-        cls,
-        message: ReplacementMessage[EndUnmergeHierarchicalMessageBody],
-        context: ReplacementContext,
-    ) -> Optional[UnmergeHierarchicalReplacement]:
-        try:
-            timestamp = datetime.strptime(
-                message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
-            )
-
-            primary_hash = message.data["primary_hash"]
-            assert isinstance(primary_hash, str)
-
-            hierarchical_hash = message.data["hierarchical_hash"]
-            assert isinstance(hierarchical_hash, str)
-
-            uuid.UUID(primary_hash)
-            uuid.UUID(hierarchical_hash)
-        except Exception as exc:
-            # TODO(markus): We're sacrificing consistency over uptime as long as
-            # this is in development. At some point this piece of code should be
-            # stable enough to remove this.
-            logger.error("process_unmerge_hierarchical.failed", exc_info=exc)
-            return None
-
-        return cls(
-            project_id=message.data["project_id"],
-            timestamp=timestamp,
-            primary_hash=primary_hash,
-            hierarchical_hash=hierarchical_hash,
-            all_columns=context.all_columns,
-            state_name=context.state_name,
-            previous_group_id=message.data["previous_group_id"],
-            new_group_id=message.data["new_group_id"],
-        )
-
-    @cached_property
-    def _where_clause(self) -> str:
-        primary_hash = _convert_hash(self.primary_hash, self.state_name)
-        hierarchical_hash = _convert_hash(
-            self.hierarchical_hash, self.state_name, convert_types=True
-        )
-        timestamp = self.timestamp.strftime(DATETIME_FORMAT)
-
-        return f"""\
-            PREWHERE primary_hash = {primary_hash}
-            WHERE group_id = {self.previous_group_id}
-            AND has(hierarchical_hashes, {hierarchical_hash})
-            AND project_id = {self.project_id}
-            AND received <= CAST('{timestamp}' AS DateTime)
-            AND NOT deleted
-        """
-
-    def get_count_query(self, table_name: str) -> Optional[str]:
-        return f"""
-            SELECT count()
-            FROM {table_name} FINAL
-            {self._where_clause}
-        """
-
-    def get_insert_query(self, table_name: str) -> Optional[str]:
-        all_column_names = [c.escaped for c in self.all_columns]
-        all_columns = ", ".join(all_column_names)
-        select_columns = ", ".join(
-            map(
-                lambda i: i if i != "group_id" else str(self.new_group_id),
-                all_column_names,
-            )
-        )
-
-        return f"""\
-            INSERT INTO {table_name} ({all_columns})
-            SELECT {select_columns}
-            FROM {table_name} FINAL
-            {self._where_clause}
-        """
-
-    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
-        return None
-
-    def get_project_id(self) -> int:
-        return self.project_id
-
-    @classmethod
-    def get_replacement_type(cls) -> ReplacementType:
-        return ReplacementType.END_UNMERGE_HIERARCHICAL
-
-
-@dataclass
 class DeleteTagReplacement(Replacement):
     project_id: int
     tag: str
@@ -1042,7 +939,6 @@ _REPLACEMENT_BY_TYPE: Mapping[ReplacementType, Type[Replacement]] = dict(
             DeleteGroupsReplacement,
             MergeReplacement,
             UnmergeGroupsReplacement,
-            UnmergeHierarchicalReplacement,
             DeleteTagReplacement,
             TombstoneEventsReplacement,
             ReplaceGroupReplacement,

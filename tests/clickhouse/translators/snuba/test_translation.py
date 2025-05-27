@@ -24,7 +24,6 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.utils import constants
 from snuba.utils.hashes import fnv_1a
 
 
@@ -127,7 +126,9 @@ def test_tag_translation() -> None:
 
 
 def test_hash_bucket_tag_translation() -> None:
-    translated = SubscriptableHashBucketMapper(None, "tags", None, "tags").attempt_map(
+    translated = SubscriptableHashBucketMapper(
+        None, "tags", None, "tags", 25
+    ).attempt_map(
         SubscriptableReference(
             "tags[release]", Column(None, None, "tags"), Literal(None, "release")
         ),
@@ -138,9 +139,7 @@ def test_hash_bucket_tag_translation() -> None:
         "tags[release]",
         "arrayElement",
         (
-            Column(
-                None, None, f"tags_{fnv_1a(b'release') % constants.ATTRIBUTE_BUCKETS}"
-            ),
+            Column(None, None, f"tags_{fnv_1a(b'release') % 25}"),
             Literal(None, "release"),
         ),
     )

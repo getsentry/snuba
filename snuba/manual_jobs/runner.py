@@ -41,7 +41,7 @@ MANIFEST_FILENAME = "job_manifest.json"
 
 
 def _read_manifest_from_path(filename: str) -> Mapping[str, JobSpec]:
-    local_root = os.path.dirname(__file__)
+    local_root = os.path.join(os.path.dirname(__file__), "..", "env")
 
     with open(os.path.join(local_root, filename)) as stream:
         contents = simplejson.loads(stream.read())
@@ -134,10 +134,11 @@ def run_job(job_spec: JobSpec) -> JobStatus:
         if not job_spec.is_async:
             current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
             job_logger.info("[runner] job execution finished")
-    except BaseException:
+    except BaseException as e:
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.FAILED)
-        job_logger.error("[runner] job execution failed")
+        job_logger.error(f"[runner] job execution failed {e}")
         job_logger.info(f"[runner] exception {traceback.format_exc()}")
+        raise e
     finally:
         _release_job_lock(job_spec.job_id)
 

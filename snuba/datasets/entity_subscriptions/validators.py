@@ -35,14 +35,18 @@ class AggregationValidator(EntitySubscriptionValidator):
         max_allowed_aggregations: int,
         disallowed_aggregations: Sequence[str],
         required_time_column: Optional[str] = None,
+        allows_group_by_without_condition: bool = False,
     ):
         self.max_allowed_aggregations = max_allowed_aggregations
         self.disallowed_aggregations = disallowed_aggregations
         self.required_time_column = required_time_column
+        self.allows_group_by_without_condition = allows_group_by_without_condition
 
     def validate(self, query: Union[CompositeQuery[Entity], Query]) -> None:
         SubscriptionAllowedClausesValidator(
-            self.max_allowed_aggregations, self.disallowed_aggregations
+            self.max_allowed_aggregations,
+            self.disallowed_aggregations,
+            allows_group_by_without_condition=self.allows_group_by_without_condition,
         ).validate(query)
         if self.required_time_column:
             NoTimeBasedConditionValidator(self.required_time_column).validate(query)

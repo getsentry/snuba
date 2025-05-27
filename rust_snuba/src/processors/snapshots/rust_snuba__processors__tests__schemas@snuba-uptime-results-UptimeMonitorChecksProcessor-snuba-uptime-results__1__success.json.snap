@@ -1,0 +1,24 @@
+---
+source: src/processors/mod.rs
+description: "{\n  \"guid\": \"54afc7ed9c53491481919c931f75bae1\",\n  \"subscription_id\": \"5421b5df80744113a6b57014f01a3a42\",\n  \"status\": \"success\",\n  \"status_reason\": null,\n  \"trace_id\": \"947efba02dac463b9c1d886a44bafc94\",\n  \"span_id\": \"58e84098e63f42e1\",\n  \"scheduled_check_time_ms\": 1717614062978,\n  \"actual_check_time_ms\": 1717614068008,\n  \"duration_ms\": 50,\n  \"request_info\": {\n    \"request_type\": \"HEAD\",\n    \"http_status_code\": 200\n  },\n  \"organization_id\": 123,\n  \"project_id\": 456,\n  \"retention_days\": 90,\n  \"region\": \"us-east-1\",\n  \"environment\": \"production\",\n  \"incident_status\": 0\n}\n"
+expression: snapshot_payload
+---
+[
+  {
+    "check_status": "success",
+    "check_status_reason": "",
+    "duration_ms": 50,
+    "environment": "production",
+    "http_status_code": 200,
+    "incident_status": 0,
+    "organization_id": 123,
+    "project_id": 456,
+    "region": "us-east-1",
+    "retention_days": 90,
+    "scheduled_check_time": 1717614062,
+    "timestamp": 1717614068008,
+    "trace_id": "947efba0-2dac-463b-9c1d-886a44bafc94",
+    "uptime_check_id": "54afc7ed-9c53-4914-8191-9c931f75bae1",
+    "uptime_subscription_id": "5421b5df-8074-4113-a6b5-7014f01a3a42"
+  }
+]

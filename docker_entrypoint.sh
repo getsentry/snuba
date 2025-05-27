@@ -19,7 +19,8 @@ else
 fi
 
 if [ -n "${ENABLE_HEAPTRACK:-}" ]; then
-  set -- heaptrack "$@"
+  file_path="./profiler_data/profile_$(date '+%Y%m%d_%H%M%S')"
+  set -- heaptrack -o "${file_path}" "$@"
 fi
 
 exec "$@"

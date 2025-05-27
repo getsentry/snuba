@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Callable, Mapping
 from unittest.mock import Mock, patch
 
@@ -12,6 +12,7 @@ from snuba.clickhouse.optimize import optimize
 from snuba.clickhouse.optimize.optimize import (
     _get_metrics_tags,
     optimize_partition_runner,
+    should_optimize_partition_today,
 )
 from snuba.clickhouse.optimize.optimize_scheduler import OptimizedSchedulerTimeout
 from snuba.clickhouse.optimize.optimize_tracker import OptimizedPartitionTracker
@@ -24,8 +25,9 @@ from tests.helpers import write_processed_messages
 
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
-last_midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-
+last_midnight = (
+    datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
+)
 
 test_data = [
     pytest.param(
@@ -128,7 +130,7 @@ class TestOptimize:
         database = cluster.get_database()
 
         # no data, 0 partitions to optimize
-        partitions = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_from_clickhouse(
             clickhouse, storage, database, table
         )
         assert partitions == []
@@ -138,21 +140,21 @@ class TestOptimize:
 
         # 1 event, 0 unoptimized partitions
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        partitions = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_from_clickhouse(
             clickhouse, storage, database, table
         )
         assert partitions == []
 
         # 2 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        partitions = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_from_clickhouse(
             clickhouse, storage, database, table
         )
         assert [(p.date, p.retention_days) for p in partitions] == [(base_monday, 90)]
 
         # 3 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        partitions = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_from_clickhouse(
             clickhouse, storage, database, table
         )
         assert [(p.date, p.retention_days) for p in partitions] == [(base_monday, 90)]
@@ -168,7 +170,7 @@ class TestOptimize:
         write_processed_messages(
             storage, [create_event_row_for_date(a_month_earlier_monday)]
         )
-        partitions = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_from_clickhouse(
             clickhouse, storage, database, table
         )
         assert sorted([(p.date, p.retention_days) for p in partitions]) == sorted(
@@ -182,7 +184,7 @@ class TestOptimize:
         assert [
             (p.date, p.retention_days)
             for p in list(
-                optimize.get_partitions_to_optimize(
+                optimize.get_partitions_from_clickhouse(
                     clickhouse, storage, database, table, before=base
                 )
             )
@@ -210,7 +212,7 @@ class TestOptimize:
             )
 
         # all partitions should be optimized
-        partitions = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_from_clickhouse(
             clickhouse, storage, database, table
         )
         assert partitions == []
@@ -391,3 +393,35 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
 
     tracker.delete_all_states()
     settings.OPTIMIZE_JOB_CUTOFF_TIME = prev_job_cutoff_time
+
+
+def test_should_optimize_partition_today_two_divisions() -> None:
+    # There's no semantic importance to which partitions should
+    # be optimized, but we want to make sure some land in group 0 and
+    # some land in group 1, and that the results are consistent so that
+    # we know we can trust that each group gets optimized once every 2 days
+    #
+    # Keep the "time" constant so that we get consistent results
+    day_0_partitions = ["2025-01-01", "2025-01-03", "2025-01-04"]
+    day_1_partitions = ["2025-01-02", "2025-01-05"]
+
+    with time_machine.travel(datetime(2025, 1, 13).astimezone(UTC), tick=False):
+        for day in day_0_partitions:
+            assert should_optimize_partition_today(day, 2)
+        for day in day_1_partitions:
+            assert not should_optimize_partition_today(day, 2)
+
+    # Inverse of above
+    with time_machine.travel(datetime(2025, 1, 14).astimezone(UTC), tick=False):
+        for day in day_1_partitions:
+            assert should_optimize_partition_today(day, 2)
+        for day in day_0_partitions:
+            assert not should_optimize_partition_today(day, 2)
+
+
+def test_should_optimize_partition_today_one_division() -> None:
+    # Tests that all partitions are optimized if there is only one division
+    assert should_optimize_partition_today("2025-01-01", 1)
+    assert should_optimize_partition_today("2025-01-02", 1)
+    assert should_optimize_partition_today("2025-01-03", 1)
+    assert should_optimize_partition_today("2025-01-04", 1)

@@ -23,6 +23,10 @@ from snuba.migrations.table_engines import TableEngine
 logger = structlog.get_logger().bind(module=__name__)
 
 
+class OperationMissingNodes(Exception):
+    pass
+
+
 class OperationTarget(Enum):
     """
     Represents the target nodes of an operation.
@@ -53,19 +57,35 @@ class SqlOperation(ABC):
         return self._storage_set
 
     def get_nodes(self) -> Sequence[ClickhouseNode]:
+        """
+        This should return the given local or dist nodes for which the operation should
+        be ran. If there are no nodes found, this probably means something is wrong.
+
+        However, this will return `[]` in the event that the target typs is for the
+        distributed nodes and the cluster is a single node cluster, since there are
+        no dist nodes in a single node cluster.
+        """
+        if self.target not in [OperationTarget.LOCAL, OperationTarget.DISTRIBUTED]:
+            raise ValueError(f"Target not set for {self}")
+
         cluster = get_cluster(self._storage_set)
-        local_nodes, dist_nodes = (
-            cluster.get_local_nodes(),
-            cluster.get_distributed_nodes(),
+
+        nodes = (
+            cluster.get_local_nodes()
+            if self.target == OperationTarget.LOCAL
+            else cluster.get_distributed_nodes()
         )
 
-        if self.target == OperationTarget.LOCAL:
-            nodes = local_nodes
-        elif self.target == OperationTarget.DISTRIBUTED:
-            nodes = dist_nodes
-        else:
-            raise ValueError(f"Target not set for {self}")
-        return nodes
+        if nodes or (
+            not nodes
+            and self.target == OperationTarget.DISTRIBUTED
+            and cluster.is_single_node()
+        ):
+            return nodes
+
+        raise OperationMissingNodes(
+            f"No {self.target.value} nodes found for {cluster.get_clickhouse_cluster_name()}"
+        )
 
     def execute(self) -> None:
         nodes = self.get_nodes()
@@ -147,8 +167,9 @@ class CreateTable(SqlOperation):
         columns: Sequence[Column[MigrationModifiers]],
         engine: TableEngine,
         target: OperationTarget = OperationTarget.UNSET,
+        settings: Optional[Mapping[str, Any]] = None,
     ):
-        super().__init__(storage_set, target=target)
+        super().__init__(storage_set, target=target, settings=settings)
         self.table_name = table_name
         self.__columns = columns
         self.engine = engine

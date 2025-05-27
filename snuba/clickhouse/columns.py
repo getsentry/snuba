@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Sequence, Union
 
-from snuba.utils.schemas import UUID, AggregateFunction, Any, Array, Column
+from snuba.utils.schemas import UUID, AggregateFunction, Any, Array, Bool, Column
 from snuba.utils.schemas import ColumnSet as BaseColumnSet
 from snuba.utils.schemas import (
     ColumnType,
@@ -35,6 +35,7 @@ __all__ = (
     "Any",
     "AggregateFunction",
     "Array",
+    "Bool",
     "Column",
     "ColumnSet",
     "ColumnType",

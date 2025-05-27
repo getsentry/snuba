@@ -58,10 +58,10 @@ required_condition = and_cond(
 
 test_cases = [
     pytest.param(
-        f"MATCH STORAGE(metrics_summaries) SELECT 4-5, trace_id WHERE {added_condition} GRANULARITY 60",
+        f"MATCH STORAGE(eap_items) SELECT 4-5, trace_id WHERE {added_condition} GRANULARITY 60",
         StorageQuery.from_query(
             Query(
-                QueryStorage(key=StorageKey("metrics_summaries")),
+                QueryStorage(key=StorageKey("eap_items")),
                 selected_columns=[
                     SelectedExpression(
                         "4-5",
@@ -82,10 +82,10 @@ test_cases = [
         id="basic_storage_query",
     ),
     pytest.param(
-        f"MATCH STORAGE(metrics_summaries) SELECT trace_id WHERE tags[something] = 'something_else' AND {added_condition} ",
+        f"MATCH STORAGE(eap_items) SELECT trace_id WHERE tags[something] = 'something_else' AND {added_condition} ",
         StorageQuery.from_query(
             Query(
-                QueryStorage(key=StorageKey("metrics_summaries")),
+                QueryStorage(key=StorageKey("eap_items")),
                 selected_columns=[
                     SelectedExpression(
                         "trace_id", Column("_snuba_trace_id", None, "trace_id")
@@ -106,10 +106,10 @@ test_cases = [
         id="nested field query",
     ),
     pytest.param(
-        f"MATCH STORAGE(metrics_summaries SAMPLE 0.1) SELECT trace_id WHERE tags[something] = 'something_else' AND {added_condition} ",
+        f"MATCH STORAGE(eap_items SAMPLE 0.1) SELECT trace_id WHERE tags[something] = 'something_else' AND {added_condition} ",
         StorageQuery.from_query(
             Query(
-                QueryStorage(key=StorageKey("metrics_summaries"), sample=0.1),
+                QueryStorage(key=StorageKey("eap_items"), sample=0.1),
                 selected_columns=[
                     SelectedExpression(
                         "trace_id", Column("_snuba_trace_id", None, "trace_id")
@@ -131,7 +131,7 @@ test_cases = [
     ),
     pytest.param(
         """MATCH {
-            MATCH STORAGE(metrics_summaries) SELECT trace_id, duration_ms WHERE %s LIMIT 100
+            MATCH STORAGE(eap_items) SELECT trace_id, duration_ms WHERE %s LIMIT 100
         } SELECT max(duration_ms) AS max_duration LIMIT 100"""
         % added_condition,
         CompositeQuery(
@@ -146,7 +146,7 @@ test_cases = [
                 )
             ],
             from_clause=Query(
-                QueryStorage(key=StorageKey("metrics_summaries")),
+                QueryStorage(key=StorageKey("eap_items")),
                 selected_columns=[
                     SelectedExpression(
                         "trace_id", Column("_snuba_trace_id", None, "trace_id")
@@ -165,11 +165,11 @@ test_cases = [
         id="composite_query",
     ),
     pytest.param(
-        """ MATCH STORAGE(metrics_summaries) SELECT trace_id, duration_ms AS duration WHERE %s LIMIT 100"""
+        """ MATCH STORAGE(eap_items) SELECT trace_id, duration_ms AS duration WHERE %s LIMIT 100"""
         % added_condition,
         StorageQuery.from_query(
             Query(
-                QueryStorage(key=StorageKey("metrics_summaries")),
+                QueryStorage(key=StorageKey("eap_items")),
                 selected_columns=[
                     SelectedExpression(
                         "trace_id", Column("_snuba_trace_id", None, "trace_id")
@@ -203,7 +203,7 @@ def test_parse_storage_query(query_body: str, expected_query: StorageQuery) -> N
 
 def test_fail_join() -> None:
     # dataset does not matter :D
-    query_body = """ MATCH STORAGE(metrics_summaries: m) -[something]-> (t: transactions) SELECT trace_id, duration_ms AS duration WHERE %s LIMIT 100"""
+    query_body = """ MATCH STORAGE(eap_items: m) -[something]-> (t: transactions) SELECT trace_id, duration_ms AS duration WHERE %s LIMIT 100"""
     events = get_dataset("events")
     with pytest.raises(ParsingException):
         parse_snql_query(query_body, events)

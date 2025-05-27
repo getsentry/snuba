@@ -11,6 +11,7 @@ import {
   CardinalityQueryResult,
   PredefinedQuery,
 } from "SnubaAdmin/cardinality_analyzer/types";
+import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 
 enum ClipboardFormats {
   CSV = "csv",
@@ -40,24 +41,6 @@ function QueryDisplay(props: {
 
   function convertResultsToCSV(queryResult: CardinalityQueryResult) {
     return CSV.sheet([queryResult.column_names, ...queryResult.rows]);
-  }
-
-  function copyText(
-    queryResult: CardinalityQueryResult,
-    format: ClipboardFormats
-  ) {
-    let formatter: (input: CardinalityQueryResult) => string = (s) =>
-      s.toString();
-
-    if (format === ClipboardFormats.JSON) {
-      formatter = JSON.stringify;
-    }
-
-    if (format === ClipboardFormats.CSV) {
-      formatter = convertResultsToCSV;
-    }
-
-    window.navigator.clipboard.writeText(formatter(queryResult));
   }
 
   function executeQuery() {
@@ -92,22 +75,10 @@ function QueryDisplay(props: {
             return (
               <div key={idx}>
                 <p>{queryResult.input_query}</p>
-                <p>
-                  <button
-                    style={copyButtonStyle}
-                    onClick={() => copyText(queryResult, ClipboardFormats.JSON)}
-                  >
-                    Copy to clipboard (JSON)
-                  </button>
-                </p>
-                <p>
-                  <button
-                    style={copyButtonStyle}
-                    onClick={() => copyText(queryResult, ClipboardFormats.CSV)}
-                  >
-                    Copy to clipboard (CSV)
-                  </button>
-                </p>
+                <QueryResultCopier
+                  jsonInput={JSON.stringify(queryResult)}
+                  csvInput={convertResultsToCSV(queryResult)}
+                />
                 {props.resultDataPopulator(queryResult)}
               </div>
             );
@@ -115,18 +86,10 @@ function QueryDisplay(props: {
 
           return (
             <Collapse key={idx} text={queryResult.input_query}>
-              <button
-                style={copyButtonStyle}
-                onClick={() => copyText(queryResult, ClipboardFormats.JSON)}
-              >
-                Copy to clipboard (JSON)
-              </button>
-              <button
-                style={copyButtonStyle}
-                onClick={() => copyText(queryResult, ClipboardFormats.CSV)}
-              >
-                Copy to clipboard (CSV)
-              </button>
+              <QueryResultCopier
+                jsonInput={JSON.stringify(queryResult)}
+                csvInput={convertResultsToCSV(queryResult)}
+              />
               {props.resultDataPopulator(queryResult)}
             </Collapse>
           );

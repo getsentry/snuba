@@ -1,66 +1,12 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { Select, Button, Code, Space, Textarea, Accordion, createStyles, Loader, Checkbox, Text, Table, Switch } from '@mantine/core';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { Space } from '@mantine/core';
 import useApi from 'SnubaAdmin/api_client';
-import { TraceLog } from 'SnubaAdmin/rpc_endpoints/trace_formatter';
-import { ExampleRequestAccordionProps, QueryInfo } from 'SnubaAdmin/rpc_endpoints/types';
+import { EndpointSelector } from 'SnubaAdmin/rpc_endpoints/endpoint_selector';
+import { RequestInput } from 'SnubaAdmin/rpc_endpoints/request_input';
+import { ResponseDisplay } from 'SnubaAdmin/rpc_endpoints/response_display';
 import { useStyles } from 'SnubaAdmin/rpc_endpoints/styles';
-import { fetchEndpointsList, executeEndpoint, getEndpointData } from 'SnubaAdmin/rpc_endpoints/utils';
-
-const DEBUG_SUPPORTED_VERSIONS = ['v1'];
-
-function ExampleRequestAccordion({
-  selectedEndpoint,
-  selectedVersion,
-  exampleRequestTemplates,
-  setRequestBody,
-  classes,
-}: ExampleRequestAccordionProps) {
-  const [isOpened, setIsOpened] = useState(false);
-
-  return (
-    <Accordion
-      classNames={{ item: classes.accordion }}
-      variant="filled"
-      radius="sm"
-      value={isOpened ? 'example' : null}
-      onChange={(value) => setIsOpened(value === 'example')}
-    >
-      <Accordion.Item value="example">
-        <Accordion.Control>Example Request Payload</Accordion.Control>
-        <Accordion.Panel>
-          <Code block style={{ color: 'green' }}>
-            <pre>
-              {JSON.stringify(
-                selectedEndpoint && selectedVersion
-                  ? exampleRequestTemplates[selectedEndpoint]?.[selectedVersion] || exampleRequestTemplates.default
-                  : exampleRequestTemplates.default,
-                null,
-                2
-              )}
-            </pre>
-          </Code>
-          <Button
-            onClick={() => {
-              setRequestBody(
-                JSON.stringify(
-                  selectedEndpoint && selectedVersion
-                    ? exampleRequestTemplates[selectedEndpoint]?.[selectedVersion] || exampleRequestTemplates.default
-                    : exampleRequestTemplates.default,
-                  null,
-                  2
-                )
-              );
-              setIsOpened(false);
-            }}
-            style={{ marginTop: '1rem' }}
-          >
-            Copy to Request Body
-          </Button>
-        </Accordion.Panel>
-      </Accordion.Item>
-    </Accordion>
-  );
-}
+import { fetchEndpointsList, executeEndpoint, getEndpointData, processTraceResults } from 'SnubaAdmin/rpc_endpoints/utils';
+import { TracingSummary, HostProfileEvents } from 'SnubaAdmin/rpc_endpoints/types';
 
 function RpcEndpoints() {
   const api = useApi();
@@ -73,6 +19,11 @@ function RpcEndpoints() {
   const [isLoading, setIsLoading] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [showTraceLogs, setShowTraceLogs] = useState(false);
+  const [showSummarizedView, setShowSummarizedView] = useState(false);
+  const [showProfileEvents, setShowProfileEvents] = useState(false);
+  const [summarizedTraceOutput, setSummarizedTraceOutput] = useState<TracingSummary | null>(null);
+  const [profileEvents, setProfileEvents] = useState<HostProfileEvents[] | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const { classes } = useStyles();
 
@@ -86,157 +37,127 @@ function RpcEndpoints() {
   }, []);
 
   const handleEndpointSelect = (value: string | null) => {
-    setSelectedEndpoint(value);
-    const selectedEndpointData = getEndpointData(endpoints, value || '');
-    setSelectedVersion(selectedEndpointData?.version || null);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    if (value == null) {
+      setSelectedEndpoint(null);
+      setSelectedVersion(null);
+    } else {
+      // underscore splits the key between endpointname_version
+      const split = value.lastIndexOf('_');
+      setSelectedEndpoint(value.substring(0, value.lastIndexOf('_')));
+      setSelectedVersion(value.substring(split + 1, value.length));
+    }
+
     setRequestBody('');
     setResponse(null);
     setDebugMode(false);
   };
 
   const handleExecute = async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsLoading(true);
+    setShowTraceLogs(false);
+    setShowSummarizedView(false);
+    setShowProfileEvents(false);
+    setResponse(null);
+    setSummarizedTraceOutput(null);
+    setProfileEvents(null);
+
     try {
       const result = await executeEndpoint(
         api,
         selectedEndpoint,
         selectedVersion,
         requestBody,
-        debugMode
+        debugMode,
+        controller.signal
       );
-      setResponse(result);
+
+      if (!controller.signal.aborted) {
+        setResponse(result);
+        setIsLoading(false);
+        try {
+          await processTraceResults(
+            result,
+            api,
+            setProfileEvents,
+            setSummarizedTraceOutput,
+            controller.signal
+          );
+        } catch (traceError: any) {
+          console.error('Error processing trace results:', traceError);
+        }
+      }
     } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return;
+      }
       alert(`Error: ${error.message}`);
       setResponse({ error: error.message });
+      setIsLoading(false);
     } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setIsLoading(false);
     }
   };
 
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      setResponse(null);
+      setSummarizedTraceOutput(null);
+      setProfileEvents(null);
+    };
+  }, []);
+
   return (
     <div>
-      <h2>RPC Endpoints</h2>
-      <Select
-        label="Select an endpoint"
-        placeholder="Choose an endpoint"
-        data={endpoints.map(endpoint => ({ value: endpoint.name, label: `${endpoint.name} (${endpoint.version})` }))}
-        value={selectedEndpoint}
-        onChange={handleEndpointSelect}
-        style={{ width: '100%', marginBottom: '1rem' }}
+      <EndpointSelector
+        endpoints={endpoints}
+        selectedEndpoint={selectedEndpoint}
+        selectedVersion={selectedVersion}
+        handleEndpointSelect={handleEndpointSelect}
       />
       <Space h="md" />
-      <ExampleRequestAccordion
+      <RequestInput
         selectedEndpoint={selectedEndpoint}
         selectedVersion={selectedVersion}
         exampleRequestTemplates={exampleRequestTemplates}
+        requestBody={requestBody}
         setRequestBody={setRequestBody}
+        debugMode={debugMode}
+        setDebugMode={setDebugMode}
+        isLoading={isLoading}
+        handleExecute={handleExecute}
         classes={classes}
       />
-      <Space h="md" />
-      <Textarea
-        label="Request Body (JSON)"
-        placeholder="Enter request body"
-        value={requestBody}
-        onChange={(event) => setRequestBody(event.currentTarget.value)}
-        style={{ width: '100%' }}
-        autosize
-        minRows={5}
-      />
-      <Space h="md" />
-      <Checkbox
-        label="Enable Debug Mode"
-        checked={debugMode}
-        onChange={(event) => setDebugMode(event.currentTarget.checked)}
-        disabled={!DEBUG_SUPPORTED_VERSIONS.includes(selectedVersion || '')}
-        className={classes.debugCheckbox}
-      />
-      <Button
-        onClick={handleExecute}
-        disabled={!selectedEndpoint || !requestBody || isLoading}
-        leftIcon={isLoading ? <Loader size="xs" /> : null}
-      >
-        {isLoading ? 'Executing...' : 'Execute'}
-      </Button>
       {response && (
-        <>
-          <Space h="md" />
-          <h3>Response:</h3>
-          <Switch
-            className={classes.viewToggle}
-            label="Show Trace Logs"
-            checked={showTraceLogs}
-            onChange={(event) => setShowTraceLogs(event.currentTarget.checked)}
-          />
-          <h4>Response Metadata:</h4>
-          <Accordion classNames={{ item: classes.accordion }}>
-            <Accordion.Item value="query-info">
-              <Accordion.Control>
-                <Text fw={700}>
-                  {showTraceLogs ? 'Query Trace Logs' : 'Query Metadata'}
-                </Text>
-              </Accordion.Control>
-              <Accordion.Panel>
-                {response.meta?.queryInfo ? (
-                  response.meta.queryInfo.map((queryInfo: QueryInfo, index: number) => (
-                    <div key={index}>
-                      {showTraceLogs ? (
-                        <>
-                          <h4>Trace Logs</h4>
-                          {queryInfo.traceLogs ? (
-                            <TraceLog log={queryInfo.traceLogs} />
-                          ) : (
-                            <Text>No trace logs available</Text>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <h4>Query {index + 1}</h4>
-                          <Table className={classes.table}>
-                            <thead>
-                              <tr>
-                                <th>Attribute</th>
-                                <th>Value</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {Object.entries({ ...queryInfo.stats, ...queryInfo.metadata }).map(([key, value]) => (
-                                <tr key={key}>
-                                  <td>{key}</td>
-                                  <td>
-                                    {typeof value === 'object' ? (
-                                      <Code block>{JSON.stringify(value, null, 2)}</Code>
-                                    ) : (
-                                      String(value)
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </Table>
-                        </>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <Text>No query info available</Text>
-                )}
-              </Accordion.Panel>
-            </Accordion.Item>
-          </Accordion>
-          <Space h="md" />
-          <h4>Response Data:</h4>
-          <div className={classes.responseDataContainer}>
-            <Code block>
-              <pre>
-                {JSON.stringify(
-                  (({ meta, ...rest }) => rest)(response),
-                  null,
-                  2
-                )}
-              </pre>
-            </Code>
-          </div>
-        </>
+        <ResponseDisplay
+          response={response}
+          showTraceLogs={showTraceLogs}
+          setShowTraceLogs={setShowTraceLogs}
+          showSummarizedView={showSummarizedView}
+          setShowSummarizedView={setShowSummarizedView}
+          summarizedTraceOutput={summarizedTraceOutput}
+          showProfileEvents={showProfileEvents}
+          setShowProfileEvents={setShowProfileEvents}
+          profileEvents={profileEvents}
+          classes={classes}
+        />
       )}
     </div>
   );
