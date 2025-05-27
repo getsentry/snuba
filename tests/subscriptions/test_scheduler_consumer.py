@@ -18,9 +18,7 @@ from arroyo.errors import ConsumerError
 from arroyo.types import BrokerValue, Partition, Topic
 from arroyo.utils.clock import MockedClock
 from confluent_kafka.admin import AdminClient
-
 from py._path.local import LocalPath
-
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest as CreateSubscriptionRequestProto,
 )
