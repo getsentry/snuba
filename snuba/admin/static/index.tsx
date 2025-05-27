@@ -2,12 +2,14 @@ import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import * as Sentry from "@sentry/react";
-import Header from "./header";
-import Nav from "./nav";
-import Body from "./body";
-import { NAV_ITEMS } from "./data";
-import Client from "./api_client";
+import Header from "SnubaAdmin/header";
+import Nav from "SnubaAdmin/nav";
+import Body from "SnubaAdmin/body";
+import { NAV_ITEMS } from "SnubaAdmin/data";
+import Client from "SnubaAdmin/api_client";
 import { MantineProvider } from "@mantine/core";
+
+import 'bootstrap/dist/css/bootstrap.min.css';
 
 const containerStyle = {
   display: "flex",
@@ -28,9 +30,13 @@ client.getSettings().then((settings) => {
       integrations: [
         new Sentry.BrowserTracing(),
         new Sentry.Replay({ maskAllText: false, blockAllMedia: false }),
+        new Sentry.BrowserProfilingIntegration(),
       ],
       // Performance Monitoring
       tracesSampleRate: settings.tracesSampleRate,
+      // Profiles
+      profilesSampleRate: settings.profilesSampleRate,
+      tracePropagationTargets: settings.tracePropagationTargets ?? undefined,
       // Session Replay
       replaysSessionSampleRate: settings.replaysSessionSampleRate,
       replaysOnErrorSampleRate: settings.replaysOnErrorSampleRate,
@@ -80,7 +86,9 @@ function getTab(locationHash: string): string {
     throw new Error("invalid hash");
   }
 
-  const navItem = NAV_ITEMS.find((item) => "#" + item.id === locationHash);
+  const hash = locationHash.split("/")[0];
+
+  const navItem = NAV_ITEMS.find((item) => "#" + item.id === hash);
 
   if (typeof navItem === "undefined") {
     throw new Error("invalid hash");
@@ -88,3 +96,5 @@ function getTab(locationHash: string): string {
 
   return navItem.id;
 }
+
+export default {};

@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "sunday"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0  # security updates only
     groups:
       maintine-dependencies:
         patterns:
@@ -19,12 +19,11 @@ updates:
     schedule:
       interval: "weekly"
       day: "sunday"
-    open-pull-requests-limit: 50
+    open-pull-requests-limit: 0  # security updates only
     ignore:
-      - dependency-name: "parsimonious"
       # sentry-kafka-schemas has its own lints to ensure it is reasonably
       # up-to-date -- we should rely on them
-      - dependency-name: "sentry-kafka-schemas"
+      - dependency-name: sentry-kafka-schemas
 
   - package-ecosystem: "docker"
     directory: "/"

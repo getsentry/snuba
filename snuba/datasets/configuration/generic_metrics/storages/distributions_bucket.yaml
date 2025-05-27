@@ -47,6 +47,14 @@ schema:
     ]
   local_table_name: generic_metric_distributions_raw_local
   dist_table_name: generic_metric_distributions_raw_dist
+allocation_policies:
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
 stream_loader:
   processor: GenericDistributionsMetricsProcessor
   default_topic: snuba-generic-metrics
@@ -61,7 +69,4 @@ stream_loader:
   subscription_scheduled_topic: scheduled-subscriptions-generic-metrics-distributions
   subscription_result_topic: generic-metrics-subscription-results
   subscription_delay_seconds: 60
-  # We noticed that the Snuba generic metrics consumers are unable to
-  # shut down successfully with a DLQ policy, when we remove the policy
-  # the issue is fixed. We also reproduced it on the errors consumer
-  # and observed the same behavior.
+  dlq_topic: snuba-dead-letter-generic-metrics

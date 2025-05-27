@@ -70,7 +70,8 @@ class ImmediateTaskBuilder(TaskBuilder):
         if timestamp % resolution == 0:
             self.__count += 1
             return ScheduledSubscriptionTask(
-                datetime.fromtimestamp(timestamp), subscription_with_metadata
+                datetime.utcfromtimestamp(timestamp),
+                subscription_with_metadata,
             )
         else:
             return None
@@ -120,7 +121,8 @@ class JitteredTaskBuilder(TaskBuilder):
                 self.__count += 1
                 self.__count_max_resolution += 1
                 return ScheduledSubscriptionTask(
-                    datetime.fromtimestamp(timestamp), subscription_with_metadata
+                    datetime.utcfromtimestamp(timestamp),
+                    subscription_with_metadata,
                 )
             else:
                 return None
@@ -129,7 +131,8 @@ class JitteredTaskBuilder(TaskBuilder):
         if timestamp % resolution == jitter:
             self.__count += 1
             return ScheduledSubscriptionTask(
-                datetime.fromtimestamp(timestamp - jitter), subscription_with_metadata
+                datetime.utcfromtimestamp(timestamp - jitter),
+                subscription_with_metadata,
             )
         else:
             return None

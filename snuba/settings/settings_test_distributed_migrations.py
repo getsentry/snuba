@@ -38,7 +38,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "database": os.environ.get("CLICKHOUSE_DATABASE", "snuba_test"),
         "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8229)),
         "storage_sets": {
-            "cdc",
             "discover",
             "events",
             "events_ro",
@@ -55,8 +54,10 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "search_issues",
             "generic_metrics_counters",
             "spans",
+            "events_analytics_platform",
             "group_attributes",
             "generic_metrics_gauges",
+            "profile_chunks",
         },
         "single_node": False,
         "cluster_name": "storage_cluster",

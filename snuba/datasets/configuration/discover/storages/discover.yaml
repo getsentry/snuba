@@ -88,6 +88,7 @@ schema:
         args: { schema_modifiers: [nullable], size: 64 },
       },
       { name: deleted, type: UInt, args: { size: 8 } },
+      { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } }
     ]
   local_table_name: discover_local
   dist_table_name: discover_dist
@@ -110,14 +111,14 @@ query_processors:
       hash_map_name: _tags_hash_map
       killswitch: tags_hash_map_enabled
   - processor: EmptyTagConditionProcessor
+    args:
+      column_name: tags.key
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: tags
   - processor: UUIDColumnProcessor
     args:
-      columns: !!set
-        trace_id: null
-        event_id: null
+      columns: [event_id, trace_id, replay_id]
   - processor: HexIntColumnProcessor
     args:
       columns: !!set
@@ -128,7 +129,6 @@ query_processors:
       prewhere_candidates:
         - event_id
         - release
-        - message
         - transaction_name
         - environment
         - project_id
@@ -137,7 +137,6 @@ query_processors:
       merge_table_sources:
         - transactions
         - errors
-  - processor: TableRateLimit
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
     args:
@@ -156,12 +155,10 @@ allocation_policies:
         is_enforced: 1
         throttled_thread_number: 1
         org_limit_bytes_scanned: 100000
-query_splitters:
-  - splitter: ColumnSplitQueryStrategy
+  - name: ReferrerGuardRailPolicy
     args:
-      id_column: event_id
-      project_column: project_id
-      timestamp_column: timestamp
-  - splitter: TimeSplitQueryStrategy
-    args:
-      timestamp_col: timestamp
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0

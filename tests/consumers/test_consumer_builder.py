@@ -64,6 +64,7 @@ consumer_builder = ConsumerBuilder(
     slice_id=None,
     join_timeout=5,
     enforce_schema=True,
+    metrics_tags={},
 )
 
 optional_consumer_config = resolve_consumer_config(
@@ -110,6 +111,7 @@ consumer_builder_with_opt = ConsumerBuilder(
     slice_id=None,
     join_timeout=5,
     enforce_schema=True,
+    metrics_tags={},
 )
 
 
@@ -162,9 +164,8 @@ def test_run_processing_strategy() -> None:
     assert get_row_count(get_writable_storage(StorageKey.ERRORS)) == 0
 
     commit = Mock()
-    partitions = Mock()
     strategy_factory = consumer_builder.build_streaming_strategy_factory()
-    strategy = strategy_factory.create_with_partitions(commit, partitions)
+    strategy = strategy_factory.create_with_partitions(commit, {})
 
     json_string = json.dumps(get_raw_error_message())
 

@@ -96,7 +96,7 @@ def main(pipeline_name: str = "deploy-snuba-us", repo: str = "snuba") -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--pipeline", default="deploy-snuba")
+    parser.add_argument("--pipeline", default="deploy-snuba-s4s")
     parser.add_argument("--repo", default="snuba")
     args = parser.parse_args()
     main(args.pipeline, args.repo)

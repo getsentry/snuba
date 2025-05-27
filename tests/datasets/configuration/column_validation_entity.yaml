@@ -27,6 +27,16 @@ schema:
         type: String
       - name: value
         type: String
+- name: tuple_example
+  type: Tuple
+  args:
+    inner_types:
+      - type: String
+      - type: UUID
+      - type: DateTime64
+        args: { precision: 6, schema_modifiers: [nullable] }
+      - type: DateTime64
+        args: { precision: 6 }
 storages:
 - storage: discover
   translation_mappers:

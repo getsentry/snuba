@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { COLORS } from "./theme";
+import { COLORS } from "SnubaAdmin/theme";
 
 function Collapse(props: { text: string; children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);

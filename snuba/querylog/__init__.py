@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import time
 from random import random
 from typing import Any, Mapping, Optional, Union
+from uuid import UUID
 
 import sentry_sdk
-from sentry_sdk import Hub
+from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from usageaccountant import UsageUnit
 
 from snuba import environment, settings, state
@@ -101,29 +103,57 @@ def _record_cogs(
     result: Union[QueryResult, QueryException, QueryPlanException],
 ) -> None:
     """
-    Record bytes scanned for Generic Metrics Queries per use case.
+    Record bytes scanned for the clickhouse compute of resource of a query.
     """
 
-    if (
-        not isinstance(result, QueryResult)
-        or query_metadata.dataset != "generic_metrics"
-    ):
+    if not isinstance(result, QueryResult):
         return
 
     profile = result.result.get("profile")
     if not profile or (bytes_scanned := profile.get("progress_bytes")) is None:
         return
 
-    if (use_case_id := request.attribution_info.tenant_ids.get("use_case_id")) is None:
-        return
+    # The dataset is usually a good proxy for app_feature
+    # However, this is not always the case. We can
+    # check the entity as well as a fallback option
+    # if the dataset is incorrect in the querylog.
 
-    if random() < (state.get_config("gen_metrics_query_cogs_probability") or 0):
+    app_feature = query_metadata.dataset.replace("_", "")
+
+    if (
+        query_metadata.dataset == "generic_metrics"
+        or query_metadata.entity.startswith("generic_metrics")
+    ) and (
+        (use_case_id := request.attribution_info.tenant_ids.get("use_case_id"))
+        is not None
+    ):
+        app_feature = f"genericmetrics_{use_case_id}"
+
+    elif query_metadata.dataset == "events":
+        app_feature = "errors"
+
+    cluster_name = query_metadata.query_list[0].stats.get("cluster_name", "")
+
+    if not cluster_name.startswith("snuba-gen-metrics"):
+        return  # Only track shared clusters
+
+    # Sanitize the cluster name to line up with the resource_id naming convention
+    cluster_name = (
+        cluster_name.replace("-", "_")
+        .replace("snuba_gen_metrics", "generic_metrics_clickhouse")
+        .replace("_0", "")
+    )
+
+    if random() < (state.get_config("snuba_api_cogs_probability") or 0):
         record_cogs(
-            resource_id="snuba_api_bytes_scanned",
-            app_feature=f"genericmetrics_{use_case_id}",
+            resource_id=f"{cluster_name}",
+            app_feature=app_feature,
             amount=bytes_scanned,
             usage_type=UsageUnit.BYTES,
         )
+
+        # TODO: Record the time spent in the API compared to time spent running the
+        # Clickhouse query, so we can track usage of the API pods themselves.
 
 
 def record_query(
@@ -157,7 +187,7 @@ def _add_tags(
     experiments: Optional[Mapping[str, Any]] = None,
     metadata: Optional[SnubaQueryMetadata] = None,
 ) -> None:
-    if Hub.current.scope.span:
+    if sentry_sdk.get_current_span():
         duration_group = timer.get_duration_group()
         sentry_sdk.set_tag("duration_group", duration_group)
         if duration_group == ">30s":
@@ -173,7 +203,44 @@ def _add_tags(
                     break
 
 
+def _build_failed_request_dict(
+    request_id: UUID,
+    body: dict[str, Any],
+    dataset: str,
+    organization: int,
+    request_status: Status,
+    referrer: Optional[str],
+    exception_name: str | None = None,
+) -> snuba_queries_v1.Querylog:
+    return {
+        "request": {
+            "id": request_id.hex,
+            "body": body,
+            "referrer": str(referrer),
+            "team": None,
+            "app_id": "none",
+            "feature": None,
+        },
+        "dataset": dataset,
+        "entity": "error",
+        "start_timestamp": None,
+        "end_timestamp": None,
+        "status": request_status.status.value,
+        "request_status": request_status.status.value,
+        "slo": request_status.slo.value,
+        "projects": [],
+        "query_list": [],
+        "timing": {"timestamp": int(time.time()), "duration_ms": 0, "tags": {}},
+        "snql_anonymized": "",
+        "organization": organization,
+    }
+
+
 def record_invalid_request(
+    request_id: UUID,
+    body: dict[str, Any],
+    dataset: str,
+    organization: int,
     timer: Timer,
     request_status: Status,
     referrer: Optional[str],
@@ -184,12 +251,27 @@ def record_invalid_request(
     it records failures during parsing/validation.
     This is for client errors.
     """
-    _record_failure_building_request(
+    _record_failure_metric_with_status(
         QueryStatus.INVALID_REQUEST, request_status, timer, referrer, exception_name
+    )
+    state.record_query(
+        _build_failed_request_dict(
+            request_id,
+            body,
+            dataset,
+            organization,
+            request_status,
+            referrer,
+            exception_name,
+        )
     )
 
 
 def record_error_building_request(
+    request_id: UUID,
+    body: dict[str, Any],
+    dataset: str,
+    organization: int,
     timer: Timer,
     request_status: Status,
     referrer: Optional[str],
@@ -200,12 +282,23 @@ def record_error_building_request(
     it records failures during parsing/validation.
     This is for system errors during parsing/validation.
     """
-    _record_failure_building_request(
+    _record_failure_metric_with_status(
         QueryStatus.ERROR, request_status, timer, referrer, exception_name
+    )
+    state.record_query(
+        _build_failed_request_dict(
+            request_id,
+            body,
+            dataset,
+            organization,
+            request_status,
+            referrer,
+            exception_name,
+        )
     )
 
 
-def _record_failure_building_request(
+def _record_failure_metric_with_status(
     status: QueryStatus,
     request_status: Status,
     timer: Timer,

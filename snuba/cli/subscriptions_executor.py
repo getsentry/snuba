@@ -62,7 +62,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 )
 @click.option(
     "--auto-offset-reset",
-    default="error",
+    default="earliest",
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
@@ -110,6 +110,7 @@ def subscriptions_executor(
 
     metrics_tags = {
         "dataset": dataset_name,
+        "entity": entity_names[0],
     }
 
     if slice_id:

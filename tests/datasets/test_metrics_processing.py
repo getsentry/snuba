@@ -1,23 +1,22 @@
-from typing import Union
-
 import pytest
 
 from snuba import settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.clickhouse.query import Expression, Query
+from snuba.clickhouse.query import Expression
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
+from snuba.pipeline.query_pipeline import QueryPipelineResult
+from snuba.pipeline.stages.query_processing import (
+    EntityProcessingStage,
+    StorageProcessingStage,
+)
 from snuba.query import SelectedExpression
-from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
-from snuba.reader import Reader
 from snuba.request import Request
-from snuba.web import QueryResult
+from snuba.utils.metrics.timer import Timer
 
 TEST_CASES = [
     pytest.param(
@@ -174,12 +173,12 @@ TEST_CASES = [
     ),
     pytest.param(
         "metrics_distributions",
-        "avg(something_else)",
+        "avg(granularity)",
         EntityKey.METRICS_DISTRIBUTIONS,
         FunctionCall(
-            "_snuba_avg(something_else)",
+            "_snuba_avg(granularity)",
             "avg",
-            (Column("_snuba_something_else", None, "something_else"),),
+            (Column("_snuba_granularity", None, "granularity"),),
         ),
         id="Test that a column other than value is not transformed",
     ),
@@ -237,61 +236,56 @@ def test_metrics_processing(
     }
 
     metrics_dataset = get_dataset("metrics")
-    query, snql_anonymized = parse_snql_query(query_body["query"], metrics_dataset)
+    query = parse_snql_query(query_body["query"], metrics_dataset)
 
     request = Request(
         id="",
         original_body=query_body,
         query=query,
-        snql_anonymized="",
         query_settings=HTTPQuerySettings(referrer=""),
         attribution_info=AttributionInfo(
             get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
         ),
     )
 
-    def query_runner(
-        clickhouse_query: Union[Query, CompositeQuery[Table]],
-        query_settings: QuerySettings,
-        reader: Reader,
-    ) -> QueryResult:
-        expected_columns = [
-            SelectedExpression(
-                "org_id",
-                Column("_snuba_org_id", None, "org_id"),
-            ),
-            SelectedExpression(
-                "project_id",
-                Column("_snuba_project_id", None, "project_id"),
-            ),
-            SelectedExpression(
-                "tags[10]",
-                FunctionCall(
-                    "_snuba_tags[10]",
-                    "arrayElement",
-                    (
-                        Column(None, None, "tags.value"),
-                        FunctionCall(
-                            None,
-                            "indexOf",
-                            (Column(None, None, "tags.key"), Literal(None, 10)),
-                        ),
+    pipeline_result = EntityProcessingStage().execute(
+        QueryPipelineResult(
+            data=request,
+            query_settings=request.query_settings,
+            timer=Timer(name="bloop"),
+            error=None,
+        )
+    )
+    clickhouse_query = StorageProcessingStage().execute(pipeline_result).data
+
+    expected_columns = [
+        SelectedExpression(
+            "org_id",
+            Column("_snuba_org_id", None, "org_id"),
+        ),
+        SelectedExpression(
+            "project_id",
+            Column("_snuba_project_id", None, "project_id"),
+        ),
+        SelectedExpression(
+            "tags[10]",
+            FunctionCall(
+                "_snuba_tags[10]",
+                "arrayElement",
+                (
+                    Column(None, None, "tags.value"),
+                    FunctionCall(
+                        None,
+                        "indexOf",
+                        (Column(None, None, "tags.key"), Literal(None, 10)),
                     ),
                 ),
             ),
-            SelectedExpression(
-                column_name,
-                translated_value,
-            ),
-        ]
+        ),
+        SelectedExpression(
+            column_name,
+            translated_value,
+        ),
+    ]
 
-        assert clickhouse_query.get_selected_columns() == expected_columns
-        return QueryResult(
-            result={"meta": [], "data": [], "totals": {}},
-            extra={"stats": {}, "sql": "", "experiments": {}},
-        )
-
-    entity = get_entity(entity_key)
-    entity.get_query_pipeline_builder().build_execution_pipeline(
-        request, query_runner
-    ).execute()
+    assert clickhouse_query.get_selected_columns() == expected_columns

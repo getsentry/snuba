@@ -77,6 +77,7 @@ def setup_logging(level: Optional[str] = None) -> None:
 def setup_sentry() -> None:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
+        spotlight=None if settings.DEBUG else False,
         integrations=[
             FlaskIntegration(),
             GnuBacktraceIntegration(),
@@ -84,9 +85,25 @@ def setup_sentry() -> None:
             RedisIntegration(),
             ThreadingIntegration(propagate_hub=True),
         ],
+        # the value for release is also computed in rust-snuba, please keep the
+        # logic in sync
         release=os.getenv("SNUBA_RELEASE"),
         traces_sample_rate=settings.SENTRY_TRACE_SAMPLE_RATE,
+        profiles_sample_rate=settings.SNUBA_PROFILES_SAMPLE_RATE,
+        _experiments={
+            # Turns on the metrics module
+            "enable_metrics": True,
+            # Enables sending of code locations for metrics
+            "metric_code_locations": True,
+        },
     )
+
+    from snuba.utils.profiler import run_ondemand_profiler
+
+    if settings.SENTRY_DSN is not None:
+        # Do not run ondemand profiler in tests, it interferes with mocked
+        # `time.sleep()` and assertions on that mock.
+        run_ondemand_profiler()
 
 
 metrics = create_metrics(

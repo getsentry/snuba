@@ -12,19 +12,53 @@ import simplejson as json
 from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
+    MAX_THRESHOLD,
+    NO_SUGGESTION,
+    NO_UNITS,
     AllocationPolicy,
     AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
+from snuba.query.validation.validators import ColumnValidationMode
+from snuba.querylog.query_metadata import QueryStatus
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
 from tests.fixtures import get_raw_event, get_raw_transaction
-from tests.helpers import write_unprocessed_events
+from tests.helpers import override_entity_column_validator, write_unprocessed_events
+
+
+class MaxBytesPolicy123(AllocationPolicy):
+    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        return []
+
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(
+            can_run=True,
+            max_threads=0,
+            max_bytes_to_read=1,
+            explanation={},
+            is_throttled=True,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        return
 
 
 class RejectAllocationPolicy123(AllocationPolicy):
@@ -38,6 +72,12 @@ class RejectAllocationPolicy123(AllocationPolicy):
             can_run=False,
             max_threads=0,
             explanation={"reason": "policy rejects all queries"},
+            is_throttled=False,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
         )
 
     def _update_quota_balance(
@@ -62,6 +102,9 @@ class TestSnQLApi(BaseApiTest):
         self.project_id = self.event["project_id"]
         self.org_id = self.event["organization_id"]
         self.group_id = self.event["group_id"]
+        self.event["data"]["contexts"]["flags"] = {
+            "values": [{"flag": "flag-name", "result": True}]
+        }
         self.skew = timedelta(minutes=180)
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
@@ -76,6 +119,30 @@ class TestSnQLApi(BaseApiTest):
             get_writable_storage(StorageKey.TRANSACTIONS),
             [get_raw_transaction()],
         )
+
+    def test_avg_gauges(self) -> None:
+        # est that `avg(value)` works on gauges even thouh that agregate function doesn't exist on the table
+        query = """MATCH (generic_metrics_gauges) SELECT avg(value) AS
+        `aggregate_value` BY toStartOfInterval(timestamp, toIntervalSecond(1800), 'Universal') AS `time`
+        WHERE granularity = 60 AND metric_id = 87269488 AND (org_id IN array(1) AND project_id IN array(1)
+        AND use_case_id = 'custom') AND timestamp >= toDateTime('2023-11-27T14:00:00') AND timestamp <
+        toDateTime('2023-11-28T14:30:00') ORDER BY time ASC"""
+        response = self.post(
+            "/generic_metrics/snql",
+            data=json.dumps(
+                {
+                    "query": query,
+                    "referrer": "myreferrer",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
 
     def test_simple_query(self) -> None:
         response = self.post(
@@ -109,28 +176,35 @@ class TestSnQLApi(BaseApiTest):
             }
         ]
 
-    def test_sessions_query(self) -> None:
+    @patch("snuba.state.record_query")
+    @patch("snuba.query.snql.parser._treeify_or_and_conditions")
+    def test_recursion_error_in_treeify(
+        self, mock_treeify: MagicMock, mock_record_query: MagicMock
+    ) -> None:
+        mock_treeify.side_effect = RecursionError()
         response = self.post(
-            "/sessions/snql",
+            "/discover/snql",
             data=json.dumps(
                 {
-                    "dataset": "sessions",
-                    "query": f"""MATCH (sessions)
-                    SELECT project_id, release BY release, project_id
-                    WHERE project_id IN array({self.project_id})
-                    AND project_id IN array({self.project_id})
-                    AND org_id = {self.org_id}
-                    AND started >= toDateTime('2021-01-01T17:05:59.554860')
-                    AND started < toDateTime('2022-01-01T17:06:00.554981')
-                    ORDER BY sessions DESC
-                    LIMIT 100 OFFSET 0""",
+                    "query": f"""MATCH (discover_events )
+                    SELECT count() AS count BY project_id, tags[custom_tag]
+                    WHERE type != 'transaction' AND project_id = {self.project_id}
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    ORDER BY count ASC
+                    LIMIT 1000""",
+                    "referrer": "myreferrer",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
         )
-        data = json.loads(response.data)
-
-        assert response.status_code == 200
-        assert data["data"] == []
+        assert response.status_code == 500
+        mock_record_query.assert_called_once()
+        metadata = mock_record_query.call_args.args[0]
+        assert metadata["status"] == QueryStatus.ERROR.value and "request" in metadata
 
     def test_join_query(self) -> None:
         response = self.post(
@@ -162,7 +236,7 @@ class TestSnQLApi(BaseApiTest):
             data=json.dumps(
                 {
                     "query": """MATCH {
-                        MATCH (discover_events )
+                        MATCH (discover_events)
                         SELECT count() AS count BY project_id, tags[custom_tag]
                         WHERE type != 'transaction' AND project_id = %s
                         AND timestamp >= toDateTime('%s')
@@ -183,6 +257,35 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert data["data"] == [{"avg_count": 1.0}]
+
+    def test_join_query_in_sub_query(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": """MATCH {
+                        MATCH (events: events) -[attributes]-> (group_attributes: group_attributes)
+                        SELECT events.group_id, count() AS `event_count`, max(events.timestamp) AS `last_seen`
+                        BY events.group_id
+                        WHERE events.project_id IN array(4553884953739266)
+                        AND group_attributes.project_id IN array(4553884953739266)
+                        AND events.timestamp >= toDateTime('2024-01-24T16:59:49.431129')
+                        AND events.timestamp < toDateTime('2024-04-23T16:59:49.431129')
+                        AND group_attributes.group_status = 0
+                    }
+                    SELECT events.group_id WHERE last_seen >= toDateTime('2024-04-09T16:59:49.431129')
+                    ORDER BY event_count DESC LIMIT 10000""",
+                    "turbo": False,
+                    "consistent": False,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == []
 
     def test_max_limit(self) -> None:
         response = self.post(
@@ -205,8 +308,17 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 400, data
 
     def test_project_rate_limiting(self) -> None:
-        state.set_config("project_concurrent_limit", self.project_id)
-        state.set_config(f"project_concurrent_limit_{self.project_id}", 0)
+        policies = (
+            get_storage(StorageKey("errors")).get_allocation_policies()
+            + get_storage(StorageKey("errors_ro")).get_allocation_policies()
+        )
+        concurrent_rate_limit_policies = [
+            p
+            for p in policies
+            if p.config_key() == "ConcurrentRateLimitAllocationPolicy"
+        ]
+        for p in concurrent_rate_limit_policies:
+            p.set_config_value("project_override", 0, {"project_id": self.project_id})
 
         response = self.post(
             "/events/snql",
@@ -223,6 +335,8 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
+        allocation_policies = response.json["quota_allowance"]["details"]
+        assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
 
         response = self.post(
             "/events/snql",
@@ -238,87 +352,37 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
-        assert response.status_code == 429
-
-    def test_project_rate_limiting_subqueries(self) -> None:
-        state.set_config("project_concurrent_limit", self.project_id)
-        state.set_config(f"project_concurrent_limit_{self.project_id}", 0)
-
-        response = self.post(
-            "/discover/snql",
-            data=json.dumps(
-                {
-                    "query": """MATCH {
-                        MATCH (discover_events )
-                        SELECT count() AS count BY project_id, tags[custom_tag]
-                        WHERE type != 'transaction' AND project_id = 2
-                        AND timestamp >= toDateTime('%s')
-                        AND timestamp < toDateTime('%s')
-                    }
-                    SELECT avg(count) AS avg_count
-                    ORDER BY avg_count ASC
-                    LIMIT 1000"""
-                    % (self.base_time.isoformat(), self.next_time.isoformat()),
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        assert response.status_code == 200
-
-        response = self.post(
-            "/discover/snql",
-            data=json.dumps(
-                {
-                    "query": """MATCH {
-                        MATCH (discover_events )
-                        SELECT count() AS count BY project_id, tags[custom_tag]
-                        WHERE type != 'transaction' AND project_id = %s
-                        AND timestamp >= toDateTime('%s')
-                        AND timestamp < toDateTime('%s')
-                    }
-                    SELECT avg(count) AS avg_count
-                    ORDER BY avg_count ASC
-                    LIMIT 1000"""
-                    % (
-                        self.project_id,
-                        self.base_time.isoformat(),
-                        self.next_time.isoformat(),
-                    ),
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
+        allocation_policies = response.json["quota_allowance"]["details"]
+        assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]
+        assert not allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
         assert response.status_code == 429
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
     def test_record_queries(self, record_query_mock: Any) -> None:
-        for use_split, expected_query_count in [(0, 1), (1, 2)]:
-            state.set_config("use_split", use_split)
-            record_query_mock.reset_mock()
-            result = json.loads(
-                self.post(
-                    "/events/snql",
-                    data=json.dumps(
-                        {
-                            "query": f"""MATCH (events)
-                            SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
-                            WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
-                            AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                            AND project_id IN tuple({self.project_id})
-                            LIMIT 5""",
-                            "tenant_ids": {"referrer": "r", "organization_id": 123},
-                        }
-                    ),
-                ).data
-            )
+        record_query_mock.reset_mock()
+        result = json.loads(
+            self.post(
+                "/events/snql",
+                data=json.dumps(
+                    {
+                        "query": f"""MATCH (events)
+                        SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
+                        WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        AND project_id IN tuple({self.project_id})
+                        LIMIT 5""",
+                        "tenant_ids": {"referrer": "test", "organization_id": 123},
+                    }
+                ),
+            ).data
+        )
 
-            assert len(result["data"]) == 1
-            assert record_query_mock.call_count == 1
-            metadata = record_query_mock.call_args[0][0]
-            assert metadata["dataset"] == "events"
-            assert metadata["request"]["referrer"] == "test"
-            assert len(metadata["query_list"]) == expected_query_count
+        assert len(result["data"]) == 1
+        assert record_query_mock.call_count == 1
+        metadata = record_query_mock.call_args[0][0]
+        assert metadata["dataset"] == "events"
+        assert metadata["request"]["referrer"] == "test"
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
@@ -351,6 +415,32 @@ class TestSnQLApi(BaseApiTest):
         metadata = record_query_mock.call_args[0][0]
         assert metadata["query_list"][0]["stats"]["error_code"] == 1123
 
+    def test_record_queries_cogs(self) -> None:
+        state.set_config("snuba_api_cogs_probability", 1.0)
+        with patch("snuba.querylog._record_cogs") as record_cogs_mock:
+            result = json.loads(
+                self.post(
+                    "/events/snql",
+                    data=json.dumps(
+                        {
+                            "query": f"""MATCH (events)
+                            SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
+                            WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                            AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                            AND project_id IN tuple({self.project_id})
+                            LIMIT 5""",
+                            "tenant_ids": {"referrer": "r", "organization_id": 123},
+                        }
+                    ),
+                ).data
+            )
+
+            assert len(result["data"]) == 1
+            assert record_cogs_mock.call_count == 1
+            metadata = record_cogs_mock.call_args[0][1]
+            # Don't test the actual value for this because it will change between different test envs (e.g. distributed)
+            assert "cluster_name" in metadata.query_list[0].stats
+
     @patch("snuba.web.query._run_query_pipeline")
     def test_error_handler(self, pipeline_mock: MagicMock) -> None:
         from redis.exceptions import ClusterDownError
@@ -378,28 +468,6 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["error"]["type"] == "internal_server_error"
         assert data["error"]["message"] == "stuff"
-
-    def test_sessions_with_function_orderby(self) -> None:
-        response = self.post(
-            "/sessions/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (sessions)
-                    SELECT project_id, release BY release, project_id
-                    WHERE org_id = {self.org_id}
-                    AND started >= toDateTime('2021-04-05T16:52:48.907628')
-                    AND started < toDateTime('2021-04-06T16:52:49.907666')
-                    AND project_id IN tuple({self.project_id})
-                    AND project_id IN tuple({self.project_id})
-                    ORDER BY divide(sessions_crashed, sessions) ASC
-                    LIMIT 21
-                    OFFSET 0
-                    """,
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        assert response.status_code == 200
 
     def test_arrayjoin(self) -> None:
         response = self.post(
@@ -779,6 +847,39 @@ class TestSnQLApi(BaseApiTest):
         assert len(data) == 1
         assert data[0]["profile_id"] == "046852d24483455c8c44f0c8fbf496f9"
 
+    @pytest.mark.parametrize(
+        "url, entity",
+        [
+            pytest.param("/transactions/snql", "transactions", id="transactions"),
+            pytest.param(
+                "/discover/snql", "discover_transactions", id="discover_transactions"
+            ),
+        ],
+    )
+    def test_profiler_id(self, url: str, entity: str) -> None:
+        response = self.post(
+            url,
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH ({entity})
+                    SELECT profiler_id AS profiler_id
+                    WHERE
+                        finish_ts >= toDateTime('{self.base_time.isoformat()}') AND
+                        finish_ts < toDateTime('{self.next_time.isoformat()}') AND
+                        project_id IN tuple({self.project_id})
+                    LIMIT 10
+                    """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)["data"]
+        assert len(data) == 1
+        assert data[0]["profiler_id"] == "ab90d5a803914b35bd7869d8f8e57469"
+
     def test_attribution_tags(self) -> None:
         response = self.post(
             "/events/snql",
@@ -813,7 +914,7 @@ class TestSnQLApi(BaseApiTest):
                     """,
                     "app_id": "something-good",
                     "parent_api": "some/endpoint",
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                    "tenant_ids": {"referrer": "test", "organization_id": 123},
                 }
             ),
         )
@@ -891,6 +992,7 @@ class TestSnQLApi(BaseApiTest):
         assert {"name": "http.url", "type": "String"} in result["meta"]
 
     def test_invalid_column(self) -> None:
+        override_entity_column_validator(EntityKey.OUTCOMES, ColumnValidationMode.ERROR)
         response = self.post(
             "/outcomes/snql",
             data=json.dumps(
@@ -909,15 +1011,12 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
-        # TODO: when validation mode is ERROR this should be:
-        # assert response.status_code == 400
-        # assert (
-        #     json.loads(response.data)["error"]["message"]
-        #     == "validation failed for entity outcomes: query column(s) fake_column do not exist"
-        # )
-
-        # For now it's 500 since it's just a clickhouse error
-        assert response.status_code == 500
+        override_entity_column_validator(EntityKey.OUTCOMES, ColumnValidationMode.WARN)
+        assert response.status_code == 400
+        assert (
+            json.loads(response.data)["error"]["message"]
+            == "Validation failed for entity outcomes: Tag keys (fake_column) not resolved"
+        )
 
     def test_valid_columns_composite_query(self) -> None:
         response = self.post(
@@ -950,8 +1049,18 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query column(s) fsdfsd do not exist",
+            "validation failed for entity events: Query column 'fsdfsd' does not exist",
             id="Invalid first Select column",
+        ),
+        pytest.param(
+            f"""{MATCH}
+                    SELECT e.fsdfsd, e.fake_col, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status
+                    {WHERE}
+                    {TIMESTAMPS}
+                    """,
+            400,
+            "validation failed for entity events: query columns (fsdfsd, fake_col) do not exist",
+            id="Invalid multiple Select columns",
         ),
         pytest.param(
             f"""{MATCH}
@@ -960,7 +1069,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
             id="Invalid second Select column",
         ),
         pytest.param(
@@ -970,7 +1079,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
             id="Invalid By column",
         ),
         pytest.param(
@@ -981,7 +1090,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
             id="Invalid Where column",
         ),
         pytest.param(
@@ -991,7 +1100,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query column(s) status do not exist",
+            "validation failed for entity events: Query column 'status' does not exist",
             id="Mismatched Select columns",
         ),
         pytest.param(
@@ -1001,24 +1110,30 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query column(s) fdsdsf do not exist",
+            "validation failed for entity events: Query column 'fdsdsf' does not exist",
             id="Invalid nested column",
         ),
     ]
 
+    @pytest.fixture()
     @pytest.mark.parametrize(
         "query, response_code, error_message", invalid_columns_composite_query_tests
     )
     def test_invalid_columns_composite_query(
         self, query: str, response_code: int, error_message: str
     ) -> None:
+        override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.ERROR)
+        override_entity_column_validator(
+            EntityKey.GROUPEDMESSAGE, ColumnValidationMode.ERROR
+        )
         response = self.post("/events/snql", data=json.dumps({"query": query}))
+        override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.WARN)
+        override_entity_column_validator(
+            EntityKey.GROUPEDMESSAGE, ColumnValidationMode.WARN
+        )
 
-        # TODO: when validation mode for events and groupedmessage is ERROR this should be:
-        # assert response.status_code == response_code
-        # assert json.loads(response.data)["error"]["message"] == error_message
-
-        assert response.status_code == 500
+        assert response.status_code == response_code
+        assert json.loads(response.data)["error"]["message"] == error_message
 
     def test_wrap_log_fn_with_ifnotfinite(self) -> None:
         """
@@ -1095,67 +1210,71 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 400
 
     def test_invalid_tag_queries(self) -> None:
-        response = self.post(
-            "/discover/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (discover)
-                    SELECT count() AS `count`
-                    BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
-                    WHERE ifNull(tags[user_flow], '') = 'buy'
-                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
-                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                    AND project_id IN array({self.project_id})
-                    AND environment = 'www.something.com'
-                    AND tags[error_code] = '2300'
-                    AND tags[count] = 419
-                    ORDER BY time ASC LIMIT 10000
-                    GRANULARITY 3600""",
-                    "turbo": False,
-                    "consistent": True,
-                    "debug": True,
-                }
-            ),
-        )
+        with patch(
+            "snuba.querylog._record_failure_metric_with_status"
+        ) as record_failure_metric_mock:
+            response = self.post(
+                "/discover/snql",
+                data=json.dumps(
+                    {
+                        "query": f"""MATCH (discover)
+                        SELECT count() AS `count`
+                        BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
+                        WHERE ifNull(tags[user_flow], '') = 'buy'
+                        AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        AND project_id IN array({self.project_id})
+                        AND environment = 'www.something.com'
+                        AND tags[error_code] = '2300'
+                        AND tags[count] = 419
+                        ORDER BY time ASC LIMIT 10000
+                        GRANULARITY 3600""",
+                        "turbo": False,
+                        "consistent": True,
+                        "debug": True,
+                    }
+                ),
+            )
 
-        assert response.status_code == 400
-        data = response.json
-        assert data["error"]["type"] == "invalid_query"
-        assert (
-            data["error"]["message"]
-            == "validation failed for entity discover: invalid tag condition on 'tags[count]': 419 must be a string"
-        )
+            assert response.status_code == 400
+            data = response.json
+            assert data["error"]["type"] == "invalid_query"
+            assert (
+                data["error"]["message"]
+                == "Validation failed for entity discover: invalid tag condition on 'tags[count]': 419 must be a string"
+            )
 
-        response = self.post(
-            "/discover/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (discover)
-                    SELECT count() AS `count`
-                    BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
-                    WHERE ifNull(tags[user_flow], '') = 'buy'
-                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
-                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                    AND project_id IN array({self.project_id})
-                    AND environment = 'www.something.com'
-                    AND tags[error_code] IN array('2300')
-                    AND tags[count] IN array(419, 70, 175, 181, 58)
-                    ORDER BY time ASC LIMIT 10000
-                    GRANULARITY 3600""",
-                    "turbo": False,
-                    "consistent": True,
-                    "debug": True,
-                }
-            ),
-        )
+            response = self.post(
+                "/discover/snql",
+                data=json.dumps(
+                    {
+                        "query": f"""MATCH (discover)
+                        SELECT count() AS `count`
+                        BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
+                        WHERE ifNull(tags[user_flow], '') = 'buy'
+                        AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        AND project_id IN array({self.project_id})
+                        AND environment = 'www.something.com'
+                        AND tags[error_code] IN array('2300')
+                        AND tags[count] IN array(419, 70, 175, 181, 58)
+                        ORDER BY time ASC LIMIT 10000
+                        GRANULARITY 3600""",
+                        "turbo": False,
+                        "consistent": True,
+                        "debug": True,
+                    }
+                ),
+            )
 
-        assert response.status_code == 400
-        data = response.json
-        assert data["error"]["type"] == "invalid_query"
-        assert (
-            data["error"]["message"]
-            == "validation failed for entity discover: invalid tag condition on 'tags[count]': array literal 419 must be a string"
-        )
+            assert response.status_code == 400
+            data = response.json
+            assert data["error"]["type"] == "invalid_query"
+            assert (
+                data["error"]["message"]
+                == "Validation failed for entity discover: invalid tag condition on 'tags[count]': array literal 419 must be a string"
+            )
+            assert record_failure_metric_mock.call_count == 2
 
     def test_datetime_condition_types(self) -> None:
         response = self.post(
@@ -1186,6 +1305,69 @@ class TestSnQLApi(BaseApiTest):
             response.status_code == 500 or response.status_code == 400
         )  # TODO: This should be a 400, and will change once we can properly categorise these errors
 
+    def test_timeseries_processor_join_query(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events: events) -[attributes]-> (ga: group_attributes)
+                    SELECT count() AS `count` BY events.time
+                    WHERE ga.group_status IN array(0)
+                    AND events.timestamp >= toDateTime('2023-11-27T10:00:00')
+                    AND events.timestamp < toDateTime('2023-11-27T13:00:00')
+                    AND events.project_id IN array({self.project_id})
+                    AND ga.project_id IN array({self.project_id})
+                    ORDER BY events.time ASC
+                    LIMIT 10000
+                    GRANULARITY 300""",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert (
+            "(toDateTime(multiply(intDiv(toUInt32(timestamp), 300), 300), 'Universal') AS `_snuba_events.time`)"
+            in data["sql"]
+        )
+
+    def test_allocation_policy_max_bytes_to_read(self) -> None:
+        with patch(
+            "snuba.web.db_query._get_allocation_policies",
+            return_value=[
+                MaxBytesPolicy123(StorageKey("doesntmatter"), ["a", "b", "c"], {})
+            ],
+        ):
+            response = self.post(
+                "/discover/snql",
+                data=json.dumps(
+                    {
+                        "query": f"""MATCH (discover_events )
+                        SELECT count() AS count BY project_id, tags[custom_tag]
+                        WHERE type != 'transaction' AND project_id = {self.project_id}
+                        AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        ORDER BY count ASC
+                        LIMIT 1000""",
+                        "referrer": "myreferrer",
+                        "turbo": False,
+                        "consistent": True,
+                        "debug": True,
+                        "tenant_ids": {"referrer": "r", "organization_id": 123},
+                    }
+                ),
+            )
+            assert response.status_code == 429
+
+            assert (
+                response.json["error"]["message"]
+                == "Query scanned more than the allocated amount of bytes"
+            )
+
     def test_allocation_policy_violation(self) -> None:
         with patch(
             "snuba.web.db_query._get_allocation_policies",
@@ -1212,9 +1394,45 @@ class TestSnQLApi(BaseApiTest):
                 ),
             )
             assert response.status_code == 429
+            info = {
+                "details": {
+                    "RejectAllocationPolicy123": {
+                        "can_run": False,
+                        "max_threads": 0,
+                        "explanation": {
+                            "reason": "policy rejects all queries",
+                            "storage_key": "StorageKey.DOESNTMATTER",
+                        },
+                        "is_throttled": False,
+                        "throttle_threshold": 1000000000000,
+                        "rejection_threshold": 1000000000000,
+                        "quota_used": 0,
+                        "quota_unit": "no_units",
+                        "suggestion": "no_suggestion",
+                        "max_bytes_to_read": 0,
+                    }
+                },
+                "summary": {
+                    "threads_used": 0,
+                    "is_successful": False,
+                    "is_rejected": True,
+                    "is_throttled": False,
+                    "rejection_storage_key": "StorageKey.DOESNTMATTER",
+                    "throttle_storage_key": None,
+                    "rejected_by": {
+                        "policy": "RejectAllocationPolicy123",
+                        "quota_used": 0,
+                        "quota_unit": "no_units",
+                        "suggestion": "no_suggestion",
+                        "storage_key": "StorageKey.DOESNTMATTER",
+                        "rejection_threshold": 1000000000000,
+                    },
+                    "throttled_by": {},
+                },
+            }
             assert (
                 response.json["error"]["message"]
-                == "{'RejectAllocationPolicy123': \"Allocation policy violated, explanation: {'reason': 'policy rejects all queries'}\"}"
+                == f"Query on could not be run due to allocation policies, info: {info}"
             )
 
     def test_tags_key_column(self) -> None:
@@ -1243,6 +1461,134 @@ class TestSnQLApi(BaseApiTest):
         )
 
         assert response.status_code == 200
+
+    def test_tags_column_in_join(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "dataset": "events",
+                    "query": f"""MATCH (events: events) -[attributes]-> (ga: group_attributes)
+                        SELECT count() AS `count`
+                        BY events.time
+                        WHERE events.timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND ifNull(events.tags[service-class], '') != 'devtest'
+                        AND events.timestamp < toDateTime('{self.next_time.isoformat()}')
+                        AND events.project_id IN array({self.project_id})
+                        AND ga.project_id IN array({self.project_id})
+                        AND ga.group_status IN array(0)
+                        AND events.type = 'error'
+                        ORDER BY events.time ASC
+                        LIMIT 10000
+                        GRANULARITY 600""",
+                    "legacy": True,
+                    "app_id": "legacy",
+                    "tenant_ids": {
+                        "organization_id": self.org_id,
+                        "referrer": "join.tag.test",
+                    },
+                    "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+
+    def test_hexint_in_condition(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "dataset": "events",
+                    "query": f"""MATCH (spans)
+                    SELECT span_id
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array({self.project_id})
+                    AND span_id IN array('844e2e5c081e6199')
+                    LIMIT 101 OFFSET 0""",
+                    "legacy": True,
+                    "app_id": "legacy",
+                    "tenant_ids": {
+                        "organization_id": self.org_id,
+                        "referrer": "join.tag.test",
+                    },
+                    "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "9533608433997996441" in data["sql"], data["sql"]  # Hexint was applied
+
+    def test_low_cardinality_processor(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "query": f"""
+                    MATCH (discover)
+                    SELECT
+                        type AS `event.type`,
+                        contexts[trace.trace_id] AS `trace`,
+                        coalesce(email, username, user_id, ip_address) AS `user.display`,
+                        timestamp,
+                        project_id AS `project`,
+                        title,
+                        event_id AS `id`,
+                        project_id AS `project.name`,
+                        platform AS `platform`
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array({self.project_id})
+                    AND environment IN array('dev', 'prod', 'staging')
+                    AND platform IN tuple('snuba', 'sentry')
+                    ORDER BY timestamp DESC LIMIT 51 OFFSET 0""",
+                    "legacy": True,
+                    "app_id": "legacy",
+                    "tenant_ids": {
+                        "organization_id": self.org_id,
+                        "referrer": "join.tag.test",
+                    },
+                    "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert (
+            "cast(environment, 'Nullable(String)') AS _snuba_environment" in data["sql"]
+        )
+        # platform is not nullable but can be cast to nullable
+        assert "cast(platform, 'Nullable(String)') AS _snuba_platform" in data["sql"]
+
+    def test_query_flags(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT flags[flag-name]
+                    WHERE project_id = {self.project_id}
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    LIMIT 1""",
+                    "referrer": "myreferrer",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+        assert data["stats"]["consistent"]
+        assert data["data"] == [{"flags[flag-name]": "true"}]
 
 
 @pytest.mark.clickhouse_db

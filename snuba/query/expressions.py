@@ -17,6 +17,7 @@ TVisited = TypeVar("TVisited")
 # Sometimes however, we want the raw data, and this allows us to print that out
 _AUTO_REPR = not settings.PRETTY_FORMAT_EXPRESSIONS
 
+
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
 @dataclass(frozen=True, repr=_AUTO_REPR)
 class _Expression:
@@ -254,6 +255,37 @@ class StringifyVisitor(ExpressionVisitor[str]):
         transformation_str = exp.transformation.accept(self)
         self.__level -= 1
         return f"{self._get_line_prefix()}({params_str}) ->\n{transformation_str}\n{self._get_line_prefix()}{self._get_alias_str(exp)}"
+
+
+class ColumnVisitor(ExpressionVisitor[set[str]]):
+    def __init__(self) -> None:
+        self.columns: set[str] = set()
+
+    def visit_literal(self, exp: Literal) -> set[str]:
+        return self.columns
+
+    def visit_column(self, exp: Column) -> set[str]:
+        self.columns.add(exp.column_name)
+        return self.columns
+
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> set[str]:
+        return exp.column.accept(self)
+
+    def visit_function_call(self, exp: FunctionCall) -> set[str]:
+        for param in exp.parameters:
+            param.accept(self)
+        return self.columns
+
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> set[str]:
+        for param in exp.parameters:
+            param.accept(self)
+        return exp.internal_function.accept(self)
+
+    def visit_argument(self, exp: Argument) -> set[str]:
+        return self.columns
+
+    def visit_lambda(self, exp: Lambda) -> set[str]:
+        return exp.transformation.accept(self)
 
 
 OptionalScalarType = Union[None, bool, str, float, int, date, datetime]

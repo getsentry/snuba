@@ -3,11 +3,7 @@ from __future__ import annotations
 import pytest
 
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.allocation_policies import (
-    AllocationPolicy,
-    AllocationPolicyViolation,
-    QueryResultOrError,
-)
+from snuba.query.allocation_policies import AllocationPolicy, QueryResultOrError
 from snuba.query.allocation_policies.bytes_scanned_window_policy import (
     _ORG_LESS_REFERRERS,
     BytesScannedWindowAllocationPolicy,
@@ -70,6 +66,7 @@ def test_consume_quota(policy: BytesScannedWindowAllocationPolicy) -> None:
         "is_enforced": True,
         "granted_quota": 0,
         "limit": ORG_SCAN_LIMIT,
+        "storage_key": "StorageKey.ERRORS",
     }
 
 
@@ -151,12 +148,15 @@ def test_enforcement_switch(policy: AllocationPolicy) -> None:
 @pytest.mark.redis_db
 def test_reject_queries_without_tenant_ids(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
-    with pytest.raises(AllocationPolicyViolation):
-        policy.get_quota_allowance(
-            tenant_ids={"organization_id": 1234}, query_id=QUERY_ID
-        )
-    with pytest.raises(AllocationPolicyViolation):
-        policy.get_quota_allowance(tenant_ids={"referrer": "bloop"}, query_id=QUERY_ID)
+    quota_allowance = policy.get_quota_allowance(
+        tenant_ids={"organization_id": 1234}, query_id=QUERY_ID
+    )
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
+
+    quota_allowance = policy.get_quota_allowance(
+        tenant_ids={"referrer": "bloop"}, query_id=QUERY_ID
+    )
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
     # These should not fail because we know they don't have an org id
     for referrer in _ORG_LESS_REFERRERS:
         tenant_ids: dict[str, str | int] = {"referrer": referrer}

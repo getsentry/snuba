@@ -1,0 +1,18 @@
+---
+source: src/processors/mod.rs
+description: "{\n  \"project_id\": 1,\n  \"profiler_id\": \"4d229f1d3807421ba62a5f8bc295d836\",\n  \"chunk_id\": \"0432a0a4c25f4697bf9f0a2fcbe6a814\",\n  \"start_timestamp\": 1710805688.1234567,\n  \"end_timestamp\": 1710805689.1234567,\n  \"received\": 1694357860,\n  \"retention_days\": 30\n}\n"
+expression: snapshot_payload
+---
+[
+  {
+    "chunk_id": "0432a0a4-c25f-4697-bf9f-0a2fcbe6a814",
+    "end_timestamp": 1710805689123456,
+    "environment": null,
+    "offset": 1,
+    "partition": 0,
+    "profiler_id": "4d229f1d-3807-421b-a62a-5f8bc295d836",
+    "project_id": 1,
+    "retention_days": 30,
+    "start_timestamp": 1710805688123456
+  }
+]

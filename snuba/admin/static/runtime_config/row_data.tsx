@@ -1,14 +1,16 @@
 import React, { ReactNode } from "react";
+import { Popover, OverlayTrigger } from 'react-bootstrap';
 
-import { linkStyle } from "./styles";
-import { EditableTableCell } from "../table";
+import { linkStyle } from "SnubaAdmin/runtime_config/styles";
+import { getDescription } from "SnubaAdmin/runtime_config/descriptions";
+import { EditableTableCell } from "SnubaAdmin/table";
 import {
   ConfigKey,
   ConfigValue,
   ConfigType,
   RowData,
   ConfigDescription,
-} from "./types";
+} from "SnubaAdmin/runtime_config/types";
 
 const TYPES = ["string", "int", "float"];
 
@@ -25,9 +27,25 @@ function getReadonlyRow(
   showActions: boolean,
   edit: () => void
 ): RowData {
+  const [realKey, staticDescription] = getDescription(key) || [null, "Is missing. Add it to snuba/admin/static/runtime_config/descriptions.tsx?"];
+  const tooltip = (
+    <Popover id="key-description">
+      <Popover.Header>Information</Popover.Header>
+      <Popover.Body>
+        <p><strong><a target="_blank" href={`https://github.com/search?q=repo%3Agetsentry%2Fsnuba%20%2F${realKey || key}%2F&type=code`}>Search codebase for config key</a></strong></p>
+        <p><strong>Static description:</strong> {staticDescription}</p>
+      </Popover.Body>
+    </Popover>
+  );
   return [
-    <code style={{ wordBreak: "break-all" }}>{key}</code>,
-    <code style={{ wordBreak: "break-all" }}>{value}</code>,
+    <OverlayTrigger trigger={["click"]} placement="bottom" overlay={tooltip}>
+      <a id={`config/${key}`} href={`#config/${key}`}>
+        <code style={{ wordBreak: "break-all" }}>
+          {key}
+        </code>
+      </a>
+    </OverlayTrigger>,
+    <code style={{ wordBreak: "break-all", color: "black" }}>{value}</code>,
     description,
     type,
     showActions && (

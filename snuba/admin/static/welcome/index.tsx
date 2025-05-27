@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import Client from "../api_client";
+import Client from "SnubaAdmin/api_client";
 
 function Welcome(props: { api: Client }) {
   const [adminRegions, setAdminRegions] = useState<string[]>([]);

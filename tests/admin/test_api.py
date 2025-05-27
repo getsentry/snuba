@@ -1,22 +1,37 @@
 from __future__ import annotations
 
-from typing import Any
+import time
+from typing import Any, Sequence, Tuple, Type
 from unittest import mock
 
 import pytest
 import simplejson as json
+from attr import dataclass
 from flask.testing import FlaskClient
+from google.protobuf import descriptor_pb2
+from google.protobuf.descriptor_pool import DescriptorPool
+from google.protobuf.message_factory import MessageFactory
+from google.protobuf.timestamp_pb2 import Timestamp
 
 from snuba import state
 from snuba.admin.auth import USER_HEADER_KEY
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
+    MAX_THRESHOLD,
+    NO_SUGGESTION,
+    NO_UNITS,
     AllocationPolicy,
     AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
+from snuba.web.rpc import RPCEndpoint
+
+
+@dataclass
+class FakeClickhouseResult:
+    results: Sequence[Any]
 
 
 @pytest.fixture
@@ -24,6 +39,71 @@ def admin_api() -> FlaskClient:
     from snuba.admin.views import application
 
     return application.test_client()
+
+
+@pytest.fixture(scope="session")
+def rpc_test_setup() -> Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]]:
+    pool = DescriptorPool()
+    request_meta_proto = descriptor_pb2.DescriptorProto(
+        name="RequestMeta",
+        field=[
+            descriptor_pb2.FieldDescriptorProto(
+                name="organization_id",
+                number=1,
+                type=descriptor_pb2.FieldDescriptorProto.TYPE_UINT64,
+            ),
+            descriptor_pb2.FieldDescriptorProto(
+                name="project_ids",
+                number=2,
+                type=descriptor_pb2.FieldDescriptorProto.TYPE_UINT64,
+                label=descriptor_pb2.FieldDescriptorProto.LABEL_REPEATED,
+            ),
+        ],
+    )
+    my_request_proto = descriptor_pb2.DescriptorProto(
+        name="MyRequest",
+        field=[
+            descriptor_pb2.FieldDescriptorProto(
+                name="message",
+                number=1,
+                type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING,
+            ),
+            descriptor_pb2.FieldDescriptorProto(
+                name="meta",
+                number=2,
+                type=descriptor_pb2.FieldDescriptorProto.TYPE_MESSAGE,
+                type_name="RequestMeta",
+            ),
+        ],
+    )
+    file_descriptor_proto = descriptor_pb2.FileDescriptorProto(
+        name="dynamic_messages.proto",
+        package="test",
+        message_type=[request_meta_proto, my_request_proto],
+    )
+    pool.Add(file_descriptor_proto)  # type: ignore
+
+    factory = MessageFactory(pool)
+    MyRequest = factory.GetPrototype(pool.FindMessageTypeByName("test.MyRequest"))  # type: ignore
+
+    class TestRPC(RPCEndpoint[MyRequest, Timestamp]):  # type: ignore
+        @classmethod
+        def version(cls) -> str:
+            return "v1"
+
+        @classmethod
+        def request_class(cls) -> type[MyRequest]:  # type: ignore
+            return MyRequest
+
+        @classmethod
+        def response_class(cls) -> type[Timestamp]:
+            return Timestamp
+
+        def _execute(self, in_msg: MyRequest) -> Timestamp:  # type: ignore
+            current_time = time.time()
+            return Timestamp(seconds=int(current_time), nanos=0)
+
+    return MyRequest, TestRPC
 
 
 @pytest.mark.redis_db
@@ -220,6 +300,29 @@ def test_predefined_system_queries(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
+def test_sudo_system_query(admin_api: FlaskClient) -> None:
+    _, host, port = get_node_for_table(admin_api, "errors")
+    response = admin_api.post(
+        "/run_clickhouse_system_query",
+        headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
+        data=json.dumps(
+            {
+                "host": host,
+                "port": port,
+                "storage": "errors_ro",
+                "sql": "SYSTEM START MERGES",
+                "sudo": True,
+            }
+        ),
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["column_names"] == []
+    assert data["rows"] == []
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_query_trace(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -232,8 +335,8 @@ def test_query_trace(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "<Debug> executeQuery" in data["trace_output"]
-    key = next(iter(data["formatted_trace_output"]))
-    assert "read_performance" in data["formatted_trace_output"][key]
+    assert "summarized_trace_output" in data
+    assert "profile_events_results" in data
 
 
 @pytest.mark.redis_db
@@ -249,7 +352,12 @@ def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     )
     assert response.status_code == 400
     data = json.loads(response.data)
-    assert "Exception: Missing columns" in data["error"]["message"]
+    # error message is different in CH versions 23.8 and 24.3
+    assert (
+        "Exception: Unknown expression or function identifier"
+        in data["error"]["message"]
+        or "Exception: Missing columns" in data["error"]["message"]
+    )
     assert "clickhouse" == data["error"]["type"]
 
 
@@ -326,16 +434,6 @@ def test_get_snuba_datasets(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert set(data) == set(get_enabled_dataset_names())
-
-
-@pytest.mark.redis_db
-def test_snuba_debug_invalid_dataset(admin_api: FlaskClient) -> None:
-    response = admin_api.post(
-        "/snuba_debug", data=json.dumps({"dataset": "", "query": ""})
-    )
-    assert response.status_code == 400
-    data = json.loads(response.data)
-    assert data["error"]["message"] == "dataset '' does not exist"
 
 
 @pytest.mark.redis_db
@@ -427,7 +525,17 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
-            return QuotaAllowance(True, 1, {})
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=1,
+                explanation={},
+                is_throttled=False,
+                rejection_threshold=MAX_THRESHOLD,
+                throttle_threshold=MAX_THRESHOLD,
+                quota_used=0,
+                quota_unit=NO_UNITS,
+                suggestion=NO_SUGGESTION,
+            )
 
         def _update_quota_balance(
             self,
@@ -451,6 +559,7 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     assert response.json is not None and len(response.json) == 1
     [data] = response.json
+    assert data["query_type"] == "select"
     assert data["policy_name"] == "FakePolicy"
     assert data["optional_config_definitions"] == [
         {
@@ -501,8 +610,8 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
 
-        # two policies
-        assert response.json is not None and len(response.json) == 2
+        # three policies
+        assert response.json is not None and len(response.json) == 5
         policy_configs = response.json
         bytes_scanned_policy = [
             policy
@@ -542,7 +651,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
 
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
-        assert response.json is not None and len(response.json) == 2
+        assert response.json is not None and len(response.json) == 5
         assert {
             "default": -1,
             "description": "Number of bytes a specific org can scan in a 10 minute "
@@ -581,6 +690,28 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
+def test_force_overwrite(admin_api: FlaskClient) -> None:
+    migration_id = "0009_add_message"
+    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
+    downgraded_migration = [
+        m for m in migrations if m.get("migration_id") == migration_id
+    ][0]
+    assert downgraded_migration["status"] == "completed"
+
+    response = admin_api.post(
+        f"/migrations/search_issues/overwrite/{migration_id}/status/not_started",
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
+    downgraded_migration = [
+        m for m in migrations if m.get("migration_id") == migration_id
+    ][0]
+    assert downgraded_migration["status"] == "not_started"
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (events)
@@ -592,6 +723,26 @@ def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/production_snql_query",
         data=json.dumps({"dataset": "events", "query": snql_query}),
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "data" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_snql_query_multiple_allowed_projects(admin_api: FlaskClient) -> None:
+    snql_query = """
+    MATCH (transactions)
+    SELECT title
+    WHERE project_id IN array(1, 11276)
+    AND finish_ts >= toDateTime('2023-01-01 00:00:00')
+    AND finish_ts < toDateTime('2023-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/production_snql_query",
+        data=json.dumps({"dataset": "transactions", "query": snql_query}),
         headers={"Referer": "https://snuba-admin.getsentry.net/"},
     )
     assert response.status_code == 200
@@ -616,3 +767,373 @@ def test_prod_snql_query_invalid_project_query(admin_api: FlaskClient) -> None:
     assert response.status_code == 400
     data = json.loads(response.data)
     assert data["error"]["message"] == "Cannot access the following project ids: {2}"
+
+
+@pytest.mark.redis_db
+def test_prod_mql_query_invalid_dataset(admin_api: FlaskClient) -> None:
+    response = admin_api.post(
+        "/production_mql_query",
+        data=json.dumps({"dataset": "", "query": "", "mql_context": {}}),
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["message"] == "dataset '' does not exist"
+
+
+@pytest.mark.redis_db
+def test_prod_mql_query_invalid_query(admin_api: FlaskClient) -> None:
+    response = admin_api.post(
+        "/production_mql_query",
+        data=json.dumps({"dataset": "functions", "query": "", "mql_context": {}}),
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert (
+        data["error"]["message"]
+        == "Rule 'expression' didn't match at '' (line 1, column 1)."
+    )
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_mql_query_valid_query(admin_api: FlaskClient) -> None:
+    mql_query = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+    mql_context = {
+        "entity": "generic_metrics_distributions",
+        "start": "2023-11-23T18:30:00",
+        "end": "2023-11-23T22:30:00",
+        "rollup": {
+            "granularity": 60,
+            "interval": 60,
+            "with_totals": "False",
+            "orderby": None,
+        },
+        "scope": {
+            "org_ids": [1],
+            "project_ids": [1],
+            "use_case_id": "transactions",
+        },
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": 123456,
+            "d:transactions/measurements.fp@millisecond": 789012,
+            "status_code": 222222,
+            "transaction": 333333,
+        },
+        "limit": None,
+        "offset": None,
+    }
+    response = admin_api.post(
+        "/production_mql_query",
+        data=json.dumps(
+            {
+                "dataset": "generic_metrics",
+                "query": mql_query,
+                "mql_context": mql_context,
+            }
+        ),
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "data" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_mql_query_multiple_allowed_projects(admin_api: FlaskClient) -> None:
+    mql_query = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+    mql_context = {
+        "entity": "generic_metrics_distributions",
+        "start": "2023-11-23T18:30:00",
+        "end": "2023-11-23T22:30:00",
+        "rollup": {
+            "granularity": 60,
+            "interval": 60,
+            "with_totals": "False",
+            "orderby": None,
+        },
+        "scope": {
+            "org_ids": [1],
+            "project_ids": [1, 11276],
+            "use_case_id": "transactions",
+        },
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": 123456,
+            "d:transactions/measurements.fp@millisecond": 789012,
+            "status_code": 222222,
+            "transaction": 333333,
+        },
+        "limit": None,
+        "offset": None,
+    }
+    response = admin_api.post(
+        "/production_mql_query",
+        data=json.dumps(
+            {
+                "dataset": "generic_metrics",
+                "query": mql_query,
+                "mql_context": mql_context,
+            }
+        ),
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "data" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_mql_query_invalid_project_query(admin_api: FlaskClient) -> None:
+    mql_query = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+    mql_context = {
+        "entity": "generic_metrics_distributions",
+        "start": "2023-11-23T18:30:00",
+        "end": "2023-11-23T22:30:00",
+        "rollup": {
+            "granularity": 60,
+            "interval": 60,
+            "with_totals": "False",
+            "orderby": None,
+        },
+        "scope": {
+            "org_ids": [1],
+            "project_ids": [2],
+            "use_case_id": "transactions",
+        },
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": 123456,
+            "d:transactions/measurements.fp@millisecond": 789012,
+            "status_code": 222222,
+            "transaction": 333333,
+        },
+        "limit": None,
+        "offset": None,
+    }
+    response = admin_api.post(
+        "/production_mql_query",
+        data=json.dumps(
+            {
+                "dataset": "generic_metrics",
+                "query": mql_query,
+                "mql_context": mql_context,
+            }
+        ),
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["message"] == "Cannot access the following project ids: {2}"
+
+
+@mock.patch("snuba.admin.clickhouse.database_clusters.get_ro_node_connection")
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_clickhouse_node_info(
+    get_ro_node_connection_mock: mock.Mock, admin_api: FlaskClient
+) -> None:
+    expected_result = {
+        "cluster": "Cluster",
+        "host_name": "Host",
+        "host_address": "127.0.0.1",
+        "port": 9000,
+        "shard": 1,
+        "replica": 1,
+        "version": "v1",
+    }
+
+    connection_mock = mock.Mock()
+    connection_mock.execute.return_value = FakeClickhouseResult(
+        [("Cluster", "Host", "127.0.0.1", 9000, 1, 1, "v1")]
+    )
+    get_ro_node_connection_mock.return_value = connection_mock
+    response = admin_api.get("/clickhouse_node_info")
+    assert response.status_code == 200
+
+    response_data = json.loads(response.data)
+    assert (
+        len(response_data) > 0
+        and {k: response_data[0][k] for k in expected_result.keys()} == expected_result
+    )
+
+
+@mock.patch("snuba.admin.clickhouse.database_clusters.get_ro_node_connection")
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_clickhouse_system_settings(
+    get_ro_node_connection_mock: mock.Mock, admin_api: FlaskClient
+) -> None:
+    expected_result = [
+        {
+            "name": "max_memory_usage",
+            "value": "10000000000",
+            "default": "10000000000",
+            "changed": 0,
+            "description": "Maximum memory usage for query execution",
+            "type": "UInt64",
+        },
+        {
+            "name": "max_threads",
+            "value": "8",
+            "default": "8",
+            "changed": 0,
+            "description": "The maximum number of threads to execute the request",
+            "type": "UInt64",
+        },
+    ]
+
+    connection_mock = mock.Mock()
+    connection_mock.execute.return_value = FakeClickhouseResult(
+        [
+            (
+                "max_memory_usage",
+                "10000000000",
+                "10000000000",
+                0,
+                "Maximum memory usage for query execution",
+                "UInt64",
+            ),
+            (
+                "max_threads",
+                "8",
+                "8",
+                0,
+                "The maximum number of threads to execute the request",
+                "UInt64",
+            ),
+        ]
+    )
+    get_ro_node_connection_mock.return_value = connection_mock
+
+    response = admin_api.get(
+        "/clickhouse_system_settings?host=test_host&port=9000&storage=test_storage"
+    )
+    assert response.status_code == 200
+
+    response_data = json.loads(response.data)
+    assert response_data == expected_result
+
+    # Test error case when parameters are missing
+    response = admin_api.get("/clickhouse_system_settings")
+    assert response.status_code == 400
+    assert json.loads(response.data) == {
+        "error": "Host, port, and storage are required"
+    }
+
+
+@pytest.mark.redis_db
+def test_execute_rpc_endpoint_success(
+    admin_api: FlaskClient,
+    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]],
+) -> None:
+    MyRequest, TestRPC = rpc_test_setup
+
+    payload = json.dumps(
+        {
+            "message": "test_execute_rpc_endpoint_success",
+            "meta": {
+                "organization_id": 123,
+                "project_ids": [1],
+            },
+        }
+    )
+
+    response = admin_api.post(
+        "/rpc_execute/TestRPC/v1",
+        data=payload,
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    response_data = json.loads(response.data)
+    timestamp = Timestamp()
+    timestamp.FromJsonString(response_data)
+    assert timestamp.seconds != 0 or timestamp.nanos != 0
+
+
+@pytest.mark.redis_db
+def test_execute_rpc_endpoint_unknown_endpoint(admin_api: FlaskClient) -> None:
+    payload = json.dumps(
+        {
+            "message": "test_execute_rpc_endpoint_unknown_endpoint",
+            "meta": {
+                "organization_id": 123,
+                "project_ids": [1],
+            },
+        }
+    )
+
+    response = admin_api.post(
+        "/rpc_execute/UnknownRPC/v1",
+        data=payload,
+        content_type="application/json",
+    )
+    assert response.status_code == 404
+    assert json.loads(response.data) == {
+        "error": "Unknown endpoint: UnknownRPC or version: v1"
+    }
+
+
+@pytest.mark.redis_db
+def test_execute_rpc_endpoint_invalid_payload(
+    admin_api: FlaskClient,
+    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]],
+) -> None:
+    MyRequest, TestRPC = rpc_test_setup
+
+    invalid_payload = json.dumps({"invalid": "data"})
+    response = admin_api.post(
+        "/rpc_execute/TestRPC/v1",
+        data=invalid_payload,
+        content_type="application/json",
+    )
+    assert response.status_code == 400
+    assert "error" in json.loads(response.data)
+
+
+@pytest.mark.redis_db
+def test_execute_rpc_endpoint_org_id_not_allowed(
+    admin_api: FlaskClient,
+    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]],
+) -> None:
+    MyRequest, TestRPC = rpc_test_setup
+
+    payload = json.dumps(
+        {
+            "message": "test_execute_rpc_endpoint_org_id_not_allowed",
+            "meta": {
+                "organization_id": 999999,
+                "project_ids": [1],
+            },
+        }
+    )
+
+    response = admin_api.post(
+        "/rpc_execute/TestRPC/v1",
+        data=payload,
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    response_data = json.loads(response.data)
+    assert "error" in response_data
+    assert "Organization ID 999999 is not allowed" in response_data["error"]
+
+
+@pytest.mark.redis_db
+def test_list_rpc_endpoints(admin_api: FlaskClient) -> None:
+    response = admin_api.get("/rpc_endpoints")
+    assert response.status_code == 200
+
+    endpoint_names = json.loads(response.data)
+    assert isinstance(endpoint_names, list)
+    assert len(endpoint_names) > 0
+
+    for endpoint in endpoint_names:
+        assert isinstance(endpoint, list)
+        assert len(endpoint) == 2
+        assert isinstance(endpoint[0], str)
+        assert isinstance(endpoint[1], str)
+
+    registered_endpoints = {tuple(name.split("__")) for name in RPCEndpoint.all_names()}
+    response_endpoints = set(tuple(endpoint) for endpoint in endpoint_names)
+    assert response_endpoints == registered_endpoints

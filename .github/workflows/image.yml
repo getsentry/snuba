@@ -4,66 +4,108 @@ on:
     branches: [master]
 jobs:
   build:
-    strategy:
-      matrix:
-        arch: [amd64, arm64]
+    outputs:
+      image_tag: ${{ steps.get_image_tag.outputs.image_tag }}
     runs-on: ubuntu-latest
-    env:
-      IMG_CACHE: ghcr.io/getsentry/snuba:${{ matrix.arch }}-latest
-      IMG_VERSIONED: ghcr.io/getsentry/snuba:${{ matrix.arch }}-${{ github.sha }}
-      SHOULD_BUILD_ADMIN_UI: ${{ matrix.arch == 'arm64' && 'false' || 'true' }}
-      NODE_VERSION: 19.x
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-node@v3
-      with:
-        node-version: ${{env.NODE_VERSION}}
-      if: matrix.arch == 'arm64'
-    - run: docker run --rm --privileged tonistiigi/binfmt --install arm64
-      if: matrix.arch == 'arm64'
-    - name: build admin UI
-      if: matrix.arch == 'arm64'
-      run: |
-        # allow copying the bundle to docker image
-        sed -i "s/snuba\/admin\/dist\/bundle.js\*//g" .dockerignore
-        # build bundle
-        cd snuba/admin
-        yarn install
-        yarn run build
+    - uses: actions/checkout@v4
+
+    - run: docker login --username '${{ github.actor }}' --password-stdin ghcr.io <<< "$GHCR_TOKEN"
+      env:
+        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - run: docker buildx create --driver docker-container --use
+
     - name: build
       run: |
         set -euxo pipefail
-        args=()
-        if docker pull -q "$IMG_CACHE"; then
-          args+=(--cache-from "$IMG_CACHE")
-        fi
-        docker buildx build \
-            "${args[@]}" \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --build-arg SHOULD_BUILD_ADMIN_UI="$SHOULD_BUILD_ADMIN_UI" \
-            --build-arg SHOULD_BUILD_RUST=false \
-            --platform linux/${{ matrix.arch }} \
-            --tag "$IMG_VERSIONED" \
-            --target application \
-            .
-        docker tag "$IMG_VERSIONED" "$IMG_CACHE"
-    - name: push
-      run: |
-        set -euxo pipefail
-        docker login --username '${{ github.actor }}' --password '${{ secrets.GITHUB_TOKEN }}' ghcr.io
-        docker push "$IMG_VERSIONED"
-        docker push "$IMG_CACHE"
-      if: github.event_name != 'pull_request'
 
-  multiarch:
-    if: github.event_name != 'pull_request'
-    needs: [build]
+        args=()
+
+        if [ ${{ github.event_name }} = 'push' ]; then
+          args+=(
+            --tag ghcr.io/getsentry/snuba:latest
+            --tag ghcr.io/getsentry/snuba:nightly
+            --tag ghcr.io/getsentry/snuba:amd64-latest
+            --cache-to type=registry,ref=ghcr.io/getsentry/snuba:buildcache,mode=max
+            --push
+          )
+        fi
+
+        if [ ${{ github.event.pull_request.head.repo.full_name }} = ${{ github.repository }} ]; then
+          # TODO: we should use github artifacts to send images between jobs, like in ci.yml
+          # otherwise third-party PRs will break
+          args+=(
+            --push
+          )
+        fi
+
+        docker buildx build \
+          --pull \
+          --platform linux/amd64 \
+          --cache-from type=registry,ref=ghcr.io/getsentry/snuba:buildcache \
+          --cache-from type=registry,ref=ghcr.io/getsentry/snuba:latest \
+          --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
+          --target application \
+          "${args[@]}" \
+          .
+
+    - id: get_image_tag
+      run: echo 'image_tag=ghcr.io/getsentry/snuba:${{ github.sha }}' >> "$GITHUB_OUTPUT"
+
+  publish-to-dockerhub:
+    needs: build
+    name: Publish Snuba to DockerHub
     runs-on: ubuntu-latest
     steps:
-    - run: |
-        set -euxo pipefail
-        docker login --username '${{ github.actor }}' --password '${{ secrets.GITHUB_TOKEN }}' ghcr.io
-        docker manifest create ghcr.io/getsentry/snuba:latest \
-          ghcr.io/getsentry/snuba:arm64-latest \
-          ghcr.io/getsentry/snuba:amd64-latest
-        docker manifest push ghcr.io/getsentry/snuba:latest
+      - uses: actions/checkout@v4 # v3.1.0
+      - name: Pull the test image
+        id: image_pull
+        env:
+          IMAGE_URL: ${{ needs.build.outputs.image_tag }}
+        shell: bash
+        run: |
+          docker pull "$IMAGE_URL"
+      - name: Get short SHA for docker tag
+        id: short_sha
+        shell: bash
+        run: |
+          SHORT_SHA=$(git rev-parse --short "$GITHUB_SHA")
+          if [[ -z "$SHORT_SHA" ]]; then
+            echo "Short SHA empty? Re-running rev-parse."
+            git rev-parse --short "$GITHUB_SHA"
+          else
+            echo "sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          fi
+      - name: Push built docker image
+        if: ${{ (github.ref_name == 'master') }}
+        shell: bash
+        env:
+          SHORT_SHA: ${{ steps.short_sha.outputs.sha }}
+          IMAGE_URL: ${{ needs.build.outputs.image_tag }}
+        run: |
+          # only login if the password is set
+          if [[ "${{ secrets.DOCKER_HUB_RW_TOKEN }}" ]]; then echo "${{ secrets.DOCKER_HUB_RW_TOKEN }}" | docker login --username=sentrybuilder --password-stdin; fi
+          # We push 3 tags to Dockerhub:
+          # first, the full sha of the commit
+          docker tag ${IMAGE_URL} getsentry/snuba:${GITHUB_SHA}
+          docker push getsentry/snuba:${GITHUB_SHA}
+          # second, the short sha of the commit
+          docker tag ${IMAGE_URL} getsentry/snuba:${SHORT_SHA}
+          docker push getsentry/snuba:${SHORT_SHA}
+          # finally, nightly
+          docker tag ${IMAGE_URL} getsentry/snuba:nightly
+          docker push getsentry/snuba:nightly
+
+  self-hosted-end-to-end:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Run Sentry self-hosted e2e CI
+        uses: getsentry/self-hosted@master
+        with:
+          project_name: snuba
+          image_url: ${{ needs.build.outputs.image_tag }}
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

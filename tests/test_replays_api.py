@@ -76,7 +76,9 @@ class TestReplaysApi(BaseApiTest):
 
         payload.pop("user")
         payload.pop("sdk")
-        payload["tags"].pop("transaction")
+        payload["tags"] = list(
+            filter(lambda tag: tag[0] != "transaction", payload["tags"])
+        )
         self.event["payload"] = list(json.dumps(payload).encode())  # type: ignore
 
         replays_storage = get_entity(EntityKey.REPLAYS).get_writable_storage()
@@ -107,7 +109,7 @@ class TestReplaysApi(BaseApiTest):
         assert data["data"] == [
             {
                 "title": None,
-                "user": None,
+                "user": "",
                 "sdk_name": "",
                 "sdk_version": "",
             }

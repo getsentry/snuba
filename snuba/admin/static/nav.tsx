@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { COLORS } from "./theme";
-import { NAV_ITEMS } from "./data";
-import Client from "./api_client";
+import { COLORS } from "SnubaAdmin/theme";
+import { NAV_ITEMS } from "SnubaAdmin/data";
+import Client from "SnubaAdmin/api_client";
 
 type NavProps = {
   active: string | null;
@@ -31,16 +31,16 @@ function Nav(props: NavProps) {
         {NAV_ITEMS.map((item) =>
           allowedTools?.includes(item.id) || allowedTools?.includes("all") ? (
             item.id === active ? (
-              <li key={item.id} style={{ color: COLORS.TEXT_DEFAULT }}>
-                <a className="nav-link-active" style={linkStyle}>
+              <li key={item.id} >
+                <a style={{ color: COLORS.TEXT_DEFAULT, ...linkStyle }} className="nav-link-active">
                   {item.display}
                 </a>
               </li>
             ) : (
-              <li key={item.id} style={{ color: COLORS.TEXT_INACTIVE }}>
+              <li key={item.id}>
                 <a
+                  style={{ color: COLORS.TEXT_INACTIVE, ...linkStyle }}
                   className="nav-link"
-                  style={linkStyle}
                   onClick={() => navigate(item.id)}
                 >
                   {item.display}
@@ -69,6 +69,7 @@ const ulStyle = {
 
 const linkStyle = {
   display: "block",
+  textDecoration: "none",
   cursor: "pointer",
   padding: 20,
 };

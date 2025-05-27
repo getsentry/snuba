@@ -1,30 +1,27 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any, List, Mapping, Optional, Sequence
 
-from snuba.clickhouse.columns import Column
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.clickhouse.columns import Column, ColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
-from snuba.datasets.plans.query_plan import (
-    ClickhouseQueryPlan,
-    ClickhouseQueryPlanBuilder,
-)
-from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
+from snuba.datasets.plans.entity_processing import EntityProcessingExecutor
 from snuba.datasets.storage import (
     EntityStorageConnection,
     Storage,
     WritableTableStorage,
 )
-from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import (
     ColumnValidationMode,
     EntityContainsColumnsValidator,
+    IllegalAggregateInConditionValidator,
     QueryValidator,
 )
 from snuba.utils.schemas import SchemaModifiers
@@ -50,7 +47,7 @@ class PluggableEntity(Entity):
     validators: Sequence[QueryValidator]
     required_time_column: Optional[str]
     storage_selector: QueryStorageSelector
-    validate_data_model: ColumnValidationMode = ColumnValidationMode.ERROR
+    validate_data_model: ColumnValidationMode | None = None
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
         default_factory=dict
@@ -65,15 +62,18 @@ class PluggableEntity(Entity):
         mappers = [s.translation_mappers for s in self.storages]
         return [
             EntityContainsColumnsValidator(
-                EntityColumnSet(self.columns), mappers, self.validate_data_model
-            )
+                ColumnSet(self.columns),
+                mappers,
+                self.validate_data_model or ColumnValidationMode.ERROR,
+            ),
+            IllegalAggregateInConditionValidator(),
         ]
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
 
-    def get_data_model(self) -> EntityColumnSet:
-        return EntityColumnSet(self.columns)
+    def get_data_model(self) -> ColumnSet:
+        return ColumnSet(self.columns)
 
     def get_join_relationship(self, relationship: str) -> Optional[JoinRelationship]:
         return self.join_relationships.get(relationship)
@@ -81,16 +81,17 @@ class PluggableEntity(Entity):
     def get_all_join_relationships(self) -> Mapping[str, JoinRelationship]:
         return self.join_relationships
 
-    def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
-        from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-
-        query_plan_builder: ClickhouseQueryPlanBuilder = StorageQueryPlanBuilder(
+    def get_processing_executor(self) -> EntityProcessingExecutor:
+        """
+        This method is used by the new pipeline. It creates a EntityProcessingExecutor object
+        which contains new methods that are responsible for apply everything related to entity processing.
+        """
+        query_plan_builder = EntityProcessingExecutor(
             storages=self.storages,
             selector=self.storage_selector,
             partition_key_column_name=self.partition_key_column_name,
         )
-
-        return SimplePipelineBuilder(query_plan_builder=query_plan_builder)
+        return query_plan_builder
 
     def get_all_storages(self) -> Sequence[Storage]:
         return [storage_connection.storage for storage_connection in self.storages]

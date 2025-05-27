@@ -12,22 +12,27 @@ RECORD_QUERIES = True
 SENTRY_DSN = os.getenv("SENTRY_DSN")
 
 SKIPPED_MIGRATION_GROUPS: Set[str] = set()
-SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
+SUPPORTED_STATES: Set[str] = {
+    "deprecate",
+    "limited",
+    "partial",
+    "complete",
+    "experimental",
+}
 ENABLE_DEV_FEATURES = True
 
 # Sometimes we want the raw structure of an expression
 # rather than the pretty formatted one. If you're debugging
 # something and you're at your wit's end, try setting this to False
 # to explore the unrefined Expression structure
-PRETTY_FORMAT_EXPRESSIONS = True
+PRETTY_FORMAT_EXPRESSIONS = os.environ.get("PRETTY_FORMAT_EXPRESSIONS", "1") == "1"
 
 # By default, allocation policies won't block requests from going through in a production
 # environment to not cause incidents unnecessarily. But if you're testing the policy, it
 # should fail on bad code
 RAISE_ON_ALLOCATION_POLICY_FAILURES = True
+RAISE_ON_ROUTING_STRATEGY_FAILURES = True
 RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = True
-
-ENFORCE_BYTES_SCANNED_WINDOW_POLICY = True
 
 # override replacer threshold to write to redis every time a replacement message is consumed
 REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 0  # ms
@@ -35,12 +40,8 @@ REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 0  # ms
 # Set enforce retention to true for tests
 ENFORCE_RETENTION = True
 
-# Ignore optimize job cut off time for tests
-OPTIMIZE_JOB_CUTOFF_TIME = 24
-
-OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 0
-
-ADMIN_ALLOWED_PROD_PROJECTS = [1]
+ADMIN_ALLOWED_PROD_PROJECTS = [1, 11276]
+ADMIN_ALLOWED_ORG_IDS = [123]
 
 REDIS_CLUSTERS = {
     key: {
@@ -61,5 +62,7 @@ REDIS_CLUSTERS = {
         (7, "dlq"),
         (8, "optimize"),
         (9, "admin_auth"),
+        (10, "manual_jobs"),
     ]
 }
+VALIDATE_DATASET_YAMLS_ON_STARTUP = True

@@ -19,3 +19,11 @@ coverage:
         # intitialization code doesn't need to be retried
         # and so that code is not executed during that test run
         threshold: 1%
+
+github_checks:
+  annotations: false
+
+ignore:
+  # This file is exercised by Rust testsuite, and we have no coverage for Rust
+  # (let alone coverage for the FFI contraption Rust + Python)
+  - "snuba/consumers/rust_processor.py"

@@ -1,0 +1,44 @@
+---
+source: src/processors/mod.rs
+description: "{\n  \"version\": 2,\n  \"use_case_id\": \"spans\",\n  \"org_id\": 1,\n  \"project_id\": 3,\n  \"metric_id\": 65562,\n  \"timestamp\": 1704614940,\n  \"sentry_received_timestamp\": 1704614940,\n  \"tags\": {\n    \"9223372036854776010\": \"production\",\n    \"9223372036854776017\": \"errored\",\n    \"65690\": \"metric_e2e_spans_set_v_VUW93LMS\"\n  },\n  \"retention_days\": 90,\n  \"mapping_meta\": {\n    \"h\": {\n      \"9223372036854776017\": \"session.status\",\n      \"9223372036854776010\": \"environment\"\n    },\n    \"f\": {\n      \"65690\": \"metric_e2e_spans_set_k_VUW93LMS\"\n    },\n    \"d\": {\n      \"65562\": \"s:spans/error@none\"\n    }\n  },\n  \"type\": \"s\",\n  \"value\": {\n    \"format\": \"base64\",\n    \"data\": \"AQAAAAcAAAA=\"\n  }\n}\n"
+expression: snapshot_payload
+---
+[
+  {
+    "granularities": [
+      1,
+      2,
+      3
+    ],
+    "materialization_version": 2,
+    "metric_id": 65562,
+    "metric_type": "set",
+    "min_retention_days": 90,
+    "org_id": 1,
+    "project_id": 3,
+    "record_meta": 1,
+    "retention_days": 90,
+    "set_values": [
+      1,
+      7
+    ],
+    "tags.indexed_value": [
+      0,
+      0,
+      0
+    ],
+    "tags.key": [
+      65690,
+      9223372036854776010,
+      9223372036854776017
+    ],
+    "tags.raw_value": [
+      "metric_e2e_spans_set_v_VUW93LMS",
+      "production",
+      "errored"
+    ],
+    "timeseries_id": 828906429,
+    "timestamp": 1704614940,
+    "use_case_id": "spans"
+  }
+]

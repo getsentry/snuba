@@ -13,9 +13,11 @@ class AuditLogAction(Enum):
     REVERSED_MIGRATION_COMPLETED = "reversed.migration.completed"
     RAN_MIGRATION_FAILED = "ran.migration.failed"
     REVERSED_MIGRATION_FAILED = "reversed.migration.failed"
+    FORCE_MIGRATION_OVERWRITE = "force.migration.overwrite"
     ALLOCATION_POLICY_UPDATE = "allocation_policy.update"
     ALLOCATION_POLICY_DELETE = "allocation_policy.delete"
     DLQ_REPLAY = "dlq.replay"
+    RAN_SUDO_SYSTEM_QUERY = "ran.sudo.system.query"
 
 
 RUNTIME_CONFIG_ACTIONS = [

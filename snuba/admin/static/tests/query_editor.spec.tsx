@@ -3,7 +3,9 @@ import { it, expect, describe, jest, afterEach } from "@jest/globals";
 import { act, cleanup, render } from "@testing-library/react";
 import { generateQuery, mergeQueryParamValues } from "../query_editor";
 import userEvent from "@testing-library/user-event";
-import QueryEditor from "../query_editor";
+import QueryEditor from "SnubaAdmin/query_editor";
+
+jest.mock("SnubaAdmin/common/components/sql_editor");
 
 describe("Query editor", () => {
   global.ResizeObserver = require("resize-observer-polyfill");
@@ -50,6 +52,11 @@ describe("Query editor", () => {
     });
   });
   describe("when rendered", () => {
+    beforeEach(() => {
+      // Reset query cache
+      localStorage.setItem("-query-editor-query", "");
+    });
+
     describe("with predefinedQueries", () => {
       const predefinedQueries = [
         {
@@ -63,36 +70,36 @@ describe("Query editor", () => {
           description: "descripton for query 2",
         },
       ];
-      it("should show right number of predefined queries in drop down menu", () => {
+      it("should show right number of predefined queries in drop down menu", async () => {
         let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
-        let { getAllByTestId } = render(
+        let { getAllByTestId, getByTestId } = render(
           <QueryEditor
             onQueryUpdate={mockOnQueryUpdate}
             predefinedQueryOptions={predefinedQueries}
           />
         );
+        await act(async () => userEvent.click(getByTestId("select")));
         expect(getAllByTestId("select-option")).toHaveLength(
-          predefinedQueries.length + 1
+          predefinedQueries.length
         );
       });
       it("should invoke callback when predefined query is selected", async () => {
-        const user = userEvent.setup();
         let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
-        let { getByTestId } = render(
+        let { getByTestId, getByText } = render(
           <QueryEditor
             onQueryUpdate={mockOnQueryUpdate}
             predefinedQueryOptions={predefinedQueries}
           />
         );
         for (const predefinedQuery of predefinedQueries) {
+          await act(async () => userEvent.click(getByTestId("select")));
           await act(async () =>
-            user.selectOptions(getByTestId("select"), predefinedQuery.name)
+            userEvent.click(getByText(predefinedQuery.name))
           );
           expect(mockOnQueryUpdate).lastCalledWith(predefinedQuery.sql);
         }
       });
       it("should show query and description when predefined query selected", async () => {
-        const user = userEvent.setup();
         let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
         let { getByTestId, getByText, getAllByText } = render(
           <QueryEditor
@@ -101,11 +108,11 @@ describe("Query editor", () => {
           />
         );
         for (const predefinedQuery of predefinedQueries) {
+          await act(async () => userEvent.click(getByTestId("select")));
           await act(async () =>
-            user.selectOptions(getByTestId("select"), predefinedQuery.name)
+            userEvent.click(getByText(predefinedQuery.name))
           );
           expect(getByText(predefinedQuery.description)).toBeTruthy();
-          expect(getAllByText(predefinedQuery.sql)).toHaveLength(2);
         }
       });
     });
@@ -117,7 +124,8 @@ describe("Query editor", () => {
           <QueryEditor onQueryUpdate={mockOnQueryUpdate} />
         );
         const input = "abcde";
-        await act(async () => user.type(getByTestId("text-area-input"), input));
+
+        await act(async () => user.type(getByTestId("SQLEditor"), input));
         expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(input);
       });
     });

@@ -2,7 +2,7 @@ import "@testing-library/react/dont-cleanup-after-each";
 import { it, expect, jest } from "@jest/globals";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import React from "react";
-import EditConfigModal from "../../capacity_management/edit_config_modal";
+import EditConfigModal from "SnubaAdmin/capacity_management/edit_config_modal";
 
 describe("Edit Config Modal", () => {
   afterAll(() => {

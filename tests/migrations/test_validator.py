@@ -418,6 +418,19 @@ def test_conflicts(mock_get_local_table_name: Mock, mock_get_cluster: Mock) -> N
 def test_parse_engine(mock_get_dist_connection: Mock) -> None:
     cluster = get_cluster(StorageSetKey.MIGRATIONS)
     connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+
+    def get_cluster_name() -> str:
+        """
+        It looks like ClickHouse changed the name of the test clusters
+        and starting on 23.8+ we only have the 'default' cluster
+        """
+        (version,) = connection.execute("SELECT version()").results[0]
+        if version >= "23.8":
+            return "default"
+        else:
+            return "test_shard_localhost"
+
+    cluster_name = get_cluster_name()
     database = connection.database
     mock_get_dist_connection.return_value = connection
 
@@ -432,14 +445,14 @@ def test_parse_engine(mock_get_dist_connection: Mock) -> None:
     )
     connection.execute(
         f"CREATE TABLE {database}.test_dist_table (id String)"
-        f"ENGINE = Distributed(test_shard_localhost, {database}, test_local_table)"
+        f"ENGINE = Distributed({cluster_name}, {database}, test_local_table)"
     )
     mock_sql_op = Mock(spec=SqlOperation)
     mock_dist_op = mock_sql_op()
 
     connection.execute(
         f"CREATE TABLE {database}.test_sharded_dist_table (id String)"
-        f"ENGINE = Distributed(test_shard_localhost, {database}, test_local_table, rand())"
+        f"ENGINE = Distributed({cluster_name}, {database}, test_local_table, rand())"
     )
 
     # test parsing the local table name from engine

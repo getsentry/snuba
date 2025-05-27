@@ -1,3 +1,4 @@
+import os
 from typing import Any, Dict, List, Optional, Union
 
 from snuba import settings
@@ -95,12 +96,13 @@ def build_context(
     user: str, timestamp: str, action: AuditLogAction
 ) -> Dict[str, Union[str, List[Dict[str, str]]]]:
     url = f"{settings.ADMIN_URL}/#auditlog"
+    environ = os.environ.get("SENTRY_ENVIRONMENT") or "unknown environment"
     return {
         "type": "context",
         "elements": [
             {
                 "type": "mrkdwn",
-                "text": f"{action.value} at *<{url}|{timestamp}>* by *<{user}>*",
+                "text": f"{action.value} at *<{url}|{timestamp}>* by *<{user}>* in *<{environ}>*",
             }
         ],
     }

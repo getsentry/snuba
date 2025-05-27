@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
-import { Table } from "../table";
-import Client from "../api_client";
+import { Table } from "SnubaAdmin/table";
+import Client from "SnubaAdmin/api_client";
 import {
   ConfigKey,
   ConfigValue,
@@ -10,8 +10,8 @@ import {
   ConfigDescriptions,
   RowData,
 } from "./types";
-import { getEditableRow, getReadonlyRow, getNewRow } from "./row_data";
-import { containerStyle, linkStyle, paragraphStyle } from "./styles";
+import { getEditableRow, getReadonlyRow, getNewRow } from "SnubaAdmin/runtime_config/row_data";
+import { containerStyle, linkStyle, paragraphStyle } from "SnubaAdmin/runtime_config/styles";
 
 function RuntimeConfig(props: { api: Client }) {
   const { api } = props;

@@ -16,6 +16,7 @@ schema:
     },
     { name: transaction_op, type: String },
     { name: transaction_status, type: UInt, args: { size: 8 } },
+    { name: time, type: DateTime },
     { name: start_ts, type: DateTime },
     { name: start_ms, type: UInt, args: { size: 16 } },
     { name: finish_ts, type: DateTime },
@@ -126,6 +127,7 @@ schema:
     },
     { name: app_start_type, type: String },
     { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
+    { name: profiler_id, type: UUID, args: { schema_modifiers: [nullable] } },
     { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
   ]
 
@@ -140,11 +142,7 @@ storages:
             [
               {
                 mapper: ColumnToIPAddress,
-                args:
-                  {
-                    from_table_name,
-                    from_col_name: "ip_address",
-                  },
+                args: { from_table_name, from_col_name: "ip_address" },
               },
               {
                 mapper: ColumnToNullIf,
@@ -296,7 +294,7 @@ storages:
                     to_function_name: "arrayJoin",
                     to_function_column: "tags.value",
                   },
-              }
+              },
             ],
           subscriptables:
             [
@@ -343,14 +341,11 @@ storages:
                   },
               },
             ],
-        }
-    }
+        },
+    },
   ]
 
-storage_selector:
-  {
-    selector: DefaultQueryStorageSelector
-  }
+storage_selector: { selector: DefaultQueryStorageSelector }
 
 query_processors:
   [
@@ -365,32 +360,23 @@ query_processors:
     { processor: BasicFunctionsProcessor },
     { processor: ApdexProcessor },
     { processor: FailureRateProcessor },
-    { processor: ReferrerRateLimiterProcessor },
     {
-      processor: ProjectReferrerRateLimiter,
-      args: { project_column: project_id },
+      processor: LowCardinalityProcessor,
+      args:
+        {
+          columns: [transaction_name, transaction_op, platform, environment, release, dist, sdk_name, http_method, type, app_start_type, transaction_source],
+        },
     },
-    {
-      processor: ProjectRateLimiterProcessor,
-      args: { project_column: project_id },
-    },
-    { processor: ResourceQuotaProcessor, args: { project_field: project_id } },
   ]
-
+validate_data_model: error
 validators:
   [
     {
       validator: EntityRequiredColumnValidator,
       args: { required_filter_columns: [project_id] },
     },
-    {
-      validator: TagConditionValidator,
-      args: {}
-    },
-    {
-      validator: DatetimeConditionValidator,
-      args: {}
-    },
+    { validator: TagConditionValidator, args: {} },
+    { validator: DatetimeConditionValidator, args: {} },
   ]
 
 required_time_column: finish_ts
@@ -402,7 +388,7 @@ subscription_validators:
         {
           max_allowed_aggregations: 1,
           disallowed_aggregations: [groupby, having, orderby],
-          required_time_column: finish_ts
+          required_time_column: finish_ts,
         },
     },
   ]

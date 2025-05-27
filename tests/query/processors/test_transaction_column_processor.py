@@ -1,6 +1,7 @@
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -10,7 +11,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 
 def test_event_id_column_format_expressions() -> None:
     unprocessed = Query(
-        Table("events", ColumnSet([])),
+        Table("events", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[
             SelectedExpression(
                 "transaction.duration", Column("transaction.duration", None, "duration")
@@ -21,7 +22,7 @@ def test_event_id_column_format_expressions() -> None:
         ],
     )
     expected = Query(
-        Table("events", ColumnSet([])),
+        Table("events", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[
             SelectedExpression(
                 "transaction.duration", Column("transaction.duration", None, "duration")

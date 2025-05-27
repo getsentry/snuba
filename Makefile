@@ -1,13 +1,19 @@
 .PHONY: develop setup-git test install-python-dependencies install-py-dev
 
-pyenv-setup:
-	@./scripts/pyenv_setup.sh
+apply-migrations:
+	snuba migrations migrate --force
+.PHONY: apply-migrations
 
-develop: install-python-dependencies setup-git
+reset-python:
+	pre-commit clean
+	rm -rf .venv
+.PHONY: reset-python
+
+develop: install-python-dependencies install-brew-dev install-rs-dev setup-git
 
 setup-git:
 	mkdir -p .git/hooks && cd .git/hooks && ln -sf ../../config/hooks/* ./
-	pip install 'pre-commit==2.18.1'
+	pip install 'pre-commit==3.6.0'
 	pre-commit install --install-hooks
 
 test:
@@ -36,15 +42,27 @@ api-tests:
 	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
 
 backend-typing:
-	mypy snuba tests scripts --strict --config-file mypy.ini --exclude 'tests/datasets|tests/query|tests/test_split.py'
+	mypy snuba tests scripts --strict --config-file mypy.ini --exclude 'tests/datasets|tests/query'
 
 install-python-dependencies:
 	pip uninstall -qqy uwsgi  # pip doesn't do well with swapping drop-ins
 	pip install `grep ^-- requirements.txt` -r requirements-build.txt
 	pip install `grep ^-- requirements.txt` -e .
 	pip install `grep ^-- requirements.txt` -r requirements-test.txt
+.PHONY: install-python-dependencies
+
+# install-rs-dev/install-py-dev mimick sentry's naming conventions
+install-rs-dev:
+	@which cargo || (echo "!!! You need an installation of Rust in order to develop snuba. Go to https://rustup.rs to get one." && exit 1)
+	. scripts/rust-envvars && cd rust_snuba/ && maturin develop
+.PHONY: install-rs-dev
 
 install-py-dev: install-python-dependencies
+.PHONY: install-py-dev
+
+install-brew-dev:
+	brew bundle
+.PHONY: install-brew-dev
 
 snubadocs:
 	pip install -U -r ./docs-requirements.txt
@@ -71,6 +89,7 @@ generate-config-docs:
 	python3 -m snuba.datasets.configuration.generate_config_docs
 
 watch-rust-snuba:
+	which cargo-watch || cargo install cargo-watch
 	. scripts/rust-envvars && \
 		cd rust_snuba/ && cargo watch -s 'maturin develop'
 .PHONY: watch-rust-snuba
@@ -84,6 +103,7 @@ test-rust:
 lint-rust:
 	. scripts/rust-envvars && \
 		cd rust_snuba && \
+		rustup component add clippy && \
 		cargo clippy --workspace --all-targets --no-deps -- -D warnings
 .PHONY: lint-rust
 

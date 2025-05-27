@@ -11,27 +11,35 @@ from snuba.clickhouse.columns import (
     UUID,
     AggregateFunction,
     Array,
+    Bool,
     ColumnType,
     Date,
     DateTime,
+    DateTime64,
     Enum,
     FixedString,
     Float,
+    Int,
     IPv4,
     IPv6,
+    Map,
+    SimpleAggregateFunction,
     String,
-    UInt,
 )
+from snuba.clickhouse.columns import Tuple as TupleCol
+from snuba.clickhouse.columns import UInt
 from snuba.migrations.columns import MigrationModifiers
 
 grammar = Grammar(
     r"""
-    type             = primitive / lowcardinality / agg / nullable / array
-    primitive        = basic_type / uint / float / fixedstring / enum
+    type             = primitive / lowcardinality / agg / simple_agg / nullable / array / map / tuple
+    # datetime64 needs to be before basic_type to not be parsed as DateTime
+    primitive        = datetime64 / basic_type / uint / int / float / fixedstring / enum
     # DateTime must come before Date
-    basic_type       = "DateTime" / "Date" / "IPv4" / "IPv6" / "String" / "UUID"
+    basic_type       = "DateTime" / "Date" / "IPv4" / "IPv6" / "String" / "UUID" / "Bool"
     uint             = "UInt" uint_size
-    uint_size        = "8" / "16" / "32" / "64"
+    int              = "Int" uint_size
+    uint_size        = "8" / "16" / "32" / "64" / "128"
     float            = "Float" float_size
     float_size       = "32" / "64"
     fixedstring      = "FixedString" open_paren space* fixedstring_size space* close_paren
@@ -43,9 +51,11 @@ grammar = Grammar(
     enum_str         = ~r"([a-zA-Z0-9\-]+)"
     enum_val         = ~r"\d+"
     agg              = "AggregateFunction" open_paren space* agg_func space* comma space* agg_types space* close_paren
+    simple_agg       = "SimpleAggregateFunction" open_paren space* agg_func space* comma space* agg_types space* close_paren
     agg_func         = ~r"[a-zA-Z0-9]+\([a-zA-Z0-9\,\.\s]+\)|[a-zA-Z0-9]+"
-    agg_types        = (primitive (space* comma space*)?)*
+    agg_types        = (type (space* comma space*)?)*
     array            = "Array" open_paren space* (array / primitive / lowcardinality / nullable) space* close_paren
+    map              = "Map" open_paren space* (map / primitive / lowcardinality) space* comma space* (map / primitive / lowcardinality / nullable) space* close_paren
     lowcardinality   = "LowCardinality" open_paren space* (primitive / nullable) space* close_paren
     nullable         = "Nullable" open_paren space* (primitive / basic_type) space* close_paren
     open_paren       = "("
@@ -54,6 +64,10 @@ grammar = Grammar(
     comma            = ","
     space            = " "
     quote            = "'"
+    datetime64              = "DateTime64" (open_paren datetime64_precision (comma space* quote datetime64_timezone quote)? close_paren)?
+    datetime64_precision    = "3" / "6" / "9"
+    datetime64_timezone     = ~r"[a-zA-Z0-9_/]+"
+    tuple            = "Tuple" open_paren space* (primitive / lowcardinality / nullable) (comma space* (primitive / lowcardinality / nullable))* space* close_paren
     """
 )
 
@@ -69,6 +83,7 @@ def merge_modifiers(
 
 
 _TYPES: dict[str, type[ColumnType[MigrationModifiers]]] = {
+    "Bool": Bool,
     "Date": Date,
     "DateTime": DateTime,
     "IPv4": IPv4,
@@ -89,6 +104,12 @@ class Visitor(NodeVisitor):  # type: ignore
     ) -> ColumnType[MigrationModifiers]:
         size = int(node.children[1].text)
         return UInt(size)
+
+    def visit_int(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> ColumnType[MigrationModifiers]:
+        size = int(node.children[1].text)
+        return Int(size)
 
     def visit_float(
         self, node: Node, visited_children: Iterable[Any]
@@ -142,6 +163,23 @@ class Visitor(NodeVisitor):  # type: ignore
         ) = visited_children
         return AggregateFunction(agg_func, [*agg_types])
 
+    def visit_simple_agg(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> SimpleAggregateFunction[MigrationModifiers]:
+        (
+            _agg,
+            _paren,
+            _sp,
+            agg_func,
+            _sp,
+            _comma,
+            _sp,
+            agg_types,
+            _sp,
+            _paren,
+        ) = visited_children
+        return SimpleAggregateFunction(agg_func, [*agg_types])
+
     def visit_agg_func(self, node: Node, visited_children: Iterable[Any]) -> str:
         return str(node.text)
 
@@ -176,6 +214,68 @@ class Visitor(NodeVisitor):  # type: ignore
     ) -> ColumnType[MigrationModifiers]:
         (_arr, _paren, _sp, inner_type, _sp, _paren) = visited_children
         return Array(inner_type)
+
+    def visit_map(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> ColumnType[MigrationModifiers]:
+        (
+            _map,
+            _paren,
+            _sp,
+            key_type,
+            _sp,
+            _comma,
+            _sp,
+            value_type,
+            _sp,
+            _paren,
+        ) = visited_children
+        return Map(key_type, value_type)
+
+    def visit_datetime64(
+        self, node: None, visited_children: Iterable[Any]
+    ) -> ColumnType[MigrationModifiers]:
+        (
+            _type,
+            precision_timezone_group,
+        ) = visited_children
+        if isinstance(precision_timezone_group, list) is False:
+            return DateTime64()
+        (
+            _parenthesis,
+            precision,
+            timezone_group,
+            _parenthesis,
+        ) = precision_timezone_group
+        if isinstance(timezone_group, list):
+            (_comma, _space, _quote, timezone, _quote) = timezone_group
+            timezone = timezone.text
+        else:
+            timezone = None
+        return DateTime64(precision=int(precision.text), timezone=timezone)
+
+    def visit_tuple(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> TupleCol[MigrationModifiers]:
+        (
+            _tup,
+            _paren,
+            _sp,
+            _type,
+            _additional_types,
+            _sp,
+            _paren,
+        ) = visited_children
+        types = [_type]
+        if isinstance(_additional_types, list):
+            for typ in _additional_types:
+                if isinstance(typ, list):
+                    types.append(typ[2])
+                elif isinstance(typ, ColumnType):
+                    types.append(typ)
+                else:
+                    continue
+        return TupleCol(types=tuple(types))
 
     def generic_visit(self, node: Node, visited_children: Iterable[Any]) -> Any:
         if isinstance(visited_children, list) and len(visited_children) == 1:

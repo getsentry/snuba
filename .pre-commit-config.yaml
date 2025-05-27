@@ -1,7 +1,8 @@
 exclude: >
     (?x)(
         ^snuba/admin/dist/|
-        ^snuba/admin/static/
+        ^snuba/admin/static/|
+        ^snuba/protobufs/
     )
 
 repos:
@@ -26,7 +27,6 @@ repos:
     rev: 4.0.1
     hooks:
       - id: flake8
-        language_version: python3.8
   - repo: https://github.com/pycqa/isort
     rev: 5.12.0
     hooks:
@@ -41,10 +41,19 @@ repos:
     hooks:
       - id: validate-configs-syntax
         name: validate-configs-syntax
-        entry: python3 -m snuba.validate_configs
+        entry: env SNUBA_SETTINGS=test python3 -m snuba.validate_configs
         language: python
         additional_dependencies: [ 'fastjsonschema', 'pyyaml', 'sentry_sdk' ]
         pass_filenames: false
         files: 'snuba/datasets/configuration/.*'
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: format rust code
+        language: system
+        # keep in sync with Cargo.toml. There is no way to run cargo fmt for specific files
+        # https://github.com/rust-lang/rustfmt/issues/4485
+        entry: rustfmt --edition 2021
+        files: ^rust_snuba/.*\.rs$
 default_language_version:
-  python: python3.8
+  python: python3.11

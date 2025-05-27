@@ -80,6 +80,7 @@ local saas_health_check(region) =
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
                 DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
                 LABEL_SELECTOR: 'service=snuba',
+                SENTRY_ENVIRONMENT: 'us',
               },
               elastic_profile_id: 'snuba',
               tasks: [
@@ -129,10 +130,14 @@ local deploy_canary_stage(region) =
               timeout: 1200,
               elastic_profile_id: 'snuba',
               environment_variables: {
+                SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
+                DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
+                DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
                 LABEL_SELECTOR: 'service=snuba,is_canary=true',
               },
               tasks: [
                 gocdtasks.script(importstr '../bash/deploy.sh'),
+                gocdtasks.script(importstr '../bash/canary-ddog-health-check.sh'),
               ],
             },
           },
@@ -163,7 +168,6 @@ function(region) {
               checks: {
                 jobs: {
                   checks: {
-                    timeout: 1800,
                     elastic_profile_id: 'snuba',
                     tasks: [
                       gocdtasks.script(importstr '../bash/check-github.sh'),

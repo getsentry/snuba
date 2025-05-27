@@ -1,8 +1,9 @@
 from typing import Optional, Sequence, TypeVar
 
+from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.join import (
     IndividualNode,
@@ -13,6 +14,7 @@ from snuba.query.data_source.join import (
 )
 from snuba.query.data_source.simple import Entity, SimpleDataSource, Table
 from snuba.query.expressions import Expression
+from snuba.query.logical import EntityQuery
 from snuba.query.logical import Query as LogicalQuery
 from tests.query.joins.equivalence_schema import (
     EVENTS_SCHEMA,
@@ -28,13 +30,17 @@ def build_node(
     from_clause: Entity,
     selected_columns: Sequence[SelectedExpression],
     condition: Optional[Expression],
+    granularity: Optional[int] = None,
 ) -> IndividualNode[Entity]:
     return IndividualNode(
         alias=alias,
-        data_source=LogicalQuery(
-            from_clause=from_clause,
-            selected_columns=selected_columns,
-            condition=condition,
+        data_source=EntityQuery.from_query(
+            LogicalQuery(  # type: ignore
+                from_clause=from_clause,
+                selected_columns=selected_columns,
+                condition=condition,
+                granularity=granularity,
+            )
         ),
     )
 
@@ -42,24 +48,28 @@ def build_node(
 def events_node(
     selected_columns: Sequence[SelectedExpression],
     condition: Optional[Expression] = None,
+    granularity: Optional[int] = None,
 ) -> IndividualNode[Entity]:
     return build_node(
         "ev",
-        Entity(EntityKey.EVENTS, EntityColumnSet(EVENTS_SCHEMA.columns)),
+        Entity(EntityKey.EVENTS, ColumnSet(EVENTS_SCHEMA.columns)),
         selected_columns,
         condition,
+        granularity,
     )
 
 
 def groups_node(
     selected_columns: Sequence[SelectedExpression],
     condition: Optional[Expression] = None,
+    granularity: Optional[int] = None,
 ) -> IndividualNode[Entity]:
     return build_node(
         "gr",
-        Entity(EntityKey.GROUPEDMESSAGE, EntityColumnSet(GROUPS_SCHEMA.columns)),
+        Entity(EntityKey.GROUPEDMESSAGE, ColumnSet(GROUPS_SCHEMA.columns)),
         selected_columns,
         condition,
+        granularity,
     )
 
 
@@ -88,7 +98,7 @@ def clickhouse_events_node(
 ) -> IndividualNode[Table]:
     return build_clickhouse_node(
         "ev",
-        Table("sentry_errors", EVENTS_SCHEMA),
+        Table("sentry_errors", EVENTS_SCHEMA, storage_key=StorageKey("dontmatter")),
         selected_columns,
         condition,
         groupby,
@@ -101,7 +111,9 @@ def clickhouse_groups_node(
 ) -> IndividualNode[Table]:
     return build_clickhouse_node(
         "gr",
-        Table("groupedmessage_local", GROUPS_SCHEMA),
+        Table(
+            "groupedmessage_local", GROUPS_SCHEMA, storage_key=StorageKey("dontmatter")
+        ),
         selected_columns,
         condition,
     )
@@ -113,7 +125,9 @@ def clickhouse_assignees_node(
 ) -> IndividualNode[Table]:
     return build_clickhouse_node(
         "as",
-        Table("groupassignee_local", GROUPS_ASSIGNEE),
+        Table(
+            "groupassignee_local", GROUPS_ASSIGNEE, storage_key=StorageKey("dontmatter")
+        ),
         selected_columns,
         condition,
     )

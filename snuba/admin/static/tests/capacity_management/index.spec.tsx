@@ -1,12 +1,34 @@
-import Client from "../../api_client";
+import Client from "SnubaAdmin/api_client";
 
-import CapacityManagement from "../../capacity_management/index";
+import CapacityManagement from "SnubaAdmin/capacity_management/index";
 import { it, expect, jest } from "@jest/globals";
-import { AllocationPolicy } from "../../capacity_management/types";
-import { act, fireEvent, render, waitFor } from "@testing-library/react";
+import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
+import {
+  act,
+  getByText,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import React from "react";
 
+function verifyRowContents(row: HTMLElement, texts: string[]) {
+  const cols = within(row).getAllByRole("cell");
+  expect(cols).toHaveLength(texts.length);
+  cols.forEach((col, i) => expect(getByText(col, texts[i])).toBeTruthy());
+}
+
+function verifyTableContents(table: HTMLElement, texts: string[][]) {
+  const rows = within(within(table).getAllByRole("rowgroup")[1]).getAllByRole(
+    "row"
+  );
+  expect(rows).toHaveLength(texts.length);
+  rows.forEach((row, i) => verifyRowContents(row, texts[i]));
+}
+
 it("should display allocation policy configs once a storage is selected", async () => {
+  global.ResizeObserver = require("resize-observer-polyfill");
   let storages = ["storage1", "storage2"];
   let allocationPolicies: AllocationPolicy[] = [
     {
@@ -21,6 +43,7 @@ it("should display allocation policy configs once a storage is selected", async 
         },
       ],
       optional_config_definitions: [],
+      query_type: "select",
     },
     {
       policy_name: "some_other_policy",
@@ -34,6 +57,7 @@ it("should display allocation policy configs once a storage is selected", async 
         },
       ],
       optional_config_definitions: [],
+      query_type: "select",
     },
   ];
 
@@ -47,7 +71,7 @@ it("should display allocation policy configs once a storage is selected", async 
       .mockResolvedValueOnce(allocationPolicies),
   };
 
-  let { getByRole, getByText } = render(
+  let { getAllByRole, getByText, getByTestId } = render(
     <CapacityManagement api={mockClient} />
   );
 
@@ -55,11 +79,9 @@ it("should display allocation policy configs once a storage is selected", async 
     expect(mockClient.getStoragesWithAllocationPolicies).toBeCalledTimes(1)
   );
 
-  expect(getByText("storage1")).toBeTruthy();
-  expect(getByText("storage2")).toBeTruthy();
-
   // select a storage
-  fireEvent.change(getByRole("combobox"), { target: { value: "storage1" } });
+  await act(async () => userEvent.click(getByTestId("select")));
+  await act(async () => userEvent.click(getByText("storage1")));
   await waitFor(() =>
     expect(mockClient.getAllocationPolicies).toBeCalledTimes(1)
   );
@@ -73,7 +95,6 @@ it("should display allocation policy configs once a storage is selected", async 
   expect(getByText("10")).toBeTruthy();
   expect(getByText("something")).toBeTruthy();
   expect(getByText("int")).toBeTruthy();
-  expect(getByText("N/A")).toBeTruthy();
 
   // second policy
   expect(getByText("some_other_policy")).toBeTruthy();
@@ -83,4 +104,18 @@ it("should display allocation policy configs once a storage is selected", async 
   expect(getByText("string")).toBeTruthy();
   expect(getByText("something_else")).toBeTruthy();
   expect(getByText('{"some_param":1}')).toBeTruthy();
+
+  const tables = getAllByRole("table");
+
+  expect(tables).toHaveLength(4);
+
+  const storage1GlobalPolicyTable = tables[0];
+  verifyTableContents(storage1GlobalPolicyTable, [
+    ["key1", "10", "something", "int", "edit"],
+  ]);
+
+  const storage2TenantPolicyTable = tables[3];
+  verifyTableContents(storage2TenantPolicyTable, [
+    ["key2", '{"some_param":1}', "a_value", "something_else", "string", "edit"],
+  ]);
 });

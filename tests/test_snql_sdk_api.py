@@ -95,41 +95,6 @@ class TestSDKSnQLApi(BaseApiTest):
             }
         ]
 
-    def test_sessions_query(self) -> None:
-        query = (
-            Query(Entity("sessions"))
-            .set_select([Column("project_id"), Column("release")])
-            .set_groupby([Column("project_id"), Column("release")])
-            .set_where(
-                [
-                    Condition(Column("project_id"), Op.IN, [self.project_id]),
-                    Condition(Column("org_id"), Op.EQ, self.org_id),
-                    Condition(
-                        Column("started"),
-                        Op.GTE,
-                        datetime(2021, 1, 1, 17, 5, 59, 554860),
-                    ),
-                    Condition(
-                        Column("started"), Op.LT, datetime(2022, 1, 1, 17, 6, 0, 554981)
-                    ),
-                ]
-            )
-            .set_orderby([OrderBy(Column("sessions"), Direction.DESC)])
-            .set_limit(100)
-        )
-
-        request = Request(
-            dataset="sessions",
-            query=query,
-            app_id="default",
-            tenant_ids={"referrer": "r", "organization_id": 123},
-        )
-        response = self.post("/sessions/snql", data=json.dumps(request.to_dict()))
-        data = json.loads(response.data)
-
-        assert response.status_code == 200
-        assert data["data"] == []
-
     def test_join_query(self) -> None:
         ev = Entity("events", "ev")
         gm = Entity("groupedmessage", "gm")

@@ -20,7 +20,7 @@ from urllib.parse import urlencode
 
 import rapidjson
 import sentry_sdk
-from urllib3.connectionpool import HTTPConnectionPool
+from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
 from urllib3.exceptions import HTTPError
 
 from snuba import settings, state
@@ -161,7 +161,7 @@ class HTTPWriteBatch:
     def __init__(
         self,
         executor: ThreadPoolExecutor,
-        pool: HTTPConnectionPool,
+        pool: HTTPConnectionPool | HTTPSConnectionPool,
         metrics: MetricsBackend,
         user: str,
         password: str,
@@ -293,14 +293,32 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         port: int,
         user: str,
         password: str,
+        secure: bool,
+        ca_certs: Optional[str],
+        verify: Optional[bool],
         metrics: MetricsBackend,
         statement: InsertStatement,
         encoding: Optional[str],
         options: Optional[Mapping[str, Any]] = None,
         chunk_size: Optional[int] = None,
         buffer_size: int = 0,
+        max_connections: int = 1,
+        block_connections: bool = False,
     ):
-        self.__pool = HTTPConnectionPool(host, port)
+        self.__pool: HTTPSConnectionPool | HTTPConnectionPool
+        if secure:
+            self.__pool = HTTPSConnectionPool(
+                host,
+                port,
+                ca_certs=ca_certs,
+                cert_reqs="REQUIRED" if verify else "CERT_NONE",
+                maxsize=max_connections,
+                block=block_connections,
+            )
+        else:
+            self.__pool = HTTPConnectionPool(
+                host, port, maxsize=max_connections, block=block_connections
+            )
         self.__executor = ThreadPoolExecutor()
         self.__metrics = metrics
 
@@ -349,7 +367,9 @@ class HTTPBatchWriter(BatchWriter[bytes]):
             batch.append(value)
 
         batch.close()
-        batch_join_timeout = state.get_config("http_batch_join_timeout", 10)
+        batch_join_timeout = state.get_config(
+            "http_batch_join_timeout", settings.BATCH_JOIN_TIMEOUT
+        )
         # IMPORTANT: Please read the docstring of this method if you ever decide to remove the
         # timeout argument from the join method.
         batch.join(timeout=batch_join_timeout)

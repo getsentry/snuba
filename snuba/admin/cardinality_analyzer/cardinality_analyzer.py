@@ -35,18 +35,28 @@ def run_metrics_query(query: str, user: str) -> ClickhouseResult:
         StorageKey("generic_metrics_distributions"),
         StorageKey("generic_metrics_sets"),
         StorageKey("generic_metrics_counters"),
+        StorageKey("generic_metrics_gauges"),
     }
     schemas = {get_storage(storage_key).get_schema() for storage_key in storage_keys}
     raw_tables = {
         "generic_metric_sets_raw_dist",
         "generic_metric_counters_raw_dist",
         "generic_metric_distributions_raw_dist",
+        "generic_metric_gauges_raw_dist",
     }
+    meta_tables = set()
+    for mtype in ["counters", "sets", "distributions", "gauges"]:
+        meta_tables.add(f"generic_metric_{mtype}_meta_aggregated_dist")
+        meta_tables.add(f"generic_metric_{mtype}_meta_tag_value_aggregated_dist")
+        meta_tables.add(f"generic_metric_{mtype}_meta_dist")
+        meta_tables.add(f"generic_metric_{mtype}_meta_tag_values_dist")
+
     validate_ro_query(
         sql_query=query,
         allowed_tables=(
             {cast(TableSchema, schema).get_table_name() for schema in schemas}
             | raw_tables
+            | meta_tables
         ),
     )
     return _stringify_result(__run_query(query))

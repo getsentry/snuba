@@ -1,15 +1,16 @@
-import os
+import re
 from typing import Optional, Sequence
 
 import click
 
-from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
-from snuba.clusters.storage_sets import StorageSetKey
+import snuba.migrations.autogeneration as autogeneration
+from snuba.clusters.cluster import CLUSTERS
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.environment import setup_logging
 from snuba.migrations.connect import (
     check_clickhouse_connections,
-    check_for_inactive_replicas,
+    get_clickhouse_clusters_for_migration_group,
+    get_clusters_for_readiness_states,
 )
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
@@ -30,12 +31,12 @@ def list() -> None:
     Lists migrations and their statuses
     """
     setup_logging()
-    check_clickhouse_connections()
+    check_clickhouse_connections(CLUSTERS)
     runner = Runner()
-    for group, group_migrations in runner.show_all():
+    for group, group_migrations in runner.show_all(include_nonexistent=True):
         readiness_state = get_group_readiness_state(group)
         click.echo(f"{group.value} (readiness_state: {readiness_state.value})")
-        for migration_id, status, blocking in group_migrations:
+        for migration_id, status, blocking, existing in group_migrations:
             symbol = {
                 Status.COMPLETED: "X",
                 Status.NOT_STARTED: " ",
@@ -48,7 +49,11 @@ def list() -> None:
             if status != Status.COMPLETED and blocking:
                 blocking_text = " (blocking)"
 
-            click.echo(f"[{symbol}]  {migration_id}{in_progress_text}{blocking_text}")
+            existing_text = "" if existing else " (this migration no longer exists)"
+
+            click.echo(
+                f"[{symbol}]  {migration_id}{in_progress_text}{blocking_text}{existing_text}"
+            )
 
         click.echo()
 
@@ -84,9 +89,20 @@ def migrate(
 
     Blocking migrations will not be run unless --force is passed.
     """
+
+    readiness_states = (
+        [ReadinessState(state) for state in readiness_state]
+        if readiness_state
+        else None
+    )
+
     setup_logging(log_level)
-    check_clickhouse_connections()
-    check_for_inactive_replicas()
+    clusters_to_check = (
+        get_clusters_for_readiness_states(readiness_states, CLUSTERS)
+        if readiness_states
+        else CLUSTERS
+    )
+    check_clickhouse_connections(clusters_to_check)
     runner = Runner()
 
     try:
@@ -101,17 +117,85 @@ def migrate(
             force=force,
             fake=fake,
             group=migration_group,
-            readiness_states=(
-                [ReadinessState(state) for state in readiness_state]
-                if readiness_state
-                else None
-            ),
+            readiness_states=readiness_states,
             check_dangerous=check_dangerous,
         )
     except MigrationError as e:
         raise click.ClickException(str(e))
 
     click.echo("Finished running migrations")
+
+
+@migrations.command()
+@click.option("-g", "--group", default=None)
+@click.option(
+    "-r",
+    "--readiness-state",
+    multiple=True,
+    type=click.Choice([r.value for r in ReadinessState], case_sensitive=False),
+    default=(),
+)
+@click.argument("through", default="all")
+@click.option("--force", is_flag=True)
+@click.option("--fake", is_flag=True)
+@click.option("--include-system", is_flag=True)
+@click.option(
+    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
+)
+def revert(
+    group: Optional[str],
+    readiness_state: Optional[Sequence[str]],
+    through: str,
+    force: bool,
+    fake: bool,
+    include_system: bool,
+    log_level: Optional[str] = None,
+) -> None:
+    """
+    If group is specified, reverse all the migrations for a group.
+    If no group is specified, reverses all migrations for all groups.
+        * by default SYSTEM migrations are NOT reversed
+        * use --include-system to also reverse SYSTEM migrations
+
+    --force is required
+    """
+
+    readiness_states = (
+        [ReadinessState(state) for state in readiness_state]
+        if readiness_state
+        else None
+    )
+
+    setup_logging(log_level)
+    clusters_to_check = (
+        get_clusters_for_readiness_states(readiness_states, CLUSTERS)
+        if readiness_states
+        else CLUSTERS
+    )
+    check_clickhouse_connections(clusters_to_check)
+    runner = Runner()
+
+    try:
+        if group:
+            migration_group = MigrationGroup(group)
+        elif through != "all":
+            raise click.ClickException(
+                "A migration group must be specified when 'through' is not 'all'."
+            )
+        else:
+            migration_group = None
+        runner.reverse_all(
+            through=through,
+            force=force,
+            fake=fake,
+            include_system=include_system,
+            group=migration_group,
+            readiness_states=readiness_states,
+        )
+    except MigrationError as e:
+        raise click.ClickException(str(e))
+
+    click.echo("Finished reversing migrations")
 
 
 @migrations.command()
@@ -143,12 +227,14 @@ def run(
     Migrations that are already in an in-progress or completed status will not be run.
     """
     setup_logging(log_level)
+    migration_group = MigrationGroup(group)
     if not dry_run:
-        check_clickhouse_connections()
-        check_for_inactive_replicas()
+        # just check the connection for the migration that's being run
+        check_clickhouse_connections(
+            get_clickhouse_clusters_for_migration_group(migration_group)
+        )
 
     runner = Runner()
-    migration_group = MigrationGroup(group)
     migration_key = MigrationKey(migration_group, migration_id)
 
     if dry_run:
@@ -197,12 +283,13 @@ def reverse(
     --force is required to reverse an already completed migration.
     --fake marks a migration as reversed without doing anything.
     """
+    migration_group = MigrationGroup(group)
     setup_logging(log_level)
     if not dry_run:
-        check_clickhouse_connections()
-        check_for_inactive_replicas()
+        check_clickhouse_connections(
+            get_clickhouse_clusters_for_migration_group(migration_group)
+        )
     runner = Runner()
-    migration_group = MigrationGroup(group)
     migration_key = MigrationKey(migration_group, migration_id)
 
     if dry_run:
@@ -245,12 +332,15 @@ def reverse_in_progress(
     --fake marks migrations as reversed without doing anything.
     """
     setup_logging(log_level)
-    if not dry_run:
-        check_clickhouse_connections()
-        check_for_inactive_replicas()
-    runner = Runner()
-
     migration_group = MigrationGroup(group) if group else None
+    if not dry_run:
+        clusters_to_check = (
+            CLUSTERS
+            if not migration_group
+            else get_clickhouse_clusters_for_migration_group(migration_group)
+        )
+        check_clickhouse_connections(clusters_to_check)
+    runner = Runner()
 
     if dry_run:
         runner.reverse_in_progress(group=migration_group, dry_run=True)
@@ -270,78 +360,29 @@ def reverse_in_progress(
 
 
 @migrations.command()
-@click.option(
-    "--type", "node_type", type=click.Choice(["local", "dist"]), required=True
-)
-@click.option(
-    "--storage-set",
-    "storage_set_names",
-    type=click.Choice([s.value for s in StorageSetKey]),
-    required=True,
-    multiple=True,
-)
-@click.option(
-    "--host-name",
-    type=str,
-    required=True,
-    default=os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
-)
-@click.option(
-    "--port",
-    type=int,
-    required=True,
-    default=int(os.environ.get("CLICKHOUSE_PORT", 9000)),
-)
-@click.option(
-    "--database",
-    type=str,
-    required=True,
-    default=os.environ.get("CLICKHOUSE_DATABASE", "default"),
-)
-def add_node(
-    node_type: str,
-    storage_set_names: Sequence[str],
-    host_name: str,
-    port: int,
-    database: str,
-) -> None:
+@click.argument("storage_path", type=str)
+@click.option("--name", type=str, help="optional name for the migration")
+def generate(storage_path: str, name: Optional[str] = None) -> None:
     """
-    Runs all migrations on a brand new ClickHouse node. This should be performed
-    before a new node is added to an existing ClickHouse cluster.
+    Given a path to user-modified storage.yaml definition (inside snuba/datasets/configuration/*/storages/*.yaml),
+    and an optional name for the migration,
+    generates a snuba migration based on the schema modifications to the storage.yaml.
 
-    All of the SQL operations for the provided storage sets will be run. Any non
-    SQL (Python) operations will be skipped.
+    Currently only column addition is supported.
 
-    This operation does not change the migration status in the migrations_local
-    / migrations_dist tables, since it is designed to bring a new node up to
-    the same state as existing ones already added to the cluster.
+    The migration is generated based on the diff between HEAD and working dir. Therefore modifications to the
+    storage should be uncommitted in the working dir.
+
+    The generated migration will be written into the local directory. The user is responsible for making
+    the commit, PR, and merging.
+
+    see MIGRATIONS.md in the root folder for more info
     """
-    user = os.environ.get("CLICKHOUSE_USER", "default")
-    password = os.environ.get("CLICKHOUSE_PASSWORD", "")
+    expected_pattern = r"(.+/)?snuba/datasets/configuration/.*/storages/.*\.(yml|yaml)"
+    if not re.fullmatch(expected_pattern, storage_path):
+        raise click.ClickException(
+            f"Storage path {storage_path} does not match expected pattern {expected_pattern}"
+        )
 
-    storage_set_keys = [StorageSetKey(name) for name in storage_set_names]
-
-    cluster = next(
-        (
-            c
-            for c in CLUSTERS
-            if all(ss in c.get_storage_set_keys() for ss in storage_set_keys)
-        ),
-        None,
-    )
-
-    if not cluster:
-        raise click.ClickException("Storage sets should be in the same cluster")
-
-    if cluster.is_single_node():
-        raise click.ClickException("You cannot add a node to a single node cluster")
-
-    Runner.add_node(
-        node_type=ClickhouseNodeType(node_type),
-        storage_sets=storage_set_keys,
-        host_name=host_name,
-        port=port,
-        user=user,
-        password=password,
-        database=database,
-    )
+    path = autogeneration.generate(storage_path, migration_name=name)
+    click.echo(f"Migration successfully generated at {path}")

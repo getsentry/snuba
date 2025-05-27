@@ -1,21 +1,32 @@
-import RuntimeConfig from "./runtime_config";
-import AuditLog from "./runtime_config/auditlog";
-import ClickhouseMigrations from "./clickhouse_migrations";
-import ClickhouseQueries from "./clickhouse_queries";
-import TracingQueries from "./tracing";
-import SnQLToSQL from "./snql_to_sql";
-import Kafka from "./kafka";
-import QuerylogQueries from "./querylog";
-import CapacityManagement from "./capacity_management";
-import DeadLetterQueue from "./dead_letter_queue";
-import CardinalityAnalyzer from "./cardinality_analyzer";
-import ProductionQueries from "./production_queries";
-import SnubaExplain from "./snuba_explain";
-import Welcome from "./welcome";
+import RuntimeConfig from "SnubaAdmin/runtime_config";
+import AutoReplacementsBypassProjects from "SnubaAdmin/auto_replacements_bypass_projects";
+import AuditLog from "SnubaAdmin/runtime_config/auditlog";
+import ClickhouseMigrations from "SnubaAdmin/clickhouse_migrations";
+import ClickhouseQueries from "SnubaAdmin/clickhouse_queries";
+import TracingQueries from "SnubaAdmin/tracing";
+import SnQLToSQL from "SnubaAdmin/snql_to_sql";
+import Kafka from "SnubaAdmin/kafka";
+import QuerylogQueries from "SnubaAdmin/querylog";
+import CapacityManagement from "SnubaAdmin/capacity_management";
+import DeadLetterQueue from "SnubaAdmin/dead_letter_queue";
+import CardinalityAnalyzer from "SnubaAdmin/cardinality_analyzer";
+import ProductionQueries from "SnubaAdmin/production_queries";
+import MQLQueries from "SnubaAdmin/mql_queries";
+import SnubaExplain from "SnubaAdmin/snuba_explain";
+import Welcome from "SnubaAdmin/welcome";
+import DeleteTool from "SnubaAdmin/delete_tool";
+import ViewCustomJobs from "SnubaAdmin/manual_jobs";
+import DatabaseClusters from "./database_clusters";
+import RpcEndpoints from "SnubaAdmin/rpc_endpoints";
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
   { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
+  {
+    id: "auto-replacements-bypass-projects",
+    display: "👻 Replacements",
+    component: AutoReplacementsBypassProjects,
+  },
   {
     id: "capacity-management",
     display: "🪫 Capacity Management",
@@ -32,7 +43,7 @@ const NAV_ITEMS = [
     component: SnubaExplain,
   },
   {
-    id: "clickhouse",
+    id: "system-queries",
     display: "🏚️ System Queries",
     component: ClickhouseQueries,
   },
@@ -45,6 +56,11 @@ const NAV_ITEMS = [
     id: "tracing",
     display: "🔎 ClickHouse Tracing",
     component: TracingQueries,
+  },
+  {
+    id: "rpc-endpoints",
+    display: "🔌 RPC Endpoints",
+    component: RpcEndpoints,
   },
   {
     id: "querylog",
@@ -75,6 +91,26 @@ const NAV_ITEMS = [
     id: "production-queries",
     display: "🔦 Production Queries",
     component: ProductionQueries,
+  },
+  {
+    id: "mql-queries",
+    display: "🎨 MQL Queries",
+    component: MQLQueries,
+  },
+  {
+    id: "delete-tool",
+    display: "🗑️ Delete Tool",
+    component: DeleteTool,
+  },
+  {
+    id: "run-custom-jobs",
+    display: "▶️ View/Run Custom Jobs",
+    component: ViewCustomJobs,
+  },
+  {
+    id: "database-clusters",
+    display: "🗂️ Database Clusters",
+    component: DatabaseClusters,
   },
 ];
 

@@ -3,6 +3,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Mapping, Optional
 
+import pytest
+
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.profiles_processor import ProfilesMessageProcessor
 from snuba.processor import InsertBatch
@@ -80,7 +82,9 @@ class TestProfilesProcessor:
         payload = message.serialize()
         del payload["profile_id"]
         processor = ProfilesMessageProcessor()
-        assert processor.process_message(payload, meta) is None
+
+        with pytest.raises(Exception):
+            processor.process_message(payload, meta)
 
     def test_valid_message(self) -> None:
         meta = KafkaMessageMetadata(
@@ -116,6 +120,6 @@ class TestProfilesProcessor:
             message.serialize(),
             meta,
         ) == InsertBatch(
-            [message.build_result(meta)],
-            datetime.utcfromtimestamp(message.received),
+            rows=[message.build_result(meta)],
+            origin_timestamp=None,
         )

@@ -2,7 +2,7 @@ from typing import cast
 
 import pytest
 
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import override_entity_map, reset_entity_factory
 from snuba.query import SelectedExpression
@@ -40,14 +40,12 @@ from tests.query.joins.join_structures import (
 BASIC_JOIN = JoinClause(
     left_node=IndividualNode(
         alias="ev",
-        data_source=Entity(
-            EntityKey.EVENTS, EntityColumnSet(EVENTS_SCHEMA.columns), None
-        ),
+        data_source=Entity(EntityKey.EVENTS, ColumnSet(EVENTS_SCHEMA.columns), None),
     ),
     right_node=IndividualNode(
         alias="gr",
         data_source=Entity(
-            EntityKey.GROUPEDMESSAGE, EntityColumnSet(GROUPS_SCHEMA.columns), None
+            EntityKey.GROUPEDMESSAGE, ColumnSet(GROUPS_SCHEMA.columns), None
         ),
     ),
     keys=[
@@ -363,6 +361,7 @@ TEST_CASES = [
                     Literal(None, "sometime"),
                 ),
             ),
+            granularity=123,
         ),
         CompositeQuery(
             from_clause=events_groups_join(
@@ -387,10 +386,12 @@ TEST_CASES = [
                                 (Column("_snuba_project_id", None, "project_id"),),
                             ),
                         ),
-                    ]
+                    ],
+                    granularity=123,
                 ),
                 groups_node(
                     [SelectedExpression("_snuba_id", Column("_snuba_id", None, "id"))],
+                    granularity=123,
                 ),
             ),
             selected_columns=[
@@ -418,8 +419,9 @@ TEST_CASES = [
                     Literal(None, "sometime"),
                 ),
             ),
+            granularity=123,
         ),
-        id="Query with group by, aggregation and having clause",
+        id="Query with granularity, group by, aggregation and having clause",
     ),
     pytest.param(
         CompositeQuery(

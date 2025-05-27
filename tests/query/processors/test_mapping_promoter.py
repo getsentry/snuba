@@ -4,6 +4,7 @@ from snuba.clickhouse.columns import ColumnSet, Nested
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -16,12 +17,13 @@ columns = ColumnSet(
         ("tags", Nested([("key", String()), ("value", String())])),
     ]
 )
+TABLE = Table("events", columns, storage_key=StorageKey("events"))
 
 test_cases = [
     (
         "not promoted",
         ClickhouseQuery(
-            Table("events", columns),
+            TABLE,
             selected_columns=[
                 SelectedExpression(
                     "tags[foo]",
@@ -44,7 +46,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            Table("events", columns),
+            TABLE,
             selected_columns=[
                 SelectedExpression(
                     "tags[foo]",
@@ -70,7 +72,7 @@ test_cases = [
     (
         "replaced with promoted col",
         ClickhouseQuery(
-            Table("events", columns),
+            TABLE,
             selected_columns=[
                 SelectedExpression(
                     "tags[promoted_tag]",
@@ -93,7 +95,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            Table("events", columns),
+            TABLE,
             selected_columns=[
                 SelectedExpression(
                     "tags[promoted_tag]",

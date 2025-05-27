@@ -25,6 +25,13 @@ CAPMAN_HASH = "capman"
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
 MAX_THREADS = "max_threads"
+NO_UNITS = "no_units"
+NO_SUGGESTION = "no_suggestion"
+CROSS_ORG_SUGGESTION = "cross org queries do not have limits"
+PASS_THROUGH_REFERRERS_SUGGESTION = (
+    "subscriptions currently do not undergo rate limiting in any way"
+)
+MAX_THRESHOLD = int(1e12)
 
 
 @dataclass(frozen=True)
@@ -95,15 +102,21 @@ class QuotaAllowance:
     # policy, this dictionary should contain some information
     # about what caused that action. Not currently well typed
     # because I don't know what exactly should go in it yet
-    explanation: dict[str, Any]
+    explanation: dict[str, JsonSerializable]
+    is_throttled: bool
+    throttle_threshold: int
+    rejection_threshold: int
+    quota_used: int
+    quota_unit: str
+    suggestion: str
+
+    # sets this value:
+    # https://clickhouse.com/docs/operations/settings/settings#max_bytes_to_read
+    # 0 means unlimited
+    max_bytes_to_read: int = field(default=0)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
-    def __lt__(self, other: QuotaAllowance) -> bool:
-        if self.can_run and not other.can_run:
-            return False
-        return self.max_threads < other.max_threads
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, QuotaAllowance):
@@ -111,58 +124,67 @@ class QuotaAllowance:
         return (
             self.can_run == other.can_run
             and self.max_threads == other.max_threads
+            and self.max_bytes_to_read == other.max_bytes_to_read
             and self.explanation == other.explanation
+            and self.is_throttled == other.is_throttled
+            and self.throttle_threshold == other.throttle_threshold
+            and self.rejection_threshold == other.rejection_threshold
+            and self.quota_used == other.quota_used
+            and self.quota_unit == other.quota_unit
+            and self.suggestion == other.suggestion
         )
 
 
-class AllocationPolicyViolation(SerializableException):
+class InvalidTenantsForAllocationPolicy(SerializableException):
+    """Individual policies can raise this exception if they are given invalid tenant_ids."""
+
     @classmethod
     def from_args(
-        cls, tenant_ids: dict[str, str | int], quota_allowance: QuotaAllowance
-    ) -> "AllocationPolicyViolation":
+        cls,
+        tenant_ids: dict[str, str | int],
+        policy_name: str,
+        description: str | None = None,
+    ) -> "InvalidTenantsForAllocationPolicy":
         return cls(
-            "Allocation policy violated",
+            description or "Invalid tenants for allocation policy",
             tenant_ids=tenant_ids,
-            quota_allowance=quota_allowance.to_dict(),
+            policy_name=policy_name,
         )
-
-    @property
-    def quota_allowance(self) -> dict[str, JsonSerializable]:
-        return cast(
-            "dict[str, JsonSerializable]", self.extra_data.get("quota_allowance", {})
-        )
-
-    @property
-    def explanation(self) -> dict[str, JsonSerializable]:
-        return self.extra_data.get("quota_allowance", {}).get("explanation", {})  # type: ignore
-
-    def __str__(self) -> str:
-        return f"{self.message}, explanation: {self.explanation}"
 
 
 class AllocationPolicyViolations(SerializableException):
     """
-    An exception class which is used to collect multiple AllocationPolicyViolation
-    exceptions and raise them at once, useful for storages with multiple policies
-    defined on them.
-
-    Do not manually raise this exception! Use AllocationPolicyViolation instead within
-    your Allocation Policies for when a violation occurs and this exception will be
-    raised containing your raised exceptions at the end.
+    An exception class which is used to communicate that the query cannot be run because
+    at least one policy of many said no
     """
 
-    def __init__(
-        self,
-        message: str | None = None,
-        violations: dict[str, AllocationPolicyViolation] = field(default_factory=dict),
-        should_report: bool = True,
-        **extra_data: JsonSerializable,
-    ) -> None:
-        self.violations = violations
-        super().__init__(message, should_report, **extra_data)
-
     def __str__(self) -> str:
-        return str({k: str(v) for k, v in self.violations.items()})
+        return f"{self.message}, info: {{'details': {self.violations}, 'summary': {self.summary}}}"
+
+    @property
+    def violations(self) -> dict[str, dict[str, Any]]:
+        details = cast(dict[str, Any], self.quota_allowance.get("details"))
+        return {k: v for k, v in details.items() if v["can_run"] == False}
+
+    @property
+    def quota_allowance(self) -> dict[str, dict[str, Any]]:
+        return cast(
+            dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {})
+        )
+
+    @property
+    def summary(self) -> dict[str, Any]:
+        return self.quota_allowance.get("summary", {})
+
+    @classmethod
+    def from_args(
+        cls,
+        quota_allowances: dict[str, Any],
+    ) -> "AllocationPolicyViolations":
+        return cls(
+            "Query on could not be run due to allocation policies",
+            quota_allowances=quota_allowances,
+        )
 
 
 class AllocationPolicy(ABC, metaclass=RegisteredClass):
@@ -340,11 +362,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     * Because allocation policies are attached to query objects, they have to be pickleable. Don't put non-pickleable members onto the allocation policy
     * At time of writing (29-03-2023), not all allocation policy decisions are made in the allocation policy,
-        rate limiters are still applied in the query pipeline, those should be moved into an allocation policy as they
+        table rate limiters are still applied in the query pipeline, those should be moved into an allocation policy as they
         are also policy decisions
-    * get_quota_allowance will throw an AllocationPolicyViolation if _get_quota_allowance().can_run is false.
-        this is to keep with the pattern in `db_query.py` which communicates error states with exceptions. There is no other
-        reason. For more information see snuba.web.db_query.db_query
     * Every allocation policy takes a `storage_key` in its init. The storage_key is like a pseudo-tenant. In different
         environments, storages may be co-located on the same cluster. To facilitate resource sharing, every allocation policy
         knows which storage_key it is serving. This is used to create unique keys for saving the config values.
@@ -352,6 +371,16 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     * Reiterating that you should no longer use `snuba.state.{get,set}_config()` for runtime configs for a specific Policy. Refer to the Configurations
         section of this docstring for more info.
     """
+
+    # This component builds redis strings that are delimited by dots, commas, colons
+    # in order to allow those characters to exist in config we replace them with their
+    # counterparts on write/read. It may be better to just replace our serialization with JSON
+    # instead of what we're doing but this is where we're at rn 1/10/24
+    __KEY_DELIMITERS_TO_ESCAPE_SEQUENCES = {
+        ".": "__dot_literal__",
+        ",": "__comma_literal__",
+        ":": "__colon_literal__",
+    }
 
     def __init__(
         self,
@@ -404,14 +433,14 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     @property
     def is_active(self) -> bool:
-        return bool(self.get_config_value(IS_ACTIVE))
+        return (
+            bool(self.get_config_value(IS_ACTIVE))
+            and settings.ALLOCATION_POLICY_ENABLED
+        )
 
     @property
     def is_enforced(self) -> bool:
-        return (
-            bool(self.get_config_value(IS_ENFORCED))
-            and settings.ENFORCE_BYTES_SCANNED_WINDOW_POLICY
-        )
+        return bool(self.get_config_value(IS_ENFORCED))
 
     @property
     def max_threads(self) -> int:
@@ -599,7 +628,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         """
         parameters = "."
         for param in sorted(list(params.keys())):
-            parameters += f"{param}:{params[param]},"
+            param_sanitized = self.__escape_delimiter_chars(param)
+            value_sanitized = self.__escape_delimiter_chars(params[param])
+            parameters += f"{param_sanitized}:{value_sanitized},"
         parameters = parameters[:-1]
         return f"{self.runtime_config_prefix}.{config}{parameters}"
 
@@ -625,11 +656,35 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             params_split = params_string.split(",")
             for param_string in params_split:
                 param_key, param_value = param_string.split(":")
+                param_key = self.__unescape_delimiter_chars(param_key)
+                param_value = self.__unescape_delimiter_chars(param_value)
                 params_dict[param_key] = param_value
 
         self.__validate_config_params(config_key=config_key, params=params_dict)
 
         return config_key, params_dict
+
+    def __escape_delimiter_chars(self, key: str) -> str:
+        if not isinstance(key, str):
+            return key
+        for (
+            delimiter_char,
+            escape_sequence,
+        ) in self.__KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
+            if escape_sequence in str(key):
+                raise InvalidPolicyConfig(
+                    f"{escape_sequence} is not a valid string for a policy config"
+                )
+            key = key.replace(delimiter_char, escape_sequence)
+        return key
+
+    def __unescape_delimiter_chars(self, key: str) -> str:
+        for (
+            delimiter_char,
+            escape_sequence,
+        ) in self.__KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
+            key = key.replace(escape_sequence, delimiter_char)
+        return key
 
     def __validate_config_params(
         self, config_key: str, params: dict[str, Any], value: Any = None
@@ -699,9 +754,31 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     ) -> QuotaAllowance:
         try:
             if not self.is_active:
-                allowance = QuotaAllowance(True, self.max_threads, {})
+                allowance = QuotaAllowance(
+                    can_run=True,
+                    max_threads=self.max_threads,
+                    explanation={},
+                    is_throttled=False,
+                    throttle_threshold=MAX_THRESHOLD,
+                    rejection_threshold=MAX_THRESHOLD,
+                    quota_used=0,
+                    quota_unit=NO_UNITS,
+                    suggestion=NO_SUGGESTION,
+                )
             else:
                 allowance = self._get_quota_allowance(tenant_ids, query_id)
+        except InvalidTenantsForAllocationPolicy as e:
+            allowance = QuotaAllowance(
+                can_run=False,
+                max_threads=0,
+                explanation=cast(dict[str, Any], e.to_dict()),
+                is_throttled=False,
+                throttle_threshold=0,
+                rejection_threshold=0,
+                quota_used=0,
+                quota_unit=NO_UNITS,
+                suggestion=NO_SUGGESTION,
+            )
         except Exception:
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
@@ -714,8 +791,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 "db_request_rejected",
                 tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
             )
-            if self.is_enforced:
-                raise AllocationPolicyViolation.from_args(tenant_ids, allowance)
         elif allowance.max_threads < self.max_threads:
             # NOTE: The elif is very intentional here. Don't count the throttling
             # if the request was rejected.
@@ -727,7 +802,19 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 },
             )
         if not self.is_enforced:
-            return QuotaAllowance(True, self.max_threads, {})
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=self.max_threads,
+                explanation={},
+                is_throttled=allowance.is_throttled,
+                throttle_threshold=allowance.throttle_threshold,
+                rejection_threshold=allowance.rejection_threshold,
+                quota_used=allowance.quota_used,
+                quota_unit=allowance.quota_unit,
+                suggestion=allowance.suggestion,
+            )
+        # make sure we always know which storage key we rejected a query from
+        allowance.explanation["storage_key"] = str(self._storage_key)
         return allowance
 
     @abstractmethod
@@ -746,8 +833,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             if not self.is_active:
                 return
             return self._update_quota_balance(tenant_ids, query_id, result_or_error)
+        except InvalidTenantsForAllocationPolicy:
+            # the policy did not do anything because the tenants were invalid, updating is also not necessary
+            pass
         except Exception:
-            # FIXME: Remove this
             logger.exception(
                 "Allocation policy failed to update quota balance, this is a bug, fix it"
             )
@@ -763,6 +852,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     ) -> None:
         pass
 
+    @property
+    def storage_key(self) -> StorageKey:
+        return self._storage_key
+
 
 class PassthroughPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
@@ -772,7 +865,15 @@ class PassthroughPolicy(AllocationPolicy):
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
         return QuotaAllowance(
-            can_run=True, max_threads=self.max_threads, explanation={}
+            can_run=True,
+            max_threads=self.max_threads,
+            explanation={},
+            is_throttled=False,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
         )
 
     def _update_quota_balance(

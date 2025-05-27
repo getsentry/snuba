@@ -11,7 +11,11 @@ class MetricsBackend(ABC):
 
     @abstractmethod
     def increment(
-        self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None
+        self,
+        name: str,
+        value: Union[int, float] = 1,
+        tags: Optional[Tags] = None,
+        unit: Optional[str] = None,
     ) -> None:
         """
         Increment a counter metric. These increments can also be
@@ -27,7 +31,11 @@ class MetricsBackend(ABC):
 
     @abstractmethod
     def gauge(
-        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
+        self,
+        name: str,
+        value: Union[int, float],
+        tags: Optional[Tags] = None,
+        unit: Optional[str] = None,
     ) -> None:
         """
         Emit a metric that is the authoritative value for a quantity at a point in time
@@ -40,7 +48,11 @@ class MetricsBackend(ABC):
 
     @abstractmethod
     def timing(
-        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
+        self,
+        name: str,
+        value: Union[int, float],
+        tags: Optional[Tags] = None,
+        unit: Optional[str] = None,
     ) -> None:
         """
         Emit a metric for the timing performance of an operation.
@@ -48,6 +60,23 @@ class MetricsBackend(ABC):
         Example:
 
         metrics.timing("request.latency", request_latency_in_ms)
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def distribution(
+        self,
+        name: str,
+        value: Union[int, float],
+        tags: Optional[Tags] = None,
+        unit: Optional[str] = None,
+    ) -> None:
+        """
+        Emit a metric for the performance of an operation.
+
+        Example:
+
+        metrics.distribution("request.size", request_size_in_bytes)
         """
         raise NotImplementedError
 

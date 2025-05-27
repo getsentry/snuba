@@ -8,10 +8,13 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     CAPMAN_HASH,
     DEFAULT_PASSTHROUGH_POLICY,
+    MAX_THRESHOLD,
+    NO_SUGGESTION,
+    NO_UNITS,
     AllocationPolicy,
     AllocationPolicyConfig,
-    AllocationPolicyViolation,
     InvalidPolicyConfig,
+    InvalidTenantsForAllocationPolicy,
     PassthroughPolicy,
     QueryResultOrError,
     QuotaAllowance,
@@ -60,21 +63,34 @@ class RejectingEverythingAllocationPolicy(PassthroughPolicy):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        return QuotaAllowance(can_run=False, max_threads=10, explanation={})
+        return QuotaAllowance(
+            can_run=False,
+            max_threads=0,
+            explanation={},
+            is_throttled=True,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
 
 
 class ThrottleEverythingAllocationPolicy(PassthroughPolicy):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        return QuotaAllowance(can_run=True, max_threads=1, explanation={})
-
-
-def test_raises_on_false_can_run() -> None:
-    with pytest.raises(AllocationPolicyViolation):
-        RejectingEverythingAllocationPolicy(
-            StorageKey("something"), [], default_config_overrides={}
-        ).get_quota_allowance({}, query_id="deadbeef")
+        return QuotaAllowance(
+            can_run=True,
+            max_threads=1,
+            explanation={},
+            is_throttled=True,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
 
 
 class BadlyWrittenAllocationPolicy(PassthroughPolicy):
@@ -90,6 +106,23 @@ class BadlyWrittenAllocationPolicy(PassthroughPolicy):
         result_or_error: QueryResultOrError,
     ) -> None:
         raise ValueError("you messed up AGAIN")
+
+
+class InvalidTenantAllocationPolicy(PassthroughPolicy):
+    def _get_quota_allowance(self, tenant_ids: dict[str, str | int], query_id: str):
+        raise InvalidTenantsForAllocationPolicy.from_args(
+            tenant_ids, self.__class__.__name__
+        )
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ):
+        raise InvalidTenantsForAllocationPolicy.from_args(
+            tenant_ids, self.__class__.__name__
+        )
 
 
 def test_passes_through_on_error() -> None:
@@ -114,6 +147,14 @@ def test_passes_through_on_error() -> None:
         ).update_quota_balance(
             None, None, None  # type: ignore
         )
+
+        assert (
+            not InvalidTenantAllocationPolicy(StorageKey("Something"), [], {})
+            .get_quota_allowance({"some": "tenant"}, "12345")
+            .can_run
+        )
+
+        InvalidTenantAllocationPolicy(StorageKey("Something"), [], {}).update_quota_balance({"some": "tenant"}, "12345", None)  # type: ignore
 
 
 @pytest.mark.redis_db
@@ -462,8 +503,8 @@ def test_is_not_enforced() -> None:
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    with pytest.raises(AllocationPolicyViolation):
-        reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
+    quota_allowance = reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
     reject_policy.set_config_value(config_key="is_enforced", value=0)
     # policy not enforced so we don't reject the query
@@ -496,3 +537,28 @@ def test_is_not_enforced() -> None:
     )
     assert throttled_metrics[0].tags["is_enforced"] == "True"
     assert throttled_metrics[1].tags["is_enforced"] == "False"
+
+
+@pytest.mark.redis_db
+def test_configs_with_delimiter_values() -> None:
+    # test that configs with dots can be stored and read
+    policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
+    policy.set_config_value("my_param_config", 5, {"ref": "a,::.b.c", "org": 1})
+    configs = policy.get_current_configs()
+    print(configs)
+    assert {
+        "name": "my_param_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "value": 5,
+        "params": {"org": 1, "ref": "a,::.b.c"},
+    } in configs
+
+
+def test_cannot_use_escape_sequences() -> None:
+    policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
+    with pytest.raises(InvalidPolicyConfig):
+        policy.set_config_value(
+            "my_param_config", 5, {"ref": "a__dot_literal__.b.c", "org": 1}
+        )

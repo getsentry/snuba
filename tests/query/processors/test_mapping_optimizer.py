@@ -80,7 +80,7 @@ TEST_CASES = [
             "has",
             (
                 column("_tags_hash_map", True),
-                FunctionCall(None, "cityHash64", (Literal(None, "my\=t\\\\ag=a"),)),
+                FunctionCall(None, "cityHash64", (Literal(None, "my\\=t\\\\ag=a"),)),
             ),
         ),
         id="Optimizable simple escaped condition",
@@ -277,6 +277,108 @@ TEST_CASES = [
         ),
         nested_condition("tags", "my_tag", ConditionFunctions.EQ, "a"),
         id="Non optimizable having",
+    ),
+    pytest.param(
+        build_query(
+            selected_columns=[column("event_id")],
+            condition=binary_condition(
+                ConditionFunctions.IN,
+                nested_expression("tags", "my_tag"),
+                FunctionCall(
+                    None,
+                    "tuple",
+                    (
+                        Literal(None, "a"),
+                        Literal(None, "b"),
+                        Literal(None, "c"),
+                    ),
+                ),
+            ),
+        ),
+        FunctionCall(
+            None,
+            "hasAny",
+            (
+                column("_tags_hash_map", True),
+                FunctionCall(
+                    None,
+                    "array",
+                    (
+                        FunctionCall(None, "cityHash64", (Literal(None, "my_tag=a"),)),
+                        FunctionCall(None, "cityHash64", (Literal(None, "my_tag=b"),)),
+                        FunctionCall(None, "cityHash64", (Literal(None, "my_tag=c"),)),
+                    ),
+                ),
+            ),
+        ),
+        id="Optimizable IN condition using tuple",
+    ),
+    pytest.param(
+        build_query(
+            selected_columns=[column("event_id")],
+            condition=binary_condition(
+                ConditionFunctions.IN,
+                nested_expression("tags", "my_tag"),
+                FunctionCall(
+                    None,
+                    "array",
+                    (
+                        Literal(None, "a"),
+                        Literal(None, "b"),
+                        Literal(None, "c"),
+                    ),
+                ),
+            ),
+        ),
+        FunctionCall(
+            None,
+            "hasAny",
+            (
+                column("_tags_hash_map", True),
+                FunctionCall(
+                    None,
+                    "array",
+                    (
+                        FunctionCall(None, "cityHash64", (Literal(None, "my_tag=a"),)),
+                        FunctionCall(None, "cityHash64", (Literal(None, "my_tag=b"),)),
+                        FunctionCall(None, "cityHash64", (Literal(None, "my_tag=c"),)),
+                    ),
+                ),
+            ),
+        ),
+        id="Optimizable IN condition using array",
+    ),
+    pytest.param(
+        build_query(
+            selected_columns=[column("event_id")],
+            condition=binary_condition(
+                ConditionFunctions.IN,
+                nested_expression("tags", "my_tag"),
+                FunctionCall(
+                    None,
+                    "array",
+                    (
+                        Literal(None, "a"),
+                        Literal(None, "b"),
+                        Literal(None, ""),
+                    ),
+                ),
+            ),
+        ),
+        binary_condition(
+            ConditionFunctions.IN,
+            nested_expression("tags", "my_tag"),
+            FunctionCall(
+                None,
+                "array",
+                (
+                    Literal(None, "a"),
+                    Literal(None, "b"),
+                    Literal(None, ""),
+                ),
+            ),
+        ),
+        id="Non optimizable IN condition with empty value",
     ),
 ]
 

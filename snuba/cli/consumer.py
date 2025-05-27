@@ -101,7 +101,7 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "--auto-offset-reset",
-    default="error",
+    default="earliest",
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
@@ -136,7 +136,7 @@ logger = logging.getLogger(__name__)
     "--output-block-size",
     type=int,
 )
-@click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=5)
+@click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=10)
 @click.option(
     "--enforce-schema",
     type=bool,
@@ -153,6 +153,12 @@ logger = logging.getLogger(__name__)
     default=30000,
 )
 @click.option(
+    "--quantized-rebalance-consumer-group-delay-secs",
+    type=int,
+    default=None,
+    help="The time to delay before a consumer will start rebalancing ",
+)
+@click.option(
     "--health-check-file",
     default=None,
     type=str,
@@ -163,12 +169,6 @@ logger = logging.getLogger(__name__)
     type=str,
     default=None,
     help="Kafka group instance id. passing a value here will run kafka with static membership.",
-)
-@click.option(
-    "--skip-write/--no-skip-write",
-    "skip_write",
-    help="Skip the write to clickhouse",
-    default=False,
 )
 def consumer(
     *,
@@ -197,11 +197,10 @@ def consumer(
     log_level: Optional[str],
     profile_path: Optional[str],
     max_poll_interval_ms: int,
+    quantized_rebalance_consumer_group_delay_secs: Optional[int],
     health_check_file: Optional[str],
     group_instance_id: Optional[str],
-    skip_write: bool,
 ) -> None:
-
     setup_logging(log_level)
     setup_sentry()
 
@@ -226,6 +225,9 @@ def consumer(
     if slice_id:
         metrics_tags["slice_id"] = str(slice_id)
 
+    for key, value in metrics_tags.items():
+        sentry_sdk.set_tag(key, value)
+
     metrics = MetricsWrapper(environment.metrics, "consumer", tags=metrics_tags)
     configure_metrics(StreamMetricsAdapter(metrics))
 
@@ -241,6 +243,7 @@ def consumer(
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
         group_instance_id=group_instance_id,
+        quantized_rebalance_consumer_group_delay_secs=quantized_rebalance_consumer_group_delay_secs,
     )
 
     consumer_builder = ConsumerBuilder(
@@ -262,6 +265,7 @@ def consumer(
         max_insert_batch_size=max_insert_batch_size,
         max_insert_batch_time_ms=max_insert_batch_time_ms,
         metrics=metrics,
+        metrics_tags=metrics_tags,
         profile_path=profile_path,
         slice_id=slice_id,
         join_timeout=join_timeout,
@@ -269,7 +273,6 @@ def consumer(
         health_check_file=health_check_file,
         enforce_schema=enforce_schema,
         group_instance_id=group_instance_id,
-        skip_write=skip_write,
     )
 
     consumer = consumer_builder.build_base_consumer()

@@ -3,10 +3,11 @@ kind: entity
 name: discover
 schema:
   [
-    { name: event_id, type: FixedString, args: { length: 32 }},
+    { name: event_id, type: FixedString, args: { length: 32 } },
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: type, type: String, args: { schema_modifiers: [nullable] } },
     { name: timestamp, type: DateTime },
+    { name: time, type: DateTime },
     { name: platform, type: String, args: { schema_modifiers: [nullable] } },
     { name: environment, type: String, args: { schema_modifiers: [nullable] } },
     { name: release, type: String, args: { schema_modifiers: [nullable] } },
@@ -254,11 +255,8 @@ schema:
       type: String,
       args: { schema_modifiers: [nullable] },
     },
-    {
-      name: profile_id,
-      type: UUID,
-      args: { schema_modifiers: [nullable] },
-    },
+    { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
+    { name: profiler_id, type: UUID, args: { schema_modifiers: [nullable] } },
     {
       name: replay_id,
       type: UUID,
@@ -267,13 +265,18 @@ schema:
     {
       name: trace_sampled,
       type: UInt,
-      args: { schema_modifiers: [ nullable ], size: 8 },
+      args: { schema_modifiers: [nullable], size: 8 },
     },
     {
       name: num_processing_errors,
       type: UInt,
-      args: { schema_modifiers: [ nullable ], size: 64 },
+      args: { schema_modifiers: [nullable], size: 64 },
     },
+    {
+        name: timestamp_ms,
+        type: DateTime64,
+        args: { schema_modifiers: [nullable], precision: 3 },
+      },
   ]
 required_time_column: timestamp
 storages:
@@ -300,6 +303,7 @@ storages:
               - group_ids
               - app_start_type
               - profile_id
+              - profiler_id
         - mapper: ColumnToLiteral
           args:
             from_table_name: null
@@ -451,16 +455,25 @@ query_processors:
       time_parse_columns:
         - timestamp
   - processor: BasicFunctionsProcessor
-  - processor: ReferrerRateLimiterProcessor
-  - processor: ProjectReferrerRateLimiter
+  - processor: LowCardinalityProcessor
     args:
-      project_column: project_id
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
-  - processor: ResourceQuotaProcessor
-    args:
-      project_field: project_id
+      columns:
+        - transaction_name
+        - transaction_op
+        - platform
+        - environment
+        - release
+        - dist
+        - sdk_name
+        - http_method
+        - type
+        - app_start_type
+        - transaction_source
+        - version
+        - tags[environment]
+
+
+validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator
     args:

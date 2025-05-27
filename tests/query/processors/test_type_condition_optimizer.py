@@ -1,6 +1,7 @@
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -20,7 +21,7 @@ def test_type_condition_optimizer() -> None:
     )
 
     unprocessed_query = Query(
-        Table("errors", ColumnSet([])),
+        Table("errors", ColumnSet([]), storage_key=StorageKey("errors")),
         condition=binary_condition(
             BooleanFunctions.AND,
             binary_condition(
@@ -32,7 +33,7 @@ def test_type_condition_optimizer() -> None:
         ),
     )
     expected_query = Query(
-        Table("errors", ColumnSet([])),
+        Table("errors", ColumnSet([]), storage_key=StorageKey("errors")),
         condition=binary_condition(BooleanFunctions.AND, Literal(None, 1), cond1),
     )
     TypeConditionOptimizer().process_query(unprocessed_query, HTTPQuerySettings())

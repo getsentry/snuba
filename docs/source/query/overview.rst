@@ -9,7 +9,7 @@ Exploring the Snuba data model
 ==============================
 
 In order to architect a Snuba query, the first step is being able to
-know which Dataset you should query, which Entities you should select
+know which Dataset you should query, which Entities you should select,
 and what the schema of each Entity is.
 
 For an introduction about Datasets and Entities, see the :doc:`/architecture/datamodel`
@@ -70,8 +70,8 @@ Would return::
 Which provides the list of columns with their type and the relationships to
 other entities defined in the data model.
 
-Preparing a query for Snuba
-===========================
+Preparing a SnQL query for Snuba
+================================
 
 Snuba query language is called SnQL. It is documented in the :doc:`/language/snql`
 section. So this section does not go into details.
@@ -99,9 +99,64 @@ The query is represented as a ``Query`` object like::
         granularity=Granularity(3600),
     )
 
+For simpler datasets, there may not exist an entity. In this case, we can
+query the storage directly like::
+
+    query = Query(
+        dataset="profiles",
+        match=Storage("profile_chunks"),
+        select=[
+            Column("chunk_id"),
+        ],
+        where=[
+            Condition(Column("start_timestamp"), Op.GT, datetime.datetime(2021, 1, 1)),
+            Condition(Column("end_timestamp"), Op.LT, datetime.datetime(2021, 1, 2)),
+            Condition(Column("project_id"), Op.IN, Function("tuple", [1, 2, 3])),
+        ],
+        limit=Limit(10),
+        offset=Offset(0),
+    )
+
 More details on how to build a query are in the sdk documentation.
 
 Once the query object is ready it can be sent to Snuba.
+
+Preparing a MQL query for Snuba
+===============================
+
+Snuba metrics query language is called MQL. It is documented in the :doc:`/language/mql`
+section. So this section does not go into details.
+
+Similar to SnQL, there is a python sdk that can be used to build queries
+
+The metrics query is represented as a ``MetricsQuery`` object like::
+
+    query = MetricsQuery(
+        query=Formula(
+            ArithmeticOperator.DIVIDE.value,
+            [
+                Timeseries(
+                    metric=Metric(
+                        public_name="transaction.duration",
+                    ),
+                    aggregate="sum",
+                ),
+                1000,
+            ],
+        ),
+        start=NOW,
+        end=NOW + timedelta(days=14),
+        rollup=Rollup(interval=3600, totals=None, granularity=3600),
+        scope=MetricsScope(
+            org_ids=[1], project_ids=[11], use_case_id="transactions"
+        ),
+        limit=Limit(100),
+        offset=Offset(5),
+    )
+
+More details on how to build a query are in the sdk documentation.
+
+Once the query object is ready it can be sent to Snuba the same wasy as SnQL.
 
 Sending a query to Snuba with Sentry
 ====================================

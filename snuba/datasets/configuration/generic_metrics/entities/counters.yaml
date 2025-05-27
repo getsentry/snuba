@@ -9,6 +9,8 @@ schema:
     { name: metric_id, type: UInt, args: { size: 64 } },
     { name: timestamp, type: DateTime },
     { name: bucketed_time, type: DateTime },
+    { name: granularity, type: UInt, args: { size: 8 } },
+    { name: use_case_id, type: String },
     {
       name: tags,
       type: Nested,
@@ -22,7 +24,17 @@ schema:
         },
     },
     {
+      name: tags.raw_value,
+      type: Array,
+      args: { schema_modifiers: [readonly], inner_type: { type: String } },
+    },
+    {
       name: value,
+      type: AggregateFunction,
+      args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
+    },
+    {
+      name: value_weighted,
       type: AggregateFunction,
       args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
     },
@@ -40,6 +52,12 @@ storages:
           args:
             from_name: sumIf
             to_name: sumMergeIf
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: sum_weighted
+            to_name: sumMerge
+            aggr_col_name: value_weighted
       subscriptables:
         - mapper: SubscriptableMapper
           args:
@@ -103,19 +121,6 @@ query_processors:
       time_group_columns:
         bucketed_time: timestamp
       time_parse_columns: [timestamp]
-  - processor: ReferrerRateLimiterProcessor
-  - processor: OrganizationRateLimiterProcessor
-    args:
-      org_column: org_id
-  - processor: ProjectReferrerRateLimiter
-    args:
-      project_column: project_id
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
-  - processor: ResourceQuotaProcessor
-    args:
-      project_field: project_id
 
 validators:
   - validator: EntityRequiredColumnValidator

@@ -17,6 +17,7 @@ from snuba.query.conditions import (
     in_condition,
 )
 from snuba.query.data_source.simple import Entity
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -38,7 +39,7 @@ TESTS = [
                 "GRANULARITY 60"
             ),
             "parent_api": "<unknown>",
-            "tenant_ids": {"organization_id": 1, "referrer": "test"},
+            "tenant_ids": {"organization_id": 1, "referrer": "my_request"},
         },
         binary_condition(
             BooleanFunctions.AND,
@@ -116,11 +117,10 @@ TENANT_ID_TESTS = [
                 "LIMIT 1000 "
                 "GRANULARITY 60"
             ),
-            "tenant_ids": {"organization_id": 1, "referrer": "test"},
+            "tenant_ids": {"organization_id": 1, "referrer": "my_request"},
         },
-        {"organization_id": 1, "referrer": "test", "project_id": 1},
+        {"organization_id": 1, "referrer": "my_request", "project_id": 1},
         "my_request",
-        0,
         id="one project id in query",
     ),
     pytest.param(
@@ -138,8 +138,7 @@ TENANT_ID_TESTS = [
             "tenant_ids": {"organization_id": 1, "referrer": "test"},
         },
         {"organization_id": 1, "referrer": "test"},
-        "my_request",
-        0,
+        "test",
         id="multiple projects, no project tenant",
     ),
     pytest.param(
@@ -158,7 +157,6 @@ TENANT_ID_TESTS = [
         },
         {"organization_id": 1, "referrer": "test"},
         "test",
-        1,
         id="only use tenant_id referrer in request",
     ),
 ]
@@ -166,19 +164,17 @@ TENANT_ID_TESTS = [
 
 @pytest.mark.redis_db
 @pytest.mark.parametrize(
-    "request_payload, expected_tenant_ids, expected_referrer, only_use_tenant_id_referrer",
+    "request_payload, expected_tenant_ids, expected_referrer",
     TENANT_ID_TESTS,
 )
 def test_tenant_ids(
     request_payload: dict[str, Any],
     expected_tenant_ids: dict[str, Any],
     expected_referrer: str,
-    only_use_tenant_id_referrer: bool,
 ) -> None:
     dataset = get_dataset("events")
     schema = RequestSchema.build(HTTPQuerySettings)
 
-    state.set_config("only_use_tenant_id_referrer", only_use_tenant_id_referrer)
     request = build_request(
         request_payload,
         parse_snql_query,
@@ -190,3 +186,21 @@ def test_tenant_ids(
     )
     assert request.referrer == expected_referrer
     assert request.attribution_info.tenant_ids == expected_tenant_ids
+
+
+@pytest.mark.redis_db
+def test_disabled_dataset() -> None:
+    state.set_config("snql_disabled_dataset__events", True)
+    dataset = get_dataset("events")
+    schema = RequestSchema.build(HTTPQuerySettings)
+
+    with pytest.raises(InvalidQueryException):
+        build_request(
+            {},
+            parse_snql_query,
+            HTTPQuerySettings,
+            schema,
+            dataset,
+            Timer("test"),
+            "my_request",
+        )

@@ -1,10 +1,17 @@
 import React, { useState } from "react";
-import Client from "../api_client";
-import { Collapse } from "../collapse";
-import { CSV } from "./CSV";
-import QueryEditor from "../query_editor";
+import Client from "SnubaAdmin/api_client";
+import { Collapse } from "SnubaAdmin/collapse";
+import { CSV } from "SnubaAdmin/cardinality_analyzer/CSV";
+import QueryEditor from "SnubaAdmin/query_editor";
+import ExecuteButton from "SnubaAdmin/utils/execute_button";
+import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 
-import { CardinalityQueryRequest, CardinalityQueryResult, PredefinedQuery } from "./types";
+import {
+  CardinalityQueryRequest,
+  CardinalityQueryResult,
+  PredefinedQuery,
+} from "SnubaAdmin/cardinality_analyzer/types";
+import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 
 enum ClipboardFormats {
   CSV = "csv",
@@ -12,13 +19,16 @@ enum ClipboardFormats {
 }
 type QueryState = Partial<CardinalityQueryRequest>;
 
+const HISTORY_KEY = "cardinality_analyzer";
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: CardinalityQueryResult) => JSX.Element;
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [query, setQuery] = useState<QueryState>({});
-  const [queryResultHistory, setCardinalityQueryResultHistory] = useState<CardinalityQueryResult[]>([]);
+  const [queryResultHistory, setCardinalityQueryResultHistory] = useState<
+    CardinalityQueryResult[]
+  >(getRecentHistory(HISTORY_KEY));
 
   function updateQuerySql(sql: string) {
     setQuery((prevQuery) => {
@@ -29,35 +39,21 @@ function QueryDisplay(props: {
     });
   }
 
-  function executeQuery() {
-    props.api
-      .executeCardinalityQuery(query as CardinalityQueryRequest)
-      .then((result) => {
-        result.input_query = query.sql || "<Input Query>";
-        setCardinalityQueryResultHistory((prevHistory) => [result, ...prevHistory]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.error.message);
-      });
-  }
-
   function convertResultsToCSV(queryResult: CardinalityQueryResult) {
     return CSV.sheet([queryResult.column_names, ...queryResult.rows]);
   }
 
-  function copyText(queryResult: CardinalityQueryResult, format: ClipboardFormats) {
-    let formatter: (input: CardinalityQueryResult) => string = (s) => s.toString();
-
-    if (format === ClipboardFormats.JSON) {
-      formatter = JSON.stringify;
-    }
-
-    if (format === ClipboardFormats.CSV) {
-      formatter = convertResultsToCSV;
-    }
-
-    window.navigator.clipboard.writeText(formatter(queryResult));
+  function executeQuery() {
+    return props.api
+      .executeCardinalityQuery(query as CardinalityQueryRequest)
+      .then((result) => {
+        result.input_query = query.sql || "<Input Query>";
+        setRecentHistory(HISTORY_KEY, result);
+        setCardinalityQueryResultHistory((prevHistory) => [
+          result,
+          ...prevHistory,
+        ]);
+      });
   }
 
   return (
@@ -70,18 +66,7 @@ function QueryDisplay(props: {
         predefinedQueryOptions={props.predefinedQueryOptions}
       />
       <div style={executeActionsStyle}>
-        <div>
-          <button
-            onClick={(evt) => {
-              evt.preventDefault();
-              executeQuery();
-            }}
-            style={executeButtonStyle}
-            disabled={!query.sql}
-          >
-            Execute Query
-          </button>
-        </div>
+        <ExecuteButton onClick={executeQuery} disabled={!query.sql} />
       </div>
       <div>
         <h2>Query results</h2>
@@ -90,16 +75,10 @@ function QueryDisplay(props: {
             return (
               <div key={idx}>
                 <p>{queryResult.input_query}</p>
-                <p>
-                  <button style={executeButtonStyle} onClick={() => copyText(queryResult, ClipboardFormats.JSON)}>
-                    Copy to clipboard (JSON)
-                  </button>
-                </p>
-                <p>
-                  <button style={executeButtonStyle} onClick={() => copyText(queryResult, ClipboardFormats.CSV)}>
-                    Copy to clipboard (CSV)
-                  </button>
-                </p>
+                <QueryResultCopier
+                  jsonInput={JSON.stringify(queryResult)}
+                  csvInput={convertResultsToCSV(queryResult)}
+                />
                 {props.resultDataPopulator(queryResult)}
               </div>
             );
@@ -107,12 +86,10 @@ function QueryDisplay(props: {
 
           return (
             <Collapse key={idx} text={queryResult.input_query}>
-              <button style={executeButtonStyle} onClick={() => copyText(queryResult, ClipboardFormats.JSON)}>
-                Copy to clipboard (JSON)
-              </button>
-              <button style={executeButtonStyle} onClick={() => copyText(queryResult, ClipboardFormats.CSV)}>
-                Copy to clipboard (CSV)
-              </button>
+              <QueryResultCopier
+                jsonInput={JSON.stringify(queryResult)}
+                csvInput={convertResultsToCSV(queryResult)}
+              />
               {props.resultDataPopulator(queryResult)}
             </Collapse>
           );
@@ -128,7 +105,7 @@ const executeActionsStyle = {
   marginTop: 8,
 };
 
-const executeButtonStyle = {
+const copyButtonStyle = {
   height: 30,
   border: 0,
   padding: "4px 20px",

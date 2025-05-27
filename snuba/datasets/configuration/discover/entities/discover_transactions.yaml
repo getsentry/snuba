@@ -118,14 +118,16 @@ schema:
     { name: title, type: String, args: { schema_modifiers: [readonly] } },
     { name: transaction_source, type: String },
     { name: timestamp, type: DateTime, args: { schema_modifiers: [readonly] } },
+    { name: time, type: DateTime, args: { schema_modifiers: [readonly] } },
     {
       name: group_ids,
       type: Array,
       args: { inner_type: { type: UInt, args: { size: 64 } } },
     },
     { name: app_start_type, type: String },
-    { name: profile_id, type: UUID, args: {schema_modifiers: [nullable]}},
-    { name: replay_id, type: UUID, args: {schema_modifiers: [nullable]}}
+    { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
+    { name: profiler_id, type: UUID, args: { schema_modifiers: [nullable] } },
+    { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } }
   ]
 required_time_column: finish_ts
 storages:
@@ -326,16 +328,23 @@ query_processors:
   - processor: BasicFunctionsProcessor
   - processor: ApdexProcessor
   - processor: FailureRateProcessor
-  - processor: ReferrerRateLimiterProcessor
-  - processor: ProjectReferrerRateLimiter
+  - processor: LowCardinalityProcessor
     args:
-      project_column: project_id
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
-  - processor: ResourceQuotaProcessor
-    args:
-      project_field: project_id
+      columns:
+        - transaction_name
+        - transaction_op
+        - platform
+        - environment
+        - tags[environment]
+        - release
+        - dist
+        - sdk_name
+        - http_method
+        - type
+        - app_start_type
+        - transaction_source
+
+validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator
     args:
@@ -354,7 +363,7 @@ subscription_validators:
         {
           max_allowed_aggregations: 1,
           disallowed_aggregations: [groupby, having, orderby],
-          required_time_column: finish_ts
+          required_time_column: finish_ts,
         },
     },
   ]

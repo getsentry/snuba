@@ -3,12 +3,17 @@ from typing import Any, MutableMapping
 import pytest
 from snuba_sdk.legacy import json_to_snql
 
+from snuba.attribution.appid import AppID
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.pipeline.processors import execute_all_clickhouse_processors
+from snuba.datasets.storages.storage_key import StorageKey
+from snuba.pipeline.query_pipeline import QueryPipelineResult
+from snuba.pipeline.stages.query_processing import (
+    EntityProcessingStage,
+    StorageProcessingStage,
+)
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Table
@@ -21,6 +26,8 @@ from snuba.query.expressions import (
 )
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query, parse_snql_query_initial
+from snuba.request import Request
+from snuba.utils.metrics.timer import Timer
 
 
 def test_iterate_over_query() -> None:
@@ -39,7 +46,7 @@ def test_iterate_over_query() -> None:
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
     query = Query(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
@@ -91,7 +98,7 @@ def test_replace_expression() -> None:
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
     query = Query(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
@@ -109,7 +116,7 @@ def test_replace_expression() -> None:
     query.transform_expressions(replace)
 
     expected_query = Query(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[
             SelectedExpression(
                 "alias", FunctionCall("alias", "tag", (Literal(None, "f1"),))
@@ -145,14 +152,14 @@ def test_replace_expression() -> None:
 def test_get_all_columns_legacy() -> None:
     query_body = {
         "selected_columns": [
-            ["f1", ["column1", "column2"], "f1_alias"],
+            ["f1", ["title", "message"], "f1_alias"],
             ["f2", [], "f2_alias"],
             ["formatDateTime", ["timestamp", "'%Y-%m-%d'"], "formatted_time"],
         ],
         "aggregations": [
             ["count", "platform", "platforms"],
             ["uniq", "platform", "uniq_platforms"],
-            ["testF", ["platform", ["anotherF", ["field2"]]], "top_platforms"],
+            ["testF", ["platform", ["anotherF", ["offset"]]], "top_platforms"],
         ],
         "conditions": [
             ["tags[sentry:dist]", "IN", ["dist1", "dist2"]],
@@ -160,21 +167,21 @@ def test_get_all_columns_legacy() -> None:
             ["timestamp", "<", "2020-01-02T12:00:00"],
             ["project_id", "=", 1],
         ],
-        "having": [["times_seen", ">", 1]],
+        "having": [["trace_sampled", ">", 1]],
         "groupby": [["format_eventid", ["event_id"]]],
     }
     events = get_dataset("events")
     request = json_to_snql(query_body, "events")
     request.validate()
-    query, _ = parse_snql_query(str(request.query), events)
+    query = parse_snql_query(str(request.query), events)
 
     assert query.get_all_ast_referenced_columns() == {
-        Column("_snuba_column1", None, "column1"),
-        Column("_snuba_column2", None, "column2"),
+        Column("_snuba_title", None, "title"),
+        Column("_snuba_message", None, "message"),
         Column("_snuba_platform", None, "platform"),
-        Column("_snuba_field2", None, "field2"),
+        Column("_snuba_offset", None, "offset"),
         Column("_snuba_tags", None, "tags"),
-        Column("_snuba_times_seen", None, "times_seen"),
+        Column("_snuba_trace_sampled", None, "trace_sampled"),
         Column("_snuba_event_id", None, "event_id"),
         Column("_snuba_timestamp", None, "timestamp"),
         Column("_snuba_project_id", None, "project_id"),
@@ -192,29 +199,29 @@ def test_get_all_columns_legacy() -> None:
 def test_get_all_columns() -> None:
     query_body = """
         MATCH (events)
-        SELECT f1(column1, column2) AS f1_alias,
+        SELECT f1(partition, release) AS f1_alias,
             f2() AS f2_alias,
             formatDateTime(timestamp, '%Y-%m-%d') AS formatted_time,
             count() AS platforms,
             uniq(platform) AS uniq_platforms,
-            testF(platform, anotherF(field2)) AS top_platforms
+            testF(platform, anotherF(title)) AS top_platforms
         BY format_eventid(event_id)
         WHERE tags[sentry:dist] IN tuple('dist1', 'dist2')
             AND timestamp >= toDateTime('2020-01-01 12:00:00')
             AND timestamp < toDateTime('2020-01-02 12:00:00')
             AND project_id = 1
-        HAVING times_seen > 1
+        HAVING trace_sampled > 1
         """
     events = get_dataset("events")
-    query, _ = parse_snql_query(query_body, events)
+    query = parse_snql_query(query_body, events)
 
     assert query.get_all_ast_referenced_columns() == {
-        Column("_snuba_column1", None, "column1"),
-        Column("_snuba_column2", None, "column2"),
+        Column("_snuba_partition", None, "partition"),
+        Column("_snuba_release", None, "release"),
         Column("_snuba_platform", None, "platform"),
-        Column("_snuba_field2", None, "field2"),
+        Column("_snuba_title", None, "title"),
         Column("_snuba_tags", None, "tags"),
-        Column("_snuba_times_seen", None, "times_seen"),
+        Column("_snuba_trace_sampled", None, "trace_sampled"),
         Column("_snuba_event_id", None, "event_id"),
         Column("_snuba_timestamp", None, "timestamp"),
         Column("_snuba_project_id", None, "project_id"),
@@ -229,7 +236,7 @@ def test_get_all_columns() -> None:
     }
 
 
-def test_initial_parsing() -> None:
+def test_initial_parsing_snql() -> None:
     # Initial parsing created a map object for groupby clause, should be a list
     body = "MATCH (events) SELECT col BY title"
     query = parse_snql_query_initial(body)
@@ -324,19 +331,6 @@ VALIDATION_TESTS = [
         True,
         id="Alias redefines col and referenced",
     ),
-    pytest.param(
-        {
-            "selected_columns": ["project_id", ["foo", ["event_id"], "event_id"]],
-            "conditions": [
-                ["whatsthis", "IN", ["a" * 32, "b" * 32]],
-                ["project_id", "=", 1],
-                ["timestamp", ">=", "2020-01-01T12:00:00"],
-                ["timestamp", "<", "2020-01-02T12:00:00"],
-            ],
-        },
-        False,
-        id="Alias referenced and not defined",
-    ),
 ]
 
 
@@ -345,14 +339,34 @@ def test_alias_validation(
     query_body: MutableMapping[str, Any], expected_result: bool
 ) -> None:
     events = get_dataset("events")
-    events_entity = get_entity(EntityKey.EVENTS)
     request = json_to_snql(query_body, "events")
     request.validate()
-    query, _ = parse_snql_query(str(request.query), events)
     settings = HTTPQuerySettings()
-    query_plan = (
-        events_entity.get_query_pipeline_builder().build_planner(query, settings)
-    ).build_best_plan()
-    execute_all_clickhouse_processors(query_plan, settings)
+    query = parse_snql_query(str(request.query), events)
+    attribution_info = AttributionInfo(
+        app_id=AppID(key=""),
+        tenant_ids={},
+        referrer="",
+        team=None,
+        feature=None,
+        parent_api=None,
+    )
+    request = Request(
+        id="123",
+        original_body=query_body,
+        query=query,
+        query_settings=settings,
+        attribution_info=attribution_info,
+    )
 
-    assert query_plan.query.validate_aliases() == expected_result
+    pipeline_result = EntityProcessingStage().execute(
+        QueryPipelineResult(
+            data=request,
+            query_settings=settings,
+            timer=Timer(name="bloop"),
+            error=None,
+        )
+    )
+    clickhouse_query = StorageProcessingStage().execute(pipeline_result).data
+
+    assert clickhouse_query.validate_aliases() == expected_result

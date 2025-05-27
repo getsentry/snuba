@@ -16,9 +16,9 @@ test_data = [
         {"conditions": [["type", "=", "transaction"], ["duration", ">", 1000]]},
         EntityKey.DISCOVER_TRANSACTIONS,
     ),
-    ({"conditions": [["type", "=", "error"]]}, EntityKey.DISCOVER_EVENTS),
+    ({"conditions": [["type", "=", "platform"]]}, EntityKey.DISCOVER_EVENTS),
     (
-        {"conditions": [[["type", "=", "error"], ["type", "=", "transaction"]]]},
+        {"conditions": [[["type", "=", "platform"], ["type", "=", "transaction"]]]},
         EntityKey.DISCOVER,
     ),
     (
@@ -29,7 +29,7 @@ test_data = [
                         "or",
                         [
                             ["equals", ["type", "transaction"]],
-                            ["equals", ["type", "default"]],
+                            ["equals", ["type", "release"]],
                         ],
                     ],
                     "=",
@@ -47,7 +47,7 @@ test_data = [
                         "and",
                         [
                             ["equals", ["duration", 10]],
-                            ["notEquals", ["type", "error"]],
+                            ["notEquals", ["type", "platform"]],
                         ],
                     ],
                     "=",
@@ -65,7 +65,7 @@ test_data = [
                         "and",
                         [
                             ["notEquals", ["type", "transaction"]],
-                            ["notEquals", ["type", "error"]],
+                            ["notEquals", ["type", "platform"]],
                         ],
                     ],
                     "=",
@@ -94,7 +94,7 @@ test_data = [
                         "and",
                         [
                             ["notEquals", ["type", "transaction"]],
-                            ["notEquals", ["type", "error"]],
+                            ["notEquals", ["type", "platform"]],
                         ],
                     ],
                     "=",
@@ -112,8 +112,8 @@ test_data = [
                     [
                         "and",
                         [
-                            ["notEquals", ["type", "default"]],
-                            ["notEquals", ["type", "error"]],
+                            ["notEquals", ["type", "release"]],
+                            ["notEquals", ["type", "platform"]],
                         ],
                     ],
                     "=",
@@ -172,7 +172,7 @@ def test_data_source(
 
     request = json_to_snql(query_body, "discover")
     request.validate()
-    query, _ = parse_snql_query(str(request.query), dataset)
+    query = parse_snql_query(str(request.query), dataset)
     entity = query.get_from_clause()
     assert isinstance(entity, EntitySource)
     assert entity.key == expected_entity

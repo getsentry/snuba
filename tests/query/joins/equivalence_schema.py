@@ -1,6 +1,5 @@
 from abc import ABC
 from typing import Sequence
-from unittest.mock import Mock
 
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
 from snuba.datasets.entities.entity_key import EntityKey
@@ -46,7 +45,6 @@ class Events(FakeEntity):
     def __init__(self) -> None:
         super().__init__(
             storages=[],
-            query_pipeline_builder=Mock(),
             abstract_column_set=EVENTS_SCHEMA,
             join_relationships={
                 "grouped": JoinRelationship(
@@ -87,7 +85,6 @@ class GroupedMessage(FakeEntity):
     def __init__(self) -> None:
         super().__init__(
             storages=[],
-            query_pipeline_builder=Mock(),
             abstract_column_set=GROUPS_SCHEMA,
             join_relationships={
                 "events": JoinRelationship(
@@ -114,7 +111,6 @@ class GroupAssignee(FakeEntity):
     def __init__(self) -> None:
         super().__init__(
             storages=[],
-            query_pipeline_builder=Mock(),
             abstract_column_set=GROUPS_ASSIGNEE,
             join_relationships={
                 "events": JoinRelationship(

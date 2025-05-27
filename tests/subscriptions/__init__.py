@@ -13,6 +13,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertEvent
 from tests.helpers import write_raw_unprocessed_events, write_unprocessed_events
+from tests.web.rpc.v1.test_utils import gen_item_message
 
 
 class BaseSubscriptionTest:
@@ -86,11 +87,21 @@ class BaseSubscriptionTest:
             ],
         )
 
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        messages = [
+            gen_item_message(self.base_time + timedelta(minutes=tick))
+            for tick in range(self.minutes)
+        ]
+        extra_messages = [
+            gen_item_message(self.base_time - timedelta(hours=4)) for _ in range(2)
+        ]
+        write_raw_unprocessed_events(items_storage, extra_messages + messages)
+
 
 def __entity_eq__(self: Entity, other: object) -> bool:
     if not isinstance(other, Entity):
         return False
-    return type(self) == type(other)
+    return isinstance(self, type(other))
 
 
 Entity.__eq__ = __entity_eq__  # type: ignore

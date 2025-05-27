@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "--auto-offset-reset",
-    default="error",
+    default="earliest",
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
@@ -186,6 +186,7 @@ def dlq_consumer(
             slice_id=instruction.slice_id,
             join_timeout=None,
             enforce_schema=False,
+            metrics_tags=metrics_tags,
         )
 
         consumer = consumer_builder.build_dlq_consumer(instruction)

@@ -18,6 +18,8 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import and_cond, column, literal, or_cond
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -37,32 +39,33 @@ def build_cond(tn: str) -> str:
 
 
 added_condition = build_cond("")
-required_condition = binary_condition(
-    "and",
+required_conditions = [
     binary_condition(
         "equals",
         Column("_snuba_project_id", None, "project_id"),
         Literal(None, 1),
     ),
     binary_condition(
-        "and",
-        binary_condition(
-            "greaterOrEquals",
-            Column("_snuba_timestamp", None, "timestamp"),
-            Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-        ),
-        binary_condition(
-            "less",
-            Column("_snuba_timestamp", None, "timestamp"),
-            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-        ),
+        "greaterOrEquals",
+        Column("_snuba_timestamp", None, "timestamp"),
+        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
     ),
+    binary_condition(
+        "less",
+        Column("_snuba_timestamp", None, "timestamp"),
+        Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+    ),
+]
+required_condition = binary_condition(
+    "and",
+    required_conditions[0],
+    binary_condition("and", required_conditions[1], required_conditions[2]),
 )
 
 
 test_cases = [
     pytest.param(
-        f"MATCH (events) SELECT 4-5, c WHERE {added_condition} GRANULARITY 60",
+        f"MATCH (events) SELECT 4-5, event_id WHERE {added_condition} GRANULARITY 60",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -74,7 +77,9 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
             ],
             granularity=60,
             condition=required_condition,
@@ -84,7 +89,7 @@ test_cases = [
         id="granularity on whole query",
     ),
     pytest.param(
-        f"MATCH (events) SELECT 4-5, c WHERE {added_condition} TOTALS true",
+        f"MATCH (events) SELECT 4-5, event_id WHERE {added_condition} TOTALS true",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -96,7 +101,9 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
             ],
             condition=required_condition,
             totals=True,
@@ -106,7 +113,7 @@ test_cases = [
         id="totals on whole query",
     ),
     pytest.param(
-        f"MATCH (events SAMPLE 0.5) SELECT 4-5, c WHERE {added_condition}",
+        f"MATCH (events SAMPLE 0.5) SELECT 4-5, event_id WHERE {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS,
@@ -120,7 +127,9 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
             ],
             condition=required_condition,
             sample=0.5,
@@ -130,7 +139,7 @@ test_cases = [
         id="sample on entity",
     ),
     pytest.param(
-        f"MATCH (events) SELECT 4-5, c,d,e WHERE {added_condition} LIMIT 5 BY c,d,e",
+        f"MATCH (events) SELECT 4-5, event_id,title,release WHERE {added_condition} LIMIT 5 BY event_id,title,release",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -142,17 +151,21 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
-                SelectedExpression("d", Column("_snuba_d", None, "d")),
-                SelectedExpression("e", Column("_snuba_e", None, "e")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
+                SelectedExpression("title", Column("_snuba_title", None, "title")),
+                SelectedExpression(
+                    "release", Column("_snuba_release", None, "release")
+                ),
             ],
             condition=required_condition,
             limitby=LimitBy(
                 5,
                 [
-                    Column("_snuba_c", None, "c"),
-                    Column("_snuba_d", None, "d"),
-                    Column("_snuba_e", None, "e"),
+                    Column("_snuba_event_id", None, "event_id"),
+                    Column("_snuba_title", None, "title"),
+                    Column("_snuba_release", None, "release"),
                 ],
             ),
             limit=1000,
@@ -161,7 +174,7 @@ test_cases = [
         id="limit by multiple columns",
     ),
     pytest.param(
-        f"MATCH (events) SELECT 4-5, c WHERE {added_condition} LIMIT 5 BY c",
+        f"MATCH (events) SELECT 4-5, group_id WHERE {added_condition} LIMIT 5 BY group_id",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -173,17 +186,19 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "group_id", Column("_snuba_group_id", None, "group_id")
+                ),
             ],
             condition=required_condition,
-            limitby=LimitBy(5, [Column("_snuba_c", None, "c")]),
+            limitby=LimitBy(5, [Column("_snuba_group_id", None, "group_id")]),
             limit=1000,
             offset=0,
         ),
         id="limit by single column",
     ),
     pytest.param(
-        f"MATCH (events) SELECT 4-5, c WHERE {added_condition} LIMIT 5 OFFSET 3",
+        f"MATCH (events) SELECT 4-5, event_id WHERE {added_condition} LIMIT 5 OFFSET 3",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -195,7 +210,9 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
             ],
             condition=required_condition,
             limit=5,
@@ -204,7 +221,7 @@ test_cases = [
         id="limit and offset",
     ),
     pytest.param(
-        f"MATCH (events) SELECT 4-5, c, arrayJoin(c) AS x WHERE {added_condition} TOTALS true",
+        f"MATCH (events) SELECT 4-5, tags, arrayJoin(tags) AS x WHERE {added_condition} TOTALS true",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -216,11 +233,11 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression("tags", Column("_snuba_tags", None, "tags")),
                 SelectedExpression(
                     "x",
                     FunctionCall(
-                        "_snuba_x", "arrayJoin", (Column("_snuba_c", None, "c"),)
+                        "_snuba_x", "arrayJoin", (Column("_snuba_tags", None, "tags"),)
                     ),
                 ),
             ],
@@ -232,7 +249,7 @@ test_cases = [
         id="Array join",
     ),
     pytest.param(
-        f"MATCH (events) SELECT 4-5, 3* foo(c) AS foo, c WHERE {added_condition}",
+        f"MATCH (events) SELECT 4-5, 3* foo(partition) AS foo, partition WHERE {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -245,19 +262,23 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "3* foo(c) AS foo",
+                    "3* foo(partition) AS foo",
                     FunctionCall(
-                        "_snuba_3* foo(c) AS foo",
+                        "_snuba_3* foo(partition) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
                             FunctionCall(
-                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                                "_snuba_foo",
+                                "foo",
+                                (Column("_snuba_partition", None, "partition"),),
                             ),
                         ),
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "partition", Column("_snuba_partition", None, "partition")
+                ),
             ],
             condition=required_condition,
             limit=1000,
@@ -267,7 +288,7 @@ test_cases = [
     ),
     pytest.param(
         f"""MATCH (events)
-        SELECT 4-5,3*foo(c) AS foo,c
+        SELECT 4-5,3*foo(partition) AS foo,partition
         WHERE platform NOT IN tuple('x', 'y') AND message IS NULL
         AND {added_condition}""",
         LogicalQuery(
@@ -282,19 +303,23 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "3*foo(c) AS foo",
+                    "3*foo(partition) AS foo",
                     FunctionCall(
-                        "_snuba_3*foo(c) AS foo",
+                        "_snuba_3*foo(partition) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
                             FunctionCall(
-                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                                "_snuba_foo",
+                                "foo",
+                                (Column("_snuba_partition", None, "partition"),),
                             ),
                         ),
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "partition", Column("_snuba_partition", None, "partition")
+                ),
             ],
             condition=binary_condition(
                 "and",
@@ -307,10 +332,16 @@ test_cases = [
                 ),
                 binary_condition(
                     "and",
-                    unary_condition(
-                        "isNull", Column("_snuba_message", None, "message")
+                    binary_condition(
+                        "and",
+                        unary_condition(
+                            "isNull", Column("_snuba_message", None, "message")
+                        ),
+                        required_conditions[0],
                     ),
-                    required_condition,
+                    binary_condition(
+                        "and", required_conditions[1], required_conditions[2]
+                    ),
                 ),
             ),
             limit=1000,
@@ -319,7 +350,7 @@ test_cases = [
         id="Basic query with word condition ops",
     ),
     pytest.param(
-        f"MATCH (events) SELECT count() AS count BY tags[key], measurements[lcp.elementSize] WHERE measurements[lcp.elementSize] > 1 AND {added_condition}",
+        f"MATCH (events) SELECT count() AS count BY tags[key], contexts[lcp.elementSize] WHERE contexts[lcp.elementSize] > 1 AND {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -334,10 +365,10 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "measurements[lcp.elementSize]",
+                    "contexts[lcp.elementSize]",
                     SubscriptableReference(
-                        "_snuba_measurements[lcp.elementSize]",
-                        Column("_snuba_measurements", None, "measurements"),
+                        "_snuba_contexts[lcp.elementSize]",
+                        Column("_snuba_contexts", None, "contexts"),
                         Literal(None, "lcp.elementSize"),
                     ),
                 ),
@@ -353,23 +384,27 @@ test_cases = [
                     Literal(None, "key"),
                 ),
                 SubscriptableReference(
-                    "_snuba_measurements[lcp.elementSize]",
-                    Column("_snuba_measurements", None, "measurements"),
+                    "_snuba_contexts[lcp.elementSize]",
+                    Column("_snuba_contexts", None, "contexts"),
                     Literal(None, "lcp.elementSize"),
                 ),
             ],
             condition=binary_condition(
                 "and",
                 binary_condition(
-                    "greater",
-                    SubscriptableReference(
-                        "_snuba_measurements[lcp.elementSize]",
-                        Column("_snuba_measurements", None, "measurements"),
-                        Literal(None, "lcp.elementSize"),
+                    "and",
+                    binary_condition(
+                        "greater",
+                        SubscriptableReference(
+                            "_snuba_contexts[lcp.elementSize]",
+                            Column("_snuba_contexts", None, "contexts"),
+                            Literal(None, "lcp.elementSize"),
+                        ),
+                        Literal(None, 1),
                     ),
-                    Literal(None, 1),
+                    required_conditions[0],
                 ),
-                required_condition,
+                binary_condition("and", required_conditions[1], required_conditions[2]),
             ),
             limit=1000,
             offset=0,
@@ -377,13 +412,15 @@ test_cases = [
         id="Basic query with subscriptables",
     ),
     pytest.param(
-        f"MATCH (events) SELECT (2*(4-5)+3), g(c) AS goo, c BY d, 2+7 WHERE {added_condition} ORDER BY f DESC",
+        f"MATCH (events) SELECT (2*(4-5)+3), g(partition) AS goo, partition BY group_id, 2+7 WHERE {added_condition} ORDER BY offset DESC",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
             selected_columns=[
-                SelectedExpression("d", Column("_snuba_d", None, "d")),
+                SelectedExpression(
+                    "group_id", Column("_snuba_group_id", None, "group_id")
+                ),
                 SelectedExpression(
                     "2+7",
                     FunctionCall(
@@ -414,31 +451,39 @@ test_cases = [
                 ),
                 SelectedExpression(
                     "goo",
-                    FunctionCall("_snuba_goo", "g", (Column("_snuba_c", None, "c"),)),
+                    FunctionCall(
+                        "_snuba_goo",
+                        "g",
+                        (Column("_snuba_partition", None, "partition"),),
+                    ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "partition", Column("_snuba_partition", None, "partition")
+                ),
             ],
             condition=required_condition,
             groupby=[
-                Column("_snuba_d", None, "d"),
+                Column("_snuba_group_id", None, "group_id"),
                 FunctionCall(
                     "_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))
                 ),
             ],
-            order_by=[OrderBy(OrderByDirection.DESC, Column("_snuba_f", None, "f"))],
+            order_by=[
+                OrderBy(OrderByDirection.DESC, Column("_snuba_offset", None, "offset"))
+            ],
             limit=1000,
             offset=0,
         ),
         id="Simple complete query with example of parenthesized arithmetic expression in SELECT",
     ),
     pytest.param(
-        f"MATCH (events) SELECT (2*(4-5)+3), foo(c) AS thing2, c BY d, 2+7 WHERE {added_condition} ORDER BY f DESC",
+        f"MATCH (events) SELECT (2*(4-5)+3), foo(partition) AS thing2, partition BY offset, 2+7 WHERE {added_condition} ORDER BY group_id DESC",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
             selected_columns=[
-                SelectedExpression("d", Column("_snuba_d", None, "d")),
+                SelectedExpression("offset", Column("_snuba_offset", None, "offset")),
                 SelectedExpression(
                     "2+7",
                     FunctionCall(
@@ -470,26 +515,34 @@ test_cases = [
                 SelectedExpression(
                     "thing2",
                     FunctionCall(
-                        "_snuba_thing2", "foo", (Column("_snuba_c", None, "c"),)
+                        "_snuba_thing2",
+                        "foo",
+                        (Column("_snuba_partition", None, "partition"),),
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "partition", Column("_snuba_partition", None, "partition")
+                ),
             ],
             condition=required_condition,
             groupby=[
-                Column("_snuba_d", None, "d"),
+                Column("_snuba_offset", None, "offset"),
                 FunctionCall(
                     "_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))
                 ),
             ],
-            order_by=[OrderBy(OrderByDirection.DESC, Column("_snuba_f", None, "f"))],
+            order_by=[
+                OrderBy(
+                    OrderByDirection.DESC, Column("_snuba_group_id", None, "group_id")
+                )
+            ],
             limit=1000,
             offset=0,
         ),
         id="Simple complete query with aliased function in SELECT",
     ),
     pytest.param(
-        f"MATCH (events) SELECT toDateTime('2020-01-01') AS now, 3*foo(c) AS foo BY toDateTime('2020-01-01') AS now WHERE {added_condition}",
+        f"MATCH (events) SELECT toDateTime('2020-01-01') AS now, 3*foo(partition) AS foo BY toDateTime('2020-01-01') AS now WHERE {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -504,14 +557,16 @@ test_cases = [
                     Literal("_snuba_now", datetime.datetime(2020, 1, 1, 0, 0)),
                 ),
                 SelectedExpression(
-                    "3*foo(c) AS foo",
+                    "3*foo(partition) AS foo",
                     FunctionCall(
-                        "_snuba_3*foo(c) AS foo",
+                        "_snuba_3*foo(partition) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
                             FunctionCall(
-                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                                "_snuba_foo",
+                                "foo",
+                                (Column("_snuba_partition", None, "partition"),),
                             ),
                         ),
                     ),
@@ -525,42 +580,36 @@ test_cases = [
         id="Basic query with date literals",
     ),
     pytest.param(
-        f"MATCH (events) SELECT a WHERE time_seen<3 AND last_seen=2 AND c=2 AND d=3 AND {added_condition}",
+        f"MATCH (events) SELECT event_id WHERE partition<3 AND offset=2 AND project_id=2 AND group_id=3 AND {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
-            selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"))],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "less",
-                    Column("_snuba_time_seen", None, "time_seen"),
-                    Literal(None, 3),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "equals",
-                        Column("_snuba_last_seen", None, "last_seen"),
-                        Literal(None, 2),
+            selected_columns=[
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                )
+            ],
+            condition=and_cond(
+                and_cond(
+                    f.less(column("partition", None, "_snuba_partition"), literal(3)),
+                    and_cond(
+                        f.equals(column("offset", None, "_snuba_offset"), literal(2)),
+                        f.equals(
+                            column("project_id", None, "_snuba_project_id"), literal(2)
+                        ),
                     ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "equals",
-                            Column("_snuba_c", None, "c"),
-                            Literal(None, 2),
+                ),
+                and_cond(
+                    and_cond(
+                        f.equals(
+                            column("group_id", None, "_snuba_group_id"), literal(3)
                         ),
-                        binary_condition(
-                            "and",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_d", None, "d"),
-                                Literal(None, 3),
-                            ),
-                            required_condition,
-                        ),
+                        required_conditions[0],
+                    ),
+                    and_cond(
+                        required_conditions[1],
+                        required_conditions[2],
                     ),
                 ),
             ),
@@ -570,36 +619,40 @@ test_cases = [
         id="Query with multiple conditions joined by AND",
     ),
     pytest.param(
-        f"MATCH (events) SELECT a WHERE ((time_seen<3 OR last_seen=afternoon) OR name=bob) AND {added_condition}",
+        f"MATCH (events) SELECT event_id WHERE ((partition<3 OR offset=retention_days) OR title=platform) AND {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
-            selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"))],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "or",
-                    binary_condition(
-                        "or",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_time_seen", None, "time_seen"),
-                            Literal(None, 3),
+            selected_columns=[
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                )
+            ],
+            condition=and_cond(
+                and_cond(
+                    or_cond(
+                        or_cond(
+                            f.less(
+                                column("partition", None, "_snuba_partition"),
+                                literal(3),
+                            ),
+                            f.equals(
+                                column("offset", None, "_snuba_offset"),
+                                column("retention_days", None, "_snuba_retention_days"),
+                            ),
                         ),
-                        binary_condition(
-                            "equals",
-                            Column("_snuba_last_seen", None, "last_seen"),
-                            Column("_snuba_afternoon", None, "afternoon"),
+                        f.equals(
+                            column("title", None, "_snuba_title"),
+                            column("platform", None, "_snuba_platform"),
                         ),
                     ),
-                    binary_condition(
-                        "equals",
-                        Column("_snuba_name", None, "name"),
-                        Column("_snuba_bob", None, "bob"),
-                    ),
+                    required_conditions[0],
                 ),
-                required_condition,
+                and_cond(
+                    required_conditions[1],
+                    required_conditions[2],
+                ),
             ),
             limit=1000,
             offset=0,
@@ -607,52 +660,47 @@ test_cases = [
         id="Query with multiple conditions joined by OR / parenthesized OR",
     ),
     pytest.param(
-        f"MATCH (events) SELECT a WHERE (name!=bob OR last_seen<afternoon AND (location=gps(x,y,z) OR times_seen>0)) AND {added_condition}",
+        f"MATCH (events) SELECT event_id WHERE (title!=platform OR partition<offset AND (location=gps(user_id,user_name,user_email) OR group_id>0)) AND {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
-            selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"))],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "or",
-                    binary_condition(
-                        "notEquals",
-                        Column("_snuba_name", None, "name"),
-                        Column("_snuba_bob", None, "bob"),
-                    ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_last_seen", None, "last_seen"),
-                            Column("_snuba_afternoon", None, "afternoon"),
+            selected_columns=[
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                )
+            ],
+            condition=and_cond(
+                and_cond(
+                    or_cond(
+                        f.notEquals(
+                            column("title", None, "_snuba_title"),
+                            column("platform", None, "_snuba_platform"),
                         ),
-                        binary_condition(
-                            "or",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_location", None, "location"),
-                                FunctionCall(
-                                    None,
-                                    "gps",
-                                    (
-                                        Column("_snuba_x", None, "x"),
-                                        Column("_snuba_y", None, "y"),
-                                        Column("_snuba_z", None, "z"),
+                        and_cond(
+                            f.less(
+                                column("partition", None, "_snuba_partition"),
+                                column("offset", None, "_snuba_offset"),
+                            ),
+                            or_cond(
+                                f.equals(
+                                    column("location", None, "_snuba_location"),
+                                    f.gps(
+                                        column("user_id", None, "_snuba_user_id"),
+                                        column("user_name", None, "_snuba_user_name"),
+                                        column("user_email", None, "_snuba_user_email"),
                                     ),
                                 ),
-                            ),
-                            binary_condition(
-                                "greater",
-                                Column("_snuba_times_seen", None, "times_seen"),
-                                Literal(None, 0),
+                                f.greater(
+                                    column("group_id", None, "_snuba_group_id"),
+                                    literal(0),
+                                ),
                             ),
                         ),
                     ),
+                    required_conditions[0],
                 ),
-                required_condition,
+                and_cond(required_conditions[1], required_conditions[2]),
             ),
             limit=1000,
             offset=0,
@@ -661,7 +709,7 @@ test_cases = [
     ),
     pytest.param(
         """MATCH (events)
-        SELECT a, b[c]
+        SELECT event_id, tags[test]
         WHERE project_id IN tuple( 2 , 3)
         AND timestamp>=toDateTime('2021-01-01')
         AND timestamp<toDateTime('2021-01-02')""",
@@ -670,13 +718,15 @@ test_cases = [
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
             selected_columns=[
-                SelectedExpression("a", Column("_snuba_a", None, "a")),
                 SelectedExpression(
-                    "b[c]",
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
+                SelectedExpression(
+                    "tags[test]",
                     SubscriptableReference(
-                        "_snuba_b[c]",
-                        Column("_snuba_b", None, "b"),
-                        key=Literal(None, "c"),
+                        "_snuba_tags[test]",
+                        Column("_snuba_tags", None, "tags"),
+                        key=Literal(None, "test"),
                     ),
                 ),
             ],
@@ -708,7 +758,7 @@ test_cases = [
     ),
     pytest.param(
         f"""MATCH (events)
-        SELECT 4-5,3*foo(c) AS foo,c
+        SELECT 4-5,3*foo(partition) AS foo,partition
         WHERE {added_condition}""",
         LogicalQuery(
             QueryEntity(
@@ -722,19 +772,23 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "3*foo(c) AS foo",
+                    "3*foo(partition) AS foo",
                     FunctionCall(
-                        "_snuba_3*foo(c) AS foo",
+                        "_snuba_3*foo(partition) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
                             FunctionCall(
-                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                                "_snuba_foo",
+                                "foo",
+                                (Column("_snuba_partition", None, "partition"),),
                             ),
                         ),
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "partition", Column("_snuba_partition", None, "partition")
+                ),
             ],
             condition=required_condition,
             limit=1000,
@@ -744,8 +798,8 @@ test_cases = [
     ),
     pytest.param(
         f"""MATCH (events)
-        SELECT 4-5,3*foo(c) AS foo,c
-        WHERE or(equals(arrayExists(a, '=', 'RuntimeException'), 1), equals(arrayAll(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1 AND {added_condition}""",
+        SELECT 4-5,3*foo(event_id) AS foo,event_id
+        WHERE or(equals(arrayExists(exception_stacks.type, '=', 'RuntimeException'), 1), equals(arrayAll(modules.name, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1 AND {added_condition}""",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -758,83 +812,95 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "3*foo(c) AS foo",
+                    "3*foo(event_id) AS foo",
                     FunctionCall(
-                        "_snuba_3*foo(c) AS foo",
+                        "_snuba_3*foo(event_id) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
                             FunctionCall(
-                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                                "_snuba_foo",
+                                "foo",
+                                (Column("_snuba_event_id", None, "event_id"),),
                             ),
                         ),
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
             ],
-            condition=binary_condition(
-                "and",
+            condition=and_cond(
                 binary_condition(
-                    "equals",
+                    "and",
                     binary_condition(
-                        "or",
+                        "equals",
                         binary_condition(
-                            "equals",
-                            FunctionCall(
-                                None,
-                                "arrayExists",
-                                (
-                                    Lambda(
-                                        None,
-                                        ("x",),
-                                        FunctionCall(
+                            "or",
+                            binary_condition(
+                                "equals",
+                                FunctionCall(
+                                    None,
+                                    "arrayExists",
+                                    (
+                                        Lambda(
                                             None,
-                                            "assumeNotNull",
-                                            (
-                                                FunctionCall(
-                                                    None,
-                                                    "equals",
-                                                    (
-                                                        Argument(None, "x"),
-                                                        Literal(
-                                                            None, "RuntimeException"
+                                            ("x",),
+                                            FunctionCall(
+                                                None,
+                                                "assumeNotNull",
+                                                (
+                                                    FunctionCall(
+                                                        None,
+                                                        "equals",
+                                                        (
+                                                            Argument(None, "x"),
+                                                            Literal(
+                                                                None, "RuntimeException"
+                                                            ),
                                                         ),
                                                     ),
                                                 ),
                                             ),
                                         ),
-                                    ),
-                                    Column("_snuba_a", None, "a"),
-                                ),
-                            ),
-                            Literal(None, 1),
-                        ),
-                        binary_condition(
-                            "equals",
-                            FunctionCall(
-                                None,
-                                "arrayAll",
-                                (
-                                    Lambda(
-                                        None,
-                                        ("x",),
-                                        FunctionCall(
+                                        Column(
+                                            "_snuba_exception_stacks.type",
                                             None,
-                                            "assumeNotNull",
-                                            (
-                                                FunctionCall(
-                                                    None,
-                                                    "notIn",
-                                                    (
-                                                        Argument(None, "x"),
-                                                        FunctionCall(
-                                                            None,
-                                                            "tuple",
-                                                            (
-                                                                Literal(None, "Stack"),
-                                                                Literal(
-                                                                    None,
-                                                                    "Arithmetic",
+                                            "exception_stacks.type",
+                                        ),
+                                    ),
+                                ),
+                                Literal(None, 1),
+                            ),
+                            binary_condition(
+                                "equals",
+                                FunctionCall(
+                                    None,
+                                    "arrayAll",
+                                    (
+                                        Lambda(
+                                            None,
+                                            ("x",),
+                                            FunctionCall(
+                                                None,
+                                                "assumeNotNull",
+                                                (
+                                                    FunctionCall(
+                                                        None,
+                                                        "notIn",
+                                                        (
+                                                            Argument(None, "x"),
+                                                            FunctionCall(
+                                                                None,
+                                                                "tuple",
+                                                                (
+                                                                    Literal(
+                                                                        None, "Stack"
+                                                                    ),
+                                                                    Literal(
+                                                                        None,
+                                                                        "Arithmetic",
+                                                                    ),
                                                                 ),
                                                             ),
                                                         ),
@@ -842,16 +908,19 @@ test_cases = [
                                                 ),
                                             ),
                                         ),
+                                        Column(
+                                            "_snuba_modules.name", None, "modules.name"
+                                        ),
                                     ),
-                                    Column("_snuba_b", None, "b"),
                                 ),
+                                Literal(None, 1),
                             ),
-                            Literal(None, 1),
                         ),
+                        Literal(None, 1),
                     ),
-                    Literal(None, 1),
+                    required_conditions[0],
                 ),
-                required_condition,
+                and_cond(required_conditions[1], required_conditions[2]),
             ),
             limit=1000,
             offset=0,
@@ -859,7 +928,7 @@ test_cases = [
         id="Special array join functions",
     ),
     pytest.param(
-        f"""MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c
+        f"""MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.event_id
         WHERE {build_cond('e')} AND {build_cond('t')}""",
         CompositeQuery(
             from_clause=JoinClause(
@@ -892,49 +961,38 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("e.c", Column("_snuba_e.c", "e", "c")),
-            ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column("_snuba_e.project_id", "e", "project_id"),
-                    Literal(None, 1),
+                SelectedExpression(
+                    "e.event_id", Column("_snuba_e.event_id", "e", "event_id")
                 ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "greaterOrEquals",
-                        Column("_snuba_e.timestamp", "e", "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+            ],
+            condition=and_cond(
+                and_cond(
+                    f.equals(
+                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
                     ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_e.timestamp", "e", "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                    f.greaterOrEquals(
+                        column("timestamp", "e", "_snuba_e.timestamp"),
+                        literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.less(
+                            column("timestamp", "e", "_snuba_e.timestamp"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
-                        binary_condition(
-                            "and",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_t.project_id", "t", "project_id"),
-                                Literal(None, 1),
-                            ),
-                            binary_condition(
-                                "and",
-                                binary_condition(
-                                    "greaterOrEquals",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                binary_condition(
-                                    "less",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                                ),
-                            ),
+                        f.equals(
+                            column("project_id", "t", "_snuba_t.project_id"), literal(1)
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
                     ),
                 ),
@@ -945,7 +1003,7 @@ test_cases = [
         id="Basic join match",
     ),
     pytest.param(
-        f"""MATCH (e: events) -[contains]-> (t: transactions SAMPLE 0.5) SELECT 4-5, t.c
+        f"""MATCH (e: events) -[contains]-> (t: transactions SAMPLE 0.5) SELECT 4-5, t.event_id
         WHERE {build_cond('e')} AND {build_cond('t')}""",
         CompositeQuery(
             from_clause=JoinClause(
@@ -979,53 +1037,43 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("t.c", Column("_snuba_t.c", "t", "c")),
-            ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column("_snuba_e.project_id", "e", "project_id"),
-                    Literal(None, 1),
+                SelectedExpression(
+                    "t.event_id", Column("_snuba_t.event_id", "t", "event_id")
                 ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "greaterOrEquals",
-                        Column("_snuba_e.timestamp", "e", "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+            ],
+            condition=and_cond(
+                and_cond(
+                    f.equals(
+                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
                     ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_e.timestamp", "e", "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                    f.greaterOrEquals(
+                        column("timestamp", "e", "_snuba_e.timestamp"),
+                        literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.less(
+                            column("timestamp", "e", "_snuba_e.timestamp"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
-                        binary_condition(
-                            "and",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_t.project_id", "t", "project_id"),
-                                Literal(None, 1),
-                            ),
-                            binary_condition(
-                                "and",
-                                binary_condition(
-                                    "greaterOrEquals",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                binary_condition(
-                                    "less",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                                ),
-                            ),
+                        f.equals(
+                            column("project_id", "t", "_snuba_t.project_id"), literal(1)
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
                     ),
                 ),
             ),
+            groupby=None,
             limit=1000,
             offset=0,
         ),
@@ -1035,7 +1083,7 @@ test_cases = [
         f"""MATCH
             (e: events) -[contains]-> (t: transactions),
             (e: events) -[assigned]-> (ga: groupassignee)
-        SELECT 4-5, ga.c
+        SELECT 4-5, ga.offset
         WHERE {build_cond('e')} AND {build_cond('t')}""",
         CompositeQuery(
             from_clause=JoinClause(
@@ -1084,53 +1132,43 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("ga.c", Column("_snuba_ga.c", "ga", "c")),
-            ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column("_snuba_e.project_id", "e", "project_id"),
-                    Literal(None, 1),
+                SelectedExpression(
+                    "ga.offset", Column("_snuba_ga.offset", "ga", "offset")
                 ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "greaterOrEquals",
-                        Column("_snuba_e.timestamp", "e", "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+            ],
+            condition=and_cond(
+                and_cond(
+                    f.equals(
+                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
                     ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_e.timestamp", "e", "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                    f.greaterOrEquals(
+                        column("timestamp", "e", "_snuba_e.timestamp"),
+                        literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.less(
+                            column("timestamp", "e", "_snuba_e.timestamp"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
-                        binary_condition(
-                            "and",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_t.project_id", "t", "project_id"),
-                                Literal(None, 1),
-                            ),
-                            binary_condition(
-                                "and",
-                                binary_condition(
-                                    "greaterOrEquals",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                binary_condition(
-                                    "less",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                                ),
-                            ),
+                        f.equals(
+                            column("project_id", "t", "_snuba_t.project_id"), literal(1)
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
                     ),
                 ),
             ),
+            groupby=None,
             limit=1000,
             offset=0,
         ),
@@ -1142,7 +1180,7 @@ test_cases = [
             (e: events) -[assigned]-> (ga: groupassignee),
             (e: events) -[bookmark]-> (gm: groupedmessage),
             (e: events) -[activity]-> (se: metrics_sets)
-        SELECT 4-5, e.a, t.b, ga.c, gm.d, se.e
+        SELECT 4-5, e.event_id, t.event_id, ga.offset, gm.offset, se.metric_id
         WHERE {build_cond('e')} AND {build_cond('t')}
         AND se.org_id = 1 AND se.project_id = 1
         AND se.timestamp >= toDateTime('2021-01-01') AND se.timestamp < toDateTime('2021-01-02')""",
@@ -1225,108 +1263,73 @@ test_cases = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("e.a", Column("_snuba_e.a", "e", "a")),
-                SelectedExpression("t.b", Column("_snuba_t.b", "t", "b")),
-                SelectedExpression("ga.c", Column("_snuba_ga.c", "ga", "c")),
-                SelectedExpression("gm.d", Column("_snuba_gm.d", "gm", "d")),
-                SelectedExpression("se.e", Column("_snuba_se.e", "se", "e")),
-            ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column("_snuba_e.project_id", "e", "project_id"),
-                    Literal(None, 1),
+                SelectedExpression(
+                    "e.event_id", Column("_snuba_e.event_id", "e", "event_id")
                 ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "greaterOrEquals",
-                        Column("_snuba_e.timestamp", "e", "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                SelectedExpression(
+                    "t.event_id", Column("_snuba_t.event_id", "t", "event_id")
+                ),
+                SelectedExpression(
+                    "ga.offset", Column("_snuba_ga.offset", "ga", "offset")
+                ),
+                SelectedExpression(
+                    "gm.offset", Column("_snuba_gm.offset", "gm", "offset")
+                ),
+                SelectedExpression(
+                    "se.metric_id", Column("_snuba_se.metric_id", "se", "metric_id")
+                ),
+            ],
+            condition=and_cond(
+                and_cond(
+                    f.equals(
+                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
                     ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_e.timestamp", "e", "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        binary_condition(
-                            "and",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_t.project_id", "t", "project_id"),
-                                Literal(None, 1),
+                    f.greaterOrEquals(
+                        column("timestamp", "e", "_snuba_e.timestamp"),
+                        literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        and_cond(
+                            f.less(
+                                column("timestamp", "e", "_snuba_e.timestamp"),
+                                literal(datetime.datetime(2021, 1, 2, 0, 0)),
                             ),
-                            binary_condition(
-                                "and",
-                                binary_condition(
-                                    "greaterOrEquals",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                binary_condition(
-                                    "and",
-                                    binary_condition(
-                                        "less",
-                                        Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                        Literal(
-                                            None, datetime.datetime(2021, 1, 2, 0, 0)
-                                        ),
-                                    ),
-                                    binary_condition(
-                                        "and",
-                                        binary_condition(
-                                            "equals",
-                                            Column("_snuba_se.org_id", "se", "org_id"),
-                                            Literal(None, 1),
-                                        ),
-                                        binary_condition(
-                                            "and",
-                                            binary_condition(
-                                                "equals",
-                                                Column(
-                                                    "_snuba_se.project_id",
-                                                    "se",
-                                                    "project_id",
-                                                ),
-                                                Literal(None, 1),
-                                            ),
-                                            binary_condition(
-                                                "and",
-                                                binary_condition(
-                                                    "greaterOrEquals",
-                                                    Column(
-                                                        "_snuba_se.timestamp",
-                                                        "se",
-                                                        "timestamp",
-                                                    ),
-                                                    Literal(
-                                                        None,
-                                                        datetime.datetime(
-                                                            2021, 1, 1, 0, 0
-                                                        ),
-                                                    ),
-                                                ),
-                                                binary_condition(
-                                                    "less",
-                                                    Column(
-                                                        "_snuba_se.timestamp",
-                                                        "se",
-                                                        "timestamp",
-                                                    ),
-                                                    Literal(
-                                                        None,
-                                                        datetime.datetime(
-                                                            2021, 1, 2, 0, 0
-                                                        ),
-                                                    ),
-                                                ),
-                                            ),
-                                        ),
-                                    ),
-                                ),
+                            f.equals(
+                                column("project_id", "t", "_snuba_t.project_id"),
+                                literal(1),
+                            ),
+                        ),
+                        and_cond(
+                            f.greaterOrEquals(
+                                column("finish_ts", "t", "_snuba_t.finish_ts"),
+                                literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                            ),
+                            f.less(
+                                column("finish_ts", "t", "_snuba_t.finish_ts"),
+                                literal(datetime.datetime(2021, 1, 2, 0, 0)),
+                            ),
+                        ),
+                    ),
+                    and_cond(
+                        and_cond(
+                            f.equals(
+                                column("org_id", "se", "_snuba_se.org_id"), literal(1)
+                            ),
+                            f.equals(
+                                column("project_id", "se", "_snuba_se.project_id"),
+                                literal(1),
+                            ),
+                        ),
+                        and_cond(
+                            f.greaterOrEquals(
+                                column("timestamp", "se", "_snuba_se.timestamp"),
+                                literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                            ),
+                            f.less(
+                                column("timestamp", "se", "_snuba_se.timestamp"),
+                                literal(datetime.datetime(2021, 1, 2, 0, 0)),
                             ),
                         ),
                     ),
@@ -1414,7 +1417,7 @@ test_cases = [
                     FunctionCall(
                         "_snuba_min_count",
                         "min",
-                        (Column("_snuba_max_count", None, "max_count"),),
+                        (Column("_snuba_max_count", None, "_snuba_max_count"),),
                     ),
                 ),
             ],
@@ -1424,7 +1427,7 @@ test_cases = [
         id="sub query of sub query match",
     ),
     pytest.param(
-        f"""MATCH (events) SELECT 4-5,3*foo(c) AS foo,c WHERE a<'stuff\\' "\\" stuff' AND b='"💩\\" \t \\'\\'' AND {added_condition} """,
+        f"""MATCH (events) SELECT 4-5,3*foo(event_id) AS foo,event_id WHERE title<'stuff\\' "\\" stuff' AND culprit='"💩\\" \t \\'\\'' AND {added_condition} """,
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -1437,35 +1440,45 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "3*foo(c) AS foo",
+                    "3*foo(event_id) AS foo",
                     FunctionCall(
-                        "_snuba_3*foo(c) AS foo",
+                        "_snuba_3*foo(event_id) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
                             FunctionCall(
-                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                                "_snuba_foo",
+                                "foo",
+                                (Column("_snuba_event_id", None, "event_id"),),
                             ),
                         ),
                     ),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "event_id", Column("_snuba_event_id", None, "event_id")
+                ),
             ],
             condition=binary_condition(
                 "and",
                 binary_condition(
                     "less",
-                    Column("_snuba_a", None, "a"),
+                    Column("_snuba_title", None, "title"),
                     Literal(None, """stuff' "\\" stuff"""),
                 ),
                 binary_condition(
                     "and",
                     binary_condition(
-                        "equals",
-                        Column("_snuba_b", None, "b"),
-                        Literal(None, """"💩\\" \t ''"""),
+                        "and",
+                        binary_condition(
+                            "equals",
+                            Column("_snuba_culprit", None, "culprit"),
+                            Literal(None, """"💩\\" \t ''"""),
+                        ),
+                        required_conditions[0],
                     ),
-                    required_condition,
+                    binary_condition(
+                        "and", required_conditions[1], required_conditions[2]
+                    ),
                 ),
             ),
             limit=1000,
@@ -1508,45 +1521,49 @@ test_cases = [
             condition=binary_condition(
                 "and",
                 binary_condition(
-                    "equals",
+                    "and",
                     binary_condition(
-                        "or",
+                        "equals",
                         binary_condition(
-                            "equals",
-                            FunctionCall(
-                                None,
-                                "ifNull",
-                                (
-                                    SubscriptableReference(
-                                        "_snuba_tags[foo]",
-                                        Column("_snuba_tags", None, "tags"),
-                                        Literal(None, "foo"),
+                            "or",
+                            binary_condition(
+                                "equals",
+                                FunctionCall(
+                                    None,
+                                    "ifNull",
+                                    (
+                                        SubscriptableReference(
+                                            "_snuba_tags[foo]",
+                                            Column("_snuba_tags", None, "tags"),
+                                            Literal(None, "foo"),
+                                        ),
+                                        Literal(None, ""),
                                     ),
-                                    Literal(None, ""),
                                 ),
+                                Literal(None, "baz"),
                             ),
-                            Literal(None, "baz"),
-                        ),
-                        binary_condition(
-                            "equals",
-                            FunctionCall(
-                                None,
-                                "ifNull",
-                                (
-                                    SubscriptableReference(
-                                        "_snuba_tags[foo.bar]",
-                                        Column("_snuba_tags", None, "tags"),
-                                        Literal(None, "foo.bar"),
+                            binary_condition(
+                                "equals",
+                                FunctionCall(
+                                    None,
+                                    "ifNull",
+                                    (
+                                        SubscriptableReference(
+                                            "_snuba_tags[foo.bar]",
+                                            Column("_snuba_tags", None, "tags"),
+                                            Literal(None, "foo.bar"),
+                                        ),
+                                        Literal(None, ""),
                                     ),
-                                    Literal(None, ""),
                                 ),
+                                Literal(None, "qux"),
                             ),
-                            Literal(None, "qux"),
                         ),
+                        Literal(None, 1),
                     ),
-                    Literal(None, 1),
+                    required_conditions[0],
                 ),
-                required_condition,
+                binary_condition("and", required_conditions[1], required_conditions[2]),
             ),
             offset=0,
         ),
@@ -1573,11 +1590,15 @@ test_cases = [
             condition=binary_condition(
                 "and",
                 binary_condition(
-                    "equals",
-                    Column("_snuba_environment", None, "environment"),
-                    Literal(None, "\\' \n \\n \\\\n \\\\\n \\"),
+                    "and",
+                    binary_condition(
+                        "equals",
+                        Column("_snuba_environment", None, "environment"),
+                        Literal(None, "\\' \n \\n \\\\n \\\\\n \\"),
+                    ),
+                    required_conditions[0],
                 ),
-                required_condition,
+                binary_condition("and", required_conditions[1], required_conditions[2]),
             ),
             offset=0,
         ),
@@ -1604,11 +1625,15 @@ test_cases = [
             condition=binary_condition(
                 "and",
                 binary_condition(
-                    "equals",
-                    Column("_snuba_environment", None, "environment"),
-                    Literal(None, "\\\\\n"),
+                    "and",
+                    binary_condition(
+                        "equals",
+                        Column("_snuba_environment", None, "environment"),
+                        Literal(None, "\\\\\n"),
+                    ),
+                    required_conditions[0],
                 ),
-                required_condition,
+                binary_condition("and", required_conditions[1], required_conditions[2]),
             ),
             offset=0,
         ),
@@ -1635,11 +1660,15 @@ test_cases = [
             condition=binary_condition(
                 "and",
                 binary_condition(
-                    "equals",
-                    Column("_snuba_environment", None, "environment"),
-                    Literal(None, """stuff \\" ' \\' stuff\\"""),
+                    "and",
+                    binary_condition(
+                        "equals",
+                        Column("_snuba_environment", None, "environment"),
+                        Literal(None, """stuff \\" ' \\' stuff\\"""),
+                    ),
+                    required_conditions[0],
                 ),
-                required_condition,
+                binary_condition("and", required_conditions[1], required_conditions[2]),
             ),
             offset=0,
         ),
@@ -1978,7 +2007,7 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
     events_entity = get_entity(EntityKey.EVENTS)
 
     with mock.patch.object(events_entity, "get_join_relationship", events_mock):
-        query, _ = parse_snql_query(query_body, events)
+        query = parse_snql_query(query_body, events)
 
     eq, reason = query.equals(expected_query)
     assert eq, reason

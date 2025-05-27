@@ -1,15 +1,68 @@
-use serde::{Deserialize, Deserializer};
+use crate::config::EnvConfig;
+use chrono::{DateTime, NaiveDateTime, Utc};
+use schemars::JsonSchema;
+use serde::{Deserialize, Deserializer, Serialize};
 
-pub const DEFAULT_RETENTION_DAYS: u16 = 90;
+// Equivalent to "%Y-%m-%dT%H:%M:%S.%fZ" in python
+// Notice the differennce of .%fZ vs %.fZ, this comes from a difference in how rust's chrono handles the format
+const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.fZ";
 
-pub fn default_retention_days() -> Option<u16> {
-    Some(DEFAULT_RETENTION_DAYS)
+pub fn enforce_retention(value: Option<u16>, config: &EnvConfig) -> u16 {
+    let mut retention_days = value.unwrap_or(config.default_retention_days);
+
+    if !config.valid_retention_days.contains(&retention_days) {
+        if retention_days <= config.lower_retention_days {
+            retention_days = config.lower_retention_days;
+        } else {
+            retention_days = config.default_retention_days;
+        }
+    }
+
+    retention_days
 }
 
-pub fn hex_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
+fn ensure_valid_datetime<'de, D>(deserializer: D) -> Result<u32, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let hex = String::deserialize(deserializer)?;
-    u64::from_str_radix(&hex, 16).map_err(serde::de::Error::custom)
+    let value = String::deserialize(deserializer)?;
+    let naive = NaiveDateTime::parse_from_str(&value, PAYLOAD_DATETIME_FORMAT);
+    let seconds_since_epoch = match naive {
+        Ok(naive_dt) => DateTime::from_naive_utc_and_offset(naive_dt, Utc),
+        Err(_) => Utc::now(),
+    };
+    Ok(seconds_since_epoch.timestamp() as u32)
 }
+
+fn ensure_valid_datetime_64<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    let naive = NaiveDateTime::parse_from_str(&value, PAYLOAD_DATETIME_FORMAT);
+    let milliseconds_since_epoch = match naive {
+        Ok(naive_dt) => {
+            let dt = DateTime::<Utc>::from_naive_utc_and_offset(naive_dt, Utc);
+            dt.timestamp_millis() as u64
+        }
+        Err(_) => {
+            let now = Utc::now();
+            now.timestamp_millis() as u64
+        }
+    };
+    Ok(milliseconds_since_epoch)
+}
+
+#[derive(Debug, Deserialize, JsonSchema, Default, Serialize)]
+pub struct StringToIntDatetime(
+    #[serde(deserialize_with = "ensure_valid_datetime")]
+    #[schemars(with = "String")]
+    pub u32,
+);
+
+#[derive(Debug, Deserialize, JsonSchema, Default, Serialize)]
+pub struct StringToIntDatetime64(
+    #[serde(deserialize_with = "ensure_valid_datetime_64")]
+    #[schemars(with = "String")]
+    pub u64,
+);

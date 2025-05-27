@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import random
 import time
-from concurrent.futures import Future, ThreadPoolExecutor
-from functools import partial
+from concurrent.futures import Future
 from threading import Thread
-from typing import Any, Callable, cast
+from typing import Any, Callable
 from unittest import mock
 
 import pytest
@@ -13,9 +12,9 @@ import rapidjson
 from sentry_redis_tools.failover_redis import FailoverRedis
 
 from redis.exceptions import ReadOnlyError
-from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state import set_config
-from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
+from snuba.state.cache.abstract import Cache
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.serializable_exception import (
@@ -80,9 +79,7 @@ class PassthroughCodec(ExceptionAwareCodec[bytes, bytes]):
 @pytest.fixture
 def backend() -> Cache[bytes]:
     codec = PassthroughCodec()
-    backend: Cache[bytes] = RedisCache(
-        redis_client, "test", codec, ThreadPoolExecutor()
-    )
+    backend: Cache[bytes] = RedisCache(redis_client, "test", codec)
     return backend
 
 
@@ -94,15 +91,13 @@ def bad_backend() -> Cache[bytes]:
         def __init__(self, client: Any) -> None:
             self._client = client
 
-        def evalsha(self, *args: str, **kwargs: str) -> None:
+        def get(self, *args: str, **kwargs: str) -> None:
             raise ReadOnlyError("Failed")
 
         def __getattr__(self, attr: str) -> Any:
             return getattr(self._client, attr)
 
-    backend: Cache[bytes] = RedisCache(
-        BadClient(redis_client), "test", codec, ThreadPoolExecutor()
-    )
+    backend: Cache[bytes] = RedisCache(BadClient(redis_client), "test", codec)
     return backend
 
 
@@ -120,12 +115,12 @@ def test_short_circuit(backend: Cache[bytes]) -> None:
     assert backend.get(key) is None
 
     with assert_changes(lambda: function.call_count, 0, 1):
-        backend.get_readthrough(key, function, noop, 5) == value
+        backend.get_readthrough(key, function, noop) == value
 
     assert backend.get(key) is None
 
     with assert_changes(lambda: function.call_count, 1, 2):
-        backend.get_readthrough(key, function, noop, 5) == value
+        backend.get_readthrough(key, function, noop) == value
 
 
 @pytest.mark.redis_db
@@ -134,7 +129,7 @@ def test_fail_open(bad_backend: Cache[bytes]) -> None:
     value = b"value"
     function = mock.MagicMock(return_value=value)
     with mock.patch("snuba.settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES", False):
-        assert bad_backend.get_readthrough(key, function, noop, 5) == value
+        assert bad_backend.get_readthrough(key, function, noop) == value
 
 
 @pytest.mark.redis_db
@@ -146,27 +141,12 @@ def test_get_readthrough(backend: Cache[bytes]) -> None:
     assert backend.get(key) is None
 
     with assert_changes(lambda: function.call_count, 0, 1):
-        backend.get_readthrough(key, function, noop, 5) == value
+        backend.get_readthrough(key, function, noop) == value
 
     assert backend.get(key) == value
 
     with assert_does_not_change(lambda: function.call_count, 1):
-        backend.get_readthrough(key, function, noop, 5) == value
-
-
-@pytest.mark.redis_db
-def test_get_readthrough_missed_deadline(backend: Cache[bytes]) -> None:
-    key = "key"
-    value = b"value"
-
-    def function() -> bytes:
-        time.sleep(1.5)
-        return value
-
-    with pytest.raises(TimeoutError):
-        backend.get_readthrough(key, function, noop, 1)
-
-    assert backend.get(key) is None
+        backend.get_readthrough(key, function, noop) == value
 
 
 @pytest.mark.redis_db
@@ -180,7 +160,7 @@ def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
         raise CustomException("error")
 
     with pytest.raises(CustomException):
-        backend.get_readthrough(key, SingleCallFunction(function), noop, 1)
+        backend.get_readthrough(key, SingleCallFunction(function), noop)
 
 
 @pytest.mark.redis_db
@@ -192,12 +172,12 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
         return f"{random.random()}".encode("utf-8")
 
     def worker() -> bytes:
-        return backend.get_readthrough(key, function, noop, 10)
+        return backend.get_readthrough(key, function, noop)
 
-    setter = execute(worker)
-    waiter = execute(worker)
+    setter = worker()
+    waiter = worker()
 
-    assert setter.result() == waiter.result()
+    assert setter == waiter
 
 
 @pytest.mark.redis_db
@@ -211,7 +191,7 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
         raise ReadThroughCustomException("error")
 
     def worker() -> bytes:
-        return backend.get_readthrough(key, SingleCallFunction(function), noop, 10)
+        return backend.get_readthrough(key, SingleCallFunction(function), noop)
 
     setter = execute(worker)
     time.sleep(0.5)
@@ -232,39 +212,11 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     "backend",
     [
         pytest.param(
-            RedisCache(redis_client, "test", PassthroughCodec(), ThreadPoolExecutor()),
+            RedisCache(redis_client, "test", PassthroughCodec()),
             id="regular cluster",
         ),
     ],
 )
-@pytest.mark.redis_db
-def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:
-    key = "key"
-    value = b"value"
-
-    def function(id: int) -> bytes:
-        time.sleep(2.5)
-        return value + f"{id}".encode()
-
-    def worker(timeout: int) -> bytes:
-        return backend.get_readthrough(key, partial(function, timeout), noop, timeout)
-
-    setter = execute(partial(worker, 2))
-    time.sleep(0.1)
-    waiter_fast = execute(partial(worker, 1))
-    time.sleep(0.1)
-    waiter_slow = execute(partial(worker, 3))
-
-    with pytest.raises(TimeoutError):
-        assert setter.result()
-
-    with pytest.raises(TimeoutError):
-        waiter_fast.result()
-
-    with pytest.raises((ExecutionError, ExecutionTimeoutError)):
-        waiter_slow.result()
-
-
 @pytest.mark.redis_db
 def test_transient_error(backend: Cache[bytes]) -> None:
     key = "key"
@@ -279,14 +231,10 @@ def test_transient_error(backend: Cache[bytes]) -> None:
         return b"hello"
 
     def transient_error() -> bytes:
-        return backend.get_readthrough(
-            key, SingleCallFunction(error_function), noop, 10
-        )
+        return backend.get_readthrough(key, SingleCallFunction(error_function), noop)
 
     def functioning_query() -> bytes:
-        return backend.get_readthrough(
-            key, SingleCallFunction(normal_function), noop, 10
-        )
+        return backend.get_readthrough(key, SingleCallFunction(normal_function), noop)
 
     setter = execute(transient_error)
     # if this sleep were removed, the waiter would also raise
@@ -299,67 +247,3 @@ def test_transient_error(backend: Cache[bytes]) -> None:
         setter.result()
 
     assert waiter.result() == b"hello"
-
-
-@pytest.mark.redis_db
-def test_notify_queue_ttl() -> None:
-    # Tests that waiting clients can be notified of the cache status
-    # even with network delays. This test will break if the notify queue
-    # TTL is set below 200ms
-
-    pop_calls = 0
-    num_waiters = 9
-
-    class DelayedRedisClient:
-        def __init__(self, redis_client: RedisClientType) -> None:
-            self._client = redis_client
-
-        def __getattr__(self, attr: str) -> Any:
-            # simulate the queue pop taking longer than expected.
-            # the notification queue TTL is 60 seconds so running into a timeout
-            # shouldn't happen (unless something has drastically changed in the TTL
-            # time or use)
-            if attr == "blpop":
-                nonlocal pop_calls
-                pop_calls += 1
-                time.sleep(0.5)
-            return getattr(self._client, attr)
-
-    codec = PassthroughCodec()
-
-    delayed_backend: Cache[bytes] = RedisCache(
-        cast(RedisClientType, DelayedRedisClient(redis_client)),
-        "test",
-        codec,
-        ThreadPoolExecutor(),
-    )
-    key = "key"
-
-    def normal_function() -> bytes:
-        # this sleep makes sure that all waiting clients
-        # are put into the waiting queue
-        time.sleep(0.5)
-        return b"hello-cached"
-
-    def normal_function_uncached() -> bytes:
-        return b"hello-not-cached"
-
-    def cached_query() -> bytes:
-        return delayed_backend.get_readthrough(key, normal_function, noop, 10)
-
-    def uncached_query() -> bytes:
-        return delayed_backend.get_readthrough(key, normal_function_uncached, noop, 10)
-
-    setter = execute(cached_query)
-    waiters = []
-    time.sleep(0.1)
-    for _ in range(num_waiters):
-        waiters.append(execute(uncached_query))
-
-    # make sure that all clients actually did hit the cache
-    assert setter.result() == b"hello-cached"
-    for w in waiters:
-        assert w.result() == b"hello-cached"
-    # make sure that all the waiters actually did hit the notification queue
-    # and didn't just get a direct cache hit
-    assert pop_calls == num_waiters

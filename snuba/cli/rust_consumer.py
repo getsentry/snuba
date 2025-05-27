@@ -1,10 +1,11 @@
 import json
+import sys
 from dataclasses import asdict
 from typing import Optional, Sequence
 
 import click
 
-from snuba import settings, state
+from snuba import settings
 from snuba.consumers.consumer_config import resolve_consumer_config
 from snuba.datasets.storages.factory import get_writable_storage_keys
 
@@ -27,9 +28,26 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 )
 @click.option(
     "--auto-offset-reset",
-    default="error",
+    default="earliest",
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
+)
+@click.option(
+    "--no-strict-offset-reset",
+    is_flag=True,
+    help="Forces the kafka consumer auto offset reset.",
+)
+@click.option(
+    "--queued-max-messages-kbytes",
+    default=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
+    type=int,
+    help="Maximum number of kilobytes per topic+partition in the local consumer queue.",
+)
+@click.option(
+    "--queued-min-messages",
+    default=settings.DEFAULT_QUEUED_MIN_MESSAGES,
+    type=int,
+    help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
 @click.option("--raw-events-topic", help="Topic to consume raw events from.")
 @click.option(
@@ -84,21 +102,20 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default="info",
 )
 @click.option(
-    "--skip-write/--no-skip-write",
-    "skip_write",
-    help="Skip the write to clickhouse",
-    default=True,
-)
-@click.option(
     "--concurrency",
     type=int,
 )
 @click.option(
-    "--use-rust-processor",
+    "--clickhouse-concurrency",
+    type=int,
+    help="Number of concurrent clickhouse batches at one time.",
+)
+@click.option(
+    "--use-rust-processor/--use-python-processor",
     "use_rust_processor",
     is_flag=True,
-    help="Use the Rust instead of Python message processor (if available)",
-    default=False,
+    help="Use the Rust (if available) or Python message processor",
+    default=True,
 )
 @click.option(
     "--group-instance-id",
@@ -112,11 +129,67 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=None,
     help="How many messages should be queued up in the Python message processor before backpressure kicks in. Defaults to the number of processes.",
 )
+@click.option(
+    "--max-poll-interval-ms",
+    type=int,
+    default=30000,
+)
+@click.option(
+    "--async-inserts",
+    is_flag=True,
+    default=False,
+    help="Enable async inserts for ClickHouse",
+)
+@click.option(
+    "--max-dlq-buffer-length",
+    type=int,
+    default=None,
+    help="Set a per-partition limit to the length of the DLQ buffer",
+)
+@click.option(
+    "--health-check-file",
+    default=None,
+    type=str,
+    help="Arroyo will touch this file at intervals to indicate health. If not provided, no health check is performed.",
+)
+@click.option(
+    "--enforce-schema",
+    type=bool,
+    is_flag=True,
+    default=False,
+    help="Enforce schema on the raw events topic.",
+)
+@click.option(
+    "--stop-at-timestamp",
+    type=int,
+    help="Unix timestamp after which to stop processing messages",
+)
+@click.option(
+    "--batch-write-timeout-ms",
+    type=int,
+    default=None,
+    help="Optional timeout for batch writer client connecting and sending request to Clickhouse",
+)
+@click.option(
+    "--custom-envoy-request-timeout",
+    type=int,
+    default=None,
+    help="Optional request timeout value for Snuba -> Envoy -> Clickhouse connection",
+)
+@click.option(
+    "--quantized-rebalance-consumer-group-delay-secs",
+    type=int,
+    default=None,
+    help="Quantized rebalancing means that during deploys, rebalancing is triggered across all pods within a consumer group at the same time. The value is used by the pods to align their group join/leave activity to some multiple of the delay",
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
     consumer_group: str,
     auto_offset_reset: str,
+    no_strict_offset_reset: bool,
+    queued_max_messages_kbytes: int,
+    queued_min_messages: int,
     raw_events_topic: Optional[str],
     commit_log_topic: Optional[str],
     replacements_topic: Optional[str],
@@ -127,11 +200,20 @@ def rust_consumer(
     max_batch_size: int,
     max_batch_time_ms: int,
     log_level: str,
-    skip_write: bool,
     concurrency: Optional[int],
+    clickhouse_concurrency: Optional[int],
     use_rust_processor: bool,
     group_instance_id: Optional[str],
+    max_poll_interval_ms: int,
+    async_inserts: bool,
     python_max_queue_depth: Optional[int],
+    health_check_file: Optional[str],
+    enforce_schema: bool,
+    stop_at_timestamp: Optional[int],
+    batch_write_timeout_ms: Optional[int],
+    max_dlq_buffer_length: Optional[int],
+    quantized_rebalance_consumer_group_delay_secs: Optional[int],
+    custom_envoy_request_timeout: Optional[int],
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -147,8 +229,12 @@ def rust_consumer(
         replacement_bootstrap_servers=replacement_bootstrap_servers,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
+        queued_max_messages_kbytes=queued_max_messages_kbytes,
+        queued_min_messages=queued_min_messages,
         slice_id=slice_id,
         group_instance_id=group_instance_id,
+        quantized_rebalance_consumer_group_delay_secs=quantized_rebalance_consumer_group_delay_secs,
+        custom_envoy_request_timeout=custom_envoy_request_timeout,
     )
 
     consumer_config_raw = json.dumps(asdict(consumer_config))
@@ -159,18 +245,29 @@ def rust_consumer(
 
     os.environ["RUST_LOG"] = log_level.lower()
 
-    # XXX: Temporary way to quickly test different values for concurrency
-    # Should be removed before this is put into  prod
-    concurrency_override = state.get_int_config(
-        f"rust_consumer.{storage_names[0]}.concurrency"
-    )
+    if not async_inserts:
+        # we don't want to allow increasing this if
+        # we aren't using async inserts since that will increase
+        # the number of inserts/sec on clickhouse
+        clickhouse_concurrency = 2
 
-    rust_snuba.consumer(  # type: ignore
+    exitcode = rust_snuba.consumer(  # type: ignore
         consumer_group,
         auto_offset_reset,
+        no_strict_offset_reset,
         consumer_config_raw,
-        skip_write,
-        concurrency_override or concurrency or 1,
+        concurrency or 1,
+        clickhouse_concurrency or 2,
         use_rust_processor,
+        enforce_schema,
+        max_poll_interval_ms,
+        async_inserts,
         python_max_queue_depth,
+        health_check_file,
+        stop_at_timestamp,
+        batch_write_timeout_ms,
+        max_dlq_buffer_length,
+        custom_envoy_request_timeout,
     )
+
+    sys.exit(exitcode)

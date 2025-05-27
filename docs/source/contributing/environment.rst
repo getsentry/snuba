@@ -9,8 +9,20 @@ In order to set up Clickhouse, Redis, and Kafka, please refer to :doc:`/getstart
 
 Prerequisites
 -------------
-`pyenv <https://github.com/pyenv/pyenv#installation>`_ must be installed on your system.
-It is also assumed that you have completed the steps to set up the `sentry dev environment <https://develop.sentry.dev/environment/>`_.
+It is assumed that you have completed the steps to set up the `sentry dev environment <https://develop.sentry.dev/environment/>`_.
+Install `pyenv <https://github.com/pyenv/pyenv#installation>`_ on your system using Homebrew::
+
+    brew install pyenv
+
+You may have other than Python 3.11.8 installed on your machine, but Snuba needs Python 3.11.8::
+
+    pyenv install 3.11.8
+
+You will need an installation of Rust to develop Snuba. Go `here <https://rustup.rs>`_ to get one::
+
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+Make sure to follow installation steps and configure your shell for cargo (Rust's build sytem and package manager).
 
 If you are using Homebrew and a M1 Mac, ensure the development packages you've installed with Homebrew are available
 by setting these environment variables::
@@ -21,24 +33,23 @@ by setting these environment variables::
 Install / Run
 -------------
 
-clone this repo into your workspace::
+Clone this repo into your workspace::
 
-    git@github.com:getsentry/snuba.git
+    git clone git@github.com:getsentry/snuba.git
 
 These commands set up the Python virtual environment::
 
     cd snuba
-    make pyenv-setup
     python -m venv .venv
     source .venv/bin/activate
     pip install --upgrade pip==22.2.2
     make develop
 
-These commands start the Snuba api, which is capable of processing queries::
+This command starts the Snuba api, which is capable of processing queries::
 
     snuba api
 
-This command instead will start the api and all the Snuba consumers to ingest
+This command starts the api and Snuba consumers to ingest
 data from Kafka::
 
     snuba devserver
@@ -71,7 +82,8 @@ and, in another terminal::
     cd ../sentry
     git checkout master
     git pull
-    sentry devservices up --exclude=snuba
+    devservices up
+    docker stop snuba-snuba-1 snuba-clickhouse-1
 
 This will get the most recent version of Sentry on master, and bring up all snuba's dependencies.
 

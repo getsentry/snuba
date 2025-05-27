@@ -253,6 +253,23 @@ class TestSearchIssuesMessageProcessor:
         assert "sdk_name" in insert_row and insert_row["sdk_name"] == "python"
         assert "sdk_version" in insert_row and insert_row["sdk_version"] == "1.2.3"
 
+    def test_extract_context_null_dicts(self, message_base):
+        message_base["data"]["contexts"] = {
+            "trace": None,
+            "profile": None,
+            "replay": None,
+            "scalar": {"string": "scalar_value"},
+        }
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert "contexts.key" in insert_row and insert_row["contexts.key"] == [
+            "scalar.string"
+        ]
+        assert "contexts.value" in insert_row and insert_row["contexts.value"] == [
+            "scalar_value"
+        ]
+
     def test_extract_context_filters_non_dict(self, message_base):
         message_base["data"]["contexts"] = {
             "string": "blah",
@@ -480,6 +497,6 @@ def test_data_source(
     #
     request = json_to_snql(query_body, "search_issues")
     request.validate()
-    query, _ = parse_snql_query(str(request.query), dataset)
+    query = parse_snql_query(str(request.query), dataset)
 
     assert query.get_from_clause().key == EntityKey.SEARCH_ISSUES

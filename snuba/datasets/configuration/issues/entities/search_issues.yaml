@@ -84,12 +84,6 @@ storages:
         - mapper: ColumnToColumn
           args:
             from_table_name:
-            from_col_name: "message"
-            to_table_name:
-            to_col_name: "search_title"
-        - mapper: ColumnToColumn
-          args:
-            from_table_name:
             from_col_name: "title"
             to_table_name:
             to_col_name: "search_title"
@@ -191,19 +185,6 @@ storage_selector:
   selector: DefaultQueryStorageSelector
 
 query_processors:
-  - processor: OrganizationRateLimiterProcessor
-    args:
-      org_column: organization_id
-  - processor: ReferrerRateLimiterProcessor
-  - processor: ProjectReferrerRateLimiter
-    args:
-      project_column: project_id
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
-  - processor: ResourceQuotaProcessor
-    args:
-      project_field: project_id
   - processor: BasicFunctionsProcessor
 
 validate_data_model: error
@@ -220,6 +201,12 @@ join_relationships:
   attributes:
     rhs_entity: group_attributes
     join_type: left
+    columns:
+      - [project_id, project_id]
+      - [group_id, group_id]
+  attributes_inner:
+    rhs_entity: group_attributes
+    join_type: inner
     columns:
       - [project_id, project_id]
       - [group_id, group_id]

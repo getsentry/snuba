@@ -1,8 +1,7 @@
 import pytest
 
-from snuba import state
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
-from snuba.web.db_query import _get_cache_partition, _get_cache_wait_timeout
+from snuba.web.db_query import _get_cache_partition
 
 
 @pytest.mark.redis_db
@@ -23,23 +22,3 @@ def test_cache_partition() -> None:
 
     assert id(nondefault_cache) == id(another_nondefault_cache)
     assert id(default_cache) != id(nondefault_cache)
-
-
-@pytest.mark.redis_db
-def test_cache_wait_timeout() -> None:
-    pool = ClickhousePool("127.0.0.1", 9000, "", "", "")
-    default_reader = NativeDriverReader(None, pool, None)
-    tiger_errors_reader = NativeDriverReader("tiger_errors", pool, None)
-    tiger_transactions_reader = NativeDriverReader("tiger_transactions", pool, None)
-
-    query_settings = {"max_execution_time": 30}
-    assert _get_cache_wait_timeout(query_settings, default_reader) == 30
-    assert _get_cache_wait_timeout(query_settings, tiger_errors_reader) == 30
-    assert _get_cache_wait_timeout(query_settings, tiger_transactions_reader) == 30
-
-    state.set_config("tiger-cache-wait-time", 60)
-    assert _get_cache_wait_timeout(query_settings, default_reader) == 30
-    assert _get_cache_wait_timeout(query_settings, tiger_errors_reader) == 60
-    assert _get_cache_wait_timeout(query_settings, tiger_transactions_reader) == 60
-
-    state.delete_config("tiger-cache-wait-time")

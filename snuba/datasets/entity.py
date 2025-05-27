@@ -1,16 +1,14 @@
 from abc import ABC, abstractmethod
 from typing import Mapping, Optional, Sequence
 
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import (
     EntityStorageConnection,
     Storage,
     WritableTableStorage,
 )
-from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation import FunctionCallValidator
@@ -20,7 +18,6 @@ from snuba.query.validation.validators import (
     QueryValidator,
 )
 from snuba.utils.describer import Describable, Description, Property
-from snuba.utils.schemas import ColumnSet
 
 
 class Entity(Describable, ABC):
@@ -33,7 +30,6 @@ class Entity(Describable, ABC):
         self,
         *,
         storages: Sequence[EntityStorageConnection],
-        query_pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan],
         abstract_column_set: ColumnSet,
         join_relationships: Mapping[str, JoinRelationship],
         validators: Optional[Sequence[QueryValidator]],
@@ -43,12 +39,11 @@ class Entity(Describable, ABC):
         subscription_validators: Optional[Sequence[EntitySubscriptionValidator]],
     ) -> None:
         self.__storages = storages
-        self.__query_pipeline_builder = query_pipeline_builder
 
         # Eventually, the EntityColumnSet should be passed in
         # For now, just convert it so we have the right
         # type from here on
-        self.__data_model = EntityColumnSet(abstract_column_set.columns)
+        self.__data_model = ColumnSet(abstract_column_set.columns)
 
         self.__join_relationships = join_relationships
         self.__subscription_processors = subscription_processors
@@ -75,7 +70,7 @@ class Entity(Describable, ABC):
         """
         return []
 
-    def get_data_model(self) -> EntityColumnSet:
+    def get_data_model(self) -> ColumnSet:
         """
         Now the data model is flat so this is just a simple ColumnSet object. We can expand this
         to also include relationships between entities.
@@ -93,12 +88,6 @@ class Entity(Describable, ABC):
         Returns all the join relationships
         """
         return self.__join_relationships
-
-    def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
-        """
-        Returns the component that orchestrates building and running query plans.
-        """
-        return self.__query_pipeline_builder
 
     def get_all_storages(self) -> Sequence[Storage]:
         """

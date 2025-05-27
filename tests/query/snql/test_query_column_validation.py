@@ -19,6 +19,8 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import and_cond, column, literal, or_cond
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.snql.parser import parse_snql_query
@@ -84,7 +86,7 @@ time_validation_tests = [
         id="subquery has their dates adjusted",
     ),
     pytest.param(
-        """MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c
+        """MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.event_id
         WHERE e.project_id=1
         AND e.timestamp>=toDateTime('2021-01-01T00:30:00')
         AND e.timestamp<toDateTime('2021-01-03T00:30:00')
@@ -122,49 +124,38 @@ time_validation_tests = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("e.c", Column("_snuba_e.c", "e", "c")),
-            ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column("_snuba_e.project_id", "e", "project_id"),
-                    Literal(None, 1),
+                SelectedExpression(
+                    "e.event_id", Column("_snuba_e.event_id", "e", "event_id")
                 ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "greaterOrEquals",
-                        Column("_snuba_e.timestamp", "e", "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+            ],
+            condition=and_cond(
+                and_cond(
+                    f.equals(
+                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
                     ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_e.timestamp", "e", "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 3, 0, 0)),
+                    f.greaterOrEquals(
+                        column("timestamp", "e", "_snuba_e.timestamp"),
+                        literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.less(
+                            column("timestamp", "e", "_snuba_e.timestamp"),
+                            literal(datetime.datetime(2021, 1, 3, 0, 0)),
                         ),
-                        binary_condition(
-                            "and",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_t.project_id", "t", "project_id"),
-                                Literal(None, 1),
-                            ),
-                            binary_condition(
-                                "and",
-                                binary_condition(
-                                    "greaterOrEquals",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                                ),
-                                binary_condition(
-                                    "less",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 7, 0, 0)),
-                                ),
-                            ),
+                        f.equals(
+                            column("project_id", "t", "_snuba_t.project_id"), literal(1)
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 0)),
+                        ),
+                        f.less(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 7, 0, 0)),
                         ),
                     ),
                 ),
@@ -331,32 +322,24 @@ time_validation_tests = [
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
             ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column("_snuba_project_id", None, "project_id"),
-                    Literal(None, 1),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "greaterOrEquals",
-                        Column("_snuba_timestamp", None, "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+            condition=and_cond(
+                and_cond(
+                    f.equals(
+                        column("project_id", None, "_snuba_project_id"), literal(1)
                     ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_timestamp", None, "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        binary_condition(
-                            "less",
-                            Column("_snuba_timestamp", None, "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 3, 0, 30)),
-                        ),
+                    f.greaterOrEquals(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime.datetime(2021, 1, 2, 0, 0)),
+                    ),
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime.datetime(2021, 1, 3, 0, 30)),
                     ),
                 ),
             ),
@@ -379,39 +362,29 @@ time_validation_tests = [
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
             ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column("_snuba_project_id", None, "project_id"),
-                    Literal(None, 1),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "greaterOrEquals",
-                        Column("_snuba_timestamp", None, "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+            condition=and_cond(
+                and_cond(
+                    f.equals(
+                        column("project_id", None, "_snuba_project_id"), literal(1)
                     ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_timestamp", None, "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                    f.greaterOrEquals(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime.datetime(2021, 1, 2, 0, 0)),
+                    ),
+                    or_cond(
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 30)),
                         ),
-                        binary_condition(
-                            "or",
-                            binary_condition(
-                                "less",
-                                Column("_snuba_timestamp", None, "timestamp"),
-                                Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
-                            ),
-                            binary_condition(
-                                "less",
-                                Column("_snuba_timestamp", None, "timestamp"),
-                                Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
-                            ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 30)),
                         ),
                     ),
                 ),
@@ -457,6 +430,6 @@ def test_entity_column_validation(
 
     events_entity = get_entity(EntityKey.EVENTS)
     monkeypatch.setattr(events_entity, "get_join_relationship", events_mock)
-    query, _ = parse_snql_query(query_body, events)
+    query = parse_snql_query(query_body, events)
     eq, reason = query.equals(expected_query)
     assert eq, reason

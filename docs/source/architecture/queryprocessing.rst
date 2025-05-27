@@ -122,24 +122,6 @@ finds equality conditions on tags and replace them with the equivalent condition
 on a tags hashmap (where we have a bloom filter index) making the filtering
 operation faster.
 
-Query Splitter
---------------
-
-Some queries can be executed in an optimized way by splitting them into multiple
-individual Clickhouse queries and by assembling the results of each one of them.
-
-Two examples are time splitting and column splitting. Both hare `in this file <https://github.com/getsentry/snuba/blob/master/snuba/web/split.py>`_.
-
-Time splitting splits a query (that does not contain aggregations and is properly
-sorted) into multiple ones over a variable time range that increases in size
-progressively and executes them in sequence stopping as soon we have enough
-results.
-
-Column splitting splits filtering and column fetching. It executes the filtering
-part of the query on a minimal number of columns so Clickhouse loads fewer columns,
-then, through a second query, fetches the missing columns only for the rows
-filtered by the first query.
-
 Query Formatter
 ---------------
 

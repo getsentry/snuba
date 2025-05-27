@@ -1,0 +1,59 @@
+version: v1
+kind: writable_storage
+name: profile_chunks
+storage:
+  key: profile_chunks
+  set_key: profile_chunks
+readiness_state: partial
+schema:
+  columns:
+    [
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: profiler_id, type: UUID },
+      { name: chunk_id, type: UUID },
+      { name: start_timestamp, type: DateTime64, args: { precision: 6 } },
+      { name: end_timestamp, type: DateTime64, args: { precision: 6 } },
+      {
+        name: environment,
+        type: String,
+        args: { schema_modifiers: [nullable] },
+      },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      { name: partition, type: UInt, args: { size: 16 } },
+      { name: offset, type: UInt, args: { size: 64 } },
+    ]
+  local_table_name: profile_chunks_local
+  dist_table_name: profile_chunks_dist
+query_processors:
+  - processor: UUIDColumnProcessor
+    args:
+      columns: !!set
+        profiler_id: null
+        chunk_id: null
+allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 1
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+mandatory_condition_checkers:
+  - condition: ProjectIdEnforcer
+stream_loader:
+  processor: ProfileChunksProcessor
+  default_topic: snuba-profile-chunks
