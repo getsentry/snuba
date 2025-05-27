@@ -10,7 +10,11 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
+    RequestMeta,
+    TraceItemType,
+)
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -29,6 +33,7 @@ from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     trace_item_filters_to_expression,
+    use_sampling_factor,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -48,7 +53,9 @@ from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
 _DEFAULT_ROW_LIMIT = 10_000
 
 
-def aggregation_filter_to_expression(agg_filter: AggregationFilter) -> Expression:
+def aggregation_filter_to_expression(
+    agg_filter: AggregationFilter, request_meta: RequestMeta
+) -> Expression:
     op_to_expr = {
         AggregationComparisonFilter.OP_LESS_THAN: f.less,
         AggregationComparisonFilter.OP_GREATER_THAN: f.greater,
@@ -69,6 +76,7 @@ def aggregation_filter_to_expression(agg_filter: AggregationFilter) -> Expressio
                 aggregation_to_expression(
                     agg_filter.comparison_filter.aggregation,
                     attribute_key_to_expression,
+                    use_sampling_factor(request_meta),
                 ),
                 agg_filter.comparison_filter.val,
             )
@@ -79,7 +87,7 @@ def aggregation_filter_to_expression(agg_filter: AggregationFilter) -> Expressio
                 )
             return and_cond(
                 *(
-                    aggregation_filter_to_expression(x)
+                    aggregation_filter_to_expression(x, request_meta)
                     for x in agg_filter.and_filter.filters
                 )
             )
@@ -90,7 +98,7 @@ def aggregation_filter_to_expression(agg_filter: AggregationFilter) -> Expressio
                 )
             return or_cond(
                 *(
-                    aggregation_filter_to_expression(x)
+                    aggregation_filter_to_expression(x, request_meta)
                     for x in agg_filter.or_filter.filters
                 )
             )
@@ -101,7 +109,7 @@ def aggregation_filter_to_expression(agg_filter: AggregationFilter) -> Expressio
 
 
 def _convert_order_by(
-    order_by: Sequence[TraceItemTableRequest.OrderBy],
+    order_by: Sequence[TraceItemTableRequest.OrderBy], request_meta: RequestMeta
 ) -> Sequence[OrderBy]:
     res: list[OrderBy] = []
     for x in order_by:
@@ -120,6 +128,7 @@ def _convert_order_by(
                     expression=aggregation_to_expression(
                         x.column.conditional_aggregation,
                         attribute_key_to_expression,
+                        use_sampling_factor(request_meta),
                     ),
                 )
             )
@@ -147,6 +156,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
             function_expr = aggregation_to_expression(
                 column.conditional_aggregation,
                 attribute_key_to_expression,
+                use_sampling_factor(request.meta),
             )
             # aggregation label may not be set and the column label takes priority anyways.
             function_expr = replace(function_expr, alias=column.label)
@@ -170,7 +180,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
                 request.filter, attribute_key_to_expression
             ),
         ),
-        order_by=_convert_order_by(request.order_by),
+        order_by=_convert_order_by(request.order_by, request.meta),
         groupby=[
             attribute_key_to_expression(attr_key) for attr_key in request.group_by
         ],
@@ -178,7 +188,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         # give it a default value that will actually return data
         limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
         having=(
-            aggregation_filter_to_expression(request.aggregation_filter)
+            aggregation_filter_to_expression(request.aggregation_filter, request.meta)
             if request.HasField("aggregation_filter")
             else None
         ),

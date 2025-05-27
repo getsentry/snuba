@@ -34,11 +34,13 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_sampling_factor,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
 )
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     ExtrapolationContext,
     aggregation_to_expression,
@@ -46,13 +48,11 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_confidence_interval_column,
     get_count_column,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    attribute_key_to_expression,
-    attribute_key_to_expression_eap_items,
-    use_eap_items_table,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.sampling_in_storage_util import (
     run_query_to_correct_tier,
+)
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+    attribute_key_to_expression_eap_items,
 )
 
 OP_TO_EXPR = {
@@ -66,9 +66,7 @@ OP_TO_EXPR = {
 def _get_attribute_key_to_expression_function(
     request_meta: RequestMeta,
 ) -> Callable[[AttributeKey], Expression]:
-    if use_eap_items_table(request_meta):
-        return attribute_key_to_expression_eap_items
-    return attribute_key_to_expression
+    return attribute_key_to_expression_eap_items
 
 
 def _convert_result_timeseries(
@@ -247,17 +245,30 @@ def _proto_expression_to_ast_expression(
         case "conditional_aggregation":
             return aggregation_to_expression(
                 expr.conditional_aggregation,
-                attribute_key_to_expression_eap_items
-                if use_eap_items_table(request_meta)
-                else attribute_key_to_expression,
+                (attribute_key_to_expression_eap_items),
+                use_sampling_factor(request_meta),
             )
         case "formula":
             formula_expr = OP_TO_EXPR[expr.formula.op](
                 _proto_expression_to_ast_expression(expr.formula.left, request_meta),
                 _proto_expression_to_ast_expression(expr.formula.right, request_meta),
             )
-            formula_expr = replace(formula_expr, alias=expr.label)
-            return formula_expr
+            match expr.formula.WhichOneof("default_value"):
+                case None:
+                    pass
+                case "default_value_double":
+                    formula_expr = f.coalesce(
+                        formula_expr, expr.formula.default_value_double
+                    )
+                case "default_value_int64":
+                    formula_expr = f.coalesce(
+                        formula_expr, expr.formula.default_value_int64
+                    )
+                case default:
+                    raise BadSnubaRPCRequestException(
+                        f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
+                    )
+            return replace(formula_expr, alias=expr.label)
         case "literal":
             return literal(expr.literal.val_double)
         case default:
@@ -265,18 +276,11 @@ def _proto_expression_to_ast_expression(
 
 
 def build_query(request: TimeSeriesRequest) -> Query:
-    if use_eap_items_table(request.meta):
-        entity = Entity(
-            key=EntityKey("eap_items"),
-            schema=get_entity(EntityKey("eap_items")).get_data_model(),
-            sample=None,
-        )
-    else:
-        entity = Entity(
-            key=EntityKey("eap_spans"),
-            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-            sample=None,
-        )
+    entity = Entity(
+        key=EntityKey("eap_items"),
+        schema=get_entity(EntityKey("eap_items")).get_data_model(),
+        sample=None,
+    )
 
     aggregation_columns = [
         SelectedExpression(
@@ -299,11 +303,7 @@ def build_query(request: TimeSeriesRequest) -> Query:
         )
         for attr_key in request.group_by
     ]
-    item_type_conds = (
-        [f.equals(column("item_type"), request.meta.trace_item_type)]
-        if use_eap_items_table(request.meta)
-        else []
-    )
+    item_type_conds = [f.equals(column("item_type"), request.meta.trace_item_type)]
 
     res = Query(
         from_clause=entity,
@@ -375,7 +375,7 @@ class ResolverTimeSeriesEAPItems:
         )
 
         res = run_query_to_correct_tier(
-            in_msg, query_settings, timer, build_query, metrics_backend
+            in_msg, query_settings, timer, build_query  # type: ignore
         )
 
         response_meta = extract_response_meta(

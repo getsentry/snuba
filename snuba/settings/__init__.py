@@ -223,6 +223,9 @@ USE_EAP_ITEMS_TABLE = bool(os.environ.get("USE_EAP_ITEMS_TABLE", True))
 # Represents 12AM PST March 12, 2025. We can remove this setting once 30 days have passed since this date.
 USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS = 1741762800
 
+# Represents 10AM PST April 8, 2025 which is the date we started writing the sampling factor. We can remove this setting once 90 days have passed since this date.
+USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS = 1744131600
+
 # Processor/Writer Options
 
 
@@ -251,7 +254,7 @@ DEFAULT_QUEUED_MIN_MESSAGES = 10000
 DISCARD_OLD_EVENTS = True
 CLICKHOUSE_HTTP_CHUNK_SIZE = 8192
 HTTP_WRITER_BUFFER_SIZE = 1
-BATCH_JOIN_TIMEOUT = os.environ.get("BATCH_JOIN_TIMEOUT", 10)
+BATCH_JOIN_TIMEOUT = int(os.environ.get("BATCH_JOIN_TIMEOUT", 10))
 
 # Retention related settings
 ENFORCE_RETENTION: bool = False
@@ -286,6 +289,12 @@ PRETTY_FORMAT_EXPRESSIONS = os.environ.get("PRETTY_FORMAT_EXPRESSIONS", "1") == 
 # policy code, the request will still be able to go through (but it will create a dangerous
 # situation eventually)
 RAISE_ON_ALLOCATION_POLICY_FAILURES = False
+
+# By default, routing strategies won't block requests from going through in a production
+# environment to not cause incidents unnecessarily. If something goes wrong with routing strategy
+# code, the request will still be able to go through (but it will create a dangerous
+# situation eventually)
+RAISE_ON_ROUTING_STRATEGY_FAILURES = False
 
 # By default, the readthrough cache won't block requests from going through in a production
 # environment to not cause incidents unnecessarily. If something goes wrong with redis or the readthrough cache

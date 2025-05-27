@@ -56,7 +56,15 @@ storages:
             to_col_table: null
             to_col_name: _hash_map_float
             num_attribute_buckets: 40
-
+  # listing all the materialized views so they get dropped with the entity
+  - storage: eap_items_downsample_8
+    is_writable: false
+  - storage: eap_items_downsample_64
+    is_writable: false
+  - storage: eap_items_downsample_512
+    is_writable: false
+  - storage: eap_item_co_occurring_attrs
+    is_writable: false
 
 storage_selector:
   selector: EAPItemsStorageSelector

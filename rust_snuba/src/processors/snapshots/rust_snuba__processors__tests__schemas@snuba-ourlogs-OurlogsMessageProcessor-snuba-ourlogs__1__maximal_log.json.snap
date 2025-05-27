@@ -31,9 +31,6 @@ expression: snapshot_payload
     "attributes_string_0": {
       "sentry.body": "hello world!"
     },
-    "attributes_string_12": {
-      "sentry.span_id": "11002233AABBCCDD"
-    },
     "attributes_string_28": {
       "some.user.tag": "hello"
     },

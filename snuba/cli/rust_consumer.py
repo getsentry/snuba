@@ -141,14 +141,6 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Enable async inserts for ClickHouse",
 )
 @click.option(
-    "--mutations-mode",
-    is_flag=True,
-    default=False,
-    help="""
-    This is only to be used for the mutability consumer
-    """,
-)
-@click.option(
     "--max-dlq-buffer-length",
     type=int,
     default=None,
@@ -219,7 +211,6 @@ def rust_consumer(
     enforce_schema: bool,
     stop_at_timestamp: Optional[int],
     batch_write_timeout_ms: Optional[int],
-    mutations_mode: bool,
     max_dlq_buffer_length: Optional[int],
     quantized_rebalance_consumer_group_delay_secs: Optional[int],
     custom_envoy_request_timeout: Optional[int],
@@ -271,7 +262,6 @@ def rust_consumer(
         enforce_schema,
         max_poll_interval_ms,
         async_inserts,
-        mutations_mode,
         python_max_queue_depth,
         health_check_file,
         stop_at_timestamp,
