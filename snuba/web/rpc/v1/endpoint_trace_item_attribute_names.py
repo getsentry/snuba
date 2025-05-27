@@ -243,7 +243,7 @@ def get_co_occurring_attributes(
     attr_filter = not_cond(
         in_cond(
             column("attr.2"),
-            f.array(*attribute_keys_to_search, *UNSEARCHABLE_ATTRIBUTE_KEYS),
+            f.array(*UNSEARCHABLE_ATTRIBUTE_KEYS),
         )
     )
     if request.value_substring_match:
@@ -273,6 +273,9 @@ def get_co_occurring_attributes(
         ],
         # chosen arbitrarily to be a high number
         limit=request.limit,
+        offset=request.page_token.offset
+        if request.page_token.HasField("offset")
+        else 0,
     )
 
     treeify_or_and_conditions(query)

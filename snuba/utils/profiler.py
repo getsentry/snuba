@@ -30,7 +30,7 @@ def _profiler_main() -> None:
         if own_hostname in queried_hostnames and current_transaction is None:
             # Log an error to Sentry on purpose, if the pod slows down it
             # should be obvious why.
-            logger.warn("starting ondemand profile for %s", own_hostname)
+            logger.warning("starting ondemand profile for %s", own_hostname)
 
             with sentry_sdk.Hub.main:
                 open_transaction: Union[
@@ -42,7 +42,7 @@ def _profiler_main() -> None:
                 assert open_transaction._profile is not None
                 open_transaction._profile.sampled = True
                 if open_transaction._profile.scheduler is None:
-                    logger.warn(
+                    logger.warning(
                         "unable to start ondemand profile, need to turn on profiling globally"
                     )
                     return
@@ -66,7 +66,7 @@ def _profiler_main() -> None:
                 own_hostname not in queried_hostnames
                 or time.time() - transaction_start >= 30
             ):
-                logger.warn("stopping ondemand profile for %s", own_hostname)
+                logger.warning("stopping ondemand profile for %s", own_hostname)
                 with sentry_sdk.Hub.main:
                     open_transaction.__exit__(None, None, None)
                     current_transaction = None

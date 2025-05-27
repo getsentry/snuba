@@ -82,8 +82,8 @@ def _build_query(
     This query will match the first 10000 occurrences of an attribute value and then deduplicate them,
     this gives a large speedup to the query at the cost of ordering and paginating all values
     """
-    if request.limit > 1000:
-        raise BadSnubaRPCRequestException("Limit can be at most 1000")
+    if request.limit > 10000:
+        raise BadSnubaRPCRequestException("Limit can be at most 10000")
 
     entity_key = EntityKey("eap_items")
     entity = Entity(
@@ -115,6 +115,9 @@ def _build_query(
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
         ],
         limit=request.limit,
+        offset=request.page_token.offset
+        if request.page_token.HasField("offset")
+        else 0,
     )
     return res
 
