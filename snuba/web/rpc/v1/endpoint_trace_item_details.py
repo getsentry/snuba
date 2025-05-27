@@ -52,7 +52,6 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
         sample=None,
     )
-
     res = Query(
         from_clause=entity,
         selected_columns=[
