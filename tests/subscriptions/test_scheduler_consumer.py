@@ -5,6 +5,7 @@ import logging
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any, Mapping, Optional
 from unittest import mock
 
@@ -18,7 +19,6 @@ from arroyo.errors import ConsumerError
 from arroyo.types import BrokerValue, Partition, Topic
 from arroyo.utils.clock import MockedClock
 from confluent_kafka.admin import AdminClient
-from py._path.local import LocalPath
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest as CreateSubscriptionRequestProto,
 )
@@ -57,7 +57,7 @@ commit_codec = CommitCodec()
 
 
 @pytest.mark.redis_db
-def test_scheduler_consumer(tmpdir: LocalPath) -> None:
+def test_scheduler_consumer(tmpdir: Path) -> None:
     settings.KAFKA_TOPIC_MAP = {
         "events": "events-test",
         "snuba-commit-log": "snuba-commit-log-test",
@@ -166,7 +166,7 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
+def test_scheduler_consumer_rpc_subscriptions(tmpdir: Path) -> None:
     commit_log_topic_name_physical = "snuba-eap-spans-commit-log-test"
     data_topic_name_physical = "snuba-spans-test"
     followed_consumer_group = "eap_items_consumers"
