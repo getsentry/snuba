@@ -278,8 +278,7 @@ class TestMetricsCountersSubscriptionCreator:
     @pytest.mark.redis_db
     def test(self, subscription: SubscriptionData, entity_key: EntityKey) -> None:
         admin_client = AdminClient(get_default_kafka_configuration())
-        create_topics(admin_client, [SnubaTopic.GENERIC_METRICS], 2)
-        create_topics(admin_client, [SnubaTopic.METRICS], 2)
+        create_topics(admin_client, [SnubaTopic.METRICS])
 
         creator = SubscriptionCreator(self.dataset, entity_key)
         identifier = creator.create(subscription, self.timer)
