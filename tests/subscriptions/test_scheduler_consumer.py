@@ -43,7 +43,7 @@ from snuba.subscriptions import scheduler_consumer
 from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer
 from snuba.subscriptions.types import Interval
 from snuba.subscriptions.utils import Tick
-from snuba.utils.manage_topics import create_topics
+from snuba.utils.manage_topics import create_topics, destroy_topics
 from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
     get_default_kafka_configuration,
@@ -162,6 +162,7 @@ def test_scheduler_consumer(tmpdir: Path) -> None:
     assert mock_scheduler_producer.produce.call_count == 2
 
     settings.KAFKA_TOPIC_MAP = {}
+    destroy_topics(admin_client, [SnubaTopic.EVENTS])
 
 
 @pytest.mark.clickhouse_db
