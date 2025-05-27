@@ -2,15 +2,13 @@ from unittest import mock
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
+    TraceItemAttributeNamesRequest,
+    TraceItemAttributeNamesResponse,
+)
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
-from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
-    TraceItemAttributesRequest as TraceItemAttributesRequestProto,
-)
-from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
-    TraceItemAttributesResponse as TraceItemAttributesResponseProto,
-)
-from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
-from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.web import QueryException
 from snuba.web.rpc import run_rpc_handler
@@ -20,7 +18,7 @@ from tests.base import BaseApiTest
 
 def test_rpc_handler_bad_request() -> None:
     resp = run_rpc_handler(
-        "TraceItemAttributesRequest", "v1alpha", b"invalid-proto-data"
+        "EndpointTraceItemAttributeNames", "v1", b"invalid-proto-data"
     )
     assert isinstance(resp, ErrorProto)
     assert resp.code == 400
@@ -35,7 +33,7 @@ def test_rpc_handler_not_found() -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_basic() -> None:
-    message = TraceItemAttributesRequestProto(
+    message = TraceItemAttributeNamesRequest(
         meta=RequestMeta(
             project_ids=[1, 2, 3],
             organization_id=1,
@@ -50,9 +48,9 @@ def test_basic() -> None:
     )
 
     resp = run_rpc_handler(
-        "TraceItemAttributesRequest", "v1alpha", message.SerializeToString()
+        "EndpointTraceItemAttributeNames", "v1", message.SerializeToString()
     )
-    assert isinstance(resp, TraceItemAttributesResponseProto)
+    assert isinstance(resp, TraceItemAttributeNamesResponse)
 
 
 @pytest.mark.parametrize(
@@ -72,7 +70,7 @@ def test_basic() -> None:
     ],
 )
 def test_internal_error(expected_status_code: int, error: Exception) -> None:
-    message = TraceItemAttributesRequestProto(
+    message = TraceItemAttributeNamesRequest(
         meta=RequestMeta(
             project_ids=[1, 2, 3],
             organization_id=1,
@@ -87,11 +85,11 @@ def test_internal_error(expected_status_code: int, error: Exception) -> None:
     )
 
     with mock.patch(
-        "snuba.web.rpc.v1alpha.trace_item_attribute_list.trace_item_attribute_list_query"
+        "snuba.web.rpc.v1.endpoint_trace_item_attribute_names.EndpointTraceItemAttributeNames._execute"
     ) as patch:
         patch.side_effect = error
         resp = run_rpc_handler(
-            "TraceItemAttributesRequest", "v1alpha", message.SerializeToString()
+            "EndpointTraceItemAttributeNames", "v1", message.SerializeToString()
         )
         assert isinstance(resp, ErrorProto)
         assert resp.code == expected_status_code

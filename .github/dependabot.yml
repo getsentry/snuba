@@ -23,7 +23,7 @@ updates:
     ignore:
       # sentry-kafka-schemas has its own lints to ensure it is reasonably
       # up-to-date -- we should rely on them
-      - dependency-name: "sentry-kafka-schemas"
+      - dependency-name: sentry-kafka-schemas
 
   - package-ecosystem: "docker"
     directory: "/"

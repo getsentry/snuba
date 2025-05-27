@@ -1,7 +1,7 @@
 use crate::config::ProcessorConfig;
 use anyhow::{anyhow, Context};
 use chrono::DateTime;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
@@ -49,6 +49,7 @@ pub fn deserialize_message(
                 click_testid: click.testid,
                 click_text: click.text,
                 click_title: click.title,
+                environment: event.environment.clone().unwrap_or("".to_string()),
                 error_sample_rate: -1.0,
                 event_hash: click.event_hash,
                 offset,
@@ -114,6 +115,17 @@ pub fn deserialize_message(
             let error_sample_rate = event.contexts.replay.error_sample_rate.unwrap_or(-1.0);
             let session_sample_rate = event.contexts.replay.session_sample_rate.unwrap_or(-1.0);
 
+            let segment_id = match event.segment_id {
+                Some(s_id) => {
+                    if s_id <= u16::MAX.into() {
+                        Some(s_id as u16)
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            };
+
             vec![ReplayRow {
                 browser_name: event.contexts.browser.name.unwrap_or_default(),
                 browser_version: event.contexts.browser.version.unwrap_or_default(),
@@ -133,6 +145,13 @@ pub fn deserialize_message(
                 offset,
                 os_name: event.contexts.os.name.unwrap_or_default(),
                 os_version: event.contexts.os.version.unwrap_or_default(),
+                ota_updates_channel: event.contexts.ota_updates.channel.unwrap_or_default(),
+                ota_updates_runtime_version: event
+                    .contexts
+                    .ota_updates
+                    .runtime_version
+                    .unwrap_or_default(),
+                ota_updates_update_id: event.contexts.ota_updates.update_id.unwrap_or_default(),
                 partition,
                 platform: event.platform.unwrap_or("".to_string()),
                 project_id: replay_message.project_id,
@@ -143,7 +162,6 @@ pub fn deserialize_message(
                 retention_days: replay_message.retention_days,
                 sdk_name: event.sdk.name.unwrap_or_default(),
                 sdk_version: event.sdk.version.unwrap_or_default(),
-                segment_id: event.segment_id,
                 timestamp: event.timestamp as u32,
                 trace_ids: event.trace_ids.unwrap_or_default(),
                 urls: event.urls.unwrap_or_default(),
@@ -151,6 +169,11 @@ pub fn deserialize_message(
                 user_email: event.user.email.unwrap_or_default(),
                 user_id: user_id.unwrap_or_default(),
                 user_name: event.user.username.unwrap_or_default(),
+                user_geo_city: event.user.geo.city.unwrap_or_default(),
+                user_geo_country_code: event.user.geo.country_code.unwrap_or_default(),
+                user_geo_region: event.user.geo.region.unwrap_or_default(),
+                user_geo_subdivision: event.user.geo.subdivision.unwrap_or_default(),
+                segment_id,
                 title,
                 tags_key,
                 tags_value: tags_value
@@ -245,6 +268,8 @@ enum ReplayPayload {
 
 #[derive(Debug, Deserialize)]
 struct ReplayClickEvent {
+    #[serde(default)]
+    environment: Option<String>,
     clicks: Vec<ReplayClickEventClick>,
 }
 
@@ -301,7 +326,7 @@ struct ReplayEvent {
     #[serde(default)]
     sdk: Version,
     #[serde(default)]
-    segment_id: Option<u16>,
+    segment_id: Option<u32>,
     timestamp: f64,
     #[serde(default)]
     urls: Option<Vec<String>>,
@@ -325,6 +350,8 @@ struct Contexts {
     os: Version,
     #[serde(default)]
     replay: ReplayContext,
+    #[serde(default)]
+    ota_updates: OTAUpdates,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -348,6 +375,16 @@ struct ReplayContext {
 }
 
 #[derive(Debug, Default, Deserialize)]
+struct OTAUpdates {
+    #[serde(default)]
+    channel: Option<String>,
+    #[serde(default)]
+    runtime_version: Option<String>,
+    #[serde(default)]
+    update_id: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
 struct User {
     #[serde(default)]
     username: Option<String>,
@@ -357,6 +394,20 @@ struct User {
     email: Option<String>,
     #[serde(default)]
     ip_address: Option<String>,
+    #[serde(default)]
+    geo: Geo,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct Geo {
+    #[serde(default)]
+    city: Option<String>,
+    #[serde(default)]
+    country_code: Option<String>,
+    #[serde(default)]
+    region: Option<String>,
+    #[serde(default)]
+    subdivision: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -431,6 +482,9 @@ pub struct ReplayRow {
     offset: u64,
     os_name: String,
     os_version: String,
+    ota_updates_channel: String,
+    ota_updates_runtime_version: String,
+    ota_updates_update_id: String,
     partition: u16,
     platform: String,
     project_id: u64,
@@ -455,6 +509,10 @@ pub struct ReplayRow {
     user_id: String,
     user_name: String,
     user: String,
+    user_geo_city: String,
+    user_geo_country_code: String,
+    user_geo_region: String,
+    user_geo_subdivision: String,
     viewed_by_id: u64,
     warning_id: Uuid,
 }
@@ -463,11 +521,11 @@ pub struct ReplayRow {
 mod tests {
     use super::*;
     use chrono::DateTime;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
+    use sentry_arroyo::backends::kafka::types::KafkaPayload;
     use std::{str::FromStr, time::SystemTime};
 
     #[test]
-    fn test_parse_replay_event() {
+    fn test_parse_replay_event_overflow_segment_id() {
         let payload = r#"{
             "contexts": {
                 "browser": {
@@ -494,6 +552,88 @@ mod tests {
                 "ip_address": "127.0.0.1",
                 "id": "user_id",
                 "username": "username"
+            },
+            "sdk": {
+                "name": "sdk",
+                "version": "v1"
+            },
+            "dist": "dist",
+            "environment": "environment",
+            "is_archived": false,
+            "platform": "platform",
+            "release": "release",
+            "replay_start_timestamp": 1702659277,
+            "replay_type": "buffer",
+            "urls": ["urls"],
+            "trace_ids": ["2cd798d70f9346089026d2014a826629"],
+            "error_ids": ["df11e6d952da470386a64340f13151c4"],
+            "tags": [
+                ["a", "b"],
+                ["transaction.name", null]
+            ],
+            "segment_id": 4206942069,
+            "replay_id": "048aa04be40243948eb3b57089c519ee",
+            "timestamp": 1702659277,
+            "type": "replay_event"
+        }"#;
+        let payload_value = payload.as_bytes();
+
+        let data = format!(
+            r#"{{
+                "payload": {payload_value:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let replay_row = rows.first().unwrap();
+        assert_eq!(replay_row.segment_id, None);
+    }
+
+    #[test]
+    fn test_parse_replay_event() {
+        let payload = r#"{
+            "contexts": {
+                "browser": {
+                    "name": "browser",
+                    "version": "v1"
+                },
+                "device": {
+                    "brand": "brand",
+                    "family": "family",
+                    "model": "model",
+                    "name": "name"
+                },
+                "os": {
+                    "name": "os",
+                    "version": "v1"
+                },
+                "ota_updates": {
+                    "channel": "channel",
+                    "runtime_version": "runtime_version",
+                    "update_id": "update_id"
+                },
+                "replay": {
+                    "error_sample_rate": 1,
+                    "session_sample_rate": 0.5
+                }
+            },
+            "user": {
+                "email": "email",
+                "ip_address": "127.0.0.1",
+                "id": "user_id",
+                "username": "username",
+                "geo": {
+                    "city": "city",
+                    "country_code": "country_code",
+                    "region": "region",
+                    "subdivision": "subdivision"
+                }
             },
             "sdk": {
                 "name": "sdk",
@@ -555,6 +695,10 @@ mod tests {
         assert_eq!(&replay_row.user_id, "user_id");
         assert_eq!(&replay_row.user_name, "username");
         assert_eq!(&replay_row.user, "user_id");
+        assert_eq!(&replay_row.user_geo_city, "city");
+        assert_eq!(&replay_row.user_geo_country_code, "country_code");
+        assert_eq!(&replay_row.user_geo_region, "region");
+        assert_eq!(&replay_row.user_geo_subdivision, "subdivision");
         assert_eq!(
             replay_row.error_ids,
             vec![Uuid::parse_str("df11e6d952da470386a64340f13151c4").unwrap()]
@@ -602,6 +746,9 @@ mod tests {
         assert_eq!(replay_row.info_id, Uuid::nil());
         assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
+        assert_eq!(&replay_row.ota_updates_channel, "channel");
+        assert_eq!(&replay_row.ota_updates_runtime_version, "runtime_version");
+        assert_eq!(&replay_row.ota_updates_update_id, "update_id");
     }
 
     #[test]
@@ -631,7 +778,13 @@ mod tests {
                 "id": null,
                 "username": null,
                 "email": null,
-                "ip_address": null
+                "ip_address": null,
+                "geo": {
+                    "city": null,
+                    "country_code": null,
+                    "region": null,
+                    "subdivision": null
+                }
             },
             "sdk": {
                 "name": null,
@@ -655,6 +808,11 @@ mod tests {
                     "brand": null,
                     "family": null,
                     "model": null
+                },
+                "ota_updates": {
+                    "channel": null,
+                    "runtime_version": null,
+                    "update_id": null
                 }
             }
         }"#;
@@ -694,6 +852,10 @@ mod tests {
         assert_eq!(&replay_row.user_id, "");
         assert_eq!(&replay_row.user_name, "");
         assert_eq!(&replay_row.user, "");
+        assert_eq!(&replay_row.user_geo_city, "");
+        assert_eq!(&replay_row.user_geo_country_code, "");
+        assert_eq!(&replay_row.user_geo_region, "");
+        assert_eq!(&replay_row.user_geo_subdivision, "");
         assert_eq!(replay_row.error_ids, vec![]);
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.ip_address_v4, None);
@@ -733,6 +895,9 @@ mod tests {
         assert_eq!(replay_row.info_id, Uuid::nil());
         assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
+        assert_eq!(&replay_row.ota_updates_channel, "");
+        assert_eq!(&replay_row.ota_updates_runtime_version, "");
+        assert_eq!(&replay_row.ota_updates_update_id, "");
     }
 
     #[test]
@@ -740,6 +905,7 @@ mod tests {
         let payload = r#"{
             "type": "replay_actions",
             "replay_id": "048aa04be40243948eb3b57089c519ee",
+            "environment": "prod",
             "clicks": [{
                 "alt": "Alternate",
                 "aria_label": "Aria-label",
@@ -796,6 +962,7 @@ mod tests {
         );
         assert_eq!(replay_row.retention_days, 30);
         assert_eq!(replay_row.segment_id, None);
+        assert_eq!(&replay_row.environment, "prod");
 
         // Default columns - not providable on this event.
         assert_eq!(&replay_row.browser_name, "");
@@ -805,7 +972,6 @@ mod tests {
         assert_eq!(&replay_row.device_model, "");
         assert_eq!(&replay_row.device_name, "");
         assert_eq!(&replay_row.dist, "");
-        assert_eq!(&replay_row.environment, "");
         assert_eq!(&replay_row.os_name, "");
         assert_eq!(&replay_row.os_version, "");
         assert_eq!(&replay_row.release, "");
@@ -1229,5 +1395,104 @@ mod tests {
         let replay_row = rows.first().unwrap();
         assert_eq!(replay_row.tags_key, [] as [String; 0]);
         assert_eq!(replay_row.tags_value, [] as [String; 0]);
+    }
+
+    #[test]
+    fn test_parse_replay_click_event_null_environment() {
+        let payload = r#"{
+            "type": "replay_actions",
+            "replay_id": "048aa04be40243948eb3b57089c519ee",
+            "environment": null,
+            "clicks": [{
+                "alt": "Alternate",
+                "aria_label": "Aria-label",
+                "class": ["hello", "world"],
+                "component_name": "SignUpButton",
+                "event_hash": "b4370ef8d1994e96b5bc719b72afbf49",
+                "id": "id",
+                "is_dead": 0,
+                "is_rage": 1,
+                "node_id": 320,
+                "role": "button",
+                "tag": "div",
+                "testid": "",
+                "text": "Submit",
+                "timestamp": 1702659277,
+                "title": "title"
+            }]
+        }"#;
+        let payload_value = payload.as_bytes();
+
+        let data = format!(
+            r#"{{
+                "payload": {payload_value:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let replay_row = rows.first().unwrap();
+
+        // Columns in the critical path.
+        assert_eq!(&replay_row.click_alt, "Alternate");
+        assert_eq!(&replay_row.click_aria_label, "Aria-label");
+        assert_eq!(&replay_row.click_component_name, "SignUpButton");
+        assert_eq!(&replay_row.click_id, "id");
+        assert_eq!(&replay_row.click_role, "button");
+        assert_eq!(&replay_row.environment, "");
+    }
+
+    #[test]
+    fn test_parse_replay_click_event_no_environment() {
+        let payload = r#"{
+            "type": "replay_actions",
+            "replay_id": "048aa04be40243948eb3b57089c519ee",
+            "clicks": [{
+                "alt": "Alternate",
+                "aria_label": "Aria-label",
+                "class": ["hello", "world"],
+                "component_name": "SignUpButton",
+                "event_hash": "b4370ef8d1994e96b5bc719b72afbf49",
+                "id": "id",
+                "is_dead": 0,
+                "is_rage": 1,
+                "node_id": 320,
+                "role": "button",
+                "tag": "div",
+                "testid": "",
+                "text": "Submit",
+                "timestamp": 1702659277,
+                "title": "title"
+            }]
+        }"#;
+        let payload_value = payload.as_bytes();
+
+        let data = format!(
+            r#"{{
+                "payload": {payload_value:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let replay_row = rows.first().unwrap();
+
+        // Columns in the critical path.
+        assert_eq!(&replay_row.click_alt, "Alternate");
+        assert_eq!(&replay_row.click_aria_label, "Aria-label");
+        assert_eq!(&replay_row.click_component_name, "SignUpButton");
+        assert_eq!(&replay_row.click_id, "id");
+        assert_eq!(&replay_row.click_role, "button");
+        assert_eq!(&replay_row.environment, "");
     }
 }

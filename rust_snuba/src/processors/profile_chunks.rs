@@ -1,8 +1,8 @@
 use crate::config::ProcessorConfig;
 use anyhow::Context;
 use chrono::DateTime;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
 use schemars::JsonSchema;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -33,6 +33,7 @@ struct FromChunkMessage {
     chunk_id: Uuid,
     start_timestamp: f64,
     end_timestamp: f64,
+    environment: Option<String>,
     received: i64,
     retention_days: Option<u16>,
 }
@@ -46,6 +47,7 @@ struct Chunk {
     start_timestamp_micro: u64,
     #[serde(rename(serialize = "end_timestamp"))]
     end_timestamp_micro: u64,
+    environment: Option<String>,
     retention_days: Option<u16>,
     #[serde(default)]
     offset: u64,
@@ -60,6 +62,7 @@ impl From<FromChunkMessage> for Chunk {
             end_timestamp_micro: (from.end_timestamp * 1e6) as u64,
             profiler_id: from.profiler_id,
             project_id: from.project_id,
+            environment: from.environment,
             retention_days: from.retention_days,
             start_timestamp_micro: (from.start_timestamp * 1e6) as u64,
             ..Default::default()

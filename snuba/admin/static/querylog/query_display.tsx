@@ -7,6 +7,7 @@ import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 
 import { QuerylogRequest, QuerylogResult, PredefinedQuery } from "./types";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
+import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 
 type QueryState = Partial<QuerylogRequest>;
 const HISTORY_KEY = "querylog";
@@ -64,11 +65,6 @@ function QueryDisplay(props: {
     return output;
   }
 
-  function copyText(queryResult: QuerylogResult, format: string) {
-    const formatter = format == "csv" ? convertResultsToCSV : JSON.stringify;
-    window.navigator.clipboard.writeText(formatter(queryResult));
-  }
-
   return (
     <div>
       <h2>Construct a Querylog Query</h2>
@@ -98,22 +94,10 @@ function QueryDisplay(props: {
             return (
               <div key={idx}>
                 <p>{queryResult.input_query}</p>
-                <p>
-                  <button
-                    style={executeButtonStyle}
-                    onClick={() => copyText(queryResult, "json")}
-                  >
-                    Copy to clipboard (JSON)
-                  </button>
-                </p>
-                <p>
-                  <button
-                    style={executeButtonStyle}
-                    onClick={() => copyText(queryResult, "csv")}
-                  >
-                    Copy to clipboard (CSV)
-                  </button>
-                </p>
+                <QueryResultCopier
+                  jsonInput={JSON.stringify(queryResult)}
+                  csvInput={convertResultsToCSV(queryResult)}
+                />
                 {props.resultDataPopulator(queryResult)}
               </div>
             );
@@ -121,18 +105,10 @@ function QueryDisplay(props: {
 
           return (
             <Collapse key={idx} text={queryResult.input_query}>
-              <button
-                style={executeButtonStyle}
-                onClick={() => copyText(queryResult, "json")}
-              >
-                Copy to clipboard (JSON)
-              </button>
-              <button
-                style={executeButtonStyle}
-                onClick={() => copyText(queryResult, "csv")}
-              >
-                Copy to clipboard (CSV)
-              </button>
+              <QueryResultCopier
+                jsonInput={JSON.stringify(queryResult)}
+                csvInput={convertResultsToCSV(queryResult)}
+              />
               {props.resultDataPopulator(queryResult)}
             </Collapse>
           );
@@ -148,38 +124,4 @@ const executeActionsStyle = {
   marginTop: 8,
 };
 
-const executeButtonStyle = {
-  height: 30,
-  border: 0,
-  padding: "4px 20px",
-  marginRight: 10,
-};
-
-const selectStyle = {
-  marginRight: 8,
-  height: 30,
-};
-
-function TextArea(props: {
-  value: string;
-  onChange: (nextValue: string) => void;
-}) {
-  const { value, onChange } = props;
-  return (
-    <textarea
-      spellCheck={false}
-      value={value}
-      onChange={(evt) => onChange(evt.target.value)}
-      style={{ width: "100%", height: 140 }}
-      placeholder={"Write your query here"}
-    />
-  );
-}
-
-const queryDescription = {
-  minHeight: 10,
-  width: "auto",
-  fontSize: 16,
-  padding: "10px 5px",
-};
 export default QueryDisplay;

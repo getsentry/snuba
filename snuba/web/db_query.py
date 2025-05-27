@@ -13,7 +13,6 @@ import rapidjson
 import sentry_sdk
 from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
-from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
 from snuba import environment, settings, state
@@ -25,6 +24,7 @@ from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.downsampled_storage_tiers import Tier
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
     MAX_THRESHOLD,
@@ -37,7 +37,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
-from snuba.query.query_settings import QuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.querylog.query_metadata import (
     SLO,
     ClickhouseQueryMetadata,
@@ -294,7 +294,7 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
-    span = Hub.current.scope.span
+    span = sentry_sdk.get_current_span()
 
     if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
         "enable_bypass_cache_referrers"
@@ -303,7 +303,6 @@ def execute_query_with_readthrough_caching(
         clickhouse_query_settings["query_id"] = query_id
         if span:
             span.set_data("query_id", query_id)
-
         return execute_query(
             clickhouse_query,
             query_settings,
@@ -481,12 +480,18 @@ def _raw_query(
         trigger_rate_limiter = None
         status = None
         request_status = get_request_status(cause)
+
+        calculated_cause = cause
         if isinstance(cause, RateLimitExceeded):
             status = QueryStatus.RATE_LIMITED
             trigger_rate_limiter = cause.extra_data.get("scope", "")
         elif isinstance(cause, ClickhouseError):
             error_code = cause.code
             status = get_query_status_from_error_codes(error_code)
+            if error_code == ErrorCodes.TOO_MANY_BYTES:
+                calculated_cause = RateLimitExceeded(
+                    "Query scanned more than the allocated amount of bytes"
+                )
 
             with configure_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
@@ -521,7 +526,7 @@ def _raw_query(
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
             },
-        ) from cause
+        ) from calculated_cause
     else:
         stats = update_with_status(
             status=QueryStatus.SUCCESS,
@@ -728,7 +733,15 @@ def db_query(
             metrics.increment("cache_miss", tags={"dataset": dataset_name})
         if stats.get("cache_hit_simple"):
             metrics.increment("cache_hit_simple", tags={"dataset": dataset_name})
+
         if result:
+            if (
+                isinstance(query_settings, HTTPQuerySettings)
+                and query_settings.get_sampling_tier() != Tier.TIER_NO_TIER
+            ):
+                stats = dict(result.extra["stats"])
+                stats["sampling_tier"] = query_settings.get_sampling_tier()
+                result.extra["stats"] = stats
             return result
         raise error or Exception(
             "No error or result when running query, this should never happen"
@@ -851,11 +864,23 @@ def _apply_allocation_policies_quota(
             key: quota_allowance.to_dict()
             for key, quota_allowance in quota_allowances.items()
         }
+
         stats["quota_allowance"] = {}
         stats["quota_allowance"]["details"] = allowance_dicts
 
         summary: dict[str, Any] = {}
         summary["threads_used"] = min_threads_across_policies
+
+        max_bytes_to_read = min(
+            [qa.max_bytes_to_read for qa in quota_allowances.values()],
+            key=lambda mb: float("inf") if mb == 0 else mb,
+        )
+        if max_bytes_to_read != 0:
+            query_settings.push_clickhouse_setting(
+                "max_bytes_to_read", max_bytes_to_read
+            )
+            summary["max_bytes_to_read"] = max_bytes_to_read
+
         _populate_query_status(
             summary, rejection_quota_and_policy, throttle_quota_and_policy
         )
@@ -880,6 +905,6 @@ def _apply_allocation_policies_quota(
                 "successful_query",
                 tags={"storage_key": allocation_policies[0].storage_key.value},
             )
-        max_threads = min(quota_allowances.values()).max_threads
+        max_threads = min_threads_across_policies
         span.set_data("max_threads", max_threads)
         query_settings.set_resource_quota(ResourceQuota(max_threads=max_threads))

@@ -37,66 +37,75 @@ class OptionalAttributeAggregationTransformer(LogicalQueryProcessor):
         self._curried_aggregation_names = curried_aggregation_names
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        def is_attribute_expression(exp_parameters: tuple[Expression, ...]) -> bool:
-            if len(exp_parameters) != 1:
-                return False
-            func_param = exp_parameters[0]
-            if not isinstance(func_param, SubscriptableReference):
-                return False
-            if func_param.column.column_name in self._attribute_column_names:
-                return True
-            return False
+        def find_subscriptable_reference(
+            exp: Expression,
+        ) -> SubscriptableReference | None:
+            # Recursively find the SubscriptableReference in nested expressions
+            if (
+                isinstance(exp, SubscriptableReference)
+                and exp.column.column_name in self._attribute_column_names
+            ):
+                return exp
+            elif isinstance(exp, FunctionCall) and exp.parameters:
+                for param in exp.parameters:
+                    result = find_subscriptable_reference(param)
+                    if result:
+                        return result
+            elif isinstance(exp, CurriedFunctionCall):
+                for param in exp.parameters:
+                    result = find_subscriptable_reference(param)
+                    if result:
+                        return result
+            return None
 
         def transform_aggregates_to_conditionals(exp: Expression) -> Expression:
             if (
                 isinstance(exp, FunctionCall)
                 and exp.function_name in self._aggregation_names
-                and len(exp.parameters) == 1
-                and is_attribute_expression(exp.parameters)
             ):
-                assert isinstance(exp.parameters[0], SubscriptableReference)
-                return FunctionCall(
-                    alias=exp.alias,
-                    function_name=f"{exp.function_name}If",
-                    parameters=(
-                        exp.parameters[0],
-                        FunctionCall(
-                            alias=None,
-                            function_name="mapContains",
-                            parameters=(
-                                exp.parameters[0].column,
-                                exp.parameters[0].key,
-                            ),
-                        ),
-                    ),
-                )
-
-            elif isinstance(exp, CurriedFunctionCall):
-                if (
-                    exp.internal_function.function_name
-                    in self._curried_aggregation_names
-                    and is_attribute_expression(exp.parameters)
-                ):
-                    assert isinstance(exp.parameters[0], SubscriptableReference)
-                    return CurriedFunctionCall(
+                subscriptable_ref = find_subscriptable_reference(exp)
+                if subscriptable_ref:
+                    return FunctionCall(
                         alias=exp.alias,
-                        internal_function=FunctionCall(
-                            alias=None,
-                            function_name=f"{exp.internal_function.function_name}If",
-                            parameters=exp.internal_function.parameters,
-                        ),
+                        function_name=f"{exp.function_name}If",
                         parameters=(
-                            exp.parameters[0],
+                            *exp.parameters,
                             FunctionCall(
                                 alias=None,
                                 function_name="mapContains",
                                 parameters=(
-                                    exp.parameters[0].column,
-                                    exp.parameters[0].key,
+                                    subscriptable_ref.column,
+                                    subscriptable_ref.key,
                                 ),
                             ),
                         ),
                     )
+            elif isinstance(exp, CurriedFunctionCall):
+                if (
+                    exp.internal_function.function_name
+                    in self._curried_aggregation_names
+                ):
+                    subscriptable_ref = find_subscriptable_reference(exp)
+                    if subscriptable_ref:
+                        return CurriedFunctionCall(
+                            alias=exp.alias,
+                            internal_function=FunctionCall(
+                                alias=None,
+                                function_name=f"{exp.internal_function.function_name}If",
+                                parameters=exp.internal_function.parameters,
+                            ),
+                            parameters=(
+                                *exp.parameters,
+                                FunctionCall(
+                                    alias=None,
+                                    function_name="mapContains",
+                                    parameters=(
+                                        subscriptable_ref.column,
+                                        subscriptable_ref.key,
+                                    ),
+                                ),
+                            ),
+                        )
 
             return exp
 

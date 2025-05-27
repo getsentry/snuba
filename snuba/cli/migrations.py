@@ -1,12 +1,10 @@
-import os
 import re
 from typing import Optional, Sequence
 
 import click
 
 import snuba.migrations.autogeneration as autogeneration
-from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.cluster import CLUSTERS
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.environment import setup_logging
 from snuba.migrations.connect import (
@@ -126,6 +124,78 @@ def migrate(
         raise click.ClickException(str(e))
 
     click.echo("Finished running migrations")
+
+
+@migrations.command()
+@click.option("-g", "--group", default=None)
+@click.option(
+    "-r",
+    "--readiness-state",
+    multiple=True,
+    type=click.Choice([r.value for r in ReadinessState], case_sensitive=False),
+    default=(),
+)
+@click.argument("through", default="all")
+@click.option("--force", is_flag=True)
+@click.option("--fake", is_flag=True)
+@click.option("--include-system", is_flag=True)
+@click.option(
+    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
+)
+def revert(
+    group: Optional[str],
+    readiness_state: Optional[Sequence[str]],
+    through: str,
+    force: bool,
+    fake: bool,
+    include_system: bool,
+    log_level: Optional[str] = None,
+) -> None:
+    """
+    If group is specified, reverse all the migrations for a group.
+    If no group is specified, reverses all migrations for all groups.
+        * by default SYSTEM migrations are NOT reversed
+        * use --include-system to also reverse SYSTEM migrations
+
+    --force is required
+    """
+
+    readiness_states = (
+        [ReadinessState(state) for state in readiness_state]
+        if readiness_state
+        else None
+    )
+
+    setup_logging(log_level)
+    clusters_to_check = (
+        get_clusters_for_readiness_states(readiness_states, CLUSTERS)
+        if readiness_states
+        else CLUSTERS
+    )
+    check_clickhouse_connections(clusters_to_check)
+    runner = Runner()
+
+    try:
+        if group:
+            migration_group = MigrationGroup(group)
+        elif through != "all":
+            raise click.ClickException(
+                "A migration group must be specified when 'through' is not 'all'."
+            )
+        else:
+            migration_group = None
+        runner.reverse_all(
+            through=through,
+            force=force,
+            fake=fake,
+            include_system=include_system,
+            group=migration_group,
+            readiness_states=readiness_states,
+        )
+    except MigrationError as e:
+        raise click.ClickException(str(e))
+
+    click.echo("Finished reversing migrations")
 
 
 @migrations.command()
@@ -287,84 +357,6 @@ def reverse_in_progress(
         raise click.ClickException(str(e))
 
     click.echo("Finished reversing in progress migrations")
-
-
-@migrations.command()
-@click.option(
-    "--type", "node_type", type=click.Choice(["local", "dist"]), required=True
-)
-@click.option(
-    "--storage-set",
-    "storage_set_names",
-    type=click.Choice([s.value for s in StorageSetKey]),
-    required=True,
-    multiple=True,
-)
-@click.option(
-    "--host-name",
-    type=str,
-    required=True,
-    default=os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
-)
-@click.option(
-    "--port",
-    type=int,
-    required=True,
-    default=int(os.environ.get("CLICKHOUSE_PORT", 9000)),
-)
-@click.option(
-    "--database",
-    type=str,
-    required=True,
-    default=os.environ.get("CLICKHOUSE_DATABASE", "default"),
-)
-def add_node(
-    node_type: str,
-    storage_set_names: Sequence[str],
-    host_name: str,
-    port: int,
-    database: str,
-) -> None:
-    """
-    Runs all migrations on a brand new ClickHouse node. This should be performed
-    before a new node is added to an existing ClickHouse cluster.
-
-    All of the SQL operations for the provided storage sets will be run. Any non
-    SQL (Python) operations will be skipped.
-
-    This operation does not change the migration status in the migrations_local
-    / migrations_dist tables, since it is designed to bring a new node up to
-    the same state as existing ones already added to the cluster.
-    """
-    user = os.environ.get("CLICKHOUSE_USER", "default")
-    password = os.environ.get("CLICKHOUSE_PASSWORD", "")
-
-    storage_set_keys = [StorageSetKey(name) for name in storage_set_names]
-
-    cluster = next(
-        (
-            c
-            for c in CLUSTERS
-            if all(ss in c.get_storage_set_keys() for ss in storage_set_keys)
-        ),
-        None,
-    )
-
-    if not cluster:
-        raise click.ClickException("Storage sets should be in the same cluster")
-
-    if cluster.is_single_node():
-        raise click.ClickException("You cannot add a node to a single node cluster")
-
-    Runner.add_node(
-        node_type=ClickhouseNodeType(node_type),
-        storage_sets=storage_set_keys,
-        host_name=host_name,
-        port=port,
-        user=user,
-        password=password,
-        database=database,
-    )
 
 
 @migrations.command()

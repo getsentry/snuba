@@ -5,6 +5,7 @@ from typing import Any, Type, TypedDict
 from snuba.clickhouse.columns import (
     Array,
     Column,
+    Date,
     DateTime,
     DateTime64,
     Enum,
@@ -20,6 +21,7 @@ from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.utils.schemas import (
     UUID,
     AggregateFunction,
+    Bool,
     ColumnType,
     FixedString,
     Int,
@@ -72,9 +74,11 @@ SIMPLE_COLUMN_TYPES: dict[str, Type[ColumnType[SchemaModifiers]]] = {
     **NUMBER_COLUMN_TYPES,
     "String": String,
     "DateTime": DateTime,
+    "Date": Date,
     "UUID": UUID,
     "IPv4": IPv4,
     "IPv6": IPv6,
+    "Bool": Bool,
 }
 
 
