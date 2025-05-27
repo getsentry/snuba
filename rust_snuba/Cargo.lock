@@ -3481,9 +3481,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-kafka-schemas"
-version = "1.3.3"
+version = "1.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4576dcac499df5fca7389b20016e0c195be4fd7b8ae52a1b3e6d52a8f2e0d251"
+checksum = "2189d0a8d4d9ceb3730e71f8383a3ef0d276a9516e0b865e7a175831517b9fc4"
 dependencies = [
  "jsonschema",
  "prettyplease",
