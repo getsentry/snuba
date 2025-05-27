@@ -46,5 +46,5 @@ def destroy_topics(client: AdminClient, topics: Sequence[Topic]) -> None:
             future.result()
             logger.info("Topic %s destroyed", topic)
         except KafkaException as err:
-            if err.args[0].code() != KafkaError.UNKNOWN_TOPIC_OR_PARTITION:
+            if err.args[0].code() != KafkaError.UNKNOWN_TOPIC_OR_PART:
                 logger.error("Failed to destroy topic %s", topic, exc_info=err)
