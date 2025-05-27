@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import Sequence
+from typing import List, Sequence
 
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationComparisonFilter,
@@ -30,6 +30,7 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_sampling_factor,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -43,15 +44,12 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    apply_virtual_columns,
-    apply_virtual_columns_eap_items,
-    attribute_key_to_expression,
-    attribute_key_to_expression_eap_items,
-    use_eap_items_table,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.sampling_in_storage_util import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.sampling_in_storage_util import (
     run_query_to_correct_tier,
+)
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+    apply_virtual_columns_eap_items,
+    attribute_key_to_expression_eap_items,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -86,9 +84,8 @@ def aggregation_filter_to_expression(
             return op_expr(
                 aggregation_to_expression(
                     agg_filter.comparison_filter.conditional_aggregation,
-                    attribute_key_to_expression_eap_items
-                    if use_eap_items_table(request_meta)
-                    else attribute_key_to_expression,
+                    attribute_key_to_expression_eap_items,
+                    use_sampling_factor(request_meta),
                 ),
                 agg_filter.comparison_filter.val,
             )
@@ -121,9 +118,35 @@ def aggregation_filter_to_expression(
 
 
 def _convert_order_by(
+    groupby: List[Expression],
     order_by: Sequence[TraceItemTableRequest.OrderBy],
     request_meta: RequestMeta,
 ) -> Sequence[OrderBy]:
+    if len(order_by) == 1:
+        order = order_by[0]
+        if order.column.key.name == "sentry.timestamp" and len(groupby) == 0:
+            direction = (
+                OrderByDirection.DESC if order.descending else OrderByDirection.ASC
+            )
+            return [
+                OrderBy(
+                    direction=direction,
+                    expression=snuba_column("organization_id"),
+                ),
+                OrderBy(
+                    direction=direction,
+                    expression=snuba_column("project_id"),
+                ),
+                OrderBy(
+                    direction=direction,
+                    expression=snuba_column("item_type"),
+                ),
+                OrderBy(
+                    direction=direction,
+                    expression=snuba_column("timestamp"),
+                ),
+            ]
+
     res: list[OrderBy] = []
     for x in order_by:
         direction = OrderByDirection.DESC if x.descending else OrderByDirection.ASC
@@ -131,9 +154,7 @@ def _convert_order_by(
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=attribute_key_to_expression_eap_items(x.column.key)
-                    if use_eap_items_table(request_meta)
-                    else attribute_key_to_expression(x.column.key),
+                    expression=attribute_key_to_expression_eap_items(x.column.key),
                 )
             )
         elif x.column.HasField("conditional_aggregation"):
@@ -142,9 +163,8 @@ def _convert_order_by(
                     direction=direction,
                     expression=aggregation_to_expression(
                         x.column.conditional_aggregation,
-                        attribute_key_to_expression_eap_items
-                        if use_eap_items_table(request_meta)
-                        else attribute_key_to_expression,
+                        attribute_key_to_expression_eap_items,
+                        use_sampling_factor(request_meta),
                     ),
                 )
             )
@@ -175,9 +195,7 @@ def _get_reliability_context_columns(
         context_columns = []
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items
-            if use_eap_items_table(request_meta)
-            else attribute_key_to_expression,
+            attribute_key_to_expression_eap_items,
         )
         if confidence_interval_column is not None:
             context_columns.append(
@@ -189,15 +207,11 @@ def _get_reliability_context_columns(
 
         average_sample_rate_column = get_average_sample_rate_column(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items
-            if use_eap_items_table(request_meta)
-            else attribute_key_to_expression,
+            attribute_key_to_expression_eap_items,
         )
         count_column = get_count_column(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items
-            if use_eap_items_table(request_meta)
-            else attribute_key_to_expression,
+            attribute_key_to_expression_eap_items,
         )
         context_columns.append(
             SelectedExpression(
@@ -215,10 +229,21 @@ def _get_reliability_context_columns(
 def _formula_to_expression(
     formula: Column.BinaryFormula, request_meta: RequestMeta
 ) -> Expression:
-    return OP_TO_EXPR[formula.op](
+    formula_expr = OP_TO_EXPR[formula.op](
         _column_to_expression(formula.left, request_meta),
         _column_to_expression(formula.right, request_meta),
     )
+    match formula.WhichOneof("default_value"):
+        case None:
+            return formula_expr
+        case "default_value_double":
+            return f.coalesce(formula_expr, formula.default_value_double)
+        case "default_value_int64":
+            return f.coalesce(formula_expr, formula.default_value_int64)
+        case default:
+            raise BadSnubaRPCRequestException(
+                f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
+            )
 
 
 def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expression:
@@ -226,17 +251,12 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     Given a column protobuf object, translates it into a Expression object and returns it.
     """
     if column.HasField("key"):
-        return (
-            attribute_key_to_expression_eap_items(column.key)
-            if use_eap_items_table(request_meta)
-            else attribute_key_to_expression(column.key)
-        )
+        return attribute_key_to_expression_eap_items(column.key)
     elif column.HasField("conditional_aggregation"):
         function_expr = aggregation_to_expression(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items
-            if use_eap_items_table(request_meta)
-            else attribute_key_to_expression,
+            attribute_key_to_expression_eap_items,
+            use_sampling_factor(request_meta),
         )
         # aggregation label may not be set and the column label takes priority anyways.
         function_expr = replace(function_expr, alias=column.label)
@@ -254,18 +274,11 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
 
 
 def build_query(request: TraceItemTableRequest) -> Query:
-    if use_eap_items_table(request.meta):
-        entity = Entity(
-            key=EntityKey("eap_items"),
-            schema=get_entity(EntityKey("eap_items")).get_data_model(),
-            sample=None,
-        )
-    else:
-        entity = Entity(
-            key=EntityKey("eap_spans"),
-            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-            sample=None,
-        )
+    entity = Entity(
+        key=EntityKey("eap_items"),
+        schema=get_entity(EntityKey("eap_items")).get_data_model(),
+        sample=None,
+    )
 
     selected_columns = []
     for column in request.columns:
@@ -280,11 +293,12 @@ def build_query(request: TraceItemTableRequest) -> Query:
         )
         selected_columns.extend(_get_reliability_context_columns(column, request.meta))
 
-    item_type_conds = (
-        [f.equals(snuba_column("item_type"), request.meta.trace_item_type)]
-        if use_eap_items_table(request.meta)
-        else []
-    )
+    item_type_conds = [
+        f.equals(snuba_column("item_type"), request.meta.trace_item_type)
+    ]
+    groupby = [
+        attribute_key_to_expression_eap_items(attr_key) for attr_key in request.group_by
+    ]
     res = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -292,36 +306,29 @@ def build_query(request: TraceItemTableRequest) -> Query:
             request.meta,
             trace_item_filters_to_expression(
                 request.filter,
-                attribute_key_to_expression_eap_items
-                if use_eap_items_table(request.meta)
-                else attribute_key_to_expression,
+                attribute_key_to_expression_eap_items,
             ),
             *item_type_conds,
         ),
-        order_by=_convert_order_by(request.order_by, request.meta),
-        groupby=[
-            attribute_key_to_expression_eap_items(attr_key)
-            if use_eap_items_table(request.meta)
-            else attribute_key_to_expression(attr_key)
-            for attr_key in request.group_by
-        ],
+        order_by=_convert_order_by(
+            groupby,
+            request.order_by,
+            request.meta,
+        ),
+        groupby=groupby,
         # Only support offset page tokens for now
         offset=request.page_token.offset,
         # protobuf sets limit to 0 by default if it is not set,
         # give it a default value that will actually return data
         limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
-        having=aggregation_filter_to_expression(
-            request.aggregation_filter, request.meta
-        )
-        if request.HasField("aggregation_filter")
-        else None,
+        having=(
+            aggregation_filter_to_expression(request.aggregation_filter, request.meta)
+            if request.HasField("aggregation_filter")
+            else None
+        ),
     )
     treeify_or_and_conditions(res)
-    apply_virtual_columns_eap_items(
-        res, request.virtual_column_contexts
-    ) if use_eap_items_table(request.meta) else apply_virtual_columns(
-        res, request.virtual_column_contexts
-    )
+    apply_virtual_columns_eap_items(res, request.virtual_column_contexts)
     add_existence_check_to_subscriptable_references(res)
     return res
 
@@ -347,7 +354,7 @@ class ResolverTraceItemTableEAPItems:
         )
 
         res = run_query_to_correct_tier(
-            in_msg, query_settings, timer, build_query, metrics_backend
+            in_msg, query_settings, timer, build_query  # type: ignore
         )
         column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(

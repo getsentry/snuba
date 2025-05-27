@@ -27,7 +27,10 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
-from snuba.web.rpc.common.common import trace_item_filters_to_expression
+from snuba.web.rpc.common.common import (
+    trace_item_filters_to_expression,
+    use_sampling_factor,
+)
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
@@ -185,6 +188,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
                         expression=aggregation_to_expression(
                             expr.conditional_aggregation,
                             attribute_key_to_expression,
+                            use_sampling_factor(request.meta),
                         ),
                     )
                 )

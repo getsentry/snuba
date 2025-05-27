@@ -40,10 +40,7 @@ from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    attribute_key_to_expression as spans_attribute_key_to_expression,
-)
-from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
-    attribute_key_to_expression as log_attribute_key_to_expression,
+    attribute_key_to_expression,
 )
 
 _BUCKET_COUNT = 40
@@ -55,11 +52,6 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
         sample=None,
     )
-    if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
-        attribute_key_to_expression = log_attribute_key_to_expression
-    else:
-        attribute_key_to_expression = spans_attribute_key_to_expression
-
     res = Query(
         from_clause=entity,
         selected_columns=[
@@ -184,7 +176,7 @@ def _convert_results(
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_str=v)))
     for k, v in row["attributes_float"].items():
         attrs.append(
-            TraceItemDetailsAttribute(name=k, value=AttributeValue(val_float=v))
+            TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v))
         )
     for k, v in row["attributes_int"].items():
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_int=v)))

@@ -339,6 +339,9 @@ class ErrorEvent:
             "message_timestamp": int(
                 self.timestamp.replace(tzinfo=timezone.utc).timestamp()
             ),
+            "timestamp_ms": int(
+                self.timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000
+            ),
             "retention_days": 90,
             "deleted": 0,
             "group_id": self.group_id,

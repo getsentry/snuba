@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Callable
+from typing import Callable, cast
 
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
@@ -8,6 +8,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
+from snuba import settings, state
 from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
@@ -57,6 +58,23 @@ def truncate_request_meta_to_day(meta: RequestMeta) -> None:
 
     meta.start_timestamp.seconds = int(start_timestamp.timestamp())
     meta.end_timestamp.seconds = int(end_timestamp.timestamp())
+
+
+def use_sampling_factor(meta: RequestMeta) -> bool:
+    """
+    Since we started writing the sampling factor on a specific date, we should only use it on queries that start after that date.
+    """
+    use_sampling_factor_timestamp_seconds = cast(
+        int,
+        state.get_int_config(
+            "use_sampling_factor_timestamp_seconds",
+            settings.USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS,
+        ),
+    )
+    if use_sampling_factor_timestamp_seconds == 0:
+        return False
+
+    return meta.start_timestamp.seconds >= use_sampling_factor_timestamp_seconds
 
 
 def treeify_or_and_conditions(query: Query) -> None:
