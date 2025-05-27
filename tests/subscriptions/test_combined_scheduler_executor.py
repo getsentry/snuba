@@ -2,12 +2,12 @@ import time
 import uuid
 from contextlib import closing
 from datetime import datetime
+from pathlib import Path
 from unittest import mock
 
 import pytest
 from arroyo.backends.kafka import KafkaProducer
 from arroyo.types import BrokerValue, Message, Partition, Topic
-from py._path.local import LocalPath
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -45,7 +45,7 @@ def create_subscription() -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
-def test_combined_scheduler_and_executor(tmpdir: LocalPath) -> None:
+def test_combined_scheduler_and_executor(tmpdir: Path) -> None:
     create_subscription()
     epoch = datetime(1970, 1, 1)
 
@@ -95,6 +95,6 @@ def test_combined_scheduler_and_executor(tmpdir: LocalPath) -> None:
             if commit.call_count == 2:
                 break
 
-        assert (tmpdir / "health.txt").check()
+        assert (tmpdir / "health.txt").exists()
         strategy.close()
         strategy.join()
