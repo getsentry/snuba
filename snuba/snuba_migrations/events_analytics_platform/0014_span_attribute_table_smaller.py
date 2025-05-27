@@ -170,6 +170,10 @@ GROUP BY
                 ),
                 columns=self.num_columns,
                 target=OperationTarget.LOCAL,
+                # Without this setting this migration fails in CH 24.3. This table
+                # gets remove in a later migration when it is rewritten so it's only
+                # needed for this version of the table
+                settings={"allow_suspicious_primary_key": 1},
             ),
             operations.CreateTable(
                 storage_set=self.storage_set_key,

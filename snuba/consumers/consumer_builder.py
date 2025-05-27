@@ -375,6 +375,15 @@ class ConsumerBuilder:
             dlq_policy,
         )
 
+    def build_lw_deletions_consumer(
+        self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
+    ) -> StreamProcessor[KafkaPayload]:
+        return self.__build_consumer(
+            strategy_factory,
+            self.raw_topic,
+            self.__build_default_dlq_policy(),
+        )
+
     def __build_default_dlq_policy(self) -> Optional[DlqPolicy[KafkaPayload]]:
         """
         Default DLQ policy applies to the base consumer or the DLQ consumer when

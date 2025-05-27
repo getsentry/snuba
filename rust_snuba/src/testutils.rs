@@ -1,12 +1,12 @@
 use crate::types::BytesInsertBatch;
 use pyo3::prelude::*;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::Producer;
-use rust_arroyo::backends::ProducerError;
-use rust_arroyo::processing::strategies::{
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::Producer;
+use sentry_arroyo::backends::ProducerError;
+use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
-use rust_arroyo::types::{Message, TopicOrPartition};
+use sentry_arroyo::types::{Message, TopicOrPartition};
 use std::str;
 use std::sync::{Arc, Mutex};
 

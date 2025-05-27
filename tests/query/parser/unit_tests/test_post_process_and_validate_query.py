@@ -1679,7 +1679,7 @@ test_cases = [
                         "exception_stacks.type", column("exception_stacks.type")
                     ),
                 ],
-                array_join=[column("exception_stacks"), column("hierarchical_hashes")],
+                array_join=[column("exception_stacks")],
                 condition=and_cond(
                     f.equals(
                         or_cond(
@@ -1736,7 +1736,6 @@ test_cases = [
             ],
             array_join=[
                 column("exception_stacks", None, "exception_stacks"),
-                column("hierarchical_hashes", None, "hierarchical_hashes"),
             ],
             condition=and_cond(
                 and_cond(

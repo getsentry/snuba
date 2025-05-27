@@ -45,7 +45,8 @@ def test_job_with_exception_causes_failure() -> None:
     with patch.object(_JobLoader, "get_job_instance") as MockGetInstance:
         MockGetInstance.return_value = FailJob()
         assert get_job_status(JOB_ID) == JobStatus.NOT_STARTED
-        run_job(test_job_spec)
+        with pytest.raises(SerializableException):
+            run_job(test_job_spec)
         assert get_job_status(JOB_ID) == JobStatus.FAILED
 
 

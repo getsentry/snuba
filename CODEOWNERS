@@ -14,15 +14,16 @@
 /snuba/datasets/configuration/metrics                     @getsentry/telemetry-experience @getsentry/owners-snuba
 /snuba/datasets/configuration/events_analytics_platform   @getsentry/events-analytics-platform @getsentry/owners-snuba
 
+# rust_snuba
+/rust_snuba @getsentry/owners-snuba
+/rust_snuba/src/processors/replays.rs @getsentry/replay-backend
+/rust_snuba/src/processors/uptime_monitor_checks.rs @getsentry/crons
+
 # EAP-related
 /snuba/web/rpc @getsentry/events-analytics-platform @getsentry/owners-snuba
 /tests/web/rpc @getsentry/events-analytics-platform @getsentry/owners-snuba
 /snuba/snuba_migrations/events_analytics_platform @getsentry/events-analytics-platform @getsentry/owners-snuba
-/rust_snuba/src/processors/eap_spans.rs @getsentry/events-analytics-platform
-
-# rust_snuba
-/rust_snuba @getsentry/owners-snuba
-/rust_snuba/src/processors/replays.rs @getsentry/replay-backend
+/rust_snuba/src/processors/eap_spans.rs @getsentry/events-analytics-platform @getsentry/owners-snuba
 
 # Legal
 /LICENSE.md  @getsentry/owners-legal
@@ -30,7 +31,7 @@
 # Build & Releases
 /.github/workflows/release.yml  @getsentry/release-approvers
 /.craft.yml                     @getsentry/release-approvers
-/docker-compose.gcb.yml         @getsentry/release-approvers
+/docker-compose.gcb.yml         @getsentry/owners-snuba
 /docker-compose.yml             @getsentry/release-approvers
 /docker_entrypoint.sh           @getsentry/release-approvers
 /cloudbuild.yaml                @getsentry/release-approvers

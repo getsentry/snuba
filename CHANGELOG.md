@@ -1,5 +1,334 @@
 # Changelog
 
+## 25.5.1
+
+### Various fixes & improvements
+
+- chore(ci): Bump sentry-related dependencies more aggressively (#6769) by @untitaker
+- ref(rust-snuba): Add architecture doc (#7151) by @untitaker
+- feat(trace-items): Support page tokens in trace item attributes endpo… (#7182) by @Zylphrex
+- Revert "fix(eap): Translate eap_spans to eap_items_span for subscriptions (#7181)" (ce427610) by @getsentry-bot
+- chore(eap-alerts): Clean up devserver args to reflect correct entity (#7185) by @shruthilayaj
+- feat(replay): update processor for user_geo fields (#7175) by @aliu39
+- chore: Create subscriptiosn eith eap items spans entity (#7183) by @shruthilayaj
+- feat(replay): update entity/storage yamls for user_geo fields (#7174) by @aliu39
+- fix(eap): Translate eap_spans to eap_items_span for subscriptions (#7181) by @phacops
+- meta: Bump new development version (baa701cd)
+
+## 25.5.0
+
+### Various fixes & improvements
+
+- feat(replay): add migration for user geo fields (#7173) by @aliu39
+- chore(eap): Cleanup EAP span, log and mutation references (#7178) by @phacops
+- feat(api): Support multipart/form-data to receive binary data (#7180) by @phacops
+- fix(job): log correct query for truncating EAP spans (#7179) by @onewland
+- feat(replay): Add OTA Updates Context to the processor (#7166) by @krystofwoldrich
+- feat(replay): Add Dataset & Storage YAML for OTA Updates Context (#7165) by @krystofwoldrich
+- feat(replay): Add Migration for OTA Updates Context Columns (#7164) by @krystofwoldrich
+- feat(eap): Transform an order by on timestamp to the full sort key order to improve performance  (#7153) by @xurui-c
+- create manual job for truncating eap_spans_2_local tables (#7167) by @onewland
+- fix(rust): Validate schemas according to their type (#7176) by @phacops
+- fix: fix duplicate labels in RPC causing incorrect behavior (#7139) by @kylemumma
+- fix batch join timeout reading from env var (#7171) by @volokluev
+- fix(trace-items): Should return keys in filter (#7162) by @Zylphrex
+- chore(devservices): Bump version to 1.1.5 and add programs.conf file (#7161) by @hubertdeng123
+- chore(eap): Stop trimming query time ranges (#7159) by @phacops
+- Revert "Revert "feat(eap): Add an item consumer (#7122)"" (#7160) by @volokluev
+- Revert "feat(eap): Add an item consumer (#7122)" (0b2e3280) by @getsentry-bot
+- feat(eap): Add an item consumer (#7122) by @phacops
+- ref(consumer) only log when there are rows to write (#7155) by @MeredithAnya
+- Revert "feat(eap): Transform an order by on timestamp to the full sort key order to improve performance (#7149)" (b4fbd4c6) by @getsentry-bot
+- fix(eap): Remove max execution time from attribute names endpoint (#7152) by @volokluev
+- chore(eap): Add a eap_items_span entity for backwards compatibility (#7150) by @phacops
+- feat(eap): Transform an order by on timestamp to the full sort key order to improve performance (#7149) by @phacops
+- fix(ourlogs): Do not store span_id (#7148) by @colin-sentry
+
+_Plus 55 more_
+
+## 25.4.0
+
+### Various fixes & improvements
+
+- fix(eap): Cast timestamp as a float to and then make it a datetime (#7072) by @phacops
+- feat(rust-snuba): Enable SSL in rdkafka (#7059) by @untitaker
+- ref: bump sentry-kafka-schemas to 1.2.0 (#7069) by @getsentry-bot
+- ref: bump sentry-protos to 0.1.69 (#7070) by @getsentry-bot
+- feat(sourecmaps) - Allow querying 'symbolicated_in_app' field on events and discover (#7063) by @yuvmen
+- Set timeout_overflow_mode to break on all tier 1 queries (#7065) by @volokluev
+- obs(snuba): add query settings to db span (#7064) by @volokluev
+- perf(sampling-in-storage): track timeout queries (#7061) by @xurui-c
+- Set timeout_before_checking_execution speed to 0 (#7062) by @volokluev
+- fix(sampling-in-storage): query scans 0 bytes (#7055) by @xurui-c
+- feat(group-by-alerts): Allow for group by's without conditions on the events dataset (#7057) by @JoshFerge
+- feat(eap): add a sample count threshold for percentile reliability (#7054) by @davidtsuk
+- feat(sourcemaps) - Add `symbolicated_in_app` column on errors (#7043) by @yuvmen
+- feat: remove logs resolver, endpoint itemstats (#7042) by @kylemumma
+- perf(sampling-in-storage): emit raw estimation error (#7051) by @xurui-c
+- fix(sourcemaps) - Added `symbolicated_in_app` column to errors_ro (#7052) by @yuvmen
+- fix(admin): Do not scrub UUIDs, hex strings and datetimes (#7053) by @untitaker
+- feat(sourcemaps) - Add new column `symbolicated_in_app` on errors (#7044) by @yuvmen
+- feat: eap timeseries works for logs (#7047) by @kylemumma
+- fix(sampling-in-storage): fix increment metric (#7049) by @xurui-c
+- fix(eap-items): add the sampling factor column to the distributed downsampled tables (#7048) by @davidtsuk
+- bump max clickhouse version to 24.8.14.10459 (#7046) by @MeredithAnya
+- fix(eap-items): Write to new sampling_factor column (#7020) by @davidtsuk
+- fix(eap-items): Update materialized views to include the sampling factor column (#7021) by @davidtsuk
+
+_Plus 60 more_
+
+## 25.3.0
+
+### Various fixes & improvements
+
+- feat(smart-autocomplete): Implement smart autocomplete functionality (#6960) by @volokluev
+- fix(eap): remove items_attribute_mv (#6968) by @volokluev
+- fix(eap): allow hashmaps to be used in the entity (#6967) by @volokluev
+- fix(eap-items): add attribute mappings for backwards compatibility (#6961) by @davidtsuk
+- feat: storage for new item_attrs table (#6944) by @kylemumma
+- feat: new mv for item_attrs (#6956) by @kylemumma
+- fix(admin): fix log profile events nonsense (#6965) by @volokluev
+- fix(eap): Return high reliability when sampling rate is 100% (#6954) by @jan-auer
+- fix(eap-items): swap description and raw_description (#6958) by @davidtsuk
+- fix(eap-items): make sure we are not overriding sentry.description (#6955) by @davidtsuk
+- ref(replay): add environment to ReplayClickEvent (#6946) by @michellewzhang
+- feat(smart_autocomplete): storage definition for new materialized view (#6951) by @volokluev
+- fix(eap): Update relative confidence calculation (#6935) by @jan-auer
+- feat: drop item_attrs mv (#6953) by @kylemumma
+- chore: increase timeout for some of the ci tests (#6952) by @kylemumma
+- Remove unsupported comments deploy.sh (#6950) by @volokluev
+- fix(eap-items): map sentry.name to sentry.description in eap_items (#6949) by @davidtsuk
+- Remove vector deployment again (#6948) by @volokluev
+- Revert "remove test-eap-mutations-vector from deploy script (#6947)" (342d8207) by @getsentry-bot
+- remove test-eap-mutations-vector from deploy script (#6947) by @volokluev
+- feat: item_attrs materialized views for new eap_items table (#6943) by @kylemumma
+- feat(eap-sampling): add mv migration for sampled views (#6940) by @volokluev
+- SRE-630: add snuba container selector for migration (#6945) by @mwarkentin
+- fix(gocd): Fix missing/changed container names (#6942) by @rgibert
+
+_Plus 52 more_
+
+## 25.2.0
+
+### Various fixes & improvements
+
+- feat(uptime): Add incident_status column to uptime_monitor_checks (#6886) by @evanpurkhiser
+- chore(eap): Enable all storages in every region (#6884) by @phacops
+- cleanup(gen-metrics): remove meta_tag_values_mv (#6882) by @onewland
+- Revert "Revert "remove generic_metrics/*/distributions_meta_tag_value… (#6883) by @onewland
+- chore(docs): update references to devservices (#6881) by @shellmayr
+- Revert "remove generic_metrics/*/distributions_meta_tag_values (#6878)" (2dea1189) by @getsentry-bot
+- remove generic_metrics/*/distributions_meta_tag_values (#6878) by @onewland
+- fix(snuba-admin): stop crashing when turning off profile events (#6879) by @volokluev
+- chore(eap): Restore missing materialized views (#6877) by @phacops
+- feat(eap): Add hash map of attribute keys to the items table (#6876) by @phacops
+- migrate(smart-autocomplete): Add a hashmap optimization + BF index to smart autocomplete table (#6875) by @volokluev
+- feat(consumer): add flag for custom envoy request timeout (#6874) by @onewland
+- fix(eap): Bad circular import in endpoint get traces (#6873) by @Zylphrex
+- chore: Upgrade clickhouse-driver to 0.2.9 (#6869) by @phacops
+- feat: eap support formulas in timeseries endpoint (#6854) by @kylemumma
+- feat(eap): Add a table to store items (#6850) by @phacops
+- feat(capman): Remove BytesScannedWindowAllocationPolicy from errors_ro (#6866) by @volokluev
+- fix(eap): reliabilities should be updated even when value is null (#6863) by @davidtsuk
+- Revert "cleanup(smart_autocomplete): remove smart autocomplete mv (#6867)" (0bdf9a9a) by @getsentry-bot
+- cleanup(smart_autocomplete): remove smart autocomplete mv (#6867) by @volokluev
+- fix: bump sentry kafka schema (#6864) by @JoshFerge
+- feat: Add a Bool column type (#6861) by @phacops
+- feat: Allow to use 128 bits integers (#6862) by @phacops
+- chore: bump sentry-kafka-schemas (#6857) by @JoshFerge
+
+_Plus 76 more_
+
+## 25.1.0
+
+### Various fixes & improvements
+
+- fix: snuba admin system query error messaging (#6763) by @kylemumma
+- feat: Add SSL/TLS support for ClickHouse connections (#6459) by @patsevanton
+- fix(settings): specify VALID_RETENTION_DAYS for self-hosted (#6756) by @aldy505
+- chore(deps): Bump Python to 3.11.11 (#6719) by @beninabox
+- Bump arroyo version (#6766) by @volokluev
+- feat(ourlogs): Add entity/storage configs & dev worker (#6759) by @colin-sentry
+- fix(optimize): make tests and optimize use UTC timestamps (#6760) by @onewland
+- meta: Bump new development version (1fe61a9d)
+
+## 24.12.2
+
+### Various fixes & improvements
+
+- ref(uptime): use new v2 table in storage (#6761) by @JoshFerge
+- ref(uptime): use region instead of region_slug (#6762) by @JoshFerge
+- ref(uptime): rebuild uptime storage table (#6758) by @JoshFerge
+- chore(eap): write script to send scrubbed data into a gcs bucket (#6698) by @davidtsuk
+- fix(scripts): Grab everything in the path (#6750) by @phacops
+- feat(profiling): process environment value for profile_chunks and add the column to the storage definition (#6738) by @viglia
+- ci: Switch e2e test to self-hosted repo (#6746) by @BYK
+- feat(ourlogs): Add a kafka consumer (#6743) by @colin-sentry
+- Revert "deps: replace python-jose with pyjwt (#6739)" (96d5c2bd) by @getsentry-bot
+- fix(uptime): add snapshot test for corrected typo (#6744) by @JoshFerge
+- feat(sudo): allow dropping of replica in sudo tool (#6742) by @volokluev
+- chore(codeowners): add crons team to uptime files (#6741) by @JoshFerge
+- deps: replace python-jose with pyjwt (#6739) by @mdtro
+- fix(uptime): align rust consumer with clickhouse schema (#6740) by @JoshFerge
+- feat(devservices): Support no workers option for containerized version of snuba (#6737) by @hubertdeng123
+- feat(devservices): Add devservices ci validation job (#6716) by @hubertdeng123
+- chore(uptime): move uptime storage to partial (#6736) by @JoshFerge
+- feat(profiling): add environment column to the profile_chunks table (#6722) by @viglia
+- feat(EAP): Trace Item resolvers (#6732) by @volokluev
+- feat(ourlogs): Simplify the buckets for logs (#6735) by @colin-sentry
+- Revert "chore(eap-spans): Take advantage of parallel reads (#6579)" (f8900d8c) by @getsentry-bot
+- Implement filter offset for attribute values API (#6667) by @xurui-c
+- fix(eap): use TDigestWeighted instead of TDigest for perncetile confidence calculation (#6734) by @shellmayr
+- fix(storage): correctly name storage key (#6733) by @JoshFerge
+
+_Plus 28 more_
+
+## 24.12.1
+
+### Various fixes & improvements
+
+- Revert "fix(eap-spans): Add an index on project_id (#6695)" (9f5c3f57) by @getsentry-bot
+- fix(eap-spans): Add an index on project_id (#6695) by @phacops
+- 984: scrub eap_spans_str_attrs (#6694) by @kylemumma
+- fix(inc984): scrub the correct bucket for sentry.user (#6693) by @xurui-c
+- fix(inc984): scrub the correct bucket for sentry.user.ip (#6692) by @volokluev
+- inc984: scrub `user` from eap_spans (#6691) by @xurui-c
+- inc984: scrub `user` from spans (#6689) by @xurui-c
+- fix(rust): Honor exit code (#6674) by @untitaker
+- ref(admin): lw delete related system queries (#6685) by @MeredithAnya
+- chore: Bump rust-toolchain (#6688) by @untitaker
+- chore(devservices): Bumping the version of devservices to latest (#6682) by @IanWoodard
+- fix(devservices): Add orchestrator devservices label to clickhouse (#6687) by @hubertdeng123
+- fix(eap): Fix divide by 0 errors caused when the sample count is 0 (#6681) by @davidtsuk
+- meta: Bump new development version (44657332)
+- ref(lw-deletes): add project_id killswitch and some logging (#6677) by @MeredithAnya
+- docs: update CH supported versions (#6683) by @MeredithAnya
+- feat(inc-984): Cleanup EAP spans  (#6676) by @xurui-c
+- fix(admin): Allow special characters in SYSTEM/OPTIMIZE queries (#6680) by @evanh
+- feat(eap): Use weighted average instead of simple average for calculating average sampling rate (#6678) by @davidtsuk
+- ref(lw-deletes): concurrent allocation policy requires org id (#6679) by @MeredithAnya
+
+## 24.12.0
+
+### Various fixes & improvements
+
+- feat(inc-984): store project ids list in dictionary in scrub job (#6675) by @volokluev
+- ref(lw-deletes): enforce ratelimiter (#6644) by @MeredithAnya
+- fix(admin): Allow KILL MUTATION commands in sudo mode (#6672) by @evanh
+- fix(inc984): align start/end timestamp to partition boundaries (#6670) by @volokluev
+- chore(deps): bump relay from 0.9.2 to 0.9.4 (#6660) by @jjbayer
+- feat(inc984): make mutation condition simpler (#6669) by @volokluev
+- chore: Bump Arroyo to 2.19.5 (#6666) by @ayirr7
+- ref: bump sentry-arroyo to 2.19.4 (#6663) by @getsentry-bot
+- fix(eap-alerts): Fix subscriptions referrer for eap alerts (#6662) by @shruthilayaj
+- chore(api): Do not log healthcheck error if downfile exists (#6635) by @untitaker
+- feat(eap): add additional validation for group by  (#6659) by @davidtsuk
+- feat(eap): add default value to virtual column (#6657) by @davidtsuk
+- ref: bump sentry-arroyo to 2.19.3 (#6656) by @getsentry-bot
+- Implement filter offset for attribute keys API (#6618) by @xurui-c
+- feat: make sentry RPC instrumentation more specific to the endpoint (#6654) by @kylemumma
+- fix(consumers): Respect 60 day retention days period (#6631) by @volokluev
+- feat: add missing example in admin rpc tool (#6647) by @kylemumma
+- hotfix(inc-984): Add manual job to scrub IPs from spans (#6649) by @volokluev
+- feat: support 15 minute granularity on eap time series RPC (#6645) by @kylemumma
+- fix(eap): Fix divide by 0 bug (#6653) by @davidtsuk
+- fix: run sentry tests when RPC changes (#6652) by @colin-sentry
+- meta: Bump new development version (60ff5441)
+- chore(eap-spans): Take advantage of parallel reads (#6579) by @phacops
+
+## 24.11.2
+
+### Various fixes & improvements
+
+- feat(eap): Bump max timeseries buckets (#6630) by @volokluev
+- fix(scripts): Automatically create local tables before MV (#6648) by @untitaker
+- feat(eap): Implement confidence intervals for percentiles (#6634) by @davidtsuk
+- fix: admin rpc endpoint selector bug fix (#6641) by @kylemumma
+- ref(admin): Allow merge function in FROM clause (#6643) by @evanh
+- fix: Actual Rust support in bump-version (#6640) by @untitaker
+- fix 0006_sorting_key_change migration (#6633) by @MeredithAnya
+- chore: Bump Arroyo 2.19.2 (#6639) by @ayirr7
+- chore: Bump Arroyo to 2.19.1 (#6632) by @ayirr7
+- chore(devservices): Bumping the version of devservices to latest (#6629) by @IanWoodard
+- feat(eap-api): support in conditions in TraceItemFilter (#6623) by @kylemumma
+- Revert "ref(ci): Disable self-hosted e2e CI due to resource constraints" (#6622) by @hubertdeng123
+- feat(devservices): Use https for repo links (#6627) by @hubertdeng123
+- chore: Bump rust-arroyo to published crate (#6614) by @untitaker
+- feat(label): adding label to container (#6628) by @IanWoodard
+- consumer: Add flag to configure DLQ buffer limit (#6626) by @ayirr7
+- feat(runtime_config): A way to add static descriptions to config items (#6624) by @untitaker
+- fix(admin): add example RPC call for the endpoints missing it (#6615) by @kylemumma
+- feat(eap-api): Use signs in count, average, and sum calculations (#6613) by @davidtsuk
+- feat(devservices): Add healthchecks to clickhouse and snuba (#6616) by @hubertdeng123
+- feat(memory): Add script to debug consumer OOM issues (#6585) by @nikhars
+- ref(ci): Disable self-hosted e2e CI due to resource constraints (#6620) by @hubertdeng123
+- ref(admin): Allow clusterAllReplicas in system queries (#6619) by @evanh
+- ref(profiling): start the profile_chunks consumer when ENABLE_PROFILES_CONSUMER is true (#6607) by @viglia
+
+_Plus 11 more_
+
+## 24.11.1
+
+### Various fixes & improvements
+
+- ref(clickhouse-24.3): allow_suspicious_primary_key for eap migration (#6602) by @MeredithAnya
+- chore(devservices): Bumping the version of devservices to latest (#6596) by @IanWoodard
+- feat(consumers): Quantized rebalancing in Rust (#6595) by @untitaker
+- chore(metrics-summaries): Remove metrics summaries consumer code (#6590) by @phacops
+- feat(eap): Extract profile id for eap spans (#6597) by @Zylphrex
+- fix(codeowners): Code owners for eap processor (#6598) by @Zylphrex
+- fix(eap): fix bug where we pass non str group by mapping to timeseries (#6593) by @davidtsuk
+- fix(eap-api): delimeter for alias (#6592) by @xurui-c
+- feat(eap): Add confidence interval calculations for count (#6568) by @davidtsuk
+- RPC handles same name attributes (#6581) by @xurui-c
+- log(optimize): after optimize, log how long it took w/partition (#6591) by @onewland
+- feat(devservices): Add restart settings and use external devservices network (#6587) by @hubertdeng123
+- chore(deps): bump actions/checkout from 2 to 4 (#6554) by @onkar
+- chore(devservices): Bumping the version of devservices to latest (#6582) by @IanWoodard
+- chore(ci): Upgrade ClickHouse to v23.8 for CI (#6584) by @phacops
+- feat(subscriptions): Add a create subscription rpc endpoint (#6571) by @shruthilayaj
+- fix(script): Wait for futures when producing to kafka (#6583) by @nikhars
+- fix: convert max_batch_time seconds (#6580) by @MeredithAnya
+- fix: dont set group.instance.id incorrectly (#6578) by @MeredithAnya
+- chore(eap-spans): Increase the number of replicas to scan in parallel (#6577) by @phacops
+- V1 RPC of TraceItemAttributeValues (#6563) by @xurui-c
+- meta: Bump new development version (9b923342)
+- build(deps): bump types-python-dateutil from 2.8.19 to 2.8.19.14 (#6557) by @onkar
+- build(deps-dev): bump webpack-cli from 4.10.0 to 5.1.4 in /snuba/admin (#6558) by @onkar
+
+_Plus 4 more_
+
+## 24.11.0
+
+### Various fixes & improvements
+
+- feat(consumers): rust consumers quantized rebalance (#6561) by @volokluev
+- chore(deps): bump docker/setup-buildx-action from 2 to 3 (#6553) by @onkar
+- ref(deletes): add lw-deletions-search-issues-consumer to deploy.sh (#6567) by @MeredithAnya
+- fix(admin): ignore gather_profile_events for certain storages (#6566) by @MeredithAnya
+- chore(deps): bump getsentry/action-github-app-token from 2.0.0 to 3.0.0 (#6549) by @onkar
+- ref(deletes): add use_bulk_deletes runtime config (#6560) by @MeredithAnya
+- feat(devservices): Only expose ports to localhost (#6565) by @hubertdeng123
+- chore(deps): bump types-pyyaml from 6.0.11 to 6.0.12.20240808 (#6552) by @onkar
+- chore(deps): bump getsentry/action-migrations from 1.0.8 to 1.2.2 (#6556) by @onkar
+- feat(eap): Add support for extrapolation (#6536) by @davidtsuk
+- feat(devservices): Bump devservices version (#6507) by @hubertdeng123
+- chore(eap-spans): Remove unused tables (#6544) by @phacops
+- chore(eap-spans): Switch test to use new spans table (#6550) by @phacops
+- [CapMan visibility] rejected queries are ran with 0 threads (#6545) by @xurui-c
+- fix: ENABLE_LW_DELETIONS_CONSUMER default to False (#6546) by @MeredithAnya
+- ref(deletes): bulk delete consumer (#6510) by @MeredithAnya
+- chore(deps): bump packaging from 21.3 to 24.1 (#6540) by @onkar
+- chore(deps): bump progressbar2 from 4.0.0 to 4.2.0 (#6534) by @onkar
+- chore(deps): bump jsonschema from 4.16.0 to 4.23.0 (#6539) by @onkar
+- chore(deps): bump google-github-actions/auth from 1 to 2 (#6541) by @onkar
+- build(deps): bump sentry-usage-accountant from 0.0.10 to 0.0.11 (#6542) by @onkar
+- build(deps): bump actions/setup-node from 3 to 4 (#6543) by @onkar
+- Fix sampling weight calculation (#6537) by @davidtsuk
+- chore(deps): bump types-setuptools from 65.3.0 to 74.1.0.20240907 (#6526) by @onkar
+
+_Plus 102 more_
+
 ## 24.10.0
 
 ### Various fixes & improvements

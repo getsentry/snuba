@@ -1,10 +1,11 @@
+name: Bump a dependency
 on:
   workflow_dispatch:
     inputs:
       package:
         required: true
         type: string
-        description: package name such as `sentry-arroyo`
+        description: package name such as `sentry-arroyo` (_ vs - does not matter)
       version:
         required: true
         type: string
@@ -35,7 +36,7 @@ jobs:
   bump-version:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8  # v3.1.0
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         token: ${{ secrets.GETSENTRY_BOT_REVERT_TOKEN }}
     - run: |
@@ -48,9 +49,9 @@ jobs:
         git checkout -b "bot/bump-version/$PACKAGE/$VERSION"
 
         re="$(sed 's/[_-]/[_-]/g' <<< "$PACKAGE")"
-        sed -i "s/^$re==.*/$PACKAGE==$VERSION/g" -- requirements*.txt
+        sed -i "s/^\($re\)==.*/\1==$VERSION/g" -- requirements*.txt
 
-        sed -i "s/^$re==.*/$PACKAGE\s=\s\"$VERSION\"/g" -- rust_snuba/Cargo.toml
+        sed -i "s/^\($re\) = \".*\"/\1 = \"$VERSION\"/g" -- rust_snuba/Cargo.toml
 
         if git diff --exit-code; then
           exit 0

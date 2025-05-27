@@ -23,6 +23,7 @@ import {
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { CSV } from "../cardinality_analyzer/CSV";
+import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 
 const MQLQueryExample = `(sum(d:transactions/duration@millisecond{status_code: 200}) by transaction + sum(d:transactions/duration@millisecond) by transaction) * 100.0`;
 
@@ -158,31 +159,13 @@ function MQLQueries(props: { api: Client }) {
                   queryResult: queryResultHistory[0],
                 })}
               </div>
-              <Button.Group>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    window.navigator.clipboard.writeText(
-                      JSON.stringify(queryResultHistory[0])
-                    )
-                  }
-                >
-                  Copy to clipboard (JSON)
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    window.navigator.clipboard.writeText(
-                      CSV.sheet([
-                        queryResultHistory[0].columns,
-                        ...queryResultHistory[0].rows,
-                      ])
-                    )
-                  }
-                >
-                  Copy to clipboard (CSV)
-                </Button>
-              </Button.Group>
+              <QueryResultCopier
+                jsonInput={JSON.stringify(queryResultHistory[0])}
+                csvInput={CSV.sheet([
+                  queryResultHistory[0].columns,
+                  ...queryResultHistory[0].rows,
+                ])}
+              />
               <Space h="md" />
               <Table
                 headerData={queryResultHistory[0].columns}
@@ -216,7 +199,7 @@ function MQLQueries(props: { api: Client }) {
           </>
         )}
       </div>
-    </div>
+    </div >
   );
 }
 
@@ -311,11 +294,11 @@ function QueryResultQuotaAllowance(props: { queryResult: QueryResult }) {
         if (policy.max_threads < 10 && policy.explanation.reason != null) {
           reasonHeader.push(
             policyName +
-              ": " +
-              policy.explanation.reason +
-              ". MQL Query executed with " +
-              policy.max_threads +
-              " threads."
+            ": " +
+            policy.explanation.reason +
+            ". MQL Query executed with " +
+            policy.max_threads +
+            " threads."
           );
         }
       });
@@ -339,28 +322,10 @@ function QueryResultHistoryItem(props: { queryResult: QueryResult }) {
         Execution Duration (ms): {props.queryResult.duration_ms}
         {QueryResultQuotaAllowance({ queryResult: props.queryResult })}
       </div>
-      <Button.Group>
-        <Button
-          variant="outline"
-          onClick={() =>
-            window.navigator.clipboard.writeText(
-              JSON.stringify(props.queryResult)
-            )
-          }
-        >
-          Copy to clipboard (JSON)
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() =>
-            window.navigator.clipboard.writeText(
-              CSV.sheet([props.queryResult.columns, ...props.queryResult.rows])
-            )
-          }
-        >
-          Copy to clipboard (CSV)
-        </Button>
-      </Button.Group>
+      <QueryResultCopier
+        jsonInput={JSON.stringify(props.queryResult)}
+        csvInput={CSV.sheet([props.queryResult.columns, ...props.queryResult.rows])}
+      />
       <Space h="md" />
       <Table
         headerData={props.queryResult.columns}

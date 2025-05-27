@@ -58,6 +58,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
+from snuba.state import get_int_config
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -72,6 +73,7 @@ from snuba.utils.health_info import (
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
+from snuba.web.bulk_delete_query import delete_from_storage as bulk_delete_from_storage
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
 from snuba.web.delete_query import (
@@ -232,7 +234,6 @@ def health_envoy() -> Response:
 
 @application.route("/health")
 def health() -> Response:
-
     thorough = http_request.args.get("thorough", False)
     health_info = get_health_info(thorough)
 
@@ -251,15 +252,18 @@ def parse_request_body(http_request: Request) -> Dict[str, Any]:
 
 
 def _trace_transaction(dataset_name: str) -> None:
-    with sentry_sdk.configure_scope() as scope:
-        if scope.span:
-            scope.span.set_tag("dataset", dataset_name)
-            scope.span.set_tag("referrer", http_request.referrer)
+    span = sentry_sdk.get_current_span()
+    if span:
+        span.set_tag("dataset", dataset_name)
+        span.set_tag("referrer", http_request.referrer)
 
-        if scope.transaction:
-            scope.transaction = (
-                f"{scope.transaction.name}__{dataset_name}__{http_request.referrer}"
-            )
+    scope = sentry_sdk.get_current_scope()
+    if scope.transaction:
+        scope.set_transaction_name(
+            f"{scope.transaction.name}__{dataset_name}__{http_request.referrer}"
+        )
+        scope.transaction.set_tag("dataset", dataset_name)
+        scope.transaction.set_tag("referrer", http_request.referrer)
 
 
 @application.route("/query", methods=["GET", "POST"])
@@ -327,11 +331,18 @@ def storage_delete(
         try:
             schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
             request_parts = schema.validate(body)
-            payload = delete_from_storage(
-                storage,
-                request_parts.query["query"]["columns"],
-                request_parts.attribution_info,
-            )
+            if get_int_config("use_bulk_deletes"):
+                payload = bulk_delete_from_storage(
+                    storage,
+                    request_parts.query["query"]["columns"],
+                    request_parts.attribution_info,
+                )
+            else:
+                payload = delete_from_storage(
+                    storage,
+                    request_parts.query["query"]["columns"],
+                    request_parts.attribution_info,
+                )
         except (
             InvalidJsonRequestException,
             DeletesNotEnabledError,
@@ -575,7 +586,10 @@ if application.debug or application.testing:
 
     application.url_map.converters["entity"] = EntityConverter
 
-    def _write_to_entity(*, entity: EntityType) -> RespTuple:
+    def _write_to_entity(
+        *,
+        entity: EntityType,
+    ) -> RespTuple:
         from snuba.processor import InsertBatch
 
         rows: MutableSequence[WriterTableRow] = []
@@ -584,9 +598,13 @@ if application.debug or application.testing:
         assert writable_storage is not None
         table_writer = writable_storage.get_table_writer()
 
-        for index, message in enumerate(json.loads(http_request.data)):
-            offset = offset_base + index
+        if http_request.files:
+            messages = [file.read() for _, file in http_request.files.items()]
+        else:
+            messages = json.loads(http_request.data)
 
+        for index, message in enumerate(messages):
+            offset = offset_base + index
             processed_message = (
                 table_writer.get_stream_loader()
                 .get_processor()
@@ -609,13 +627,20 @@ if application.debug or application.testing:
         return ("ok", 200, {"Content-Type": "text/plain"})
 
     @application.route("/tests/entities/<entity:entity>/insert", methods=["POST"])
-    def write_to_entity(*, entity: EntityType) -> RespTuple:
-        return _write_to_entity(entity=entity)
+    def write_json_to_entity(*, entity: EntityType) -> RespTuple:
+        return _write_to_entity(
+            entity=entity,
+        )
+
+    @application.route("/tests/entities/<entity:entity>/insert_bytes", methods=["POST"])
+    def write_bytes_to_entity(*, entity: EntityType) -> RespTuple:
+        return _write_to_entity(
+            entity=entity,
+        )
 
     @application.route("/tests/<entity:entity>/eventstream", methods=["POST"])
     def eventstream(*, entity: Entity) -> RespTuple:
         record = json.loads(http_request.data)
-
         version = record[0]
         if version != 2:
             raise RuntimeError("Unsupported protocol version: %s" % record)

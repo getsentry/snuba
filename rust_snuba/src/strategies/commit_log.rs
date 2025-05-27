@@ -1,14 +1,14 @@
 use crate::types::BytesInsertBatch;
 use chrono::{DateTime, Utc};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::Producer;
-use rust_arroyo::processing::strategies::run_task_in_threads::{
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::Producer;
+use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use rust_arroyo::processing::strategies::{
+use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
-use rust_arroyo::types::{Message, Topic, TopicOrPartition};
+use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
 use serde::{Deserialize, Serialize};
 use std::str;
 use std::sync::Arc;
@@ -139,12 +139,15 @@ impl TaskRunner<BytesInsertBatch<()>, BytesInsertBatch<()>, anyhow::Error> for P
     }
 }
 
-pub struct ProduceCommitLog {
-    inner: RunTaskInThreads<BytesInsertBatch<()>, BytesInsertBatch<()>, anyhow::Error>,
+pub struct ProduceCommitLog<N> {
+    inner: RunTaskInThreads<BytesInsertBatch<()>, BytesInsertBatch<()>, anyhow::Error, N>,
 }
 
-impl ProduceCommitLog {
-    pub fn new<N>(
+impl<N> ProduceCommitLog<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
+{
+    pub fn new(
         next_step: N,
         producer: Arc<dyn Producer<KafkaPayload> + 'static>,
         destination: Topic,
@@ -152,19 +155,10 @@ impl ProduceCommitLog {
         consumer_group: String,
         concurrency: &ConcurrencyConfig,
         skip_produce: bool,
-    ) -> Self
-    where
-        N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
-    {
+    ) -> Self {
         let inner = RunTaskInThreads::new(
             next_step,
-            Box::new(ProduceMessage::new(
-                producer,
-                destination,
-                topic,
-                consumer_group,
-                skip_produce,
-            )),
+            ProduceMessage::new(producer, destination, topic, consumer_group, skip_produce),
             concurrency,
             Some("produce_commit_log"),
         );
@@ -173,7 +167,10 @@ impl ProduceCommitLog {
     }
 }
 
-impl ProcessingStrategy<BytesInsertBatch<()>> for ProduceCommitLog {
+impl<N> ProcessingStrategy<BytesInsertBatch<()>> for ProduceCommitLog<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>>,
+{
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }
@@ -200,8 +197,8 @@ mod tests {
 
     use super::*;
     use crate::testutils::TestStrategy;
-    use rust_arroyo::backends::ProducerError;
-    use rust_arroyo::types::Topic;
+    use sentry_arroyo::backends::ProducerError;
+    use sentry_arroyo::types::Topic;
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
 

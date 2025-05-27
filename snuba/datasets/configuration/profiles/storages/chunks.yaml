@@ -4,7 +4,7 @@ name: profile_chunks
 storage:
   key: profile_chunks
   set_key: profile_chunks
-readiness_state: partial
+readiness_state: complete
 schema:
   columns:
     [
@@ -13,6 +13,11 @@ schema:
       { name: chunk_id, type: UUID },
       { name: start_timestamp, type: DateTime64, args: { precision: 6 } },
       { name: end_timestamp, type: DateTime64, args: { precision: 6 } },
+      {
+        name: environment,
+        type: String,
+        args: { schema_modifiers: [nullable] },
+      },
       { name: retention_days, type: UInt, args: { size: 16 } },
       { name: partition, type: UInt, args: { size: 16 } },
       { name: offset, type: UInt, args: { size: 64 } },
