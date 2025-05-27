@@ -1,1 +1,3 @@
 snuba/admin/dist/bundle.js binary
+snuba/protobufs/**/*.py linguist-generated=true
+snuba/protobufs/**/*.pyi linguist-generated=true

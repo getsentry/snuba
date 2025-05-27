@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import UTC, timedelta
 from typing import Optional
 
 import click
@@ -26,6 +26,24 @@ from snuba.redis import RedisClientKey, get_redis_client
     help="Clickhouse native port to write to.",
 )
 @click.option(
+    "--clickhouse-secure",
+    type=bool,
+    default=False,
+    help="If true, an encrypted connection will be used",
+)
+@click.option(
+    "--clickhouse-ca-certs",
+    type=str,
+    default=None,
+    help="An optional path to certificates directory.",
+)
+@click.option(
+    "--clickhouse-verify",
+    type=bool,
+    default=False,
+    help="Verify ClickHouse SSL cert.",
+)
+@click.option(
     "--storage",
     "storage_name",
     type=click.Choice(["errors"]),
@@ -35,17 +53,28 @@ from snuba.redis import RedisClientKey, get_redis_client
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--parallel",
+    "default_parallel_threads",
     type=click.IntRange(1, 2),
     default=1,
-    help="Run parallel optimizations",
+    help="Default parallel threads",
+)
+@click.option(
+    "--divide-partitions",
+    type=click.IntRange(1, 2),
+    default=1,
+    help="Divide partitions into N groups",
 )
 def optimize(
     *,
     clickhouse_host: Optional[str],
     clickhouse_port: Optional[int],
+    clickhouse_secure: bool,
+    clickhouse_ca_certs: Optional[str],
+    clickhouse_verify: Optional[bool],
     storage_name: str,
-    parallel: int,
+    default_parallel_threads: int,
     log_level: Optional[str] = None,
+    divide_partitions: int,
 ) -> None:
     from datetime import datetime
 
@@ -62,7 +91,7 @@ def optimize(
 
     (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
 
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
     database = storage.get_cluster().get_database()
 
@@ -78,6 +107,9 @@ def optimize(
             clickhouse_user,
             clickhouse_password,
             database,
+            clickhouse_secure,
+            clickhouse_ca_certs,
+            clickhouse_verify,
             send_receive_timeout=ClickhouseClientSettings.OPTIMIZE.value.timeout,
         )
     elif not storage.get_cluster().is_single_node():
@@ -119,10 +151,11 @@ def optimize(
         clickhouse=connection,
         storage=storage,
         database=database,
-        parallel=parallel,
+        default_parallel_threads=default_parallel_threads,
         clickhouse_host=clickhouse_host,
         tracker=tracker,
         before=today,
+        divide_partitions_count=divide_partitions,
     )
 
     tracker.delete_all_states()

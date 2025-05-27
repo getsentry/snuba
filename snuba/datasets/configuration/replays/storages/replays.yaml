@@ -82,6 +82,11 @@ schema:
         type: String,
         args: { schema_modifiers: [nullable] },
       },
+      { name: user_geo_city, type: String },
+      { name: user_geo_country_code, type: String },
+      { name: user_geo_region, type: String },
+      { name: user_geo_subdivision, type: String },
+      { name: viewed_by_id, type: UInt, args: { size: 64 } },
       { name: os_name, type: String, args: { schema_modifiers: [nullable] } },
       {
         name: os_version,
@@ -118,6 +123,18 @@ schema:
         type: String,
         args: { schema_modifiers: [nullable] },
       },
+      {
+        name: ota_updates_channel,
+        type: String,
+      },
+      {
+        name: ota_updates_runtime_version,
+        type: String,
+      },
+      {
+        name: ota_updates_update_id,
+        type: String,
+      },
       { name: sdk_name, type: String, args: { schema_modifiers: [nullable] } },
       {
         name: sdk_version,
@@ -131,6 +148,15 @@ schema:
           {
             subcolumns:
               [{ name: key, type: String }, { name: value, type: String }],
+          },
+      },
+      {
+        name: _tags_hash_map,
+        type: Array,
+        args:
+          {
+            schema_modifiers: [readonly],
+            inner_type: { type: UInt, args: { size: 64 } },
           },
       },
       { name: click_node_id, type: UInt, args: { size: 32 } },
@@ -167,19 +193,33 @@ schema:
     ]
   local_table_name: replays_local
   dist_table_name: replays_dist
+
 query_processors:
-  - processor: TableRateLimit
   - processor: ClickhouseSettingsOverride
     args:
       settings:
         max_rows_to_group_by: 1000000
-        group_by_overflow_mode: any
+        group_by_overflow_mode: break
+  - processor: MappingOptimizer
+    args:
+      column_name: tags
+      hash_map_name: _tags_hash_map
+      killswitch: tags_hash_map_enabled
+  - processor: EmptyTagConditionProcessor
+    args:
+      column_name: tags.key
+  - processor: ArrayJoinKeyValueOptimizer
+    args:
+      column_name: tags
+
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
+
 stream_loader:
   processor: ReplaysProcessor
   default_topic: ingest-replay-events
   dlq_topic: snuba-dead-letter-replays
+
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
     args:
@@ -189,15 +229,6 @@ allocation_policies:
         - project_id
       default_config_overrides:
         is_enforced: 0
-  - name: BytesScannedWindowAllocationPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - referrer
-      default_config_overrides:
-        is_enforced: 1
-        throttled_thread_number: 1
-        org_limit_bytes_scanned: 100000
   - name: ReferrerGuardRailPolicy
     args:
       required_tenant_types:
@@ -205,3 +236,12 @@ allocation_policies:
       default_config_overrides:
         is_enforced: 0
         is_active: 0
+  - name: BytesScannedRejectingPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - project_id
+        - referrer
+      default_config_overrides:
+        is_active: 0
+        is_enforced: 0

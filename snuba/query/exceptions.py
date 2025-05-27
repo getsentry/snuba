@@ -50,3 +50,12 @@ class QueryPlanException(SerializableException):
     @classmethod
     def from_args(cls, exception_type: str, message: str) -> "QueryPlanException":
         return cls(exception_type=exception_type, message=message)
+
+
+class TooManyDeleteRowsException(SerializableException):
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
+class NoRowsToDeleteException(SerializableException):
+    pass

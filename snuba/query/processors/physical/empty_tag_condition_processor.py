@@ -30,18 +30,24 @@ class EmptyTagConditionProcessor(ClickhouseQueryProcessor):
     the `has` function.
     """
 
+    def __init__(self, column_name: str) -> None:
+        self.column_name = column_name
+
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def process_condition(exp: Expression) -> Expression:
             result = CONDITION_PATTERN.match(exp)
             if result is not None:
                 key_column = result.optional_string(KEY_COL_MAPPING_PARAM)
-                if key_column == "tags.key":
+                if key_column == self.column_name:
                     rhs = result.optional_string(KEY_MAPPING_PARAM)
                     table_name = result.optional_string(TABLE_MAPPING_PARAM)
                     replacement = FunctionCall(
                         exp.alias,
                         "has",
-                        (Column(None, table_name, "tags.key"), Literal(None, rhs)),
+                        (
+                            Column(None, table_name, self.column_name),
+                            Literal(None, rhs),
+                        ),
                     )
 
                     assert isinstance(exp, FunctionCall)

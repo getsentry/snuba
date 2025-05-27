@@ -68,7 +68,7 @@ def _check_codecs(old_type: str, new_col_type: ColumnType[MigrationModifiers]) -
 
         def _has_codec(codec_str: str, modifiers: MigrationModifiers) -> bool:
             for codec in modifiers.codecs or []:
-                if re.match(f"^{codec_str.lower()}[\w\D\(\)]*", codec.lower()):
+                if re.match(rf"^{codec_str.lower()}[\w\D\(\)]*", codec.lower()):
                     return True
             return False
 

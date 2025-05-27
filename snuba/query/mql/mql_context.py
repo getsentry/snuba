@@ -26,6 +26,7 @@ class MQLContext:
     indexer_mappings: dict[str, str | int]
     limit: int | None
     offset: int | None
+    extrapolate: bool
 
     def __post_init__(self) -> None:
         self.validate()
@@ -45,6 +46,8 @@ class MQLContext:
             raise ParsingException("MQL context: limit must be an int")
         if self.offset is not None and not isinstance(self.offset, int):
             raise ParsingException("MQL context: offset must be an int")
+        if self.extrapolate is not None and not isinstance(self.extrapolate, bool):
+            raise ParsingException("MQL context: extrapolate flag must be a bool")
 
     @staticmethod
     def from_dict(mql_context_dict: dict[str, Any]) -> MQLContext:
@@ -57,6 +60,7 @@ class MQLContext:
                 indexer_mappings=mql_context_dict["indexer_mappings"],
                 limit=mql_context_dict["limit"],
                 offset=mql_context_dict["offset"],
+                extrapolate=mql_context_dict.get("extrapolate", False),
             )
         except KeyError as e:
             raise ParsingException(f"MQL context: missing required field {e}")

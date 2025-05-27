@@ -1,18 +1,25 @@
 import React, { useEffect, useState } from "react";
-import { Switch } from "@mantine/core";
+import {
+  Accordion,
+  Switch,
+  Code,
+  Stack,
+  Title,
+  Group,
+  Button,
+} from "@mantine/core";
 import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import { Table } from "SnubaAdmin/table";
-
-import {
-  LogLine,
-  TracingRequest,
-  TracingResult,
-  PredefinedQuery,
-} from "./types";
+import ExecuteButton from "SnubaAdmin/utils/execute_button";
+import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
+import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
+import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
+import { TracingRequest, TracingResult, PredefinedQuery } from "./types";
 
 type QueryState = Partial<TracingRequest>;
 
+const HISTORY_KEY = "tracing_queries";
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (
@@ -22,12 +29,15 @@ function QueryDisplay(props: {
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [storages, setStorages] = useState<string[]>([]);
-  const [query, setQuery] = useState<QueryState>({});
+  const [checkedGatherProfileEvents, setCheckedGatherProfileEvents] = useState<boolean>(true);
+  const [query, setQuery] = useState<QueryState>({
+    storage: getParamFromStorage("storage"),
+    gather_profile_events: checkedGatherProfileEvents
+  });
   const [queryResultHistory, setQueryResultHistory] = useState<TracingResult[]>(
-    []
+    getRecentHistory(HISTORY_KEY)
   );
-  const [isExecuting, setIsExecuting] = useState<boolean>(false);
-  const [showFormatted, setShowFormatted] = useState<boolean>(false);
+  const [showFormatted, setShowFormatted] = useState<boolean>(true);
 
   useEffect(() => {
     props.api.getClickhouseNodes().then((res) => {
@@ -45,33 +55,28 @@ function QueryDisplay(props: {
   }
 
   function executeQuery() {
-    if (isExecuting) {
-      window.alert("A query is already running");
-    }
-    setIsExecuting(true);
-    props.api
+    query.gather_profile_events = checkedGatherProfileEvents;
+    return props.api
       .executeTracingQuery(query as TracingRequest)
       .then((result) => {
         const tracing_result = {
           input_query: `${query.sql}`,
           timestamp: result.timestamp,
           num_rows_result: result.num_rows_result,
+          result: result.result,
           cols: result.cols,
           trace_output: result.trace_output,
-          formatted_trace_output: result.formatted_trace_output,
+          summarized_trace_output: result.summarized_trace_output,
+          profile_events_results: result.profile_events_results,
+          profile_events_meta: result.profile_events_meta,
+          profile_events_profile: result.profile_events_profile,
           error: result.error,
         };
+        setRecentHistory(HISTORY_KEY, tracing_result);
         setQueryResultHistory((prevHistory) => [
           tracing_result,
           ...prevHistory,
         ]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.error.message);
-      })
-      .finally(() => {
-        setIsExecuting(false);
       });
   }
 
@@ -82,50 +87,40 @@ function QueryDisplay(props: {
         storage: storage,
       };
     });
-    console.log(query);
-  }
-
-  function copyText(text: string) {
-    window.navigator.clipboard.writeText(text);
   }
 
   return (
     <div>
       <h2>Construct a ClickHouse Query</h2>
-      <a href="https://getsentry.github.io/snuba/clickhouse/death_queries.html">
-        🛑 WARNING! BEFORE RUNNING QUERIES, READ THIS 🛑
-      </a>
       <QueryEditor
         onQueryUpdate={(sql) => {
           updateQuerySql(sql);
         }}
-        predefinedQueryOptions={props.predefinedQueryOptions}
       />
       <div style={executeActionsStyle}>
         <div>
-          <select
+          <CustomSelect
             value={query.storage || ""}
-            onChange={(evt) => selectStorage(evt.target.value)}
-            style={selectStyle}
-          >
-            <option disabled value="">
-              Select a storage
-            </option>
-            {storages.map((storage) => (
-              <option key={storage} value={storage}>
-                {storage}
-              </option>
-            ))}
-          </select>
+            onChange={selectStorage}
+            name="storage"
+            options={storages}
+          />
         </div>
-        <div>
-          <button
-            onClick={(_) => executeQuery()}
-            style={executeButtonStyle}
-            disabled={isExecuting || !query.storage || !query.sql}
-          >
-            Execute query
-          </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <Switch
+            checked={checkedGatherProfileEvents}
+            onChange={(evt: React.ChangeEvent<HTMLInputElement>) => {
+                  setCheckedGatherProfileEvents(evt.currentTarget.checked);
+                }
+            }
+            onLabel="PROFILE"
+            offLabel="NO PROFILE"
+            size="md"
+          />
+          <ExecuteButton
+            onClick={executeQuery}
+            disabled={!query.storage || !query.sql}
+          />
         </div>
       </div>
       <div>
@@ -141,18 +136,41 @@ function QueryDisplay(props: {
         />
         <br />
         <Table
-          headerData={["Query", "Response"]}
+          headerData={["Response"]}
           rowData={queryResultHistory.map((queryResult) => [
-            <span>{queryResult.input_query}</span>,
-            <div>
-              <button
-                style={executeButtonStyle}
-                onClick={() => copyText(JSON.stringify(queryResult))}
-              >
-                Copy to clipboard
-              </button>
+            <Stack>
+              <QueryResultCopier
+                rawInput={queryResult.trace_output || ""}
+                jsonInput={JSON.stringify(queryResult)}
+              />
+              <Title order={3}>Tracing Data</Title>
               {props.resultDataPopulator(queryResult, showFormatted)}
-            </div>,
+              <Accordion chevronPosition="left">
+                <Accordion.Item value="input-query" key="input-query">
+                  <Accordion.Control>
+                    <Title order={3}>Input Query</Title>
+                  </Accordion.Control>
+                  <Accordion.Panel>
+                    <Code block>{queryResult.input_query}</Code>
+                  </Accordion.Panel>
+                </Accordion.Item>
+              </Accordion>
+              <Accordion chevronPosition="left">
+                <Accordion.Item value="query-result" key="query-result">
+                  <Accordion.Control>
+                    <Title order={3}>Query Result</Title>
+                  </Accordion.Control>
+                  <Accordion.Panel>
+                    <Table
+                      headerData={
+                        (queryResult.cols || []).map(([name, ty]) => <>{name} <small>({ty})</small></>)
+                      }
+                      rowData={queryResult.result || []}
+                    />
+                  </Accordion.Panel>
+                </Accordion.Item>
+              </Accordion>
+            </Stack>,
           ])}
           columnWidths={[1, 5]}
         />
@@ -167,38 +185,8 @@ const executeActionsStyle = {
   marginTop: 8,
 };
 
-const executeButtonStyle = {
-  height: 30,
-  border: 0,
-  padding: "4px 20px",
-  marginRight: 10,
-};
-
 const selectStyle = {
   marginRight: 8,
   height: 30,
-};
-
-function TextArea(props: {
-  value: string;
-  onChange: (nextValue: string) => void;
-}) {
-  const { value, onChange } = props;
-  return (
-    <textarea
-      spellCheck={false}
-      value={value}
-      onChange={(evt) => onChange(evt.target.value)}
-      style={{ width: "100%", height: 140 }}
-      placeholder={"Write your query here"}
-    />
-  );
-}
-
-const queryDescription = {
-  minHeight: 10,
-  width: "auto",
-  fontSize: 16,
-  padding: "10px 5px",
 };
 export default QueryDisplay;

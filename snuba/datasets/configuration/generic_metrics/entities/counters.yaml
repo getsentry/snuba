@@ -26,14 +26,15 @@ schema:
     {
       name: tags.raw_value,
       type: Array,
-      args:
-        {
-          schema_modifiers: [readonly],
-          inner_type: { type: String },
-        },
+      args: { schema_modifiers: [readonly], inner_type: { type: String } },
     },
     {
       name: value,
+      type: AggregateFunction,
+      args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
+    },
+    {
+      name: value_weighted,
       type: AggregateFunction,
       args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
     },
@@ -51,6 +52,12 @@ storages:
           args:
             from_name: sumIf
             to_name: sumMergeIf
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: sum_weighted
+            to_name: sumMerge
+            aggr_col_name: value_weighted
       subscriptables:
         - mapper: SubscriptableMapper
           args:

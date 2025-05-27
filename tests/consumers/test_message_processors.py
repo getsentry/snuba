@@ -13,12 +13,6 @@ import sentry_kafka_schemas
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.processors.errors_processor import ErrorsProcessor
-from snuba.datasets.processors.generic_metrics_processor import (
-    GenericCountersMetricsProcessor,
-    GenericDistributionsMetricsProcessor,
-    GenericGaugesMetricsProcessor,
-    GenericSetsMetricsProcessor,
-)
 from snuba.datasets.processors.metrics_bucket_processor import (
     PolymorphicMetricsProcessor,
 )
@@ -34,10 +28,6 @@ from snuba.processor import InsertBatch, ReplacementBatch
         ("events", ErrorsProcessor),
         ("outcomes", OutcomesProcessor),
         ("outcomes", OutcomesProcessor),
-        ("snuba-generic-metrics", GenericCountersMetricsProcessor),
-        ("snuba-generic-metrics", GenericSetsMetricsProcessor),
-        ("snuba-generic-metrics", GenericDistributionsMetricsProcessor),
-        ("snuba-generic-metrics", GenericGaugesMetricsProcessor),
         ("snuba-metrics", PolymorphicMetricsProcessor),
     ],
 )

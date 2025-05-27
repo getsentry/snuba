@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import itertools
 import logging
 import os
 import time
@@ -14,12 +13,13 @@ from snuba import environment, settings
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
+    ClickhouseCluster,
     ConnectionId,
     UndefinedClickhouseCluster,
 )
-from snuba.datasets.factory import get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
+from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.environment import setup_logging
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -85,7 +85,11 @@ def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
         "thorough": str(thorough),
     }
 
-    clickhouse_health = check_clickhouse(metric_tags=metric_tags) if thorough else True
+    clickhouse_health = (
+        check_all_tables_present(metric_tags=metric_tags)
+        if thorough
+        else sanity_check_clickhouse_connections()
+    )
     metric_tags["clickhouse_ok"] = str(clickhouse_health)
 
     body: Mapping[str, Union[str, bool]]
@@ -100,34 +104,70 @@ def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
             body["clickhouse_ok"] = clickhouse_health
         status = 502
 
+    payload = json.dumps(body)
     if status != 200:
         metrics.increment("healthcheck_failed", tags=metric_tags)
-        logger.error(f"Snuba health check failed! Tags: {metric_tags}")
+        if down_file_exists:
+            logger.error("Snuba health check failed! Tags: %s", metric_tags)
+        else:
+            logger.info("Snuba health check failed! Tags: %s", metric_tags)
+
     metrics.timing(
-        "healthcheck.latency", time.time() - start, tags={"thorough": str(thorough)}
+        "healthcheck.latency",
+        time.time() - start,
+        tags={"thorough": str(thorough), "down_file_exists": str(down_file_exists)},
     )
 
-    logger.info(json.dumps(body))
     return HealthInfo(
-        body=json.dumps(body),
+        body=payload,
         status=status,
         content_type={"Content-Type": "application/json"},
     )
 
 
-def filter_checked_storages() -> List[Storage]:
-    datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
-    entities = itertools.chain(*[dataset.get_all_entities() for dataset in datasets])
+def filter_checked_storages(filtered_storages: List[Storage]) -> None:
+    all_storage_keys = get_all_storage_keys()
+    for storage_key in all_storage_keys:
+        storage = get_storage(storage_key)
+        if storage.get_readiness_state().value in settings.SUPPORTED_STATES:
+            filtered_storages.append(storage)
 
+
+def sanity_check_clickhouse_connections() -> bool:
+    """
+    Check if at least a single clickhouse query node is operable,
+    returns True if so, False otherwise.
+    """
     storages: List[Storage] = []
-    for entity in entities:
-        for storage in entity.get_all_storages():
-            if storage.get_readiness_state().value in settings.SUPPORTED_STATES:
-                storages.append(storage)
-    return storages
+
+    try:
+        filter_checked_storages(storages)
+    except KeyError:
+        pass
+
+    unique_clusters: dict[ConnectionId, ClickhouseCluster] = {}
+
+    for storage in storages:
+        try:
+            unique_clusters[
+                storage.get_cluster().get_connection_id()
+            ] = storage.get_cluster()
+        except UndefinedClickhouseCluster as err:
+            logger.error(err)
+            continue
+
+    for cluster in unique_clusters.values():
+        try:
+            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+            clickhouse.execute("show tables").results
+            return True
+        except Exception as err:
+            logger.error(err)
+            continue
+    return False
 
 
-def check_clickhouse(metric_tags: dict[str, Any] | None = None) -> bool:
+def check_all_tables_present(metric_tags: dict[str, Any] | None = None) -> bool:
     """
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     TODO: Eventually, when we fully migrate to readiness_states, we can remove DISABLED_DATASETS.
@@ -137,7 +177,8 @@ def check_clickhouse(metric_tags: dict[str, Any] | None = None) -> bool:
     logger = logging.getLogger("snuba.health")
 
     try:
-        storages = filter_checked_storages()
+        storages: List[Storage] = []
+        filter_checked_storages(storages)
         connection_grouped_table_names: MutableMapping[
             ConnectionId, Set[str]
         ] = defaultdict(set)

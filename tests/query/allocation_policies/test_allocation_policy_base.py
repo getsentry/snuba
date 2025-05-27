@@ -8,6 +8,9 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     CAPMAN_HASH,
     DEFAULT_PASSTHROUGH_POLICY,
+    MAX_THRESHOLD,
+    NO_SUGGESTION,
+    NO_UNITS,
     AllocationPolicy,
     AllocationPolicyConfig,
     InvalidPolicyConfig,
@@ -60,14 +63,34 @@ class RejectingEverythingAllocationPolicy(PassthroughPolicy):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        return QuotaAllowance(can_run=False, max_threads=10, explanation={})
+        return QuotaAllowance(
+            can_run=False,
+            max_threads=0,
+            explanation={},
+            is_throttled=True,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
 
 
 class ThrottleEverythingAllocationPolicy(PassthroughPolicy):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        return QuotaAllowance(can_run=True, max_threads=1, explanation={})
+        return QuotaAllowance(
+            can_run=True,
+            max_threads=1,
+            explanation={},
+            is_throttled=True,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
 
 
 class BadlyWrittenAllocationPolicy(PassthroughPolicy):
@@ -480,7 +503,8 @@ def test_is_not_enforced() -> None:
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    assert not reject_policy.get_quota_allowance(tenant_ids, "deadbeef").can_run
+    quota_allowance = reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
     reject_policy.set_config_value(config_key="is_enforced", value=0)
     # policy not enforced so we don't reject the query

@@ -4,6 +4,7 @@ mod factory;
 mod logging;
 mod metrics;
 mod processors;
+mod rebalancing;
 mod runtime_config;
 mod strategies;
 mod types;

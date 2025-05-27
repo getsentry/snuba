@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Tuple, Union, cast
 
@@ -332,7 +331,6 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         }
 
     def test_raw_mql_string(self, test_dataset: str, tag_column: str) -> None:
-        print(self.indexer_mappings)
         query = MetricsQuery(
             query=f"((sum({COUNTERS_MRI}{{transaction:t1}}) / sum({COUNTERS_MRI})){{transaction:t2}} + sum({COUNTERS_MRI}){{transaction:t3}}) by transaction",
             start=self.start_time,
@@ -359,9 +357,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
 
         assert response.status_code == 200, data
         rows = data["data"]
-        assert len(rows) >= 180, rows
-
-        assert math.isnan(rows[0]["aggregate_value"])  # division by zero
+        assert len(rows) == 0
 
 
 @pytest.mark.clickhouse_db

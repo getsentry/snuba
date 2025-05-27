@@ -127,6 +127,7 @@ schema:
     },
     { name: app_start_type, type: String },
     { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
+    { name: profiler_id, type: UUID, args: { schema_modifiers: [nullable] } },
     { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
   ]
 
@@ -359,6 +360,13 @@ query_processors:
     { processor: BasicFunctionsProcessor },
     { processor: ApdexProcessor },
     { processor: FailureRateProcessor },
+    {
+      processor: LowCardinalityProcessor,
+      args:
+        {
+          columns: [transaction_name, transaction_op, platform, environment, release, dist, sdk_name, http_method, type, app_start_type, transaction_source],
+        },
+    },
   ]
 validate_data_model: error
 validators:

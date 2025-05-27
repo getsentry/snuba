@@ -1,13 +1,16 @@
+import os
+import sys
+from subprocess import call, list2cmdline
+
 import click
+from honcho.manager import Manager
 
 from snuba import settings
 
 COMMON_RUST_CONSUMER_DEV_OPTIONS = [
     "--use-rust-processor",
-    "--no-skip-write",
     "--auto-offset-reset=latest",
     "--no-strict-offset-reset",
-    "--log-level=debug",
     "--enforce-schema",
 ]
 
@@ -15,13 +18,11 @@ COMMON_RUST_CONSUMER_DEV_OPTIONS = [
 @click.command()
 @click.option("--bootstrap/--no-bootstrap", default=True)
 @click.option("--workers/--no-workers", default=True)
-def devserver(*, bootstrap: bool, workers: bool) -> None:
+@click.option(
+    "--log-level", default="info", help="Logging level to use for all processes"
+)
+def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
     "Starts all Snuba processes for local development."
-    import os
-    import sys
-    from subprocess import call, list2cmdline
-
-    from honcho.manager import Manager
 
     os.environ["PYTHONUNBUFFERED"] = "1"
 
@@ -53,6 +54,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--storage=transactions",
                 "--consumer-group=transactions_group",
                 *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                f"--log-level={log_level}",
             ],
         ),
         (
@@ -63,6 +65,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--storage=outcomes_raw",
                 "--consumer-group=outcomes_group",
                 *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                f"--log-level={log_level}",
             ],
         ),
         (
@@ -74,6 +77,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--consumer-group=outcomes_billing_group",
                 "--raw-events-topic=outcomes-billing",
                 *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                f"--log-level={log_level}",
             ],
         ),
         (
@@ -84,6 +88,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--storage=errors",
                 "--consumer-group=errors_group",
                 *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                f"--log-level={log_level}",
             ],
         ),
         (
@@ -93,7 +98,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "replacer",
                 "--auto-offset-reset=latest",
                 "--no-strict-offset-reset",
-                "--log-level=debug",
+                f"--log-level={log_level}",
                 "--storage=errors",
             ],
         ),
@@ -106,6 +111,31 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--consumer-group=spans_group",
                 "--use-rust-processor",
                 *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                f"--log-level={log_level}",
+            ],
+        ),
+        (
+            "eap-items-consumer",
+            [
+                "snuba",
+                "rust-consumer",
+                "--storage=eap_items",
+                "--consumer-group=eap_items_group",
+                "--use-rust-processor",
+                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                f"--log-level={log_level}",
+            ],
+        ),
+        (
+            "eap-items-span-consumer",
+            [
+                "snuba",
+                "rust-consumer",
+                "--storage=eap_items_span",
+                "--consumer-group=eap_items_span_group",
+                "--use-rust-processor",
+                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                f"--log-level={log_level}",
             ],
         ),
     ]
@@ -119,9 +149,9 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "subscriptions-scheduler",
                     "--entity=events",
                     "--consumer-group=snuba-events-subscriptions-scheduler",
-                    "--followed-consumer-group=snuba-consumers",
+                    "--followed-consumer-group=errors_group",
                     "--auto-offset-reset=latest",
-                    "--log-level=debug",
+                    f"--log-level={log_level}",
                     "--schedule-ttl=10",
                 ],
             ),
@@ -134,6 +164,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--entity=events",
                     "--consumer-group=snuba-events-subscription-executor",
                     "--auto-offset-reset=latest",
+                    f"--log-level={log_level}",
                 ],
             ),
             (
@@ -145,7 +176,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--consumer-group=snuba-transactions-subscriptions-scheduler",
                     "--followed-consumer-group=transactions_group",
                     "--auto-offset-reset=latest",
-                    "--log-level=debug",
+                    f"--log-level={log_level}",
                     "--schedule-ttl=10",
                 ],
             ),
@@ -158,6 +189,32 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--entity=transactions",
                     "--consumer-group=snuba-transactions-subscription-executor",
                     "--auto-offset-reset=latest",
+                    f"--log-level={log_level}",
+                ],
+            ),
+            (
+                "subscriptions-scheduler-eap-spans",
+                [
+                    "snuba",
+                    "subscriptions-scheduler",
+                    "--entity=eap_items_span",
+                    "--consumer-group=snuba-eap_spans-subscriptions-scheduler",
+                    "--followed-consumer-group=eap_items_span_group",
+                    "--auto-offset-reset=latest",
+                    f"--log-level={log_level}",
+                    "--schedule-ttl=10",
+                ],
+            ),
+            (
+                "subscriptions-executor-eap-spans",
+                [
+                    "snuba",
+                    "subscriptions-executor",
+                    "--dataset=events_analytics_platform",
+                    "--entity=eap_items_span",
+                    "--consumer-group=snuba-eap_spans-subscription-executor",
+                    "--auto-offset-reset=latest",
+                    f"--log-level={log_level}",
                 ],
             ),
         ]
@@ -172,10 +229,10 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--dataset=events",
                     "--entity=events",
                     "--consumer-group=snuba-events-subscriptions-scheduler-executor",
-                    "--followed-consumer-group=snuba-consumers",
+                    "--followed-consumer-group=errors_group",
                     "--auto-offset-reset=latest",
                     "--no-strict-offset-reset",
-                    "--log-level=debug",
+                    f"--log-level={log_level}",
                     "--schedule-ttl=10",
                     "--stale-threshold-seconds=900",
                 ],
@@ -191,7 +248,23 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--followed-consumer-group=transactions_group",
                     "--auto-offset-reset=latest",
                     "--no-strict-offset-reset",
-                    "--log-level=debug",
+                    f"--log-level={log_level}",
+                    "--schedule-ttl=10",
+                    "--stale-threshold-seconds=900",
+                ],
+            ),
+            (
+                "subscriptions-scheduler-executor-eap-spans",
+                [
+                    "snuba",
+                    "subscriptions-scheduler-executor",
+                    "--dataset=events_analytics_platform",
+                    "--entity=eap_items_span",
+                    "--consumer-group=snuba-eap_spans-subscription-executor",
+                    "--followed-consumer-group=eap_items_span_group",
+                    "--auto-offset-reset=latest",
+                    "--no-strict-offset-reset",
+                    f"--log-level={log_level}",
                     "--schedule-ttl=10",
                     "--stale-threshold-seconds=900",
                 ],
@@ -208,6 +281,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=metrics_raw",
                     "--consumer-group=snuba-metrics-consumers",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                    f"--log-level={log_level}",
                 ],
             ),
             (
@@ -218,6 +292,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=generic_metrics_distributions_raw",
                     "--consumer-group=snuba-gen-metrics-distributions-consumers",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                    f"--log-level={log_level}",
                 ],
             ),
             (
@@ -228,6 +303,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=generic_metrics_sets_raw",
                     "--consumer-group=snuba-gen-metrics-sets-consumers",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                    f"--log-level={log_level}",
                 ],
             ),
             (
@@ -238,6 +314,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=generic_metrics_counters_raw",
                     "--consumer-group=snuba-gen-metrics-counters-consumers",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                    f"--log-level={log_level}",
                 ],
             ),
             (
@@ -248,6 +325,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=generic_metrics_gauges_raw",
                     "--consumer-group=snuba-gen-metrics-gauges-consumers",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                    f"--log-level={log_level}",
                 ],
             ),
         ]
@@ -263,7 +341,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "--consumer-group=snuba-metrics-subscriptions-scheduler",
                             "--followed-consumer-group=snuba-metrics-consumers",
                             "--auto-offset-reset=latest",
-                            "--log-level=debug",
+                            f"--log-level={log_level}",
                             "--schedule-ttl=10",
                         ],
                     ),
@@ -276,7 +354,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "--consumer-group=snuba-metrics-subscriptions-scheduler",
                             "--followed-consumer-group=snuba-metrics-consumers",
                             "--auto-offset-reset=latest",
-                            "--log-level=debug",
+                            f"--log-level={log_level}",
                             "--schedule-ttl=10",
                         ],
                     ),
@@ -287,9 +365,9 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "subscriptions-scheduler",
                             "--entity=generic_metrics_distributions",
                             "--consumer-group=snuba-generic-metrics-distributions-subscriptions-schedulers",
-                            "--followed-consumer-group=snuba-generic-metrics-distributions-consumers",
+                            "--followed-consumer-group=snuba-gen-metrics-distributions-consumers",
                             "--auto-offset-reset=latest",
-                            "--log-level=debug",
+                            f"--log-level={log_level}",
                             "--schedule-ttl=10",
                         ],
                     ),
@@ -300,9 +378,9 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "subscriptions-scheduler",
                             "--entity=generic_metrics_sets",
                             "--consumer-group=snuba-generic-metrics-sets-subscriptions-schedulers",
-                            "--followed-consumer-group=snuba-generic-metrics-sets-consumers",
+                            "--followed-consumer-group=snuba-gen-metrics-sets-consumers",
                             "--auto-offset-reset=latest",
-                            "--log-level=debug",
+                            f"--log-level={log_level}",
                             "--schedule-ttl=10",
                         ],
                     ),
@@ -313,9 +391,22 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "subscriptions-scheduler",
                             "--entity=generic_metrics_counters",
                             "--consumer-group=snuba-generic-metrics-counters-subscriptions-schedulers",
-                            "--followed-consumer-group=snuba-generic-metrics-counters-consumers",
+                            "--followed-consumer-group=snuba-gen-metrics-counters-consumers",
                             "--auto-offset-reset=latest",
-                            "--log-level=debug",
+                            f"--log-level={log_level}",
+                            "--schedule-ttl=10",
+                        ],
+                    ),
+                    (
+                        "subscriptions-scheduler-generic-metrics-gauges",
+                        [
+                            "snuba",
+                            "subscriptions-scheduler",
+                            "--entity=generic_metrics_gauges",
+                            "--consumer-group=snuba-generic-metrics-gauges-subscriptions-schedulers",
+                            "--followed-consumer-group=snuba-gen-metrics-gauges-consumers",
+                            "--auto-offset-reset=latest",
+                            f"--log-level={log_level}",
                             "--schedule-ttl=10",
                         ],
                     ),
@@ -329,6 +420,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "--entity=metrics_sets",
                             "--consumer-group=snuba-metrics-subscription-executor",
                             "--auto-offset-reset=latest",
+                            f"--log-level={log_level}",
                         ],
                     ),
                 ]
@@ -346,7 +438,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "--followed-consumer-group=snuba-metrics-consumers",
                             "--auto-offset-reset=latest",
                             "--no-strict-offset-reset",
-                            "--log-level=debug",
+                            f"--log-level={log_level}",
                             "--schedule-ttl=10",
                         ],
                     ),
@@ -362,6 +454,18 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=profiles",
                     "--consumer-group=profiles_group",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                    f"--log-level={log_level}",
+                ],
+            ),
+            (
+                "profile_chunks",
+                [
+                    "snuba",
+                    "rust-consumer",
+                    "--storage=profile_chunks",
+                    "--consumer-group=profile_chunks_group",
+                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                    f"--log-level={log_level}",
                 ],
             ),
             (
@@ -372,6 +476,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=functions_raw",
                     "--consumer-group=functions_group",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                    f"--log-level={log_level}",
                 ],
             ),
         ]
@@ -386,6 +491,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=replays",
                     "--consumer-group=replays_group",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                    f"--log-level={log_level}",
                 ],
             ),
         ]
@@ -400,6 +506,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=search_issues",
                     "--consumer-group=generic_events_group",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                    f"--log-level={log_level}",
                 ],
             ),
         ]
@@ -414,6 +521,25 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=group_attributes",
                     "--consumer-group=group_attributes_group",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                    f"--log-level={log_level}",
+                ],
+            ),
+        ]
+
+    if settings.ENABLE_LW_DELETIONS_CONSUMER:
+        daemons += [
+            (
+                "lw-deletions-consumer",
+                [
+                    "snuba",
+                    "lw-deletions-consumer",
+                    "--storage=search_issues",
+                    "--consumer-group=search_issues_deletes_group",
+                    "--max-rows-batch-size=10",
+                    "--max-batch-time-ms=1000",
+                    "--auto-offset-reset=latest",
+                    "--no-strict-offset-reset",
+                    f"--log-level={log_level}",
                 ],
             ),
         ]

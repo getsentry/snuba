@@ -81,6 +81,16 @@ allocation_policies:
         is_enforced: 1
         throttled_thread_number: 1
         org_limit_bytes_scanned: 100000
+  - name: BytesScannedRejectingPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - project_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
+
   - name: ReferrerGuardRailPolicy
     args:
       required_tenant_types:
@@ -89,14 +99,24 @@ allocation_policies:
         is_enforced: 0
         is_active: 0
 
+delete_allocation_policies:
+  - name: DeleteConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 1
+
 query_processors:
-  - processor: TableRateLimit
   - processor: MappingOptimizer
     args:
       column_name: tags
       hash_map_name: _tags_hash_map
       killswitch: tags_hash_map_enabled
   - processor: EmptyTagConditionProcessor
+    args:
+      column_name: tags.key
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: tags
@@ -114,6 +134,15 @@ query_processors:
         contexts:
           trace.trace_id: trace_id
 
+deletion_settings:
+  is_enabled: 1
+  max_rows_to_delete: 2000000
+  tables:
+    - search_issues_local_v2
+  allowed_columns:
+    - project_id
+    - group_id
+
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 
@@ -122,3 +151,10 @@ stream_loader:
   default_topic: generic-events
   commit_log_topic: snuba-generic-events-commit-log
   dlq_topic: snuba-dead-letter-generic-events
+
+deletion_processors:
+  - processor: ColumnFilterProcessor
+    args:
+      column_filters:
+        - project_id
+        - group_id

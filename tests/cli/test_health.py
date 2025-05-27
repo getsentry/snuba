@@ -11,22 +11,32 @@ def test_down_file_exists_pod_healthy() -> None:
     with mock.patch(
         "snuba.utils.health_info.check_down_file_exists", return_value=True
     ):
-        result = runner.invoke(health)
-        assert result.exit_code == 0
+        with mock.patch(
+            "snuba.utils.health_info.sanity_check_clickhouse_connections",
+            return_value=True,
+        ):
+            result = runner.invoke(health)
+            assert result.exit_code == 0
 
 
-def test_do_not_check_clickhouse_if_not_thorough() -> None:
+def test_bad_clickhouse_connection_healthcheck_fails() -> None:
     runner = CliRunner()
-    # don't check clickhouse if not thorough
-    with mock.patch("snuba.utils.health_info.check_clickhouse", return_value=False):
+    # sanity check clickhouse connections when not running in thorough mode
+    with mock.patch(
+        "snuba.utils.health_info.sanity_check_clickhouse_connections",
+        return_value=False,
+    ):
         result = runner.invoke(health)
-        assert result.exit_code == 0
+        assert result.exit_code == 1
 
 
 def test_bad_clickhouse_connection_thorough_healthcheck_fails() -> None:
     runner = CliRunner()
-    # thorough healthcheck fails on bad clickhouse connection
-    with mock.patch("snuba.utils.health_info.check_clickhouse", return_value=False):
+    # thorough healthcheck fails on bad clickhouse connection, because we cannot verify
+    # tables
+    with mock.patch(
+        "snuba.utils.health_info.check_all_tables_present", return_value=False
+    ):
         result = runner.invoke(health, "--thorough")
         assert result.exit_code == 1
 
@@ -34,6 +44,8 @@ def test_bad_clickhouse_connection_thorough_healthcheck_fails() -> None:
 def test_good_clickhouse_connection_thorough_healthcheck_passes() -> None:
     runner = CliRunner()
     # thorough healthcheck passes on good clickhouse connection
-    with mock.patch("snuba.utils.health_info.check_clickhouse", return_value=True):
+    with mock.patch(
+        "snuba.utils.health_info.check_all_tables_present", return_value=True
+    ):
         result = runner.invoke(health, "--thorough")
         assert result.exit_code == 0

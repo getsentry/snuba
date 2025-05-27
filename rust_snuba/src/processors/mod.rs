@@ -1,18 +1,21 @@
+mod eap_items;
+pub(crate) mod eap_items_span;
 mod errors;
 mod functions;
 mod generic_metrics;
-mod metrics_summaries;
 mod outcomes;
+mod profile_chunks;
 mod profiles;
 mod querylog;
 mod release_health_metrics;
 mod replays;
 mod spans;
+mod uptime_monitor_checks;
 mod utils;
 
 use crate::config::ProcessorConfig;
 use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 pub enum ProcessingFunctionType {
     ProcessingFunction(ProcessingFunction),
@@ -53,8 +56,8 @@ define_processing_functions! {
     ("ProfilesMessageProcessor", "processed-profiles", ProcessingFunctionType::ProcessingFunction(profiles::process_message)),
     ("QuerylogProcessor", "snuba-queries", ProcessingFunctionType::ProcessingFunction(querylog::process_message)),
     ("ReplaysProcessor", "ingest-replay-events", ProcessingFunctionType::ProcessingFunction(replays::process_message)),
+    ("UptimeMonitorChecksProcessor", "snuba-uptime-results", ProcessingFunctionType::ProcessingFunction(uptime_monitor_checks::process_message)),
     ("SpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(spans::process_message)),
-    ("MetricsSummariesMessageProcessor", "snuba-metrics-summaries", ProcessingFunctionType::ProcessingFunction(metrics_summaries::process_message)),
     ("OutcomesProcessor", "outcomes", ProcessingFunctionType::ProcessingFunction(outcomes::process_message)),
     ("GenericCountersMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_counter_message)),
     ("GenericSetsMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_set_message)),
@@ -62,6 +65,9 @@ define_processing_functions! {
     ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_gauge_message)),
     ("PolymorphicMetricsProcessor", "snuba-metrics", ProcessingFunctionType::ProcessingFunction(release_health_metrics::process_metrics_message)),
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
+    ("ProfileChunksProcessor", "snuba-profile-chunks", ProcessingFunctionType::ProcessingFunction(profile_chunks::process_message)),
+    ("EAPItemsProcessor", "snuba-items", ProcessingFunctionType::ProcessingFunction(eap_items::process_message)),
+    ("EAPItemsSpanProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(eap_items_span::process_message)),
 }
 
 // COGS is recorded for these processors
@@ -152,7 +158,11 @@ mod tests {
                     settings.add_redaction(".*.message_timestamp", "<event timestamp>");
                 }
 
-                settings.set_description(std::str::from_utf8(example.payload()).unwrap());
+                // This payload is protobuf (so binary), not JSON (so text).
+                if *topic_name != "snuba-items" {
+                    settings.set_description(std::str::from_utf8(example.payload()).unwrap());
+                }
+
                 let _guard = settings.bind_to_scope();
 
                 let payload = KafkaPayload::new(None, None, Some(example.payload().to_vec()));

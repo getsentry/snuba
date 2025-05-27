@@ -4,7 +4,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
 // Equivalent to "%Y-%m-%dT%H:%M:%S.%fZ" in python
-pub const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S.%fZ";
+// Notice the differennce of .%fZ vs %.fZ, this comes from a difference in how rust's chrono handles the format
+const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.fZ";
 
 pub fn enforce_retention(value: Option<u16>, config: &EnvConfig) -> u16 {
     let mut retention_days = value.unwrap_or(config.default_retention_days);
@@ -33,6 +34,25 @@ where
     Ok(seconds_since_epoch.timestamp() as u32)
 }
 
+fn ensure_valid_datetime_64<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    let naive = NaiveDateTime::parse_from_str(&value, PAYLOAD_DATETIME_FORMAT);
+    let milliseconds_since_epoch = match naive {
+        Ok(naive_dt) => {
+            let dt = DateTime::<Utc>::from_naive_utc_and_offset(naive_dt, Utc);
+            dt.timestamp_millis() as u64
+        }
+        Err(_) => {
+            let now = Utc::now();
+            now.timestamp_millis() as u64
+        }
+    };
+    Ok(milliseconds_since_epoch)
+}
+
 #[derive(Debug, Deserialize, JsonSchema, Default, Serialize)]
 pub struct StringToIntDatetime(
     #[serde(deserialize_with = "ensure_valid_datetime")]
@@ -40,9 +60,9 @@ pub struct StringToIntDatetime(
     pub u32,
 );
 
-pub fn from_slice<'a, T: Deserialize<'a>>(
-    payload: &'a [u8],
-) -> Result<T, serde_path_to_error::Error<serde_json::Error>> {
-    let jd = &mut serde_json::Deserializer::from_slice(payload);
-    serde_path_to_error::deserialize(jd)
-}
+#[derive(Debug, Deserialize, JsonSchema, Default, Serialize)]
+pub struct StringToIntDatetime64(
+    #[serde(deserialize_with = "ensure_valid_datetime_64")]
+    #[schemars(with = "String")]
+    pub u64,
+);

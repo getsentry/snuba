@@ -34,3 +34,29 @@ MQL_QUERY_SCHEMA = {
     },
     "additionalProperties": False,
 }
+
+DELETE_QUERY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "query": {
+            "type": "object",
+            "properties": {
+                "columns": {
+                    "type": "object",
+                    "properties": {
+                        "project_id": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                        }
+                    },
+                    "required": ["project_id"],
+                    "additionalProperties": {"type": "array"},
+                },
+            },
+            "required": ["columns"],
+            "additionalProperties": False,
+        }
+    },
+    "required": ["query"],
+    "additionalProperties": False,
+}

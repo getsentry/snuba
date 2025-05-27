@@ -10,6 +10,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.join import entity_from_node
 from snuba.query.data_source.simple import Entity
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression
 from snuba.query.joins.pre_processor import QualifiedCol, get_equivalent_columns
 
@@ -46,7 +47,10 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
         return
 
     # Now this has to be a join, so we can work with it.
-
+    for _, node in from_clause.get_alias_node_map().items():
+        if not isinstance(node.data_source, Entity):
+            raise InvalidQueryException("Storage queries do not support joins")
+    # from now on we know we are dealing with entities
     alias_to_entity = {
         alias: entity_from_node(node)
         for alias, node in from_clause.get_alias_node_map().items()

@@ -10,6 +10,7 @@ from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query_dsl.accessors import get_time_range
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storage import StorageNotAvailable
 from snuba.query.data_source.projects_finder import ProjectsFinder
@@ -120,6 +121,7 @@ ERROR_CODE_MAPPINGS = {
     ErrorCodes.CANNOT_PARSE_UUID: RequestStatus.INVALID_REQUEST,
     ErrorCodes.ILLEGAL_AGGREGATION: RequestStatus.INVALID_REQUEST,
     ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES: RequestStatus.CLICKHOUSE_MAX_QUERIES_EXCEEDED,
+    ErrorCodes.CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING: RequestStatus.INVALID_REQUEST,
 }
 
 
@@ -266,19 +268,21 @@ class SnubaQueryMetadata:
             start, end = None, None
             entity_name = "unknown"
             if isinstance(request.query, LogicalQuery):
-                entity_key = request.query.get_from_clause().key
-                entity_obj = get_entity(entity_key)
-                entity_name = entity_key.value
-                if entity_obj.required_time_column is not None:
-                    start, end = get_time_range(
-                        request.query, entity_obj.required_time_column
-                    )
+                source_key = request.query.get_from_clause().key
+                if isinstance(source_key, EntityKey):
+                    entity_key = source_key
+                    entity_obj = get_entity(entity_key)
+                    entity_name = entity_key.value
+                    if entity_obj.required_time_column is not None:
+                        start, end = get_time_range(
+                            request.query, entity_obj.required_time_column
+                        )
             self.start_timestamp = start
             self.end_timestamp = end
             self.entity = entity_name
             self.query_list: MutableSequence[ClickhouseQueryMetadata] = []
             self.projects = ProjectsFinder().visit(request.query)
-            self.snql_anonymized = request.snql_anonymized
+            self.snql_anonymized = ""
         else:
             self.start_timestamp = start_timestamp
             self.end_timestamp = end_timestamp
@@ -298,7 +302,7 @@ class SnubaQueryMetadata:
         end = int(self.end_timestamp.timestamp()) if self.end_timestamp else None
         request_dict: snuba_queries_v1.Querylog = {
             "request": {
-                "id": self.request.id,
+                "id": self.request.id.hex,
                 "body": self.request.original_body,
                 "referrer": self.request.referrer,
                 "team": self.request.attribution_info.team,

@@ -12,6 +12,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.processor import InsertEvent
 from snuba.query import SelectedExpression
+from snuba.query.conditions import in_condition
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
@@ -19,7 +20,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Column as MetaColumn
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import parse_and_run_query
+from snuba.web.query import run_query
 from tests.helpers import write_unprocessed_events
 
 
@@ -75,19 +76,19 @@ def test_transform_column_names() -> None:
                 ),
             ),
         ],
+        condition=in_condition(Column(None, None, "project_id"), [Literal(None, 1)]),
     )
     query_settings = HTTPQuerySettings(referrer="asd")
 
     dataset = get_dataset("events")
     timer = Timer("test")
 
-    result = parse_and_run_query(
+    result = run_query(
         dataset,
         Request(
-            id="asd",
+            id=uuid.uuid4(),
             original_body={},
             query=query,
-            snql_anonymized="",
             query_settings=query_settings,
             attribution_info=AttributionInfo(
                 get_app_id("blah"),

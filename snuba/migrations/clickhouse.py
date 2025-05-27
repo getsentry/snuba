@@ -1,5 +1,4 @@
-CLICKHOUSE_SERVER_MIN_VERSION = "20.3.5.21"
-# Note only versions up to 21.8.13.1 are currently supported,
-# 23.3.8.22 is enabled for testing purposes in a minimal number of
-# datasets
-CLICKHOUSE_SERVER_MAX_VERSION = "23.3.8.22"
+CLICKHOUSE_SERVER_MIN_VERSION = "23.8.11.29"
+# Note: SaaS, self-hosted, and sentry dev
+# environements should all be on 23.8.11.29
+CLICKHOUSE_SERVER_MAX_VERSION = "24.8.14.10459"

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-/devinfra/scripts/checks/datadog/monitor_status.py --dry-run=true \
+/devinfra/scripts/checks/datadog/monitor_status.py \
   140973101
 
 

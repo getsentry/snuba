@@ -6,14 +6,16 @@ use schemars::{gen::SchemaGenerator, schema::Schema, JsonSchema};
 use serde::de;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_with::serde_as;
+use serde_with::DefaultOnError;
 use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{enforce_retention, StringToIntDatetime};
+use crate::processors::utils::{enforce_retention, StringToIntDatetime64};
 use crate::types::{
     InsertBatch, InsertOrReplacement, KafkaMessageMetadata, ReplacementData, RowData,
 };
@@ -107,7 +109,7 @@ struct ReplacementEvent {
 struct ErrorMessage {
     data: ErrorData,
     #[serde(default)]
-    datetime: StringToIntDatetime,
+    datetime: StringToIntDatetime64,
     event_id: Uuid,
     group_id: u64,
     message: String,
@@ -130,8 +132,6 @@ struct ErrorData {
     #[serde(default, alias = "sentry.interfaces.Exception")]
     exception: Option<Exception>,
     #[serde(default)]
-    hierarchical_hashes: Vec<String>,
-    #[serde(default)]
     location: Option<String>,
     #[serde(default)]
     modules: Option<BTreeMap<String, Option<String>>>,
@@ -153,6 +153,8 @@ struct ErrorData {
     user: Option<User>,
     #[serde(default)]
     version: Option<String>,
+    #[serde(default)]
+    symbolicated_in_app: Option<bool>,
 }
 
 // Contexts
@@ -161,6 +163,8 @@ type GenericContext = BTreeMap<String, ContextStringify>;
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Contexts {
+    #[serde(default)]
+    flags: Option<FlagContext>,
     #[serde(default)]
     replay: Option<ReplayContext>,
     #[serde(default)]
@@ -177,8 +181,24 @@ struct TraceContext {
     span_id: Option<String>,
     #[serde(default)]
     trace_id: Option<Uuid>,
+    #[serde(default)]
+    parent_span_id: Option<String>,
     #[serde(flatten)]
     other: GenericContext,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+struct FlagContext {
+    #[serde(default)]
+    values: Option<Vec<Option<FlagContextItem>>>,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+struct FlagContextItem {
+    #[serde(default)]
+    flag: Unicodify,
+    #[serde(default)]
+    result: Unicodify,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -223,6 +243,7 @@ struct StackTrace {
     frames: Option<Vec<Option<StackFrame>>>,
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize, JsonSchema)]
 struct StackFrame {
     #[serde(default)]
@@ -239,6 +260,7 @@ struct StackFrame {
     in_app: Option<bool>,
     #[serde(default)]
     colno: Option<u32>,
+    #[serde_as(deserialize_as = "DefaultOnError")]
     #[serde(default)]
     lineno: Option<u32>,
 }
@@ -346,7 +368,6 @@ struct ErrorRow {
     #[serde(rename = "exception_stacks.value")]
     exception_stacks_value: Vec<Option<String>>,
     group_id: u64,
-    hierarchical_hashes: Vec<Uuid>,
     http_method: Option<String>,
     http_referer: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -381,7 +402,12 @@ struct ErrorRow {
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
     tags_value: Vec<String>,
+    #[serde(rename = "flags.key")]
+    flags_key: Vec<String>,
+    #[serde(rename = "flags.value")]
+    flags_value: Vec<String>,
     timestamp: u32,
+    timestamp_ms: u64,
     title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     trace_id: Option<Uuid>,
@@ -395,6 +421,8 @@ struct ErrorRow {
     user_name: Option<String>,
     user: String,
     version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    symbolicated_in_app: Option<bool>,
 }
 
 impl ErrorRow {
@@ -415,12 +443,6 @@ impl ErrorRow {
 
         // Hashes
         let primary_hash = to_uuid(from.primary_hash);
-        let hierarchical_hashes: Vec<Uuid> = from
-            .data
-            .hierarchical_hashes
-            .into_iter()
-            .map(to_uuid)
-            .collect();
 
         // SDK Integrations
         let from_sdk = from.data.sdk.unwrap_or_default();
@@ -450,7 +472,7 @@ impl ErrorRow {
             .into_iter()
             .flatten()
         {
-            if key == "Referrer" {
+            if key == "Referer" || key == "Referrer" {
                 http_referer = value.0;
                 break;
             }
@@ -556,10 +578,30 @@ impl ErrorRow {
             contexts_values.push(trace_id.simple().to_string());
         }
 
+        if let Some(parent_span_id) = from_trace_context.parent_span_id {
+            contexts_keys.push("trace.parent_span_id".to_owned());
+            contexts_values.push(parent_span_id.to_string());
+        }
+
         // Conditionally overwrite replay_id if it was provided on the contexts object.
         if let Some(rid) = from_context.replay.unwrap_or_default().replay_id {
             replay_id = Some(rid)
         }
+
+        // Split feature keys and values into two vectors if the context could be parsed.
+        let mut flags_key = Vec::new();
+        let mut flags_value = Vec::new();
+
+        if let Some(ctx) = from_context.flags {
+            if let Some(values) = ctx.values {
+                for item in values.into_iter().flatten() {
+                    if let (Some(k), Some(v)) = (item.flag.0, item.result.0) {
+                        flags_key.push(k);
+                        flags_value.push(v);
+                    }
+                }
+            }
+        };
 
         // Stacktrace.
 
@@ -666,8 +708,9 @@ impl ErrorRow {
             exception_stacks_mechanism_type: stack_mechanism_types,
             exception_stacks_type: stack_types,
             exception_stacks_value: stack_values,
+            flags_key,
+            flags_value,
             group_id: from.group_id,
-            hierarchical_hashes,
             http_method: from_request.method.0,
             http_referer,
             ip_address_v4,
@@ -691,7 +734,8 @@ impl ErrorRow {
             span_id,
             tags_key,
             tags_value,
-            timestamp: from.datetime.0,
+            timestamp: (from.datetime.0 / 1000) as u32,
+            timestamp_ms: from.datetime.0,
             title: from.data.title.0.unwrap_or_default(),
             trace_id: from_trace_context.trace_id,
             trace_sampled: from_trace_context.sampled.map(|v| v as u8),
@@ -702,6 +746,7 @@ impl ErrorRow {
             user_name: from_user.username.0,
             user: user.unwrap_or_default(),
             version: from.data.version,
+            symbolicated_in_app: from.data.symbolicated_in_app,
             ..Default::default()
         })
     }
@@ -840,5 +885,40 @@ mod tests {
         // run schema validation only for a subset of the payload, json-schema-diff gets too
         // confused by our untagged enum/anyOf wrapper
         run_schema_type_test::<Message>("events", None);
+    }
+
+    #[test]
+    fn deserialize_invalid_lineno() {
+        const SERIALIZED: &str = r#"
+        {
+            "function": "foo",
+            "module": "app.hello",
+            "filename": "hello",
+            "abs_path": "hello",
+            "lineno": 90052021220,
+            "colno": 86472,
+            "in_app": true,
+            "context_line": null,
+            "data": null,
+            "errors": null,
+            "raw_function": null,
+            "image_addr": null,
+            "instruction_addr": null,
+            "addr_mode": null,
+            "package": null,
+            "platform": null,
+            "post_context": null,
+            "pre_context": null,
+            "source_link": null,
+            "symbol": null,
+            "symbol_addr": null,
+            "trust": null,
+            "vars": null,
+            "snapshot": null,
+            "lock": null
+        }
+        "#;
+        let deserialized: StackFrame = serde_json::from_str(SERIALIZED).unwrap();
+        assert_eq!(deserialized.lineno, None);
     }
 }

@@ -37,6 +37,7 @@ it("should populate configs table upon render", async () => {
         ],
       },
     ],
+    query_type: "select",
   };
 
   let { getByText, getByTestId } = render(

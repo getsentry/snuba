@@ -2,8 +2,7 @@ from typing import Set, Union
 
 import pytest
 
-from snuba.clickhouse.columns import UUID, UInt
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.clickhouse.columns import UUID, ColumnSet, UInt
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -14,7 +13,7 @@ from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.utils.schemas import Column as EntityColumn
 
-EVENTS_SCHEMA = EntityColumnSet(
+EVENTS_SCHEMA = ColumnSet(
     [
         EntityColumn("event_id", UUID()),
         EntityColumn("project_id", UInt(32)),
@@ -70,4 +69,4 @@ def test_count_columns(
     expected_proj: Set[int],
 ) -> None:
     project_finder = ProjectsFinder()
-    assert project_finder.visit(query) == expected_proj
+    assert project_finder.visit(query) == expected_proj  # type: ignore

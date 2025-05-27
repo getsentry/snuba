@@ -66,7 +66,7 @@ def test_default_query_storage_selector(
     selector: QueryStorageSelector,
     expected_storage: Storage,
 ) -> None:
-    query, _ = parse_snql_query(str(snql_query), dataset)
+    query = parse_snql_query(str(snql_query), dataset)
     assert isinstance(query, Query)
 
     selected_storage = selector.select_storage(
@@ -76,7 +76,7 @@ def test_default_query_storage_selector(
 
 
 def test_assert_raises() -> None:
-    query, _ = parse_snql_query(
+    query = parse_snql_query(
         """ MATCH (generic_metrics_sets)
         SELECT uniq(value) AS unique_values BY project_id, org_id
         WHERE org_id = 1

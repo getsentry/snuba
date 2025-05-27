@@ -204,3 +204,9 @@ join_relationships:
     columns:
       - [project_id, project_id]
       - [group_id, group_id]
+  attributes_inner:
+    rhs_entity: group_attributes
+    join_type: inner
+    columns:
+      - [project_id, project_id]
+      - [group_id, group_id]

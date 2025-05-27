@@ -30,7 +30,11 @@ schema:
     },
     { name: trace_ids, type: Array, args: { inner_type: { type: UUID } } },
     { name: error_ids, type: Array, args: { inner_type: { type: UUID } } },
-    { name: _error_ids_hashed, type: Array, args: { inner_type: { type: UInt, args: { size: 64 } } }},
+    {
+      name: _error_ids_hashed,
+      type: Array,
+      args: { inner_type: { type: UInt, args: { size: 64 } } },
+    },
     {
       name: count_errors,
       type: UInt,
@@ -69,6 +73,11 @@ schema:
     { name: user_id, type: String, args: { schema_modifiers: [nullable] } },
     { name: user_name, type: String, args: { schema_modifiers: [nullable] } },
     { name: user_email, type: String, args: { schema_modifiers: [nullable] } },
+    { name: user_geo_city, type: String },
+    { name: user_geo_country_code, type: String },
+    { name: user_geo_region, type: String },
+    { name: user_geo_subdivision, type: String },
+    { name: viewed_by_id, type: UInt, args: { size: 64 } },
     { name: os_name, type: String, args: { schema_modifiers: [nullable] } },
     { name: os_version, type: String, args: { schema_modifiers: [nullable] } },
     {
@@ -97,6 +106,18 @@ schema:
       type: String,
       args: { schema_modifiers: [nullable] },
     },
+    {
+      name: ota_updates_channel,
+      type: String,
+    },
+    {
+      name: ota_updates_runtime_version,
+      type: String,
+    },
+    {
+      name: ota_updates_update_id,
+      type: String,
+    },
     { name: sdk_name, type: String, args: { schema_modifiers: [nullable] } },
     { name: sdk_version, type: String, args: { schema_modifiers: [nullable] } },
     {
@@ -106,6 +127,15 @@ schema:
         {
           subcolumns:
             [{ name: key, type: String }, { name: value, type: String }],
+        },
+    },
+    {
+      name: _tags_hash_map,
+      type: Array,
+      args:
+        {
+          schema_modifiers: [readonly],
+          inner_type: { type: UInt, args: { size: 64 } },
         },
     },
     { name: click_node_id, type: UInt, args: { size: 32 } },
@@ -133,6 +163,20 @@ required_time_column: timestamp
 storages:
   - storage: replays
     is_writable: true
+    translation_mappers:
+      columns:
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_key
+            to_function_name: arrayJoin
+            to_function_column: tags.key
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_value
+            to_function_name: arrayJoin
+            to_function_column: tags.value
 
 storage_selector:
   selector: DefaultQueryStorageSelector

@@ -256,6 +256,7 @@ schema:
       args: { schema_modifiers: [nullable] },
     },
     { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
+    { name: profiler_id, type: UUID, args: { schema_modifiers: [nullable] } },
     {
       name: replay_id,
       type: UUID,
@@ -271,6 +272,11 @@ schema:
       type: UInt,
       args: { schema_modifiers: [nullable], size: 64 },
     },
+    {
+        name: timestamp_ms,
+        type: DateTime64,
+        args: { schema_modifiers: [nullable], precision: 3 },
+      },
   ]
 required_time_column: timestamp
 storages:
@@ -297,6 +303,7 @@ storages:
               - group_ids
               - app_start_type
               - profile_id
+              - profiler_id
         - mapper: ColumnToLiteral
           args:
             from_table_name: null
@@ -448,6 +455,23 @@ query_processors:
       time_parse_columns:
         - timestamp
   - processor: BasicFunctionsProcessor
+  - processor: LowCardinalityProcessor
+    args:
+      columns:
+        - transaction_name
+        - transaction_op
+        - platform
+        - environment
+        - release
+        - dist
+        - sdk_name
+        - http_method
+        - type
+        - app_start_type
+        - transaction_source
+        - version
+        - tags[environment]
+
 
 validate_data_model: error
 validators:

@@ -2,6 +2,7 @@ from snuba.clickhouse.columns import ColumnSet, Nested
 from snuba.clickhouse.columns import SchemaModifiers as Modifier
 from snuba.clickhouse.columns import String, UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Table
@@ -23,7 +24,7 @@ def test_events_promoted_boolean_context() -> None:
         ]
     )
     query = ClickhouseQuery(
-        Table("events", columns),
+        Table("events", columns, storage_key=StorageKey("dontmatter")),
         selected_columns=[
             SelectedExpression(
                 "contexts[device.charging]",
@@ -47,7 +48,7 @@ def test_events_promoted_boolean_context() -> None:
     )
 
     expected = ClickhouseQuery(
-        Table("events", columns),
+        Table("events", columns, storage_key=StorageKey("dontmatter")),
         selected_columns=[
             SelectedExpression(
                 "contexts[device.charging]",
@@ -88,7 +89,7 @@ def test_events_boolean_context() -> None:
         [("contexts", Nested([("key", String()), ("value", String())]))]
     )
     query = ClickhouseQuery(
-        Table("errors", columns),
+        Table("errors", columns, storage_key=StorageKey("dontmatter")),
         selected_columns=[
             SelectedExpression(
                 "contexts[device.charging]",
@@ -112,7 +113,7 @@ def test_events_boolean_context() -> None:
     )
 
     expected = ClickhouseQuery(
-        Table("errors", columns),
+        Table("errors", columns, storage_key=StorageKey("dontmatter")),
         selected_columns=[
             SelectedExpression(
                 "contexts[device.charging]",

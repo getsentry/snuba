@@ -36,7 +36,6 @@ class Cache(Generic[TValue], ABC):
         key: str,
         function: Callable[[], TValue],
         record_cache_hit_type: Callable[[int], None],
-        timeout: int,
         timer: Optional[Timer] = None,
     ) -> TValue:
         """

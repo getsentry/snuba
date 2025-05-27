@@ -157,6 +157,8 @@ schema:
       },
       { name: app_start_type, type: String },
       { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
+      { name: profiler_id, type: UUID, args: { schema_modifiers: [nullable] } },
+      { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
     ]
   local_table_name: transactions_local
   dist_table_name: transactions_dist
@@ -202,7 +204,7 @@ query_processors:
           trace.span_id: span_id
   - processor: UUIDColumnProcessor
     args:
-      columns: [event_id, trace_id, profile_id]
+      columns: [event_id, trace_id, profile_id, profiler_id, replay_id]
   - processor: HexIntColumnProcessor
     args:
       columns: [span_id]
@@ -213,6 +215,8 @@ query_processors:
       hash_map_name: _tags_hash_map
       killswitch: tags_hash_map_enabled
   - processor: EmptyTagConditionProcessor
+    args:
+      column_name: tags.key
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: tags
@@ -245,13 +249,7 @@ query_processors:
     args:
       prewhere_candidates:
         [event_id, trace_id, span_id, transaction_name, transaction, title]
-  - processor: TableRateLimit
   - processor: TupleUnaliaser
-
-query_splitters:
-  - splitter: TimeSplitQueryStrategy
-    args:
-      timestamp_col: finish_ts
 
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer

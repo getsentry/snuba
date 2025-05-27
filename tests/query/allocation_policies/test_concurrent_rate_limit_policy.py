@@ -53,9 +53,10 @@ def test_rate_limit_concurrent(policy: ConcurrentRateLimitAllocationPolicy) -> N
             tenant_ids={"organization_id": 123}, query_id=f"abc{i}"
         )
 
-    assert not policy.get_quota_allowance(
+    quota_allowance = policy.get_quota_allowance(
         tenant_ids={"organization_id": 123}, query_id=f"abc{MAX_CONCURRENT_QUERIES}"
-    ).can_run
+    )
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
 
 @pytest.mark.redis_db
@@ -69,10 +70,11 @@ def test_rate_limit_concurrent_diff_tenants(
             tenant_ids={"organization_id": RATE_LIMITED_ORG_ID}, query_id=f"abc{i}"
         )
 
-    assert not policy.get_quota_allowance(
+    quota_allowance = policy.get_quota_allowance(
         tenant_ids={"organization_id": RATE_LIMITED_ORG_ID},
         query_id=f"abc{MAX_CONCURRENT_QUERIES}",
-    ).can_run
+    )
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
     policy.get_quota_allowance(
         tenant_ids={"organization_id": OTHER_ORG_ID},
         query_id=f"abc{MAX_CONCURRENT_QUERIES}",
@@ -106,9 +108,10 @@ def test_rate_limit_concurrent_complete_query(
         )
 
     # cant submit anymore
-    assert not policy.get_quota_allowance(
+    quota_allowance = policy.get_quota_allowance(
         tenant_ids={"organization_id": 123}, query_id=f"abc{MAX_CONCURRENT_QUERIES}"
-    ).can_run
+    )
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
     # one query finishes
     policy.update_quota_balance(
@@ -123,10 +126,11 @@ def test_rate_limit_concurrent_complete_query(
     )
 
     # but no more than that
-    assert not policy.get_quota_allowance(
+    quota_allowance = policy.get_quota_allowance(
         tenant_ids={"organization_id": 123},
         query_id="some_query_id",
-    ).can_run
+    )
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
 
 @pytest.mark.redis_db
@@ -260,7 +264,7 @@ def test_apply_overrides(
     allowance = policy.get_quota_allowance(
         tenant_ids=tenant_ids, query_id=f"{expected_concurrent_limit+1}"
     )
-    assert not allowance.can_run
+    assert not allowance.can_run and allowance.max_threads == 0
     assert allowance.explanation["overrides"] == expected_overrides
 
 
@@ -346,7 +350,8 @@ def test_cross_org(policy: ConcurrentRateLimitAllocationPolicy) -> None:
 def test_bad_tenants(policy: ConcurrentRateLimitAllocationPolicy):
     bad_tenant_ids: dict[str, str | int] = {"referrer": "abcd"}
     with mock.patch("snuba.settings.RAISE_ON_ALLOCATION_POLICY_FAILURES", False):
-        assert not policy.get_quota_allowance(bad_tenant_ids, "1234").can_run
+        quota_allowance = policy.get_quota_allowance(bad_tenant_ids, "1234")
+        assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
         # does not raise
         policy.update_quota_balance(bad_tenant_ids, "1234", _RESULT_SUCCESS)

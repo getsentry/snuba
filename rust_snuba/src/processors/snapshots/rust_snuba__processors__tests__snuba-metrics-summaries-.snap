@@ -1,0 +1,12 @@
+---
+source: src/processors/mod.rs
+expression: diff
+---
+[
+    Change {
+        path: "",
+        change: RequiredAdd {
+            property: "count",
+        },
+    },
+]
