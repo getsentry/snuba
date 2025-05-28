@@ -1730,18 +1730,6 @@ class TestTimeSeriesApi(BaseApiTest):
                                                                             "andFilter": {
                                                                                 "filters": [
                                                                                     {
-                                                                                        "comparisonFilter": {
-                                                                                            "key": {
-                                                                                                "name": "sentry.op",
-                                                                                                "type": "TYPE_STRING",
-                                                                                            },
-                                                                                            "op": "OP_NOT_EQUALS",
-                                                                                            "value": {
-                                                                                                "valStr": "http.server"
-                                                                                            },
-                                                                                        }
-                                                                                    },
-                                                                                    {
                                                                                         "andFilter": {
                                                                                             "filters": [
                                                                                                 {
