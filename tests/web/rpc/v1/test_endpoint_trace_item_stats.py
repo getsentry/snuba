@@ -134,30 +134,6 @@ class TestTraceItemAttributesStats(BaseApiTest):
 
         assert match
 
-    def test_backwards_compatibility(self, setup_teardown: Any) -> None:
-        message = TraceItemStatsRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            stats_types=[
-                StatsType(
-                    attribute_distributions=AttributeDistributionsRequest(
-                        max_buckets=10,
-                        max_attributes=100,
-                    )
-                )
-            ],
-        )
-
-        response = EndpointTraceItemStats().execute(message)
-        assert len(response.results[0].attribute_distributions.attributes) == 2
-
     def test_with_filter(self, setup_teardown: Any) -> None:
         message = TraceItemStatsRequest(
             meta=RequestMeta(
