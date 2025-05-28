@@ -1,7 +1,8 @@
+import uuid
 from dataclasses import replace
 from typing import List, Sequence
-import uuid
 
+from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationComparisonFilter,
     AggregationFilter,
@@ -12,7 +13,6 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
-from google.protobuf.json_format import MessageToDict
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -28,11 +28,11 @@ from snuba.query.dsl import literal, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
+from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc import RoutingDecision
-from snuba.request import Request as SnubaRequest
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     base_conditions_and,
@@ -54,10 +54,6 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.sampling_in_storage_util import (
     run_query_to_correct_tier,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    apply_virtual_columns_eap_items,
-    attribute_key_to_expression_eap_items,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     apply_virtual_columns,
@@ -356,6 +352,7 @@ def _get_page_token(
     num_rows = len(response[0].results)
     return PageToken(offset=request.page_token.offset + num_rows)
 
+
 def _build_snuba_request(
     request: TraceItemTableRequest, query_settings: QuerySettings
 ) -> SnubaRequest:
@@ -376,6 +373,7 @@ def _build_snuba_request(
             parent_api="eap_items_samples",
         ),
     )
+
 
 class ResolverTraceItemTableEAPItems:
     def resolve(

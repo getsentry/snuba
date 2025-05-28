@@ -1,9 +1,10 @@
+import uuid
 from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime
 from typing import Any, Callable, Dict, Iterable
-import uuid
 
+from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import DataPoint
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
@@ -19,14 +20,12 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     ExtrapolationMode,
 )
+
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.request import Request as SnubaRequest
-from google.protobuf.json_format import MessageToDict
-
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -34,6 +33,7 @@ from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
+from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
@@ -394,7 +394,11 @@ def _build_snuba_request(
 
 class ResolverTimeSeriesEAPItems:
     def resolve(
-        self, in_msg: TimeSeriesRequest, timer: Timer, metrics_backend: MetricsBackend, routing_decision: RoutingDecision
+        self,
+        in_msg: TimeSeriesRequest,
+        timer: Timer,
+        metrics_backend: MetricsBackend,
+        routing_decision: RoutingDecision,
     ) -> TimeSeriesResponse:
         # aggregations field is deprecated, it gets converted to request.expressions
         # if the user passes it in

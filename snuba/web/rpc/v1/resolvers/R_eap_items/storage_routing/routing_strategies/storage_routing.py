@@ -44,53 +44,54 @@ ClickhouseQuerySettings = Dict[str, Any]
 class RoutingContext:
     in_msg: RoutedRequestType
     timer: Timer
-    build_query: Callable[[TimeSeriesRequest | TraceItemTableRequest], Query]
-    query_settings: HTTPQuerySettings
+    # build_query: Callable[[TimeSeriesRequest | TraceItemTableRequest], Query]
+    # query_settings: HTTPQuerySettings
     query_result: Optional[QueryResult] = field(default=None)
     extra_info: dict[str, Any] = field(default_factory=dict)
 
-    def to_log_dict(self) -> dict[str, Any]:
-        query_result: dict[str, Any] = {}
-        if self.query_result:
-            query_result["meta"] = self.query_result.result.get("meta", {})
-            query_result["profile"] = self.query_result.result.get("profile", {})
-            query_result["stats"] = self.query_result.extra.get("stats")
-            query_result["sql"] = self.query_result.extra.get("sql")
+    # def to_log_dict(self) -> dict[str, Any]:
+    #     query_result: dict[str, Any] = {}
+    #     if self.query_result:
+    #         query_result["meta"] = self.query_result.result.get("meta", {})
+    #         query_result["profile"] = self.query_result.result.get("profile", {})
+    #         query_result["stats"] = self.query_result.extra.get("stats")
+    #         query_result["sql"] = self.query_result.extra.get("sql")
 
-        return {
-            "source_request_id": self.in_msg.meta.request_id,
-            "extra_info": self.extra_info,
-            "clickhouse_settings": self.query_settings.get_clickhouse_settings(),
-            "result_info": query_result,
-            "routed_tier": self.query_settings.get_sampling_tier().name,
-        }
+    #     return {
+    #         "source_request_id": self.in_msg.meta.request_id,
+    #         "extra_info": self.extra_info,
+    #         "clickhouse_settings": self.query_settings.get_clickhouse_settings(),
+    #         "result_info": query_result,
+    #         "routed_tier": self.query_settings.get_sampling_tier().name,
+    #     }
 
 
 def _get_stats_dict(
-    routing_context: RoutingContext,
+    routing_decision: RoutingDecision,
 ) -> snuba_queries_v1._QueryMetadataStats:
     return cast(
         snuba_queries_v1._QueryMetadataStats,
         {
             "final": False,
             "cache_hit": 0,
-            "max_threads": routing_context.query_settings.get_clickhouse_settings().get(
+            "max_threads": routing_decision.clickhouse_settings.get(
                 "max_threads", 0
             ),
             "clickhouse_table": "na",
             "query_id": "na",
             "is_duplicate": 0,
             "consistent": False,
-            **routing_context.to_log_dict(),
+            **routing_decision.to_log_dict(),
         },
     )
 
 
 def _construct_hacky_querylog_payload(
-    strategy: "BaseRoutingStrategy", routing_context: RoutingContext
+    strategy: "BaseRoutingStrategy", routing_decision: RoutingDecision
 ) -> snuba_queries_v1.Querylog:
     cur_span = sentry_sdk.get_current_span()
-    query_result = routing_context.query_result or QueryResult(
+    assert routing_decision.routing_context is not None
+    query_result = routing_decision.routing_context.query_result or QueryResult(
         {}, {"stats": {}, "sql": "", "experiments": {}}
     )
     profile = query_result.result.get("profile", {}) or {}
@@ -98,26 +99,26 @@ def _construct_hacky_querylog_payload(
         "request": {
             "id": uuid.uuid4().hex,
             "app_id": "storage_routing",
-            "body": MessageToDict(routing_context.in_msg),
+            "body": MessageToDict(routing_decision.routing_context.in_msg),
             "referrer": strategy.__class__.__name__,
         },
         "dataset": "storage_routing",
         "entity": "eap",
-        "start_timestamp": routing_context.in_msg.meta.start_timestamp.seconds,
-        "end_timestamp": routing_context.in_msg.meta.end_timestamp.seconds,
-        "status": routing_context.query_settings.get_sampling_tier().name,
+        "start_timestamp": routing_decision.routing_context.in_msg.meta.start_timestamp.seconds,
+        "end_timestamp": routing_decision.routing_context.in_msg.meta.end_timestamp.seconds,
+        "status": routing_decision.tier.name,
         "request_status": "NA",
         "slo": "N/A",
-        "projects": list(routing_context.in_msg.meta.project_ids) or [],
-        "timing": routing_context.timer.for_json(),
+        "projects": list(routing_decision.routing_context.in_msg.meta.project_ids) or [],
+        "timing": routing_decision.routing_context.timer.for_json(),
         "snql_anonymized": "",
         "query_list": [
             {
                 "sql": "",
                 "sql_anonymized": "",
-                "start_timestamp": routing_context.in_msg.meta.start_timestamp.seconds,
-                "end_timestamp": routing_context.in_msg.meta.end_timestamp.seconds,
-                "stats": _get_stats_dict(routing_context),
+                "start_timestamp": routing_decision.routing_context.in_msg.meta.start_timestamp.seconds,
+                "end_timestamp": routing_decision.routing_context.in_msg.meta.end_timestamp.seconds,
+                "stats": _get_stats_dict(routing_decision),
                 "status": "0",
                 "trace_id": cur_span.trace_id if cur_span else "no_current_span",
                 "profile": {
@@ -242,7 +243,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
     ) -> tuple[Tier, ClickhouseQuerySettings]:
         raise NotImplementedError
 
-    def decide_tier_and_query_settings(
+    def __decide_tier_and_query_settings(
         self, timer: Timer, routing_decision: RoutingDecision
     ) -> None:
         with sentry_sdk.start_span(op="decide_tier"):
@@ -296,7 +297,9 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                 value=bytes_scanned,
                 tags={"tier": routing_decision.tier.name},
             )
-        record_query(_construct_hacky_querylog_payload(self, routing_decision.routing_context))
+        record_query(
+            _construct_hacky_querylog_payload(self, routing_decision)
+        )
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
