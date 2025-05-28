@@ -51,6 +51,7 @@ _TIME_PERIOD_HOURS_BUCKETS = [
 ]
 _BUCKETS_COUNT = len(_TIME_PERIOD_HOURS_BUCKETS)
 
+
 @dataclass
 class RoutingDecision:
     strategy: BaseRoutingStrategy | None = None
@@ -63,8 +64,12 @@ class RoutingDecision:
         assert self.routing_context is not None
         query_result: dict[str, Any] = {}
         if self.routing_context.query_result:
-            query_result["meta"] = self.routing_context.query_result.result.get("meta", {})
-            query_result["profile"] = self.routing_context.query_result.result.get("profile", {})
+            query_result["meta"] = self.routing_context.query_result.result.get(
+                "meta", {}
+            )
+            query_result["profile"] = self.routing_context.query_result.result.get(
+                "profile", {}
+            )
             query_result["stats"] = self.routing_context.query_result.extra.get("stats")
             query_result["sql"] = self.routing_context.query_result.extra.get("sql")
 
@@ -175,10 +180,12 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         if span is not None:
             span.description = self.config_key()
 
-        routing_decision = RoutingDecision(routing_context=RoutingContext(
-            in_msg=in_msg,
-            timer=self._timer,
-        ))
+        routing_decision = RoutingDecision(
+            routing_context=RoutingContext(
+                in_msg=in_msg,
+                timer=self._timer,
+            )
+        )
         self.__before_execute(in_msg, routing_decision)
         error = None
         try:
@@ -229,9 +236,13 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         if state.get_config("storage_routing.enable_get_cluster_loadinfo", True):
             get_cluster_loadinfo()
 
-        selected_strategy = RoutingStrategySelector().select_routing_strategy(routing_decision.routing_context)
+        selected_strategy = RoutingStrategySelector().select_routing_strategy(
+            routing_decision.routing_context
+        )
         routing_decision.strategy = selected_strategy
-        selected_strategy.__decide_tier_and_query_settings(self._timer, routing_decision)
+        selected_strategy.__decide_tier_and_query_settings(
+            self._timer, routing_decision
+        )
         self._timer.mark("rpc_start")
         self._before_execute(in_msg)
 

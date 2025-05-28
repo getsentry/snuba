@@ -74,9 +74,7 @@ def _get_stats_dict(
         {
             "final": False,
             "cache_hit": 0,
-            "max_threads": routing_decision.clickhouse_settings.get(
-                "max_threads", 0
-            ),
+            "max_threads": routing_decision.clickhouse_settings.get("max_threads", 0),
             "clickhouse_table": "na",
             "query_id": "na",
             "is_duplicate": 0,
@@ -109,7 +107,8 @@ def _construct_hacky_querylog_payload(
         "status": routing_decision.tier.name,
         "request_status": "NA",
         "slo": "N/A",
-        "projects": list(routing_decision.routing_context.in_msg.meta.project_ids) or [],
+        "projects": list(routing_decision.routing_context.in_msg.meta.project_ids)
+        or [],
         "timing": routing_decision.routing_context.timer.for_json(),
         "snql_anonymized": "",
         "query_list": [
@@ -297,9 +296,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                 value=bytes_scanned,
                 tags={"tier": routing_decision.tier.name},
             )
-        record_query(
-            _construct_hacky_querylog_payload(self, routing_decision)
-        )
+        record_query(_construct_hacky_querylog_payload(self, routing_decision))
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass

@@ -369,6 +369,7 @@ def build_query(request: TimeSeriesRequest) -> Query:
     treeify_or_and_conditions(res)
     return res
 
+
 def _build_snuba_request(
     request: TimeSeriesRequest, query_settings: QuerySettings
 ) -> SnubaRequest:
