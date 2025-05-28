@@ -1698,6 +1698,332 @@ class TestTimeSeriesApi(BaseApiTest):
             ),
         ]
 
+    def test_bug(self) -> None:
+        query = {
+            "expressions": [
+                {
+                    "conditionalAggregation": {
+                        "aggregate": "FUNCTION_P50",
+                        "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED",
+                        "key": {"name": "sentry.duration_ms", "type": "TYPE_DOUBLE"},
+                        "label": "p50(span.duration)",
+                    },
+                    "label": "p50(span.duration)",
+                }
+            ],
+            "filter": {
+                "andFilter": {
+                    "filters": [
+                        {
+                            "andFilter": {
+                                "filters": [
+                                    {
+                                        "andFilter": {
+                                            "filters": [
+                                                {
+                                                    "comparisonFilter": {
+                                                        "key": {
+                                                            "name": "sentry.environment",
+                                                            "type": "TYPE_STRING",
+                                                        },
+                                                        "op": "OP_IN",
+                                                        "value": {
+                                                            "valStrArray": {
+                                                                "values": ["production"]
+                                                            }
+                                                        },
+                                                    }
+                                                },
+                                                {
+                                                    "andFilter": {
+                                                        "filters": [
+                                                            {
+                                                                "comparisonFilter": {
+                                                                    "key": {
+                                                                        "name": "sentry.transaction",
+                                                                        "type": "TYPE_STRING",
+                                                                    },
+                                                                    "op": "OP_EQUALS",
+                                                                    "value": {
+                                                                        "valStr": "Chat Streaming Latency"
+                                                                    },
+                                                                }
+                                                            },
+                                                            {
+                                                                "andFilter": {
+                                                                    "filters": [
+                                                                        {
+                                                                            "orFilter": {
+                                                                                "filters": [
+                                                                                    {
+                                                                                        "comparisonFilter": {
+                                                                                            "key": {
+                                                                                                "name": "sentry.op",
+                                                                                                "type": "TYPE_STRING",
+                                                                                            },
+                                                                                            "op": "OP_IN",
+                                                                                            "value": {
+                                                                                                "valStrArray": {
+                                                                                                    "values": [
+                                                                                                        "pageload",
+                                                                                                        "navigation",
+                                                                                                        "ui.render",
+                                                                                                        "interaction",
+                                                                                                        "ui.interaction",
+                                                                                                        "ui.interaction.click",
+                                                                                                        "ui.interaction.hover",
+                                                                                                        "ui.interaction.drag",
+                                                                                                        "ui.interaction.press",
+                                                                                                        "ui.webvital.cls",
+                                                                                                        "ui.webvital.fcp",
+                                                                                                    ]
+                                                                                                }
+                                                                                            },
+                                                                                        }
+                                                                                    },
+                                                                                    {
+                                                                                        "comparisonFilter": {
+                                                                                            "key": {
+                                                                                                "name": "sentry.project_id",
+                                                                                                "type": "TYPE_INT",
+                                                                                            },
+                                                                                            "op": "OP_IN",
+                                                                                            "value": {
+                                                                                                "valIntArray": {
+                                                                                                    "values": [
+                                                                                                        "4505957967003648"
+                                                                                                    ]
+                                                                                                }
+                                                                                            },
+                                                                                        }
+                                                                                    },
+                                                                                ]
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "andFilter": {
+                                                                                "filters": [
+                                                                                    {
+                                                                                        "comparisonFilter": {
+                                                                                            "key": {
+                                                                                                "name": "sentry.op",
+                                                                                                "type": "TYPE_STRING",
+                                                                                            },
+                                                                                            "op": "OP_NOT_EQUALS",
+                                                                                            "value": {
+                                                                                                "valStr": "http.server"
+                                                                                            },
+                                                                                        }
+                                                                                    },
+                                                                                    {
+                                                                                        "andFilter": {
+                                                                                            "filters": [
+                                                                                                {
+                                                                                                    "comparisonFilter": {
+                                                                                                        "key": {
+                                                                                                            "name": "sentry.is_segment",
+                                                                                                            "type": "TYPE_BOOLEAN",
+                                                                                                        },
+                                                                                                        "op": "OP_EQUALS",
+                                                                                                        "value": {
+                                                                                                            "valBool": True
+                                                                                                        },
+                                                                                                    }
+                                                                                                },
+                                                                                                {
+                                                                                                    "andFilter": {
+                                                                                                        "filters": [
+                                                                                                            {
+                                                                                                                "comparisonFilter": {
+                                                                                                                    "key": {
+                                                                                                                        "name": "sentry.timestamp",
+                                                                                                                        "type": "TYPE_STRING",
+                                                                                                                    },
+                                                                                                                    "op": "OP_GREATER_THAN_OR_EQUALS",
+                                                                                                                    "value": {
+                                                                                                                        "valStr": "2025-05-14 18:33:50.010572+00:00"
+                                                                                                                    },
+                                                                                                                }
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "comparisonFilter": {
+                                                                                                                    "key": {
+                                                                                                                        "name": "sentry.segment_id",
+                                                                                                                        "type": "TYPE_STRING",
+                                                                                                                    },
+                                                                                                                    "op": "OP_NOT_EQUALS",
+                                                                                                                    "value": {
+                                                                                                                        "valStr": "00"
+                                                                                                                    },
+                                                                                                                }
+                                                                                                            },
+                                                                                                        ]
+                                                                                                    }
+                                                                                                },
+                                                                                            ]
+                                                                                        }
+                                                                                    },
+                                                                                ]
+                                                                            }
+                                                                        },
+                                                                    ]
+                                                                }
+                                                            },
+                                                        ]
+                                                    }
+                                                },
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "andFilter": {
+                                            "filters": [
+                                                {
+                                                    "orFilter": {
+                                                        "filters": [
+                                                            {
+                                                                "comparisonFilter": {
+                                                                    "key": {
+                                                                        "name": "sentry.timestamp",
+                                                                        "type": "TYPE_STRING",
+                                                                    },
+                                                                    "op": "OP_NOT_EQUALS",
+                                                                    "value": {
+                                                                        "valStr": "2025-05-15T01:08:13+00:00"
+                                                                    },
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                {
+                                                    "orFilter": {
+                                                        "filters": [
+                                                            {
+                                                                "comparisonFilter": {
+                                                                    "key": {
+                                                                        "name": "sentry.timestamp",
+                                                                        "type": "TYPE_STRING",
+                                                                    },
+                                                                    "op": "OP_NOT_EQUALS",
+                                                                    "value": {
+                                                                        "valStr": "2025-05-19T22:52:59+00:00"
+                                                                    },
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                {
+                                                    "orFilter": {
+                                                        "filters": [
+                                                            {
+                                                                "comparisonFilter": {
+                                                                    "key": {
+                                                                        "name": "sentry.timestamp",
+                                                                        "type": "TYPE_STRING",
+                                                                    },
+                                                                    "op": "OP_NOT_EQUALS",
+                                                                    "value": {
+                                                                        "valStr": "2025-05-15T23:55:12+00:00"
+                                                                    },
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                {
+                                                    "orFilter": {
+                                                        "filters": [
+                                                            {
+                                                                "comparisonFilter": {
+                                                                    "key": {
+                                                                        "name": "sentry.timestamp",
+                                                                        "type": "TYPE_STRING",
+                                                                    },
+                                                                    "op": "OP_NOT_EQUALS",
+                                                                    "value": {
+                                                                        "valStr": "2025-05-21T09:52:33+00:00"
+                                                                    },
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                {
+                                                    "orFilter": {
+                                                        "filters": [
+                                                            {
+                                                                "comparisonFilter": {
+                                                                    "key": {
+                                                                        "name": "sentry.timestamp",
+                                                                        "type": "TYPE_STRING",
+                                                                    },
+                                                                    "op": "OP_NOT_EQUALS",
+                                                                    "value": {
+                                                                        "valStr": "2025-05-24T02:27:33+00:00"
+                                                                    },
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                            ]
+                                        }
+                                    },
+                                ]
+                            }
+                        },
+                        {
+                            "andFilter": {
+                                "filters": [
+                                    {
+                                        "comparisonFilter": {
+                                            "key": {
+                                                "name": "sentry.timestamp",
+                                                "type": "TYPE_DOUBLE",
+                                            },
+                                            "op": "OP_GREATER_THAN_OR_EQUALS",
+                                            "value": {"valInt": "1745841600"},
+                                        }
+                                    },
+                                    {
+                                        "comparisonFilter": {
+                                            "key": {
+                                                "name": "sentry.timestamp",
+                                                "type": "TYPE_DOUBLE",
+                                            },
+                                            "op": "OP_LESS_THAN",
+                                            "value": {"valInt": "1748476800"},
+                                        }
+                                    },
+                                ]
+                            }
+                        },
+                    ]
+                }
+            },
+            "granularitySecs": "43200",
+            "meta": {
+                "downsampledStorageConfig": {"mode": "MODE_NORMAL"},
+                "endTimestamp": "2025-05-29T00:00:00Z",
+                "organizationId": "4505957955796992",
+                "projectIds": [
+                    "4505957967003648",
+                    "4506378011213824",
+                    "4506384784228352",
+                ],
+                "referrer": "api.dashboards.widget.area-chart",
+                "requestId": "4da24e8f-b4a0-413f-835a-01dc3bf063d8",
+                "startTimestamp": "2025-04-28T12:00:00Z",
+                "traceItemType": "TRACE_ITEM_TYPE_SPAN",
+            },
+        }
+        from google.protobuf.json_format import ParseDict
+
+        message = ParseDict(query, TimeSeriesRequest())
+        EndpointTimeSeries().execute(message)
+
 
 class TestUtils:
     def test_no_duplicate_labels(self) -> None:
