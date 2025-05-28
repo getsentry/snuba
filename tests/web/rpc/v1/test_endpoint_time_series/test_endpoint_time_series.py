@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 from clickhouse_driver.errors import ServerException
+from google.protobuf.json_format import ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
@@ -1698,66 +1699,62 @@ class TestTimeSeriesApi(BaseApiTest):
             ),
         ]
 
-    def test_bug(self) -> None:
+    def test_filter_on_timestamp_string(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+
         query = {
             "expressions": [
                 {
                     "conditionalAggregation": {
-                        "aggregate": "FUNCTION_P50",
+                        "aggregate": "FUNCTION_SUM",
                         "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED",
-                        "key": {"name": "sentry.duration_ms", "type": "TYPE_DOUBLE"},
-                        "label": "p50(span.duration)",
+                        "key": {"name": "test_metric", "type": "TYPE_DOUBLE"},
+                        "label": "sum(test_metric)",
                     },
-                    "label": "p50(span.duration)",
+                    "label": "sum(test_metric)",
                 }
             ],
             "filter": {
-                "andFilter": {
-                    "filters": [
-                        # This is the problem:
-                        {
-                            "comparisonFilter": {
-                                "key": {
-                                    "name": "sentry.timestamp",
-                                    "type": "TYPE_STRING",
-                                },
-                                "op": "OP_GREATER_THAN_OR_EQUALS",
-                                "value": {"valStr": "2025-05-14 18:33:50.010572+00:00"},
-                            }
-                        },
-                        {
-                            "comparisonFilter": {
-                                "key": {
-                                    "name": "sentry.segment_id",
-                                    "type": "TYPE_STRING",
-                                },
-                                "op": "OP_NOT_EQUALS",
-                                "value": {"valStr": "00"},
-                            }
-                        },
-                    ]
+                "comparisonFilter": {
+                    "key": {
+                        "name": "sentry.timestamp",
+                        "type": "TYPE_STRING",
+                    },
+                    "op": "OP_GREATER_THAN_OR_EQUALS",
+                    "value": {
+                        "valStr": (BASE_TIME + timedelta(minutes=30)).isoformat()
+                    },
                 }
             },
-            "granularitySecs": "43200",
+            "granularitySecs": "60",
             "meta": {
                 "downsampledStorageConfig": {"mode": "MODE_NORMAL"},
-                "endTimestamp": "2025-05-29T00:00:00Z",
-                "organizationId": "4505957955796992",
+                "endTimestamp": (BASE_TIME + timedelta(hours=1)).isoformat(),
+                "organizationId": "1",
                 "projectIds": [
-                    "4505957967003648",
-                    "4506378011213824",
-                    "4506384784228352",
+                    "1",
                 ],
                 "referrer": "api.dashboards.widget.area-chart",
                 "requestId": "4da24e8f-b4a0-413f-835a-01dc3bf063d8",
-                "startTimestamp": "2025-04-28T12:00:00Z",
+                "startTimestamp": BASE_TIME.isoformat(),
                 "traceItemType": "TRACE_ITEM_TYPE_SPAN",
             },
         }
-        from google.protobuf.json_format import ParseDict
 
         message = ParseDict(query, TimeSeriesRequest())
-        EndpointTimeSeries().execute(message)
+        result = EndpointTimeSeries().execute(message)
+        data_points = result.result_timeseries[0].data_points
+        for i in range(30):
+            assert not data_points[i].data_present
+
+        for i in range(30, 60):
+            assert data_points[i].data_present
 
 
 class TestUtils:

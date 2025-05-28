@@ -188,7 +188,14 @@ def trace_item_filters_to_expression(
 
     if item_filter.HasField("comparison_filter"):
         k = item_filter.comparison_filter.key
-        k_expression = attribute_key_to_expression(k)
+        # NOTE (Volo): this is a special case where the client is asking to filter by the timestamp but is
+        # providing the timestamp as a string. in this case, we access the column directly and then down below convert the given value
+        # to a datetime
+        if k.name == "sentry.timestamp" and k.type == AttributeKey.TYPE_STRING:
+            k_expression = column("timestamp")
+        else:
+            k_expression = attribute_key_to_expression(k)
+
         op = item_filter.comparison_filter.op
         v = item_filter.comparison_filter.value
 
@@ -205,7 +212,17 @@ def trace_item_filters_to_expression(
                 case "val_bool":
                     v_expression = literal(v.val_bool)
                 case "val_str":
-                    v_expression = literal(v.val_str)
+                    # timestamp is a special case where we need to convert the string to a datetime to filter it
+                    # if it's provided as a string
+                    if (
+                        k.name == "sentry.timestamp"
+                        and k.type == AttributeKey.TYPE_STRING
+                    ):
+                        v_expression = f.toDateTime(
+                            literal(datetime.fromisoformat(v.val_str))
+                        )
+                    else:
+                        v_expression = literal(v.val_str)
                 case "val_float":
                     v_expression = literal(v.val_float)
                 case "val_double":

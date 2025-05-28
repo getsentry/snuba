@@ -136,11 +136,6 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
                 f.CAST(column("sampling_weight"), "Float64"),
                 alias=alias,
             )
-        elif (
-            attr_key.name == "sentry.timestamp"
-            and attr_key.type == AttributeKey.TYPE_STRING
-        ):
-            return column(converted_attr_name[len(COLUMN_PREFIX) :], alias=alias)
 
         return f.CAST(
             column(converted_attr_name[len(COLUMN_PREFIX) :]),
