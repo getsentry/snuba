@@ -1,8 +1,10 @@
+import uuid
 from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime
 from typing import Any, Callable, Dict, Iterable
 
+from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import DataPoint
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
@@ -19,17 +21,23 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     ExtrapolationMode,
 )
 
+from snuba.attribution.appid import AppID
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
+from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
+from snuba.web.query import run_query
+from snuba.web.rpc import RoutingDecision
 from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
@@ -362,9 +370,36 @@ def build_query(request: TimeSeriesRequest) -> Query:
     return res
 
 
+def _build_snuba_request(
+    request: TimeSeriesRequest, query_settings: QuerySettings
+) -> SnubaRequest:
+
+    return SnubaRequest(
+        id=uuid.UUID(request.meta.request_id),
+        original_body=MessageToDict(request),
+        query=build_query(request),
+        query_settings=query_settings,
+        attribution_info=AttributionInfo(
+            referrer=request.meta.referrer,
+            team="eap",
+            feature="eap",
+            tenant_ids={
+                "organization_id": request.meta.organization_id,
+                "referrer": request.meta.referrer,
+            },
+            app_id=AppID("eap"),
+            parent_api="eap_items_samples",
+        ),
+    )
+
+
 class ResolverTimeSeriesEAPItems:
     def resolve(
-        self, in_msg: TimeSeriesRequest, timer: Timer, metrics_backend: MetricsBackend
+        self,
+        in_msg: TimeSeriesRequest,
+        timer: Timer,
+        metrics_backend: MetricsBackend,
+        routing_decision: RoutingDecision,
     ) -> TimeSeriesResponse:
         # aggregations field is deprecated, it gets converted to request.expressions
         # if the user passes it in
@@ -373,9 +408,13 @@ class ResolverTimeSeriesEAPItems:
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )
+        query_settings.set_clickhouse_settings(routing_decision.clickhouse_settings)
 
-        res = run_query_to_correct_tier(
-            in_msg, query_settings, timer, build_query  # type: ignore
+        snuba_request = _build_snuba_request(in_msg, query_settings)
+        res = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=snuba_request,
+            timer=timer,
         )
 
         response_meta = extract_response_meta(
