@@ -106,8 +106,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         // Write to clickhouse
         let next_step = ClickhouseWriterStep::new(next_step, &self.clickhouse_concurrency);
 
-        let next_step =
-            SetJoinTimeout::new(next_step, Some(Duration::from_millis(self.join_timeout_ms)));
+        let next_step = SetJoinTimeout::new(
+            next_step,
+            Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
+        );
 
         // Batch insert rows
         let batch_factory = BatchFactory::new(
