@@ -1732,32 +1732,6 @@ class TestTimeSeriesApi(BaseApiTest):
                                                                                     {
                                                                                         "comparisonFilter": {
                                                                                             "key": {
-                                                                                                "name": "sentry.op",
-                                                                                                "type": "TYPE_STRING",
-                                                                                            },
-                                                                                            "op": "OP_IN",
-                                                                                            "value": {
-                                                                                                "valStrArray": {
-                                                                                                    "values": [
-                                                                                                        "pageload",
-                                                                                                        "navigation",
-                                                                                                        "ui.render",
-                                                                                                        "interaction",
-                                                                                                        "ui.interaction",
-                                                                                                        "ui.interaction.click",
-                                                                                                        "ui.interaction.hover",
-                                                                                                        "ui.interaction.drag",
-                                                                                                        "ui.interaction.press",
-                                                                                                        "ui.webvital.cls",
-                                                                                                        "ui.webvital.fcp",
-                                                                                                    ]
-                                                                                                }
-                                                                                            },
-                                                                                        }
-                                                                                    },
-                                                                                    {
-                                                                                        "comparisonFilter": {
-                                                                                            "key": {
                                                                                                 "name": "sentry.project_id",
                                                                                                 "type": "TYPE_INT",
                                                                                             },
