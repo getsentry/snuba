@@ -58,6 +58,7 @@ pub struct ConsumerStrategyFactory {
     pub stop_at_timestamp: Option<i64>,
     pub batch_write_timeout: Option<Duration>,
     pub custom_envoy_request_timeout: Option<u64>,
+    pub join_timeout_ms: Option<u64>,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
@@ -105,7 +106,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         // Write to clickhouse
         let next_step = ClickhouseWriterStep::new(next_step, &self.clickhouse_concurrency);
 
-        let next_step = SetJoinTimeout::new(next_step, None);
+        let next_step =
+            SetJoinTimeout::new(next_step, Some(Duration::from_millis(self.join_timeout_ms)));
 
         // Batch insert rows
         let batch_factory = BatchFactory::new(
@@ -228,8 +230,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         // force message processor to drop all in-flight messages, as it is not worth the time
         // spent in rebalancing to wait for them and it is idempotent anyway. later, we overwrite
         // the timeout again for the clickhouse writer step
-        let next_step = SetJoinTimeout::new(next_step, Some(Duration::from_secs(0)));
-
+        let next_step = SetJoinTimeout::new(
+            next_step,
+            Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
+        );
         if let Some(path) = &self.health_check_file {
             Box::new(HealthCheck::new(next_step, path))
         } else {
