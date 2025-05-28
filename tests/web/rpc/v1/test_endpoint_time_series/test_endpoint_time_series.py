@@ -1714,109 +1714,25 @@ class TestTimeSeriesApi(BaseApiTest):
             "filter": {
                 "andFilter": {
                     "filters": [
+                        # This is the problem:
                         {
-                            "andFilter": {
-                                "filters": [
-                                    {
-                                        "andFilter": {
-                                            "filters": [
-                                                {
-                                                    "andFilter": {
-                                                        "filters": [
-                                                            {
-                                                                "andFilter": {
-                                                                    "filters": [
-                                                                        {
-                                                                            "andFilter": {
-                                                                                "filters": [
-                                                                                    {
-                                                                                        "andFilter": {
-                                                                                            "filters": [
-                                                                                                {
-                                                                                                    "comparisonFilter": {
-                                                                                                        "key": {
-                                                                                                            "name": "sentry.is_segment",
-                                                                                                            "type": "TYPE_BOOLEAN",
-                                                                                                        },
-                                                                                                        "op": "OP_EQUALS",
-                                                                                                        "value": {
-                                                                                                            "valBool": True
-                                                                                                        },
-                                                                                                    }
-                                                                                                },
-                                                                                                {
-                                                                                                    "andFilter": {
-                                                                                                        "filters": [
-                                                                                                            # This is the problem:
-                                                                                                            # {
-                                                                                                            #    "comparisonFilter": {
-                                                                                                            #        "key": {
-                                                                                                            #            "name": "sentry.timestamp",
-                                                                                                            #            "type": "TYPE_STRING",
-                                                                                                            #        },
-                                                                                                            #        "op": "OP_GREATER_THAN_OR_EQUALS",
-                                                                                                            #        "value": {
-                                                                                                            #            "valStr": "2025-05-14 18:33:50.010572+00:00"
-                                                                                                            #        },
-                                                                                                            #    }
-                                                                                                            # },
-                                                                                                            {
-                                                                                                                "comparisonFilter": {
-                                                                                                                    "key": {
-                                                                                                                        "name": "sentry.segment_id",
-                                                                                                                        "type": "TYPE_STRING",
-                                                                                                                    },
-                                                                                                                    "op": "OP_NOT_EQUALS",
-                                                                                                                    "value": {
-                                                                                                                        "valStr": "00"
-                                                                                                                    },
-                                                                                                                }
-                                                                                                            },
-                                                                                                        ]
-                                                                                                    }
-                                                                                                },
-                                                                                            ]
-                                                                                        }
-                                                                                    },
-                                                                                ]
-                                                                            }
-                                                                        },
-                                                                    ]
-                                                                }
-                                                            },
-                                                        ]
-                                                    }
-                                                },
-                                            ]
-                                        }
-                                    },
-                                ]
+                            "comparisonFilter": {
+                                "key": {
+                                    "name": "sentry.timestamp",
+                                    "type": "TYPE_STRING",
+                                },
+                                "op": "OP_GREATER_THAN_OR_EQUALS",
+                                "value": {"valStr": "2025-05-14 18:33:50.010572+00:00"},
                             }
                         },
                         {
-                            "andFilter": {
-                                "filters": [
-                                    {
-                                        "comparisonFilter": {
-                                            "key": {
-                                                "name": "sentry.timestamp",
-                                                "type": "TYPE_DOUBLE",
-                                            },
-                                            "op": "OP_GREATER_THAN_OR_EQUALS",
-                                            "value": {"valInt": "1745841600"},
-                                        }
-                                    },
-                                    {
-                                        "comparisonFilter": {
-                                            "key": {
-                                                "name": "sentry.timestamp",
-                                                "type": "TYPE_DOUBLE",
-                                            },
-                                            "op": "OP_LESS_THAN",
-                                            "value": {"valInt": "1748476800"},
-                                        }
-                                    },
-                                ]
+                            "comparisonFilter": {
+                                "key": {
+                                    "name": "sentry.segment_id",
+                                    "type": "TYPE_STRING",
+                                },
+                                "op": "OP_NOT_EQUALS",
+                                "value": {"valStr": "00"},
                             }
                         },
                     ]
