@@ -358,93 +358,6 @@ class TestTraceItemTable(BaseApiTest):
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
-    def test_booleans_and_number_compares_backward_compat(
-        self, setup_teardown: Any
-    ) -> None:
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            filter=TraceItemFilter(
-                or_filter=OrFilter(
-                    filters=[
-                        TraceItemFilter(
-                            comparison_filter=ComparisonFilter(
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_FLOAT,
-                                    name="eap.measurement",
-                                ),
-                                op=ComparisonFilter.OP_LESS_THAN_OR_EQUALS,
-                                value=AttributeValue(val_float=101),
-                            ),
-                        ),
-                        TraceItemFilter(
-                            comparison_filter=ComparisonFilter(
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_FLOAT,
-                                    name="eap.measurement",
-                                ),
-                                op=ComparisonFilter.OP_GREATER_THAN,
-                                value=AttributeValue(val_float=999),
-                            ),
-                        ),
-                    ]
-                )
-            ),
-            columns=[
-                Column(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_BOOLEAN, name="sentry.is_segment"
-                    )
-                ),
-                Column(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_STRING, name="sentry.span_id"
-                    )
-                ),
-            ],
-            order_by=[
-                TraceItemTableRequest.OrderBy(
-                    column=Column(
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_STRING, name="sentry.span_id"
-                        )
-                    )
-                )
-            ],
-            limit=61,
-        )
-        response = EndpointTraceItemTable().execute(message)
-        expected_response = TraceItemTableResponse(
-            column_values=[
-                TraceItemColumnValues(
-                    attribute_name="sentry.is_segment",
-                    results=[AttributeValue(val_bool=True) for _ in range(61)],
-                ),
-                TraceItemColumnValues(
-                    attribute_name="sentry.span_id",
-                    results=[
-                        AttributeValue(val_str="123456781234567d") for _ in range(61)
-                    ],
-                ),
-            ],
-            page_token=PageToken(offset=61),
-            meta=ResponseMeta(
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                downsampled_storage_meta=DownsampledStorageMeta(
-                    can_go_to_higher_accuracy_tier=False,
-                ),
-            ),
-        )
-        assert MessageToDict(response) == MessageToDict(expected_response)
-
     def test_booleans_and_number_compares(self, setup_teardown: Any) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -491,7 +404,7 @@ class TestTraceItemTable(BaseApiTest):
                 ),
                 Column(
                     key=AttributeKey(
-                        type=AttributeKey.TYPE_STRING, name="sentry.span_id"
+                        type=AttributeKey.TYPE_STRING, name="sentry.item_id"
                     )
                 ),
             ],
@@ -499,7 +412,7 @@ class TestTraceItemTable(BaseApiTest):
                 TraceItemTableRequest.OrderBy(
                     column=Column(
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_STRING, name="sentry.span_id"
+                            type=AttributeKey.TYPE_STRING, name="sentry.item_id"
                         )
                     )
                 )
@@ -514,7 +427,7 @@ class TestTraceItemTable(BaseApiTest):
                     results=[AttributeValue(val_bool=True) for _ in range(61)],
                 ),
                 TraceItemColumnValues(
-                    attribute_name="sentry.span_id",
+                    attribute_name="sentry.item_id",
                     results=[
                         AttributeValue(val_str="123456781234567d") for _ in range(61)
                     ],
@@ -2878,7 +2791,7 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
-    def test_span_id_column(self) -> None:
+    def test_item_id_column(self) -> None:
         write_eap_item(
             BASE_TIME,
             item_id=int("123456781234567d", 16).to_bytes(16, byteorder="little"),
@@ -2896,14 +2809,14 @@ class TestTraceItemTable(BaseApiTest):
             columns=[
                 Column(
                     key=AttributeKey(
-                        type=AttributeKey.TYPE_STRING, name="sentry.span_id"
+                        type=AttributeKey.TYPE_STRING, name="sentry.item_id"
                     )
                 ),
             ],
             filter=TraceItemFilter(
                 comparison_filter=ComparisonFilter(
                     key=AttributeKey(
-                        type=AttributeKey.TYPE_STRING, name="sentry.span_id"
+                        type=AttributeKey.TYPE_STRING, name="sentry.item_id"
                     ),
                     op=ComparisonFilter.OP_EQUALS,
                     value=AttributeValue(val_str="123456781234567d"),
@@ -2913,7 +2826,7 @@ class TestTraceItemTable(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         assert response.column_values == [
             TraceItemColumnValues(
-                attribute_name="sentry.span_id",
+                attribute_name="sentry.item_id",
                 results=[AttributeValue(val_str="123456781234567d")],
             )
         ]
