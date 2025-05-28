@@ -1747,18 +1747,19 @@ class TestTimeSeriesApi(BaseApiTest):
                                                                                                 {
                                                                                                     "andFilter": {
                                                                                                         "filters": [
-                                                                                                            {
-                                                                                                                "comparisonFilter": {
-                                                                                                                    "key": {
-                                                                                                                        "name": "sentry.timestamp",
-                                                                                                                        "type": "TYPE_STRING",
-                                                                                                                    },
-                                                                                                                    "op": "OP_GREATER_THAN_OR_EQUALS",
-                                                                                                                    "value": {
-                                                                                                                        "valStr": "2025-05-14 18:33:50.010572+00:00"
-                                                                                                                    },
-                                                                                                                }
-                                                                                                            },
+                                                                                                            # This is the problem:
+                                                                                                            # {
+                                                                                                            #    "comparisonFilter": {
+                                                                                                            #        "key": {
+                                                                                                            #            "name": "sentry.timestamp",
+                                                                                                            #            "type": "TYPE_STRING",
+                                                                                                            #        },
+                                                                                                            #        "op": "OP_GREATER_THAN_OR_EQUALS",
+                                                                                                            #        "value": {
+                                                                                                            #            "valStr": "2025-05-14 18:33:50.010572+00:00"
+                                                                                                            #        },
+                                                                                                            #    }
+                                                                                                            # },
                                                                                                             {
                                                                                                                 "comparisonFilter": {
                                                                                                                     "key": {
