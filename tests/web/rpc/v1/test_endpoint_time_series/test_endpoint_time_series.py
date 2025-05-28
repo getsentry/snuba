@@ -1724,18 +1724,6 @@ class TestTimeSeriesApi(BaseApiTest):
                                                     "andFilter": {
                                                         "filters": [
                                                             {
-                                                                "comparisonFilter": {
-                                                                    "key": {
-                                                                        "name": "sentry.transaction",
-                                                                        "type": "TYPE_STRING",
-                                                                    },
-                                                                    "op": "OP_EQUALS",
-                                                                    "value": {
-                                                                        "valStr": "Chat Streaming Latency"
-                                                                    },
-                                                                }
-                                                            },
-                                                            {
                                                                 "andFilter": {
                                                                     "filters": [
                                                                         {
