@@ -1721,20 +1721,6 @@ class TestTimeSeriesApi(BaseApiTest):
                                         "andFilter": {
                                             "filters": [
                                                 {
-                                                    "comparisonFilter": {
-                                                        "key": {
-                                                            "name": "sentry.environment",
-                                                            "type": "TYPE_STRING",
-                                                        },
-                                                        "op": "OP_IN",
-                                                        "value": {
-                                                            "valStrArray": {
-                                                                "values": ["production"]
-                                                            }
-                                                        },
-                                                    }
-                                                },
-                                                {
                                                     "andFilter": {
                                                         "filters": [
                                                             {
