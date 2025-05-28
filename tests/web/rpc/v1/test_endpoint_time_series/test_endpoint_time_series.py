@@ -1727,28 +1727,6 @@ class TestTimeSeriesApi(BaseApiTest):
                                                                 "andFilter": {
                                                                     "filters": [
                                                                         {
-                                                                            "orFilter": {
-                                                                                "filters": [
-                                                                                    {
-                                                                                        "comparisonFilter": {
-                                                                                            "key": {
-                                                                                                "name": "sentry.project_id",
-                                                                                                "type": "TYPE_INT",
-                                                                                            },
-                                                                                            "op": "OP_IN",
-                                                                                            "value": {
-                                                                                                "valIntArray": {
-                                                                                                    "values": [
-                                                                                                        "4505957967003648"
-                                                                                                    ]
-                                                                                                }
-                                                                                            },
-                                                                                        }
-                                                                                    },
-                                                                                ]
-                                                                            }
-                                                                        },
-                                                                        {
                                                                             "andFilter": {
                                                                                 "filters": [
                                                                                     {
