@@ -38,6 +38,7 @@ jobs:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           migration: "./snuba/migrations/groups.py"
           cmd: python scripts/ddl-changes.py
+          useRawBody: true
 
       - name: Check migrations are not coupled with other changes
         run: |
