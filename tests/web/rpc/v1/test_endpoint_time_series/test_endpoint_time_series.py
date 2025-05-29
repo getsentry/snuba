@@ -1068,7 +1068,10 @@ class TestTimeSeriesApi(BaseApiTest):
                 ),
             ],
             group_by=[
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.name"),
+                AttributeKey(
+                    type=AttributeKey.TYPE_STRING,
+                    name="sentry.raw_description",
+                ),
             ],
             granularity_secs=granularity_secs,
         )
@@ -1080,7 +1083,9 @@ class TestTimeSeriesApi(BaseApiTest):
         ]
         expected_timeseries = TimeSeries(
             label="sum(test_metric)",
-            group_by_attributes={"sentry.name": "/api/0/relays/projectconfigs/"},
+            group_by_attributes={
+                "sentry.raw_description": "/api/0/relays/projectconfigs/",
+            },
             buckets=expected_buckets,
             data_points=[
                 DataPoint(data=300, data_present=True, sample_count=300)
