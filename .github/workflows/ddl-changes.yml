@@ -31,7 +31,7 @@ jobs:
         run: |
           SNUBA_SETTINGS=test_distributed python scripts/ddl-changes.py
       - name: Generate SQL for migration
-        uses: getsentry/action-migrations@v1.2.2
+        uses: getsentry/action-migrations@v1.3.0
         env:
           SNUBA_SETTINGS: test_distributed
         with:
