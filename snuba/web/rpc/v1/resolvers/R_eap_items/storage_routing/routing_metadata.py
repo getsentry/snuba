@@ -1,12 +1,14 @@
 from dataclasses import dataclass, field
 from typing import Any, Generic, Optional
 
-
 from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.rpc import Tin
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import BaseRoutingStrategy
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
+    BaseRoutingStrategy,
+)
+
 
 @dataclass
 class RoutingContext(Generic[Tin]):
@@ -32,6 +34,7 @@ class RoutingContext(Generic[Tin]):
     #         "result_info": query_result,
     #         "routed_tier": self.query_settings.get_sampling_tier().name,
     #     }
+
 
 @dataclass
 class RoutingDecision(Generic[Tin]):

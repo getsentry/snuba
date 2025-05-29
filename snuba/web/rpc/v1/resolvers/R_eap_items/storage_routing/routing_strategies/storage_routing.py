@@ -1,7 +1,18 @@
 import os
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Generic, Optional, Type, TypeAlias, Union, cast, final
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    Optional,
+    Type,
+    TypeAlias,
+    Union,
+    cast,
+    final,
+)
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -27,7 +38,10 @@ from snuba.utils.registered_class import RegisteredClass, import_submodules_in_d
 from snuba.web import QueryResult
 from snuba.web.query import run_query
 from snuba.web.rpc import Tin
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import RoutingContext, RoutingDecision
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import (
+    RoutingContext,
+    RoutingDecision,
+)
 
 _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
 _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
@@ -39,7 +53,6 @@ MetricsBackendType: TypeAlias = Callable[
 
 RoutedRequestType = Union[TimeSeriesRequest, TraceItemTableRequest]
 ClickhouseQuerySettings = Dict[str, Any]
-
 
 
 def _get_stats_dict(
@@ -140,7 +153,9 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             return False
         return routing_context.in_msg.meta.downsampled_storage_config.mode == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY  # type: ignore
 
-    def _build_snuba_request(self, routing_context: RoutingContext[Tin]) -> SnubaRequest:
+    def _build_snuba_request(
+        self, routing_context: RoutingContext[Tin]
+    ) -> SnubaRequest:
         request = routing_context.in_msg
         if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:  # type: ignore
             team = "ourlogs"
@@ -169,18 +184,20 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             ),
         )
 
-    def _run_query(self, routing_context: RoutingContext[Tin]) -> QueryResult:
-        snuba_request = self._build_snuba_request(routing_context)
-        res = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=snuba_request,
-            timer=routing_context.timer,
-        )
-        routing_context.query_result = res
-        return res
+    # def _run_query(self, routing_context: RoutingContext[Tin]) -> QueryResult:
+    #     snuba_request = self._build_snuba_request(routing_context)
+    #     res = run_query(
+    #         dataset=PluggableDataset(name="eap", all_entities=[]),
+    #         request=snuba_request,
+    #         timer=routing_context.timer,
+    #     )
+    #     routing_context.query_result = res
+    #     return res
 
     def __merge_clickhouse_settings(
-        self, routing_decision: RoutingDecision[Tin], query_settings: ClickhouseQuerySettings
+        self,
+        routing_decision: RoutingDecision[Tin],
+        query_settings: ClickhouseQuerySettings,
     ) -> None:
         """merge query settings decided in _decide_tier_and_query_settings with whatever was passed in the
         routing context initially
@@ -398,8 +415,6 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
     #             if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
     #                 raise e
     #     return routing_context.query_result
-
-
 
 
 import_submodules_in_directory(

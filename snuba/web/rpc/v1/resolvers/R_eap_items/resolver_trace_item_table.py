@@ -32,7 +32,9 @@ from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
-from snuba.web.rpc import RoutingDecision
+from snuba.web.rpc import RoutingDecision, Tin
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
+
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     base_conditions_and,
@@ -45,6 +47,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import RoutingContext
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     aggregation_to_expression,
     get_average_sample_rate_column,
@@ -353,24 +356,32 @@ def _get_page_token(
     return PageToken(offset=request.page_token.offset + num_rows)
 
 
-def _build_snuba_request(
-    request: TraceItemTableRequest, query_settings: QuerySettings
-) -> SnubaRequest:
+def _build_snuba_request(routing_context: RoutingContext[Tin]) -> SnubaRequest:
+    request = routing_context.in_msg
+    if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:  # type: ignore
+        team = "ourlogs"
+        feature = "ourlogs"
+        parent_api = "ourlog_trace_item_table"
+    else:
+        team = "eap"
+        feature = "eap"
+        parent_api = "eap_span_samples"
+
     return SnubaRequest(
-        id=uuid.UUID(request.meta.request_id),
+        id=uuid.UUID(request.meta.request_id),  # type: ignore
         original_body=MessageToDict(request),
-        query=build_query(request),
-        query_settings=query_settings,
+        query=routing_context.build_query(request),  # type: ignore
+        query_settings=routing_context.query_settings,  # type: ignore
         attribution_info=AttributionInfo(
-            referrer=request.meta.referrer,
-            team="eap",
-            feature="eap",
+            referrer=request.meta.referrer,  # type: ignore
+            team=team,
+            feature=feature,
             tenant_ids={
-                "organization_id": request.meta.organization_id,
-                "referrer": request.meta.referrer,
+                "organization_id": request.meta.organization_id,  # type: ignore
+                "referrer": request.meta.referrer,  # type: ignore
             },
             app_id=AppID("eap"),
-            parent_api="eap_items_samples",
+            parent_api=parent_api,
         ),
     )
 
@@ -390,7 +401,7 @@ class ResolverTraceItemTableEAPItems:
         query_settings.set_clickhouse_settings(routing_decision.clickhouse_settings)
         query_settings.set_sampling_tier(routing_decision.tier)
 
-        snuba_request = _build_snuba_request(in_msg, query_settings)
+        snuba_request = _build_snuba_request(routing_decision.routing_context)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

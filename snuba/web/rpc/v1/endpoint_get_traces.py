@@ -395,7 +395,11 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     def response_class(cls) -> Type[GetTracesResponse]:
         return GetTracesResponse
 
-    def _execute(self, in_msg: GetTracesRequest, routing_decision: RoutingDecision[GetTracesRequest] | None = None) -> GetTracesResponse:
+    def _execute(
+        self,
+        in_msg: GetTracesRequest,
+        routing_decision: RoutingDecision[GetTracesRequest] | None = None,
+    ) -> GetTracesResponse:
         _validate_order_by(in_msg)
 
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(

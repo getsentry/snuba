@@ -11,6 +11,8 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.util import with_span
 from snuba.web import QueryResult
 from snuba.web.query import run_query
+from snuba.web.rpc import Tin
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import RoutingDecision
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
     ClickhouseQuerySettings,
@@ -50,10 +52,10 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
             / _DOWNSAMPLING_TIER_MULTIPLIERS[self._get_most_downsampled_tier()]
         )
 
-    def _is_preflight_mode(self, routing_context: RoutingContext) -> bool:
-        return (
-            routing_context.in_msg.meta.HasField("downsampled_storage_config")
-            and routing_context.in_msg.meta.downsampled_storage_config.mode
+    def _is_preflight_mode(self, routing_context: RoutingContext[Tin]) -> bool:
+        return bool(
+            routing_context.in_msg.meta.HasField("downsampled_storage_config")  # type: ignore
+            and routing_context.in_msg.meta.downsampled_storage_config.mode  # type: ignore
             == DownsampledStorageConfig.MODE_PREFLIGHT
         )
 
@@ -101,7 +103,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
     def _get_target_tier(
         self,
         most_downsampled_tier_query_result: QueryResult,
-        routing_context: RoutingContext,
+        routing_context: RoutingContext[Tin],
     ) -> Tier:
         estimated_query_bytes_scanned_to_this_tier = -1
         with sentry_sdk.start_span(op="_get_target_tier") as span:
@@ -166,7 +168,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
             return target_tier
 
     def _run_query_on_most_downsampled_tier(
-        self, routing_context: RoutingContext
+        self, routing_context: RoutingContext[Tin]
     ) -> QueryResult:
         with sentry_sdk.start_span(op="_run_query_on_most_downsampled_tier") as span:
             routing_context.query_settings.set_sampling_tier(
@@ -199,27 +201,27 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
 
     @with_span(op="function")
     def _decide_tier_and_query_settings(
-        self, routing_context: RoutingContext
+        self, routing_decision: RoutingDecision[Tin]
     ) -> tuple[Tier, ClickhouseQuerySettings]:
         if (
-            not routing_context.in_msg.meta.HasField("downsampled_storage_config")
-            or routing_context.in_msg.meta.downsampled_storage_config.mode
+            not routing_decision.routing_context.in_msg.meta.HasField("downsampled_storage_config")  # type: ignore
+            or routing_decision.routing_context.in_msg.meta.downsampled_storage_config.mode  # type: ignore
             == DownsampledStorageConfig.MODE_UNSPECIFIED
         ):
             return Tier.TIER_1, {}
 
-        if self._is_preflight_mode(routing_context):
+        if self._is_preflight_mode(routing_decision.routing_context):
             return self._get_most_downsampled_tier(), {}
 
-        routing_context.query_result = self._run_query_on_most_downsampled_tier(
-            routing_context
+        routing_decision.routing_context.query_result = self._run_query_on_most_downsampled_tier(
+            routing_decision.routing_context
         )
         if (
-            self._get_query_bytes_scanned(routing_context.query_result)
+            self._get_query_bytes_scanned(routing_decision.routing_context.query_result)
             >= self._get_bytes_scanned_limit()
         ):
             self._record_value_in_span_and_DD(
-                routing_context,
+                routing_decision.routing_context,
                 self.metrics.increment,
                 "most_downsampled_tier_query_bytes_scanned_exceeds_limit",
                 1,
@@ -231,7 +233,7 @@ class LinearBytesScannedRoutingStrategy(BaseRoutingStrategy):
         }
 
         return (
-            self._get_target_tier(routing_context.query_result, routing_context),
+            self._get_target_tier(routing_decision.routing_context.query_result, routing_decision.routing_context),
             query_settings,
         )
 

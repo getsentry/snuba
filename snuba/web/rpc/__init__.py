@@ -32,8 +32,8 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.load_retriever impor
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
-    RoutingDecision,
     RoutingContext,
+    RoutingDecision,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategy_selector import (
     RoutingStrategySelector,
@@ -85,7 +85,9 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
             ),
         )
 
-    def resolve(self, in_msg: Tin, routing_decision: RoutingDecision[Tin] | None = None) -> Tout:
+    def resolve(
+        self, in_msg: Tin, routing_decision: RoutingDecision[Tin]
+    ) -> Tout:
         raise NotImplementedError
 
 
@@ -199,7 +201,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             error = e  # type: ignore
         return self.__after_execute(in_msg, out, error, routing_decision)
 
-    def __before_execute(self, in_msg: Tin, routing_decision: RoutingDecision[Tin]) -> None:
+    def __before_execute(
+        self, in_msg: Tin, routing_decision: RoutingDecision[Tin]
+    ) -> None:
         self._timer.update_tags(self.__extract_request_tags(in_msg))
 
         # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
@@ -255,7 +259,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         """Override this for any pre-processing/logging before the _execute method"""
         pass
 
-    def _execute(self, in_msg: Tin, routing_decision: RoutingDecision[Tin] | None = None) -> Tout:
+    def _execute(
+        self, in_msg: Tin, routing_decision: RoutingDecision[Tin]
+    ) -> Tout:
         raise NotImplementedError
 
     def __after_execute(

@@ -17,8 +17,10 @@ from snuba.web.rpc.proto_visitor import (
     TimeSeriesRequestWrapper,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import (
+    RoutingDecision,
+)
 from snuba.web.rpc.v1.visitors.visitor_v2 import preprocess_expression_labels
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import RoutingDecision
 
 _VALID_GRANULARITY_SECS = set(
     [
@@ -116,7 +118,11 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
             timer=self._timer, metrics_backend=self._metrics_backend
         )
 
-    def _execute(self, in_msg: TimeSeriesRequest, routing_decision: RoutingDecision[Tin] | None = None) -> TimeSeriesResponse:
+    def _execute(
+        self,
+        in_msg: TimeSeriesRequest,
+        routing_decision: RoutingDecision[Tin],
+    ) -> TimeSeriesResponse:
         # TODO: Move this to base
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
