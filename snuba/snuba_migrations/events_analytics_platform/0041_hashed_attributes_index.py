@@ -69,6 +69,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,
                 index_name="bf_hashed_attributes",
+                target=OperationTarget.LOCAL,
             ),
             operations.DropColumn(
                 storage_set=self.storage_set_key,
