@@ -1,7 +1,7 @@
 import os
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, Type, TypeAlias, Union, cast, final
+from typing import Any, Callable, Dict, Generic, Optional, Type, TypeAlias, Union, cast, final
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -26,7 +26,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 from snuba.web import QueryResult
 from snuba.web.query import run_query
-from snuba.web.rpc import RoutingDecision
+from snuba.web.rpc import Tin
 
 _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
 _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
@@ -41,8 +41,8 @@ ClickhouseQuerySettings = Dict[str, Any]
 
 
 @dataclass
-class RoutingContext:
-    in_msg: RoutedRequestType
+class RoutingContext(Generic[Tin]):
+    in_msg: Tin
     timer: Timer
     # build_query: Callable[[TimeSeriesRequest | TraceItemTableRequest], Query]
     # query_settings: HTTPQuerySettings
@@ -67,16 +67,14 @@ class RoutingContext:
 
 
 def _get_stats_dict(
-    routing_decision: RoutingDecision,
+    routing_decision: RoutingDecision[Tin],
 ) -> snuba_queries_v1._QueryMetadataStats:
     return cast(
         snuba_queries_v1._QueryMetadataStats,
         {
             "final": False,
             "cache_hit": 0,
-            "max_threads": routing_decision.clickhouse_settings.get(
-                "max_threads", 0
-            ),
+            "max_threads": routing_decision.clickhouse_settings.get("max_threads", 0),
             "clickhouse_table": "na",
             "query_id": "na",
             "is_duplicate": 0,
@@ -87,7 +85,7 @@ def _get_stats_dict(
 
 
 def _construct_hacky_querylog_payload(
-    strategy: "BaseRoutingStrategy", routing_decision: RoutingDecision
+    strategy: "BaseRoutingStrategy", routing_decision: RoutingDecision[Tin]
 ) -> snuba_queries_v1.Querylog:
     cur_span = sentry_sdk.get_current_span()
     assert routing_decision.routing_context is not None
@@ -104,20 +102,21 @@ def _construct_hacky_querylog_payload(
         },
         "dataset": "storage_routing",
         "entity": "eap",
-        "start_timestamp": routing_decision.routing_context.in_msg.meta.start_timestamp.seconds,
-        "end_timestamp": routing_decision.routing_context.in_msg.meta.end_timestamp.seconds,
+        "start_timestamp": routing_decision.routing_context.in_msg.meta.start_timestamp.seconds,  # type: ignore
+        "end_timestamp": routing_decision.routing_context.in_msg.meta.end_timestamp.seconds,  # type: ignore
         "status": routing_decision.tier.name,
         "request_status": "NA",
         "slo": "N/A",
-        "projects": list(routing_decision.routing_context.in_msg.meta.project_ids) or [],
+        "projects": list(routing_decision.routing_context.in_msg.meta.project_ids)  # type: ignore
+        or [],
         "timing": routing_decision.routing_context.timer.for_json(),
         "snql_anonymized": "",
         "query_list": [
             {
                 "sql": "",
                 "sql_anonymized": "",
-                "start_timestamp": routing_decision.routing_context.in_msg.meta.start_timestamp.seconds,
-                "end_timestamp": routing_decision.routing_context.in_msg.meta.end_timestamp.seconds,
+                "start_timestamp": routing_decision.routing_context.in_msg.meta.start_timestamp.seconds,  # type: ignore
+                "end_timestamp": routing_decision.routing_context.in_msg.meta.end_timestamp.seconds,  # type: ignore
                 "stats": _get_stats_dict(routing_decision),
                 "status": "0",
                 "trace_id": cur_span.trace_id if cur_span else "no_current_span",
@@ -139,7 +138,7 @@ def _construct_hacky_querylog_payload(
                 "slo": "na",
             }
         ],
-        "organization": routing_context.in_msg.meta.organization_id,
+        "organization": routing_decision.routing_context.in_msg.meta.organization_id,  # type: ignore
     }
 
 
@@ -160,17 +159,14 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
     def get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
         return cast("Type[BaseRoutingStrategy]", cls.class_from_name(name))
 
-    def _is_highest_accuracy_mode(self, routing_context: RoutingContext) -> bool:
-        if not routing_context.in_msg.meta.HasField("downsampled_storage_config"):
+    def _is_highest_accuracy_mode(self, routing_context: RoutingContext[Tin]) -> bool:
+        if not routing_context.in_msg.meta.HasField("downsampled_storage_config"):  # type: ignore
             return False
-        return (
-            routing_context.in_msg.meta.downsampled_storage_config.mode
-            == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
-        )
+        return routing_context.in_msg.meta.downsampled_storage_config.mode == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY  # type: ignore
 
-    def _build_snuba_request(self, routing_context: RoutingContext) -> SnubaRequest:
+    def _build_snuba_request(self, routing_context: RoutingContext[Tin]) -> SnubaRequest:
         request = routing_context.in_msg
-        if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
+        if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:  # type: ignore
             team = "ourlogs"
             feature = "ourlogs"
             parent_api = "ourlog_trace_item_table"
@@ -180,24 +176,24 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             parent_api = "eap_span_samples"
 
         return SnubaRequest(
-            id=uuid.UUID(request.meta.request_id),
+            id=uuid.UUID(request.meta.request_id),  # type: ignore
             original_body=MessageToDict(request),
-            query=routing_context.build_query(request),
-            query_settings=routing_context.query_settings,
+            query=routing_context.build_query(request),  # type: ignore
+            query_settings=routing_context.query_settings,  # type: ignore
             attribution_info=AttributionInfo(
-                referrer=request.meta.referrer,
+                referrer=request.meta.referrer,  # type: ignore
                 team=team,
                 feature=feature,
                 tenant_ids={
-                    "organization_id": request.meta.organization_id,
-                    "referrer": request.meta.referrer,
+                    "organization_id": request.meta.organization_id,  # type: ignore
+                    "referrer": request.meta.referrer,  # type: ignore
                 },
                 app_id=AppID("eap"),
                 parent_api=parent_api,
             ),
         )
 
-    def _run_query(self, routing_context: RoutingContext) -> QueryResult:
+    def _run_query(self, routing_context: RoutingContext[Tin]) -> QueryResult:
         snuba_request = self._build_snuba_request(routing_context)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
@@ -208,7 +204,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
         return res
 
     def __merge_clickhouse_settings(
-        self, routing_decision: RoutingDecision, query_settings: ClickhouseQuerySettings
+        self, routing_decision: RoutingDecision[Tin], query_settings: ClickhouseQuerySettings
     ) -> None:
         """merge query settings decided in _decide_tier_and_query_settings with whatever was passed in the
         routing context initially
@@ -221,7 +217,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
     def _record_value_in_span_and_DD(
         self,
-        routing_context: RoutingContext,
+        routing_context: RoutingContext[Tin],
         metrics_backend_func: MetricsBackendType,
         name: str,
         value: float | int,
@@ -239,12 +235,12 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             span.set_data(name, value)
 
     def _decide_tier_and_query_settings(
-        self, routing_decision: RoutingDecision
+        self, routing_decision: RoutingDecision[Tin]
     ) -> tuple[Tier, ClickhouseQuerySettings]:
         raise NotImplementedError
 
     def __decide_tier_and_query_settings(
-        self, timer: Timer, routing_decision: RoutingDecision
+        self, timer: Timer, routing_decision: RoutingDecision[Tin]
     ) -> None:
         with sentry_sdk.start_span(op="decide_tier"):
             try:
@@ -254,7 +250,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                 )
                 timer.mark(_END_ESTIMATION_MARK)
                 self._record_value_in_span_and_DD(
-                    routing_context,
+                    routing_decision.routing_context,
                     self.metrics.timing,
                     "estimation_time_overhead",
                     timer.get_duration_between_marks(
@@ -273,7 +269,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             routing_decision.tier = target_tier
 
     @final
-    def __output_metrics(self, routing_decision: RoutingDecision) -> None:
+    def __output_metrics(self, routing_decision: RoutingDecision[Tin]) -> None:
         assert routing_decision.routing_context is not None
         self._emit_routing_mistake(routing_decision.routing_context)
         self._output_metrics(routing_decision.routing_context)
@@ -297,11 +293,9 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                 value=bytes_scanned,
                 tags={"tier": routing_decision.tier.name},
             )
-        record_query(
-            _construct_hacky_querylog_payload(self, routing_decision)
-        )
+        record_query(_construct_hacky_querylog_payload(self, routing_decision))
 
-    def _output_metrics(self, routing_context: RoutingContext) -> None:
+    def _output_metrics(self, routing_context: RoutingContext[Tin]) -> None:
         pass
 
     def _get_sampled_too_low_threshold(self) -> int:
@@ -336,7 +330,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             or default
         )
 
-    def _emit_routing_mistake(self, routing_context: RoutingContext) -> None:
+    def _emit_routing_mistake(self, routing_context: RoutingContext[Tin]) -> None:
         if not routing_context.query_result or self._is_highest_accuracy_mode(
             routing_context
         ):
@@ -354,11 +348,11 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                     value=1,
                     tags={
                         "reason": "time_budget_exceeded",
-                        "tier": routing_context.query_settings.get_sampling_tier().name,
+                        "tier": routing_context.query_settings.get_sampling_tier().name,  # type: ignore
                     },
                 )
             elif (
-                routing_context.query_settings.get_sampling_tier() != Tier.TIER_1
+                routing_context.query_settings.get_sampling_tier() != Tier.TIER_1  # type: ignore
                 and elapsed_ms < self._get_sampled_too_low_threshold()
             ):
                 self._record_value_in_span_and_DD(
@@ -368,7 +362,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                     value=1,
                     tags={
                         "reason": "sampled_too_low",
-                        "tier": routing_context.query_settings.get_sampling_tier().name,
+                        "tier": routing_context.query_settings.get_sampling_tier().name,  # type: ignore
                     },
                 )
             else:
@@ -378,56 +372,85 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                     name="routing_success",
                     value=1,
                     tags={
-                        "tier": routing_context.query_settings.get_sampling_tier().name
+                        "tier": routing_context.query_settings.get_sampling_tier().name  # type: ignore
                     },
                 )
 
-    @final
-    @with_span(op="function")
-    def run_query_to_correct_tier(self, routing_context: RoutingContext) -> QueryResult:
-        with sentry_sdk.start_span(op="decide_tier"):
-            try:
-                routing_context.timer.mark(_START_ESTIMATION_MARK)
-                target_tier, query_settings = self.decide_tier_and_query_settings(
-                    routing_context
-                )
-                routing_context.timer.mark(_END_ESTIMATION_MARK)
-                self._record_value_in_span_and_DD(
-                    routing_context,
-                    self.metrics.timing,
-                    "estimation_time_overhead",
-                    routing_context.timer.get_duration_between_marks(
-                        _START_ESTIMATION_MARK, _END_ESTIMATION_MARK
-                    ),
-                )
-                self.__merge_clickhouse_settings(routing_context, query_settings)
-            except Exception as e:
-                # log some error metrics
-                self.metrics.increment("estimation_failure")
-                sentry_sdk.capture_exception(e)
-                target_tier = Tier.TIER_1
-                if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
-                    raise e
+    # @final
+    # @with_span(op="function")
+    # def run_query_to_correct_tier(self, routing_context: RoutingContext[Tin]) -> QueryResult:
+    #     with sentry_sdk.start_span(op="decide_tier"):
+    #         try:
+    #             routing_context.timer.mark(_START_ESTIMATION_MARK)
+    #             target_tier, query_settings = self.decide_tier_and_query_settings(
+    #                 routing_context
+    #             )
+    #             routing_context.timer.mark(_END_ESTIMATION_MARK)
+    #             self._record_value_in_span_and_DD(
+    #                 routing_context,
+    #                 self.metrics.timing,
+    #                 "estimation_time_overhead",
+    #                 routing_context.timer.get_duration_between_marks(
+    #                     _START_ESTIMATION_MARK, _END_ESTIMATION_MARK
+    #                 ),
+    #             )
+    #             self.__merge_clickhouse_settings(routing_context, query_settings)
+    #         except Exception as e:
+    #             # log some error metrics
+    #             self.metrics.increment("estimation_failure")
+    #             sentry_sdk.capture_exception(e)
+    #             target_tier = Tier.TIER_1
+    #             if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
+    #                 raise e
 
-            routing_context.query_settings.set_sampling_tier(target_tier)
+    #         routing_context.query_settings.set_sampling_tier(target_tier)
 
-        with sentry_sdk.start_span(op="run_selected_tier_query") as run_span:
-            run_span.set_data(
-                f"{_SAMPLING_IN_STORAGE_PREFIX}.selected_tier",
-                routing_context.query_settings.get_sampling_tier().name,
+    #     with sentry_sdk.start_span(op="run_selected_tier_query") as run_span:
+    #         run_span.set_data(
+    #             f"{_SAMPLING_IN_STORAGE_PREFIX}.selected_tier",
+    #             routing_context.query_settings.get_sampling_tier().name,
+    #         )
+    #         output = self._run_query(routing_context)
+    #         routing_context.query_result = output
+    #     with sentry_sdk.start_span(op="output_metrics"):
+    #         try:
+    #             self.__output_metrics(routing_context)
+    #         except Exception as e:
+    #             # log some error metrics
+    #             self.metrics.increment("metrics_failure")
+    #             sentry_sdk.capture_exception(e)
+    #             if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
+    #                 raise e
+    #     return routing_context.query_result
+
+@dataclass
+class RoutingDecision(Generic[Tin]):
+    routing_context: RoutingContext[Tin]
+    strategy: BaseRoutingStrategy | None = None
+    tier: Tier = Tier.TIER_1
+    clickhouse_settings: dict[str, str] = {}
+    can_run: bool | None = None
+
+    def to_log_dict(self) -> dict[str, Any]:
+        assert self.routing_context is not None
+        query_result: dict[str, Any] = {}
+        if self.routing_context.query_result:
+            query_result["meta"] = self.routing_context.query_result.result.get(
+                "meta", {}
             )
-            output = self._run_query(routing_context)
-            routing_context.query_result = output
-        with sentry_sdk.start_span(op="output_metrics"):
-            try:
-                self.__output_metrics(routing_context)
-            except Exception as e:
-                # log some error metrics
-                self.metrics.increment("metrics_failure")
-                sentry_sdk.capture_exception(e)
-                if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
-                    raise e
-        return routing_context.query_result
+            query_result["profile"] = self.routing_context.query_result.result.get(
+                "profile", {}
+            )
+            query_result["stats"] = self.routing_context.query_result.extra.get("stats")
+            query_result["sql"] = self.routing_context.query_result.extra.get("sql")
+
+        return {
+            "source_request_id": self.routing_context.in_msg.meta.request_id,  # type: ignore
+            "extra_info": self.routing_context.extra_info,
+            "clickhouse_settings": self.clickhouse_settings,
+            "result_info": query_result,
+            "routed_tier": self.tier.name,
+        }
 
 
 import_submodules_in_directory(

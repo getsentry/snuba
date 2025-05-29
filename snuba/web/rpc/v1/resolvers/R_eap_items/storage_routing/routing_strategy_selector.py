@@ -6,6 +6,7 @@ from typing import Any, Iterable, Tuple
 import sentry_sdk
 
 from snuba.state import get_config
+from snuba.web.rpc import Tin
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.linear_bytes_scanned_storage_routing import (
     LinearBytesScannedRoutingStrategy,
 )
@@ -86,9 +87,9 @@ _DEFAULT_STORAGE_ROUTING_CONFIG = StorageRoutingConfig(
 
 class RoutingStrategySelector:
     def get_storage_routing_config(
-        self, in_msg: RoutedRequestType
+        self, in_msg: Tin
     ) -> StorageRoutingConfig:
-        organization_id = str(in_msg.meta.organization_id)
+        organization_id = str(in_msg.meta.organization_id)  # type: ignore
         try:
             overrides = json.loads(
                 str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}"))
@@ -103,22 +104,26 @@ class RoutingStrategySelector:
             return _DEFAULT_STORAGE_ROUTING_CONFIG
 
     def select_routing_strategy(
-        self, routing_context: RoutingContext
+        self, routing_context: RoutingContext[Tin]
     ) -> BaseRoutingStrategy:
-        combined_org_and_project_ids = f"{routing_context.in_msg.meta.organization_id}:{'.'.join(str(pid) for pid in sorted(routing_context.in_msg.meta.project_ids))}"
-        bucket = (
-            int(hashlib.md5(combined_org_and_project_ids.encode()).hexdigest(), 16)
-            % _NUM_BUCKETS
-        )
-        config = self.get_storage_routing_config(routing_context.in_msg)
-        cumulative_buckets = 0.0
-        for (
-            strategy_name,
-            percentage,
-        ) in config.get_routing_strategy_and_percentage_routed():
-            cumulative_buckets += percentage * _NUM_BUCKETS
-            if bucket < cumulative_buckets:
-                return BaseRoutingStrategy.get_from_name(strategy_name)()
+        try:
+            combined_org_and_project_ids = f"{routing_context.in_msg.meta.organization_id}:{'.'.join(str(pid) for pid in sorted(routing_context.in_msg.meta.project_ids))}"  # type: ignore
+            bucket = (
+                int(hashlib.md5(combined_org_and_project_ids.encode()).hexdigest(), 16)
+                % _NUM_BUCKETS
+            )
+            config = self.get_storage_routing_config(routing_context.in_msg)
+            cumulative_buckets = 0.0
+            for (
+                strategy_name,
+                percentage,
+            ) in config.get_routing_strategy_and_percentage_routed():
+                cumulative_buckets += percentage * _NUM_BUCKETS
+                if bucket < cumulative_buckets:
+                    return BaseRoutingStrategy.get_from_name(strategy_name)()
+        except Exception as e:
+            sentry_sdk.capture_message(f"Error selecting routing strategy: {e}")
+            return LinearBytesScannedRoutingStrategy()
 
         # this should never happen because the percentages were validated in StorageRoutingConfig.from_json
         return LinearBytesScannedRoutingStrategy()

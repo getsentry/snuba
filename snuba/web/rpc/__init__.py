@@ -32,6 +32,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.load_retriever impor
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
+    RoutingDecision,
     RoutingContext,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategy_selector import (
@@ -50,31 +51,6 @@ _TIME_PERIOD_HOURS_BUCKETS = [
     90 * 24,
 ]
 _BUCKETS_COUNT = len(_TIME_PERIOD_HOURS_BUCKETS)
-
-@dataclass
-class RoutingDecision:
-    strategy: BaseRoutingStrategy | None = None
-    tier: Tier = Tier.TIER_1
-    clickhouse_settings: dict[str, str] = {}
-    can_run: bool | None = None
-    routing_context: RoutingContext | None = None
-
-    def to_log_dict(self) -> dict[str, Any]:
-        assert self.routing_context is not None
-        query_result: dict[str, Any] = {}
-        if self.routing_context.query_result:
-            query_result["meta"] = self.routing_context.query_result.result.get("meta", {})
-            query_result["profile"] = self.routing_context.query_result.result.get("profile", {})
-            query_result["stats"] = self.routing_context.query_result.extra.get("stats")
-            query_result["sql"] = self.routing_context.query_result.extra.get("sql")
-
-        return {
-            "source_request_id": self.routing_context.in_msg.meta.request_id,
-            "extra_info": self.routing_context.extra_info,
-            "clickhouse_settings": self.clickhouse_settings,
-            "result_info": query_result,
-            "routed_tier": self.tier.name,
-        }
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -175,10 +151,12 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         if span is not None:
             span.description = self.config_key()
 
-        routing_decision = RoutingDecision(routing_context=RoutingContext(
-            in_msg=in_msg,
-            timer=self._timer,
-        ))
+        routing_decision = RoutingDecision(
+            routing_context=RoutingContext(
+                in_msg=in_msg,
+                timer=self._timer,
+            )
+        )
         self.__before_execute(in_msg, routing_decision)
         error = None
         try:
@@ -221,17 +199,22 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             error = e  # type: ignore
         return self.__after_execute(in_msg, out, error, routing_decision)
 
-    def __before_execute(self, in_msg: Tin, routing_decision: RoutingDecision) -> None:
+    def __before_execute(self, in_msg: Tin, routing_decision: RoutingDecision[Tin]) -> None:
         self._timer.update_tags(self.__extract_request_tags(in_msg))
+        
         # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
         # the result is currently not used in storage routing
         # can turn off on Snuba Admin
         if state.get_config("storage_routing.enable_get_cluster_loadinfo", True):
             get_cluster_loadinfo()
 
-        selected_strategy = RoutingStrategySelector().select_routing_strategy(routing_decision.routing_context)
+        selected_strategy = RoutingStrategySelector().select_routing_strategy(
+            routing_decision.routing_context
+        )
         routing_decision.strategy = selected_strategy
-        selected_strategy.__decide_tier_and_query_settings(self._timer, routing_decision)
+        selected_strategy.__decide_tier_and_query_settings(
+            self._timer, routing_decision
+        )
         self._timer.mark("rpc_start")
         self._before_execute(in_msg)
 
@@ -272,7 +255,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         """Override this for any pre-processing/logging before the _execute method"""
         pass
 
-    def _execute(self, in_msg: Tin, routing_decision: RoutingDecision) -> Tout:
+    def _execute(self, in_msg: Tin, routing_decision: RoutingDecision[Tin]) -> Tout:
         raise NotImplementedError
 
     def __after_execute(
@@ -280,7 +263,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         in_msg: Tin,
         out_msg: Tout,
         error: Exception | None,
-        routing_decision: RoutingDecision,
+        routing_decision: RoutingDecision[Tin],
     ) -> Tout:
         try:
             res = self._after_execute(in_msg, out_msg, error, routing_decision)
@@ -318,7 +301,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         in_msg: Tin,
         out_msg: Tout,
         error: Exception | None,
-        routing_decision: RoutingDecision,
+        routing_decision: RoutingDecision[Tin],
     ) -> Tout:
         """Override this for any post-processing/logging after the _execute method"""
         return out_msg
