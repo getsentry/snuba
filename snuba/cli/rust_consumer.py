@@ -188,6 +188,12 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=0,
     help="number of milliseconds to wait for the current batch to be flushed by the consumer in case of rebalance",
 )
+@click.option(
+    "--health-check-consumer-groups",
+    default=[],
+    multiple=True,
+    help="Consumer groups for which to use the Snuba Health Check instead of the default Arroyo Health Check",
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -212,6 +218,7 @@ def rust_consumer(
     group_instance_id: Optional[str],
     max_poll_interval_ms: int,
     async_inserts: bool,
+    health_check_consumer_groups: Sequence[str],
     python_max_queue_depth: Optional[int],
     health_check_file: Optional[str],
     enforce_schema: bool,
@@ -269,6 +276,7 @@ def rust_consumer(
         enforce_schema,
         max_poll_interval_ms,
         async_inserts,
+        health_check_consumer_groups,
         python_max_queue_depth,
         health_check_file,
         stop_at_timestamp,

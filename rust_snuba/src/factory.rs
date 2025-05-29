@@ -60,9 +60,8 @@ pub struct ConsumerStrategyFactory {
     pub batch_write_timeout: Option<Duration>,
     pub custom_envoy_request_timeout: Option<u64>,
     pub join_timeout_ms: Option<u64>,
+    pub health_check_consumer_groups: Vec<String>,
 }
-
-const SNUBA_HEALTH_CHECK_CONSUMER_GROUPS: [&str; 1] = ["snuba_generic_metrics_distributions"];
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
     fn update_partitions(&self, partitions: &HashMap<Partition, u64>) {
@@ -241,8 +240,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         );
         if let Some(path) = &self.health_check_file {
             {
-                if SNUBA_HEALTH_CHECK_CONSUMER_GROUPS
-                    .contains(&self.physical_consumer_group.as_str())
+                if self
+                    .health_check_consumer_groups
+                    .contains(&self.physical_consumer_group)
                 {
                     tracing::info!(
                         "Using Snuba HealthCheck for consumer group: {}",
