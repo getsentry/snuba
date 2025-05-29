@@ -8,6 +8,7 @@ from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series import (
     ResolverTimeSeriesEAPItems,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import RoutingDecision
 
 
 class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
@@ -15,7 +16,7 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
     def trace_item_type(cls) -> TraceItemType.ValueType:
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
-    def resolve(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
+    def resolve(self, in_msg: TimeSeriesRequest, routing_decision: RoutingDecision[TimeSeriesRequest] | None = None) -> TimeSeriesResponse:
         return ResolverTimeSeriesEAPItems().resolve(
-            in_msg, self._timer, self._metrics_backend
+            in_msg, self._timer, self._metrics_backend, routing_decision
         )

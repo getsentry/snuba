@@ -16,6 +16,7 @@ from snuba.web.rpc.proto_visitor import (
     TraceItemTableRequestWrapper,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import RoutingDecision
 from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
     SparseAggregateAttributeTransformer,
 )
@@ -111,7 +112,7 @@ class EndpointTraceItemTable(
     def response_class(cls) -> Type[TraceItemTableResponse]:
         return TraceItemTableResponse
 
-    def _execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
+    def _execute(self, in_msg: TraceItemTableRequest, routing_decision: RoutingDecision[TraceItemTableRequest] | None = None) -> TraceItemTableResponse:
         aggregation_to_conditional_aggregation_visitor = (
             AggregationToConditionalAggregationVisitor()
         )
@@ -133,4 +134,4 @@ class EndpointTraceItemTable(
         in_msg = _transform_request(in_msg)
 
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
-        return resolver.resolve(in_msg)
+        return resolver.resolve(in_msg, routing_decision)  # type: ignore

@@ -18,8 +18,7 @@ from snuba.web.rpc.proto_visitor import (
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.visitors.visitor_v2 import preprocess_expression_labels
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import RoutingDecision
-
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import RoutingDecision
 
 _VALID_GRANULARITY_SECS = set(
     [
@@ -117,7 +116,7 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
             timer=self._timer, metrics_backend=self._metrics_backend
         )
 
-    def _execute(self, in_msg: TimeSeriesRequest, routing_decision: RoutingDecision[Tin]) -> TimeSeriesResponse:
+    def _execute(self, in_msg: TimeSeriesRequest, routing_decision: RoutingDecision[Tin] | None = None) -> TimeSeriesResponse:
         # TODO: Move this to base
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
@@ -138,4 +137,4 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         if bool(get_int_config("enable_clear_labels_eap", 0)):
             preprocess_expression_labels(in_msg)
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
-        return resolver.resolve(in_msg)
+        return resolver.resolve(in_msg, routing_decision)  # type: ignore

@@ -21,6 +21,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     ExtrapolationMode,
 )
 
+from snuba import query
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -399,16 +400,19 @@ class ResolverTimeSeriesEAPItems:
         in_msg: TimeSeriesRequest,
         timer: Timer,
         metrics_backend: MetricsBackend,
-        routing_decision: RoutingDecision,
+        routing_decision: RoutingDecision[TimeSeriesRequest] | None = None,
     ) -> TimeSeriesResponse:
         # aggregations field is deprecated, it gets converted to request.expressions
         # if the user passes it in
         assert len(in_msg.aggregations) == 0
 
+        assert routing_decision is not None
+
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )
         query_settings.set_clickhouse_settings(routing_decision.clickhouse_settings)
+        query_settings.set_sampling_tier(routing_decision.tier)
 
         snuba_request = _build_snuba_request(in_msg, query_settings)
         res = run_query(

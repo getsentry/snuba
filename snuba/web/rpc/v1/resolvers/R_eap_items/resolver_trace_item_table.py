@@ -381,12 +381,14 @@ class ResolverTraceItemTableEAPItems:
         in_msg: TraceItemTableRequest,
         timer: Timer,
         metrics_backend: MetricsBackend,
-        routing_decision: RoutingDecision,
+        routing_decision: RoutingDecision[TraceItemTableRequest] | None = None,
     ) -> TraceItemTableResponse:
+        assert routing_decision is not None
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )
         query_settings.set_clickhouse_settings(routing_decision.clickhouse_settings)
+        query_settings.set_sampling_tier(routing_decision.tier)
 
         snuba_request = _build_snuba_request(in_msg, query_settings)
         res = run_query(

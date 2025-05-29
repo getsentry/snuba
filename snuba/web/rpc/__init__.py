@@ -85,7 +85,7 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
             ),
         )
 
-    def resolve(self, in_msg: Tin) -> Tout:
+    def resolve(self, in_msg: Tin, routing_decision: RoutingDecision[Tin] | None = None) -> Tout:
         raise NotImplementedError
 
 
@@ -201,7 +201,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def __before_execute(self, in_msg: Tin, routing_decision: RoutingDecision[Tin]) -> None:
         self._timer.update_tags(self.__extract_request_tags(in_msg))
-        
+
         # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
         # the result is currently not used in storage routing
         # can turn off on Snuba Admin
@@ -255,7 +255,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         """Override this for any pre-processing/logging before the _execute method"""
         pass
 
-    def _execute(self, in_msg: Tin, routing_decision: RoutingDecision[Tin]) -> Tout:
+    def _execute(self, in_msg: Tin, routing_decision: RoutingDecision[Tin] | None = None) -> Tout:
         raise NotImplementedError
 
     def __after_execute(
