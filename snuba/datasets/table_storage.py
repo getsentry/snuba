@@ -1,3 +1,4 @@
+import logging
 from functools import cached_property
 from typing import Any, Mapping, Optional, Sequence
 
@@ -27,6 +28,8 @@ from snuba.utils.schemas import ReadOnly
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic, get_topic_creation_config
 from snuba.writer import BatchWriter
+
+logger = logging.getLogger(__name__)
 
 
 class KafkaTopicSpec:
@@ -63,6 +66,7 @@ class KafkaTopicSpec:
     @cached_property
     def partitions_number(self) -> int:
         config = get_default_kafka_configuration(self.__topic, None)
+        logger.info(f"partitions_number kafka config: {config}")
         client = AdminClient(config)
         topic_name = self.get_physical_topic_name()
         return len(
