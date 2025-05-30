@@ -161,8 +161,8 @@ def test_scheduler_consumer(tmpdir: Path) -> None:
     assert (tmpdir / "health.txt").exists()
     assert mock_scheduler_producer.produce.call_count == 2
 
-    settings.KAFKA_TOPIC_MAP = {}
     destroy_topics(admin_client, [SnubaTopic.EVENTS])
+    settings.KAFKA_TOPIC_MAP = {}
 
 
 @pytest.mark.clickhouse_db
