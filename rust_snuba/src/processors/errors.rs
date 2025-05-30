@@ -155,6 +155,8 @@ struct ErrorData {
     version: Option<String>,
     #[serde(default)]
     symbolicated_in_app: Option<bool>,
+    #[serde(default)]
+    sample_rate: Option<f64>,
 }
 
 // Contexts
@@ -423,6 +425,7 @@ struct ErrorRow {
     version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     symbolicated_in_app: Option<bool>,
+    sample_weight: Option<f64>,
 }
 
 impl ErrorRow {
@@ -686,6 +689,11 @@ impl ErrorRow {
             }
         }
 
+        let sample_weight =
+            from.data
+                .sample_rate
+                .and_then(|rate| if rate == 0.0 { None } else { Some(1.0 / rate) });
+
         Ok(Self {
             contexts_key: contexts_keys,
             contexts_value: contexts_values,
@@ -747,6 +755,7 @@ impl ErrorRow {
             user: user.unwrap_or_default(),
             version: from.data.version,
             symbolicated_in_app: from.data.symbolicated_in_app,
+            sample_weight,
             ..Default::default()
         })
     }

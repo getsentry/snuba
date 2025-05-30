@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -40,6 +41,7 @@ class ErrorEvent:
     received_timestamp: datetime
     errors: Sequence[Mapping[str, Any]] | None
     symbolicated_in_app: bool | None = None
+    sample_rate: float | None = None
 
     def serialize(self) -> tuple[int, str, Mapping[str, Any]]:
         serialized_event: dict[str, Any] = {
@@ -245,6 +247,7 @@ class ErrorEvent:
                 "type": "error",
                 "version": "7",
                 "symbolicated_in_app": self.symbolicated_in_app,
+                "sample_rate": self.sample_rate,
             },
         }
 
@@ -371,6 +374,7 @@ class ErrorEvent:
             "exception_frames.module": ["__main__"],
             "exception_frames.function": ["<module>"],
             "exception_frames.stack_level": [0],
+            "sample_weight": None,
             "sdk_integrations": [
                 "argv",
                 "atexit",
@@ -1014,3 +1018,125 @@ class TestErrorsProcessor:
         test_symbolicated_in_app_value(True)
         test_symbolicated_in_app_value(False)
         test_symbolicated_in_app_value(None)
+
+    def test_errors_sample_weight(self) -> None:
+        sample_rate = random.random()
+        timestamp, recieved = self.__get_timestamps()
+        message = ErrorEvent(
+            event_id=str(uuid.UUID("dcb9d002cac548c795d1c9adbfc68040")),
+            organization_id=1,
+            project_id=2,
+            group_id=100,
+            platform="python",
+            message="",
+            trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
+            timestamp=timestamp,
+            received_timestamp=recieved,
+            release="1.0.0",
+            dist="dist",
+            environment="prod",
+            email="foo@bar.com",
+            ip_address="127.0.0.1",
+            user_id="myself",
+            username="me",
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
+            replay_id=None,
+            threads=None,
+            errors=[{"type": "one"}, {"type": "two"}, {"type": "three"}],
+            flags=[],
+            sample_rate=sample_rate,
+        )
+        payload = message.serialize()
+        meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+
+        processed = self.processor.process_message(payload, meta)
+
+        assert processed is not None
+        assert len(processed.rows) == 1
+        assert processed.rows[0].get("sample_weight") == (1 / sample_rate)
+
+    def test_errors_sample_weight_with_no_sample_rate(self) -> None:
+        timestamp, recieved = self.__get_timestamps()
+        message = ErrorEvent(
+            event_id=str(uuid.UUID("dcb9d002cac548c795d1c9adbfc68040")),
+            organization_id=1,
+            project_id=2,
+            group_id=100,
+            platform="python",
+            message="",
+            trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
+            timestamp=timestamp,
+            received_timestamp=recieved,
+            release="1.0.0",
+            dist="dist",
+            environment="prod",
+            email="foo@bar.com",
+            ip_address="127.0.0.1",
+            user_id="myself",
+            username="me",
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
+            replay_id=None,
+            threads=None,
+            errors=[{"type": "one"}, {"type": "two"}, {"type": "three"}],
+            flags=[],
+            sample_rate=None,
+        )
+        payload = message.serialize()
+        meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+
+        processed = self.processor.process_message(payload, meta)
+
+        assert processed is not None
+        assert processed.rows[0].get("sample_weight") is None
+
+    def test_errors_sample_weight_with_zero_sample_rate(self) -> None:
+        timestamp, recieved = self.__get_timestamps()
+        message = ErrorEvent(
+            event_id=str(uuid.UUID("dcb9d002cac548c795d1c9adbfc68040")),
+            organization_id=1,
+            project_id=2,
+            group_id=100,
+            platform="python",
+            message="",
+            trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
+            timestamp=timestamp,
+            received_timestamp=recieved,
+            release="1.0.0",
+            dist="dist",
+            environment="prod",
+            email="foo@bar.com",
+            ip_address="127.0.0.1",
+            user_id="myself",
+            username="me",
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
+            replay_id=None,
+            threads=None,
+            errors=[{"type": "one"}, {"type": "two"}, {"type": "three"}],
+            flags=[],
+            sample_rate=0.0,
+        )
+        payload = message.serialize()
+        meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+
+        processed = self.processor.process_message(payload, meta)
+
+        assert processed is not None
+        assert processed.rows[0].get("sample_weight") is None

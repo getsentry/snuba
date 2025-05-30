@@ -49,6 +49,7 @@ expression: snapshot_payload
     "received": 1679315856,
     "release": null,
     "retention_days": 90,
+    "sample_weight": null,
     "sdk_integrations": [],
     "sdk_name": "sentry-java",
     "sdk_version": "1.4.0-3ded0",
