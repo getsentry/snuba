@@ -40,7 +40,8 @@ def create_topics(
 def destroy_topics(client: AdminClient, topics: Sequence[Topic]) -> None:
     logger.info("Destroying Kafka topics...")
     for topic, future in client.delete_topics(
-        list([topic.value for topic in topics]), operation_timeout=1
+        list([KafkaTopicSpec(topic).topic_name for topic in topics]),
+        operation_timeout=1,
     ).items():
         try:
             future.result()
