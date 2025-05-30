@@ -1,0 +1,482 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>Querying Snuba &#8212; Snuba 25.6.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="The SnQL query language" href="../language/snql.html" />
+    <link rel="prev" title="Writable Storage Schema" href="../configuration/writable_storage.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="querying-snuba">
+<h1>Querying Snuba<a class="headerlink" href="#querying-snuba" title="Permalink to this heading">¶</a></h1>
+<p>This guide drives you through the process of authoring and testing a
+Snuba query.</p>
+<section id="exploring-the-snuba-data-model">
+<h2>Exploring the Snuba data model<a class="headerlink" href="#exploring-the-snuba-data-model" title="Permalink to this heading">¶</a></h2>
+<p>In order to architect a Snuba query, the first step is being able to
+know which Dataset you should query, which Entities you should select,
+and what the schema of each Entity is.</p>
+<p>For an introduction about Datasets and Entities, see the <a class="reference internal" href="../architecture/datamodel.html"><span class="doc">Snuba Data Model</span></a>
+section.</p>
+<p>Datasets can be found <a class="reference external" href="https://github.com/getsentry/snuba/blob/master/snuba/datasets/factory.py">in this module</a>.
+Each Dataset is a class that references the Entities.</p>
+<p>The list of entities in the system can be found via the <code class="docutils literal notranslate"><span class="pre">snuba</span> <span class="pre">entities</span></code>
+command:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">snuba</span> <span class="n">entities</span> <span class="nb">list</span>
+</pre></div>
+</div>
+<p>would return something like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Declared</span> <span class="n">Entities</span><span class="p">:</span>
+<span class="n">discover</span>
+<span class="n">errors</span>
+<span class="n">events</span>
+<span class="n">groups</span>
+<span class="n">groupassignee</span>
+<span class="n">groupedmessage</span>
+<span class="o">.....</span>
+</pre></div>
+</div>
+<p>Once we have found the entity we are interested into, we need to understand
+the schema and the relationship declared on that entity.
+The same command describes an Entity:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">snuba</span> <span class="n">entities</span> <span class="n">describe</span> <span class="n">groupedmessage</span>
+</pre></div>
+</div>
+<p>Would return:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Entity</span> <span class="n">groupedmessage</span>
+    <span class="n">Entity</span> <span class="n">schema</span>
+    <span class="o">--------------------------------</span>
+    <span class="n">offset</span> <span class="n">UInt64</span>
+    <span class="n">record_deleted</span> <span class="n">UInt8</span>
+    <span class="n">project_id</span> <span class="n">UInt64</span>
+    <span class="nb">id</span> <span class="n">UInt64</span>
+    <span class="n">status</span> <span class="n">Nullable</span><span class="p">(</span><span class="n">UInt8</span><span class="p">)</span>
+    <span class="n">last_seen</span> <span class="n">Nullable</span><span class="p">(</span><span class="n">DateTime</span><span class="p">)</span>
+    <span class="n">first_seen</span> <span class="n">Nullable</span><span class="p">(</span><span class="n">DateTime</span><span class="p">)</span>
+    <span class="n">active_at</span> <span class="n">Nullable</span><span class="p">(</span><span class="n">DateTime</span><span class="p">)</span>
+    <span class="n">first_release_id</span> <span class="n">Nullable</span><span class="p">(</span><span class="n">UInt64</span><span class="p">)</span>
+
+    <span class="n">Relationships</span>
+    <span class="o">--------------------------------</span>
+        <span class="n">groups</span>
+        <span class="o">--------------------------------</span>
+        <span class="n">Destination</span><span class="p">:</span> <span class="n">events</span>
+        <span class="n">Type</span><span class="p">:</span> <span class="n">LEFT</span>
+            <span class="n">Join</span> <span class="n">keys</span>
+            <span class="o">--------------------------------</span>
+            <span class="n">project_id</span> <span class="o">=</span> <span class="n">LEFT</span><span class="o">.</span><span class="n">project_id</span>
+            <span class="nb">id</span> <span class="o">=</span> <span class="n">LEFT</span><span class="o">.</span><span class="n">group_id</span>
+</pre></div>
+</div>
+<p>Which provides the list of columns with their type and the relationships to
+other entities defined in the data model.</p>
+</section>
+<section id="preparing-a-snql-query-for-snuba">
+<h2>Preparing a SnQL query for Snuba<a class="headerlink" href="#preparing-a-snql-query-for-snuba" title="Permalink to this heading">¶</a></h2>
+<p>Snuba query language is called SnQL. It is documented in the <a class="reference internal" href="../language/snql.html"><span class="doc">The SnQL query language</span></a>
+section. So this section does not go into details.</p>
+<p>There is a python sdk that can be used to build Snuba queries and it can
+be used in any Python client including Sentry. <a class="reference external" href="https://github.com/getsentry/snuba-sdk">This</a>
+is where the sdk project is documented.</p>
+<p>The query is represented as a <code class="docutils literal notranslate"><span class="pre">Query</span></code> object like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">query</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span>
+    <span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;discover&quot;</span><span class="p">,</span>
+    <span class="n">match</span><span class="o">=</span><span class="n">Entity</span><span class="p">(</span><span class="s2">&quot;events&quot;</span><span class="p">),</span>
+    <span class="n">select</span><span class="o">=</span><span class="p">[</span>
+        <span class="n">Column</span><span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">),</span>
+        <span class="n">Function</span><span class="p">(</span><span class="s2">&quot;uniq&quot;</span><span class="p">,</span> <span class="p">[</span><span class="n">Column</span><span class="p">(</span><span class="s2">&quot;event_id&quot;</span><span class="p">)],</span> <span class="s2">&quot;uniq_events&quot;</span><span class="p">),</span>
+    <span class="p">],</span>
+    <span class="n">groupby</span><span class="o">=</span><span class="p">[</span><span class="n">Column</span><span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">)],</span>
+    <span class="n">where</span><span class="o">=</span><span class="p">[</span>
+        <span class="n">Condition</span><span class="p">(</span><span class="n">Column</span><span class="p">(</span><span class="s2">&quot;timestamp&quot;</span><span class="p">),</span> <span class="n">Op</span><span class="o">.</span><span class="n">GT</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)),</span>
+        <span class="n">Condition</span><span class="p">(</span><span class="n">Column</span><span class="p">(</span><span class="s2">&quot;project_id&quot;</span><span class="p">),</span> <span class="n">Op</span><span class="o">.</span><span class="n">IN</span><span class="p">,</span> <span class="n">Function</span><span class="p">(</span><span class="s2">&quot;tuple&quot;</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])),</span>
+    <span class="p">],</span>
+    <span class="n">limit</span><span class="o">=</span><span class="n">Limit</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
+    <span class="n">offset</span><span class="o">=</span><span class="n">Offset</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+    <span class="n">granularity</span><span class="o">=</span><span class="n">Granularity</span><span class="p">(</span><span class="mi">3600</span><span class="p">),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>For simpler datasets, there may not exist an entity. In this case, we can
+query the storage directly like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">query</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span>
+    <span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;profiles&quot;</span><span class="p">,</span>
+    <span class="n">match</span><span class="o">=</span><span class="n">Storage</span><span class="p">(</span><span class="s2">&quot;profile_chunks&quot;</span><span class="p">),</span>
+    <span class="n">select</span><span class="o">=</span><span class="p">[</span>
+        <span class="n">Column</span><span class="p">(</span><span class="s2">&quot;chunk_id&quot;</span><span class="p">),</span>
+    <span class="p">],</span>
+    <span class="n">where</span><span class="o">=</span><span class="p">[</span>
+        <span class="n">Condition</span><span class="p">(</span><span class="n">Column</span><span class="p">(</span><span class="s2">&quot;start_timestamp&quot;</span><span class="p">),</span> <span class="n">Op</span><span class="o">.</span><span class="n">GT</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)),</span>
+        <span class="n">Condition</span><span class="p">(</span><span class="n">Column</span><span class="p">(</span><span class="s2">&quot;end_timestamp&quot;</span><span class="p">),</span> <span class="n">Op</span><span class="o">.</span><span class="n">LT</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)),</span>
+        <span class="n">Condition</span><span class="p">(</span><span class="n">Column</span><span class="p">(</span><span class="s2">&quot;project_id&quot;</span><span class="p">),</span> <span class="n">Op</span><span class="o">.</span><span class="n">IN</span><span class="p">,</span> <span class="n">Function</span><span class="p">(</span><span class="s2">&quot;tuple&quot;</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])),</span>
+    <span class="p">],</span>
+    <span class="n">limit</span><span class="o">=</span><span class="n">Limit</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
+    <span class="n">offset</span><span class="o">=</span><span class="n">Offset</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>More details on how to build a query are in the sdk documentation.</p>
+<p>Once the query object is ready it can be sent to Snuba.</p>
+</section>
+<section id="preparing-a-mql-query-for-snuba">
+<h2>Preparing a MQL query for Snuba<a class="headerlink" href="#preparing-a-mql-query-for-snuba" title="Permalink to this heading">¶</a></h2>
+<p>Snuba metrics query language is called MQL. It is documented in the <a class="reference internal" href="../language/mql.html"><span class="doc">The MQL query language</span></a>
+section. So this section does not go into details.</p>
+<p>Similar to SnQL, there is a python sdk that can be used to build queries</p>
+<p>The metrics query is represented as a <code class="docutils literal notranslate"><span class="pre">MetricsQuery</span></code> object like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">query</span> <span class="o">=</span> <span class="n">MetricsQuery</span><span class="p">(</span>
+    <span class="n">query</span><span class="o">=</span><span class="n">Formula</span><span class="p">(</span>
+        <span class="n">ArithmeticOperator</span><span class="o">.</span><span class="n">DIVIDE</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+        <span class="p">[</span>
+            <span class="n">Timeseries</span><span class="p">(</span>
+                <span class="n">metric</span><span class="o">=</span><span class="n">Metric</span><span class="p">(</span>
+                    <span class="n">public_name</span><span class="o">=</span><span class="s2">&quot;transaction.duration&quot;</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="n">aggregate</span><span class="o">=</span><span class="s2">&quot;sum&quot;</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="mi">1000</span><span class="p">,</span>
+        <span class="p">],</span>
+    <span class="p">),</span>
+    <span class="n">start</span><span class="o">=</span><span class="n">NOW</span><span class="p">,</span>
+    <span class="n">end</span><span class="o">=</span><span class="n">NOW</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">14</span><span class="p">),</span>
+    <span class="n">rollup</span><span class="o">=</span><span class="n">Rollup</span><span class="p">(</span><span class="n">interval</span><span class="o">=</span><span class="mi">3600</span><span class="p">,</span> <span class="n">totals</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">granularity</span><span class="o">=</span><span class="mi">3600</span><span class="p">),</span>
+    <span class="n">scope</span><span class="o">=</span><span class="n">MetricsScope</span><span class="p">(</span>
+        <span class="n">org_ids</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">project_ids</span><span class="o">=</span><span class="p">[</span><span class="mi">11</span><span class="p">],</span> <span class="n">use_case_id</span><span class="o">=</span><span class="s2">&quot;transactions&quot;</span>
+    <span class="p">),</span>
+    <span class="n">limit</span><span class="o">=</span><span class="n">Limit</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span>
+    <span class="n">offset</span><span class="o">=</span><span class="n">Offset</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>More details on how to build a query are in the sdk documentation.</p>
+<p>Once the query object is ready it can be sent to Snuba the same wasy as SnQL.</p>
+</section>
+<section id="sending-a-query-to-snuba-with-sentry">
+<h2>Sending a query to Snuba with Sentry<a class="headerlink" href="#sending-a-query-to-snuba-with-sentry" title="Permalink to this heading">¶</a></h2>
+<p>The most common use case when querying Snuba is via Sentry. This section
+explains how to build a query in the Sentry code base and send it to Snuba.</p>
+<p>Sentry imports the Snuba sdk described above. This is the recommended way
+to build Snuba queries.</p>
+<p>Once a <code class="docutils literal notranslate"><span class="pre">Query</span></code> object has been created the Snuba client api provided by
+Sentry can and should be used to send the query to Snuba.</p>
+<p>The api is in <a class="reference external" href="https://github.com/getsentry/sentry/blob/master/src/sentry/utils/snuba.py#L667">this module</a>.
+It takes care of caching, retries and allows bulk queries.</p>
+<p>The method returns a dictionary that contains the data in response and
+additional metadata:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="s2">&quot;very bad&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;uniq_events&quot;</span><span class="p">:</span> <span class="mi">2</span>
+        <span class="p">}</span>
+    <span class="p">],</span>
+    <span class="s2">&quot;meta&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;String&quot;</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;uniq_events&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;UInt64&quot;</span>
+        <span class="p">}</span>
+    <span class="p">],</span>
+    <span class="s2">&quot;timing&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="o">...</span> <span class="n">details</span> <span class="o">...</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">data</span></code> section is a list with one dictionary per row. The <code class="docutils literal notranslate"><span class="pre">meta</span></code>
+section contains the list of the columns included in the response with
+their data type as inferred by Clickhouse.</p>
+<p>More details about the structure of the timing section below.</p>
+</section>
+<section id="sending-a-test-query-through-the-web-ui">
+<h2>Sending a test query through the web UI<a class="headerlink" href="#sending-a-test-query-through-the-web-ui" title="Permalink to this heading">¶</a></h2>
+<p>Snuba has a minimal web UI you can use to send queries. You can run Snuba
+locally and the web UI will be accessible at <code class="docutils literal notranslate"><span class="pre">http://127.0.0.1:1218/[DATASET</span> <span class="pre">NAME]/snql</span></code>.</p>
+<img alt="../_images/snubaUI.png" src="../_images/snubaUI.png" />
+<p>The SnQL query should be provided (sorry, on one line only) in the <cite>query</cite>
+attribute and the structure of the response is the same discussed in the
+section above.</p>
+</section>
+<section id="sending-a-query-via-curl">
+<h2>Sending a query via curl<a class="headerlink" href="#sending-a-query-via-curl" title="Permalink to this heading">¶</a></h2>
+<p>The web ui just sends the payload as a POST. So the same result can be
+achieved with curl or any other HTTP client.</p>
+</section>
+<section id="request-and-response-formats">
+<h2>Request and response formats<a class="headerlink" href="#request-and-response-formats" title="Permalink to this heading">¶</a></h2>
+<p>The request format is the same visible in the screenshot:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">query</span></code> contains the SnQL query as a string</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dataset</span></code> is the dataset name (if not already specified in the url</p></li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">debug</span></code> makes Snuba provide exhaustive statistics in the response</dt><dd><p>including the Clickhouse query.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">consistent</span></code> forces the Clickhouse query to be executed in single</dt><dd><p>threaded mode and, in case the Clickhouse table is
+replicated, it will force Snuba to always hit the same
+node. Which can guarantee sequential consistency as
+that is the node where the consumer write by default.
+This is achieved with the <a class="reference external" href="https://clickhouse.tech/docs/en/operations/settings/settings/#load_balancing-in_order">load balancing</a>
+Clickhouse property which is set as <code class="docutils literal notranslate"><span class="pre">in_order</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">turbo</span></code> sets a sampling rate to the query defined in the <code class="docutils literal notranslate"><span class="pre">TURBO_SAMPLE_RATE</span></code></dt><dd><p>Snuba setting. It also prevents Snuba to apply the <code class="docutils literal notranslate"><span class="pre">FINAL</span></code>
+mode to the Clickhouse query in case it was needed to guarantee
+correct results after replacements.</p>
+</dd>
+</dl>
+</li>
+</ul>
+<p>Snuba can respond with 4 http codes. 200 is for a successful query,
+if the query cannot be properly validated it will be a 400. A 500 generally
+means a Clickhouse related issue (that go from timeout to connection issues)
+though there are several invalid queries that Snuba is not able to identify
+in advance still (we are removing them).
+Snuba has an internal rate limiter so 429 is also a possible return code.</p>
+<p>The response format for a successful query is the same discussed above.
+The complete version looks like this (in debug mode)</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">[],</span>
+    <span class="s2">&quot;meta&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;String&quot;</span>
+        <span class="p">}</span>
+    <span class="p">],</span>
+    <span class="s2">&quot;timing&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;timestamp&quot;</span><span class="p">:</span> <span class="mi">1621038379</span><span class="p">,</span>
+        <span class="s2">&quot;duration_ms&quot;</span><span class="p">:</span> <span class="mi">95</span><span class="p">,</span>
+        <span class="s2">&quot;marks_ms&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;cache_get&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s2">&quot;cache_set&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="s2">&quot;execute&quot;</span><span class="p">:</span> <span class="mi">39</span><span class="p">,</span>
+            <span class="s2">&quot;get_configs&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="s2">&quot;prepare_query&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+            <span class="s2">&quot;rate_limit&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="s2">&quot;validate_schema&quot;</span><span class="p">:</span> <span class="mi">34</span>
+        <span class="p">}</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;stats&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;clickhouse_table&quot;</span><span class="p">:</span> <span class="s2">&quot;errors_local&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;final&quot;</span><span class="p">:</span> <span class="n">false</span><span class="p">,</span>
+        <span class="s2">&quot;referrer&quot;</span><span class="p">:</span> <span class="s2">&quot;http://127.0.0.1:1218/events/snql&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;sample&quot;</span><span class="p">:</span> <span class="n">null</span><span class="p">,</span>
+        <span class="s2">&quot;project_rate&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="s2">&quot;project_concurrent&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="s2">&quot;global_rate&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="s2">&quot;global_concurrent&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="s2">&quot;consistent&quot;</span><span class="p">:</span> <span class="n">false</span><span class="p">,</span>
+        <span class="s2">&quot;result_rows&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="s2">&quot;result_cols&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="s2">&quot;query_id&quot;</span><span class="p">:</span> <span class="s2">&quot;f09f3f9e1c632f395792c6a4bfe7c4fe&quot;</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;SELECT (title AS _snuba_title) FROM errors_local PREWHERE equals((project_id AS _snuba_project_id), 1) WHERE equals(deleted, 0) AND greaterOrEquals((timestamp AS _snuba_timestamp), toDateTime(&#39;2021-05-01T00:00:00&#39;, &#39;Universal&#39;)) AND less(_snuba_timestamp, toDateTime(&#39;2021-05-11T00:00:00&#39;, &#39;Universal&#39;)) LIMIT 1000 OFFSET 0&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">timing</span></code> section contains the timestamp of the query and the duration. What
+is interesting is that the duration is broken down into phases: <code class="docutils literal notranslate"><span class="pre">marks_ms</span></code>.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">sql</span></code> element is the Clickhouse query.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">stats</span></code> dictionary contains the following keys</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">clickhouse_table</span></code> is the table picked by snuba during query processing</p></li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">final</span></code> tells if Snuba decided to send a FINAL query to Clickhouse which would force</dt><dd><p>Clickhouse to apply the relevant merges (for merge trees) right away.
+<a class="reference external" href="https://clickhouse.tech/docs/en/sql-reference/statements/select/from/#select-from-final">Details</a></p>
+</dd>
+</dl>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sample</span></code> is the sampling rate applied</p></li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">project_rate</span></code> is the number of request per second Snuba received for the specific</dt><dd><p>project at the time of the query</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">project_concurrent</span></code> is the number of concurrent query involving the specific project</dt><dd><p>at the time of the query.</p>
+</dd>
+</dl>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">global_rate</span></code> same as for <code class="docutils literal notranslate"><span class="pre">project_rate</span></code> but not focused on one project</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">global_concurrent</span></code> same as for <code class="docutils literal notranslate"><span class="pre">project_concurrent</span></code> but not focused on one project</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">query_id</span></code> is a unique identifier for the this query.</p></li>
+</ul>
+<p>A query validation issue would generally have this format:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;invalid_query&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Missing &gt;= condition with a datetime literal on column timestamp for entity events. Example: timestamp &gt;= toDateTime(&#39;2023-05-16 00:00&#39;)&quot;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>A Clickhouse error would have a similar structure. The <code class="docutils literal notranslate"><span class="pre">type</span></code> field will say
+<code class="docutils literal notranslate"><span class="pre">clickhouse</span></code>, the message will contain details around the exception.
+Contrarily to the query validation errors, in case of Clickhouse errors, the
+query is actually executed, so all the timing and stats details described for
+successful query are present.</p>
+</section>
+<section id="creating-a-subscription-query">
+<h2>Creating a Subscription query<a class="headerlink" href="#creating-a-subscription-query" title="Permalink to this heading">¶</a></h2>
+<p>Send the payload as a POST to  <code class="docutils literal notranslate"><span class="pre">127.0.0.1:1218/[DATASET</span> <span class="pre">NAME]/[ENTITY</span> <span class="pre">NAME]/subscriptions</span></code>.</p>
+</section>
+<section id="request-format">
+<h2>Request Format<a class="headerlink" href="#request-format" title="Permalink to this heading">¶</a></h2>
+<p>A subscription query would generally have this payload format:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;project_id&quot;</span><span class="p">:</span> <span class="mi">42</span><span class="p">,</span>
+    <span class="s2">&quot;time_window&quot;</span> <span class="p">:</span> <span class="mi">150</span><span class="p">,</span>
+    <span class="s2">&quot;resolution&quot;</span> <span class="p">:</span> <span class="mi">60</span><span class="p">,</span>
+    <span class="s2">&quot;query&quot;</span> <span class="p">:</span> <span class="s2">&quot;MATCH (events) SELECT ....&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>project_id, resolution, time_window are all specified as separate fields
+in the subscription payload by the user, alongside the query. This allows
+us to pre-build one subscription query and vary these as separate parameters.</p>
+<p>‘time_window’ becomes part of the query condition (i.e the WHERE), and the
+subscription query will look at the past ‘time_window’ seconds (as specified
+by the window) of events. For example, if ‘time_window’ = 60, the
+subscription query will select rows whose timestamp column’s values fall in
+the range of [start - 60 seconds, start) where ‘start’ is defined as
+the timestamp at which the subscription was created. As ‘time_window’
+increases, the larger the range of accepted values for the relevant
+timestamp column.</p>
+<p>‘project_id’ becomes part of the query condition, and the query will filter
+records by matching on the specified id.</p>
+<p>‘resolution’ is used to determine when the scheduler creates tasks so that
+the executor can run subscription queries. The scheduler can either schedule
+the subscription immediately, or can schedule subscriptions with
+a jitter (see JitteredTaskBuilder defintion for more details). For scheduling,
+a running timestamp is maintained and in the case of immediate scheduling,
+a subscription task is scheduled every ‘resolution’ seconds.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/snuba.svg" alt="Logo"/>
+            </a></p>
+<h1 class="logo"><a href="../index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getstarted.html">Getting started with Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/datamodel.html">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/queryprocessing.html">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration/overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Querying Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/snql.html">The SnQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/mql.html">The MQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migrations/modes.html">Snuba Migration Modes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/environment.html">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/death_queries.html">Clickhouse Queries Of Death</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/schema_design.html">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html">Profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#regular-transaction-profiling">Regular transaction profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#on-demand-profiling">On-demand profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="../configuration/writable_storage.html" title="previous chapter">Writable Storage Schema</a></li>
+      <li>Next: <a href="../language/snql.html" title="next chapter">The SnQL query language</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.1.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.13</a>
+      
+      |
+      <a href="../_sources/query/overview.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
