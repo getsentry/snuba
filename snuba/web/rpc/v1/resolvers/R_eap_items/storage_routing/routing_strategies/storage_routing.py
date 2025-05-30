@@ -167,7 +167,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
     def _decide_tier_and_query_settings(
         self, routing_decision: RoutingDecision[Tin]
-    ) -> tuple[Tier, ClickhouseQuerySettings]:
+    ) -> tuple[Tier, ClickhouseQuerySettings, bool]:
         raise NotImplementedError
 
     def __decide_tier_and_query_settings(
@@ -176,7 +176,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
         with sentry_sdk.start_span(op="decide_tier"):
             try:
                 timer.mark(_START_ESTIMATION_MARK)
-                target_tier, query_settings = self._decide_tier_and_query_settings(
+                target_tier, query_settings, can_run = self._decide_tier_and_query_settings(
                     routing_decision
                 )
                 timer.mark(_END_ESTIMATION_MARK)
@@ -188,7 +188,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                         _START_ESTIMATION_MARK, _END_ESTIMATION_MARK
                     ),
                 )
-                self.__merge_clickhouse_settings(routing_decision, query_settings)
+
             except Exception as e:
                 # log some error metrics
                 self.metrics.increment("estimation_failure")
@@ -198,6 +198,8 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                     raise e
 
             routing_decision.tier = target_tier
+            self.__merge_clickhouse_settings(routing_decision, query_settings)
+            routing_decision.can_run = can_run
 
     @final
     def __output_metrics(self, routing_decision: RoutingDecision[Tin]) -> None:

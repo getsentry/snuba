@@ -27,6 +27,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
@@ -413,31 +414,37 @@ class ResolverTimeSeriesEAPItems:
         # if the user passes it in
         assert len(in_msg.aggregations) == 0
 
-        routing_decision.use_storage_routing = True
+        if routing_decision.can_run:
 
-        query_settings = (
-            setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
-        )
-        query_settings.set_clickhouse_settings(routing_decision.clickhouse_settings)
-        query_settings.set_sampling_tier(routing_decision.tier)
+            routing_decision.use_storage_routing = True
 
-        snuba_request = _build_snuba_request(routing_decision.routing_context)
-        res = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=snuba_request,
-            timer=timer,
-        )
+            query_settings = (
+                setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
+            )
+            query_settings.set_clickhouse_settings(routing_decision.clickhouse_settings)
+            query_settings.set_sampling_tier(routing_decision.tier)
 
-        response_meta = extract_response_meta(
-            in_msg.meta.request_id,
-            in_msg.meta.debug,
-            [res],
-            [timer],
-        )
+            snuba_request = _build_snuba_request(routing_decision.routing_context)
+            res = run_query(
+                dataset=PluggableDataset(name="eap", all_entities=[]),
+                request=snuba_request,
+                timer=timer,
+            )
 
-        return TimeSeriesResponse(
-            result_timeseries=list(
-                _convert_result_timeseries(in_msg, res.result.get("data", []))
-            ),
-            meta=response_meta,
-        )
+            response_meta = extract_response_meta(
+                in_msg.meta.request_id,
+                in_msg.meta.debug,
+                [res],
+                [timer],
+            )
+
+            return TimeSeriesResponse(
+                result_timeseries=list(
+                    _convert_result_timeseries(in_msg, res.result.get("data", []))
+                ),
+                meta=response_meta,
+            )
+
+        else:
+            # until we move allocation policies into routing strategies, can_run is always true so this will never execute
+            raise AllocationPolicyViolations

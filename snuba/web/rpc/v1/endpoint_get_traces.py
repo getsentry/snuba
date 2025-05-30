@@ -44,6 +44,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import RoutingDecision
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression_eap_items,
 )
@@ -398,7 +399,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     def _execute(
         self,
         in_msg: GetTracesRequest,
-        routing_decision: RoutingDecision[GetTracesRequest] | None = None,
+        routing_decision: RoutingDecision[GetTracesRequest],
     ) -> GetTracesResponse:
         _validate_order_by(in_msg)
 

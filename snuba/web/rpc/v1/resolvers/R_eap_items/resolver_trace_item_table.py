@@ -24,6 +24,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond
@@ -393,28 +394,32 @@ class ResolverTraceItemTableEAPItems:
         metrics_backend: MetricsBackend,
         routing_decision: RoutingDecision[TraceItemTableRequest],
     ) -> TraceItemTableResponse:
-        routing_decision.use_storage_routing = True
-        query_settings = (
-            setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
-        )
-        query_settings.set_clickhouse_settings(routing_decision.clickhouse_settings)
-        query_settings.set_sampling_tier(routing_decision.tier)
+        if routing_decision.can_run:
+            routing_decision.use_storage_routing = True
+            query_settings = (
+                setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
+            )
+            query_settings.set_clickhouse_settings(routing_decision.clickhouse_settings)
+            query_settings.set_sampling_tier(routing_decision.tier)
 
-        snuba_request = _build_snuba_request(routing_decision.routing_context)
-        res = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=snuba_request,
-            timer=timer,
-        )
-        column_values = convert_results(in_msg, res.result.get("data", []))
-        response_meta = extract_response_meta(
-            in_msg.meta.request_id,
-            in_msg.meta.debug,
-            [res],
-            [timer],
-        )
-        return TraceItemTableResponse(
-            column_values=column_values,
-            page_token=_get_page_token(in_msg, column_values),
-            meta=response_meta,
-        )
+            snuba_request = _build_snuba_request(routing_decision.routing_context)
+            res = run_query(
+                dataset=PluggableDataset(name="eap", all_entities=[]),
+                request=snuba_request,
+                timer=timer,
+            )
+            column_values = convert_results(in_msg, res.result.get("data", []))
+            response_meta = extract_response_meta(
+                in_msg.meta.request_id,
+                in_msg.meta.debug,
+                [res],
+                [timer],
+            )
+            return TraceItemTableResponse(
+                column_values=column_values,
+                page_token=_get_page_token(in_msg, column_values),
+                meta=response_meta,
+            )
+        else:
+            # until we move allocation policies into routing strategies, can_run is always true so this will never execute
+            raise AllocationPolicyViolations
