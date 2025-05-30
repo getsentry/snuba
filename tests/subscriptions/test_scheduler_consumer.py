@@ -43,7 +43,7 @@ from snuba.subscriptions import scheduler_consumer
 from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer
 from snuba.subscriptions.types import Interval
 from snuba.subscriptions.utils import Tick
-from snuba.utils.manage_topics import create_topics
+from snuba.utils.manage_topics import create_topics, destroy_topics
 from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
     get_default_kafka_configuration,
@@ -58,20 +58,25 @@ commit_codec = CommitCodec()
 
 @pytest.mark.redis_db
 def test_scheduler_consumer(tmpdir: Path) -> None:
-    settings.TOPIC_PARTITION_COUNTS = {"events": 2}
+    settings.KAFKA_TOPIC_MAP = {
+        "events": "events-test",
+        "snuba-commit-log": "snuba-commit-log-test",
+    }
     importlib.reload(scheduler_consumer)
 
     admin_client = AdminClient(get_default_kafka_configuration())
-    create_topics(admin_client, [SnubaTopic.COMMIT_LOG])
+    create_topics(admin_client, [SnubaTopic.EVENTS], 2)
+    create_topics(admin_client, [SnubaTopic.COMMIT_LOG], 1)
 
     metrics_backend = TestingMetricsBackend()
     entity_name = "events"
-    entity = get_entity(EntityKey(entity_name))
+    entity_key = EntityKey(entity_name)
+    entity = get_entity(entity_key)
     storage = entity.get_writable_storage()
     assert storage is not None
     stream_loader = storage.get_table_writer().get_stream_loader()
 
-    commit_log_topic = Topic("snuba-commit-log")
+    commit_log_topic = Topic("snuba-commit-log-test")
 
     mock_scheduler_producer = mock.Mock()
 
@@ -79,7 +84,6 @@ def test_scheduler_consumer(tmpdir: Path) -> None:
     from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
     from snuba.subscriptions.store import RedisSubscriptionDataStore
 
-    entity_key = EntityKey(entity_name)
     partition_index = 0
 
     store = RedisSubscriptionDataStore(
@@ -157,17 +161,26 @@ def test_scheduler_consumer(tmpdir: Path) -> None:
     assert (tmpdir / "health.txt").exists()
     assert mock_scheduler_producer.produce.call_count == 2
 
-    settings.TOPIC_PARTITION_COUNTS = {}
+    destroy_topics(admin_client, [SnubaTopic.EVENTS])
+    settings.KAFKA_TOPIC_MAP = {}
 
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_scheduler_consumer_rpc_subscriptions(tmpdir: Path) -> None:
-    settings.TOPIC_PARTITION_COUNTS = {"snuba-spans": 2}
+    commit_log_topic_name_physical = "snuba-eap-spans-commit-log-test"
+    data_topic_name_physical = "snuba-spans-test"
+    followed_consumer_group = "eap_items_consumers"
+
+    settings.KAFKA_TOPIC_MAP = {
+        "snuba-spans": data_topic_name_physical,
+        "snuba-eap-spans-commit-log": commit_log_topic_name_physical,
+    }
     importlib.reload(scheduler_consumer)
 
     admin_client = AdminClient(get_default_kafka_configuration())
-    create_topics(admin_client, [SnubaTopic.EAP_SPANS_COMMIT_LOG])
+    create_topics(admin_client, [SnubaTopic.SPANS], 2)
+    create_topics(admin_client, [SnubaTopic.EAP_SPANS_COMMIT_LOG], 1)
 
     metrics_backend = TestingMetricsBackend()
     entity_name = "eap_items_span"
@@ -176,7 +189,8 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: Path) -> None:
     assert storage is not None
     stream_loader = storage.get_table_writer().get_stream_loader()
 
-    commit_log_topic = Topic("snuba-eap-spans-commit-log")
+    data_topic = Topic(data_topic_name_physical)
+    commit_log_topic = Topic(commit_log_topic_name_physical)
 
     mock_scheduler_producer = mock.Mock()
 
@@ -213,7 +227,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: Path) -> None:
     builder = scheduler_consumer.SchedulerBuilder(
         entity_name,
         str(uuid.uuid1().hex),
-        "eap_items_span",
+        followed_consumer_group,
         [],
         mock_scheduler_producer,
         "latest",
@@ -247,8 +261,8 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: Path) -> None:
             commit_log_topic,
             payload=commit_codec.encode(
                 Commit(
-                    "eap_items_span",
-                    Partition(commit_log_topic, partition),
+                    followed_consumer_group,
+                    Partition(data_topic, partition),
                     offset,
                     ts,
                     ts,
@@ -275,7 +289,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: Path) -> None:
     time_series_request = payload["task"]["data"]["time_series_request"]
     TimeSeriesRequest().ParseFromString(base64.b64decode(time_series_request))
 
-    settings.TOPIC_PARTITION_COUNTS = {}
+    settings.KAFKA_TOPIC_MAP = {}
 
 
 def test_tick_time_shift() -> None:
