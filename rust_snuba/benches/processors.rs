@@ -102,7 +102,7 @@ fn create_factory(
         batch_write_timeout: None,
         custom_envoy_request_timeout: None,
         join_timeout_ms: None,
-        health_check_consumer_groups: vec![],
+        health_check: "arroyo".to_string(),
     };
     Box::new(factory)
 }

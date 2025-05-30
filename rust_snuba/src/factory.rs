@@ -60,7 +60,7 @@ pub struct ConsumerStrategyFactory {
     pub batch_write_timeout: Option<Duration>,
     pub custom_envoy_request_timeout: Option<u64>,
     pub join_timeout_ms: Option<u64>,
-    pub health_check_consumer_groups: Vec<String>,
+    pub health_check: String,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
@@ -240,10 +240,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         );
         if let Some(path) = &self.health_check_file {
             {
-                if self
-                    .health_check_consumer_groups
-                    .contains(&self.physical_consumer_group)
-                {
+                if self.health_check == "snuba" {
                     tracing::info!(
                         "Using Snuba HealthCheck for consumer group: {}",
                         self.physical_consumer_group
