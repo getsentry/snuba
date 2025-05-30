@@ -15,15 +15,12 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     ExtrapolationMode,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
-
-from snuba import query
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -35,12 +32,12 @@ from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
-from snuba.web.rpc import RoutingDecision, Tin
+from snuba.web.rpc import Tin
 from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
@@ -52,7 +49,6 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import RoutingContext
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     ExtrapolationContext,
     aggregation_to_expression,
@@ -60,8 +56,9 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_confidence_interval_column,
     get_count_column,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.sampling_in_storage_util import (
-    run_query_to_correct_tier,
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import (
+    RoutingContext,
+    RoutingDecision,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
     attribute_key_to_expression_eap_items,
@@ -410,13 +407,13 @@ class ResolverTimeSeriesEAPItems:
         in_msg: TimeSeriesRequest,
         timer: Timer,
         metrics_backend: MetricsBackend,
-        routing_decision: RoutingDecision[TimeSeriesRequest] | None = None,
+        routing_decision: RoutingDecision[TimeSeriesRequest],
     ) -> TimeSeriesResponse:
         # aggregations field is deprecated, it gets converted to request.expressions
         # if the user passes it in
         assert len(in_msg.aggregations) == 0
 
-        assert routing_decision is not None
+        routing_decision.use_storage_routing = True
 
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()

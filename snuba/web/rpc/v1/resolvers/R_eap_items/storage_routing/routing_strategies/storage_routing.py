@@ -1,18 +1,6 @@
 import os
 import uuid
-from dataclasses import dataclass, field
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Generic,
-    Optional,
-    Type,
-    TypeAlias,
-    Union,
-    cast,
-    final,
-)
+from typing import Any, Callable, Dict, Optional, Type, TypeAlias, Union, cast, final
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -25,18 +13,13 @@ from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from snuba import environment, settings, state
 from snuba.attribution import AppID
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.downsampled_storage_tiers import Tier
-from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.state import record_query
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 from snuba.web import QueryResult
-from snuba.web.query import run_query
 from snuba.web.rpc import Tin
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import (
     RoutingContext,

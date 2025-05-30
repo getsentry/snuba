@@ -20,14 +20,18 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
+from snuba.web.rpc import Tin
 from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
     treeify_or_and_conditions,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import (
+    RoutingContext,
+    RoutingDecision,
+)
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
     ClickhouseQuerySettings,
-    RoutingContext,
 )
 
 
@@ -61,7 +65,10 @@ def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
 
 
 class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
-    def get_ingested_items_for_timerange(self, routing_context: RoutingContext) -> int:
+    def get_ingested_items_for_timerange(
+        self, routing_context: RoutingContext[Tin]
+    ) -> int:
+        in_msg_meta = routing_context.in_msg.meta  # type: ignore
         entity = Entity(
             key=EntityKey("outcomes"),
             schema=get_entity(EntityKey("outcomes")).get_data_model(),
@@ -76,16 +83,16 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                 )
             ],
             condition=and_cond(
-                project_id_and_org_conditions(routing_context.in_msg.meta),
+                project_id_and_org_conditions(in_msg_meta),
                 timestamp_in_range_condition(
-                    routing_context.in_msg.meta.start_timestamp.seconds,
-                    routing_context.in_msg.meta.end_timestamp.seconds,
+                    in_msg_meta.start_timestamp.seconds,
+                    in_msg_meta.end_timestamp.seconds,
                 ),
                 f.equals(column("outcome"), Outcome.ACCEPTED),
                 f.equals(
                     column("category"),
                     _ITEM_TYPE_TO_OUTCOME.get(
-                        routing_context.in_msg.meta.trace_item_type,
+                        in_msg_meta.trace_item_type,
                         OutcomeCategory.SPAN_INDEXED,
                     ),
                 ),
@@ -97,11 +104,11 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             query=query,
             query_settings=HTTPQuerySettings(),
             attribution_info=AttributionInfo(
-                referrer=routing_context.in_msg.meta.referrer,
+                referrer=in_msg_meta.referrer,
                 team="eap",
                 feature="eap",
                 tenant_ids={
-                    "organization_id": routing_context.in_msg.meta.organization_id,
+                    "organization_id": in_msg_meta.organization_id,
                     "referrer": "eap.route_outcomes",
                 },
                 app_id=AppID("eap"),
@@ -138,28 +145,33 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         )
 
     def _decide_tier_and_query_settings(
-        self, routing_context: RoutingContext
+        self, routing_decision: RoutingDecision[Tin]
     ) -> tuple[Tier, ClickhouseQuerySettings]:
-        if self._is_highest_accuracy_mode(routing_context):
+        if self._is_highest_accuracy_mode(routing_decision.routing_context):
             return Tier.TIER_1, {}
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
-        start_ts = routing_context.in_msg.meta.start_timestamp.seconds
-        end_ts = routing_context.in_msg.meta.end_timestamp.seconds
+        in_msg_meta = routing_decision.routing_context.in_msg.meta  # type: ignore
+        start_ts = in_msg_meta.start_timestamp.seconds
+        end_ts = in_msg_meta.end_timestamp.seconds
         time_range_secs = end_ts - start_ts
         min_timerange_to_query_outcomes = self._get_min_timerange_to_query_outcomes()
         if time_range_secs < min_timerange_to_query_outcomes:
-            routing_context.extra_info[
+            routing_decision.routing_context.extra_info[
                 "min_timerange_to_query_outcomes"
             ] = min_timerange_to_query_outcomes
-            routing_context.extra_info["time_range_secs"] = time_range_secs
+            routing_decision.routing_context.extra_info[
+                "time_range_secs"
+            ] = time_range_secs
             return Tier.TIER_1, {}
 
         # see how many items this combo of orgs/projects has actually ingested for the timerange,
         # downsample if it's too many
-        ingested_items = self.get_ingested_items_for_timerange(routing_context)
-        routing_context.extra_info["ingested_items"] = ingested_items
+        ingested_items = self.get_ingested_items_for_timerange(
+            routing_decision.routing_context
+        )
+        routing_decision.routing_context.extra_info["ingested_items"] = ingested_items
         max_items_before_downsampling = self._get_max_items_before_downsampling()
-        routing_context.extra_info[
+        routing_decision.routing_context.extra_info[
             "max_items_before_downsampling"
         ] = max_items_before_downsampling
         if (

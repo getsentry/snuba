@@ -7,13 +7,14 @@ import sentry_sdk
 
 from snuba.state import get_config
 from snuba.web.rpc import Tin
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import (
+    RoutingContext,
+)
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.linear_bytes_scanned_storage_routing import (
     LinearBytesScannedRoutingStrategy,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
-    RoutedRequestType,
-    RoutingContext,
 )
 
 _FLOATING_POINT_TOLERANCE = 1e-6
@@ -86,9 +87,7 @@ _DEFAULT_STORAGE_ROUTING_CONFIG = StorageRoutingConfig(
 
 
 class RoutingStrategySelector:
-    def get_storage_routing_config(
-        self, in_msg: Tin
-    ) -> StorageRoutingConfig:
+    def get_storage_routing_config(self, in_msg: Tin) -> StorageRoutingConfig:
         organization_id = str(in_msg.meta.organization_id)  # type: ignore
         try:
             overrides = json.loads(

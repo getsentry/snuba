@@ -11,7 +11,11 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
+    RequestMeta,
+    TraceItemType,
+)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.attribution.appid import AppID
@@ -27,14 +31,12 @@ from snuba.query.dsl import column as snuba_column
 from snuba.query.dsl import literal, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
-from snuba.web.rpc import RoutingDecision, Tin
-from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
-
+from snuba.web.rpc import Tin
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     base_conditions_and,
@@ -47,7 +49,6 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import RoutingContext
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     aggregation_to_expression,
     get_average_sample_rate_column,
@@ -55,15 +56,13 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.sampling_in_storage_util import (
-    run_query_to_correct_tier,
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import (
+    RoutingContext,
+    RoutingDecision,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    apply_virtual_columns,
     apply_virtual_columns_eap_items,
-    attribute_key_to_expression,
     attribute_key_to_expression_eap_items,
-    use_eap_items_table,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -392,9 +391,9 @@ class ResolverTraceItemTableEAPItems:
         in_msg: TraceItemTableRequest,
         timer: Timer,
         metrics_backend: MetricsBackend,
-        routing_decision: RoutingDecision[TraceItemTableRequest] | None = None,
+        routing_decision: RoutingDecision[TraceItemTableRequest],
     ) -> TraceItemTableResponse:
-        assert routing_decision is not None
+        routing_decision.use_storage_routing = True
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )

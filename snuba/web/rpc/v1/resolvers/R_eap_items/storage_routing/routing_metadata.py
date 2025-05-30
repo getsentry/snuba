@@ -39,6 +39,7 @@ class RoutingContext(Generic[Tin]):
 @dataclass
 class RoutingDecision(Generic[Tin]):
     routing_context: RoutingContext[Tin]
+    use_storage_routing: bool = False
     strategy: BaseRoutingStrategy | None = None
     tier: Tier = Tier.TIER_1
     clickhouse_settings: dict[str, str] = {}

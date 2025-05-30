@@ -1,10 +1,8 @@
 import os
 from bisect import bisect_left
-from dataclasses import field
-from typing import Any, Generic, List, Optional, Tuple, Type, TypeVar, cast, final
+from typing import Generic, List, Tuple, Type, TypeVar, cast, final
 
 import sentry_sdk
-from attr import dataclass
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
@@ -12,7 +10,6 @@ from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba import environment, settings, state
-from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -21,7 +18,7 @@ from snuba.utils.registered_class import (
     RegisteredClass,
     import_submodules_in_directory,
 )
-from snuba.web import QueryException, QueryResult
+from snuba.web import QueryException
 from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     RPCRequestException,
@@ -30,8 +27,7 @@ from snuba.web.rpc.common.exceptions import (
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.load_retriever import (
     get_cluster_loadinfo,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
-    BaseRoutingStrategy,
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_metadata import (
     RoutingContext,
     RoutingDecision,
 )
@@ -85,9 +81,7 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
             ),
         )
 
-    def resolve(
-        self, in_msg: Tin, routing_decision: RoutingDecision[Tin]
-    ) -> Tout:
+    def resolve(self, in_msg: Tin, routing_decision: RoutingDecision[Tin]) -> Tout:
         raise NotImplementedError
 
 
@@ -259,9 +253,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         """Override this for any pre-processing/logging before the _execute method"""
         pass
 
-    def _execute(
-        self, in_msg: Tin, routing_decision: RoutingDecision[Tin]
-    ) -> Tout:
+    def _execute(self, in_msg: Tin, routing_decision: RoutingDecision[Tin]) -> Tout:
         raise NotImplementedError
 
     def __after_execute(
@@ -273,8 +265,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     ) -> Tout:
         try:
             res = self._after_execute(in_msg, out_msg, error, routing_decision)
-            if routing_decision.strategy is not None:
-                routing_decision.strategy.__output_metrics(routing_decision)
+            # this is because not all endpoints use storage routing, so only endpoints that use storage routing will have this flag set to True
+            if routing_decision.use_storage_routing:
+                routing_decision.strategy.__output_metrics(routing_decision)  # type: ignore
             self._timer.mark("rpc_end")
             self._timer.send_metrics_to(self.metrics)
             if error is not None:
