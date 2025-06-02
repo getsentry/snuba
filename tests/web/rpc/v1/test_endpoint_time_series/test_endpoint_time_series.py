@@ -1748,13 +1748,8 @@ class TestTimeSeriesApi(BaseApiTest):
         }
 
         message = ParseDict(query, TimeSeriesRequest())
-        result = EndpointTimeSeries().execute(message)
-        data_points = result.result_timeseries[0].data_points
-        for i in range(30):
-            assert not data_points[i].data_present
-
-        for i in range(30, 60):
-            assert data_points[i].data_present
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTimeSeries().execute(message)
 
 
 class TestUtils:

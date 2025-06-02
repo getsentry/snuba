@@ -9,13 +9,18 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     Expression,
     TimeSeriesRequest,
 )
+from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 from sentry_protos.snuba.v1.formula_pb2 import Literal
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeAggregation
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeAggregation,
+    AttributeKey,
+)
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
-class TimeSeriesRequestVisitor(ABC):
+class RequestVisitor(ABC):
     def visit(self, node: Message) -> None:
         method_name = "visit_" + type(node).__name__
         visitor = getattr(self, method_name, self.generic_visit)
@@ -25,7 +30,7 @@ class TimeSeriesRequestVisitor(ABC):
         raise NotImplementedError(f"No visit_{type(node).__name__} method")
 
 
-class ValidateAliasVisitor(TimeSeriesRequestVisitor):
+class ValidateAliasVisitor(RequestVisitor):
     """
     This visitor validates that all top level expression labels are unique.
     It also adds default labels to top-level expressions that dont have them.
@@ -55,7 +60,7 @@ class ValidateAliasVisitor(TimeSeriesRequestVisitor):
                 self.expression_labels.add(new_label)
 
 
-class RemoveInnerExpressionLabelsVisitor(TimeSeriesRequestVisitor):
+class RemoveInnerExpressionLabelsVisitor(RequestVisitor):
     """
     Removes all labels inside expressions except for the top-level expression label.
     """
@@ -86,7 +91,7 @@ class RemoveInnerExpressionLabelsVisitor(TimeSeriesRequestVisitor):
         return
 
 
-class AddAggregateLabelsVisitor(TimeSeriesRequestVisitor):
+class AddAggregateLabelsVisitor(RequestVisitor):
     """
     Adds a label to aggregate and conditional aggregate expressions, that is the same as the label of
     the expression.
@@ -115,7 +120,33 @@ class AddAggregateLabelsVisitor(TimeSeriesRequestVisitor):
         node.label = self.current_label
 
 
+class RejectTimestampAsStringVisitor(RequestVisitor):
+    def visit_TraceItemTableRequest(self, node: TraceItemTableRequest) -> None:
+        self.visit(node.filter)
+
+    def visit_TimeSeriesRequest(self, node: TimeSeriesRequest) -> None:
+        self.visit(node.filter)
+
+    def visit_TraceItemFilter(self, node: TraceItemFilter):
+        if node.HasField("and_filter"):
+            for f in node.and_filter.filters:
+                self.visit(f)
+        elif node.HasField("or_filter"):
+            for f in node.or_filter.filters:
+                self.visit(f)
+        elif node.HasField("not_filter"):
+            for f in node.not_filter.filters:
+                self.visit(f)
+        elif node.HasField("comparison_filter"):
+            k = node.comparison_filter.key
+            if k.name == "sentry.timestamp" and k.type == AttributeKey.TYPE_STRING:
+                raise BadSnubaRPCRequestException(
+                    "sentry.timestamp can only be compared to TYPE_INT or TYPE_DOUBLE, got TYPE_STRING"
+                )
+
+
 def preprocess_expression_labels(msg: TimeSeriesRequest) -> None:
+    RejectTimestampAsStringVisitor().visit(msg)
     ValidateAliasVisitor().visit(msg)
     RemoveInnerExpressionLabelsVisitor().visit(msg)
 
