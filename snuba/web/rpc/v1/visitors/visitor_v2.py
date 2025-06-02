@@ -127,7 +127,7 @@ class RejectTimestampAsStringVisitor(RequestVisitor):
     def visit_TimeSeriesRequest(self, node: TimeSeriesRequest) -> None:
         self.visit(node.filter)
 
-    def visit_TraceItemFilter(self, node: TraceItemFilter):
+    def visit_TraceItemFilter(self, node: TraceItemFilter) -> None:
         if node.HasField("and_filter"):
             for f in node.and_filter.filters:
                 self.visit(f)
