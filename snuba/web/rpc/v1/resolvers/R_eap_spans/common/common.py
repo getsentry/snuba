@@ -92,16 +92,6 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
     AttributeKey.Type.TYPE_BOOLEAN: "attributes_float",
 }
 
-# We have renamed some attributes in eap_items, so to avoid breaking changes we need to map the old names to the new names
-ATTRIBUTE_MAPPINGS: Final[Mapping[str, str]] = {
-    "sentry.name": "sentry.raw_description",
-    "sentry.description": "sentry.normalized_description",
-    "sentry.span_id": "sentry.item_id",
-    "sentry.segment_name": "sentry.transaction",
-    "sentry.start_timestamp": "sentry.start_timestamp_precise",
-    "sentry.end_timestamp": "sentry.end_timestamp_precise",
-}
-
 
 def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
     alias = attr_key.name + "_" + AttributeKey.Type.Name(attr_key.type)
@@ -112,13 +102,12 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
             f"attribute key {attr_key.name} must have a type specified"
         )
 
-    converted_attr_name = ATTRIBUTE_MAPPINGS.get(attr_key.name, attr_key.name)
-    if converted_attr_name in NORMALIZED_COLUMNS_EAP_ITEMS:
-        if attr_key.type not in NORMALIZED_COLUMNS_EAP_ITEMS[converted_attr_name]:
+    if attr_key.name in NORMALIZED_COLUMNS_EAP_ITEMS:
+        if attr_key.type not in NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name]:
             formatted_attribute_types = ", ".join(
                 map(
                     AttributeKey.Type.Name,
-                    NORMALIZED_COLUMNS_EAP_ITEMS[converted_attr_name],
+                    NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name],
                 )
             )
             raise BadSnubaRPCRequestException(
@@ -127,7 +116,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
 
         if attr_key.name in {"sentry.span_id", "sentry.item_id"}:
             return column(
-                converted_attr_name[len(COLUMN_PREFIX) :],
+                attr_key.name[len(COLUMN_PREFIX) :],
                 alias=alias,
             )
         elif attr_key.name == "sentry.sampling_factor":
@@ -138,7 +127,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
             )
 
         return f.CAST(
-            column(converted_attr_name[len(COLUMN_PREFIX) :]),
+            column(attr_key.name[len(COLUMN_PREFIX) :]),
             PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
             alias=alias,
         )
@@ -148,7 +137,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
             return f.CAST(
                 SubscriptableReference(
                     column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
-                    key=literal(converted_attr_name),
+                    key=literal(attr_key.name),
                     alias=None,
                 ),
                 "Nullable(Boolean)",
@@ -158,7 +147,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
             return f.CAST(
                 SubscriptableReference(
                     column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
-                    key=literal(converted_attr_name),
+                    key=literal(attr_key.name),
                     alias=None,
                 ),
                 "Nullable(Int64)",
@@ -166,7 +155,7 @@ def attribute_key_to_expression_eap_items(attr_key: AttributeKey) -> Expression:
             )
         return SubscriptableReference(
             column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]),
-            key=literal(converted_attr_name),
+            key=literal(attr_key.name),
             alias=alias,
         )
 

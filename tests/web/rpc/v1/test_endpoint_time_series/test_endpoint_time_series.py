@@ -39,7 +39,6 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state import set_config
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -1069,7 +1068,10 @@ class TestTimeSeriesApi(BaseApiTest):
                 ),
             ],
             group_by=[
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.name"),
+                AttributeKey(
+                    type=AttributeKey.TYPE_STRING,
+                    name="sentry.raw_description",
+                ),
             ],
             granularity_secs=granularity_secs,
         )
@@ -1081,7 +1083,9 @@ class TestTimeSeriesApi(BaseApiTest):
         ]
         expected_timeseries = TimeSeries(
             label="sum(test_metric)",
-            group_by_attributes={"sentry.name": "/api/0/relays/projectconfigs/"},
+            group_by_attributes={
+                "sentry.raw_description": "/api/0/relays/projectconfigs/",
+            },
             buckets=expected_buckets,
             data_points=[
                 DataPoint(data=300, data_present=True, sample_count=300)
@@ -1484,7 +1488,6 @@ class TestTimeSeriesApi(BaseApiTest):
         This test ensures that duplicate labels in top level expressions
         raises exception
         """
-        set_config("enable_clear_labels_eap", 1)
         granularity_secs = 3600
         query_duration = granularity_secs * 1
         message = TimeSeriesRequest(
@@ -1527,7 +1530,6 @@ class TestTimeSeriesApi(BaseApiTest):
         This test ensures that duplicate labels across different expressions
         doesnt cause incorrect behavior
         """
-        set_config("enable_clear_labels_eap", 1)
         granularity_secs = 30
         query_duration = granularity_secs * 4
         metric1_value = 3
@@ -1648,7 +1650,6 @@ class TestTimeSeriesApi(BaseApiTest):
         ensure that when the label of the aggregate differs from the label of the expression,
         it still works
         """
-        set_config("enable_clear_labels_eap", 1)
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 300
         query_duration = 60 * 30

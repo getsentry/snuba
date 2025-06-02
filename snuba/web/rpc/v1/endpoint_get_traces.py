@@ -214,7 +214,7 @@ def _attribute_to_expression(
             return f.cast(
                 f.min(
                     _get_attribute_expression(
-                        "sentry.start_timestamp",
+                        "sentry.start_timestamp_precise",
                         AttributeKey.Type.TYPE_DOUBLE,
                         request_meta,
                     )
@@ -226,7 +226,7 @@ def _attribute_to_expression(
             return f.cast(
                 f.max(
                     _get_attribute_expression(
-                        "sentry.end_timestamp",
+                        "sentry.end_timestamp_precise",
                         AttributeKey.Type.TYPE_DOUBLE,
                         request_meta,
                     )
@@ -240,7 +240,7 @@ def _attribute_to_expression(
             return f.countIf(*conditions, alias=alias)
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
             return _get_root_span_attribute(
-                "sentry.name", AttributeKey.Type.TYPE_STRING
+                "sentry.raw_description", AttributeKey.Type.TYPE_STRING
             )
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS:
             return _get_root_span_attribute(
@@ -252,7 +252,7 @@ def _attribute_to_expression(
             )
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_NAME:
             return _get_earliest_span_attribute(
-                "sentry.name", AttributeKey.Type.TYPE_STRING
+                "sentry.raw_description", AttributeKey.Type.TYPE_STRING
             )
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_PROJECT_ID:
             return _get_earliest_span_attribute(
@@ -264,7 +264,7 @@ def _attribute_to_expression(
             )
         elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN:
             return _get_earliest_frontend_span_attribute(
-                "sentry.name", AttributeKey.Type.TYPE_STRING
+                "sentry.raw_description", AttributeKey.Type.TYPE_STRING
             )
         elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_PROJECT_ID:
             return _get_earliest_frontend_span_attribute(

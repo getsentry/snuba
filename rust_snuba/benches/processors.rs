@@ -101,6 +101,8 @@ fn create_factory(
         stop_at_timestamp: None,
         batch_write_timeout: None,
         custom_envoy_request_timeout: None,
+        join_timeout_ms: None,
+        health_check: "arroyo".to_string(),
     };
     Box::new(factory)
 }
