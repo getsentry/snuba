@@ -43,7 +43,7 @@ from snuba.subscriptions import scheduler_consumer
 from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer
 from snuba.subscriptions.types import Interval
 from snuba.subscriptions.utils import Tick
-from snuba.utils.manage_topics import create_topics, destroy_topics
+from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
     get_default_kafka_configuration,
@@ -59,7 +59,7 @@ commit_codec = CommitCodec()
 @pytest.mark.redis_db
 def test_scheduler_consumer(tmpdir: Path) -> None:
     settings.KAFKA_TOPIC_MAP = {
-        "events": "events-test",
+        "events": "events-scheduler-consumer-test",
         "snuba-commit-log": "snuba-commit-log-test",
     }
     importlib.reload(scheduler_consumer)
@@ -161,8 +161,8 @@ def test_scheduler_consumer(tmpdir: Path) -> None:
     assert (tmpdir / "health.txt").exists()
     assert mock_scheduler_producer.produce.call_count == 2
 
-    destroy_topics(admin_client, [SnubaTopic.EVENTS])
     settings.KAFKA_TOPIC_MAP = {}
+    del stream_loader.get_default_topic_spec().partitions_number
 
 
 @pytest.mark.clickhouse_db
