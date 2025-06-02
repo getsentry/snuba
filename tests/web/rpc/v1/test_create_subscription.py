@@ -194,6 +194,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         super().setup_method(test_method)
         admin_client = AdminClient(get_default_kafka_configuration())
         create_topics(admin_client, [SnubaTopic.SPANS])
+        create_topics(admin_client, [SnubaTopic.ITEMS])
 
     def test_create_valid_subscription(self) -> None:
         store_spans_timeseries(
