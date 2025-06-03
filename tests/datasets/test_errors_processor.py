@@ -1059,7 +1059,7 @@ class TestErrorsProcessor:
 
         assert processed is not None
         assert len(processed.rows) == 1
-        assert processed.rows[0].get("sample_weight") == (1 / sample_rate)
+        assert processed.rows[0].get("sample_weight") == pytest.approx(1 / sample_rate)
 
     def test_errors_sample_weight_with_no_sample_rate(self) -> None:
         timestamp, recieved = self.__get_timestamps()
