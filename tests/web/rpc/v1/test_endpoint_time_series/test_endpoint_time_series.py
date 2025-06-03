@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 from clickhouse_driver.errors import ServerException
+from google.protobuf.json_format import ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
@@ -1702,6 +1703,58 @@ class TestTimeSeriesApi(BaseApiTest):
                 ],
             ),
         ]
+
+    def test_filter_on_timestamp_string(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+
+        query = {
+            "expressions": [
+                {
+                    "conditionalAggregation": {
+                        "aggregate": "FUNCTION_SUM",
+                        "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED",
+                        "key": {"name": "test_metric", "type": "TYPE_DOUBLE"},
+                        "label": "sum(test_metric)",
+                    },
+                    "label": "sum(test_metric)",
+                }
+            ],
+            "filter": {
+                "comparisonFilter": {
+                    "key": {
+                        "name": "sentry.timestamp",
+                        "type": "TYPE_STRING",
+                    },
+                    "op": "OP_GREATER_THAN_OR_EQUALS",
+                    "value": {
+                        "valStr": (BASE_TIME + timedelta(minutes=30)).isoformat()
+                    },
+                }
+            },
+            "granularitySecs": "60",
+            "meta": {
+                "downsampledStorageConfig": {"mode": "MODE_NORMAL"},
+                "endTimestamp": (BASE_TIME + timedelta(hours=1)).isoformat(),
+                "organizationId": "1",
+                "projectIds": [
+                    "1",
+                ],
+                "referrer": "api.dashboards.widget.area-chart",
+                "requestId": "4da24e8f-b4a0-413f-835a-01dc3bf063d8",
+                "startTimestamp": BASE_TIME.isoformat(),
+                "traceItemType": "TRACE_ITEM_TYPE_SPAN",
+            },
+        }
+
+        message = ParseDict(query, TimeSeriesRequest())
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTimeSeries().execute(message)
 
 
 class TestUtils:
