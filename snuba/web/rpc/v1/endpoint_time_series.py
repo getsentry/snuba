@@ -116,6 +116,7 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
 
     def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
         # TODO: Move this to base
+        preprocess_expression_labels(in_msg)
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )
