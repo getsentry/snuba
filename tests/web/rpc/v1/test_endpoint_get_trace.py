@@ -21,10 +21,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.v1.endpoint_get_trace import EndpointGetTrace
-from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_get_trace import (
-    _value_to_attribute,
-)
+from snuba.web.rpc.v1.endpoint_get_trace import EndpointGetTrace, _value_to_attribute
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import SERVER_NAME, gen_item_message
