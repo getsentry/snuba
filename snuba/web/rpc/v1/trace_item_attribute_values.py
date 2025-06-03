@@ -41,7 +41,7 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
 
     conditions: list[Expression] = [
         f.has(
-            column("_hash_map_string"), getattr(attribute_key, "key", request.key.name)
+            column("attributes_string"), getattr(attribute_key, "key", request.key.name)
         ),
     ]
     if request.meta.trace_item_type:
@@ -69,7 +69,7 @@ def _build_query(
         SELECT attributes_string_38['sentry.description'] as attr_value
         FROM eap_items_1_dist
         WHERE
-        has(_hash_map_string_38, cityHash64('sentry.description'))
+        has(attributes_string_38, cityHash64('sentry.description'))
         AND attributes_string_38['sentry.description'] LIKE '%django.middleware%'
         AND project_id = 1 AND organization_id=1 AND item_type=1
         AND less(timestamp, toDateTime(1741910400))
