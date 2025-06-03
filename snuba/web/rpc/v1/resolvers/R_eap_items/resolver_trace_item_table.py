@@ -44,12 +44,12 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.sampling_in_storage_util import (
-    run_query_to_correct_tier,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     apply_virtual_columns_eap_items,
     attribute_key_to_expression_eap_items,
+)
+from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.sampling_in_storage_util import (
+    run_query_to_correct_tier,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -354,7 +354,10 @@ class ResolverTraceItemTableEAPItems:
         )
 
         res = run_query_to_correct_tier(
-            in_msg, query_settings, timer, build_query  # type: ignore
+            in_msg,
+            query_settings,
+            timer,
+            build_query,  # type: ignore
         )
         column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(

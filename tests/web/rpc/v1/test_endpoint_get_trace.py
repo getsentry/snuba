@@ -22,7 +22,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_get_trace import EndpointGetTrace
-from snuba.web.rpc.v1.resolvers.R_eap_spans.resolver_get_trace import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_get_trace import (
     _value_to_attribute,
 )
 from tests.base import BaseApiTest

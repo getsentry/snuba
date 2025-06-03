@@ -38,23 +38,6 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
     "sentry.end_timestamp",
 }
 
-# These are attributes that were not stored in attr_str_ or attr_num_ in eap_spans because they were stored in columns.
-# Since we store these in the attribute columns in eap_items, we need to exclude them in endpoints that don't expect them to be in the attribute columns.
-ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS: Final[Set[str]] = {
-    "sentry.raw_description",
-    "sentry.transaction",
-    "sentry.start_timestamp_precise",
-    "sentry.end_timestamp_precise",
-    "sentry.duration_ms",
-    "sentry.event_id",
-    "sentry.exclusive_time_ms",
-    "sentry.is_segment",
-    "sentry.parent_span_id",
-    "sentry.profile_id",
-    "sentry.received",
-    "sentry.segment_id",
-}
-
 COLUMN_PREFIX: str = "sentry."
 
 NORMALIZED_COLUMNS_EAP_ITEMS: Final[

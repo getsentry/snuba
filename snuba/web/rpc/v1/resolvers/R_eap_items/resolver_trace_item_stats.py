@@ -20,16 +20,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
-from snuba.query.dsl import (
-    arrayJoin,
-    column,
-    count,
-    in_cond,
-    literal,
-    literals_array,
-    not_cond,
-    tupleElement,
-)
+from snuba.query.dsl import arrayJoin, column, count, tupleElement
 from snuba.query.expressions import FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -47,8 +38,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS,
+from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression_eap_items,
 )
 
@@ -64,7 +54,6 @@ def _transform_results(
     results: Iterable[Dict[str, Any]],
     request_meta: RequestMeta,
 ) -> Iterable[AttributeDistribution]:
-
     # Maintain the order of keys, so it is in descending order
     # of most prevelant key-value pair.
     res: OrderedDict[Tuple[str, str], AttributeDistribution] = OrderedDict()
@@ -167,14 +156,6 @@ def _build_attr_distribution_query(
         condition=base_conditions_and(
             in_msg.meta,
             trace_item_filters_expression,
-            not_cond(
-                in_cond(
-                    attrs_string_keys,
-                    literals_array(
-                        None, list(map(literal, ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS))
-                    ),
-                ),
-            ),
         ),
         order_by=[
             OrderBy(
