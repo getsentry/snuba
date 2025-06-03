@@ -9,7 +9,11 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
+    RequestMeta,
+    TraceItemType,
+)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -23,8 +27,6 @@ from snuba.query.dsl import literal, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     base_conditions_and,
@@ -37,6 +39,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     aggregation_to_expression,
     get_average_sample_rate_column,
@@ -342,12 +345,14 @@ def _get_page_token(
     return PageToken(offset=request.page_token.offset + num_rows)
 
 
-class ResolverTraceItemTableEAPItems:
+class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
+    @classmethod
+    def trace_item_type(cls) -> TraceItemType:
+        return TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+
     def resolve(
         self,
         in_msg: TraceItemTableRequest,
-        timer: Timer,
-        metrics_backend: MetricsBackend,
     ) -> TraceItemTableResponse:
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
@@ -356,7 +361,7 @@ class ResolverTraceItemTableEAPItems:
         res = run_query_to_correct_tier(
             in_msg,
             query_settings,
-            timer,
+            self._timer,
             build_query,  # type: ignore
         )
         column_values = convert_results(in_msg, res.result.get("data", []))
@@ -364,7 +369,7 @@ class ResolverTraceItemTableEAPItems:
             in_msg.meta.request_id,
             in_msg.meta.debug,
             [res],
-            [timer],
+            [self._timer],
         )
         return TraceItemTableResponse(
             column_values=column_values,

@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     TraceItemStatsResponse,
     TraceItemStatsResult,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -26,7 +26,6 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.utils.constants import ATTRIBUTE_BUCKETS_EAP_ITEMS
-from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     base_conditions_and,
@@ -38,6 +37,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression_eap_items,
 )
@@ -185,11 +185,14 @@ def _build_attr_distribution_query(
     return query
 
 
-class ResolverTraceItemStatsEAPItems:
+class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
+    @classmethod
+    def trace_item_type(cls) -> TraceItemType:
+        return TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+
     def resolve(
         self,
         in_msg: TraceItemStatsRequest,
-        timer: Timer,
     ) -> TraceItemStatsResponse:
         results = []
         for requested_type in in_msg.stats_types:
@@ -209,7 +212,7 @@ class ResolverTraceItemStatsEAPItems:
                 query_res = run_query(
                     dataset=PluggableDataset(name="eap", all_entities=[]),
                     request=snuba_request,
-                    timer=timer,
+                    timer=self._timer,
                 )
 
                 attributes = _transform_results(
@@ -225,7 +228,7 @@ class ResolverTraceItemStatsEAPItems:
             in_msg.meta.request_id,
             in_msg.meta.debug,
             [],
-            [timer],
+            [self._timer],
         )
 
         return TraceItemStatsResponse(

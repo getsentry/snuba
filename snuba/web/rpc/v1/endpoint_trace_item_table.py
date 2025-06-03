@@ -16,6 +16,9 @@ from snuba.web.rpc.proto_visitor import (
     TraceItemTableRequestWrapper,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
+from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import (
+    ResolverTraceItemTableEAPItems,
+)
 from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
     SparseAggregateAttributeTransformer,
 )
@@ -103,8 +106,14 @@ class EndpointTraceItemTable(
     def get_resolver(
         self, trace_item_type: TraceItemType.ValueType
     ) -> TraceItemDataResolver[TraceItemTableRequest, TraceItemTableResponse]:
-        return ResolverTraceItemTable.get_from_trace_item_type(trace_item_type)(
-            timer=self._timer, metrics_backend=self._metrics_backend
+        try:
+            resolver = ResolverTraceItemTable.get_from_trace_item_type(trace_item_type)
+        except Exception:
+            resolver = ResolverTraceItemTableEAPItems
+
+        return resolver(
+            timer=self._timer,
+            metrics_backend=self._metrics_backend,
         )
 
     @classmethod

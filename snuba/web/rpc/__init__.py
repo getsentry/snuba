@@ -48,7 +48,11 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     @classmethod
     def config_key(cls) -> str:
-        return f"{cls.endpoint_name()}__{cls.trace_item_type()}"
+        try:
+            trace_item_type = cls.trace_item_type()
+        except NotImplementedError:
+            trace_item_type = "base"
+        return f"{cls.endpoint_name()}__{trace_item_type}"
 
     @classmethod
     def endpoint_name(cls) -> str:
@@ -58,7 +62,7 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
-        return TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+        raise NotImplementedError
 
     @classmethod
     def get_from_trace_item_type(
