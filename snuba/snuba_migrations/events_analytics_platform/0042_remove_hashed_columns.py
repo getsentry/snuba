@@ -209,11 +209,16 @@ class Migration(migration.ClickhouseNodeMigration):
             )
 
         for target in [OperationTarget.DISTRIBUTED, OperationTarget.LOCAL]:
+            table_name = (
+                self.local_table_name
+                if target == OperationTarget.LOCAL
+                else self.dist_table_name
+            )
             for i in range(buckets):
                 ops.append(
                     operations.DropColumn(
                         storage_set=self.storage_set_key,
-                        table_name=self.local_table_name,
+                        table_name=table_name,
                         column_name=f"_hash_map_string_{i}",
                         target=target,
                     )
@@ -221,7 +226,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 ops.append(
                     operations.DropColumn(
                         storage_set=self.storage_set_key,
-                        table_name=self.local_table_name,
+                        table_name=table_name,
                         column_name=f"_hash_map_float_{i}",
                         target=target,
                     )
@@ -247,7 +252,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ops.append(
                 operations.DropColumn(
                     storage_set=self.storage_set_key,
-                    table_name=self.dist_table_name,
+                    table_name=table_name,
                     column_name="hashed_keys",
                     target=target,
                 ),
@@ -258,11 +263,16 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         ops: List[operations.SqlOperation] = []
         for target in [OperationTarget.LOCAL, OperationTarget.DISTRIBUTED]:
+            table_name = (
+                self.local_table_name
+                if target == OperationTarget.LOCAL
+                else self.dist_table_name
+            )
             for i in range(buckets):
                 ops.append(
                     operations.AddColumn(
                         storage_set=self.storage_set_key,
-                        table_name=self.local_table_name,
+                        table_name=table_name,
                         column=Column(
                             name=f"_hash_map_string_{i}",
                             type=Array(UInt(64)),
@@ -273,7 +283,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 ops.append(
                     operations.AddColumn(
                         storage_set=self.storage_set_key,
-                        table_name=self.local_table_name,
+                        table_name=table_name,
                         column=Column(
                             name=f"_hash_map_float_{i}",
                             type=Array(UInt(64)),
@@ -309,7 +319,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ops.append(
                 operations.AddColumn(
                     storage_set=self.storage_set_key,
-                    table_name=self.dist_table_name,
+                    table_name=table_name,
                     column=Column(
                         name="hashed_keys",
                         type=Array(UInt(64)),
