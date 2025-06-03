@@ -363,7 +363,7 @@ def build_query(request: TimeSeriesRequest) -> Query:
 
 class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
     @classmethod
-    def trace_item_type(cls) -> TraceItemType:
+    def trace_item_type(cls) -> TraceItemType.ValueType:
         return TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
 
     def resolve(

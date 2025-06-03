@@ -10,9 +10,6 @@ from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
-from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_stats import (
-    ResolverTraceItemStatsEAPItems,
-)
 
 
 class EndpointTraceItemStats(
@@ -33,11 +30,7 @@ class EndpointTraceItemStats(
     def get_resolver(
         self, trace_item_type: TraceItemType.ValueType
     ) -> TraceItemDataResolver[TraceItemStatsRequest, TraceItemStatsResponse]:
-        try:
-            resolver = ResolverTraceItemStats.get_from_trace_item_type(trace_item_type)
-        except Exception:
-            resolver = ResolverTraceItemStatsEAPItems
-        return resolver(
+        return ResolverTraceItemStats.get_from_trace_item_type(trace_item_type)(
             timer=self._timer,
             metrics_backend=self._metrics_backend,
         )

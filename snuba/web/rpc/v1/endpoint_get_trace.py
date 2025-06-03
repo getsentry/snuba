@@ -302,7 +302,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         self,
         in_msg: GetTraceRequest,
         item: GetTraceRequest.TraceItem,
-    ) -> GetTraceResponse:
+    ) -> GetTraceResponse.ItemGroup:
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=_build_snuba_request(in_msg, item),

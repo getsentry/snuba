@@ -347,7 +347,7 @@ def _get_page_token(
 
 class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
     @classmethod
-    def trace_item_type(cls) -> TraceItemType:
+    def trace_item_type(cls) -> TraceItemType.ValueType:
         return TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
 
     def resolve(

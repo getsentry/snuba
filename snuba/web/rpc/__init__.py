@@ -49,7 +49,7 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
     @classmethod
     def config_key(cls) -> str:
         try:
-            trace_item_type = cls.trace_item_type()
+            trace_item_type = str(cls.trace_item_type())
         except NotImplementedError:
             trace_item_type = "base"
         return f"{cls.endpoint_name()}__{trace_item_type}"
@@ -68,12 +68,20 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
     def get_from_trace_item_type(
         cls, trace_item_type: TraceItemType.ValueType
     ) -> "Type[TraceItemDataResolver[Tin, Tout]]":
-        return cast(
-            Type["TraceItemDataResolver[Tin, Tout]"],
-            getattr(cls, "_registry").get_class_from_name(
-                f"{cls.endpoint_name()}__{trace_item_type}"
-            ),
-        )
+        try:
+            return cast(
+                Type["TraceItemDataResolver[Tin, Tout]"],
+                getattr(cls, "_registry").get_class_from_name(
+                    f"{cls.endpoint_name()}__{trace_item_type}"
+                ),
+            )
+        except Exception:
+            return cast(
+                Type["TraceItemDataResolver[Tin, Tout]"],
+                getattr(cls, "_registry").get_class_from_name(
+                    f"{cls.endpoint_name()}__{TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED}"
+                ),
+            )
 
     def resolve(self, in_msg: Tin) -> Tout:
         raise NotImplementedError
