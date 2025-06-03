@@ -214,6 +214,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 if target == OperationTarget.LOCAL
                 else self.dist_table_name
             )
+            table_type = "local" if target == OperationTarget.LOCAL else "dist"
             for i in range(buckets):
                 ops.append(
                     operations.DropColumn(
@@ -235,7 +236,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     ops.append(
                         operations.DropColumn(
                             storage_set=self.storage_set_key,
-                            table_name=f"eap_items_1_downsample_{downsampled_factor}_{target.value}",
+                            table_name=f"eap_items_1_downsample_{downsampled_factor}_{table_type}",
                             column_name=f"_hash_map_string_{i}",
                             target=target,
                         )
@@ -243,7 +244,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     ops.append(
                         operations.DropColumn(
                             storage_set=self.storage_set_key,
-                            table_name=f"eap_items_1_downsample_{downsampled_factor}_{target.value}",
+                            table_name=f"eap_items_1_downsample_{downsampled_factor}_{table_type}",
                             column_name=f"_hash_map_float_{i}",
                             target=target,
                         )
@@ -268,6 +269,9 @@ class Migration(migration.ClickhouseNodeMigration):
                 if target == OperationTarget.LOCAL
                 else self.dist_table_name
             )
+
+            table_type = "local" if target == OperationTarget.LOCAL else "dist"
+
             for i in range(buckets):
                 ops.append(
                     operations.AddColumn(
@@ -296,7 +300,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     ops.append(
                         operations.AddColumn(
                             storage_set=self.storage_set_key,
-                            table_name=f"eap_items_1_downsample_{downsampled_factor}_{target.value}",
+                            table_name=f"eap_items_1_downsample_{downsampled_factor}_{table_type}",
                             column=Column(
                                 name=f"_hash_map_string_{i}",
                                 type=Array(UInt(64)),
@@ -307,7 +311,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     ops.append(
                         operations.AddColumn(
                             storage_set=self.storage_set_key,
-                            table_name=f"eap_items_1_downsample_{downsampled_factor}_{target.value}",
+                            table_name=f"eap_items_1_downsample_{downsampled_factor}_{table_type}",
                             column=Column(
                                 name=f"_hash_map_float_{i}",
                                 type=Array(UInt(64)),
