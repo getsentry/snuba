@@ -19,6 +19,14 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         ops: List[operations.SqlOperation] = []
+        ops.append(
+            operations.DropIndex(
+                storage_set=self.storage_set_key,
+                table_name=self.local_table_name,
+                index_name="bf_hashed_keys",
+                target=OperationTarget.LOCAL,
+            ),
+        )
         for target in [OperationTarget.DISTRIBUTED, OperationTarget.LOCAL]:
             for i in range(buckets):
                 ops.append(
@@ -87,5 +95,17 @@ class Migration(migration.ClickhouseNodeMigration):
                     target=target,
                 ),
             )
+
+        ops.append(
+            operations.AddIndex(
+                storage_set=self.storage_set_key,
+                table_name=self.local_table_name,
+                index_name="bf_hashed_keys",
+                index_expression="hashed_keys",
+                index_type="bloom_filter",
+                granularity=1,
+                target=OperationTarget.LOCAL,
+            ),
+        )
 
         return ops
