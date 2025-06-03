@@ -39,12 +39,14 @@ pub fn consumer(
     enforce_schema: bool,
     max_poll_interval_ms: usize,
     async_inserts: bool,
+    health_check: &str,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
     max_dlq_buffer_length: Option<usize>,
     custom_envoy_request_timeout: Option<u64>,
+    join_timeout_ms: Option<u64>,
 ) -> usize {
     py.allow_threads(|| {
         consumer_impl(
@@ -64,6 +66,8 @@ pub fn consumer(
             batch_write_timeout_ms,
             max_dlq_buffer_length,
             custom_envoy_request_timeout,
+            join_timeout_ms,
+            health_check,
         )
     })
 }
@@ -86,6 +90,8 @@ pub fn consumer_impl(
     batch_write_timeout_ms: Option<u64>,
     max_dlq_buffer_length: Option<usize>,
     custom_envoy_request_timeout: Option<u64>,
+    join_timeout_ms: Option<u64>,
+    health_check: &str,
 ) -> usize {
     setup_logging();
 
@@ -268,6 +274,8 @@ pub fn consumer_impl(
         stop_at_timestamp,
         batch_write_timeout,
         custom_envoy_request_timeout,
+        join_timeout_ms,
+        health_check: health_check.to_string(),
     };
 
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);

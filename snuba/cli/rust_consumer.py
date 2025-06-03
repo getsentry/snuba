@@ -182,6 +182,18 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=None,
     help="Quantized rebalancing means that during deploys, rebalancing is triggered across all pods within a consumer group at the same time. The value is used by the pods to align their group join/leave activity to some multiple of the delay",
 )
+@click.option(
+    "--join-timeout-ms",
+    type=int,
+    default=0,
+    help="number of milliseconds to wait for the current batch to be flushed by the consumer in case of rebalance",
+)
+@click.option(
+    "--health-check",
+    default="arroyo",
+    type=click.Choice(["snuba", "arroyo"]),
+    help="Specify which health check to use for the consumer. If not specified, the default Arroyo health check is used.",
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -206,6 +218,7 @@ def rust_consumer(
     group_instance_id: Optional[str],
     max_poll_interval_ms: int,
     async_inserts: bool,
+    health_check: str,
     python_max_queue_depth: Optional[int],
     health_check_file: Optional[str],
     enforce_schema: bool,
@@ -214,6 +227,7 @@ def rust_consumer(
     max_dlq_buffer_length: Optional[int],
     quantized_rebalance_consumer_group_delay_secs: Optional[int],
     custom_envoy_request_timeout: Optional[int],
+    join_timeout_ms: Optional[int]
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -262,12 +276,14 @@ def rust_consumer(
         enforce_schema,
         max_poll_interval_ms,
         async_inserts,
+        health_check,
         python_max_queue_depth,
         health_check_file,
         stop_at_timestamp,
         batch_write_timeout_ms,
         max_dlq_buffer_length,
         custom_envoy_request_timeout,
+        join_timeout_ms,
     )
 
     sys.exit(exitcode)

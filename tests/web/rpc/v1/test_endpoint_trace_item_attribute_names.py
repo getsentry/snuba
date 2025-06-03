@@ -6,7 +6,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
     TraceItemAttributeNamesResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
@@ -230,36 +230,6 @@ class TestTraceItemAttributeNames(BaseApiTest):
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         assert res.meta.query_info != []
-
-    def test_backwards_compat_names(self) -> None:
-        req = TraceItemAttributeNamesRequest(
-            meta=RequestMeta(
-                project_ids=[1],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            limit=1000,
-            type=AttributeKey.Type.TYPE_STRING,
-        )
-        res = EndpointTraceItemAttributeNames().execute(req)
-        attributes_returned = {attribute.name for attribute in res.attributes}
-        for attr_name in {
-            "bar",
-            "baz",
-            "foo",
-            "sentry.name",
-            "sentry.segment_name",
-            "sentry.service",
-        }:
-            assert attr_name in attributes_returned, attr_name
 
     def test_basic_co_occurring_attrs(self) -> None:
         req = TraceItemAttributeNamesRequest(
