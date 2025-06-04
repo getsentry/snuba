@@ -35,17 +35,3 @@ def create_topics(
         except KafkaException as err:
             if err.args[0].code() != KafkaError.TOPIC_ALREADY_EXISTS:
                 logger.error("Failed to create topic %s", topic, exc_info=err)
-
-
-def destroy_topics(client: AdminClient, topics: Sequence[Topic]) -> None:
-    logger.info("Destroying Kafka topics...")
-    for topic, future in client.delete_topics(
-        list([KafkaTopicSpec(topic).topic_name for topic in topics]),
-        operation_timeout=1,
-    ).items():
-        try:
-            future.result()
-            logger.info("Topic %s destroyed", topic)
-        except KafkaException as err:
-            if err.args[0].code() != KafkaError.UNKNOWN_TOPIC_OR_PART:
-                logger.error("Failed to destroy topic %s", topic, exc_info=err)
