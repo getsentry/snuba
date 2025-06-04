@@ -21,7 +21,6 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
-    ExistsFilter,
     TraceItemFilter,
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
@@ -796,41 +795,23 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert measurement_reliabilities == [Reliability.RELIABILITY_LOW]
 
     def test_formula(self) -> None:
-        """
-        This test ensures that formulas work with extrapolation.
-        Reliabilities will not be returned.
-        """
+        """ """
         span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_item(
-            span_ts,
-            {"kyles_measurement": 6},
-            server_sample_rate=0.5,
-            count=10,
-        )
-        write_eap_item(
-            span_ts,
-            raw_attributes={"kyles_measurement": 7},
-            count=2,
-        )
+        write_eap_item(span_ts, {"kyles_measurement": 6}, 10, server_sample_rate=0.6)
+        write_eap_item(span_ts, {"kyles_measurement": 7}, 2, server_sample_rate=0.7)
+        write_eap_item(span_ts, {"kyles_measurement_2": 5}, 2, server_sample_rate=0.5)
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
         message = TraceItemTableRequest(
             meta=RequestMeta(
-                project_ids=[1],
+                project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
+                start_timestamp=hour_ago,
                 end_timestamp=ts,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            filter=TraceItemFilter(
-                exists_filter=ExistsFilter(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_DOUBLE, name="kyles_measurement"
-                    )
-                )
             ),
             columns=[
                 Column(
@@ -849,17 +830,17 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                         ),
                         right=Column(
                             aggregation=AttributeAggregation(
-                                aggregate=Function.FUNCTION_COUNT,
+                                aggregate=Function.FUNCTION_SUM,
                                 key=AttributeKey(
                                     type=AttributeKey.TYPE_DOUBLE,
-                                    name="kyles_measurement",
+                                    name="kyles_measurement_2",
                                 ),
                                 extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                             ),
-                            label="count(kyles_measurement)",
+                            label="sum(kyles_measurement_2)",
                         ),
                     ),
-                    label="sum(kyles_measurement) / count(kyles_measurement)",
+                    label="sum(kyles_measurement) / sum(kyles_measurement_2)",
                 ),
             ],
             limit=1,
@@ -867,9 +848,9 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         assert response.column_values == [
             TraceItemColumnValues(
-                attribute_name="sum(kyles_measurement) / count(kyles_measurement)",
+                attribute_name="sum(kyles_measurement) / sum(kyles_measurement_2)",
                 results=[
-                    AttributeValue(val_double=(134 / 22)),
+                    AttributeValue(val_double=(120 / 20)),
                 ],
             ),
         ]
