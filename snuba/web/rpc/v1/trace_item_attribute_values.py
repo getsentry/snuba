@@ -119,8 +119,6 @@ def _build_query(
             request.page_token.offset if request.page_token.HasField("offset") else 0
         ),
     )
-    breakpoint()
-    print(res)
     return res
 
 
