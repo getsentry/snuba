@@ -35,12 +35,12 @@ class Migration(migration.ClickhouseNodeMigration):
         ops: List[operations.SqlOperation] = [
             operations.RunSql(
                 storage_set=self.storage_set_key,
-                statement=f"ALTER TABLE {self.local_table_name} ADD COLUMN hashed_keys Array(UInt64) MATERIALIZED {get_hashed_attributes_column_expression()}",
+                statement=f"ALTER TABLE {self.local_table_name} ADD COLUMN IF NOT EXISTS hashed_keys Array(UInt64) MATERIALIZED {get_hashed_attributes_column_expression()}",
                 target=OperationTarget.LOCAL,
             ),
             operations.RunSql(
                 storage_set=self.storage_set_key,
-                statement=f"ALTER TABLE {self.dist_table_name} ADD COLUMN hashed_keys Array(UInt64) MATERIALIZED {get_hashed_attributes_column_expression()}",
+                statement=f"ALTER TABLE {self.dist_table_name} ADD COLUMN IF NOT EXISTS hashed_keys Array(UInt64) MATERIALIZED {get_hashed_attributes_column_expression()}",
                 target=OperationTarget.DISTRIBUTED,
             ),
             operations.AddIndex(

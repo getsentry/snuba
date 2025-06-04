@@ -48,7 +48,11 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     @classmethod
     def config_key(cls) -> str:
-        return f"{cls.endpoint_name()}__{cls.trace_item_type()}"
+        try:
+            trace_item_type = str(cls.trace_item_type())
+        except NotImplementedError:
+            trace_item_type = "base"
+        return f"{cls.endpoint_name()}__{trace_item_type}"
 
     @classmethod
     def endpoint_name(cls) -> str:
@@ -58,17 +62,25 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
-        return TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+        raise NotImplementedError
 
     @classmethod
     def get_from_trace_item_type(
-        cls, trace_item_type: TraceItemType.ValueType
+        cls,
+        trace_item_type: TraceItemType.ValueType,
     ) -> "Type[TraceItemDataResolver[Tin, Tout]]":
+        registry = getattr(cls, "_registry")
+        try:
+            shape = registry.get_class_from_name(
+                f"{cls.endpoint_name()}__{trace_item_type}"
+            )
+        except InvalidConfigKeyError:
+            shape = registry.get_class_from_name(
+                f"{cls.endpoint_name()}__{TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED}"
+            )
         return cast(
             Type["TraceItemDataResolver[Tin, Tout]"],
-            getattr(cls, "_registry").get_class_from_name(
-                f"{cls.endpoint_name()}__{trace_item_type}"
-            ),
+            shape,
         )
 
     def resolve(self, in_msg: Tin) -> Tout:

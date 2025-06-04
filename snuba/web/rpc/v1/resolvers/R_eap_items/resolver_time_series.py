@@ -13,7 +13,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     ExtrapolationMode,
@@ -28,8 +28,6 @@ from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
@@ -41,6 +39,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     ExtrapolationContext,
     aggregation_to_expression,
@@ -48,11 +47,11 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_confidence_interval_column,
     get_count_column,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
+    attribute_key_to_expression_eap_items,
+)
 from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.sampling_in_storage_util import (
     run_query_to_correct_tier,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    attribute_key_to_expression_eap_items,
 )
 
 OP_TO_EXPR = {
@@ -362,9 +361,14 @@ def build_query(request: TimeSeriesRequest) -> Query:
     return res
 
 
-class ResolverTimeSeriesEAPItems:
+class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
+    @classmethod
+    def trace_item_type(cls) -> TraceItemType.ValueType:
+        return TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+
     def resolve(
-        self, in_msg: TimeSeriesRequest, timer: Timer, metrics_backend: MetricsBackend
+        self,
+        in_msg: TimeSeriesRequest,
     ) -> TimeSeriesResponse:
         # aggregations field is deprecated, it gets converted to request.expressions
         # if the user passes it in
@@ -373,21 +377,26 @@ class ResolverTimeSeriesEAPItems:
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )
-
         res = run_query_to_correct_tier(
-            in_msg, query_settings, timer, build_query  # type: ignore
+            in_msg,
+            query_settings,
+            self._timer,
+            build_query,  # type: ignore
         )
 
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
             [res],
-            [timer],
+            [self._timer],
         )
 
         return TimeSeriesResponse(
             result_timeseries=list(
-                _convert_result_timeseries(in_msg, res.result.get("data", []))
+                _convert_result_timeseries(
+                    in_msg,
+                    res.result.get("data", []),
+                )
             ),
             meta=response_meta,
         )

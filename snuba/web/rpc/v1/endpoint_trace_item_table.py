@@ -19,6 +19,7 @@ from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
     SparseAggregateAttributeTransformer,
 )
+from snuba.web.rpc.v1.visitors.visitor_v2 import RejectTimestampAsStringVisitor
 
 _GROUP_BY_DISALLOWED_COLUMNS = ["timestamp"]
 
@@ -104,7 +105,8 @@ class EndpointTraceItemTable(
         self, trace_item_type: TraceItemType.ValueType
     ) -> TraceItemDataResolver[TraceItemTableRequest, TraceItemTableResponse]:
         return ResolverTraceItemTable.get_from_trace_item_type(trace_item_type)(
-            timer=self._timer, metrics_backend=self._metrics_backend
+            timer=self._timer,
+            metrics_backend=self._metrics_backend,
         )
 
     @classmethod
@@ -122,6 +124,7 @@ class EndpointTraceItemTable(
         _validate_select_and_groupby(in_msg)
         _validate_order_by(in_msg)
 
+        RejectTimestampAsStringVisitor().visit(in_msg)
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )

@@ -185,7 +185,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--join-timeout-ms",
     type=int,
-    default=0,
+    default=1000,
     help="number of milliseconds to wait for the current batch to be flushed by the consumer in case of rebalance",
 )
 @click.option(

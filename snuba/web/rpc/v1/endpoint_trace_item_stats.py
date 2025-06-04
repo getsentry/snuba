@@ -31,11 +31,11 @@ class EndpointTraceItemStats(
         self, trace_item_type: TraceItemType.ValueType
     ) -> TraceItemDataResolver[TraceItemStatsRequest, TraceItemStatsResponse]:
         return ResolverTraceItemStats.get_from_trace_item_type(trace_item_type)(
-            timer=self._timer, metrics_backend=self._metrics_backend
+            timer=self._timer,
+            metrics_backend=self._metrics_backend,
         )
 
     def _execute(self, in_msg: TraceItemStatsRequest) -> TraceItemStatsResponse:
-
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )
