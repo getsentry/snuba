@@ -190,12 +190,22 @@ def _convert_order_by(
 
 
 def _get_reliability_context_columns(
-    column: Column, request_meta: RequestMeta
+    column: Column, alias_prefix: str | None = None
 ) -> list[SelectedExpression]:
     """
     extrapolated aggregates need to request extra columns to calculate the reliability of the result.
     this function returns the list of columns that need to be requested.
+
+    If alias_prefix is provided, it will be prepended to the alias of the returned columns.
     """
+
+    if column.HasField("formula"):
+        return _get_reliability_context_columns(
+            column.formula.left, alias_prefix=column.label + ".left."
+        ) + _get_reliability_context_columns(
+            column.formula.right, alias_prefix=column.label + ".right."
+        )
+
     if not (column.HasField("conditional_aggregation")):
         return []
 
@@ -209,9 +219,15 @@ def _get_reliability_context_columns(
             attribute_key_to_expression_eap_items,
         )
         if confidence_interval_column is not None:
+            if alias_prefix is not None:
+                name: str | None = alias_prefix + (
+                    confidence_interval_column.alias or ""
+                )
+            else:
+                name = confidence_interval_column.alias
             context_columns.append(
                 SelectedExpression(
-                    name=confidence_interval_column.alias,
+                    name=name,
                     expression=confidence_interval_column,
                 )
             )
@@ -220,19 +236,26 @@ def _get_reliability_context_columns(
             column.conditional_aggregation,
             attribute_key_to_expression_eap_items,
         )
+        if alias_prefix is not None:
+            name = alias_prefix + (average_sample_rate_column.alias or "")
+        else:
+            name = average_sample_rate_column.alias
+        context_columns.append(
+            SelectedExpression(
+                name=name,
+                expression=average_sample_rate_column,
+            )
+        )
+
         count_column = get_count_column(
             column.conditional_aggregation,
             attribute_key_to_expression_eap_items,
         )
-        context_columns.append(
-            SelectedExpression(
-                name=average_sample_rate_column.alias,
-                expression=average_sample_rate_column,
-            )
-        )
-        context_columns.append(
-            SelectedExpression(name=count_column.alias, expression=count_column)
-        )
+        if alias_prefix is not None:
+            name = alias_prefix + (count_column.alias or "")
+        else:
+            name = count_column.alias
+        context_columns.append(SelectedExpression(name=name, expression=count_column))
         return context_columns
     return []
 
@@ -302,7 +325,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
                 expression=_column_to_expression(column, request.meta),
             )
         )
-        selected_columns.extend(_get_reliability_context_columns(column, request.meta))
+        selected_columns.extend(_get_reliability_context_columns(column))
 
     item_type_conds = [
         f.equals(snuba_column("item_type"), request.meta.trace_item_type)
