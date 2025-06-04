@@ -91,5 +91,4 @@ for f in os.listdir(os.path.dirname(os.path.realpath(__file__))):
 
 
 for v, module_path in _TO_IMPORT.items():
-    print(v, module_path)
     import_submodules_in_directory(module_path, f"snuba.web.rpc.v1.resolvers.{v}")
