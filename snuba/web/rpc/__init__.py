@@ -66,22 +66,22 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     @classmethod
     def get_from_trace_item_type(
-        cls, trace_item_type: TraceItemType.ValueType
+        cls,
+        trace_item_type: TraceItemType.ValueType,
     ) -> "Type[TraceItemDataResolver[Tin, Tout]]":
+        registry = getattr(cls, "_registry")
         try:
-            return cast(
-                Type["TraceItemDataResolver[Tin, Tout]"],
-                getattr(cls, "_registry").get_class_from_name(
-                    f"{cls.endpoint_name()}__{trace_item_type}"
-                ),
+            shape = registry.get_class_from_name(
+                f"{cls.endpoint_name()}__{trace_item_type}"
             )
-        except Exception:
-            return cast(
-                Type["TraceItemDataResolver[Tin, Tout]"],
-                getattr(cls, "_registry").get_class_from_name(
-                    f"{cls.endpoint_name()}__{TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED}"
-                ),
+        except InvalidConfigKeyError:
+            shape = registry.get_class_from_name(
+                f"{cls.endpoint_name()}__{TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED}"
             )
+        return cast(
+            Type["TraceItemDataResolver[Tin, Tout]"],
+            shape,
+        )
 
     def resolve(self, in_msg: Tin) -> Tout:
         raise NotImplementedError
