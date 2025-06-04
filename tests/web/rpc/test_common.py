@@ -10,7 +10,7 @@ from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
 from snuba.query.expressions import SubscriptableReference
 from snuba.web.rpc.common.common import next_monday, prev_monday, use_sampling_factor
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression,
 )
 from tests.conftest import SnubaSetConfig

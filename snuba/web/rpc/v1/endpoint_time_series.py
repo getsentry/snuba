@@ -111,7 +111,8 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         self, trace_item_type: TraceItemType.ValueType
     ) -> TraceItemDataResolver[TimeSeriesRequest, TimeSeriesResponse]:
         return ResolverTimeSeries.get_from_trace_item_type(trace_item_type)(
-            timer=self._timer, metrics_backend=self._metrics_backend
+            timer=self._timer,
+            metrics_backend=self._metrics_backend,
         )
 
     def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:

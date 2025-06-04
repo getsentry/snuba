@@ -105,7 +105,8 @@ class EndpointTraceItemTable(
         self, trace_item_type: TraceItemType.ValueType
     ) -> TraceItemDataResolver[TraceItemTableRequest, TraceItemTableResponse]:
         return ResolverTraceItemTable.get_from_trace_item_type(trace_item_type)(
-            timer=self._timer, metrics_backend=self._metrics_backend
+            timer=self._timer,
+            metrics_backend=self._metrics_backend,
         )
 
     @classmethod
