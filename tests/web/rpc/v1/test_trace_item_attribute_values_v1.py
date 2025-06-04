@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Generator, List
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -9,6 +9,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
+from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem as TraceItemMessage
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -52,7 +53,9 @@ COMMON_META = RequestMeta(
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
+def setup_teardown(
+    clickhouse_db: None, redis_db: None
+) -> Generator[List[bytes], None, None]:
     items_storage = get_storage(StorageKey("eap_items"))
     start_timestamp = BASE_TIME
     messages = [
@@ -109,6 +112,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
         ),
     ]
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+    yield messages
 
 
 @pytest.mark.clickhouse_db
@@ -165,3 +169,27 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         res = AttributeValuesRequest().execute(req)
         assert res.values == []
+
+    def test_item_id_substring_match(self, setup_teardown: List[bytes]) -> None:
+        first_msg_bytes = setup_teardown[0]
+        first_msg = TraceItemMessage()
+        first_msg.ParseFromString(first_msg_bytes)
+        item_id = first_msg.item_id.hex()
+        req = TraceItemAttributeValuesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            key=AttributeKey(name="sentry.item_id", type=AttributeKey.TYPE_STRING),
+            value_substring_match=item_id,
+        )
+        res = AttributeValuesRequest().execute(req)
+        assert res.values == [item_id]
