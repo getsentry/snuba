@@ -95,6 +95,18 @@ hash_map_columns: List[Column[Modifiers]] = [
     for i in range(buckets)
 ]
 
+hash_map_columns.extend(
+    [
+        Column(
+            hash_map_column_name("float", i),
+            Array(
+                UInt(64),
+            ),
+        )
+        for i in range(buckets)
+    ]
+)
+
 
 def get_mv_expr(sampling_weight: int, with_hash_map_columns: bool = True) -> str:
     column_names = [
