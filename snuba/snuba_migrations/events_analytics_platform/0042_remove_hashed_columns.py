@@ -52,60 +52,35 @@ base_columns: List[Column[Modifiers]] = [
         ),
     ),
 ]
+hash_map_columns: List[Column[Modifiers]] = []
 
-base_columns.extend(
-    [
-        Column(
-            f"attributes_string_{i}",
-            Map(
-                String(),
-                String(),
-                modifiers=Modifiers(
-                    codecs=["ZSTD(1)"],
+for column_type in {"string", "float"}:
+    base_columns.extend(
+        [
+            Column(
+                f"attributes_{column_type}_{i}",
+                Map(
+                    String(),
+                    Float(64),
+                    modifiers=Modifiers(
+                        codecs=["ZSTD(1)"],
+                    ),
                 ),
-            ),
-        )
-        for i in range(buckets)
-    ]
-)
-
-base_columns.extend(
-    [
-        Column(
-            f"attributes_float_{i}",
-            Map(
-                String(),
-                Float(64),
-                modifiers=Modifiers(
-                    codecs=["ZSTD(1)"],
-                ),
-            ),
-        )
-        for i in range(buckets)
-    ]
-)
-
-hash_map_columns: List[Column[Modifiers]] = [
-    Column(
-        hash_map_column_name("string", i),
-        Array(
-            UInt(64),
-        ),
+            )
+            for i in range(buckets)
+        ]
     )
-    for i in range(buckets)
-]
-
-hash_map_columns.extend(
-    [
-        Column(
-            hash_map_column_name("float", i),
-            Array(
-                UInt(64),
-            ),
-        )
-        for i in range(buckets)
-    ]
-)
+    hash_map_columns.extend(
+        [
+            Column(
+                hash_map_column_name(column_type, i),
+                Array(
+                    UInt(64),
+                ),
+            )
+            for i in range(buckets)
+        ]
+    )
 
 
 def get_mv_expr(sampling_weight: int, with_hash_map_columns: bool = True) -> str:
