@@ -144,7 +144,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     columns=base_columns,
                     destination_table_name=f"eap_items_1_downsample_{downsampled_factor}_local",
                     target=OperationTarget.LOCAL,
-                    query=get_mv_expr(downsampled_factor, with_hash_map_columns=True),
+                    query=get_mv_expr(downsampled_factor, with_hash_map_columns=False),
                 )
             )
             ops.append(
