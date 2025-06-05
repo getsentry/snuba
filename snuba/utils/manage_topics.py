@@ -10,9 +10,7 @@ from snuba.utils.streams.topics import Topic
 logger = logging.getLogger(__name__)
 
 
-def create_topics(
-    client: AdminClient, topics: Sequence[Topic], num_partitions: int = 1
-) -> None:
+def create_topics(client: AdminClient, topics: Sequence[Topic]) -> None:
     topics_to_create = {}
 
     for topic in topics:
@@ -20,8 +18,8 @@ def create_topics(
         logger.debug("Adding topic %s to creation list", topic_spec.topic_name)
         topics_to_create[topic_spec.topic_name] = NewTopic(
             topic_spec.topic_name,
-            num_partitions=num_partitions,
-            replication_factor=1,
+            num_partitions=topic_spec.partitions_number,
+            replication_factor=topic_spec.replication_factor,
             config=topic_spec.topic_creation_config,
         )
 

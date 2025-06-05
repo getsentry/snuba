@@ -2,7 +2,6 @@ from typing import List, Tuple, cast
 from uuid import UUID
 
 import pytest
-from confluent_kafka.admin import AdminClient
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity, get_entity_name
@@ -14,10 +13,7 @@ from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator
-from snuba.utils.manage_topics import create_topics
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
-from snuba.utils.streams.topics import Topic as SnubaTopic
 
 dataset = get_dataset("generic_metrics")
 entity = get_entity(EntityKey.GENERIC_METRICS_SETS)
@@ -54,9 +50,6 @@ def subscription_data_builder() -> SubscriptionData:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_entity_subscriptions_data() -> None:
-    admin_client = AdminClient(get_default_kafka_configuration())
-    create_topics(admin_client, [SnubaTopic.GENERIC_METRICS])
-
     subscription_data = subscription_data_builder()
 
     subscription_identifier = SubscriptionCreator(dataset, entity_key).create(

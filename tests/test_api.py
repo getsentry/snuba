@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import simplejson as json
-from confluent_kafka.admin import AdminClient
 from dateutil.parser import parse as parse_datetime
 from sentry_sdk import Client, Hub
 
@@ -24,9 +23,6 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertBatch, InsertEvent, ReplacementType
 from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
-from snuba.utils.manage_topics import create_topics
-from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
-from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
 from tests.helpers import write_processed_messages
@@ -2105,12 +2101,6 @@ class TestCreateSubscriptionApi(BaseApiTest):
     entity_key = "events"
 
     def test(self) -> None:
-        settings.KAFKA_TOPIC_MAP = {
-            "events": "events-test-api",
-        }
-        admin_client = AdminClient(get_default_kafka_configuration())
-        create_topics(admin_client, [SnubaTopic.EVENTS])
-
         expected_uuid = uuid.uuid1()
 
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
@@ -2132,7 +2122,6 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert data == {
             "subscription_id": f"0/{expected_uuid.hex}",
         }
-        settings.KAFKA_TOPIC_MAP = {}
 
     def test_tenant_ids(self) -> None:
         expected_uuid = uuid.uuid1()
@@ -2182,8 +2171,6 @@ class TestCreateSubscriptionApi(BaseApiTest):
         Test that ensures that the passed entity is the selected one, not the dataset's default
         entity
         """
-        admin_client = AdminClient(get_default_kafka_configuration())
-        create_topics(admin_client, [SnubaTopic.METRICS])
 
         expected_uuid = uuid.uuid1()
         entity_key = EntityKey.METRICS_COUNTERS
