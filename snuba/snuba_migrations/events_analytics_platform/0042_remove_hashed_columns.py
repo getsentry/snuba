@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from typing import Any, List, Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
@@ -52,9 +52,13 @@ base_columns: List[Column[Modifiers]] = [
         ),
     ),
 ]
-hash_map_columns: List[Column[Modifiers]] = []
+hash_map_columns: list[Column[Modifiers]] = []
+column_types: list[tuple[str, Any]] = [
+    ("string", String()),
+    ("float", Float(64)),
+]
 
-for column_type_name, column_type in [("string", String()), ("float", Float(64))]:
+for column_type_name, column_type in column_types:
     base_columns.extend(
         [
             Column(
