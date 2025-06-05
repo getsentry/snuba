@@ -32,6 +32,7 @@ base_columns: List[Column[Modifiers]] = [
     Column("trace_id", UUID()),
     Column("item_id", UInt(128)),
     Column("sampling_weight", UInt(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
+    Column("sampling_factor", Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
     Column(
         "retention_days",
         UInt(16, modifiers=Modifiers(codecs=["T64", "ZSTD(1)"])),
@@ -94,19 +95,15 @@ hash_map_columns: List[Column[Modifiers]] = [
     for i in range(buckets)
 ]
 
-sampling_factor_column: Column[Modifiers] = Column(
-    "sampling_factor", Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))
-)
 
-
-def get_mv_expr(sampling_weight: int, with_hashed_columns: bool = True) -> str:
+def get_mv_expr(sampling_weight: int, with_hash_map_columns: bool = True) -> str:
     column_names = [
         c.name
         for c in base_columns
         if c.name not in {"sampling_weight", "sampling_factor"}
     ]
-    if with_hashed_columns:
-        column_names.extend([f"{c.name}" for c in (hash_map_columns)])
+    if with_hash_map_columns:
+        column_names.extend([c.name for c in hash_map_columns])
     column_names_str = ", ".join(column_names)
     return f"SELECT {column_names_str}, sampling_weight * {sampling_weight} AS sampling_weight, sampling_factor / {sampling_weight} AS sampling_factor FROM eap_items_1_local WHERE (cityHash64(item_id + {sampling_weight})  % {sampling_weight}) = 0"
 
@@ -135,10 +132,10 @@ class Migration(migration.ClickhouseNodeMigration):
                 operations.CreateMaterializedView(
                     storage_set=self.storage_set_key,
                     view_name=f"eap_items_1_downsample_{downsampled_factor}_mv_3",
-                    columns=base_columns + [sampling_factor_column],
+                    columns=base_columns,
                     destination_table_name=f"eap_items_1_downsample_{downsampled_factor}_local",
                     target=OperationTarget.LOCAL,
-                    query=get_mv_expr(downsampled_factor, with_hashed_columns=False),
+                    query=get_mv_expr(downsampled_factor, with_hash_map_columns=False),
                 )
             )
             ops.append(
@@ -157,10 +154,10 @@ class Migration(migration.ClickhouseNodeMigration):
                 operations.CreateMaterializedView(
                     storage_set=self.storage_set_key,
                     view_name=f"eap_items_1_downsample_{downsampled_factor}_mv_2",
-                    columns=base_columns + [sampling_factor_column],
+                    columns=base_columns,
                     destination_table_name=f"eap_items_1_downsample_{downsampled_factor}_local",
                     target=OperationTarget.LOCAL,
-                    query=get_mv_expr(downsampled_factor, with_hashed_columns=True),
+                    query=get_mv_expr(downsampled_factor, with_hash_map_columns=True),
                 )
             )
             ops.append(
