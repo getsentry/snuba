@@ -24,7 +24,7 @@ def hash_map_column_name(attribute_type: str, i: int) -> str:
     return f"_hash_map_{attribute_type}_{i}"
 
 
-base_columns = [
+base_columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("item_type", UInt(8)),
@@ -84,7 +84,7 @@ base_columns.extend(
     ]
 )
 
-hash_map_columns = [
+hash_map_columns: List[Column[Modifiers]] = [
     Column(
         hash_map_column_name("string", i),
         Array(
@@ -94,7 +94,7 @@ hash_map_columns = [
     for i in range(buckets)
 ]
 
-sampling_factor_column = Column(
+sampling_factor_column: Column[Modifiers] = Column(
     "sampling_factor", Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))
 )
 
