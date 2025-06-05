@@ -54,14 +54,14 @@ base_columns: List[Column[Modifiers]] = [
 ]
 hash_map_columns: List[Column[Modifiers]] = []
 
-for column_type in {"string", "float"}:
+for column_type_name, column_type in [("string", String()), ("float", Float(64))]:
     base_columns.extend(
         [
             Column(
-                f"attributes_{column_type}_{i}",
+                f"attributes_{column_type_name}_{i}",
                 Map(
                     String(),
-                    Float(64),
+                    column_type,
                     modifiers=Modifiers(
                         codecs=["ZSTD(1)"],
                     ),
