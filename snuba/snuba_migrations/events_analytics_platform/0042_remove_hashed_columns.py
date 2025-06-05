@@ -169,7 +169,6 @@ def get_mv_expr(sampling_weight: int, with_hashed_columns: bool = True) -> str:
 
 
 class Migration(migration.ClickhouseNodeMigration):
-
     blocking = False
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
     granularity = "8192"
@@ -188,7 +187,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 target=OperationTarget.LOCAL,
             ),
         )
-
         for downsampled_factor in self.downsampled_factors:
             ops.append(
                 operations.CreateMaterializedView(
@@ -207,131 +205,10 @@ class Migration(migration.ClickhouseNodeMigration):
                     target=OperationTarget.LOCAL,
                 )
             )
-
-        for target in [OperationTarget.DISTRIBUTED, OperationTarget.LOCAL]:
-            table_name = (
-                self.local_table_name
-                if target == OperationTarget.LOCAL
-                else self.dist_table_name
-            )
-            table_type = "local" if target == OperationTarget.LOCAL else "dist"
-            for i in range(buckets):
-                ops.append(
-                    operations.DropColumn(
-                        storage_set=self.storage_set_key,
-                        table_name=table_name,
-                        column_name=f"_hash_map_string_{i}",
-                        target=target,
-                    )
-                )
-                ops.append(
-                    operations.DropColumn(
-                        storage_set=self.storage_set_key,
-                        table_name=table_name,
-                        column_name=f"_hash_map_float_{i}",
-                        target=target,
-                    )
-                )
-                for downsampled_factor in self.downsampled_factors:
-                    ops.append(
-                        operations.DropColumn(
-                            storage_set=self.storage_set_key,
-                            table_name=f"eap_items_1_downsample_{downsampled_factor}_{table_type}",
-                            column_name=f"_hash_map_string_{i}",
-                            target=target,
-                        )
-                    )
-                    ops.append(
-                        operations.DropColumn(
-                            storage_set=self.storage_set_key,
-                            table_name=f"eap_items_1_downsample_{downsampled_factor}_{table_type}",
-                            column_name=f"_hash_map_float_{i}",
-                            target=target,
-                        )
-                    )
-
-            ops.append(
-                operations.DropColumn(
-                    storage_set=self.storage_set_key,
-                    table_name=table_name,
-                    column_name="hashed_keys",
-                    target=target,
-                ),
-            )
-
         return ops
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         ops: List[operations.SqlOperation] = []
-        for target in [OperationTarget.LOCAL, OperationTarget.DISTRIBUTED]:
-            table_name = (
-                self.local_table_name
-                if target == OperationTarget.LOCAL
-                else self.dist_table_name
-            )
-
-            table_type = "local" if target == OperationTarget.LOCAL else "dist"
-
-            for i in range(buckets):
-                ops.append(
-                    operations.AddColumn(
-                        storage_set=self.storage_set_key,
-                        table_name=table_name,
-                        column=Column(
-                            name=f"_hash_map_string_{i}",
-                            type=Array(UInt(64)),
-                        ),
-                        target=target,
-                    )
-                )
-                ops.append(
-                    operations.AddColumn(
-                        storage_set=self.storage_set_key,
-                        table_name=table_name,
-                        column=Column(
-                            name=f"_hash_map_float_{i}",
-                            type=Array(UInt(64)),
-                        ),
-                        target=target,
-                    )
-                )
-
-                for downsampled_factor in self.downsampled_factors:
-                    ops.append(
-                        operations.AddColumn(
-                            storage_set=self.storage_set_key,
-                            table_name=f"eap_items_1_downsample_{downsampled_factor}_{table_type}",
-                            column=Column(
-                                name=f"_hash_map_string_{i}",
-                                type=Array(UInt(64)),
-                            ),
-                            target=target,
-                        )
-                    )
-                    ops.append(
-                        operations.AddColumn(
-                            storage_set=self.storage_set_key,
-                            table_name=f"eap_items_1_downsample_{downsampled_factor}_{table_type}",
-                            column=Column(
-                                name=f"_hash_map_float_{i}",
-                                type=Array(UInt(64)),
-                            ),
-                            target=target,
-                        )
-                    )
-
-            ops.append(
-                operations.AddColumn(
-                    storage_set=self.storage_set_key,
-                    table_name=table_name,
-                    column=Column(
-                        name="hashed_keys",
-                        type=Array(UInt(64)),
-                    ),
-                    target=target,
-                ),
-            )
-
         for downsampled_factor in self.downsampled_factors:
             ops.append(
                 operations.CreateMaterializedView(
@@ -350,7 +227,6 @@ class Migration(migration.ClickhouseNodeMigration):
                     target=OperationTarget.LOCAL,
                 )
             )
-
         ops.append(
             operations.AddIndex(
                 storage_set=self.storage_set_key,
@@ -362,5 +238,4 @@ class Migration(migration.ClickhouseNodeMigration):
                 target=OperationTarget.LOCAL,
             ),
         )
-
         return ops
