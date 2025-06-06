@@ -1024,6 +1024,7 @@ def test_clickhouse_system_settings(
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_execute_rpc_endpoint_success(
     admin_api: FlaskClient,
     rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]],
