@@ -16,7 +16,4 @@ class ResolverTraceItemStatsOurlogs(ResolverTraceItemStats):
         return TraceItemType.TRACE_ITEM_TYPE_LOG
 
     def resolve(self, routing_decision: RoutingDecision) -> TraceItemStatsResponse:
-        return ResolverTraceItemStatsEAPItems().resolve(
-            routing_decision,
-            self._timer,
-        )
+        return ResolverTraceItemStatsEAPItems().resolve(routing_decision)
