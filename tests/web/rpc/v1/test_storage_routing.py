@@ -12,14 +12,17 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba import state
 from snuba.downsampled_storage_tiers import Tier
-from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.timer import Timer
-from snuba.web import QueryException, QueryResult
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
+from snuba.web import QueryResult
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
     ClickhouseQuerySettings,
     RoutingContext,
+    RoutingDecision,
 )
+from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
+
+RANDOM_REQUEST_ID = str(uuid.uuid4())
 
 
 def _get_in_msg() -> TimeSeriesRequest:
@@ -29,7 +32,7 @@ def _get_in_msg() -> TimeSeriesRequest:
 
     return TimeSeriesRequest(
         meta=RequestMeta(
-            request_id=str(uuid.uuid4()),
+            request_id=RANDOM_REQUEST_ID,
             project_ids=[1, 2, 3],
             organization_id=1,
             cogs_category="something",
@@ -58,12 +61,9 @@ def get_query_result(elapsed_ms: int = 1000) -> QueryResult:
 
 class RoutingStrategyFailsToSelectTier(BaseRoutingStrategy):
     def _decide_tier_and_query_settings(
-        self, routing_context: RoutingContext
-    ) -> tuple[Tier, ClickhouseQuerySettings]:
+        self, routing_decision: RoutingDecision
+    ) -> tuple[Tier, ClickhouseQuerySettings, bool]:
         raise Exception
-
-    def _run_query(self, routing_context: RoutingContext) -> QueryResult:
-        return get_query_result()
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
@@ -71,12 +71,9 @@ class RoutingStrategyFailsToSelectTier(BaseRoutingStrategy):
 
 class RoutingStrategySelectsTier8(BaseRoutingStrategy):
     def _decide_tier_and_query_settings(
-        self, routing_context: RoutingContext
-    ) -> tuple[Tier, ClickhouseQuerySettings]:
-        return Tier.TIER_8, {}
-
-    def _run_query(self, routing_context: RoutingContext) -> QueryResult:
-        return get_query_result()
+        self, routing_decision: RoutingDecision
+    ) -> tuple[Tier, ClickhouseQuerySettings, bool]:
+        return Tier.TIER_8, {}, True
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
@@ -84,12 +81,9 @@ class RoutingStrategySelectsTier8(BaseRoutingStrategy):
 
 class RoutingStrategyUpdatesQuerySettings(BaseRoutingStrategy):
     def _decide_tier_and_query_settings(
-        self, routing_context: RoutingContext
-    ) -> tuple[Tier, ClickhouseQuerySettings]:
-        return Tier.TIER_8, {"some_setting": "some_value"}
-
-    def _run_query(self, routing_context: RoutingContext) -> QueryResult:
-        return get_query_result()
+        self, routing_decision: RoutingDecision
+    ) -> tuple[Tier, ClickhouseQuerySettings, bool]:
+        return Tier.TIER_8, {"some_setting": "some_value"}, True
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
@@ -97,12 +91,9 @@ class RoutingStrategyUpdatesQuerySettings(BaseRoutingStrategy):
 
 class RoutingStrategyBadMetrics(BaseRoutingStrategy):
     def _decide_tier_and_query_settings(
-        self, routing_context: RoutingContext
-    ) -> tuple[Tier, ClickhouseQuerySettings]:
-        return Tier.TIER_8, {"some_setting": "some_value"}
-
-    def _run_query(self, routing_context: RoutingContext) -> QueryResult:
-        return get_query_result()
+        self, routing_decision: RoutingDecision
+    ) -> tuple[Tier, ClickhouseQuerySettings, bool]:
+        return Tier.TIER_8, {"some_setting": "some_value"}, True
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         if 1 / 0 > 10:
@@ -111,66 +102,64 @@ class RoutingStrategyBadMetrics(BaseRoutingStrategy):
 
 class RoutingStrategyQueryFails(BaseRoutingStrategy):
     def _decide_tier_and_query_settings(
-        self, routing_context: RoutingContext
-    ) -> tuple[Tier, ClickhouseQuerySettings]:
-        return Tier.TIER_8, {"some_setting": "some_value"}
-
-    def _run_query(self, routing_context: RoutingContext) -> QueryResult:
-        raise QueryException("this query failed")
+        self, routing_decision: RoutingDecision
+    ) -> tuple[Tier, ClickhouseQuerySettings, bool]:
+        return Tier.TIER_8, {"some_setting": "some_value"}, True
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         raise ValueError("should never get here")
 
 
-ROUTING_CONTEXT = RoutingContext(
-    in_msg=_get_in_msg(),
-    timer=Timer("stuff"),
-    build_query=MagicMock(),
-    query_settings=HTTPQuerySettings(),
-    query_result=MagicMock(spec=QueryResult),
-    extra_info={},
+ROUTING_DECISION = RoutingDecision(
+    routing_context=RoutingContext(
+        in_msg=_get_in_msg(),
+        timer=Timer("stuff"),
+        query_result=MagicMock(spec=QueryResult),
+        extra_info={},
+    ),
 )
 
 
 @pytest.mark.redis_db
 def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> None:
     with mock.patch("snuba.settings.RAISE_ON_ROUTING_STRATEGY_FAILURES", False):
-        routing_context = deepcopy(ROUTING_CONTEXT)
-        RoutingStrategyFailsToSelectTier().run_query_to_correct_tier(routing_context)
-        assert routing_context.query_settings.get_sampling_tier() == Tier.TIER_1
+        routing_decision = deepcopy(ROUTING_DECISION)
+        RoutingStrategyFailsToSelectTier().decide_tier_and_query_settings(
+            Timer("test"), routing_decision
+        )
+        assert routing_decision.tier == Tier.TIER_1
 
 
 @pytest.mark.redis_db
 def test_target_tier_is_set_in_routing_context() -> None:
-    routing_context = deepcopy(ROUTING_CONTEXT)
-    RoutingStrategySelectsTier8().run_query_to_correct_tier(routing_context)
-    assert routing_context.query_settings.get_sampling_tier() == Tier.TIER_8
+    routing_decision = deepcopy(ROUTING_DECISION)
+    RoutingStrategySelectsTier8().decide_tier_and_query_settings(
+        Timer("test"), routing_decision
+    )
+    assert routing_decision.tier == Tier.TIER_8
 
 
 @pytest.mark.redis_db
 def test_merge_query_settings() -> None:
-    routing_context = deepcopy(ROUTING_CONTEXT)
-    RoutingStrategyUpdatesQuerySettings().run_query_to_correct_tier(routing_context)
-    assert routing_context.query_settings.get_sampling_tier() == Tier.TIER_8
-    assert routing_context.query_settings.get_clickhouse_settings() == {
-        "some_setting": "some_value"
-    }
+    routing_decision = deepcopy(ROUTING_DECISION)
+    RoutingStrategyUpdatesQuerySettings().decide_tier_and_query_settings(
+        Timer("test"), routing_decision
+    )
+    assert routing_decision.tier == Tier.TIER_8
+    assert routing_decision.clickhouse_settings == {"some_setting": "some_value"}
 
 
 @pytest.mark.redis_db
 def test_outputting_metrics_fails_open() -> None:
     with mock.patch("snuba.settings.RAISE_ON_ROUTING_STRATEGY_FAILURES", False):
-        routing_context = deepcopy(ROUTING_CONTEXT)
-        RoutingStrategyBadMetrics().run_query_to_correct_tier(routing_context)
-
-
-def test_failed_query() -> None:
-    routing_context = deepcopy(ROUTING_CONTEXT)
-    with pytest.raises(QueryException):
-        RoutingStrategyQueryFails().run_query_to_correct_tier(routing_context)
+        routing_decision = deepcopy(ROUTING_DECISION)
+        RoutingStrategyBadMetrics().decide_tier_and_query_settings(
+            Timer("test"), routing_decision
+        )
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_metrics_output() -> None:
     metric = 0
 
@@ -186,17 +175,24 @@ def test_metrics_output() -> None:
                 tags={"a": "b", "c": "d"},
             )
 
-    routing_context = deepcopy(ROUTING_CONTEXT)
+    routing_decision = deepcopy(ROUTING_DECISION)
     with mock.patch(
-        "snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing.record_query"
-    ) as record_query:
-        result = MetricsStrategy().run_query_to_correct_tier(routing_context)
+        "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.record_query"
+    ) as record_query, mock.patch(
+        "snuba.web.rpc.storage_routing.routing_strategy_selector.RoutingStrategySelector.select_routing_strategy",
+        return_value=MetricsStrategy(),
+    ), mock.patch(
+        "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series.run_query",
+        return_value=get_query_result(),
+    ):
+        EndpointTimeSeries().execute(_get_in_msg())
         record_query.assert_called_once()
         recorded_payload = record_query.mock_calls[0].args[0]
         assert recorded_payload["dataset"] == "storage_routing"
         assert recorded_payload["status"] == "TIER_8"
         assert recorded_payload["request"]["referrer"] == "MetricsStrategy"
 
+        print("plsplspls", recorded_payload["query_list"][0]["stats"])
         assert recorded_payload["query_list"][0]["stats"] == {
             "extra_info": {
                 "sampling_in_storage_estimation_time_overhead": {
@@ -224,23 +220,23 @@ def test_metrics_output() -> None:
                 "time_budget": 8000,
             },
             "clickhouse_settings": {},
-            "source_request_id": routing_context.in_msg.meta.request_id,
+            "source_request_id": RANDOM_REQUEST_ID,
             "result_info": {
                 "meta": {},
                 "profile": {"bytes": 420, "elapsed": 1.0},
-                "sql": result.extra["sql"],
-                "stats": result.extra["stats"],
+                "sql": "SELECT * FROM your_mom",
+                "stats": {"stat": 1},
             },
             "routed_tier": "TIER_8",
             "final": False,
             "cache_hit": 0,
-            "max_threads": routing_context.query_settings.get_clickhouse_settings().get(
-                "max_threads", 0
-            ),
+            "can_run": True,
+            "max_threads": routing_decision.clickhouse_settings.get("max_threads", 0),
             "clickhouse_table": "na",
             "query_id": "na",
             "is_duplicate": 0,
             "consistent": False,
+            "strategy": "MetricsStrategy",
         }
         schema = get_codec("snuba-queries")
         payload_bytes = json.dumps(recorded_payload).encode("utf-8")
@@ -266,34 +262,56 @@ def test_get_time_budget() -> None:
 
 
 @pytest.mark.redis_db
-def test_strategy_exceeeds_time_budget() -> None:
+@pytest.mark.clickhouse_db
+def test_strategy_exceeds_time_budget() -> None:
     class TooLongStrategy(RoutingStrategySelectsTier8):
-        def _run_query(self, routing_context: RoutingContext) -> QueryResult:
-            return get_query_result(12000)
+        pass
 
-    state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
-    strategy = TooLongStrategy()
-    routing_context = deepcopy(ROUTING_CONTEXT)
-    strategy.run_query_to_correct_tier(routing_context)
-    assert routing_context.extra_info["sampling_in_storage_routing_mistake"] == {
-        "type": "increment",
-        "value": 1,
-        "tags": {"reason": "time_budget_exceeded", "tier": "TIER_8"},
-    }
+    with mock.patch(
+        "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.record_query"
+    ) as record_query, mock.patch(
+        "snuba.web.rpc.storage_routing.routing_strategy_selector.RoutingStrategySelector.select_routing_strategy",
+        return_value=TooLongStrategy(),
+    ), mock.patch(
+        "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series.run_query",
+        return_value=get_query_result(12000),
+    ):
+
+        state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
+        EndpointTimeSeries().execute(_get_in_msg())
+        recorded_payload = record_query.mock_calls[0].args[0]
+        assert recorded_payload["query_list"][0]["stats"]["extra_info"][
+            "sampling_in_storage_routing_mistake"
+        ] == {
+            "type": "increment",
+            "value": 1,
+            "tags": {"reason": "time_budget_exceeded", "tier": "TIER_8"},
+        }
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_outcomes_based_routing_metrics_sampled_too_low() -> None:
     class TooFastStrategy(RoutingStrategySelectsTier8):
-        def _run_query(self, routing_context: RoutingContext) -> QueryResult:
-            return get_query_result(900)
+        pass
 
-    state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
-    strategy = TooFastStrategy()
-    routing_context = deepcopy(ROUTING_CONTEXT)
-    strategy.run_query_to_correct_tier(routing_context)
-    assert routing_context.extra_info["sampling_in_storage_routing_mistake"] == {
-        "type": "increment",
-        "value": 1,
-        "tags": {"reason": "sampled_too_low", "tier": "TIER_8"},
-    }
+    with mock.patch(
+        "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.record_query"
+    ) as record_query, mock.patch(
+        "snuba.web.rpc.storage_routing.routing_strategy_selector.RoutingStrategySelector.select_routing_strategy",
+        return_value=TooFastStrategy(),
+    ), mock.patch(
+        "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series.run_query",
+        return_value=get_query_result(900),
+    ):
+
+        state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
+        EndpointTimeSeries().execute(_get_in_msg())
+        recorded_payload = record_query.mock_calls[0].args[0]
+        assert recorded_payload["query_list"][0]["stats"]["extra_info"][
+            "sampling_in_storage_routing_mistake"
+        ] == {
+            "type": "increment",
+            "value": 1,
+            "tags": {"reason": "sampled_too_low", "tier": "TIER_8"},
+        }

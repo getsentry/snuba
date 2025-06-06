@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import replace
-from typing import Sequence
+from typing import Sequence, cast
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
@@ -40,6 +40,9 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
+)
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
@@ -238,13 +241,15 @@ class ResolverTraceItemTableUptimeChecks(ResolverTraceItemTable):
     def trace_item_type(cls) -> TraceItemType.ValueType:
         return TraceItemType.TRACE_ITEM_TYPE_UPTIME_CHECK
 
-    def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
+    def resolve(self, routing_decision: RoutingDecision) -> TraceItemTableResponse:
+        in_msg = cast(TraceItemTableRequest, routing_decision.routing_context.in_msg)
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
             timer=self._timer,
         )
+        routing_decision.routing_context.query_result = res
         column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,

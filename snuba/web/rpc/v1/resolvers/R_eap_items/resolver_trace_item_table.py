@@ -1,6 +1,9 @@
+import typing
+import uuid
 from dataclasses import replace
-from typing import List, Sequence
+from typing import List, Sequence, cast
 
+from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationComparisonFilter,
     AggregationFilter,
@@ -16,8 +19,11 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
+from snuba.attribution.appid import AppID
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -27,6 +33,8 @@ from snuba.query.dsl import literal, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request import Request as SnubaRequest
+from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     base_conditions_and,
@@ -39,6 +47,10 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingContext,
+    RoutingDecision,
+)
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     aggregation_to_expression,
@@ -50,9 +62,6 @@ from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     apply_virtual_columns_eap_items,
     attribute_key_to_expression_eap_items,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.sampling_in_storage_util import (
-    run_query_to_correct_tier,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -345,6 +354,38 @@ def _get_page_token(
     return PageToken(offset=request.page_token.offset + num_rows)
 
 
+def _build_snuba_request(
+    routing_context: RoutingContext, query_settings: HTTPQuerySettings
+) -> SnubaRequest:
+    request = typing.cast(TraceItemTableRequest, routing_context.in_msg)
+    if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
+        team = "ourlogs"
+        feature = "ourlogs"
+        parent_api = "ourlog_trace_item_table"
+    else:
+        team = "eap"
+        feature = "eap"
+        parent_api = "eap_span_samples"
+
+    return SnubaRequest(
+        id=uuid.UUID(request.meta.request_id),
+        original_body=MessageToDict(request),
+        query=build_query(request),
+        query_settings=query_settings,
+        attribution_info=AttributionInfo(
+            referrer=request.meta.referrer,
+            team=team,
+            feature=feature,
+            tenant_ids={
+                "organization_id": request.meta.organization_id,
+                "referrer": request.meta.referrer,
+            },
+            app_id=AppID("eap"),
+            parent_api=parent_api,
+        ),
+    )
+
+
 class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
@@ -352,18 +393,24 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
 
     def resolve(
         self,
-        in_msg: TraceItemTableRequest,
+        routing_decision: RoutingDecision,
     ) -> TraceItemTableResponse:
+        in_msg = cast(TraceItemTableRequest, routing_decision.routing_context.in_msg)
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )
+        query_settings.set_clickhouse_settings(routing_decision.clickhouse_settings)
+        query_settings.set_sampling_tier(routing_decision.tier)
 
-        res = run_query_to_correct_tier(
-            in_msg,
-            query_settings,
-            self._timer,
-            build_query,  # type: ignore
+        snuba_request = _build_snuba_request(
+            routing_decision.routing_context, query_settings
         )
+        res = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=snuba_request,
+            timer=self._timer,
+        )
+        routing_decision.routing_context.query_result = res
         column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,

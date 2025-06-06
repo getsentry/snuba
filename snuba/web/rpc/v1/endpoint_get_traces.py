@@ -1,6 +1,6 @@
 import uuid
 from collections import defaultdict
-from typing import Any, Callable, Dict, Iterable, Type
+from typing import Any, Callable, Dict, Iterable, Type, cast
 
 from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
 from google.protobuf.json_format import MessageToDict
@@ -44,6 +44,9 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
+)
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression_eap_items,
 )
@@ -395,7 +398,11 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     def response_class(cls) -> Type[GetTracesResponse]:
         return GetTracesResponse
 
-    def _execute(self, in_msg: GetTracesRequest) -> GetTracesResponse:
+    def _execute(
+        self,
+        routing_decision: RoutingDecision,
+    ) -> GetTracesResponse:
+        in_msg = cast(GetTracesRequest, routing_decision.routing_context.in_msg)
         _validate_order_by(in_msg)
 
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(

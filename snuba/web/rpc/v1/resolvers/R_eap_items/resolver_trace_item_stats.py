@@ -1,6 +1,6 @@
 import uuid
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any, Dict, Iterable, Tuple, cast
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
@@ -46,6 +46,9 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
+)
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression_eap_items,
@@ -226,8 +229,9 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
 
     def resolve(
         self,
-        in_msg: TraceItemStatsRequest,
+        routing_decision: RoutingDecision,
     ) -> TraceItemStatsResponse:
+        in_msg = cast(TraceItemStatsRequest, routing_decision.routing_context.in_msg)
         results = []
         for requested_type in in_msg.stats_types:
             result = TraceItemStatsResult()

@@ -1,5 +1,5 @@
 import uuid
-from typing import Type
+from typing import Type, cast
 
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
@@ -14,6 +14,9 @@ from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     ContainsAggregateVisitor,
     TraceItemTableRequestWrapper,
+)
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
@@ -113,7 +116,11 @@ class EndpointTraceItemTable(
     def response_class(cls) -> Type[TraceItemTableResponse]:
         return TraceItemTableResponse
 
-    def _execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
+    def _execute(
+        self,
+        routing_decision: RoutingDecision,
+    ) -> TraceItemTableResponse:
+        in_msg = cast(TraceItemTableRequest, routing_decision.routing_context.in_msg)
         aggregation_to_conditional_aggregation_visitor = (
             AggregationToConditionalAggregationVisitor()
         )
@@ -134,6 +141,7 @@ class EndpointTraceItemTable(
             )
 
         in_msg = _transform_request(in_msg)
+        routing_decision.routing_context.in_msg = in_msg
 
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
-        return resolver.resolve(in_msg)
+        return resolver.resolve(routing_decision)
