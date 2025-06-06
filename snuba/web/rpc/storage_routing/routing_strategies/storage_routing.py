@@ -174,7 +174,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
         meta = routing_context.in_msg.time_series_request.meta if isinstance(routing_context.in_msg, CreateSubscriptionRequest) else routing_context.in_msg.meta  # type: ignore
         if not meta.HasField("downsampled_storage_config"):
             return False
-        return (
+        return bool(
             meta.downsampled_storage_config.mode
             == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
         )

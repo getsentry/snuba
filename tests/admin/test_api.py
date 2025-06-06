@@ -102,7 +102,7 @@ def rpc_test_setup() -> Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]]:
         def response_class(cls) -> type[Timestamp]:
             return Timestamp
 
-        def _execute(self, routing_decision: RoutingDecision) -> Timestamp:  # type: ignore
+        def _execute(self, routing_decision: RoutingDecision) -> Timestamp:
             current_time = time.time()
             return Timestamp(seconds=int(current_time), nanos=0)
 
