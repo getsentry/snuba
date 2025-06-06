@@ -27,6 +27,9 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
+)
 
 
 @dataclass
@@ -99,7 +102,7 @@ def rpc_test_setup() -> Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]]:
         def response_class(cls) -> type[Timestamp]:
             return Timestamp
 
-        def _execute(self, in_msg: MyRequest) -> Timestamp:  # type: ignore
+        def _execute(self, routing_decision: RoutingDecision) -> Timestamp:
             current_time = time.time()
             return Timestamp(seconds=int(current_time), nanos=0)
 
@@ -1021,6 +1024,7 @@ def test_clickhouse_system_settings(
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_execute_rpc_endpoint_success(
     admin_api: FlaskClient,
     rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]],

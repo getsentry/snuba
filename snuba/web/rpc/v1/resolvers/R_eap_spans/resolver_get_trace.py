@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from operator import attrgetter
-from typing import Any, Dict, Iterable, Type, cast
+from typing import Any, Dict, Iterable, cast
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -9,6 +9,7 @@ from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
     GetTraceRequest,
     GetTraceResponse,
 )
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 
 from snuba.attribution.appid import AppID
@@ -25,7 +26,6 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
-from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     project_id_and_org_conditions,
     timestamp_in_range_condition,
@@ -39,6 +39,7 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
 )
+from snuba.web.rpc.v1.resolvers import ResolverGetTrace
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression_eap_items,
 )
@@ -51,7 +52,7 @@ NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
 ]
 
 
-def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Query:
+def _build_query(request: GetTraceRequest) -> Query:
     selected_columns: list[SelectedExpression] = [
         SelectedExpression(
             name="id",
@@ -79,9 +80,12 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
             ),
         ),
     ]
+    item_conditions = [
+        i for i in request.items if i.item_type == TraceItemType.TRACE_ITEM_TYPE_SPAN
+    ][0]
 
-    if len(item.attributes) > 0:
-        for attribute_key in item.attributes:
+    if len(item_conditions.attributes) > 0:
+        for attribute_key in item_conditions.attributes:
             selected_columns.append(
                 SelectedExpression(
                     name=attribute_key.name,
@@ -125,6 +129,7 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
         sample=None,
     )
+
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -133,10 +138,6 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
             timestamp_in_range_condition(
                 request.meta.start_timestamp.seconds,
                 request.meta.end_timestamp.seconds,
-            ),
-            equals(
-                column("item_type"),
-                literal(item.item_type),
             ),
             equals(
                 column("trace_id"),
@@ -156,17 +157,16 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
     return query
 
 
-def _build_snuba_request(
-    request: GetTraceRequest,
-    item: GetTraceRequest.TraceItem,
-) -> SnubaRequest:
+def _build_snuba_request(request: GetTraceRequest) -> SnubaRequest:
+    query_settings = (
+        setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
+    )
+
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=_build_query(request, item),
-        query_settings=(
-            setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
-        ),
+        query=_build_query(request),
+        query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
             team="eap",
@@ -227,7 +227,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
 
 
 def _convert_results(
-    data: Iterable[Dict[str, Any]],
+    data: Iterable[Dict[str, Any]], add_hex_columns: bool = False
 ) -> list[GetTraceResponse.Item]:
     items: list[GetTraceResponse.Item] = []
 
@@ -271,51 +271,40 @@ def _convert_results(
     return items
 
 
-class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
+class ResolverGetTraceEAPSpans(ResolverGetTrace):
     @classmethod
-    def version(cls) -> str:
-        return "v1"
+    def trace_item_type(cls) -> TraceItemType.ValueType:
+        return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
-    @classmethod
-    def request_class(cls) -> Type[GetTraceRequest]:
-        return GetTraceRequest
-
-    @classmethod
-    def response_class(cls) -> Type[GetTraceResponse]:
-        return GetTraceResponse
-
-    def _execute(self, routing_decision: RoutingDecision) -> GetTraceResponse:
+    def resolve(self, routing_decision: RoutingDecision) -> GetTraceResponse:
         in_msg = cast(GetTraceRequest, routing_decision.routing_context.in_msg)
-        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
-            uuid.uuid4()
+        results = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=_build_snuba_request(in_msg),
+            timer=self._timer,
         )
+        routing_decision.routing_context.query_result = results
+        item_conditions = [
+            i for i in in_msg.items if i.item_type == TraceItemType.TRACE_ITEM_TYPE_SPAN
+        ][0]
+        items = _convert_results(
+            results.result.get("data", []),
+            not item_conditions.attributes,
+        )
+        item_groups: list[GetTraceResponse.ItemGroup] = [
+            GetTraceResponse.ItemGroup(
+                item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                items=items,
+            ),
+        ]
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
             [],
             [self._timer],
         )
-        item_groups = [self._query_item_group(in_msg, item) for item in in_msg.items]
         return GetTraceResponse(
             item_groups=item_groups,
             meta=response_meta,
             trace_id=in_msg.trace_id,
-        )
-
-    def _query_item_group(
-        self,
-        in_msg: GetTraceRequest,
-        item: GetTraceRequest.TraceItem,
-    ) -> GetTraceResponse.ItemGroup:
-        results = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=_build_snuba_request(in_msg, item),
-            timer=self._timer,
-        )
-        items = _convert_results(
-            results.result.get("data", []),
-        )
-        return GetTraceResponse.ItemGroup(
-            item_type=item.item_type,
-            items=items,
         )
