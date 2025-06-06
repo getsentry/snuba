@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
-from typing import Callable, cast
+from typing import Callable, TypeVar, cast
 
+from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
@@ -23,6 +24,9 @@ from snuba.query.dsl import (
 )
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+
+Tin = TypeVar("Tin", bound=ProtobufMessage)
+Tout = TypeVar("Tout", bound=ProtobufMessage)
 
 
 def _check_non_string_values_cannot_ignore_case(

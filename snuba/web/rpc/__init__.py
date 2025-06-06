@@ -1,6 +1,7 @@
 import os
+import typing
 from bisect import bisect_left
-from typing import Generic, List, Tuple, Type, TypeVar, cast, final
+from typing import Generic, List, Tuple, Type, cast, final
 
 import sentry_sdk
 from google.protobuf.message import DecodeError
@@ -9,7 +10,8 @@ from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageCon
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
-from snuba import environment
+from snuba import environment, settings, state
+from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -19,14 +21,20 @@ from snuba.utils.registered_class import (
     import_submodules_in_directory,
 )
 from snuba.web import QueryException
+from snuba.web.rpc.common.common import Tin, Tout
 from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
-
-Tin = TypeVar("Tin", bound=ProtobufMessage)
-Tout = TypeVar("Tout", bound=ProtobufMessage)
+from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingContext,
+    RoutingDecision,
+)
+from snuba.web.rpc.storage_routing.routing_strategy_selector import (
+    RoutingStrategySelector,
+)
 
 _TIME_PERIOD_HOURS_BUCKETS = [
     1,
@@ -83,7 +91,7 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
             shape,
         )
 
-    def resolve(self, in_msg: Tin) -> Tout:
+    def resolve(self, routing_decision: RoutingDecision) -> Tout:
         raise NotImplementedError
 
 
@@ -148,10 +156,22 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
-        self.__before_execute(in_msg)
+
+        routing_decision = RoutingDecision(
+            routing_context=RoutingContext(
+                in_msg=in_msg,
+                timer=self._timer,
+            )
+        )
+        self.__before_execute(routing_decision)
         error = None
         try:
-            out = self._execute(in_msg)
+            if routing_decision.can_run:
+                with sentry_sdk.start_span(op="execute") as span:
+                    span.set_data("selected_tier", routing_decision.tier)
+                out = self._execute(routing_decision)
+            else:
+                raise AllocationPolicyViolations
         except QueryException as e:
             if (
                 "error_code" in e.extra["stats"]
@@ -164,9 +184,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 and e.extra["stats"]["error_code"] == 159
             ):
                 tags = {"endpoint": str(self.__class__.__name__)}
-                if self._uses_storage_routing(in_msg):
+                if self._uses_storage_routing(
+                    typing.cast(Tin, routing_decision.routing_context.in_msg)
+                ):
                     tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
-                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
+                        routing_decision.routing_context.in_msg.meta.downsampled_storage_config.mode  # type: ignore
                     )
                 self.metrics.increment("timeout_query", 1, tags)
                 sentry_sdk.capture_exception(e)
@@ -175,9 +197,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 and e.extra["stats"]["error_code"] == 160
             ):
                 tags = {"endpoint": str(self.__class__.__name__)}
-                if self._uses_storage_routing(in_msg):
+                if self._uses_storage_routing(
+                    typing.cast(Tin, routing_decision.routing_context.in_msg)
+                ):
                     tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
-                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
+                        routing_decision.routing_context.in_msg.meta.downsampled_storage_config.mode  # type: ignore
                     )
                 self.metrics.increment("estimated_execution_timeout", 1, tags)
                 sentry_sdk.capture_exception(e)
@@ -186,12 +210,28 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         except Exception as e:
             out = self.response_class()()
             error = e  # type: ignore
-        return self.__after_execute(in_msg, out, error)
+        return self.__after_execute(out, error, routing_decision)
 
-    def __before_execute(self, in_msg: Tin) -> None:
-        self._timer.update_tags(self.__extract_request_tags(in_msg))
+    def __before_execute(self, routing_decision: RoutingDecision) -> None:
+        self._timer.update_tags(
+            self.__extract_request_tags(
+                typing.cast(Tin, routing_decision.routing_context.in_msg)
+            )
+        )
+
+        # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
+        # the result is currently not used in storage routing
+        # can turn off on Snuba Admin
+        if state.get_config("storage_routing.enable_get_cluster_loadinfo", True):
+            get_cluster_loadinfo()
+
+        selected_strategy = RoutingStrategySelector().select_routing_strategy(
+            routing_decision.routing_context
+        )
+        routing_decision.strategy = selected_strategy
+        selected_strategy.decide_tier_and_query_settings(self._timer, routing_decision)
         self._timer.mark("rpc_start")
-        self._before_execute(in_msg)
+        self._before_execute(typing.cast(Tin, routing_decision.routing_context.in_msg))
 
     def __extract_request_tags(self, in_msg: Tin) -> dict[str, str]:
         if not hasattr(in_msg, "meta"):
@@ -230,37 +270,51 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         """Override this for any pre-processing/logging before the _execute method"""
         pass
 
-    def _execute(self, in_msg: Tin) -> Tout:
+    def _execute(self, routing_decision: RoutingDecision) -> Tout:
         raise NotImplementedError
 
     def __after_execute(
-        self, in_msg: Tin, out_msg: Tout, error: Exception | None
+        self,
+        out_msg: Tout,
+        error: Exception | None,
+        routing_decision: RoutingDecision,
     ) -> Tout:
-        res = self._after_execute(in_msg, out_msg, error)
-        self._timer.mark("rpc_end")
-        self._timer.send_metrics_to(self.metrics)
-        if error is not None:
-            sentry_sdk.capture_exception(error)
-            if isinstance(error, BadSnubaRPCRequestException):
-                self.metrics.increment(
-                    "request_invalid",
-                    tags=self._timer.tags,
-                )
+        try:
+            res = self._after_execute(out_msg, error, routing_decision)
+            routing_decision.strategy.output_metrics(routing_decision)  # type: ignore
+            self._timer.mark("rpc_end")
+            self._timer.send_metrics_to(self.metrics)
+            if error is not None:
+                # todo(rachel): do we want to capture allocation policy violations?
+                sentry_sdk.capture_exception(error)
+                if isinstance(error, BadSnubaRPCRequestException):
+                    self.metrics.increment(
+                        "request_invalid",
+                        tags=self._timer.tags,
+                    )
+                else:
+                    self.metrics.increment(
+                        "request_error",
+                        tags=self._timer.tags,
+                    )
+                raise error
             else:
                 self.metrics.increment(
-                    "request_error",
+                    "request_success",
                     tags=self._timer.tags,
                 )
-            raise error
-        else:
-            self.metrics.increment(
-                "request_success",
-                tags=self._timer.tags,
-            )
+        except Exception as e:
+            self.metrics.increment("metrics_failure")
+            sentry_sdk.capture_exception(e)
+            if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
+                raise e
         return res
 
     def _after_execute(
-        self, in_msg: Tin, out_msg: Tout, error: Exception | None
+        self,
+        out_msg: Tout,
+        error: Exception | None,
+        routing_decision: RoutingDecision,
     ) -> Tout:
         """Override this for any post-processing/logging after the _execute method"""
         return out_msg

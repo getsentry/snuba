@@ -2,9 +2,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.load_retriever import (
-    get_cluster_loadinfo,
-)
+from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
 
 
 @pytest.mark.redis_db

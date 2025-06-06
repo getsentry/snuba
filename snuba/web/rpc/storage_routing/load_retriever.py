@@ -13,7 +13,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(
     environment.metrics,
-    "snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.load_retriever",
+    "snuba.web.rpc.storage_routing.load_retriever",
 )
 
 

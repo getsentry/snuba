@@ -1,6 +1,6 @@
 import math
 import uuid
-from typing import Type
+from typing import Type, cast
 
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     Expression,
@@ -14,6 +14,9 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     TimeSeriesRequestWrapper,
+)
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.visitors.visitor_v2 import preprocess_expression_labels
@@ -115,8 +118,12 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
             metrics_backend=self._metrics_backend,
         )
 
-    def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
+    def _execute(
+        self,
+        routing_decision: RoutingDecision,
+    ) -> TimeSeriesResponse:
         # TODO: Move this to base
+        in_msg = cast(TimeSeriesRequest, routing_decision.routing_context.in_msg)
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )
@@ -135,4 +142,5 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         in_msg_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
         preprocess_expression_labels(in_msg)
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
-        return resolver.resolve(in_msg)
+        routing_decision.routing_context.in_msg = in_msg
+        return resolver.resolve(routing_decision)
