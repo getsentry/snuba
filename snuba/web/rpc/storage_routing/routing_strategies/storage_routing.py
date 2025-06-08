@@ -172,7 +172,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
     def _is_highest_accuracy_mode(self, routing_context: RoutingContext) -> bool:
         meta = routing_context.in_msg.time_series_request.meta if isinstance(routing_context.in_msg, CreateSubscriptionRequest) else routing_context.in_msg.meta  # type: ignore
-        if not meta.HasField("downsampled_storage_config"):
+        if not hasattr(meta, "downsampled_storage_config"):
             return False
         return bool(
             meta.downsampled_storage_config.mode
