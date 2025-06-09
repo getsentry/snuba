@@ -803,42 +803,53 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=hour_ago,
-                end_timestamp=ts,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+
+        meta = RequestMeta(
+            project_ids=[1, 2, 3],
+            organization_id=1,
+            cogs_category="something",
+            referrer="something",
+            start_timestamp=hour_ago,
+            end_timestamp=ts,
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        )
+        # TODO: I manually set the labels here for the left and right side of the formula
+        # to be .left and .right. This is required to be able to calculate the reliability.
+        # I need to add a visitor to set labels like this for all formulas.
+        col1 = Column(
+            aggregation=AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(
+                    type=AttributeKey.TYPE_DOUBLE,
+                    name="kyles_measurement",
+                ),
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                label="sum(kyles_measurement) / sum(kyles_measurement_2).left",
             ),
+            label="sum(kyles_measurement) / sum(kyles_measurement_2).left",
+        )
+        col2 = Column(
+            aggregation=AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(
+                    type=AttributeKey.TYPE_DOUBLE,
+                    name="kyles_measurement_2",
+                ),
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                label="sum(kyles_measurement) / sum(kyles_measurement_2).right",
+            ),
+            label="sum(kyles_measurement) / sum(kyles_measurement_2).right",
+        )
+        message = TraceItemTableRequest(
+            meta=meta,
             columns=[
+                col1,
+                col2,
                 Column(
                     formula=Column.BinaryFormula(
                         op=Column.BinaryFormula.OP_DIVIDE,
-                        left=Column(
-                            aggregation=AttributeAggregation(
-                                aggregate=Function.FUNCTION_SUM,
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_DOUBLE,
-                                    name="kyles_measurement",
-                                ),
-                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
-                            ),
-                            label="sum(kyles_measurement)",
-                        ),
-                        right=Column(
-                            aggregation=AttributeAggregation(
-                                aggregate=Function.FUNCTION_SUM,
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_DOUBLE,
-                                    name="kyles_measurement_2",
-                                ),
-                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
-                            ),
-                            label="sum(kyles_measurement_2)",
-                        ),
+                        left=col1,
+                        right=col2,
                     ),
                     label="sum(kyles_measurement) / sum(kyles_measurement_2)",
                 ),
