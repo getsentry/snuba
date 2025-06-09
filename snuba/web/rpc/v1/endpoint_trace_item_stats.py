@@ -1,5 +1,5 @@
 import uuid
-from typing import Type, cast
+from typing import Type
 
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     TraceItemStatsRequest,
@@ -9,9 +9,6 @@ from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    RoutingDecision,
-)
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 
 
@@ -38,8 +35,7 @@ class EndpointTraceItemStats(
             metrics_backend=self._metrics_backend,
         )
 
-    def _execute(self, routing_decision: RoutingDecision) -> TraceItemStatsResponse:
-        in_msg = cast(TraceItemStatsRequest, routing_decision.routing_context.in_msg)
+    def _execute(self, in_msg: TraceItemStatsRequest) -> TraceItemStatsResponse:
 
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
@@ -52,5 +48,7 @@ class EndpointTraceItemStats(
             raise BadSnubaRPCRequestException(
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
             )
+
+        self.routing_decision.routing_context.in_msg = in_msg
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
-        return resolver.resolve(routing_decision)
+        return resolver.resolve(in_msg, self.routing_decision)

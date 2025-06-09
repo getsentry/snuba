@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import replace
-from typing import Sequence, cast
+from typing import Sequence
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
@@ -241,8 +241,9 @@ class ResolverTraceItemTableUptimeChecks(ResolverTraceItemTable):
     def trace_item_type(cls) -> TraceItemType.ValueType:
         return TraceItemType.TRACE_ITEM_TYPE_UPTIME_CHECK
 
-    def resolve(self, routing_decision: RoutingDecision) -> TraceItemTableResponse:
-        in_msg = cast(TraceItemTableRequest, routing_decision.routing_context.in_msg)
+    def resolve(
+        self, in_msg: TraceItemTableRequest, routing_decision: RoutingDecision
+    ) -> TraceItemTableResponse:
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
@@ -250,6 +251,7 @@ class ResolverTraceItemTableUptimeChecks(ResolverTraceItemTable):
             timer=self._timer,
         )
         routing_decision.routing_context.query_result = res
+        routing_decision.routing_context.in_msg = in_msg
         column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,

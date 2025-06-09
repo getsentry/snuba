@@ -1,4 +1,4 @@
-from typing import Type, cast
+from typing import Type
 
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest as CreateSubscriptionRequestProto,
@@ -11,9 +11,6 @@ from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    RoutingDecision,
-)
 from snuba.web.rpc.v1.endpoint_time_series import _convert_aggregations_to_expressions
 
 
@@ -32,17 +29,19 @@ class CreateSubscriptionRequest(
     def response_class(cls) -> Type[CreateSubscriptionResponse]:
         return CreateSubscriptionResponse
 
-    def _execute(self, routing_decision: RoutingDecision) -> CreateSubscriptionResponse:
+    def _execute(
+        self, in_msg: CreateSubscriptionRequestProto
+    ) -> CreateSubscriptionResponse:
         from snuba.subscriptions.data import RPCSubscriptionData
         from snuba.subscriptions.subscription import SubscriptionCreator
 
-        in_msg = cast(
-            CreateSubscriptionRequestProto, routing_decision.routing_context.in_msg
-        )
         # convert aggregations to expressions
         in_msg.time_series_request.CopyFrom(
             _convert_aggregations_to_expressions(in_msg.time_series_request)
         )
+
+        # todo(rachel): have to do this to get the transformed in_msg back into routing_context, it's used in _construct_hacky_querylog_payload
+        self.routing_decision.routing_context.in_msg = in_msg
 
         dataset = PluggableDataset(name="eap", all_entities=[])
         entity_key = EntityKey(subscription_entity_name())

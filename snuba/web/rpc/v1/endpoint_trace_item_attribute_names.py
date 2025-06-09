@@ -1,5 +1,5 @@
 import uuid
-from typing import Type, cast
+from typing import Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
@@ -38,9 +38,6 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
-from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    RoutingDecision,
-)
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
@@ -372,15 +369,13 @@ class EndpointTraceItemAttributeNames(
         )
 
     def _execute(
-        self, routing_decision: RoutingDecision
+        self, in_msg: TraceItemAttributeNamesRequest
     ) -> TraceItemAttributeNamesResponse:
-        in_msg = cast(
-            TraceItemAttributeNamesRequest, routing_decision.routing_context.in_msg
-        )
         if not in_msg.meta.request_id:
             in_msg.meta.request_id = str(uuid.uuid4())
 
         snuba_request = get_co_occurring_attributes(in_msg)
+        self.routing_decision.routing_context.in_msg = in_msg
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

@@ -1,7 +1,7 @@
 import uuid
 from collections import defaultdict
 from datetime import datetime
-from typing import Any, Dict, Iterable, cast
+from typing import Any, Dict, Iterable
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -290,14 +290,16 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
     def trace_item_type(cls) -> TraceItemType.ValueType:
         return TraceItemType.TRACE_ITEM_TYPE_UPTIME_CHECK
 
-    def resolve(self, routing_decision: RoutingDecision) -> TimeSeriesResponse:
-        in_msg = cast(TimeSeriesRequest, routing_decision.routing_context.in_msg)
+    def resolve(
+        self, in_msg: TimeSeriesRequest, routing_decision: RoutingDecision
+    ) -> TimeSeriesResponse:
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
             timer=self._timer,
         )
+        routing_decision.routing_context.in_msg = in_msg
         routing_decision.routing_context.query_result = res
         response_meta = extract_response_meta(
             in_msg.meta.request_id,

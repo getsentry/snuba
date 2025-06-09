@@ -18,6 +18,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableR
 
 from snuba import environment, settings, state
 from snuba.downsampled_storage_tiers import Tier
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -38,8 +39,8 @@ ClickhouseQuerySettings = Dict[str, Any]
 
 @dataclass
 class RoutingContext:
-    in_msg: ProtobufMessage
     timer: Timer
+    in_msg: ProtobufMessage | None = None
     query_result: Optional[QueryResult] = field(default=None)
     extra_info: dict[str, Any] = field(default_factory=dict)
 
@@ -47,7 +48,7 @@ class RoutingContext:
 @dataclass
 class RoutingDecision:
     routing_context: RoutingContext
-    strategy: BaseRoutingStrategy | None = None
+    strategy: BaseRoutingStrategy
     tier: Tier = Tier.TIER_1
     clickhouse_settings: dict[str, str] = field(default_factory=dict)
     can_run: bool | None = None
@@ -109,7 +110,9 @@ def _construct_hacky_querylog_payload(
         "request": {
             "id": uuid.uuid4().hex,
             "app_id": "storage_routing",
-            "body": MessageToDict(routing_decision.routing_context.in_msg),
+            "body": MessageToDict(routing_decision.routing_context.in_msg)
+            if routing_decision.routing_context.in_msg
+            else {},
             "referrer": strategy.__class__.__name__,
         },
         "dataset": "storage_routing",
@@ -179,19 +182,20 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
         )
 
-    def __merge_clickhouse_settings(
+    def merge_clickhouse_settings(
         self,
         routing_decision: RoutingDecision,
-        query_settings: ClickhouseQuerySettings,
+        query_settings: HTTPQuerySettings,
     ) -> None:
-        """merge query settings decided in _decide_tier_and_query_settings with whatever was passed in the
-        routing context initially
+        """merge query settings decided in _get_routing_decision with whatever was passed in (from the request) initially
 
-        the settings in _decide_tier_and_query_settings take priority
+        the settings in _get_routing_decision take priority
+
+        note that for querylog, routing_decision.clickhouse_settings will not contain whatever was passed in
         """
 
-        for k, v in query_settings.items():
-            routing_decision.clickhouse_settings[k] = v
+        for k, v in routing_decision.clickhouse_settings.items():
+            query_settings.push_clickhouse_setting(k, v)
 
     def _record_value_in_span_and_DD(
         self,
@@ -212,29 +216,25 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
         if span is not None:
             span.set_data(name, value)
 
-    def _decide_tier_and_query_settings(
-        self, routing_decision: RoutingDecision
-    ) -> tuple[Tier, ClickhouseQuerySettings, bool]:
+    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
         raise NotImplementedError
 
     @final
-    def decide_tier_and_query_settings(
-        self, timer: Timer, routing_decision: RoutingDecision
-    ) -> None:
+    def get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
+        from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
+            OutcomesBasedRoutingStrategy,
+        )
+
         with sentry_sdk.start_span(op="decide_tier"):
             try:
-                timer.mark(_START_ESTIMATION_MARK)
-                (
-                    target_tier,
-                    query_settings,
-                    can_run,
-                ) = self._decide_tier_and_query_settings(routing_decision)
-                timer.mark(_END_ESTIMATION_MARK)
+                routing_context.timer.mark(_START_ESTIMATION_MARK)
+                routing_decision = self._get_routing_decision(routing_context)
+                routing_context.timer.mark(_END_ESTIMATION_MARK)
                 self._record_value_in_span_and_DD(
                     routing_decision.routing_context,
                     self.metrics.timing,
                     "estimation_time_overhead",
-                    timer.get_duration_between_marks(
+                    routing_context.timer.get_duration_between_marks(
                         _START_ESTIMATION_MARK, _END_ESTIMATION_MARK
                     ),
                 )
@@ -243,16 +243,19 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                 # log some error metrics
                 self.metrics.increment("estimation_failure")
                 sentry_sdk.capture_exception(e)
-                target_tier = Tier.TIER_1
-                can_run = True
-                query_settings = {}
+                routing_decision = RoutingDecision(
+                    routing_context=RoutingContext(
+                        timer=Timer("endpoint_timing"),
+                    ),
+                    strategy=OutcomesBasedRoutingStrategy(),
+                    tier=Tier.TIER_1,
+                    can_run=True,
+                )
 
                 if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
                     raise e
 
-            routing_decision.tier = target_tier
-            self.__merge_clickhouse_settings(routing_decision, query_settings)
-            routing_decision.can_run = can_run
+            return routing_decision
 
     @final
     def output_metrics(self, routing_decision: RoutingDecision) -> None:

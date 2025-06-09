@@ -1,7 +1,7 @@
 import typing
 import uuid
 from dataclasses import replace
-from typing import List, Sequence, cast
+from typing import List, Sequence
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
@@ -393,13 +393,15 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
 
     def resolve(
         self,
+        in_msg: TraceItemTableRequest,
         routing_decision: RoutingDecision,
     ) -> TraceItemTableResponse:
-        in_msg = cast(TraceItemTableRequest, routing_decision.routing_context.in_msg)
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )
-        query_settings.set_clickhouse_settings(routing_decision.clickhouse_settings)
+        routing_decision.strategy.merge_clickhouse_settings(
+            routing_decision, query_settings
+        )
         query_settings.set_sampling_tier(routing_decision.tier)
 
         snuba_request = _build_snuba_request(

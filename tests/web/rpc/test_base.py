@@ -1,6 +1,6 @@
 import time
 from datetime import timedelta
-from typing import Type, cast
+from typing import Type
 from unittest.mock import patch
 
 import pytest
@@ -13,9 +13,6 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names
-from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    RoutingDecision,
-)
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.backends.metrics import TestingMetricsBackend
 from tests.web.rpc.v1.test_utils import BASE_TIME
@@ -32,9 +29,9 @@ class MyRPC(RPCEndpoint[Timestamp, Timestamp]):
     def version(cls) -> str:
         return "v1"
 
-    def _execute(self, routing_decision: RoutingDecision) -> Timestamp:
+    def _execute(self, in_msg: Timestamp) -> Timestamp:
         time.sleep(self.duration_millis / 1000)
-        return cast(Timestamp, routing_decision.routing_context.in_msg)
+        return Timestamp()
 
 
 class ErrorRPC(RPCEndpoint[Timestamp, Timestamp]):
@@ -48,7 +45,7 @@ class ErrorRPC(RPCEndpoint[Timestamp, Timestamp]):
     def version(cls) -> str:
         return "v1"
 
-    def _execute(self, routing_decision: RoutingDecision) -> Timestamp:
+    def _execute(self, in_msg: Timestamp) -> Timestamp:
         time.sleep(self.duration_millis / 1000)
         raise RPCException("This is meant to error!")
 
@@ -70,14 +67,11 @@ def test_before_and_after_execute() -> None:
             nonlocal before_called
             before_called = True
 
-        def _execute(self, routing_decision: RoutingDecision) -> Timestamp:
-            return cast(Timestamp, routing_decision.routing_context.in_msg)
+        def _execute(self, in_msg: Timestamp) -> Timestamp:
+            return in_msg
 
         def _after_execute(
-            self,
-            out_msg: Timestamp,
-            error: Exception | None,
-            routing_decision: RoutingDecision,
+            self, in_msg: Timestamp, out_msg: Timestamp, error: Exception | None
         ) -> Timestamp:
             nonlocal after_called
             after_called = True

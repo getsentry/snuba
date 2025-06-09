@@ -16,7 +16,6 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
-    ClickhouseQuerySettings,
     RoutingContext,
     RoutingDecision,
 )
@@ -60,9 +59,7 @@ def get_query_result(elapsed_ms: int = 1000) -> QueryResult:
 
 
 class RoutingStrategyFailsToSelectTier(BaseRoutingStrategy):
-    def _decide_tier_and_query_settings(
-        self, routing_decision: RoutingDecision
-    ) -> tuple[Tier, ClickhouseQuerySettings, bool]:
+    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
         raise Exception
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
@@ -70,30 +67,42 @@ class RoutingStrategyFailsToSelectTier(BaseRoutingStrategy):
 
 
 class RoutingStrategySelectsTier8(BaseRoutingStrategy):
-    def _decide_tier_and_query_settings(
-        self, routing_decision: RoutingDecision
-    ) -> tuple[Tier, ClickhouseQuerySettings, bool]:
-        return Tier.TIER_8, {}, True
+    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
+        return RoutingDecision(
+            routing_context=routing_context,
+            strategy=self,
+            tier=Tier.TIER_8,
+            can_run=True,
+            clickhouse_settings={},
+        )
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
 
 
 class RoutingStrategyUpdatesQuerySettings(BaseRoutingStrategy):
-    def _decide_tier_and_query_settings(
-        self, routing_decision: RoutingDecision
-    ) -> tuple[Tier, ClickhouseQuerySettings, bool]:
-        return Tier.TIER_8, {"some_setting": "some_value"}, True
+    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
+        return RoutingDecision(
+            routing_context=routing_context,
+            strategy=self,
+            tier=Tier.TIER_8,
+            clickhouse_settings={"some_setting": "some_value"},
+            can_run=True,
+        )
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
 
 
 class RoutingStrategyBadMetrics(BaseRoutingStrategy):
-    def _decide_tier_and_query_settings(
-        self, routing_decision: RoutingDecision
-    ) -> tuple[Tier, ClickhouseQuerySettings, bool]:
-        return Tier.TIER_8, {"some_setting": "some_value"}, True
+    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
+        return RoutingDecision(
+            routing_context=routing_context,
+            strategy=self,
+            tier=Tier.TIER_8,
+            clickhouse_settings={"some_setting": "some_value"},
+            can_run=True,
+        )
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         if 1 / 0 > 10:
@@ -101,49 +110,48 @@ class RoutingStrategyBadMetrics(BaseRoutingStrategy):
 
 
 class RoutingStrategyQueryFails(BaseRoutingStrategy):
-    def _decide_tier_and_query_settings(
-        self, routing_decision: RoutingDecision
-    ) -> tuple[Tier, ClickhouseQuerySettings, bool]:
-        return Tier.TIER_8, {"some_setting": "some_value"}, True
+    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
+        return RoutingDecision(
+            routing_context=routing_context,
+            strategy=self,
+            tier=Tier.TIER_8,
+            clickhouse_settings={"some_setting": "some_value"},
+            can_run=True,
+        )
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         raise ValueError("should never get here")
 
 
-ROUTING_DECISION = RoutingDecision(
-    routing_context=RoutingContext(
-        in_msg=_get_in_msg(),
-        timer=Timer("stuff"),
-        query_result=MagicMock(spec=QueryResult),
-        extra_info={},
-    ),
+ROUTING_CONTEXT = RoutingContext(
+    in_msg=_get_in_msg(),
+    timer=Timer("stuff"),
+    query_result=MagicMock(spec=QueryResult),
+    extra_info={},
 )
 
 
 @pytest.mark.redis_db
 def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> None:
     with mock.patch("snuba.settings.RAISE_ON_ROUTING_STRATEGY_FAILURES", False):
-        routing_decision = deepcopy(ROUTING_DECISION)
-        RoutingStrategyFailsToSelectTier().decide_tier_and_query_settings(
-            Timer("test"), routing_decision
+        routing_decision = RoutingStrategyFailsToSelectTier().get_routing_decision(
+            deepcopy(ROUTING_CONTEXT)
         )
         assert routing_decision.tier == Tier.TIER_1
 
 
 @pytest.mark.redis_db
 def test_target_tier_is_set_in_routing_context() -> None:
-    routing_decision = deepcopy(ROUTING_DECISION)
-    RoutingStrategySelectsTier8().decide_tier_and_query_settings(
-        Timer("test"), routing_decision
+    routing_decision = RoutingStrategySelectsTier8().get_routing_decision(
+        deepcopy(ROUTING_CONTEXT)
     )
     assert routing_decision.tier == Tier.TIER_8
 
 
 @pytest.mark.redis_db
 def test_merge_query_settings() -> None:
-    routing_decision = deepcopy(ROUTING_DECISION)
-    RoutingStrategyUpdatesQuerySettings().decide_tier_and_query_settings(
-        Timer("test"), routing_decision
+    routing_decision = RoutingStrategyUpdatesQuerySettings().get_routing_decision(
+        deepcopy(ROUTING_CONTEXT)
     )
     assert routing_decision.tier == Tier.TIER_8
     assert routing_decision.clickhouse_settings == {"some_setting": "some_value"}
@@ -152,10 +160,7 @@ def test_merge_query_settings() -> None:
 @pytest.mark.redis_db
 def test_outputting_metrics_fails_open() -> None:
     with mock.patch("snuba.settings.RAISE_ON_ROUTING_STRATEGY_FAILURES", False):
-        routing_decision = deepcopy(ROUTING_DECISION)
-        RoutingStrategyBadMetrics().decide_tier_and_query_settings(
-            Timer("test"), routing_decision
-        )
+        RoutingStrategyBadMetrics().get_routing_decision(deepcopy(ROUTING_CONTEXT))
 
 
 @pytest.mark.redis_db
@@ -175,7 +180,6 @@ def test_metrics_output() -> None:
                 tags={"a": "b", "c": "d"},
             )
 
-    routing_decision = deepcopy(ROUTING_DECISION)
     with mock.patch(
         "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.record_query"
     ) as record_query, mock.patch(
@@ -231,7 +235,7 @@ def test_metrics_output() -> None:
             "final": False,
             "cache_hit": 0,
             "can_run": True,
-            "max_threads": routing_decision.clickhouse_settings.get("max_threads", 0),
+            "max_threads": 0,
             "clickhouse_table": "na",
             "query_id": "na",
             "is_duplicate": 0,

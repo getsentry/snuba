@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Tuple
 
 import sentry_sdk
+from google.protobuf.message import Message as ProtobufMessage
 
 from snuba.state import get_config
-from snuba.web.rpc.common.common import Tin
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
 )
@@ -85,7 +85,9 @@ _DEFAULT_STORAGE_ROUTING_CONFIG = StorageRoutingConfig(
 
 
 class RoutingStrategySelector:
-    def get_storage_routing_config(self, in_msg: Tin) -> StorageRoutingConfig:
+    def get_storage_routing_config(
+        self, in_msg: ProtobufMessage
+    ) -> StorageRoutingConfig:
         organization_id = str(in_msg.meta.organization_id)  # type: ignore
         try:
             overrides = json.loads(
@@ -109,7 +111,7 @@ class RoutingStrategySelector:
                 int(hashlib.md5(combined_org_and_project_ids.encode()).hexdigest(), 16)
                 % _NUM_BUCKETS
             )
-            config = self.get_storage_routing_config(routing_context.in_msg)
+            config = self.get_storage_routing_config(routing_context.in_msg)  # type: ignore
             cumulative_buckets = 0.0
             for (
                 strategy_name,

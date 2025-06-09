@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Dict, Iterable, Tuple, Type, cast
+from typing import Any, Dict, Iterable, Tuple, Type
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -38,9 +38,6 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     RPCRequestException,
-)
-from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    RoutingDecision,
 )
 from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
     attribute_key_to_expression,
@@ -206,8 +203,7 @@ class EndpointTraceItemDetails(
     def response_class(cls) -> Type[TraceItemDetailsResponse]:
         return TraceItemDetailsResponse
 
-    def _execute(self, routing_decision: RoutingDecision) -> TraceItemDetailsResponse:
-        in_msg = cast(TraceItemDetailsRequest, routing_decision.routing_context.in_msg)
+    def _execute(self, in_msg: TraceItemDetailsRequest) -> TraceItemDetailsResponse:
         if in_msg.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
             raise BadSnubaRPCRequestException(
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
@@ -229,6 +225,7 @@ class EndpointTraceItemDetails(
                 )
 
         snuba_request = _build_snuba_request(in_msg)
+        self.routing_decision.routing_context.in_msg = in_msg
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

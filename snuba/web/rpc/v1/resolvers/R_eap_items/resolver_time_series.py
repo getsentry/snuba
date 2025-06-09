@@ -3,7 +3,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime
-from typing import Any, Callable, Dict, Iterable, cast
+from typing import Any, Callable, Dict, Iterable
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -35,8 +35,6 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     base_conditions_and,
@@ -53,6 +51,7 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
 )
+from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     ExtrapolationContext,
     aggregation_to_expression,
@@ -400,18 +399,16 @@ def _build_snuba_request(
     )
 
 
-class ResolverTimeSeriesEAPItems:
+class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
         return TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
 
     def resolve(
         self,
-        timer: Timer,
-        metrics_backend: MetricsBackend,
+        in_msg: TimeSeriesRequest,
         routing_decision: RoutingDecision,
     ) -> TimeSeriesResponse:
-        in_msg = cast(TimeSeriesRequest, routing_decision.routing_context.in_msg)
         # aggregations field is deprecated, it gets converted to request.expressions
         # if the user passes it in
         assert len(in_msg.aggregations) == 0
@@ -419,7 +416,9 @@ class ResolverTimeSeriesEAPItems:
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )
-        query_settings.set_clickhouse_settings(routing_decision.clickhouse_settings)
+        routing_decision.strategy.merge_clickhouse_settings(
+            routing_decision, query_settings
+        )
         query_settings.set_sampling_tier(routing_decision.tier)
 
         snuba_request = _build_snuba_request(
@@ -428,14 +427,14 @@ class ResolverTimeSeriesEAPItems:
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
-            timer=timer,
+            timer=self._timer,
         )
 
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
             [res],
-            [timer],
+            [self._timer],
         )
 
         # todo(rachel): this sucks bc u have to repeat it for every resolver

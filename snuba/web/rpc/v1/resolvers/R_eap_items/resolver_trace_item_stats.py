@@ -1,6 +1,6 @@
 import uuid
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, Tuple, cast
+from typing import Any, Dict, Iterable, Tuple
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
@@ -229,9 +229,9 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
 
     def resolve(
         self,
+        in_msg: TraceItemStatsRequest,
         routing_decision: RoutingDecision,
     ) -> TraceItemStatsResponse:
-        in_msg = cast(TraceItemStatsRequest, routing_decision.routing_context.in_msg)
         results = []
         for requested_type in in_msg.stats_types:
             result = TraceItemStatsResult()

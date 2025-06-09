@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from operator import attrgetter
-from typing import Any, Dict, Iterable, Type, cast
+from typing import Any, Dict, Iterable, Type
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -36,9 +36,6 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    RoutingDecision,
-)
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression_eap_items,
 )
@@ -284,11 +281,11 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
     def response_class(cls) -> Type[GetTraceResponse]:
         return GetTraceResponse
 
-    def _execute(self, routing_decision: RoutingDecision) -> GetTraceResponse:
-        in_msg = cast(GetTraceRequest, routing_decision.routing_context.in_msg)
+    def _execute(self, in_msg: GetTraceRequest) -> GetTraceResponse:
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )
+        self.routing_decision.routing_context.in_msg = in_msg
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,

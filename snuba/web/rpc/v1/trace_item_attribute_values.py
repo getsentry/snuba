@@ -1,5 +1,5 @@
 import uuid
-from typing import Type, cast
+from typing import Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
@@ -31,9 +31,6 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import base_conditions_and, treeify_or_and_conditions
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    RoutingDecision,
-)
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression_eap_items,
 )
@@ -163,11 +160,8 @@ class AttributeValuesRequest(
         return TraceItemAttributeValuesResponse
 
     def _execute(
-        self, routing_decision: RoutingDecision
+        self, in_msg: TraceItemAttributeValuesRequest
     ) -> TraceItemAttributeValuesResponse:
-        in_msg = cast(
-            TraceItemAttributeValuesRequest, routing_decision.routing_context.in_msg
-        )
 
         # if for some reason the item_id is the key, we can just return the value
         # item ids are unique
@@ -178,6 +172,7 @@ class AttributeValuesRequest(
             )
         in_msg.limit = in_msg.limit or 1000
         snuba_request = _build_snuba_request(in_msg)
+        self.routing_decision.routing_context.in_msg = in_msg
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

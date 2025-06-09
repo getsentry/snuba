@@ -29,7 +29,6 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
-    ClickhouseQuerySettings,
     RoutingContext,
     RoutingDecision,
 )
@@ -98,7 +97,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         )
         snuba_request = SnubaRequest(
             id=uuid.uuid4(),
-            original_body=MessageToDict(routing_context.in_msg),
+            original_body=MessageToDict(routing_context.in_msg),  # type: ignore
             query=query,
             query_settings=HTTPQuerySettings(),
             attribution_info=AttributionInfo(
@@ -142,11 +141,16 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             or default
         )
 
-    def _decide_tier_and_query_settings(
-        self, routing_decision: RoutingDecision
-    ) -> tuple[Tier, ClickhouseQuerySettings, bool]:
-        if self._is_highest_accuracy_mode(routing_decision.routing_context):
-            return Tier.TIER_1, {}, True
+    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
+        routing_decision = RoutingDecision(
+            routing_context=routing_context,
+            strategy=self,
+            tier=Tier.TIER_1,
+            clickhouse_settings={},
+            can_run=True,
+        )
+        if self._is_highest_accuracy_mode(routing_context):
+            return routing_decision
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
         in_msg_meta = routing_decision.routing_context.in_msg.time_series_request.meta if isinstance(routing_decision.routing_context.in_msg, CreateSubscriptionRequest) else routing_decision.routing_context.in_msg.meta  # type: ignore
         start_ts = in_msg_meta.start_timestamp.seconds
@@ -160,7 +164,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             routing_decision.routing_context.extra_info[
                 "time_range_secs"
             ] = time_range_secs
-            return Tier.TIER_1, {}, True
+            return routing_decision
 
         # see how many items this combo of orgs/projects has actually ingested for the timerange,
         # downsample if it's too many
@@ -176,13 +180,13 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             ingested_items > max_items_before_downsampling
             and ingested_items <= max_items_before_downsampling * 10
         ):
-            return Tier.TIER_8, {}, True
+            routing_decision.tier = Tier.TIER_8
         elif (
             ingested_items > max_items_before_downsampling * 10
             and ingested_items <= max_items_before_downsampling * 100
         ):
-            return Tier.TIER_64, {}, True
+            routing_decision.tier = Tier.TIER_64
         elif ingested_items > max_items_before_downsampling * 100:
-            return Tier.TIER_512, {}, True
+            routing_decision.tier = Tier.TIER_512
 
-        return Tier.TIER_1, {}, True
+        return routing_decision

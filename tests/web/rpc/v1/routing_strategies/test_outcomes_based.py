@@ -19,7 +19,6 @@ from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
-    RoutingDecision,
 )
 from tests.helpers import write_raw_unprocessed_events
 
@@ -82,17 +81,15 @@ def test_outcomes_based_routing_normal_mode(store_outcomes_data: Any) -> None:
     request = TraceItemTableRequest(meta=_get_request_meta())
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
 
-    routing_decision = RoutingDecision(
-        routing_context=RoutingContext(
+    routing_decision = strategy.get_routing_decision(
+        RoutingContext(
             in_msg=request,
             timer=Timer("test"),
-        ),
+        )
     )
-
-    tier, settings, can_run = strategy._decide_tier_and_query_settings(routing_decision)
-    assert tier == Tier.TIER_1
-    assert settings == {}
-    assert can_run
+    assert routing_decision.tier == Tier.TIER_1
+    assert routing_decision.clickhouse_settings == {}
+    assert routing_decision.can_run
 
 
 @pytest.mark.clickhouse_db
@@ -106,32 +103,40 @@ def test_outcomes_based_routing_downsample(store_outcomes_data: Any) -> None:
     request = TraceItemTableRequest(meta=_get_request_meta())
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
 
-    routing_decision = RoutingDecision(
-        routing_context=RoutingContext(
+    routing_decision = strategy.get_routing_decision(
+        RoutingContext(
             in_msg=request,
             timer=Timer("test"),
-        ),
+        )
     )
-
-    tier, settings, can_run = strategy._decide_tier_and_query_settings(routing_decision)
-    assert tier == Tier.TIER_8
-    assert settings == {}
-    assert can_run
+    assert routing_decision.tier == Tier.TIER_8
+    assert routing_decision.clickhouse_settings == {}
+    assert routing_decision.can_run
     state.set_config(
         "OutcomesBasedRoutingStrategy.max_items_before_downsampling", 500_000
     )
-    tier, settings, can_run = strategy._decide_tier_and_query_settings(routing_decision)
-    assert tier == Tier.TIER_64
-    assert settings == {}
-    assert can_run
+    routing_decision = strategy.get_routing_decision(
+        RoutingContext(
+            in_msg=request,
+            timer=Timer("test"),
+        )
+    )
+    assert routing_decision.tier == Tier.TIER_64
+    assert routing_decision.clickhouse_settings == {}
+    assert routing_decision.can_run
 
     state.set_config(
         "OutcomesBasedRoutingStrategy.max_items_before_downsampling", 50_000
     )
-    tier, settings, can_run = strategy._decide_tier_and_query_settings(routing_decision)
-    assert tier == Tier.TIER_512
-    assert settings == {}
-    assert can_run
+    routing_decision = strategy.get_routing_decision(
+        RoutingContext(
+            in_msg=request,
+            timer=Timer("test"),
+        )
+    )
+    assert routing_decision.tier == Tier.TIER_512
+    assert routing_decision.clickhouse_settings == {}
+    assert routing_decision.can_run
 
 
 @pytest.mark.clickhouse_db
@@ -143,14 +148,13 @@ def test_outcomes_based_routing_highest_accuracy_mode(store_outcomes_data: Any) 
     request.meta.downsampled_storage_config.mode = (
         DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
     )
-    routing_decision = RoutingDecision(
-        routing_context=RoutingContext(
+    routing_decision = strategy.get_routing_decision(
+        RoutingContext(
             in_msg=request,
             timer=Timer("test"),
-        ),
+        )
     )
 
-    tier, settings, can_run = strategy._decide_tier_and_query_settings(routing_decision)
-    assert tier == Tier.TIER_1
-    assert settings == {}
-    assert can_run
+    assert routing_decision.tier == Tier.TIER_1
+    assert routing_decision.clickhouse_settings == {}
+    assert routing_decision.can_run
