@@ -30,7 +30,7 @@ class Migration(migration.ClickhouseNodeMigration):
                         operations.DropColumn(
                             storage_set=self.storage_set_key,
                             table_name=f"{table_name_prefix}_local",
-                            column_name=self.column_to_remove,
+                            column_name=column_to_remove,
                             target=OperationTarget.LOCAL,
                         ),
                     ]
