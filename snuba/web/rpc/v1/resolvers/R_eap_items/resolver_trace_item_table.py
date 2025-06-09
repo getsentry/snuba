@@ -190,7 +190,7 @@ def _convert_order_by(
 
 
 def _get_reliability_context_columns(
-    column: Column, alias_prefix: str | None = None
+    column: Column, request_meta: RequestMeta
 ) -> list[SelectedExpression]:
     """
     extrapolated aggregates need to request extra columns to calculate the reliability of the result.
@@ -200,10 +200,25 @@ def _get_reliability_context_columns(
     """
 
     if column.HasField("formula"):
-        return _get_reliability_context_columns(
-            column.formula.left, alias_prefix=column.label + ".left."
-        ) + _get_reliability_context_columns(
-            column.formula.right, alias_prefix=column.label + ".right."
+        # also query for the left and right parts of the formula separately
+        # this will be used later to calculate the reliability of the formula
+        # ex: SELECT agg1/agg2 will become SELECT agg1/agg2, agg1, agg2
+        leftcolumn = Column()
+        leftcolumn.CopyFrom(column.formula.left)
+        rightcolumn = Column()
+        rightcolumn.CopyFrom(column.formula.right)
+        leftselect = SelectedExpression(
+            name=leftcolumn.label,
+            expression=_column_to_expression(leftcolumn, request_meta),
+        )
+        rightselect = SelectedExpression(
+            name=rightcolumn.label,
+            expression=_column_to_expression(rightcolumn, request_meta),
+        )
+        return (
+            [leftselect, rightselect]
+            + _get_reliability_context_columns(leftcolumn, request_meta)
+            + _get_reliability_context_columns(rightcolumn, request_meta)
         )
 
     if not (column.HasField("conditional_aggregation")):
@@ -219,15 +234,9 @@ def _get_reliability_context_columns(
             attribute_key_to_expression_eap_items,
         )
         if confidence_interval_column is not None:
-            if alias_prefix is not None:
-                name: str | None = alias_prefix + (
-                    confidence_interval_column.alias or ""
-                )
-            else:
-                name = confidence_interval_column.alias
             context_columns.append(
                 SelectedExpression(
-                    name=name,
+                    name=confidence_interval_column.alias,
                     expression=confidence_interval_column,
                 )
             )
@@ -236,13 +245,9 @@ def _get_reliability_context_columns(
             column.conditional_aggregation,
             attribute_key_to_expression_eap_items,
         )
-        if alias_prefix is not None:
-            name = alias_prefix + (average_sample_rate_column.alias or "")
-        else:
-            name = average_sample_rate_column.alias
         context_columns.append(
             SelectedExpression(
-                name=name,
+                name=average_sample_rate_column.alias,
                 expression=average_sample_rate_column,
             )
         )
@@ -251,11 +256,9 @@ def _get_reliability_context_columns(
             column.conditional_aggregation,
             attribute_key_to_expression_eap_items,
         )
-        if alias_prefix is not None:
-            name = alias_prefix + (count_column.alias or "")
-        else:
-            name = count_column.alias
-        context_columns.append(SelectedExpression(name=name, expression=count_column))
+        context_columns.append(
+            SelectedExpression(name=count_column.alias, expression=count_column)
+        )
         return context_columns
     return []
 
@@ -325,7 +328,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
                 expression=_column_to_expression(column, request.meta),
             )
         )
-        selected_columns.extend(_get_reliability_context_columns(column))
+        selected_columns.extend(_get_reliability_context_columns(column, request.meta))
 
     item_type_conds = [
         f.equals(snuba_column("item_type"), request.meta.trace_item_type)
