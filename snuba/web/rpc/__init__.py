@@ -176,7 +176,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             if self.routing_decision.can_run:
                 with sentry_sdk.start_span(op="execute") as span:
                     span.set_data("selected_tier", self.routing_decision.tier)
-                out = self._execute(in_msg)
+                    out = self._execute(in_msg)
             else:
                 raise AllocationPolicyViolations
         except QueryException as e:

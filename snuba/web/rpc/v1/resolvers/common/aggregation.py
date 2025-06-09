@@ -82,7 +82,6 @@ class ExtrapolationContext(ABC):
         column_label: str,
         row_data: Dict[str, Any],
     ) -> ExtrapolationContext:
-        print(row_data)
         value = row_data[column_label]
         is_extrapolated = False
 

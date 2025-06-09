@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime, timedelta
 from typing import Any, Sequence, Tuple, Type
 from unittest import mock
 
@@ -31,6 +32,10 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
 )
 
+BASE_TIME = datetime.utcnow().replace(
+    hour=8, minute=0, second=0, microsecond=0, tzinfo=UTC
+) - timedelta(hours=24)
+
 
 @dataclass
 class FakeClickhouseResult:
@@ -47,6 +52,28 @@ def admin_api() -> FlaskClient:
 @pytest.fixture(scope="session")
 def rpc_test_setup() -> Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]]:
     pool = DescriptorPool()
+    timestamp_file = descriptor_pb2.FileDescriptorProto(
+        name="google/protobuf/timestamp.proto",
+        package="google.protobuf",
+        message_type=[
+            descriptor_pb2.DescriptorProto(
+                name="Timestamp",
+                field=[
+                    descriptor_pb2.FieldDescriptorProto(
+                        name="seconds",
+                        number=1,
+                        type=descriptor_pb2.FieldDescriptorProto.TYPE_INT64,
+                    ),
+                    descriptor_pb2.FieldDescriptorProto(
+                        name="nanos",
+                        number=2,
+                        type=descriptor_pb2.FieldDescriptorProto.TYPE_INT32,
+                    ),
+                ],
+            )
+        ],
+    )
+    pool.Add(timestamp_file)  # type: ignore
     request_meta_proto = descriptor_pb2.DescriptorProto(
         name="RequestMeta",
         field=[
@@ -60,6 +87,33 @@ def rpc_test_setup() -> Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]]:
                 number=2,
                 type=descriptor_pb2.FieldDescriptorProto.TYPE_UINT64,
                 label=descriptor_pb2.FieldDescriptorProto.LABEL_REPEATED,
+            ),
+            descriptor_pb2.FieldDescriptorProto(
+                name="start_timestamp",
+                number=3,
+                type=descriptor_pb2.FieldDescriptorProto.TYPE_MESSAGE,
+                type_name="google.protobuf.Timestamp",
+            ),
+            descriptor_pb2.FieldDescriptorProto(
+                name="end_timestamp",
+                number=4,
+                type=descriptor_pb2.FieldDescriptorProto.TYPE_MESSAGE,
+                type_name="google.protobuf.Timestamp",
+            ),
+            descriptor_pb2.FieldDescriptorProto(
+                name="trace_item_type",
+                number=5,
+                type=descriptor_pb2.FieldDescriptorProto.TYPE_UINT64,
+            ),
+            descriptor_pb2.FieldDescriptorProto(
+                name="referrer",
+                number=6,
+                type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING,
+            ),
+            descriptor_pb2.FieldDescriptorProto(
+                name="request_id",
+                number=7,
+                type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING,
             ),
         ],
     )
@@ -1031,12 +1085,20 @@ def test_execute_rpc_endpoint_success(
 ) -> None:
     MyRequest, TestRPC = rpc_test_setup
 
+    start_time = BASE_TIME - timedelta(minutes=30)
+    end_time = BASE_TIME + timedelta(hours=24)
+
     payload = json.dumps(
         {
             "message": "test_execute_rpc_endpoint_success",
             "meta": {
                 "organization_id": 123,
                 "project_ids": [1],
+                "start_timestamp": start_time.isoformat(),
+                "end_timestamp": end_time.isoformat(),
+                "trace_item_type": 1,
+                "referrer": "test_referrer",
+                "request_id": "test_request_id",
             },
         }
     )
@@ -1046,6 +1108,8 @@ def test_execute_rpc_endpoint_success(
         data=payload,
         content_type="application/json",
     )
+
+    print(response.data)
 
     assert response.status_code == 200
     response_data = json.loads(response.data)
