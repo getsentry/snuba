@@ -40,7 +40,7 @@ ClickhouseQuerySettings = Dict[str, Any]
 @dataclass
 class RoutingContext:
     timer: Timer
-    in_msg: ProtobufMessage | None = None
+    in_msg: ProtobufMessage
     query_result: Optional[QueryResult] = field(default=None)
     extra_info: dict[str, Any] = field(default_factory=dict)
 
@@ -244,9 +244,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                 self.metrics.increment("estimation_failure")
                 sentry_sdk.capture_exception(e)
                 routing_decision = RoutingDecision(
-                    routing_context=RoutingContext(
-                        timer=Timer("endpoint_timing"),
-                    ),
+                    routing_context=routing_context,
                     strategy=OutcomesBasedRoutingStrategy(),
                     tier=Tier.TIER_1,
                     can_run=True,

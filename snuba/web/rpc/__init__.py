@@ -50,6 +50,7 @@ _TIME_PERIOD_HOURS_BUCKETS = [
 _BUCKETS_COUNT = len(_TIME_PERIOD_HOURS_BUCKETS)
 _DEFAULT_ROUTING_DECISION = RoutingDecision(
     routing_context=RoutingContext(
+        in_msg=ProtobufMessage(),
         timer=Timer("endpoint_timing"),
     ),
     strategy=OutcomesBasedRoutingStrategy(),
@@ -279,8 +280,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     ) -> Tout:
         try:
             res = self._after_execute(in_msg, out_msg, error)
-            if self.routing_decision.strategy:
-                self.routing_decision.strategy.output_metrics(self.routing_decision)
+            self.routing_decision.strategy.output_metrics(self.routing_decision)
             self._timer.mark("rpc_end")
             self._timer.send_metrics_to(self.metrics)
             if error is not None:

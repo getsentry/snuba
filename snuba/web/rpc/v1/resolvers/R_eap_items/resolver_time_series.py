@@ -123,10 +123,12 @@ def _convert_result_timeseries(
     aggregation_labels = set([expr.label for expr in request.expressions])
 
     group_by_labels = set([attr.name for attr in request.group_by])
+
     # create a mapping with (all the group by attribute key,val pairs as strs, label name)
     # In the example in the docstring it would look like:
     # { ("group_by_attr_1,g1|group_by_attr_2,g2", "sum(sentry.duration"): TimeSeries()}
     result_timeseries: dict[tuple[str, str], TimeSeries] = {}
+
     # create a mapping for each timeseries of timestamp: row to fill data points not returned in the query
     # {
     #   ("group_by_attr_1,g1|group_by_attr_2,g2", "sum(sentry.duration"): {
@@ -136,6 +138,7 @@ def _convert_result_timeseries(
     result_timeseries_timestamp_to_row: defaultdict[
         tuple[str, str], dict[int, Dict[str, Any]]
     ] = defaultdict(dict)
+
     query_duration = (
         request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
     )
@@ -143,6 +146,7 @@ def _convert_result_timeseries(
         Timestamp(seconds=(request.meta.start_timestamp.seconds) + secs)
         for secs in range(0, query_duration, request.granularity_secs)
     ]
+
     # this loop fill in our pre-computed dictionaries so that we can zerofill later
     for row in data:
         group_by_map = {}
@@ -305,7 +309,6 @@ def build_query(request: TimeSeriesRequest) -> Query:
         )
         for attr_key in request.group_by
     ]
-
     item_type_conds = [f.equals(column("item_type"), request.meta.trace_item_type)]
 
     res = Query(

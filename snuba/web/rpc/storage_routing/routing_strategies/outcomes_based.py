@@ -97,7 +97,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         )
         snuba_request = SnubaRequest(
             id=uuid.uuid4(),
-            original_body=MessageToDict(routing_context.in_msg),  # type: ignore
+            original_body=MessageToDict(routing_context.in_msg),
             query=query,
             query_settings=HTTPQuerySettings(),
             attribution_info=AttributionInfo(

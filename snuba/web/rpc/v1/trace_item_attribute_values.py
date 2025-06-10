@@ -162,7 +162,6 @@ class AttributeValuesRequest(
     def _execute(
         self, in_msg: TraceItemAttributeValuesRequest
     ) -> TraceItemAttributeValuesResponse:
-
         # if for some reason the item_id is the key, we can just return the value
         # item ids are unique
         if in_msg.key.name == "sentry.item_id" and in_msg.value_substring_match:

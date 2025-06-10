@@ -36,7 +36,6 @@ class EndpointTraceItemStats(
         )
 
     def _execute(self, in_msg: TraceItemStatsRequest) -> TraceItemStatsResponse:
-
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )
@@ -48,6 +47,5 @@ class EndpointTraceItemStats(
             raise BadSnubaRPCRequestException(
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
             )
-
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg, self.routing_decision)

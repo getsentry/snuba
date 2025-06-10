@@ -39,7 +39,7 @@ from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     RPCRequestException,
 )
-from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression,
 )
 
