@@ -196,7 +196,6 @@ def test_metrics_output() -> None:
         assert recorded_payload["status"] == "TIER_8"
         assert recorded_payload["request"]["referrer"] == "MetricsStrategy"
 
-        print("plsplspls", recorded_payload["query_list"][0]["stats"])
         assert recorded_payload["query_list"][0]["stats"] == {
             "extra_info": {
                 "sampling_in_storage_estimation_time_overhead": {

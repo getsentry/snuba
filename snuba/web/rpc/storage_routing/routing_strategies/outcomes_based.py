@@ -142,7 +142,6 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         )
 
     def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
-        print("a")
         routing_decision = RoutingDecision(
             routing_context=routing_context,
             strategy=self,
@@ -150,20 +149,15 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             clickhouse_settings={},
             can_run=True,
         )
-        print("b")
         if self._is_highest_accuracy_mode(routing_context):
-            print("c")
             return routing_decision
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
         in_msg_meta = routing_decision.routing_context.in_msg.time_series_request.meta if isinstance(routing_decision.routing_context.in_msg, CreateSubscriptionRequest) else routing_decision.routing_context.in_msg.meta  # type: ignore
-        print("d")
         start_ts = in_msg_meta.start_timestamp.seconds
         end_ts = in_msg_meta.end_timestamp.seconds
         time_range_secs = end_ts - start_ts
         min_timerange_to_query_outcomes = self._get_min_timerange_to_query_outcomes()
-        print("e")
         if time_range_secs < min_timerange_to_query_outcomes:
-            print("f")
             routing_decision.routing_context.extra_info[
                 "min_timerange_to_query_outcomes"
             ] = min_timerange_to_query_outcomes
@@ -174,33 +168,24 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         # see how many items this combo of orgs/projects has actually ingested for the timerange,
         # downsample if it's too many
-        print("g")
         ingested_items = self.get_ingested_items_for_timerange(
             routing_decision.routing_context
         )
-        print("h")
         routing_decision.routing_context.extra_info["ingested_items"] = ingested_items
-        print("i")
         max_items_before_downsampling = self._get_max_items_before_downsampling()
-        print("j")
         routing_decision.routing_context.extra_info[
             "max_items_before_downsampling"
         ] = max_items_before_downsampling
-        print("k")
         if (
             ingested_items > max_items_before_downsampling
             and ingested_items <= max_items_before_downsampling * 10
         ):
-            print("l")
             routing_decision.tier = Tier.TIER_8
         elif (
             ingested_items > max_items_before_downsampling * 10
             and ingested_items <= max_items_before_downsampling * 100
         ):
-            print("m")
             routing_decision.tier = Tier.TIER_64
         elif ingested_items > max_items_before_downsampling * 100:
-            print("n")
             routing_decision.tier = Tier.TIER_512
-        print("o")
         return routing_decision

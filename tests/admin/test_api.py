@@ -1109,8 +1109,6 @@ def test_execute_rpc_endpoint_success(
         content_type="application/json",
     )
 
-    print(response.data)
-
     assert response.status_code == 200
     response_data = json.loads(response.data)
     timestamp = Timestamp()
