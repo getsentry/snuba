@@ -22,6 +22,9 @@ x-sentry-service-config:
   modes:
     default: [redis, kafka, clickhouse]
     containerized: [clickhouse, redis, kafka, snuba]
+    containerized-profiles: [clickhouse, redis, kafka, snuba, profiles-consumer, profile-chunks-consumer, functions-consumer, functions-consumer]
+    containerized-uptime: [clickhouse, redis, kafka, snuba, uptime-consumer]
+    containerized-metrics-dev: [clickhouse, redis, kafka, snuba, metrics-consumer, generic-metrics-distributions-consumer, generic-metrics-sets-consumer, generic-metrics-counters-consumer, generic-metrics-gauges-consumer]
 
 services:
   clickhouse:
@@ -82,6 +85,339 @@ services:
       ENABLE_GROUP_ATTRIBUTES_CONSUMER: ${ENABLE_GROUP_ATTRIBUTES_CONSUMER:-}
       ENABLE_LW_DELETIONS_CONSUMER: ${ENABLE_LW_DELETIONS_CONSUMER:-}
       SENTRY_SPOTLIGHT: 'http://host.docker.internal:8969/stream'
+    platform: linux/amd64
+    extra_hosts:
+      host.docker.internal: host-gateway
+    networks:
+      - devservices
+    labels:
+      - orchestrator=devservices
+    restart: unless-stopped
+  profiles-consumer:
+    image: ghcr.io/getsentry/snuba:latest
+    healthcheck:
+      test: curl -f http://localhost:1218/health_envoy
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    command:
+      - [
+          snuba,
+          rust-consumer,
+          --storage=profiles,
+          --consumer-group=profiles_group,
+          --use-rust-processor,
+          --auto-offset-reset=latest,
+          --no-strict-offset-reset,
+          --enforce-schema
+        ]
+    environment:
+      PYTHONUNBUFFERED: 1
+      SNUBA_SETTINGS: docker
+      DEBUG: 1
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_HTTP_PORT: 8123
+      DEFAULT_BROKERS: kafka:9093
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 1
+    platform: linux/amd64
+    extra_hosts:
+      host.docker.internal: host-gateway
+    networks:
+      - devservices
+    labels:
+      - orchestrator=devservices
+    restart: unless-stopped
+  profile-chunks-consumer:
+    image: ghcr.io/getsentry/snuba:latest
+    healthcheck:
+      test: curl -f http://localhost:1218/health_envoy
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    command:
+      - [
+          snuba,
+          rust-consumer,
+          --storage=profile_chunks,
+          --consumer-group=profile_chunks_group,
+          --use-rust-processor,
+          --auto-offset-reset=latest,
+          --no-strict-offset-reset,
+          --enforce-schema
+        ]
+    environment:
+      PYTHONUNBUFFERED: 1
+      SNUBA_SETTINGS: docker
+      DEBUG: 1
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_HTTP_PORT: 8123
+      DEFAULT_BROKERS: kafka:9093
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 1
+    platform: linux/amd64
+    extra_hosts:
+      host.docker.internal: host-gateway
+    networks:
+      - devservices
+    labels:
+      - orchestrator=devservices
+    restart: unless-stopped
+  functions-consumer:
+    image: ghcr.io/getsentry/snuba:latest
+    healthcheck:
+      test: curl -f http://localhost:1218/health_envoy
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    command:
+      - [
+          snuba,
+          rust-consumer,
+          --storage=functions_raw,
+          --consumer-group=functions_group,
+          --use-rust-processor,
+          --auto-offset-reset=latest,
+          --no-strict-offset-reset,
+          --enforce-schema
+        ]
+    environment:
+      PYTHONUNBUFFERED: 1
+      SNUBA_SETTINGS: docker
+      DEBUG: 1
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_HTTP_PORT: 8123
+      DEFAULT_BROKERS: kafka:9093
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 1
+    platform: linux/amd64
+    extra_hosts:
+      host.docker.internal: host-gateway
+    networks:
+      - devservices
+    labels:
+      - orchestrator=devservices
+    restart: unless-stopped
+  uptime-consumer:
+    image: ghcr.io/getsentry/snuba:latest
+    healthcheck:
+      test: curl -f http://localhost:1218/health_envoy
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    command:
+      - [
+          snuba,
+          rust-consumer,
+          --storage=uptime_monitor_checks,
+          --consumer-group=snuba-uptime-results,
+          --use-rust-processor,
+          --auto-offset-reset=latest,
+          --no-strict-offset-reset,
+          --enforce-schema
+        ]
+    environment:
+      PYTHONUNBUFFERED: 1
+      SNUBA_SETTINGS: docker
+      DEBUG: 1
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_HTTP_PORT: 8123
+      DEFAULT_BROKERS: kafka:9093
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 1
+    platform: linux/amd64
+    extra_hosts:
+      host.docker.internal: host-gateway
+    networks:
+      - devservices
+    labels:
+      - orchestrator=devservices
+    restart: unless-stopped
+  metrics-consumer:
+    image: ghcr.io/getsentry/snuba:latest
+    healthcheck:
+      test: curl -f http://localhost:1218/health_envoy
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    command:
+      - [
+          snuba,
+          rust-consumer,
+          --storage=metrics_raw,
+          --consumer-group=snuba-metrics-consumers,
+          --use-rust-processor,
+          --auto-offset-reset=latest,
+          --no-strict-offset-reset,
+          --enforce-schema
+        ]
+    environment:
+      PYTHONUNBUFFERED: 1
+      SNUBA_SETTINGS: docker
+      DEBUG: 1
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_HTTP_PORT: 8123
+      DEFAULT_BROKERS: kafka:9093
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 1
+    platform: linux/amd64
+    extra_hosts:
+      host.docker.internal: host-gateway
+    networks:
+      - devservices
+    labels:
+      - orchestrator=devservices
+    restart: unless-stopped
+  generic-metrics-distributions-consumer:
+    image: ghcr.io/getsentry/snuba:latest
+    healthcheck:
+      test: curl -f http://localhost:1218/health_envoy
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    command:
+      - [
+          snuba,
+          rust-consumer,
+          --storage=generic_metrics_distributions_raw,
+          --consumer-group=snuba-gen-metrics-distributions-consumers,
+          --use-rust-processor,
+          --auto-offset-reset=latest,
+          --no-strict-offset-reset,
+          --enforce-schema
+        ]
+    environment:
+      PYTHONUNBUFFERED: 1
+      SNUBA_SETTINGS: docker
+      DEBUG: 1
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_HTTP_PORT: 8123
+      DEFAULT_BROKERS: kafka:9093
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 1
+    platform: linux/amd64
+    extra_hosts:
+      host.docker.internal: host-gateway
+    networks:
+      - devservices
+    labels:
+      - orchestrator=devservices
+    restart: unless-stopped
+  generic-metrics-sets-consumer:
+    image: ghcr.io/getsentry/snuba:latest
+    healthcheck:
+      test: curl -f http://localhost:1218/health_envoy
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    command:
+      - [
+          snuba,
+          rust-consumer,
+          --storage=generic_metrics_sets_raw,
+          --consumer-group=snuba-gen-metrics-sets-consumers,
+          --use-rust-processor,
+          --auto-offset-reset=latest,
+          --no-strict-offset-reset,
+          --enforce-schema
+        ]
+    environment:
+      PYTHONUNBUFFERED: 1
+      SNUBA_SETTINGS: docker
+      DEBUG: 1
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_HTTP_PORT: 8123
+      DEFAULT_BROKERS: kafka:9093
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 1
+    platform: linux/amd64
+    extra_hosts:
+      host.docker.internal: host-gateway
+    networks:
+      - devservices
+    labels:
+      - orchestrator=devservices
+    restart: unless-stopped
+  generic-metrics-counters-consumer:
+    image: ghcr.io/getsentry/snuba:latest
+    healthcheck:
+      test: curl -f http://localhost:1218/health_envoy
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    command:
+      - [
+          snuba,
+          rust-consumer,
+          --storage=generic_metrics_counters_raw,
+          --consumer-group=snuba-gen-metrics-counters-consumers,
+          --use-rust-processor,
+          --auto-offset-reset=latest,
+          --no-strict-offset-reset,
+          --enforce-schema
+        ]
+    environment:
+      PYTHONUNBUFFERED: 1
+      SNUBA_SETTINGS: docker
+      DEBUG: 1
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_HTTP_PORT: 8123
+      DEFAULT_BROKERS: kafka:9093
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 1
+    platform: linux/amd64
+    extra_hosts:
+      host.docker.internal: host-gateway
+    networks:
+      - devservices
+    labels:
+      - orchestrator=devservices
+    restart: unless-stopped
+  generic-metrics-gauges-consumer:
+    image: ghcr.io/getsentry/snuba:latest
+    healthcheck:
+      test: curl -f http://localhost:1218/health_envoy
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    command:
+      - [
+          snuba,
+          rust-consumer,
+          --storage=generic_metrics_gauges_raw,
+          --consumer-group=snuba-gen-metrics-gauges-consumers,
+          --use-rust-processor,
+          --auto-offset-reset=latest,
+          --no-strict-offset-reset,
+          --enforce-schema
+        ]
+    environment:
+      PYTHONUNBUFFERED: 1
+      SNUBA_SETTINGS: docker
+      DEBUG: 1
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_HTTP_PORT: 8123
+      DEFAULT_BROKERS: kafka:9093
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 1
     platform: linux/amd64
     extra_hosts:
       host.docker.internal: host-gateway
