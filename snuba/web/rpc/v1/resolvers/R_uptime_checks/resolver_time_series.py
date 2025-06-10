@@ -261,11 +261,15 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     return res
 
 
-def _build_snuba_request(request: TimeSeriesRequest, routing_decision: RoutingDecision) -> SnubaRequest:
+def _build_snuba_request(
+    request: TimeSeriesRequest, routing_decision: RoutingDecision
+) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
-    routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
+    routing_decision.strategy.merge_clickhouse_settings(
+        routing_decision, query_settings
+    )
     query_settings.set_sampling_tier(routing_decision.tier)
 
     return SnubaRequest(

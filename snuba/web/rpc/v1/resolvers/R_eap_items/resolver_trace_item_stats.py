@@ -106,7 +106,9 @@ def _build_attr_distribution_snuba_request(
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
-    routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
+    routing_decision.strategy.merge_clickhouse_settings(
+        routing_decision, query_settings
+    )
     query_settings.set_sampling_tier(routing_decision.tier)
 
     return SnubaRequest(
@@ -247,7 +249,9 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
                     in_msg, requested_type.attribute_distributions
                 )
                 treeify_or_and_conditions(query)
-                snuba_request = _build_attr_distribution_snuba_request(in_msg, query, routing_decision)
+                snuba_request = _build_attr_distribution_snuba_request(
+                    in_msg, query, routing_decision
+                )
 
                 query_res = run_query(
                     dataset=PluggableDataset(name="eap", all_entities=[]),

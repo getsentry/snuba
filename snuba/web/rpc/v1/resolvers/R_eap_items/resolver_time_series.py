@@ -421,9 +421,7 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
         )
         query_settings.set_sampling_tier(routing_decision.tier)
 
-        snuba_request = _build_snuba_request(
-            in_msg, query_settings
-        )
+        snuba_request = _build_snuba_request(in_msg, query_settings)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
