@@ -101,11 +101,13 @@ def _transform_results(
 
 
 def _build_attr_distribution_snuba_request(
-    request: TraceItemStatsRequest, query: Query
+    request: TraceItemStatsRequest, query: Query, routing_decision: RoutingDecision
 ) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
+    routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
+    query_settings.set_sampling_tier(routing_decision.tier)
 
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
@@ -245,7 +247,7 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
                     in_msg, requested_type.attribute_distributions
                 )
                 treeify_or_and_conditions(query)
-                snuba_request = _build_attr_distribution_snuba_request(in_msg, query)
+                snuba_request = _build_attr_distribution_snuba_request(in_msg, query, routing_decision)
 
                 query_res = run_query(
                     dataset=PluggableDataset(name="eap", all_entities=[]),

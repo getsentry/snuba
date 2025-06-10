@@ -261,10 +261,12 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     return res
 
 
-def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
+def _build_snuba_request(request: TimeSeriesRequest, routing_decision: RoutingDecision) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
+    routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
+    query_settings.set_sampling_tier(routing_decision.tier)
 
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
@@ -293,13 +295,12 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
     def resolve(
         self, in_msg: TimeSeriesRequest, routing_decision: RoutingDecision
     ) -> TimeSeriesResponse:
-        snuba_request = _build_snuba_request(in_msg)
+        snuba_request = _build_snuba_request(in_msg, routing_decision)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
             timer=self._timer,
         )
-        routing_decision.routing_context.in_msg = in_msg
         routing_decision.routing_context.query_result = res
         response_meta = extract_response_meta(
             in_msg.meta.request_id,

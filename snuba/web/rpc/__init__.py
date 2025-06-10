@@ -284,11 +284,15 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             self._timer.mark("rpc_end")
             self._timer.send_metrics_to(self.metrics)
             if error is not None:
-                # todo(rachel): do we want to capture allocation policy violations?
                 sentry_sdk.capture_exception(error)
                 if isinstance(error, BadSnubaRPCRequestException):
                     self.metrics.increment(
                         "request_invalid",
+                        tags=self._timer.tags,
+                    )
+                elif isinstance(error, AllocationPolicyViolations):
+                    self.metrics.increment(
+                        "request_rate_limited",
                         tags=self._timer.tags,
                     )
                 else:

@@ -770,6 +770,8 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         )
         response = EndpointTraceItemTable().execute(message)
 
+        print(response)
+
         measurement_tags = [v.val_str for v in response.column_values[0].results]
         assert measurement_tags == ["foo"]
 

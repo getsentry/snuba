@@ -176,6 +176,7 @@ def _convert_result_timeseries(
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
+                print("row_dataaaa", row_data)
                 extrapolation_context = ExtrapolationContext.from_row(
                     timeseries.label, row_data
                 )
@@ -368,9 +369,8 @@ def build_query(request: TimeSeriesRequest) -> Query:
 
 
 def _build_snuba_request(
-    routing_context: RoutingContext, query_settings: HTTPQuerySettings
+    request: TimeSeriesRequest, query_settings: HTTPQuerySettings
 ) -> SnubaRequest:
-    request = typing.cast(TimeSeriesRequest, routing_context.in_msg)
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
         team = "ourlogs"
         feature = "ourlogs"
@@ -422,7 +422,7 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
         query_settings.set_sampling_tier(routing_decision.tier)
 
         snuba_request = _build_snuba_request(
-            routing_decision.routing_context, query_settings
+            in_msg, query_settings
         )
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
@@ -439,6 +439,9 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
 
         # todo(rachel): this sucks bc u have to repeat it for every resolver
         routing_decision.routing_context.query_result = res
+
+        print("in_msggg", in_msg)
+        print("ressss", res)
 
         return TimeSeriesResponse(
             result_timeseries=list(

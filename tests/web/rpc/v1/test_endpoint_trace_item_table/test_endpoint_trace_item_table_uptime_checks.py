@@ -26,6 +26,8 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageMeta
+
 
 _TRACE_ID = uuid.uuid4().hex
 
@@ -174,8 +176,9 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             page_token=PageToken(offset=10),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(downsampled_storage_meta=DownsampledStorageMeta(can_go_to_higher_accuracy_tier=False), request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
+        print("response", response)
         assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_offset(self, setup_teardown: Any) -> None:
@@ -253,7 +256,7 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             page_token=PageToken(offset=10),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(downsampled_storage_meta=DownsampledStorageMeta(can_go_to_higher_accuracy_tier=False), request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
