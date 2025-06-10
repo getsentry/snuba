@@ -252,8 +252,6 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                     can_run=True,
                 )
 
-                print(e)
-
                 if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
                     raise e
 

@@ -1,4 +1,3 @@
-import typing
 import uuid
 from collections import defaultdict
 from dataclasses import replace
@@ -48,7 +47,6 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    RoutingContext,
     RoutingDecision,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
@@ -176,7 +174,6 @@ def _convert_result_timeseries(
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
-                print("row_dataaaa", row_data)
                 extrapolation_context = ExtrapolationContext.from_row(
                     timeseries.label, row_data
                 )
@@ -437,10 +434,6 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
 
         # todo(rachel): this sucks bc u have to repeat it for every resolver
         routing_decision.routing_context.query_result = res
-
-        print("in_msggg", in_msg)
-        print("ressss", res)
-
         return TimeSeriesResponse(
             result_timeseries=list(
                 _convert_result_timeseries(

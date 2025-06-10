@@ -784,7 +784,6 @@ class TestTimeSeriesApi(BaseApiTest):
         )
 
         response = EndpointTimeSeries().execute(message)
-        print(response)
         expected_buckets = [
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(
@@ -801,7 +800,6 @@ class TestTimeSeriesApi(BaseApiTest):
                 ],
             )
         ]
-        assert False
 
     def test_start_time_not_divisible_by_time_buckets_returns_valid_data(self) -> None:
         # store a a test metric with a value of 1, every second of one hour

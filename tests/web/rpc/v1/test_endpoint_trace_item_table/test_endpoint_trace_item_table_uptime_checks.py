@@ -182,7 +182,6 @@ class TestTraceItemTable(BaseApiTest):
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
         )
-        print("response", response)
         assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_offset(self, setup_teardown: Any) -> None:

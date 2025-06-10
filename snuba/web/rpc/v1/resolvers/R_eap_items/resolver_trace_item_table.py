@@ -1,4 +1,3 @@
-import typing
 import uuid
 from dataclasses import replace
 from typing import List, Sequence
@@ -48,7 +47,6 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    RoutingContext,
     RoutingDecision,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
@@ -355,9 +353,8 @@ def _get_page_token(
 
 
 def _build_snuba_request(
-    routing_context: RoutingContext, query_settings: HTTPQuerySettings
+    request: TraceItemTableRequest, query_settings: HTTPQuerySettings
 ) -> SnubaRequest:
-    request = typing.cast(TraceItemTableRequest, routing_context.in_msg)
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
         team = "ourlogs"
         feature = "ourlogs"
@@ -404,9 +401,7 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         )
         query_settings.set_sampling_tier(routing_decision.tier)
 
-        snuba_request = _build_snuba_request(
-            routing_decision.routing_context, query_settings
-        )
+        snuba_request = _build_snuba_request(in_msg, query_settings)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

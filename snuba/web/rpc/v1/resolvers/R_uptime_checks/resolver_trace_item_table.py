@@ -264,8 +264,6 @@ class ResolverTraceItemTableUptimeChecks(ResolverTraceItemTable):
             [res],
             [self._timer],
         )
-        print("response_metaaaaaa")
-        print(response_meta)
         return TraceItemTableResponse(
             column_values=column_values,
             page_token=_get_page_token(in_msg, column_values),
