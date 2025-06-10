@@ -225,7 +225,6 @@ class EndpointTraceItemDetails(
                 )
 
         snuba_request = _build_snuba_request(in_msg)
-        self.routing_decision.routing_context.in_msg = in_msg
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

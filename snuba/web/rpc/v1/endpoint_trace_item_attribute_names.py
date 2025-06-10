@@ -375,7 +375,6 @@ class EndpointTraceItemAttributeNames(
             in_msg.meta.request_id = str(uuid.uuid4())
 
         snuba_request = get_co_occurring_attributes(in_msg)
-        self.routing_decision.routing_context.in_msg = in_msg
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

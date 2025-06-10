@@ -285,7 +285,6 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )
-        self.routing_decision.routing_context.in_msg = in_msg
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
