@@ -350,7 +350,6 @@ def run_rpc_handler(
                 message=f"endpoint {name} with version {version} does not exist (did you use the correct version and capitalization?) {e}",
             )
         )
-
     try:
         deserialized_protobuf = endpoint.parse_from_string(data)
     except DecodeError as e:

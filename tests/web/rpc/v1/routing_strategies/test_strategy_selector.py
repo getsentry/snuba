@@ -201,7 +201,7 @@ def test_selects_override_if_it_exists() -> None:
     )
 
     assert RoutingStrategySelector().get_storage_routing_config(
-        routing_context.in_msg  # type: ignore
+        routing_context.in_msg
     ).get_routing_strategy_and_percentage_routed() == [
         ("ToyRoutingStrategy1", 0.95),
         ("ToyRoutingStrategy2", 0.05),
@@ -231,7 +231,7 @@ def test_does_not_override_if_organization_id_is_different() -> None:
     )
 
     assert RoutingStrategySelector().get_storage_routing_config(
-        routing_context.in_msg  # type: ignore
+        routing_context.in_msg
     ).get_routing_strategy_and_percentage_routed() == [
         ("OutcomesBasedRoutingStrategy", 0.25),
         ("ToyRoutingStrategy1", 0.25),

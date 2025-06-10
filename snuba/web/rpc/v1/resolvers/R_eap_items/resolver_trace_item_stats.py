@@ -258,6 +258,7 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
                     request=snuba_request,
                     timer=self._timer,
                 )
+                routing_decision.routing_context.query_result = query_res
 
                 attributes = _transform_results(
                     query_res.result.get("data", []), in_msg.meta

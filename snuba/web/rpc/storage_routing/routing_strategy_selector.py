@@ -111,7 +111,7 @@ class RoutingStrategySelector:
                 int(hashlib.md5(combined_org_and_project_ids.encode()).hexdigest(), 16)
                 % _NUM_BUCKETS
             )
-            config = self.get_storage_routing_config(routing_context.in_msg)  # type: ignore
+            config = self.get_storage_routing_config(routing_context.in_msg)
             cumulative_buckets = 0.0
             for (
                 strategy_name,
