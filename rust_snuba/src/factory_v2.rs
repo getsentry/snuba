@@ -113,41 +113,11 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
-        // Batch insert rows
-        let batch_factory = BatchFactory::new(
-            &self.storage_config.clickhouse_cluster.host,
-            self.storage_config.clickhouse_cluster.http_port,
-            &self.storage_config.clickhouse_table_name,
-            &self.storage_config.clickhouse_cluster.database,
-            &self.clickhouse_concurrency,
-            &self.storage_config.clickhouse_cluster.user,
-            &self.storage_config.clickhouse_cluster.password,
-            self.storage_config.clickhouse_cluster.secure,
-            self.async_inserts,
-            self.batch_write_timeout,
-            self.custom_envoy_request_timeout,
-        );
-
-        let accumulator = Arc::new(
-            |batch: BytesInsertBatch<HttpBatch>,
-             small_batch: Message<BytesInsertBatch<RowData>>| {
-                Ok(batch.merge(small_batch.into_payload()))
-            },
-        );
-
+        let accumulator = Arc::new(BytesInsertBatch::merge);
         let next_step = Reduce::new(
             next_step,
             accumulator,
-            Arc::new(move || {
-                BytesInsertBatch::new(
-                    batch_factory.new_batch(),
-                    None,
-                    None,
-                    None,
-                    Default::default(),
-                    CogsData::default(),
-                )
-            }),
+            BytesInsertBatch::default(),
             self.max_batch_size,
             self.max_batch_time,
             BytesInsertBatch::len,
