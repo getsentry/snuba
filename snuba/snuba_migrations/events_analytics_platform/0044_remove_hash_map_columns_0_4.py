@@ -19,7 +19,7 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
     downsampled_factors = [8, 64, 512]
-    buckets = range(5)
+    buckets = range(1)
     table_name_prefix = "eap_items_1"
 
     def forwards_ops(self) -> list[operations.SqlOperation]:
