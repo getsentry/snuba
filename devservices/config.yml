@@ -19,6 +19,24 @@ x-sentry-service-config:
         repo_link: https://github.com/getsentry/sentry-shared-kafka.git
     snuba:
       description: Service that provides a rich data model on top of Clickhouse together with a fast ingestion consumer and a query optimizer
+    profiles-consumer:
+      description: Consumer for profiles
+    profile-chunks-consumer:
+      description: Consumer for profile chunks
+    functions-consumer:
+      description: Consumer for functions
+    uptime-consumer:
+      description: Consumer for uptime
+    metrics-consumer:
+      description: Consumer for metrics
+    generic-metrics-distributions-consumer:
+      description: Consumer for generic metrics distributions
+    generic-metrics-sets-consumer:
+      description: Consumer for generic metrics sets
+    generic-metrics-counters-consumer:
+      description: Consumer for generic metrics counters
+    generic-metrics-gauges-consumer:
+      description: Consumer for generic metrics gauges
   modes:
     default: [redis, kafka, clickhouse]
     containerized: [clickhouse, redis, kafka, snuba]
@@ -100,8 +118,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 3
-    command:
-      - [
+    command: [
           snuba,
           rust-consumer,
           --storage=profiles,
@@ -137,8 +154,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 3
-    command:
-      - [
+    command: [
           snuba,
           rust-consumer,
           --storage=profile_chunks,
@@ -174,8 +190,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 3
-    command:
-      - [
+    command: [
           snuba,
           rust-consumer,
           --storage=functions_raw,
@@ -211,8 +226,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 3
-    command:
-      - [
+    command: [
           snuba,
           rust-consumer,
           --storage=uptime_monitor_checks,
@@ -248,8 +262,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 3
-    command:
-      - [
+    command: [
           snuba,
           rust-consumer,
           --storage=metrics_raw,
@@ -285,8 +298,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 3
-    command:
-      - [
+    command: [
           snuba,
           rust-consumer,
           --storage=generic_metrics_distributions_raw,
@@ -322,8 +334,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 3
-    command:
-      - [
+    command: [
           snuba,
           rust-consumer,
           --storage=generic_metrics_sets_raw,
@@ -359,8 +370,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 3
-    command:
-      - [
+    command: [
           snuba,
           rust-consumer,
           --storage=generic_metrics_counters_raw,
@@ -396,8 +406,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 3
-    command:
-      - [
+    command: [
           snuba,
           rust-consumer,
           --storage=generic_metrics_gauges_raw,
