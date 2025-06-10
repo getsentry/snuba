@@ -51,8 +51,8 @@ pub fn consumer(
     consumer_version: Option<&str>,
 ) -> usize {
     if consumer_version == Some("v2") {
-        return py.allow_threads(|| {
-            return consumer_v2_impl(
+        py.allow_threads(|| {
+            consumer_v2_impl(
                 consumer_group,
                 auto_offset_reset,
                 no_strict_offset_reset,
@@ -71,11 +71,11 @@ pub fn consumer(
                 custom_envoy_request_timeout,
                 join_timeout_ms,
                 health_check,
-            );
-        });
+            )
+        })
     } else {
-        return py.allow_threads(|| {
-            return consumer_impl(
+        py.allow_threads(|| {
+            consumer_impl(
                 consumer_group,
                 auto_offset_reset,
                 no_strict_offset_reset,
@@ -94,11 +94,12 @@ pub fn consumer(
                 custom_envoy_request_timeout,
                 join_timeout_ms,
                 health_check,
-            );
-        });
+            )
+        })
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn consumer_v2_impl(
     consumer_group: &str,
     auto_offset_reset: &str,
