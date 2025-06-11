@@ -9,13 +9,16 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use sentry_arroyo::processing::strategies::healthcheck::HealthCheck;
 use sentry_arroyo::processing::strategies::reduce::Reduce;
+use sentry_arroyo::processing::strategies::run_task::RunTask;
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskInThreads,
 };
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, TaskRunner,
 };
-use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
+use sentry_arroyo::processing::strategies::{
+    ProcessingStrategy, ProcessingStrategyFactory, SubmitError,
+};
 use sentry_arroyo::types::Message;
 use sentry_arroyo::types::{Partition, Topic};
 use sentry_kafka_schemas::Schema;
@@ -24,8 +27,6 @@ use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
-use crate::strategies::clickhouse::batch::{BatchFactory, HttpBatch};
-use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
@@ -75,7 +76,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         // Commit offsets
         let next_step = CommitOffsets::new(Duration::from_secs(1));
 
-        // Produce commit log if there is one
+        // TODO: Produce commit log if there is one
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
             if let Some((ref producer, destination)) = self.commit_log_producer {
                 Box::new(ProduceCommitLog::new(
@@ -91,6 +92,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 Box::new(next_step)
             };
 
+        // TODO: Write to clickhouse
+
         let cogs_label = get_cogs_label(&self.storage_config.message_processor.python_class_name);
 
         // Produce cogs if generic metrics AND we are not skipping writes AND record_cogs is true
@@ -102,22 +105,48 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     self.accountant_topic_config.broker_config.clone(),
                     &self.accountant_topic_config.physical_topic_name,
                 )),
-                _ => next_step,
+                _ => Box::new(next_step),
             };
-
-        // Write to clickhouse
-        let next_step = ClickhouseWriterStep::new(next_step, &self.clickhouse_concurrency);
 
         let next_step = SetJoinTimeout::new(
             next_step,
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
-        let accumulator = Arc::new(BytesInsertBatch::merge);
+        let next_step =
+            Box::new(RunTaskInThreads::new(
+                |message: BytesInsertBatch<RowData>| -> Result<
+                    BytesInsertBatch<()>,
+                    SubmitError<BytesInsertBatch<RowData>>,
+                > {
+                    let batch = message.payload();
+                    println!("Processing batch with {} messages", batch.len());
+                    let (_, empty_batch) = batch.take();
+                    Ok(message.replace(empty_batch))
+                },
+                next_step,
+            ));
+
+        let accumulator = Arc::new(
+            |batch: Message<BytesInsertBatch<RowData>>,
+             small_batch: Message<BytesInsertBatch<RowData>>| {
+                Ok(batch.payload().merge(small_batch.into_payload()))
+            },
+        );
+
         let next_step = Reduce::new(
             next_step,
             accumulator,
-            BytesInsertBatch::default(),
+            Arc::new(move || {
+                BytesInsertBatch::<RowData>::new(
+                    RowData::default(),
+                    None,
+                    None,
+                    None,
+                    Default::default(),
+                    CogsData::default(),
+                )
+            }),
             self.max_batch_size,
             self.max_batch_time,
             BytesInsertBatch::len,

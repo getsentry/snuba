@@ -262,6 +262,11 @@ impl BytesInsertBatch<RowData> {
     pub fn len(&self) -> usize {
         self.rows.num_rows
     }
+
+    pub fn merge(mut self, other: BytesInsertBatch<RowData>) {
+        self.rows.encoded_rows.extend(other.rows.encoded_rows);
+        self.rows.num_rows += other.rows.num_rows;
+    }
 }
 
 impl BytesInsertBatch<HttpBatch> {

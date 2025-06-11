@@ -15,6 +15,8 @@ use rust_arroyo::{counter, timer};
 use crate::config::ClickhouseConfig;
 use crate::types::BytesInsertBatch;
 
+pub mod writer_v2;
+
 const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
 
 struct ClickhouseWriter {
