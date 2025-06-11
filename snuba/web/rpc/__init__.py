@@ -278,39 +278,45 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __after_execute(
         self, in_msg: Tin, out_msg: Tout, error: Exception | None
     ) -> Tout:
+        output_metrics_error = None
         try:
             res = self._after_execute(in_msg, out_msg, error)
-            self.routing_decision.strategy.output_metrics(self.routing_decision)
-            self._timer.mark("rpc_end")
-            self._timer.send_metrics_to(self.metrics)
-            if error is not None:
-                sentry_sdk.capture_exception(error)
-                if isinstance(error, BadSnubaRPCRequestException):
-                    self.metrics.increment(
-                        "request_invalid",
-                        tags=self._timer.tags,
-                    )
-                elif isinstance(error, AllocationPolicyViolations):
-                    self.metrics.increment(
-                        "request_rate_limited",
-                        tags=self._timer.tags,
-                    )
-                else:
-                    self.metrics.increment(
-                        "request_error",
-                        tags=self._timer.tags,
-                    )
-                raise error
-            else:
+        except Exception as e:
+            output_metrics_error = e
+
+        self.routing_decision.strategy.output_metrics(self.routing_decision)
+        self._timer.mark("rpc_end")
+        self._timer.send_metrics_to(self.metrics)
+        if error is not None:
+            sentry_sdk.capture_exception(error)
+            if isinstance(error, BadSnubaRPCRequestException):
                 self.metrics.increment(
-                    "request_success",
+                    "request_invalid",
                     tags=self._timer.tags,
                 )
-        except Exception as e:
+            elif isinstance(error, AllocationPolicyViolations):
+                self.metrics.increment(
+                    "request_rate_limited",
+                    tags=self._timer.tags,
+                )
+            else:
+                self.metrics.increment(
+                    "request_error",
+                    tags=self._timer.tags,
+                )
+            raise error
+        else:
+            self.metrics.increment(
+                "request_success",
+                tags=self._timer.tags,
+            )
+
+        if output_metrics_error is not None:
             self.metrics.increment("metrics_failure")
-            sentry_sdk.capture_exception(e)
+            sentry_sdk.capture_exception(output_metrics_error)
             if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
-                raise e
+                raise output_metrics_error
+
         return res
 
     def _after_execute(
