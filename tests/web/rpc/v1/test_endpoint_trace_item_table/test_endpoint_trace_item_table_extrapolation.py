@@ -795,8 +795,15 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert measurement_p90s[0] == 4
         assert measurement_reliabilities == [Reliability.RELIABILITY_LOW]
 
-    def test_formula(self) -> None:
-        """ """
+    def test_formula_reliability(self) -> None:
+        """
+        ensures reliability is calculated correctly for formulas
+        (reliability is calculated based on the reliability of the left and right side of the formula)
+        a formula is reliable iff all of its children are reliable.
+        ex: (agg1 + agg2) / agg3 * agg4 is reliable iff agg1, agg2, agg3, agg4 are all reliable
+
+        this tests low and high reliability for a formula
+        """
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_item(span_ts, {"kyles_measurement": 6}, 10, server_sample_rate=0.6)
         write_eap_item(span_ts, {"kyles_measurement": 7}, 2, server_sample_rate=0.7)
@@ -904,6 +911,134 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                     AttributeValue(val_double=(200)),
                 ],
                 reliabilities=[Reliability.RELIABILITY_HIGH],
+            ),
+        ]
+
+    def test_formula_reliability_with_group_by(self) -> None:
+        """
+        ensures formula reliability is calculated correctly for formulas with group by
+        """
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_item(
+            span_ts,
+            {"kyles_measurement": 6, "myattr": "foo"},
+            5,
+            server_sample_rate=0.2,
+        )
+        write_eap_item(
+            span_ts,
+            {"kyles_measurement": 7, "myattr": "bazz"},
+            100,
+            server_sample_rate=0.1,
+        )
+        write_eap_item(
+            span_ts,
+            {"kyles_measurement_2": 5, "myattr": "foo"},
+            20,
+            server_sample_rate=0.5,
+        )
+        write_eap_item(
+            span_ts,
+            {"kyles_measurement_2": 5, "myattr": "bazz"},
+            20,
+            server_sample_rate=0.5,
+        )
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
+
+        meta = RequestMeta(
+            project_ids=[1, 2, 3],
+            organization_id=1,
+            cogs_category="something",
+            referrer="something",
+            start_timestamp=hour_ago,
+            end_timestamp=ts,
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        )
+        col1 = Column(
+            aggregation=AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(
+                    type=AttributeKey.TYPE_DOUBLE,
+                    name="kyles_measurement",
+                ),
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                label="sum(kyles_measurement)",
+            ),
+        )
+        col2 = Column(
+            aggregation=AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(
+                    type=AttributeKey.TYPE_DOUBLE,
+                    name="kyles_measurement_2",
+                ),
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                label="sum(kyles_measurement_2)",
+            ),
+        )
+        message = TraceItemTableRequest(
+            meta=meta,
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="myattr")),
+                col1,
+                col2,
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=col1,
+                        right=col2,
+                    ),
+                    label="sum(kyles_measurement) / sum(kyles_measurement_2)",
+                ),
+            ],
+            group_by=[
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="myattr"),
+            ],
+            limit=10,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert sorted(response.column_values, key=lambda x: x.attribute_name) == [
+            TraceItemColumnValues(
+                attribute_name="myattr",
+                results=[
+                    AttributeValue(val_str="foo"),
+                    AttributeValue(val_str="bazz"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(kyles_measurement)",
+                results=[
+                    AttributeValue(val_double=(150)),
+                    AttributeValue(val_double=(7000)),
+                ],
+                reliabilities=[
+                    Reliability.RELIABILITY_LOW,
+                    Reliability.RELIABILITY_HIGH,
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(kyles_measurement) / sum(kyles_measurement_2)",
+                results=[
+                    AttributeValue(val_double=(0.75)),
+                    AttributeValue(val_double=(35)),
+                ],
+                reliabilities=[
+                    Reliability.RELIABILITY_LOW,
+                    Reliability.RELIABILITY_HIGH,
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(kyles_measurement_2)",
+                results=[
+                    AttributeValue(val_double=(200)),
+                    AttributeValue(val_double=(200)),
+                ],
+                reliabilities=[
+                    Reliability.RELIABILITY_HIGH,
+                    Reliability.RELIABILITY_HIGH,
+                ],
             ),
         ]
 
