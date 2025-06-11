@@ -112,7 +112,7 @@ def convert_results(
     # we have added extra columns such as ones to compute formula reliabilities
     # that we dont want to return to the user
     requested_column_labels = set(e.label for e in request.columns)
-    to_delete = filter(lambda k: k not in requested_column_labels, res.keys())
+    to_delete = list(filter(lambda k: k not in requested_column_labels, res.keys()))
     for name in to_delete:
         del res[name]
 

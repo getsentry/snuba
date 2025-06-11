@@ -1,3 +1,4 @@
+import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -813,9 +814,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             end_timestamp=ts,
             trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
         )
-        # TODO: I manually set the labels here for the left and right side of the formula
-        # to be .left and .right. This is required to be able to calculate the reliability.
-        # I need to add a visitor to set labels like this for all formulas.
         col1 = Column(
             aggregation=AttributeAggregation(
                 aggregate=Function.FUNCTION_SUM,
@@ -824,9 +822,8 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                     name="kyles_measurement",
                 ),
                 extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
-                label="sum(kyles_measurement) / sum(kyles_measurement_2).left",
+                label="sum(kyles_measurement)",
             ),
-            label="sum(kyles_measurement) / sum(kyles_measurement_2).left",
         )
         col2 = Column(
             aggregation=AttributeAggregation(
@@ -836,9 +833,8 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                     name="kyles_measurement_2",
                 ),
                 extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
-                label="sum(kyles_measurement) / sum(kyles_measurement_2).right",
+                label="sum(kyles_measurement_2)",
             ),
-            label="sum(kyles_measurement) / sum(kyles_measurement_2).right",
         )
         message = TraceItemTableRequest(
             meta=meta,
@@ -857,12 +853,57 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             limit=1,
         )
         response = EndpointTraceItemTable().execute(message)
-        assert response.column_values == [
+        assert sorted(response.column_values, key=lambda x: x.attribute_name) == [
+            TraceItemColumnValues(
+                attribute_name="sum(kyles_measurement)",
+                results=[
+                    AttributeValue(val_double=(120)),
+                ],
+                reliabilities=[Reliability.RELIABILITY_HIGH],
+            ),
             TraceItemColumnValues(
                 attribute_name="sum(kyles_measurement) / sum(kyles_measurement_2)",
                 results=[
                     AttributeValue(val_double=(120 / 20)),
                 ],
+                reliabilities=[Reliability.RELIABILITY_LOW],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(kyles_measurement_2)",
+                results=[
+                    AttributeValue(val_double=(20)),
+                ],
+                reliabilities=[Reliability.RELIABILITY_LOW],
+            ),
+        ]
+
+        # we tested w low reliability, now add more data points to test high reliability
+        write_eap_item(span_ts, {"kyles_measurement_2": 5}, 18, server_sample_rate=0.5)
+        # wait for the data to be written to the database
+        # ideally this would be a callback function but that would be complex to implement
+        time.sleep(2)
+        response = EndpointTraceItemTable().execute(message)
+        assert sorted(response.column_values, key=lambda x: x.attribute_name) == [
+            TraceItemColumnValues(
+                attribute_name="sum(kyles_measurement)",
+                results=[
+                    AttributeValue(val_double=(120)),
+                ],
+                reliabilities=[Reliability.RELIABILITY_HIGH],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(kyles_measurement) / sum(kyles_measurement_2)",
+                results=[
+                    AttributeValue(val_double=(120 / 200)),
+                ],
+                reliabilities=[Reliability.RELIABILITY_HIGH],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(kyles_measurement_2)",
+                results=[
+                    AttributeValue(val_double=(200)),
+                ],
+                reliabilities=[Reliability.RELIABILITY_HIGH],
             ),
         ]
 
