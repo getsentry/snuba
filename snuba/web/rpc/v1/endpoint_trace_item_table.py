@@ -19,6 +19,11 @@ from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
     SparseAggregateAttributeTransformer,
 )
+from snuba.web.rpc.v1.visitors.trace_item_table_request_visitor import (
+    NormalizeFormulaLabelsVisitor,
+    SetAggregateLabelsVisitor,
+    ValidateColumnLabelsVisitor,
+)
 from snuba.web.rpc.v1.visitors.visitor_v2 import RejectTimestampAsStringVisitor
 
 _GROUP_BY_DISALLOWED_COLUMNS = ["timestamp"]
@@ -87,7 +92,13 @@ def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
     This function is for initial processing and transformation of the request after recieving it.
     It is similar to the query processor step of the snql pipeline.
     """
-    return SparseAggregateAttributeTransformer(request).transform()
+    request = SparseAggregateAttributeTransformer(request).transform()
+    ValidateColumnLabelsVisitor().visit(request)
+    # SetAggregateLabelsVisitor should come after ValidateColumnLabelsVisitor because it
+    # relies on the labels in the columns being set.
+    SetAggregateLabelsVisitor().visit(request)
+    NormalizeFormulaLabelsVisitor().visit(request)
+    return request
 
 
 class EndpointTraceItemTable(
