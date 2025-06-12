@@ -68,7 +68,7 @@ def _get_job_type(job_id: str) -> str:
 
 
 def _get_job_types_multi(job_ids_keys: Sequence[str]) -> List[str]:
-    pipeline = _redis_client.pipeline()
+    pipeline = _redis_client.pipeline(transaction=False)
     for job_id_key in job_ids_keys:
         pipeline.get(job_id_key)
     redis_statuses = pipeline.execute()
@@ -80,7 +80,7 @@ def _get_job_status_multi(job_ids_keys: Sequence[str]) -> List[JobStatus]:
     if len(job_ids_keys) == 0:
         return []
 
-    pipeline = _redis_client.pipeline()
+    pipeline = _redis_client.pipeline(transaction=False)
     for job_id_key in job_ids_keys:
         pipeline.get(job_id_key)
     redis_statuses = pipeline.execute()
