@@ -1670,6 +1670,7 @@ class TestTimeSeriesApi(BaseApiTest):
 
 class TestUtils:
     @pytest.mark.redis_db
+    @pytest.mark.clickhouse_db
     def test_no_duplicate_labels(self) -> None:
         message = TimeSeriesRequest(
             meta=RequestMeta(

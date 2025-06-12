@@ -136,6 +136,7 @@ def test_metrics() -> None:
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_error_metrics() -> None:
     with patch("snuba.web.rpc.sentry_sdk.capture_exception") as sentry_sdk_mock:
         metrics_backend = TestingMetricsBackend()
