@@ -51,7 +51,7 @@ services:
     restart: unless-stopped
 
   snuba:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:d984d17ef0d1686420c1234f9a6795958eab165d
     ports:
       - 127.0.0.1:1218:1218
       - 127.0.0.1:1219:1219
