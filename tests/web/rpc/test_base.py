@@ -145,17 +145,15 @@ def test_error_metrics() -> None:
             rpc_call.execute(_get_in_msg())
         metric_tags = [m.tags for m in metrics_backend.calls]
         # the last tags set only contains endpoint_name and version because in __after_execute's metrics_backend.increment, we don't pass in the other tags
-        expected_metric_tags = [
+        assert metric_tags == [
             {
                 "time_period": "lte_1_day",
                 "referrer": "something",
                 "endpoint_name": "ErrorRPC",
                 "version": "v1",
             }
-            for _ in range(len(metrics_backend.calls) - 1)
-        ] + [{"endpoint_name": "ErrorRPC", "version": "v1"}]
-
-        assert metric_tags == expected_metric_tags
+            for _ in range(len(metrics_backend.calls))
+        ]
 
         metric_names_to_metric = {m.name: m for m in metrics_backend.calls}  # type: ignore
         assert metric_names_to_metric["rpc.request_error"].value == 1  # type: ignore
