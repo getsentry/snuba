@@ -10,6 +10,7 @@ from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba import environment
+from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -18,7 +19,6 @@ from snuba.utils.registered_class import (
     RegisteredClass,
     import_submodules_in_directory,
 )
-from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.web import QueryException
 from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
@@ -157,7 +157,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             if isinstance(e.__cause__, AllocationPolicyViolations):
                 error = RPCRequestException(
                     status_code=429,
-                    message=f"Request rate limited by allocation policy: {e.message}"
+                    message=f"Request rate limited by allocation policy: {e.message}",
                 )
                 out = self.response_class()()
             elif (
