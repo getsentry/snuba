@@ -16,8 +16,6 @@ producer = Producer(kafka_config)
 def delivery_report(err, msg):
     if err is not None:
         print(f"Message delivery failed: {err}")
-    else:
-        print(f"Message delivered to {msg.topic()} [{msg.partition()}]")
 
 
 def generate_item_message(start_timestamp=None):
@@ -69,12 +67,15 @@ def main():
     topic = "snuba-items"
 
     try:
+        count = 0
         while True:
-            print("Generating message...")
+            count += 1
+            if count % 100 == 0:
+                print(f"Generating message {count}...")
             message = generate_item_message()
             producer.produce(topic, message, callback=delivery_report)
             producer.poll(0)
-            time.sleep(1)  # Produce a message every second
+            time.sleep(0.05)  # Produce a message every second
 
     except KeyboardInterrupt:
         print("Shutting down producer...")

@@ -234,6 +234,17 @@ impl<R> BytesInsertBatch<R> {
         &self.cogs_data
     }
 
+    pub fn clone_meta(&self) -> BytesInsertBatch<()> {
+        BytesInsertBatch {
+            rows: (),
+            message_timestamp: self.message_timestamp.clone(),
+            origin_timestamp: self.origin_timestamp.clone(),
+            sentry_received_timestamp: self.sentry_received_timestamp.clone(),
+            commit_log_offsets: self.commit_log_offsets.clone(),
+            cogs_data: self.cogs_data.clone(),
+        }
+    }
+
     pub fn take(self) -> (R, BytesInsertBatch<()>) {
         let new = BytesInsertBatch {
             rows: (),
@@ -263,7 +274,7 @@ impl BytesInsertBatch<RowData> {
         self.rows.num_rows
     }
 
-    pub fn merge(mut self, other: BytesInsertBatch<RowData>) {
+    pub fn merge(mut self, other: BytesInsertBatch<RowData>) -> Self {
         self.rows.encoded_rows.extend(other.rows.encoded_rows);
         self.rows.num_rows += other.rows.num_rows;
         self.commit_log_offsets.merge(other.commit_log_offsets);
@@ -272,6 +283,7 @@ impl BytesInsertBatch<RowData> {
         self.sentry_received_timestamp
             .merge(other.sentry_received_timestamp);
         self.cogs_data.merge(other.cogs_data);
+        self
     }
 }
 
@@ -286,6 +298,7 @@ impl BytesInsertBatch<HttpBatch> {
         self.sentry_received_timestamp
             .merge(other.sentry_received_timestamp);
         self.cogs_data.merge(other.cogs_data);
+        self
     }
 }
 

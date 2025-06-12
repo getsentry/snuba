@@ -113,36 +113,28 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
-        /*
-          Self {
-            function,
-            next_step,
-            message_carried_over: None,
-            commit_request_carried_over: None,
-        }
-        F: FnMut(Message<TPayload>) -> Result<Message<TTransformed>, SubmitError<TPayload>>
-         */
-
         let next_step =
             RunTask::new(
                 |message: Message<BytesInsertBatch<RowData>>| -> Result<
                     Message<BytesInsertBatch<()>>,
                     SubmitError<BytesInsertBatch<RowData>>,
                 > {
-                    println!("Processing batch with {} messages", message.payload().len());
-                    Ok(Message::new_broker_message(message.payload().take()))
+                    let payload = message.payload();
+                    println!("Processing batch with {} messages", payload.len());
+                    let empty_batch = payload.clone_meta();
+                    Ok(message.replace(empty_batch))
                 },
                 next_step,
             );
 
         let accumulator = Arc::new(
             |batch: BytesInsertBatch<RowData>, small_batch: Message<BytesInsertBatch<RowData>>| {
-                batch.merge(small_batch.into_payload());
+                Ok(batch.merge(small_batch.into_payload()))
             },
         );
 
         let next_step = Reduce::new(
-            todo!(),
+            next_step,
             accumulator,
             Arc::new(move || {
                 BytesInsertBatch::<RowData>::new(
