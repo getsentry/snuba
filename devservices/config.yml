@@ -113,11 +113,6 @@ services:
     restart: unless-stopped
   profiles-consumer:
     image: ghcr.io/getsentry/snuba:latest
-    healthcheck:
-      test: curl -f http://localhost:1218/health_envoy
-      interval: 5s
-      timeout: 5s
-      retries: 3
     command: [
           rust-consumer,
           --storage=profiles,
@@ -148,11 +143,6 @@ services:
     restart: unless-stopped
   profile-chunks-consumer:
     image: ghcr.io/getsentry/snuba:latest
-    healthcheck:
-      test: curl -f http://localhost:1218/health_envoy
-      interval: 5s
-      timeout: 5s
-      retries: 3
     command: [
           rust-consumer,
           --storage=profile_chunks,
@@ -183,11 +173,6 @@ services:
     restart: unless-stopped
   functions-consumer:
     image: ghcr.io/getsentry/snuba:latest
-    healthcheck:
-      test: curl -f http://localhost:1218/health_envoy
-      interval: 5s
-      timeout: 5s
-      retries: 3
     command: [
           rust-consumer,
           --storage=functions_raw,
@@ -218,11 +203,6 @@ services:
     restart: unless-stopped
   uptime-consumer:
     image: ghcr.io/getsentry/snuba:latest
-    healthcheck:
-      test: curl -f http://localhost:1218/health_envoy
-      interval: 5s
-      timeout: 5s
-      retries: 3
     command: [
           rust-consumer,
           --storage=uptime_monitor_checks,
@@ -253,11 +233,6 @@ services:
     restart: unless-stopped
   metrics-consumer:
     image: ghcr.io/getsentry/snuba:latest
-    healthcheck:
-      test: curl -f http://localhost:1218/health_envoy
-      interval: 5s
-      timeout: 5s
-      retries: 3
     command: [
           rust-consumer,
           --storage=metrics_raw,
@@ -288,11 +263,6 @@ services:
     restart: unless-stopped
   generic-metrics-distributions-consumer:
     image: ghcr.io/getsentry/snuba:latest
-    healthcheck:
-      test: curl -f http://localhost:1218/health_envoy
-      interval: 5s
-      timeout: 5s
-      retries: 3
     command: [
           rust-consumer,
           --storage=generic_metrics_distributions_raw,
@@ -323,11 +293,6 @@ services:
     restart: unless-stopped
   generic-metrics-sets-consumer:
     image: ghcr.io/getsentry/snuba:latest
-    healthcheck:
-      test: curl -f http://localhost:1218/health_envoy
-      interval: 5s
-      timeout: 5s
-      retries: 3
     command: [
           rust-consumer,
           --storage=generic_metrics_sets_raw,
@@ -358,11 +323,6 @@ services:
     restart: unless-stopped
   generic-metrics-counters-consumer:
     image: ghcr.io/getsentry/snuba:latest
-    healthcheck:
-      test: curl -f http://localhost:1218/health_envoy
-      interval: 5s
-      timeout: 5s
-      retries: 3
     command: [
           rust-consumer,
           --storage=generic_metrics_counters_raw,
@@ -393,13 +353,7 @@ services:
     restart: unless-stopped
   generic-metrics-gauges-consumer:
     image: ghcr.io/getsentry/snuba:latest
-    healthcheck:
-      test: curl -f http://localhost:1218/health_envoy
-      interval: 5s
-      timeout: 5s
-      retries: 3
     command: [
-          snuba,
           rust-consumer,
           --storage=generic_metrics_gauges_raw,
           --consumer-group=snuba-gen-metrics-gauges-consumers,
