@@ -242,7 +242,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             except Exception as e:
                 # log some error metrics
                 self.metrics.increment("estimation_failure")
-                sentry_sdk.capture_exception(e)
+                sentry_sdk.capture_message(f"Error getting routing decision: {e}")
                 routing_decision = RoutingDecision(
                     routing_context=routing_context,
                     strategy=OutcomesBasedRoutingStrategy(),

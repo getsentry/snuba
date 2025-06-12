@@ -6,7 +6,6 @@ from typing import Any, Mapping
 import pytest
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageMeta
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemColumnValues,
@@ -176,9 +175,6 @@ class TestTraceItemTable(BaseApiTest):
             ],
             page_token=PageToken(offset=10),
             meta=ResponseMeta(
-                downsampled_storage_meta=DownsampledStorageMeta(
-                    can_go_to_higher_accuracy_tier=False
-                ),
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
         )
@@ -260,9 +256,6 @@ class TestTraceItemTable(BaseApiTest):
             ],
             page_token=PageToken(offset=10),
             meta=ResponseMeta(
-                downsampled_storage_meta=DownsampledStorageMeta(
-                    can_go_to_higher_accuracy_tier=False
-                ),
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
         )

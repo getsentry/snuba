@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import datetime
 from typing import Any, Callable, Dict, Iterable
 
+import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import DataPoint
@@ -416,10 +417,13 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )
-        routing_decision.strategy.merge_clickhouse_settings(
-            routing_decision, query_settings
-        )
-        query_settings.set_sampling_tier(routing_decision.tier)
+        try:
+            routing_decision.strategy.merge_clickhouse_settings(
+                routing_decision, query_settings
+            )
+            query_settings.set_sampling_tier(routing_decision.tier)
+        except Exception as e:
+            sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
 
         snuba_request = _build_snuba_request(in_msg, query_settings)
         res = run_query(
@@ -435,7 +439,6 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
             [self._timer],
         )
 
-        # todo(rachel): this sucks bc u have to repeat it for every resolver
         routing_decision.routing_context.query_result = res
         return TimeSeriesResponse(
             result_timeseries=list(

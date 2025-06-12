@@ -301,7 +301,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
         if output_metrics_error is not None:
             self.metrics.increment("metrics_failure")
-            sentry_sdk.capture_exception(output_metrics_error)
+            sentry_sdk.capture_message(
+                f"Error in routing strategy output metrics: {output_metrics_error}"
+            )
             if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
                 raise output_metrics_error
 

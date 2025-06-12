@@ -2,6 +2,7 @@ import uuid
 from dataclasses import replace
 from typing import List, Sequence
 
+import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationComparisonFilter,
@@ -396,10 +397,13 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )
-        routing_decision.strategy.merge_clickhouse_settings(
-            routing_decision, query_settings
-        )
-        query_settings.set_sampling_tier(routing_decision.tier)
+        try:
+            routing_decision.strategy.merge_clickhouse_settings(
+                routing_decision, query_settings
+            )
+            query_settings.set_sampling_tier(routing_decision.tier)
+        except Exception as e:
+            sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
 
         snuba_request = _build_snuba_request(in_msg, query_settings)
         res = run_query(
