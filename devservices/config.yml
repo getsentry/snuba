@@ -119,7 +119,6 @@ services:
       timeout: 5s
       retries: 3
     command: [
-          snuba,
           rust-consumer,
           --storage=profiles,
           --consumer-group=profiles_group,
@@ -155,7 +154,6 @@ services:
       timeout: 5s
       retries: 3
     command: [
-          snuba,
           rust-consumer,
           --storage=profile_chunks,
           --consumer-group=profile_chunks_group,
@@ -191,7 +189,6 @@ services:
       timeout: 5s
       retries: 3
     command: [
-          snuba,
           rust-consumer,
           --storage=functions_raw,
           --consumer-group=functions_group,
@@ -227,7 +224,6 @@ services:
       timeout: 5s
       retries: 3
     command: [
-          snuba,
           rust-consumer,
           --storage=uptime_monitor_checks,
           --consumer-group=snuba-uptime-results,
@@ -263,7 +259,6 @@ services:
       timeout: 5s
       retries: 3
     command: [
-          snuba,
           rust-consumer,
           --storage=metrics_raw,
           --consumer-group=snuba-metrics-consumers,
@@ -299,7 +294,6 @@ services:
       timeout: 5s
       retries: 3
     command: [
-          snuba,
           rust-consumer,
           --storage=generic_metrics_distributions_raw,
           --consumer-group=snuba-gen-metrics-distributions-consumers,
@@ -335,7 +329,6 @@ services:
       timeout: 5s
       retries: 3
     command: [
-          snuba,
           rust-consumer,
           --storage=generic_metrics_sets_raw,
           --consumer-group=snuba-gen-metrics-sets-consumers,
@@ -371,7 +364,6 @@ services:
       timeout: 5s
       retries: 3
     command: [
-          snuba,
           rust-consumer,
           --storage=generic_metrics_counters_raw,
           --consumer-group=snuba-gen-metrics-counters-consumers,
