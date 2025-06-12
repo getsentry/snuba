@@ -135,20 +135,18 @@ jobs:
         shell: bash
         env:
           SHORT_SHA: ${{ steps.short_sha.outputs.sha }}
-          IMAGE_URL: ${{ needs.build.outputs.image_tag }}
         run: |
           # only login if the password is set
           if [[ "${{ secrets.DOCKER_HUB_RW_TOKEN }}" ]]; then echo "${{ secrets.DOCKER_HUB_RW_TOKEN }}" | docker login --username=sentrybuilder --password-stdin; fi
           # We push 3 tags to Dockerhub:
           # first, the full sha of the commit
-          docker tag ${IMAGE_URL} getsentry/snuba:${GITHUB_SHA}
-          docker push getsentry/snuba:${GITHUB_SHA}
+          docker buildx imagetools create --tag getsentry/snuba:${GITHUB_SHA} ghcr.io/getsentry/snuba:${{ github.sha }}
+
           # second, the short sha of the commit
-          docker tag ${IMAGE_URL} getsentry/snuba:${SHORT_SHA}
-          docker push getsentry/snuba:${SHORT_SHA}
+          docker buildx imagetools create --tag getsentry/snuba:${SHORT_SHA} ghcr.io/getsentry/snuba:${{ github.sha }}
+
           # finally, nightly
-          docker tag ${IMAGE_URL} getsentry/snuba:nightly
-          docker push getsentry/snuba:nightly
+          docker buildx imagetools create --tag getsentry/snuba:nightly ghcr.io/getsentry/snuba:${{ github.sha }}
 
   self-hosted-end-to-end:
     needs: [build, assemble]
