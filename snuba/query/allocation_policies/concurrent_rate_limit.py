@@ -33,6 +33,9 @@ _PASS_THROUGH_REFERRERS = set(
         "tsdb-modelid:4.batch_alert_event_frequency",
         "tsdb-modelid:4.batch_alert_event_uniq_user_frequency",
         "tsdb-modelid:4.batch_alert_event_frequency_percent",
+        "tsdb-modelid:4.wf_batch_alert_event_frequency",
+        "tsdb-modelid:4.wf_batch_alert_event_uniq_user_frequency",
+        "tsdb-modelid:4.wf_batch_alert_event_frequency_percent",
     ]
 )
 from snuba.query.allocation_policies import MAX_THRESHOLD, NO_SUGGESTION
