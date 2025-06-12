@@ -266,6 +266,12 @@ impl BytesInsertBatch<RowData> {
     pub fn merge(mut self, other: BytesInsertBatch<RowData>) {
         self.rows.encoded_rows.extend(other.rows.encoded_rows);
         self.rows.num_rows += other.rows.num_rows;
+        self.commit_log_offsets.merge(other.commit_log_offsets);
+        self.message_timestamp.merge(other.message_timestamp);
+        self.origin_timestamp.merge(other.origin_timestamp);
+        self.sentry_received_timestamp
+            .merge(other.sentry_received_timestamp);
+        self.cogs_data.merge(other.cogs_data);
     }
 }
 
@@ -280,7 +286,6 @@ impl BytesInsertBatch<HttpBatch> {
         self.sentry_received_timestamp
             .merge(other.sentry_received_timestamp);
         self.cogs_data.merge(other.cogs_data);
-        self
     }
 }
 
