@@ -203,16 +203,10 @@ def _build_query(request: TraceItemTableRequest) -> Query:
     return res
 
 
-def _build_snuba_request(
-    request: TraceItemTableRequest, routing_decision: RoutingDecision
-) -> SnubaRequest:
+def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
-    routing_decision.strategy.merge_clickhouse_settings(
-        routing_decision, query_settings
-    )
-    query_settings.set_sampling_tier(routing_decision.tier)
 
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
@@ -250,13 +244,12 @@ class ResolverTraceItemTableUptimeChecks(ResolverTraceItemTable):
     def resolve(
         self, in_msg: TraceItemTableRequest, routing_decision: RoutingDecision
     ) -> TraceItemTableResponse:
-        snuba_request = _build_snuba_request(in_msg, routing_decision)
+        snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
             timer=self._timer,
         )
-        routing_decision.routing_context.query_result = res
         column_values = convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,

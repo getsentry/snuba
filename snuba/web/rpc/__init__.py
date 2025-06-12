@@ -10,7 +10,6 @@ from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba import environment, settings, state
-from snuba.downsampled_storage_tiers import Tier
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -27,10 +26,8 @@ from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
+from snuba.web.rpc.storage_routing.defaults import get_default_routing_decision
 from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
-from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
-    OutcomesBasedRoutingStrategy,
-)
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
@@ -48,15 +45,6 @@ _TIME_PERIOD_HOURS_BUCKETS = [
     90 * 24,
 ]
 _BUCKETS_COUNT = len(_TIME_PERIOD_HOURS_BUCKETS)
-_DEFAULT_ROUTING_DECISION = RoutingDecision(
-    routing_context=RoutingContext(
-        in_msg=ProtobufMessage(),
-        timer=Timer("endpoint_timing"),
-    ),
-    strategy=OutcomesBasedRoutingStrategy(),
-    tier=Tier.TIER_1,
-    can_run=True,
-)
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -111,7 +99,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(self, metrics_backend: MetricsBackend | None = None) -> None:
         self._timer = Timer("endpoint_timing")
         self._metrics_backend = metrics_backend or environment.metrics
-        self.routing_decision = _DEFAULT_ROUTING_DECISION
+        self.routing_decision = get_default_routing_decision(None)
 
     @classmethod
     def request_class(cls) -> Type[Tin]:
@@ -278,13 +266,13 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __after_execute(
         self, in_msg: Tin, out_msg: Tout, error: Exception | None
     ) -> Tout:
+        res = self._after_execute(in_msg, out_msg, error)
         output_metrics_error = None
         try:
-            res = self._after_execute(in_msg, out_msg, error)
+            self.routing_decision.strategy.output_metrics(self.routing_decision)
         except Exception as e:
             output_metrics_error = e
 
-        self.routing_decision.strategy.output_metrics(self.routing_decision)
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:

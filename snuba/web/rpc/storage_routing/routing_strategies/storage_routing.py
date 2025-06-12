@@ -10,9 +10,6 @@ from google.protobuf.json_format import MessageToDict
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
-from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
-    CreateSubscriptionRequest,
-)
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 
@@ -24,6 +21,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 from snuba.web import QueryResult
+from snuba.web.rpc.storage_routing.common import extract_message_meta
 
 _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
 _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
@@ -66,10 +64,12 @@ class RoutingDecision:
             query_result["stats"] = self.routing_context.query_result.extra.get("stats")
             query_result["sql"] = self.routing_context.query_result.extra.get("sql")
 
+        in_msg_meta = extract_message_meta(self.routing_context.in_msg)
+
         return {
             "can_run": self.can_run,
             "strategy": self.strategy.__class__.__name__,
-            "source_request_id": self.routing_context.in_msg.time_series_request.meta.request_id if isinstance(self.routing_context.in_msg, CreateSubscriptionRequest) else self.routing_context.in_msg.meta.request_id,  # type: ignore
+            "source_request_id": in_msg_meta.request_id,
             "extra_info": self.routing_context.extra_info,
             "clickhouse_settings": self.clickhouse_settings,
             "result_info": query_result,
@@ -104,7 +104,7 @@ def _construct_hacky_querylog_payload(
         {}, {"stats": {}, "sql": "", "experiments": {}}
     )
     profile = query_result.result.get("profile", {}) or {}
-    in_message_meta = routing_decision.routing_context.in_msg.time_series_request.meta if isinstance(routing_decision.routing_context.in_msg, CreateSubscriptionRequest) else routing_decision.routing_context.in_msg.meta  # type: ignore
+    in_message_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
     return {
         "request": {
@@ -174,7 +174,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
         return cast("Type[BaseRoutingStrategy]", cls.class_from_name(name))
 
     def _is_highest_accuracy_mode(self, routing_context: RoutingContext) -> bool:
-        meta = routing_context.in_msg.time_series_request.meta if isinstance(routing_context.in_msg, CreateSubscriptionRequest) else routing_context.in_msg.meta  # type: ignore
+        meta = extract_message_meta(routing_context.in_msg)
         if not hasattr(meta, "downsampled_storage_config"):
             return False
         return bool(
@@ -318,10 +318,10 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
         )
 
     def _emit_routing_mistake(self, routing_decision: RoutingDecision) -> None:
-        if (
-            not routing_decision.routing_context.query_result
-            or self._is_highest_accuracy_mode(routing_decision.routing_context)
-        ):
+        if routing_decision.routing_context.query_result is None:
+            sentry_sdk.capture_message("storage routing: query_result is None")
+            return
+        if self._is_highest_accuracy_mode(routing_decision.routing_context):
             return
         profile = (
             routing_decision.routing_context.query_result.result.get("profile", {})

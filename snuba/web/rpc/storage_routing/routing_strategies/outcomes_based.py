@@ -2,9 +2,6 @@ import uuid
 from typing import cast
 
 from google.protobuf.json_format import MessageToDict
-from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
-    CreateSubscriptionRequest,
-)
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba import state
@@ -27,6 +24,7 @@ from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
     treeify_or_and_conditions,
 )
+from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
     RoutingContext,
@@ -65,7 +63,7 @@ def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
 
 class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
     def get_ingested_items_for_timerange(self, routing_context: RoutingContext) -> int:
-        in_msg_meta = routing_context.in_msg.time_series_request.meta if isinstance(routing_context.in_msg, CreateSubscriptionRequest) else routing_context.in_msg.meta  # type: ignore
+        in_msg_meta = extract_message_meta(routing_context.in_msg)
         entity = Entity(
             key=EntityKey("outcomes"),
             schema=get_entity(EntityKey("outcomes")).get_data_model(),
@@ -152,7 +150,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         if self._is_highest_accuracy_mode(routing_context):
             return routing_decision
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
-        in_msg_meta = routing_decision.routing_context.in_msg.time_series_request.meta if isinstance(routing_decision.routing_context.in_msg, CreateSubscriptionRequest) else routing_decision.routing_context.in_msg.meta  # type: ignore
+        in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
         start_ts = in_msg_meta.start_timestamp.seconds
         end_ts = in_msg_meta.end_timestamp.seconds
         time_range_secs = end_ts - start_ts
