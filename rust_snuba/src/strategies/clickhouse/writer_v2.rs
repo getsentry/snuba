@@ -3,19 +3,17 @@ use std::time::{Duration, SystemTime};
 
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
-use rust_arroyo::processing::strategies::run_task_in_threads::{
+use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use rust_arroyo::processing::strategies::{
+use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
-use rust_arroyo::types::Message;
-use rust_arroyo::{counter, timer};
+use sentry_arroyo::types::Message;
+use sentry_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
-use crate::types::BytesInsertBatch;
-
-pub mod writer_v2;
+use crate::types::{BytesInsertBatch, RowData};
 
 const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
 
@@ -33,17 +31,27 @@ impl ClickhouseWriter {
     }
 }
 
-impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ClickhouseWriter {
+impl TaskRunner<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error>
+    for ClickhouseWriter
+{
     fn get_task(
         &self,
-        message: Message<BytesInsertBatch>,
-    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
+        message: Message<BytesInsertBatch<RowData>>,
+    ) -> RunTaskFunc<BytesInsertBatch<()>, anyhow::Error> {
         let skip_write = self.skip_write;
         let client = self.client.clone();
 
         Box::pin(async move {
+            // TODO: I need to consumer the message so I can own the payload through into_payload()
+            // but then I cannot use the message anymore and use message.replace()
+            // Ideally, I would be able to do something like:
+            // let message_with_cloned_offsets = message.copy_offsets()
+            // let payload = message.into_payload()
+            // ... do my thing
+            // return Ok(message_with_cloned_offsets.replace(return_value))
             let insert_batch = message.payload();
-            let encoded_rows = insert_batch.encoded_rows();
+            let (rows, empty_batch) = insert_batch.take();
+            let encoded_rows = rows.into_encoded_rows();
 
             let write_start = SystemTime::now();
 
@@ -61,7 +69,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for Clickhous
                 tracing::debug!("performing write");
 
                 let response = client
-                    .send(insert_batch.encoded_rows())
+                    .send(encoded_rows.as_slice())
                     .await
                     .map_err(RunTaskError::Other)?;
 
@@ -77,13 +85,18 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for Clickhous
             counter!("insertions.batch_write_msgs", insert_batch.len() as i64);
             insert_batch.record_message_latency();
 
-            Ok(message)
+            Ok(message.replace(empty_batch))
         })
     }
 }
 
 pub struct ClickhouseWriterStep {
-    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch, anyhow::Error>,
+    inner: RunTaskInThreads<
+        BytesInsertBatch<RowData>,
+        BytesInsertBatch<()>,
+        anyhow::Error,
+        ProcessingStrategy<BytesInsertBatch<()>>,
+    >,
 }
 
 impl ClickhouseWriterStep {
@@ -95,7 +108,7 @@ impl ClickhouseWriterStep {
         concurrency: &ConcurrencyConfig,
     ) -> Self
     where
-        N: ProcessingStrategy<BytesInsertBatch> + 'static,
+        N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
     {
         let hostname = cluster_config.host;
         let http_port = cluster_config.http_port;
@@ -115,20 +128,16 @@ impl ClickhouseWriterStep {
     }
 }
 
-impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
+impl ProcessingStrategy<BytesInsertBatch<RowData>> for ClickhouseWriterStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }
 
     fn submit(
         &mut self,
-        message: Message<BytesInsertBatch>,
-    ) -> Result<(), SubmitError<BytesInsertBatch>> {
+        message: Message<BytesInsertBatch<RowData>>,
+    ) -> Result<(), SubmitError<BytesInsertBatch<RowData>>> {
         self.inner.submit(message)
-    }
-
-    fn close(&mut self) {
-        self.inner.close();
     }
 
     fn terminate(&mut self) {

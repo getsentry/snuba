@@ -120,8 +120,12 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     SubmitError<BytesInsertBatch<RowData>>,
                 > {
                     let payload = message.payload();
-                    println!("Processing batch with {} messages", payload.len());
-                    let empty_batch = payload.clone_meta();
+                    let (rows, empty_batch) = payload.take();
+                    println!(
+                        "Processing batch with {} messages, {} bytes",
+                        payload.len(),
+                        rows.into_encoded_rows().len()
+                    );
                     Ok(message.replace(empty_batch))
                 },
                 next_step,
