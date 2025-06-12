@@ -88,6 +88,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         name: Checkout code
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run linter
         run: |
           make lint-rust format-rust-ci
@@ -204,7 +208,7 @@ jobs:
     needs: [linting, snuba-image]
     name: Tests and code coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     strategy:
       matrix:
         snuba_settings:
@@ -325,7 +329,6 @@ jobs:
         uses: ./.github/actions/setup-sentry
         with:
           workdir: sentry
-          use-new-devservices: true
           mode: minimal
 
       - name: Start snuba
@@ -363,22 +366,22 @@ jobs:
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
-          pytest -k 'not __In' tests/snuba \
+          pytest -k 'not __In' \
+              tests/snuba \
+              tests/sentry/snuba \
               tests/sentry/eventstream/kafka \
               tests/sentry/post_process_forwarder \
-              tests/sentry/snuba \
               tests/sentry/eventstore/snuba \
               tests/sentry/search/events \
               tests/sentry/event_manager \
               tests/sentry/api/endpoints/test_organization_profiling_functions.py \
               tests/sentry/integrations/slack/test_unfurl.py \
-              tests/snuba/api/endpoints/test_organization_events_stats_span_indexed.py \
-              tests/snuba/api/endpoints/test_organization_events_stats_mep.py \
-              tests/sentry/sentry_metrics/querying \
-              tests/snuba/test_snql_snuba.py \
-              tests/snuba/test_metrics_layer.py \
+              tests/sentry/uptime/endpoints/test_project_uptime_alert_check_index.py \
+              tests/sentry/uptime/endpoints/test_organization_uptime_stats.py \
+              tests/sentry/api/endpoints/test_organization_traces.py \
               tests/sentry/api/endpoints/test_organization_spans_fields.py \
-              tests/snuba/api/endpoints/test_organization_events_span_indexed.py \
+              tests/sentry/api/endpoints/test_organization_spans_fields_stats.py \
+              tests/sentry/sentry_metrics/querying \
               -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run CI module tests
@@ -397,6 +400,7 @@ jobs:
         version:
           [
             "24.3.5.47.altinitystable",
+            "24.8.11.51285.altinitystable",
           ]
 
     steps:
@@ -435,7 +439,7 @@ jobs:
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       name: Checkout repository
-    - uses: getsentry/action-validate-devservices-config@6477ef1e9c96e456bfad726006e731f89fcd81db
+    - uses: getsentry/action-validate-devservices-config@02a078d1280293e6598cabfbd318a01609c12c83
       name: Validate devservices config
       with:
         requirements-file-path: requirements.txt

@@ -245,6 +245,21 @@ schema:
         args: { schema_modifiers: [ nullable ], size: 64 },
       },
       { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
+      {
+        name: symbolicated_in_app,
+        type: UInt,
+        args: { schema_modifiers: [nullable], size: 8 },
+      },
+      {
+        name: timestamp_ms,
+        type: DateTime64,
+        args: { schema_modifiers: [nullable], precision: 3 },
+      },
+      {
+        name: sample_weight,
+        type: Float,
+        args: { schema_modifiers: [nullable], size: 64 },
+      },
     ]
   local_table_name: errors_local
   dist_table_name: errors_dist_ro
@@ -279,15 +294,6 @@ allocation_policies:
         getsentry.tasks.backfill_grouping_records:
           max_threads: 7
           concurrent_limit: 60
-  - name: BytesScannedWindowAllocationPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - referrer
-      default_config_overrides:
-        is_enforced: 1
-        throttled_thread_number: 1
-        org_limit_bytes_scanned: 10000000
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser

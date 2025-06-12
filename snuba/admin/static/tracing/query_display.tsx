@@ -29,8 +29,10 @@ function QueryDisplay(props: {
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [storages, setStorages] = useState<string[]>([]);
+  const [checkedGatherProfileEvents, setCheckedGatherProfileEvents] = useState<boolean>(true);
   const [query, setQuery] = useState<QueryState>({
     storage: getParamFromStorage("storage"),
+    gather_profile_events: checkedGatherProfileEvents
   });
   const [queryResultHistory, setQueryResultHistory] = useState<TracingResult[]>(
     getRecentHistory(HISTORY_KEY)
@@ -53,6 +55,7 @@ function QueryDisplay(props: {
   }
 
   function executeQuery() {
+    query.gather_profile_events = checkedGatherProfileEvents;
     return props.api
       .executeTracingQuery(query as TracingRequest)
       .then((result) => {
@@ -105,12 +108,10 @@ function QueryDisplay(props: {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <Switch
-            checked={query.gather_profile_events ?? true}
-            onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
-              setQuery((prevQuery) => ({
-                ...prevQuery,
-                gather_profile_events: evt.currentTarget.checked,
-              }))
+            checked={checkedGatherProfileEvents}
+            onChange={(evt: React.ChangeEvent<HTMLInputElement>) => {
+                  setCheckedGatherProfileEvents(evt.currentTarget.checked);
+                }
             }
             onLabel="PROFILE"
             offLabel="NO PROFILE"

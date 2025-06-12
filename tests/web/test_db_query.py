@@ -318,6 +318,7 @@ def test_db_query_success() -> None:
             "ReferrerGuardRailPolicy": {
                 "can_run": True,
                 "max_threads": 10,
+                "max_bytes_to_read": 0,
                 "explanation": {
                     "reason": "within limit",
                     "policy": "referrer_guard_rail_policy",
@@ -334,6 +335,7 @@ def test_db_query_success() -> None:
             "ConcurrentRateLimitAllocationPolicy": {
                 "can_run": True,
                 "max_threads": 10,
+                "max_bytes_to_read": 0,
                 "explanation": {
                     "reason": "within limit",
                     "overrides": {},
@@ -349,6 +351,7 @@ def test_db_query_success() -> None:
             "BytesScannedRejectingPolicy": {
                 "can_run": True,
                 "max_threads": 10,
+                "max_bytes_to_read": 0,
                 "explanation": {
                     "reason": "within_limit",
                     "storage_key": "StorageKey.ERRORS_RO",
@@ -362,6 +365,7 @@ def test_db_query_success() -> None:
             },
             "CrossOrgQueryAllocationPolicy": {
                 "can_run": True,
+                "max_bytes_to_read": 0,
                 "max_threads": 10,
                 "explanation": {
                     "reason": "pass_through",
@@ -373,17 +377,6 @@ def test_db_query_success() -> None:
                 "quota_used": 0,
                 "quota_unit": NO_UNITS,
                 "suggestion": NO_SUGGESTION,
-            },
-            "BytesScannedWindowAllocationPolicy": {
-                "can_run": True,
-                "max_threads": 10,
-                "explanation": {"storage_key": "StorageKey.ERRORS_RO"},
-                "is_throttled": False,
-                "throttle_threshold": 10000000,
-                "rejection_threshold": MAX_THRESHOLD,
-                "quota_used": 0,
-                "quota_unit": "bytes",
-                "suggestion": "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API",
             },
         },
     }
@@ -555,6 +548,7 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
                 "ThrottleAllocationPolicy1": {
                     "can_run": True,
                     "max_threads": 1,
+                    "max_bytes_to_read": 0,
                     "explanation": {
                         "reason": "ThrottleAllocationPolicy1 throttles all queries",
                         "storage_key": "StorageKey.DOESNTMATTER",
@@ -569,6 +563,7 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
                 "ThrottleAllocationPolicy2": {
                     "can_run": True,
                     "max_threads": 2,
+                    "max_bytes_to_read": 0,
                     "explanation": {
                         "reason": "ThrottleAllocationPolicy2 throttles all queries",
                         "storage_key": "StorageKey.DOESNTMATTER",
@@ -687,6 +682,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             "details": {
                 "RejectAllocationPolicy": {
                     "can_run": False,
+                    "max_bytes_to_read": 0,
                     "explanation": {
                         "reason": "policy rejects all queries",
                         "storage_key": "StorageKey.DOESNTMATTER",
@@ -933,6 +929,7 @@ def test_allocation_policy_updates_quota() -> None:
                     "storage_key": "StorageKey.DOESNTMATTER",
                 },
                 "is_throttled": False,
+                "max_bytes_to_read": 0,
                 "throttle_threshold": MAX_QUERIES_TO_RUN,
                 "rejection_threshold": MAX_QUERIES_TO_RUN,
                 "quota_used": queries_run,
@@ -1072,3 +1069,94 @@ def test_cache_metrics_with_simple_readthrough() -> None:
                 mock.call.increment("cache_hit_simple", tags={"dataset": "events"}),
             ]
         )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_policy_sets_max_bytes_to_read() -> None:
+    class MaxBytesPolicy(AllocationPolicy):
+        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+            return []
+
+        def _get_quota_allowance(
+            self, tenant_ids: dict[str, str | int], query_id: str
+        ) -> QuotaAllowance:
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=10,
+                explanation={},
+                is_throttled=True,
+                throttle_threshold=420,
+                rejection_threshold=42069,
+                quota_used=123,
+                quota_unit="concurrent_queries",
+                suggestion=NO_SUGGESTION,
+                max_bytes_to_read=1,
+            )
+
+        def _update_quota_balance(
+            self,
+            tenant_ids: dict[str, str | int],
+            query_id: str,
+            result_or_error: QueryResultOrError,
+        ) -> None:
+            pass
+
+    query, storage, attribution_info = _build_test_query(
+        "count(distinct(project_id))",
+        [
+            MaxBytesPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+        ],
+    )
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+    settings = HTTPQuerySettings()
+    db_query(
+        clickhouse_query=query,
+        query_settings=settings,
+        attribution_info=attribution_info,
+        dataset_name="events",
+        query_metadata_list=query_metadata_list,
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    )
+
+    assert stats["quota_allowance"] == {
+        "details": {
+            "MaxBytesPolicy": {
+                "can_run": True,
+                "explanation": {"storage_key": "StorageKey.DOESNTMATTER"},
+                "is_throttled": True,
+                "max_bytes_to_read": 1,
+                "max_threads": 10,
+                "quota_unit": "concurrent_queries",
+                "quota_used": 123,
+                "rejection_threshold": 42069,
+                "suggestion": "no_suggestion",
+                "throttle_threshold": 420,
+            }
+        },
+        "summary": {
+            "is_rejected": False,
+            "is_successful": False,
+            "is_throttled": True,
+            "max_bytes_to_read": 1,
+            "rejected_by": {},
+            "rejection_storage_key": None,
+            "threads_used": 10,
+            "throttle_storage_key": "StorageKey.DOESNTMATTER",
+            "throttled_by": {
+                "policy": "MaxBytesPolicy",
+                "quota_unit": "concurrent_queries",
+                "quota_used": 123,
+                "storage_key": "StorageKey.DOESNTMATTER",
+                "suggestion": "no_suggestion",
+                "throttle_threshold": 420,
+            },
+        },
+    }

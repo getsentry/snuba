@@ -1,5 +1,8 @@
 migrations:
-- snuba/migrations/group_loader.py
-- snuba/migrations/groups.py
-- snuba/snuba_migrations/**/*
-- snuba/migrations/system_migrations/*
+- any:
+  - changed-files:
+    - any-glob-to-any-file:
+      - snuba/migrations/group_loader.py
+      - snuba/migrations/groups.py
+      - snuba/snuba_migrations/**/*
+      - snuba/migrations/system_migrations/*

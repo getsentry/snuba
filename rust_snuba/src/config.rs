@@ -56,6 +56,7 @@ pub struct TopicConfig {
     pub logical_topic_name: String,
     #[serde(deserialize_with = "deserialize_broker_config")]
     pub broker_config: BrokerConfig,
+    pub quantized_rebalance_consumer_group_delay_secs: Option<u64>,
 }
 
 type RawBrokerConfig = HashMap<String, Value>;
@@ -83,6 +84,7 @@ pub struct StorageConfig {
 pub struct ClickhouseConfig {
     pub host: String,
     pub port: u16,
+    pub secure: bool,
     pub http_port: u16,
     pub user: String,
     pub password: String,

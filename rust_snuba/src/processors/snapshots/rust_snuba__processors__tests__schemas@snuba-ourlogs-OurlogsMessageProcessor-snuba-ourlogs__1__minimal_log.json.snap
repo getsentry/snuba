@@ -5,18 +5,31 @@ expression: snapshot_payload
 ---
 [
   {
-    "attr_bool": {},
-    "attr_double": {},
-    "attr_int": {},
-    "attr_string": {},
-    "body": "hello world!",
+    "attributes_bool": {},
+    "attributes_float_14": {
+      "sentry.timestamp_precise": "<item timestamp>"
+    },
+    "attributes_float_37": {
+      "sentry.severity_number": 0.0
+    },
+    "attributes_int": {
+      "sentry.severity_number": 0,
+      "sentry.timestamp_precise": "<item timestamp>"
+    },
+    "attributes_string_0": {
+      "sentry.body": "hello world!"
+    },
+    "attributes_string_35": {
+      "sentry.severity_text": "INFO"
+    },
+    "item_id": "<item ID>",
+    "item_type": 3,
     "organization_id": 69,
     "project_id": 1,
     "retention_days": 90,
-    "severity_number": 0,
-    "severity_text": "INFO",
-    "span_id": 0,
-    "timestamp": 1715868485371000,
+    "sampling_factor": 1.0,
+    "sampling_weight": 1,
+    "timestamp": 1715868,
     "trace_id": "00000000-0000-0000-0000-000000000000"
   }
 ]

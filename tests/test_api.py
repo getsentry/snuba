@@ -2273,7 +2273,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                         "project_id": 1,
                         "time_window": int(timedelta(minutes=10).total_seconds()),
                         "resolution": int(timedelta(minutes=1).total_seconds()),
-                        "query": "MATCH (events) SELECT count() AS count BY project_id WHERE platform IN tuple('a')",
+                        "query": "MATCH (events) SELECT count() AS count BY project_id HAVING platform IN tuple('a')",
                     }
                 ).encode("utf-8"),
             )
@@ -2282,7 +2282,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         data = json.loads(resp.data)
         assert data == {
             "error": {
-                "message": "A maximum of 1 aggregation is allowed in the select",
+                "message": "invalid clause having in subscription query",
                 "type": "invalid_query",
             }
         }

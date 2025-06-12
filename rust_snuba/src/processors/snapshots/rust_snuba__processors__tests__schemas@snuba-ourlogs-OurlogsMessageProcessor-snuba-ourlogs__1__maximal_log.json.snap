@@ -5,26 +5,46 @@ expression: snapshot_payload
 ---
 [
   {
-    "attr_bool": {
+    "attributes_bool": {
       "bool.user.tag": true
     },
-    "attr_double": {
+    "attributes_float_14": {
+      "sentry.timestamp_precise": "<item timestamp>"
+    },
+    "attributes_float_15": {
       "double.user.tag": -10.59
     },
-    "attr_int": {
-      "another.user.tag": 10
+    "attributes_float_24": {
+      "bool.user.tag": 1.0
     },
-    "attr_string": {
+    "attributes_float_35": {
+      "another.user.tag": 10.0
+    },
+    "attributes_float_37": {
+      "sentry.severity_number": 1.0
+    },
+    "attributes_int": {
+      "another.user.tag": 10,
+      "sentry.severity_number": 1,
+      "sentry.timestamp_precise": "<item timestamp>"
+    },
+    "attributes_string_0": {
+      "sentry.body": "hello world!"
+    },
+    "attributes_string_28": {
       "some.user.tag": "hello"
     },
-    "body": "hello world!",
+    "attributes_string_35": {
+      "sentry.severity_text": "WARNING"
+    },
+    "item_id": "<item ID>",
+    "item_type": 3,
     "organization_id": 69,
     "project_id": 1,
     "retention_days": 90,
-    "severity_number": 1,
-    "severity_text": "WARNING",
-    "span_id": 1225016703947885789,
-    "timestamp": 1715868485371000,
+    "sampling_factor": 1.0,
+    "sampling_weight": 1,
+    "timestamp": 1715868,
     "trace_id": "3c8c20d5-0a54-4a1c-ba10-f76f574d856f"
   }
 ]

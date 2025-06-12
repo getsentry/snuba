@@ -15,7 +15,7 @@ use uuid::Uuid;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{enforce_retention, StringToIntDatetime};
+use crate::processors::utils::{enforce_retention, StringToIntDatetime64};
 use crate::types::{
     InsertBatch, InsertOrReplacement, KafkaMessageMetadata, ReplacementData, RowData,
 };
@@ -109,7 +109,7 @@ struct ReplacementEvent {
 struct ErrorMessage {
     data: ErrorData,
     #[serde(default)]
-    datetime: StringToIntDatetime,
+    datetime: StringToIntDatetime64,
     event_id: Uuid,
     group_id: u64,
     message: String,
@@ -153,6 +153,10 @@ struct ErrorData {
     user: Option<User>,
     #[serde(default)]
     version: Option<String>,
+    #[serde(default)]
+    symbolicated_in_app: Option<bool>,
+    #[serde(default)]
+    sample_rate: Option<f64>,
 }
 
 // Contexts
@@ -405,6 +409,7 @@ struct ErrorRow {
     #[serde(rename = "flags.value")]
     flags_value: Vec<String>,
     timestamp: u32,
+    timestamp_ms: u64,
     title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     trace_id: Option<Uuid>,
@@ -418,6 +423,9 @@ struct ErrorRow {
     user_name: Option<String>,
     user: String,
     version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    symbolicated_in_app: Option<bool>,
+    sample_weight: Option<f64>,
 }
 
 impl ErrorRow {
@@ -681,6 +689,11 @@ impl ErrorRow {
             }
         }
 
+        let sample_weight =
+            from.data
+                .sample_rate
+                .and_then(|rate| if rate == 0.0 { None } else { Some(1.0 / rate) });
+
         Ok(Self {
             contexts_key: contexts_keys,
             contexts_value: contexts_values,
@@ -729,7 +742,8 @@ impl ErrorRow {
             span_id,
             tags_key,
             tags_value,
-            timestamp: from.datetime.0,
+            timestamp: (from.datetime.0 / 1000) as u32,
+            timestamp_ms: from.datetime.0,
             title: from.data.title.0.unwrap_or_default(),
             trace_id: from_trace_context.trace_id,
             trace_sampled: from_trace_context.sampled.map(|v| v as u8),
@@ -740,6 +754,8 @@ impl ErrorRow {
             user_name: from_user.username.0,
             user: user.unwrap_or_default(),
             version: from.data.version,
+            symbolicated_in_app: from.data.symbolicated_in_app,
+            sample_weight,
             ..Default::default()
         })
     }
