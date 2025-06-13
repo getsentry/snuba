@@ -19,12 +19,14 @@ from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
     SparseAggregateAttributeTransformer,
 )
+from snuba.web.rpc.v1.visitors.time_series_request_visitor import (
+    RejectTimestampAsStringVisitor,
+)
 from snuba.web.rpc.v1.visitors.trace_item_table_request_visitor import (
     NormalizeFormulaLabelsVisitor,
     SetAggregateLabelsVisitor,
     ValidateColumnLabelsVisitor,
 )
-from snuba.web.rpc.v1.visitors.visitor_v2 import RejectTimestampAsStringVisitor
 
 _GROUP_BY_DISALLOWED_COLUMNS = ["timestamp"]
 
