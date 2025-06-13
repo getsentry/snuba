@@ -7,6 +7,7 @@ import sentry_sdk
 from google.protobuf.message import Message as ProtobufMessage
 
 from snuba.state import get_config
+from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
 )
@@ -106,7 +107,8 @@ class RoutingStrategySelector:
         self, routing_context: RoutingContext
     ) -> BaseRoutingStrategy:
         try:
-            combined_org_and_project_ids = f"{routing_context.in_msg.meta.organization_id}:{'.'.join(str(pid) for pid in sorted(routing_context.in_msg.meta.project_ids))}"  # type: ignore
+            in_msg_meta = extract_message_meta(routing_context.in_msg)
+            combined_org_and_project_ids = f"{in_msg_meta.organization_id}:{'.'.join(str(pid) for pid in sorted(in_msg_meta.project_ids))}"  # type: ignore
             bucket = (
                 int(hashlib.md5(combined_org_and_project_ids.encode()).hexdigest(), 16)
                 % _NUM_BUCKETS
