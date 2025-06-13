@@ -10,6 +10,7 @@ from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba import environment
+from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -153,13 +154,21 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         try:
             out = self._execute(in_msg)
         except QueryException as e:
-            if (
+            if isinstance(e.__cause__, AllocationPolicyViolations):
+                error = RPCRequestException(
+                    status_code=429,
+                    message=f"Request rate limited by allocation policy: {e.message}",
+                )
+                out = self.response_class()()
+            elif (
                 "error_code" in e.extra["stats"]
                 and e.extra["stats"]["error_code"] == 241
             ):
                 self.metrics.increment("OOM_query")
                 sentry_sdk.capture_exception(e)
-            if (
+                out = self.response_class()()
+                error = e
+            elif (
                 "error_code" in e.extra["stats"]
                 and e.extra["stats"]["error_code"] == 159
             ):
@@ -170,7 +179,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     )
                 self.metrics.increment("timeout_query", 1, tags)
                 sentry_sdk.capture_exception(e)
-            if (
+                out = self.response_class()()
+                error = e
+            elif (
                 "error_code" in e.extra["stats"]
                 and e.extra["stats"]["error_code"] == 160
             ):
@@ -181,8 +192,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     )
                 self.metrics.increment("estimated_execution_timeout", 1, tags)
                 sentry_sdk.capture_exception(e)
-            out = self.response_class()()
-            error = e
+                out = self.response_class()()
+                error = e
+            else:
+                out = self.response_class()()
+                error = e
         except Exception as e:
             out = self.response_class()()
             error = e  # type: ignore
