@@ -84,29 +84,13 @@ def convert_results(
                             assert i == len(reliable_so_far)
                             reliable_so_far.append(reliability)
                         else:
-                            if reliable_so_far[i] in [
-                                Reliability.RELIABILITY_UNSPECIFIED,
-                            ]:
-                                # these wont change so we skip (if any part of the formula has
-                                # a unspecified reliability, the formula will have a unspecified reliability
-                                continue
-
                             if reliability not in [
                                 Reliability.RELIABILITY_UNSPECIFIED,
                                 Reliability.RELIABILITY_LOW,
                                 Reliability.RELIABILITY_HIGH,
                             ]:
                                 raise ValueError(f"Invalid reliability: {reliability}")
-
-                            if reliability == Reliability.RELIABILITY_LOW:
-                                reliable_so_far[i] = Reliability.RELIABILITY_LOW
-                            elif (
-                                reliability == Reliability.RELIABILITY_HIGH
-                                and reliable_so_far[i] != Reliability.RELIABILITY_LOW
-                            ):
-                                reliable_so_far[i] = Reliability.RELIABILITY_HIGH
-                            elif reliability == Reliability.RELIABILITY_UNSPECIFIED:
-                                reliable_so_far[i] = Reliability.RELIABILITY_UNSPECIFIED
+                            reliable_so_far[i] = min(reliable_so_far[i], reliability)
             # set reliability of the formula to be the newly calculated ones
             while len(res[column.label].reliabilities) > 0:
                 res[column.label].reliabilities.pop()
