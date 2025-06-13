@@ -1,7 +1,5 @@
-from abc import ABC
 from random import randint
 
-from google.protobuf.message import Message
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
@@ -19,16 +17,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 from snuba.state import get_config
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-
-
-class RequestVisitor(ABC):
-    def visit(self, node: Message) -> None:
-        method_name = "visit_" + type(node).__name__
-        visitor = getattr(self, method_name, self.generic_visit)
-        visitor(node)
-
-    def generic_visit(self, node: Message) -> None:
-        raise NotImplementedError(f"No visit_{type(node).__name__} method")
+from snuba.web.rpc.v1.visitors.visitor_v2 import RequestVisitor
 
 
 class ValidateAliasVisitor(RequestVisitor):

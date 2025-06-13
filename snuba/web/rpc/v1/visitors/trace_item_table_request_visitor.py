@@ -1,8 +1,5 @@
-from abc import ABC
 from random import randint
-from typing import Any
 
-from google.protobuf.message import Message
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
@@ -17,25 +14,10 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.visitors.visitor_v2 import RequestVisitor
 
 
-class TraceItemTableRequestVisitor(ABC):
-    """
-    When you call visitor.visit(msg), the visitor will call the appropriate visit function
-    visit_TraceItemTableRequest, visit_Column, visit_AttributeAggregation, etc.
-    Subclasses are responsible for implementing these functions.
-    """
-
-    def visit(self, node: Message, *args: Any) -> None:
-        method_name = "visit_" + type(node).__name__
-        visitor = getattr(self, method_name, self.generic_visit)
-        visitor(node, *args)
-
-    def generic_visit(self, node: Message, *args: Any) -> None:
-        raise NotImplementedError(f"No visit_{type(node).__name__} method")
-
-
-class ValidateColumnLabelsVisitor(TraceItemTableRequestVisitor):
+class ValidateColumnLabelsVisitor(RequestVisitor):
     """
     Make sure all top level columns have unique labels.
     It also adds default labels to any column that doesnt have one.
@@ -65,7 +47,7 @@ class ValidateColumnLabelsVisitor(TraceItemTableRequestVisitor):
                 self.column_labels.add(new_label)
 
 
-class NormalizeFormulaLabelsVisitor(TraceItemTableRequestVisitor):
+class NormalizeFormulaLabelsVisitor(RequestVisitor):
     """
     Sets the labels of a formula such that the top-level label of the column is unchanged,
     and each left and right part becomes top_level_label.left and top_level_label.right.
@@ -123,7 +105,7 @@ class NormalizeFormulaLabelsVisitor(TraceItemTableRequestVisitor):
         return
 
 
-class SetAggregateLabelsVisitor(TraceItemTableRequestVisitor):
+class SetAggregateLabelsVisitor(RequestVisitor):
     """
     Sets the label of all aggregates in columns to be the same as the label of
     the column. This is required for correct behavior of the endpoint.
