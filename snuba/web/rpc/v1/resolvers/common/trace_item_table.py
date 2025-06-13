@@ -37,6 +37,8 @@ def add_converter(
         converters[column.label] = lambda x: AttributeValue(val_double=float(x))
         add_converter(column.formula.left, converters)
         add_converter(column.formula.right, converters)
+    elif column.HasField("literal"):
+        converters[column.label] = lambda x: AttributeValue(val_double=float(x))
     else:
         raise BadSnubaRPCRequestException(
             "column is not one of: attribute, (conditional) aggregation, or formula"
