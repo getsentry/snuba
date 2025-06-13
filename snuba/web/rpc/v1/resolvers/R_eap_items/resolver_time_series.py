@@ -1,8 +1,11 @@
+import uuid
 from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime
 from typing import Any, Callable, Dict, Iterable
 
+import sentry_sdk
+from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import DataPoint
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
@@ -19,8 +22,11 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     ExtrapolationMode,
 )
 
+from snuba.attribution.appid import AppID
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -28,6 +34,8 @@ from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request import Request as SnubaRequest
+from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
@@ -39,6 +47,9 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
+)
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     ExtrapolationContext,
@@ -49,9 +60,6 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression_eap_items,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.sampling_in_storage_util import (
-    run_query_to_correct_tier,
 )
 
 OP_TO_EXPR = {
@@ -361,6 +369,37 @@ def build_query(request: TimeSeriesRequest) -> Query:
     return res
 
 
+def _build_snuba_request(
+    request: TimeSeriesRequest, query_settings: HTTPQuerySettings
+) -> SnubaRequest:
+    if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
+        team = "ourlogs"
+        feature = "ourlogs"
+        parent_api = "ourlog_trace_item_table"
+    else:
+        team = "eap"
+        feature = "eap"
+        parent_api = "eap_span_samples"
+
+    return SnubaRequest(
+        id=uuid.UUID(request.meta.request_id),
+        original_body=MessageToDict(request),
+        query=build_query(request),
+        query_settings=query_settings,
+        attribution_info=AttributionInfo(
+            referrer=request.meta.referrer,
+            team=team,
+            feature=feature,
+            tenant_ids={
+                "organization_id": request.meta.organization_id,
+                "referrer": request.meta.referrer,
+            },
+            app_id=AppID("eap"),
+            parent_api=parent_api,
+        ),
+    )
+
+
 class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
@@ -369,6 +408,7 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
     def resolve(
         self,
         in_msg: TimeSeriesRequest,
+        routing_decision: RoutingDecision,
     ) -> TimeSeriesResponse:
         # aggregations field is deprecated, it gets converted to request.expressions
         # if the user passes it in
@@ -377,11 +417,19 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
         query_settings = (
             setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         )
-        res = run_query_to_correct_tier(
-            in_msg,
-            query_settings,
-            self._timer,
-            build_query,  # type: ignore
+        try:
+            routing_decision.strategy.merge_clickhouse_settings(
+                routing_decision, query_settings
+            )
+            query_settings.set_sampling_tier(routing_decision.tier)
+        except Exception as e:
+            sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
+
+        snuba_request = _build_snuba_request(in_msg, query_settings)
+        res = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=snuba_request,
+            timer=self._timer,
         )
 
         response_meta = extract_response_meta(
@@ -391,6 +439,7 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
             [self._timer],
         )
 
+        routing_decision.routing_context.query_result = res
         return TimeSeriesResponse(
             result_timeseries=list(
                 _convert_result_timeseries(

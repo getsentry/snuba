@@ -136,4 +136,4 @@ class EndpointTraceItemTable(
         in_msg = _transform_request(in_msg)
 
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
-        return resolver.resolve(in_msg)
+        return resolver.resolve(in_msg, self.routing_decision)

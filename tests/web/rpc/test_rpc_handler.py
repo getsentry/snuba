@@ -53,6 +53,8 @@ def test_basic() -> None:
     assert isinstance(resp, TraceItemAttributeNamesResponse)
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 @pytest.mark.parametrize(
     "expected_status_code, error",
     [
