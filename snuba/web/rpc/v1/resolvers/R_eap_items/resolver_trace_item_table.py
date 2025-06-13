@@ -203,23 +203,18 @@ def _get_reliability_context_columns(
         # also query for the left and right parts of the formula separately
         # this will be used later to calculate the reliability of the formula
         # ex: SELECT agg1/agg2 will become SELECT agg1/agg2, agg1, agg2
-        leftcolumn = Column()
-        leftcolumn.CopyFrom(column.formula.left)
-        rightcolumn = Column()
-        rightcolumn.CopyFrom(column.formula.right)
-        leftselect = SelectedExpression(
-            name=leftcolumn.label,
-            expression=_column_to_expression(leftcolumn, request_meta),
-        )
-        rightselect = SelectedExpression(
-            name=rightcolumn.label,
-            expression=_column_to_expression(rightcolumn, request_meta),
-        )
-        return (
-            [leftselect, rightselect]
-            + _get_reliability_context_columns(leftcolumn, request_meta)
-            + _get_reliability_context_columns(rightcolumn, request_meta)
-        )
+        context_cols = []
+        for col in [column.formula.left, column.formula.right]:
+            if not col.HasField("formula"):
+                context_cols.append(
+                    SelectedExpression(
+                        name=col.label,
+                        expression=_column_to_expression(col, request_meta),
+                    )
+                )
+            context_cols.extend(_get_reliability_context_columns(col, request_meta))
+
+        return context_cols
 
     if not (column.HasField("conditional_aggregation")):
         return []
