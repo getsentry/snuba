@@ -1,5 +1,36 @@
 # Changelog
 
+## 25.6.0
+
+### Various fixes & improvements
+
+- ref(eap): tests with orderby label only (#7236) by @MeredithAnya
+- feat(devservices): Add containerized modes for profiles, uptime, metrics dev (#7229) by @hubertdeng123
+- feat(cbrs): move routing strategies to rpc (#7201) by @xurui-c
+- feat(capman): Don't rate limit customers for workflow alert referrers (#7237) by @kcons
+- ci: provide arm64 image build (#6825) by @aldy505
+- chore(redis): update sentry-redis-tools to 0.5.0 (#7232) by @davidtsuk
+- fix(migration): only drop the first bucket to speed up the migration (#7228) by @davidtsuk
+- feat(consumers): Create V2 consumer copy (#7227) by @volokluev
+- chore(eap): Remove hash map columns for buckets 0 to 4 (#7225) by @phacops
+- chore(eap): Remove hashed_keys column (#7224) by @phacops
+- fix(eap): Remove AddIndex on a column that doesn't exist (#7223) by @phacops
+- fix(eap): Remove hash map columns from the MV (#7222) by @phacops
+- fix(eap): Reduce impact of migration (#7221) by @phacops
+- Revert "chore(eap): drop hashed key columns" (#7220) by @onewland
+- Revert "Deprecate TOPIC_PARTITION_COUNTS setting (reverts ed0426b) (#5942)" (e8188c4b) by @getsentry-bot
+- Deprecate TOPIC_PARTITION_COUNTS setting (reverts ed0426b) (#5942) by @lynnagara
+- fix(eap): fix stupid attribute values query for item id (#7219) by @volokluev
+- chore(eap): drop hashed key columns (#7218) by @davidtsuk
+- chore(eap): Remove eap-spans resolver (#7215) by @phacops
+- chore(eap): remove _hash_map columns from eap config (#7217) by @volokluev
+- fix(EAP-100): allow passing in string timestamps in filters (#7202) by @volokluev
+- feat(consumers): set default join timeout on rust consumers (#7213) by @volokluev
+- fix(eap): don't create a column if it already exists (#7211) by @davidtsuk
+- feat(eap): add hashed attributes column (#7208) by @davidtsuk
+
+_Plus 38 more_
+
 ## 25.5.1
 
 ### Various fixes & improvements
