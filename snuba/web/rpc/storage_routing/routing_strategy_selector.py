@@ -121,6 +121,7 @@ class RoutingStrategySelector:
                 if bucket < cumulative_buckets:
                     return BaseRoutingStrategy.get_from_name(strategy_name)()
         except Exception as e:
+            sentry_sdk.set_extra("in_msg", routing_context.in_msg)
             sentry_sdk.capture_message(f"Error selecting routing strategy: {e}")
             return OutcomesBasedRoutingStrategy()
 
