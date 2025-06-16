@@ -126,6 +126,7 @@ class TestTimeSeriesApi(BaseApiTest):
             error = Error()
             error.ParseFromString(response.data)
             assert response.status_code == 200, (error.message, error.details)
+        assert False
 
     def test_fails_without_type(self) -> None:
         ts = Timestamp()
