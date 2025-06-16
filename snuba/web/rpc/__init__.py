@@ -152,7 +152,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     @final
     def execute(self, in_msg: Tin) -> Tout:
-        print(in_msg)
         scope = sentry_sdk.get_current_scope()
         scope.set_transaction_name(self.config_key())
         span = scope.span

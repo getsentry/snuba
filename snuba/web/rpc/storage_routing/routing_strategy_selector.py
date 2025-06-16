@@ -6,6 +6,7 @@ from typing import Any, Iterable, Tuple
 import sentry_sdk
 from google.protobuf.message import Message as ProtobufMessage
 
+from snuba import settings
 from snuba.state import get_config
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
@@ -121,7 +122,8 @@ class RoutingStrategySelector:
                 if bucket < cumulative_buckets:
                     return BaseRoutingStrategy.get_from_name(strategy_name)()
         except Exception as e:
-            sentry_sdk.set_extra("in_msg", routing_context.in_msg)
+            if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
+                raise e
             sentry_sdk.capture_message(f"Error selecting routing strategy: {e}")
             return OutcomesBasedRoutingStrategy()
 

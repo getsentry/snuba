@@ -1,12 +1,8 @@
-import sys
 import time
-import traceback
-import typing
 import uuid
-from contextlib import contextmanager
 from datetime import timedelta
-from typing import Any, Callable, Generator, Iterator, List, Type
-from unittest.mock import Mock, patch
+from typing import Type
+from unittest.mock import patch
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -21,7 +17,6 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.backends.metrics import TestingMetricsBackend
-from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_utils import BASE_TIME
 
 RANDOM_REQUEST_ID = str(uuid.uuid4())
@@ -226,62 +221,3 @@ def test_tagged_metrics(hours: int, expected_time_bucket: str) -> None:
         }
         for _ in range(len(metrics_backend.calls))
     ]
-
-
-@contextmanager
-def track_exceptions() -> Generator[List[Exception], None, None]:
-    exceptions: List[Exception] = []
-    original_hook: Callable[
-        [Type[BaseException], BaseException, Any], None
-    ] = sys.excepthook
-
-    def custom_excepthook(
-        exc_type: Type[BaseException], exc_value: BaseException, exc_traceback: Any
-    ) -> None:
-        exceptions.append(typing.cast(Exception, exc_value))
-        original_hook(exc_type, exc_value, exc_traceback)
-
-    sys.excepthook = custom_excepthook
-    try:
-        yield exceptions
-    finally:
-        sys.excepthook = original_hook
-
-
-class TestBasic(BaseApiTest):
-    def test_exception_tracking(self) -> None:
-        ts = Timestamp()
-        ts.GetCurrentTime()
-        tstart = Timestamp(seconds=ts.seconds - 3600)
-        with track_exceptions() as exceptions:
-            message = TimeSeriesRequest(
-                meta=RequestMeta(
-                    project_ids=[1, 2, 3],
-                    organization_id=1,
-                    cogs_category="something",
-                    referrer="something",
-                    start_timestamp=tstart,
-                    end_timestamp=ts,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                ),
-                aggregations=[
-                    AttributeAggregation(
-                        aggregate=Function.FUNCTION_AVG,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="sentry.duration"
-                        ),
-                        label="p50",
-                    ),
-                    AttributeAggregation(
-                        aggregate=Function.FUNCTION_P95,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="sentry.duration"
-                        ),
-                        label="p90",
-                    ),
-                ],
-                granularity_secs=60,
-            )
-            self.app.post(
-                "/rpc/EndpointTimeSeries/v1", data=message.SerializeToString()
-            )
