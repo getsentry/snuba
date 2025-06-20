@@ -44,6 +44,10 @@ x-sentry-service-config:
     containerized-uptime: [clickhouse, redis, kafka, snuba, uptime-consumer]
     containerized-metrics-dev: [clickhouse, redis, kafka, snuba, metrics-consumer, generic-metrics-distributions-consumer, generic-metrics-sets-consumer, generic-metrics-counters-consumer, generic-metrics-gauges-consumer]
 
+x-programs:
+  devserver:
+    command: snuba devserver
+
 services:
   clickhouse:
     image: ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:23.8.11.29.altinitystable
