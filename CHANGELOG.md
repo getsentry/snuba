@@ -1,5 +1,14 @@
 # Changelog
 
+## 25.6.1
+
+### Various fixes & improvements
+
+- feat(capman): Fix model ID for workflow querying referrer (#7243) by @kcons
+- Revert "feat(capman): Fix model ID for workflow querying referrer (#7239)" (b8889e71) by @getsentry-bot
+- feat(capman): Fix model ID for workflow querying referrer (#7239) by @kcons
+- meta: Bump new development version (57f19402)
+
 ## 25.6.0
 
 ### Various fixes & improvements
