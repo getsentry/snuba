@@ -152,16 +152,7 @@ def _run_and_apply_column_names(
     for select_col in clickhouse_query.get_selected_columns():
         alias = select_col.expression.alias
         name = select_col.name
-        if alias is None or name is None:
-            logger.warning(
-                "Missing alias or name for selected expression",
-                extra={
-                    "selected_expression_name": name,
-                    "selected_expression_alias": alias,
-                },
-                exc_info=True,
-            )
-        elif alias in alias_name_mapping and name not in alias_name_mapping[alias]:
+        if alias in alias_name_mapping and name not in alias_name_mapping[alias]:
             alias_name_mapping[alias].append(name)
         else:
             alias_name_mapping[alias] = [name]
