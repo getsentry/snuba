@@ -6,7 +6,9 @@ from typing import Any, Iterable, Tuple
 import sentry_sdk
 from google.protobuf.message import Message as ProtobufMessage
 
+from snuba import settings
 from snuba.state import get_config
+from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
 )
@@ -88,7 +90,8 @@ class RoutingStrategySelector:
     def get_storage_routing_config(
         self, in_msg: ProtobufMessage
     ) -> StorageRoutingConfig:
-        organization_id = str(in_msg.meta.organization_id)  # type: ignore
+        in_msg_meta = extract_message_meta(in_msg)
+        organization_id = str(in_msg_meta.organization_id)
         try:
             overrides = json.loads(
                 str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}"))
@@ -106,7 +109,8 @@ class RoutingStrategySelector:
         self, routing_context: RoutingContext
     ) -> BaseRoutingStrategy:
         try:
-            combined_org_and_project_ids = f"{routing_context.in_msg.meta.organization_id}:{'.'.join(str(pid) for pid in sorted(routing_context.in_msg.meta.project_ids))}"  # type: ignore
+            in_msg_meta = extract_message_meta(routing_context.in_msg)
+            combined_org_and_project_ids = f"{in_msg_meta.organization_id}:{'.'.join(str(pid) for pid in sorted(in_msg_meta.project_ids))}"
             bucket = (
                 int(hashlib.md5(combined_org_and_project_ids.encode()).hexdigest(), 16)
                 % _NUM_BUCKETS
@@ -121,6 +125,8 @@ class RoutingStrategySelector:
                 if bucket < cumulative_buckets:
                     return BaseRoutingStrategy.get_from_name(strategy_name)()
         except Exception as e:
+            if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
+                raise e
             sentry_sdk.capture_message(f"Error selecting routing strategy: {e}")
             return OutcomesBasedRoutingStrategy()
 
