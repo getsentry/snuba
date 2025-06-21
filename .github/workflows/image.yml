@@ -13,6 +13,7 @@ jobs:
           - os: ubuntu-24.04-arm
             platform: arm64
     runs-on: ${{ matrix.os }}
+    name: build-${{ matrix.platform }}
     permissions:
       contents: read
       packages: write
@@ -111,14 +112,7 @@ jobs:
     name: Publish Snuba to DockerHub
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # v3.1.0
-      - name: Pull the test image
-        id: image_pull
-        env:
-          IMAGE_URL: ghcr.io/getsentry/snuba:${{ github.sha }}
-        shell: bash
-        run: |
-          docker pull "$IMAGE_URL"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Get short SHA for docker tag
         id: short_sha
         shell: bash
