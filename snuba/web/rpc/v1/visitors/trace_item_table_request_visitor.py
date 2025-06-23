@@ -47,6 +47,33 @@ class ValidateColumnLabelsVisitor(RequestVisitor):
                 self.column_labels.add(new_label)
 
 
+class SetColumnLabelsVisitor(RequestVisitor):
+    """
+    Adds default labels to any column that doesnt have one.
+    """
+
+    def __init__(self) -> None:
+        self.column_labels: set[str] = set()
+        super().__init__()
+
+    def visit_TraceItemTableRequest(self, node: TraceItemTableRequest) -> None:
+        # collect the existing labels so I dont generate duplicates
+        for column in node.columns:
+            if column.label == "":
+                continue
+            self.column_labels.add(column.label)
+
+        # add default labels to any column that doesnt have one
+        for column in node.columns:
+            if column.label == "":
+                new_label = f"column_{randint(0, 1000000)}"
+                while new_label in self.column_labels:
+                    # theoretically this could loop forever, but the probability is so small
+                    new_label = f"expr_{randint(0, 1000000)}"
+                column.label = new_label
+                self.column_labels.add(new_label)
+
+
 class NormalizeFormulaLabelsVisitor(RequestVisitor):
     """
     Sets the labels of a formula such that the top-level label of the column is unchanged,

@@ -28,6 +28,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.state import set_config
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -804,6 +805,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
 
         this tests low and high reliability for a formula
         """
+        set_config("enable_formula_reliability", 1)
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_item(span_ts, {"kyles_measurement": 6}, 10, server_sample_rate=0.6)
         write_eap_item(span_ts, {"kyles_measurement": 7}, 2, server_sample_rate=0.7)
@@ -918,6 +920,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         """
         ensures reliability is calculated correctly for nested formulas
         """
+        set_config("enable_formula_reliability", 1)
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_item(span_ts, {"kyles_measurement": 6}, 10, server_sample_rate=0.6)
         write_eap_item(span_ts, {"kyles_measurement": 7}, 2, server_sample_rate=0.7)
@@ -1027,6 +1030,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         """
         ensures formula reliability is calculated correctly for formulas with group by
         """
+        set_config("enable_formula_reliability", 1)
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_item(
             span_ts,
