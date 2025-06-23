@@ -8,6 +8,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
+from snuba.state import get_int_config
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.proto_visitor import (
@@ -25,7 +26,7 @@ from snuba.web.rpc.v1.visitors.time_series_request_visitor import (
 from snuba.web.rpc.v1.visitors.trace_item_table_request_visitor import (
     NormalizeFormulaLabelsVisitor,
     SetAggregateLabelsVisitor,
-    ValidateColumnLabelsVisitor,
+    SetColumnLabelsVisitor,
 )
 
 _GROUP_BY_DISALLOWED_COLUMNS = ["timestamp"]
@@ -95,11 +96,14 @@ def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
     It is similar to the query processor step of the snql pipeline.
     """
     request = SparseAggregateAttributeTransformer(request).transform()
-    ValidateColumnLabelsVisitor().visit(request)
-    # SetAggregateLabelsVisitor should come after ValidateColumnLabelsVisitor because it
-    # relies on the labels in the columns being set.
-    SetAggregateLabelsVisitor().visit(request)
-    NormalizeFormulaLabelsVisitor().visit(request)
+    if get_int_config("enable_formula_reliability", 1):
+        # TODO: replace SetColumnLabelsVisitor with ValidateColumnLabelsVisitor currently blocked
+        # by sentry integration tests
+        SetColumnLabelsVisitor().visit(request)
+        # SetAggregateLabelsVisitor should come after ValidateColumnLabelsVisitor because it
+        # relies on the labels in the columns being set.
+        SetAggregateLabelsVisitor().visit(request)
+        NormalizeFormulaLabelsVisitor().visit(request)
     return request
 
 

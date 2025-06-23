@@ -13,6 +13,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
+from snuba.state import get_int_config
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
 
@@ -35,8 +36,9 @@ def add_converter(
         converters[column.label] = lambda x: AttributeValue(val_double=float(x))
     elif column.HasField("formula"):
         converters[column.label] = lambda x: AttributeValue(val_double=float(x))
-        add_converter(column.formula.left, converters)
-        add_converter(column.formula.right, converters)
+        if get_int_config("enable_formula_reliability", 1):
+            add_converter(column.formula.left, converters)
+            add_converter(column.formula.right, converters)
     elif column.HasField("literal"):
         converters[column.label] = lambda x: AttributeValue(val_double=float(x))
     else:
@@ -68,45 +70,50 @@ def convert_results(
                         extrapolation_context.reliability
                     )
 
-    # add formula reliabilities, remove the left and right parts
-    for column in request.columns:
-        if column.HasField("formula"):
-            # compute its reliability based on the reliabilities of the left and right parts
-            # (already computed in res variable)
-            # a formula is reliable iff all of its parts are reliable (.left and .right)
-            # ex: (agg1 + agg2) / agg3 * agg4 is reliable iff agg1, agg2, agg3, agg4 are reliable
-            reliable_so_far: list[Reliability.ValueType] = []
-            for resname, resvalue in res.items():
-                if re.fullmatch(
-                    rf"{re.escape(column.label)}(\.left|\.right)+", resname
-                ):
-                    for i, reliability in enumerate(resvalue.reliabilities):
-                        if len(reliable_so_far) <= i:
-                            # bc we are extending as we go, it should only ever be 1 behind
-                            assert i == len(reliable_so_far)
-                            reliable_so_far.append(reliability)
-                        else:
-                            if reliability not in [
-                                Reliability.RELIABILITY_UNSPECIFIED,
-                                Reliability.RELIABILITY_LOW,
-                                Reliability.RELIABILITY_HIGH,
-                            ]:
-                                raise ValueError(f"Invalid reliability: {reliability}")
-                            reliable_so_far[i] = min(reliable_so_far[i], reliability)
-            # set reliability of the formula to be the newly calculated ones
-            while len(res[column.label].reliabilities) > 0:
-                res[column.label].reliabilities.pop()
-            for e in reliable_so_far:
-                assert e is not None
-                res[column.label].reliabilities.append(e)
+    if get_int_config("enable_formula_reliability", 1):
+        # add formula reliabilities, remove the left and right parts
+        for column in request.columns:
+            if column.HasField("formula"):
+                # compute its reliability based on the reliabilities of the left and right parts
+                # (already computed in res variable)
+                # a formula is reliable iff all of its parts are reliable (.left and .right)
+                # ex: (agg1 + agg2) / agg3 * agg4 is reliable iff agg1, agg2, agg3, agg4 are reliable
+                reliable_so_far: list[Reliability.ValueType] = []
+                for resname, resvalue in res.items():
+                    if re.fullmatch(
+                        rf"{re.escape(column.label)}(\.left|\.right)+", resname
+                    ):
+                        for i, reliability in enumerate(resvalue.reliabilities):
+                            if len(reliable_so_far) <= i:
+                                # bc we are extending as we go, it should only ever be 1 behind
+                                assert i == len(reliable_so_far)
+                                reliable_so_far.append(reliability)
+                            else:
+                                if reliability not in [
+                                    Reliability.RELIABILITY_UNSPECIFIED,
+                                    Reliability.RELIABILITY_LOW,
+                                    Reliability.RELIABILITY_HIGH,
+                                ]:
+                                    raise ValueError(
+                                        f"Invalid reliability: {reliability}"
+                                    )
+                                reliable_so_far[i] = min(
+                                    reliable_so_far[i], reliability
+                                )
+                # set reliability of the formula to be the newly calculated ones
+                while len(res[column.label].reliabilities) > 0:
+                    res[column.label].reliabilities.pop()
+                for e in reliable_so_far:
+                    assert e is not None
+                    res[column.label].reliabilities.append(e)
 
-    # we want to remove any columns that were not requested by the user.
-    # we have added extra columns such as ones to compute formula reliabilities
-    # that we dont want to return to the user
-    requested_column_labels = set(e.label for e in request.columns)
-    to_delete = list(filter(lambda k: k not in requested_column_labels, res.keys()))
-    for name in to_delete:
-        del res[name]
+        # we want to remove any columns that were not requested by the user.
+        # we have added extra columns such as ones to compute formula reliabilities
+        # that we dont want to return to the user
+        requested_column_labels = set(e.label for e in request.columns)
+        to_delete = list(filter(lambda k: k not in requested_column_labels, res.keys()))
+        for name in to_delete:
+            del res[name]
 
     column_ordering = {column.label: i for i, column in enumerate(request.columns)}
 
