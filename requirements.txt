@@ -6,7 +6,7 @@ click==8.1.7
 clickhouse-driver==0.2.9
 confluent-kafka==2.7.0
 datadog==0.21.0
-devservices==1.1.5
+devservices==1.2.1
 flake8==7.0.0
 Flask==2.2.5
 google-cloud-storage==2.18.0
