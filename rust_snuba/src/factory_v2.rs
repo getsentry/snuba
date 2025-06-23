@@ -74,7 +74,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         // Commit offsets
         let next_step = CommitOffsets::new(Duration::from_secs(1));
 
-        // TODO: Produce commit log if there is one
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
             if let Some((ref producer, destination)) = self.commit_log_producer {
                 Box::new(ProduceCommitLog::new(
@@ -89,8 +88,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             } else {
                 Box::new(next_step)
             };
-
-        // TODO: Write to clickhouse
 
         let cogs_label = get_cogs_label(&self.storage_config.message_processor.python_class_name);
 
