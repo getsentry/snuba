@@ -119,14 +119,14 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     Message<BytesInsertBatch<()>>,
                     SubmitError<BytesInsertBatch<RowData>>,
                 > {
-                    let payload = message.payload();
+                    let (empty_msg, payload) = message.take();
                     let (rows, empty_batch) = payload.take();
                     println!(
                         "Processing batch with {} messages, {} bytes",
-                        payload.len(),
-                        rows.into_encoded_rows().len()
+                        rows.num_rows,
+                        rows.encoded_rows.len()
                     );
-                    Ok(message.replace(empty_batch))
+                    Ok(empty_msg.replace(empty_batch))
                 },
                 next_step,
             );

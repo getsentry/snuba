@@ -176,7 +176,7 @@ impl InsertBatch {
 
 #[derive(Clone, Debug, Default)]
 pub struct BytesInsertBatch<R> {
-    rows: R,
+    pub rows: R,
 
     /// when the message was inserted into the snuba topic
     ///
