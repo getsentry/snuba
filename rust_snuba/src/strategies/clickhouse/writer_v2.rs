@@ -17,39 +17,17 @@ use crate::types::{BytesInsertBatch, RowData};
 
 const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
 
-struct ClickhouseWriter {
+fn clickhouse_task_runner(
     client: Arc<ClickhouseClient>,
     skip_write: bool,
-}
-
-impl ClickhouseWriter {
-    pub fn new(client: ClickhouseClient, skip_write: bool) -> Self {
-        ClickhouseWriter {
-            client: Arc::new(client),
-            skip_write,
-        }
-    }
-}
-
-impl TaskRunner<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error>
-    for ClickhouseWriter
-{
-    fn get_task(
-        &self,
-        message: Message<BytesInsertBatch<RowData>>,
-    ) -> RunTaskFunc<BytesInsertBatch<()>, anyhow::Error> {
-        let skip_write = self.skip_write;
-        let client = self.client.clone();
+) -> impl TaskRunner<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error> {
+    move |message: Message<BytesInsertBatch<RowData>>| -> RunTaskFunc<BytesInsertBatch<()>, anyhow::Error> {
+        let skip_write = skip_write;
+        let client = client.clone();
 
         Box::pin(async move {
-            // TODO: I need to consumer the message so I can own the payload through into_payload()
-            // but then I cannot use the message anymore and use message.replace()
-            // Ideally, I would be able to do something like:
-            // let message_with_cloned_offsets = message.copy_offsets()
-            // let payload = message.into_payload()
-            // ... do my thing
-            // return Ok(message_with_cloned_offsets.replace(return_value))
-            let insert_batch = message.payload();
+            let (empty_message, insert_batch) = message.take();
+            let batch_len = insert_batch.len();
             let (rows, empty_batch) = insert_batch.take();
             let encoded_rows = rows.into_encoded_rows();
 
@@ -61,10 +39,10 @@ impl TaskRunner<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error>
             if encoded_rows.is_empty() {
                 tracing::debug!(
                     "skipping write of empty payload ({} rows)",
-                    insert_batch.len()
+                    batch_len
                 );
             } else if skip_write {
-                tracing::info!("skipping write of {} rows", insert_batch.len());
+                tracing::info!("skipping write of {} rows", batch_len);
             } else {
                 tracing::debug!("performing write");
 
@@ -74,7 +52,7 @@ impl TaskRunner<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error>
                     .map_err(RunTaskError::Other)?;
 
                 tracing::debug!(?response);
-                tracing::info!("Inserted {} rows", insert_batch.len());
+                tracing::info!("Inserted {} rows", batch_len);
             }
 
             let write_finish = SystemTime::now();
@@ -82,44 +60,41 @@ impl TaskRunner<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error>
             if let Ok(elapsed) = write_finish.duration_since(write_start) {
                 timer!("insertions.batch_write_ms", elapsed);
             }
-            counter!("insertions.batch_write_msgs", insert_batch.len() as i64);
-            insert_batch.record_message_latency();
+            counter!("insertions.batch_write_msgs", batch_len as i64);
+            empty_batch.record_message_latency();
 
-            Ok(message.replace(empty_batch))
+            Ok(empty_message.replace(empty_batch))
         })
     }
 }
 
-pub struct ClickhouseWriterStep {
-    inner: RunTaskInThreads<
-        BytesInsertBatch<RowData>,
-        BytesInsertBatch<()>,
-        anyhow::Error,
-        ProcessingStrategy<BytesInsertBatch<()>>,
-    >,
+pub struct ClickhouseWriterStep<N> {
+    inner: RunTaskInThreads<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error, N>,
 }
 
-impl ClickhouseWriterStep {
-    pub fn new<N>(
+impl<N> ClickhouseWriterStep<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
+{
+    pub fn new(
         next_step: N,
         cluster_config: ClickhouseConfig,
         table: String,
         skip_write: bool,
         concurrency: &ConcurrencyConfig,
-    ) -> Self
-    where
-        N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
-    {
+    ) -> Self {
         let hostname = cluster_config.host;
         let http_port = cluster_config.http_port;
         let database = cluster_config.database;
 
         let inner = RunTaskInThreads::new(
             next_step,
-            Box::new(ClickhouseWriter::new(
-                ClickhouseClient::new(&hostname, http_port, &table, &database),
+            clickhouse_task_runner(
+                Arc::new(ClickhouseClient::new(
+                    &hostname, http_port, &table, &database,
+                )),
                 skip_write,
-            )),
+            ),
             concurrency,
             Some("clickhouse"),
         );
@@ -128,7 +103,10 @@ impl ClickhouseWriterStep {
     }
 }
 
-impl ProcessingStrategy<BytesInsertBatch<RowData>> for ClickhouseWriterStep {
+impl<N> ProcessingStrategy<BytesInsertBatch<RowData>> for ClickhouseWriterStep<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>>,
+{
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }

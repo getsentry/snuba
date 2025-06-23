@@ -9,16 +9,13 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use sentry_arroyo::processing::strategies::healthcheck::HealthCheck;
 use sentry_arroyo::processing::strategies::reduce::Reduce;
-use sentry_arroyo::processing::strategies::run_task::RunTask;
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskInThreads,
 };
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, TaskRunner,
 };
-use sentry_arroyo::processing::strategies::{
-    ProcessingStrategy, ProcessingStrategyFactory, SubmitError,
-};
+use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use sentry_arroyo::types::Message;
 use sentry_arroyo::types::{Partition, Topic};
 use sentry_kafka_schemas::Schema;
@@ -27,6 +24,7 @@ use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
+use crate::strategies::clickhouse::writer_v2::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
@@ -113,23 +111,13 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
-        let next_step =
-            RunTask::new(
-                |message: Message<BytesInsertBatch<RowData>>| -> Result<
-                    Message<BytesInsertBatch<()>>,
-                    SubmitError<BytesInsertBatch<RowData>>,
-                > {
-                    let (empty_msg, payload) = message.take();
-                    let (rows, empty_batch) = payload.take();
-                    println!(
-                        "Processing batch with {} messages, {} bytes",
-                        rows.num_rows,
-                        rows.encoded_rows.len()
-                    );
-                    Ok(empty_msg.replace(empty_batch))
-                },
-                next_step,
-            );
+        let next_step = ClickhouseWriterStep::new(
+            next_step,
+            self.storage_config.clickhouse_cluster.clone(),
+            self.storage_config.clickhouse_table_name.clone(),
+            false,
+            &self.clickhouse_concurrency,
+        );
 
         let accumulator = Arc::new(
             |batch: BytesInsertBatch<RowData>, small_batch: Message<BytesInsertBatch<RowData>>| {

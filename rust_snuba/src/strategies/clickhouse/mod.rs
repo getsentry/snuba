@@ -14,7 +14,7 @@ use crate::strategies::clickhouse::batch::HttpBatch;
 use crate::types::BytesInsertBatch;
 
 pub mod batch;
-//pub mod writer_v2;
+pub mod writer_v2;
 
 struct ClickhouseWriter {}
 
