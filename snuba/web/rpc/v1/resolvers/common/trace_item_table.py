@@ -19,28 +19,35 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
 
 
-def _get_converter_for_column(column: Column) -> Callable[[Any], AttributeValue]:
+def _add_converter(
+    column: Column, converters: Dict[str, Callable[[Any], AttributeValue]]
+) -> None:
     if column.HasField("key"):
         if column.key.type == AttributeKey.TYPE_BOOLEAN:
-            return lambda x: AttributeValue(val_bool=bool(x))
+            converters[column.label] = lambda x: AttributeValue(val_bool=bool(x))
         elif column.key.type == AttributeKey.TYPE_STRING:
-            return lambda x: AttributeValue(val_str=str(x))
+            converters[column.label] = lambda x: AttributeValue(val_str=str(x))
         elif column.key.type == AttributeKey.TYPE_INT:
-            return lambda x: AttributeValue(val_int=int(x))
+            converters[column.label] = lambda x: AttributeValue(val_int=int(x))
         elif column.key.type == AttributeKey.TYPE_FLOAT:
-            return lambda x: AttributeValue(val_float=float(x))
+            converters[column.label] = lambda x: AttributeValue(val_float=float(x))
         elif column.key.type == AttributeKey.TYPE_DOUBLE:
-            return lambda x: AttributeValue(val_double=float(x))
+            converters[column.label] = lambda x: AttributeValue(val_double=float(x))
         else:
             raise BadSnubaRPCRequestException(
                 f"unknown attribute type: {column.key.type}"
             )
     elif column.HasField("conditional_aggregation"):
-        return lambda x: AttributeValue(val_double=float(x))
+        converters[column.label] = lambda x: AttributeValue(val_double=float(x))
     elif column.HasField("formula"):
-        return lambda x: AttributeValue(val_double=float(x))
+        converters[column.label] = lambda x: AttributeValue(val_double=float(x))
+        if get_int_config(
+            "enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT
+        ):
+            _add_converter(column.formula.left, converters)
+            _add_converter(column.formula.right, converters)
     elif column.HasField("literal"):
-        return lambda x: AttributeValue(val_double=float(x))
+        converters[column.label] = lambda x: AttributeValue(val_double=float(x))
     else:
         raise BadSnubaRPCRequestException(
             "column is not one of: attribute, (conditional) aggregation, or formula"
@@ -56,16 +63,7 @@ def get_converters_for_columns(
     """
     converters: Dict[str, Callable[[Any], AttributeValue]] = {}
     for column in columns:
-        converters[column.label] = _get_converter_for_column(column)
-        if column.HasField("formula") and get_int_config(
-            "enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT
-        ):
-            converters[column.formula.left.label] = _get_converter_for_column(
-                column.formula.left
-            )
-            converters[column.formula.right.label] = _get_converter_for_column(
-                column.formula.right
-            )
+        _add_converter(column, converters)
     return converters
 
 
