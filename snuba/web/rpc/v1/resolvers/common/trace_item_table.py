@@ -13,6 +13,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
+from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
 from snuba.state import get_int_config
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
@@ -36,7 +37,9 @@ def add_converter(
         converters[column.label] = lambda x: AttributeValue(val_double=float(x))
     elif column.HasField("formula"):
         converters[column.label] = lambda x: AttributeValue(val_double=float(x))
-        if get_int_config("enable_formula_reliability", 1):
+        if get_int_config(
+            "enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT
+        ):
             add_converter(column.formula.left, converters)
             add_converter(column.formula.right, converters)
     elif column.HasField("literal"):
@@ -70,7 +73,7 @@ def convert_results(
                         extrapolation_context.reliability
                     )
 
-    if get_int_config("enable_formula_reliability", 1):
+    if get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
         # add formula reliabilities, remove the left and right parts
         for column in request.columns:
             if column.HasField("formula"):
@@ -101,7 +104,7 @@ def convert_results(
                                     reliable_so_far[i], reliability
                                 )
                 # set reliability of the formula to be the newly calculated ones
-                while len(res[column.label].reliabilities) > 0:
+                while column.label in res and len(res[column.label].reliabilities) > 0:
                     res[column.label].reliabilities.pop()
                 for e in reliable_so_far:
                     assert e is not None
