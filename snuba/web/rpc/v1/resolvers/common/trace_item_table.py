@@ -76,7 +76,7 @@ def convert_results(
     if get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
         # add formula reliabilities, remove the left and right parts
         for column in request.columns:
-            if column.HasField("formula"):
+            if column.HasField("formula") and column.label in res:
                 # compute its reliability based on the reliabilities of the left and right parts
                 # (already computed in res variable)
                 # a formula is reliable iff all of its parts are reliable (.left and .right)
@@ -104,7 +104,7 @@ def convert_results(
                                     reliable_so_far[i], reliability
                                 )
                 # set reliability of the formula to be the newly calculated ones
-                while column.label in res and len(res[column.label].reliabilities) > 0:
+                while len(res[column.label].reliabilities) > 0:
                     res[column.label].reliabilities.pop()
                 for e in reliable_so_far:
                     assert e is not None
