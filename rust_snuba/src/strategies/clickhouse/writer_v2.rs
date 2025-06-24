@@ -53,13 +53,13 @@ fn clickhouse_task_runner(
 
                 tracing::debug!(?response);
                 tracing::info!("Inserted {} rows", batch_len);
+                let write_finish = SystemTime::now();
+                if let Ok(elapsed) = write_finish.duration_since(write_start) {
+                    timer!("insertions.batch_write_ms", elapsed);
+                }
             }
 
-            let write_finish = SystemTime::now();
 
-            if let Ok(elapsed) = write_finish.duration_since(write_start) {
-                timer!("insertions.batch_write_ms", elapsed);
-            }
             counter!("insertions.batch_write_msgs", batch_len as i64);
             empty_batch.record_message_latency();
 

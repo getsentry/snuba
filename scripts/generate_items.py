@@ -5,7 +5,7 @@ from typing import Optional
 
 from confluent_kafka import Message as KafkaMessage
 from confluent_kafka import Producer
-from sentry_protos.google.protobuf.timestamp_pb2 import Timestamp
+from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
