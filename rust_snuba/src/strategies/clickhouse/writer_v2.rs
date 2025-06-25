@@ -15,8 +15,6 @@ use sentry_arroyo::{counter, timer};
 use crate::config::ClickhouseConfig;
 use crate::types::{BytesInsertBatch, RowData};
 
-const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
-
 fn clickhouse_task_runner(
     client: Arc<ClickhouseClient>,
     skip_write: bool,
@@ -47,7 +45,7 @@ fn clickhouse_task_runner(
                 tracing::debug!("performing write");
 
                 let response = client
-                    .send(encoded_rows.as_slice())
+                    .send(encoded_rows)
                     .await
                     .map_err(RunTaskError::Other)?;
 
@@ -163,22 +161,13 @@ impl ClickhouseClient {
         }
     }
 
-    fn chunked_body(rows: &[u8]) -> Vec<Result<Box<[u8]>, std::io::Error>> {
-        rows.chunks(CLICKHOUSE_HTTP_CHUNK_SIZE)
-            .map(|chunk| Ok(Box::from(chunk)))
-            .collect()
-    }
-
-    pub async fn send(&self, body: &[u8]) -> anyhow::Result<Response> {
-        let chunks = Self::chunked_body(body);
-        let stream = futures::stream::iter(chunks);
-
+    pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
         let res = self
             .client
             .post(&self.url)
             .headers(self.headers.clone())
             .query(&[("query", &self.query)])
-            .body(reqwest::Body::wrap_stream(stream))
+            .body(reqwest::Body::from(body))
             .send()
             .await?;
 
