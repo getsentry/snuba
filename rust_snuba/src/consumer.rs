@@ -557,7 +557,7 @@ pub fn consumer_impl(
     }
 }
 
-#[allow(
+#[expect(
     unexpected_cfgs,
     reason = "Fixed in pyo3 v0.23, see https://github.com/PyO3/pyo3/issues/4743"
 )]
