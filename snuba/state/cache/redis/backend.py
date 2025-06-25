@@ -1,6 +1,8 @@
 import logging
 from typing import Callable, Optional
 
+import sentry_sdk
+
 from redis.exceptions import ConnectionError, ReadOnlyError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from snuba import environment, settings
@@ -84,7 +86,7 @@ class RedisCache(Cache[TValue]):
                     timer.mark("cache_set")
             except Exception as e:
                 metrics.increment("execute_error", tags=metric_tags)
-                raise e
+                sentry_sdk.capture_exception(e)
             return value
 
     def get_readthrough(
