@@ -199,9 +199,10 @@ mod tests {
                 .parse::<u16>()
                 .unwrap(),
             user: std::env::var("CLICKHOUSE_USER").unwrap_or("default".to_string()),
-            password: std::env::var("CLICKHOUSE_PASSWORD").unwrap_or("default".to_string()),
+            password: std::env::var("CLICKHOUSE_PASSWORD").unwrap_or("".to_string()),
             database: std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string()),
         };
+        println!("config: {:?}", config);
         let client: ClickhouseClient = ClickhouseClient::new(&config, "querylog_local");
 
         assert!(client.url.contains("load_balancing"));
