@@ -186,12 +186,21 @@ mod tests {
     async fn it_works() -> Result<(), reqwest::Error> {
         let config = ClickhouseConfig {
             host: std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string()),
-            port: 9000,
-            secure: false,
-            http_port: 8123,
-            user: "default".to_string(),
-            password: "default".to_string(),
-            database: "default".to_string(),
+            port: std::env::var("CLICKHOUSE_PORT")
+                .unwrap_or("9000".to_string())
+                .parse::<u16>()
+                .unwrap(),
+            secure: std::env::var("CLICKHOUSE_SECURE")
+                .unwrap_or("false".to_string())
+                .to_lowercase()
+                == "true",
+            http_port: std::env::var("CLICKHOUSE_HTTP_PORT")
+                .unwrap_or("8123".to_string())
+                .parse::<u16>()
+                .unwrap(),
+            user: std::env::var("CLICKHOUSE_USER").unwrap_or("default".to_string()),
+            password: std::env::var("CLICKHOUSE_PASSWORD").unwrap_or("default".to_string()),
+            database: std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string()),
         };
         let client: ClickhouseClient = ClickhouseClient::new(&config, "querylog_local");
 
