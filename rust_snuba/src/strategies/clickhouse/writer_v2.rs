@@ -83,16 +83,10 @@ where
         skip_write: bool,
         concurrency: &ConcurrencyConfig,
     ) -> Self {
-        let hostname = cluster_config.host;
-        let http_port = cluster_config.http_port;
-        let database = cluster_config.database;
-
         let inner = RunTaskInThreads::new(
             next_step,
             clickhouse_task_runner(
-                Arc::new(ClickhouseClient::new(
-                    &hostname, http_port, &table, &database,
-                )),
+                Arc::new(ClickhouseClient::new(&cluster_config.clone(), &table)),
                 skip_write,
             ),
             concurrency,
@@ -136,17 +130,29 @@ pub struct ClickhouseClient {
 }
 
 impl ClickhouseClient {
-    pub fn new(hostname: &str, http_port: u16, table: &str, database: &str) -> ClickhouseClient {
-        let mut headers = HeaderMap::with_capacity(3);
+    pub fn new(config: &ClickhouseConfig, table: &str) -> ClickhouseClient {
+        let mut headers = HeaderMap::with_capacity(6);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
         headers.insert(
+            "X-Clickhouse-User",
+            HeaderValue::from_str(&config.user).unwrap(),
+        );
+        headers.insert(
+            "X-ClickHouse-Key",
+            HeaderValue::from_str(&config.password).unwrap(),
+        );
+        headers.insert(
             "X-ClickHouse-Database",
-            HeaderValue::from_str(database).unwrap(),
+            HeaderValue::from_str(&config.database).unwrap(),
         );
 
+        let scheme = if config.secure { "https" } else { "http" };
+        let host = &config.host;
+        let port = &config.http_port;
+
         let query_params = "load_balancing=in_order&insert_distributed_sync=1".to_string();
-        let url = format!("http://{hostname}:{http_port}?{query_params}");
+        let url = format!("{scheme}://{host}:{port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
         ClickhouseClient {
@@ -203,7 +209,6 @@ mod tests {
         println!("Response status {}", res.unwrap().status());
         Ok(())
     }
-
     #[test]
     fn chunked_body() {
         let mut data: Vec<u8> = vec![0; 1_000_000];
