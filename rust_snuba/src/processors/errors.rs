@@ -87,6 +87,7 @@ pub fn process_message_with_replacement(
     }
 }
 
+#[expect(clippy::large_enum_variant)]
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(untagged)]
 enum Message {
