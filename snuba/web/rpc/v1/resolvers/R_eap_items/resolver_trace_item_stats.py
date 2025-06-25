@@ -46,6 +46,9 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
+)
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression_eap_items,
@@ -98,11 +101,15 @@ def _transform_results(
 
 
 def _build_attr_distribution_snuba_request(
-    request: TraceItemStatsRequest, query: Query
+    request: TraceItemStatsRequest, query: Query, routing_decision: RoutingDecision
 ) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
+    routing_decision.strategy.merge_clickhouse_settings(
+        routing_decision, query_settings
+    )
+    query_settings.set_sampling_tier(routing_decision.tier)
 
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
@@ -227,6 +234,7 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
     def resolve(
         self,
         in_msg: TraceItemStatsRequest,
+        routing_decision: RoutingDecision,
     ) -> TraceItemStatsResponse:
         results = []
         for requested_type in in_msg.stats_types:
@@ -241,13 +249,16 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
                     in_msg, requested_type.attribute_distributions
                 )
                 treeify_or_and_conditions(query)
-                snuba_request = _build_attr_distribution_snuba_request(in_msg, query)
+                snuba_request = _build_attr_distribution_snuba_request(
+                    in_msg, query, routing_decision
+                )
 
                 query_res = run_query(
                     dataset=PluggableDataset(name="eap", all_entities=[]),
                     request=snuba_request,
                     timer=self._timer,
                 )
+                routing_decision.routing_context.query_result = query_res
 
                 attributes = _transform_results(
                     query_res.result.get("data", []), in_msg.meta
