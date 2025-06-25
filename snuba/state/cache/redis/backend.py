@@ -74,6 +74,7 @@ class RedisCache(Cache[TValue]):
         else:
             try:
                 value = function()
+                raise ConnectionError("test")
                 self.__client.set(
                     result_key,
                     self.__codec.encode(value),
