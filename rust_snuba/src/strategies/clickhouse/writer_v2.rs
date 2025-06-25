@@ -198,16 +198,8 @@ mod tests {
         assert!(client.url.contains("load_balancing"));
         assert!(client.url.contains("insert_distributed_sync"));
         println!("running test");
-        let res = client.send(b"[]").await;
+        let res = client.send(b"[]".to_vec()).await;
         println!("Response status {}", res.unwrap().status());
         Ok(())
-    }
-    #[test]
-    fn chunked_body() {
-        let mut data: Vec<u8> = vec![0; 1_000_000];
-
-        assert_eq!(ClickhouseClient::chunked_body(&data).len(), 1);
-        data.push(0);
-        assert_eq!(ClickhouseClient::chunked_body(&data).len(), 2);
     }
 }
