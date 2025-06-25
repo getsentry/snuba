@@ -195,12 +195,16 @@ mod tests {
     use super::*;
     #[tokio::test]
     async fn it_works() -> Result<(), reqwest::Error> {
-        let client: ClickhouseClient = ClickhouseClient::new(
-            &std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string()),
-            8123,
-            "querylog_local",
-            "default",
-        );
+        let config = ClickhouseConfig {
+            host: std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string()),
+            port: 9000,
+            secure: false,
+            http_port: 8123,
+            user: "default".to_string(),
+            password: "default".to_string(),
+            database: "default".to_string(),
+        };
+        let client: ClickhouseClient = ClickhouseClient::new(&config, "querylog_local");
 
         assert!(client.url.contains("load_balancing"));
         assert!(client.url.contains("insert_distributed_sync"));
