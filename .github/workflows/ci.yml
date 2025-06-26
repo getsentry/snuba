@@ -352,6 +352,7 @@ jobs:
             --network devservices \
             ghcr.io/getsentry/snuba-ci:${{ github.sha }}
           docker exec snuba-snuba-1 snuba migrations migrate --force
+          docker ps
 
       - name: Run snuba tests
         if: needs.files-changed.outputs.api_changes == 'false'
