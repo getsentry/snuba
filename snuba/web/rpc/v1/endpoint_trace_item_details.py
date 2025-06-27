@@ -174,17 +174,28 @@ def _convert_results(
 
     for k, v in row["attributes_string"].items():
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_str=v)))
-    for k, v in row["attributes_float"].items():
-        attrs.append(
-            TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v))
-        )
+
+    int_attr_names = set()
     for k, v in row["attributes_int"].items():
+        int_attr_names.add(k)
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_int=v)))
+
+    bool_attr_names = set()
     for k, v in row["attributes_bool"].items():
+        bool_attr_names.add(k)
         attrs.append(
             TraceItemDetailsAttribute(name=k, value=AttributeValue(val_bool=v))
         )
 
+    for k, v in row["attributes_float"].items():
+        if k in int_attr_names or k in bool_attr_names:
+            # for bool & int attributes, we also store a float version in the database
+            # to simplfy aggregations. when returning data to the user we should only return
+            # the original type, and ignore the float duplicate
+            continue
+        attrs.append(
+            TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v))
+        )
     return item_id, timestamp, attrs
 
 
