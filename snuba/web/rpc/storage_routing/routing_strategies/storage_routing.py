@@ -319,7 +319,6 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
     def _emit_routing_mistake(self, routing_decision: RoutingDecision) -> None:
         if routing_decision.routing_context.query_result is None:
-            sentry_sdk.capture_message("storage routing: query_result is None")
             return
         if self._is_highest_accuracy_mode(routing_decision.routing_context):
             return
