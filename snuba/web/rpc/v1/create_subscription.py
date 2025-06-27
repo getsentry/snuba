@@ -46,7 +46,7 @@ class CreateSubscriptionRequest(
 
         if (
             in_msg.time_series_request.meta.trace_item_type
-            == TraceItemType.TRACE_ITEM_TYPE_LOG
+            != TraceItemType.TRACE_ITEM_TYPE_SPAN
         ):
             entity_key = EntityKey("eap_items")
 
