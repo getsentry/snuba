@@ -179,13 +179,7 @@ pub fn consumer_v2_impl(
         set_global_tag("storage".to_owned(), storage_name);
         set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
 
-        metrics::init(StatsDBackend::new(
-            &host,
-            port,
-            "snuba.consumer",
-            env_config.ddm_metrics_sample_rate,
-        ))
-        .unwrap();
+        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer")).unwrap();
     }
 
     if !use_rust_processor {
@@ -414,13 +408,7 @@ pub fn consumer_impl(
         set_global_tag("storage".to_owned(), storage_name);
         set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
 
-        metrics::init(StatsDBackend::new(
-            &host,
-            port,
-            "snuba.consumer",
-            env_config.ddm_metrics_sample_rate,
-        ))
-        .unwrap();
+        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer")).unwrap();
     }
 
     if !use_rust_processor {
