@@ -131,10 +131,9 @@ def convert_results(
             if column.HasField("formula") and column.label in res:
                 # compute the reliabilities for the formula
                 reliabilities = _get_reliabilities_for_formula(column, res)
-                # get rid of any old reliabilities on the formula (but i dont think there will be any)
+                # set the reliabilities of the formula to be the ones we calculated
                 while len(res[column.label].reliabilities) > 0:
                     res[column.label].reliabilities.pop()
-                # put the newly computed reliabilities on the formula
                 for e in reliabilities:
                     assert e is not None
                     res[column.label].reliabilities.append(e)
