@@ -67,6 +67,19 @@ _SPANS = [
     )
     for i in range(_SPAN_COUNT)
 ]
+_ADDITIONAL_TRACE_IDS = [uuid.uuid4().hex for _ in range(_SPAN_COUNT)]
+_ADDITIONAL_SPANS = [
+    gen_item_message(
+        start_timestamp=_BASE_TIME + timedelta(hours=1, minutes=i),
+        trace_id=_ADDITIONAL_TRACE_IDS[i],
+        attributes={
+            "span_op": AnyValue(string_value="lcp"),
+            "span_name": AnyValue(string_value="standalone"),
+            "is_segment": AnyValue(bool_value=False),
+        },
+    )
+    for i in range(_SPAN_COUNT)
+]
 
 
 @pytest.fixture(autouse=False)
@@ -74,21 +87,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
 
     write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
-    write_raw_unprocessed_events(
-        items_storage,  # type: ignore
-        [
-            gen_item_message(
-                start_timestamp=_BASE_TIME + timedelta(minutes=i),
-                trace_id=uuid.uuid4().hex,
-                attributes={
-                    "span_op": AnyValue(string_value="lcp"),
-                    "span_name": AnyValue(string_value="standalone"),
-                    "is_segment": AnyValue(bool_value=False),
-                },
-            )
-            for i in range(_SPAN_COUNT)
-        ],
-    )
+    write_raw_unprocessed_events(items_storage, _ADDITIONAL_SPANS)  # type: ignore
 
 
 @pytest.mark.clickhouse_db
@@ -128,7 +127,7 @@ class TestGetTraces(BaseApiTest):
         (
             start_timestamp_per_trace_id,
             trace_id_per_start_timestamp,
-        ) = generate_trace_id_timestamp_data()
+        ) = generate_trace_id_timestamp_data(_SPANS + _ADDITIONAL_SPANS)
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -163,14 +162,14 @@ class TestGetTraces(BaseApiTest):
                     sorted(trace_id_per_start_timestamp.keys())
                 )
             ],
-            page_token=PageToken(offset=len(_TRACE_IDS)),
+            page_token=PageToken(offset=len(_TRACE_IDS + _ADDITIONAL_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_data_and_limit(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
-        three_hours_later = int((_BASE_TIME + timedelta(hours=10)).timestamp())
+        ten_hours_later = int((_BASE_TIME + timedelta(hours=10)).timestamp())
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -178,7 +177,7 @@ class TestGetTraces(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=ts,
-                end_timestamp=Timestamp(seconds=three_hours_later),
+                end_timestamp=Timestamp(seconds=ten_hours_later),
                 request_id=_REQUEST_ID,
             ),
             attributes=[
@@ -189,8 +188,10 @@ class TestGetTraces(BaseApiTest):
             limit=1,
         )
         response = EndpointGetTraces().execute(message)
-        spans = generate_spans()
+        spans = generate_spans(_SPANS + _ADDITIONAL_SPANS)
         last_span = spans[0]
+        trace_ids = [span.trace_id for span in spans]
+        print(trace_ids)
         for span in spans:
             if span.timestamp.seconds >= last_span.timestamp.seconds:
                 last_span = span
@@ -281,7 +282,7 @@ class TestGetTraces(BaseApiTest):
         (
             start_timestamp_per_trace_id,
             trace_id_per_start_timestamp,
-        ) = generate_trace_id_timestamp_data()
+        ) = generate_trace_id_timestamp_data(_SPANS)
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -477,7 +478,7 @@ class TestGetTraces(BaseApiTest):
         (
             start_timestamp_per_trace_id,
             trace_id_per_start_timestamp,
-        ) = generate_trace_id_timestamp_data()
+        ) = generate_trace_id_timestamp_data(_SPANS)
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -543,7 +544,7 @@ class TestGetTraces(BaseApiTest):
         (
             start_timestamp_per_trace_id,
             trace_id_per_start_timestamp,
-        ) = generate_trace_id_timestamp_data()
+        ) = generate_trace_id_timestamp_data(_SPANS)
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -646,18 +647,20 @@ class TestGetTraces(BaseApiTest):
             EndpointGetTraces().execute(message)
 
 
-def generate_spans() -> list[TraceItem]:
+def generate_spans(spans_data: list[bytes]) -> list[TraceItem]:
     spans: list[TraceItem] = []
-    for payload in _SPANS:
+    for payload in spans_data:
         span = TraceItem()
         span.ParseFromString(payload)
         spans.append(span)
     return spans
 
 
-def generate_trace_id_timestamp_data() -> tuple[dict[str, float], dict[float, str]]:
+def generate_trace_id_timestamp_data(
+    spans_data: list[bytes],
+) -> tuple[dict[str, float], dict[float, str]]:
     start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
-    for payload in _SPANS:
+    for payload in spans_data:
         s = TraceItem()
         s.ParseFromString(payload)
         start_timestamp_per_trace_id[s.trace_id] = min(
