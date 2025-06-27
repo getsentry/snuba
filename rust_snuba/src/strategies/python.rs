@@ -246,7 +246,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     message: transformed_message,
                 })) => {
                     self.transformed_messages.push_front(transformed_message);
-                    if deadline.map_or(false, |d| d.has_elapsed()) {
+                    if deadline.is_some_and(|d| d.has_elapsed()) {
                         tracing::warn!("Timeout reached");
                         break;
                     }
