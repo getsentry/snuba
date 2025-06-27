@@ -196,7 +196,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 )
 @click.option(
     "--consumer-version",
-    default="v1",
+    default="v2",
     type=click.Choice(["v1", "v2"]),
     help="Specify which consumer version to use, v1 is stable, v2 is experimental",
 )
