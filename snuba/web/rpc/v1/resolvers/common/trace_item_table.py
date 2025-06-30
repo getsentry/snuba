@@ -81,10 +81,31 @@ def _is_sub_column(result_column_name: str, column: Column) -> bool:
 def _get_reliabilities_for_formula(
     column: Column, res: Dict[str, TraceItemColumnValues]
 ) -> list[Reliability.ValueType]:
-    # compute its reliability based on the reliabilities of the left and right parts
-    # (already computed in res variable)
-    # a formula is reliable iff all of its parts are reliable (.left and .right)
-    # ex: (agg1 + agg2) / agg3 * agg4 is reliable iff agg1, agg2, agg3, agg4 are reliable
+    """
+    Compute and return the reliabilities for the given formula column,
+    based on the reliabilities of the left and right parts.
+
+    Ex:
+    When users send a request with a formula such as sum(B)/min(B)
+    we also separately query for sum(B), min(B) separately (earlier in the codebase).
+    Thus, we already have the reliabilities for sum(B), min(B) in res labels as .left and .right.
+    We use them in this function to compute the reliability of the formula, based on the following:
+    a formula is reliable iff all of its parts are reliable (.left and .right)
+    ex: (agg1 + agg2) / agg3 * agg4 is reliable iff agg1, agg2, agg3, agg4 are reliable.
+
+    Select A, sum(B)/min(B) AS agg GROUP BY A
+    +----+--------------+----------+--------------+
+    | A  |     agg      | agg.left |  agg.right   |
+    +----+--------------+----------+--------------+
+    | A1 | reliable     | reliable | reliable     |
+    | A2 | not reliable | reliable | not reliable |
+    | A3 | reliable     | reliable | reliable     |
+    +----+--------------+----------+--------------+
+    you can see that each column has a reliability for each group by. and the reliabilities of agg is determined
+    based on the reliabilities of agg.left and agg.right. In this case the function would return
+    [reliable, not reliable, reliable]
+    """
+
     reliable_so_far: list[Reliability.ValueType] = []
     for resname, resvalue in res.items():
         if _is_sub_column(resname, column):
