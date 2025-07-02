@@ -31,6 +31,9 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import base_conditions_and, treeify_or_and_conditions
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
+)
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression_eap_items,
 )
@@ -124,7 +127,10 @@ def _build_query(
 
 def _build_snuba_request(
     request: TraceItemAttributeValuesRequest,
+    routing_decision: RoutingDecision,
 ) -> SnubaRequest:
+    settings = HTTPQuerySettings()
+    settings.set_sampling_tier(routing_decision.tier)
     return SnubaRequest(
         id=uuid.uuid4(),
         original_body=MessageToDict(request),
@@ -170,7 +176,7 @@ class AttributeValuesRequest(
                 page_token=None,
             )
         in_msg.limit = in_msg.limit or 1000
-        snuba_request = _build_snuba_request(in_msg)
+        snuba_request = _build_snuba_request(in_msg, self.routing_decision)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

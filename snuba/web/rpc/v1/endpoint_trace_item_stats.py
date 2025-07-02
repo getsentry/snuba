@@ -7,9 +7,20 @@ from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
+from snuba.downsampled_storage_tiers import Tier
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
+
+
+def downgrade_tier(tier: Tier) -> Tier:
+    if tier == Tier.TIER_1:
+        return Tier.TIER_8
+    elif tier == Tier.TIER_8:
+        return Tier.TIER_64
+    elif tier == Tier.TIER_64:
+        return Tier.TIER_512
+    return tier
 
 
 class EndpointTraceItemStats(
@@ -48,4 +59,7 @@ class EndpointTraceItemStats(
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
             )
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
+        # the stats endpoint is quite costly to run so we use one tier lower than the
+        # routing system recommends
+        self.routing_decision.tier = downgrade_tier(self.routing_decision.tier)
         return resolver.resolve(in_msg, self.routing_decision)
