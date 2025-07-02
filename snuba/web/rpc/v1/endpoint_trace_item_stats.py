@@ -1,6 +1,7 @@
 import uuid
 from typing import Type
 
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     TraceItemStatsRequest,
     TraceItemStatsResponse,
@@ -61,5 +62,9 @@ class EndpointTraceItemStats(
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         # the stats endpoint is quite costly to run so we use one tier lower than the
         # routing system recommends
-        self.routing_decision.tier = downgrade_tier(self.routing_decision.tier)
+        if (
+            in_msg.meta.downsampled_storage_config.mode
+            != DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+        ):
+            self.routing_decision.tier = downgrade_tier(self.routing_decision.tier)
         return resolver.resolve(in_msg, self.routing_decision)
