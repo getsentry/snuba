@@ -557,7 +557,14 @@ pub fn consumer_impl(
     }
 }
 
-pyo3::create_exception!(rust_snuba, SnubaRustError, pyo3::exceptions::PyException);
+#[expect(
+    unexpected_cfgs,
+    reason = "Fixed in pyo3 v0.23, see https://github.com/PyO3/pyo3/issues/4743"
+)]
+mod exceptions {
+    pyo3::create_exception!(rust_snuba, SnubaRustError, pyo3::exceptions::PyException);
+}
+use exceptions::*;
 
 /// insert: encoded rows
 type PyInsert = PyObject;
