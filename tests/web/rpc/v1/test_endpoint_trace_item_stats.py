@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     AttributeDistribution,
     AttributeDistributionsRequest,
@@ -89,6 +90,9 @@ class TestTraceItemAttributesStats(BaseApiTest):
                 start_timestamp=START_TIMESTAMP,
                 end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY,
+                ),
             ),
             stats_types=[
                 StatsType(
@@ -144,6 +148,9 @@ class TestTraceItemAttributesStats(BaseApiTest):
                 start_timestamp=START_TIMESTAMP,
                 end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY,
+                ),
             ),
             filter=TraceItemFilter(
                 comparison_filter=ComparisonFilter(
