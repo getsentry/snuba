@@ -61,8 +61,8 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    apply_virtual_columns_eap_items,
-    attribute_key_to_expression_eap_items,
+    apply_virtual_columns,
+    attribute_key_to_expression,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -97,7 +97,7 @@ def aggregation_filter_to_expression(
             return op_expr(
                 aggregation_to_expression(
                     agg_filter.comparison_filter.conditional_aggregation,
-                    attribute_key_to_expression_eap_items,
+                    attribute_key_to_expression,
                     use_sampling_factor(request_meta),
                 ),
                 agg_filter.comparison_filter.val,
@@ -167,7 +167,7 @@ def _convert_order_by(
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=attribute_key_to_expression_eap_items(x.column.key),
+                    expression=attribute_key_to_expression(x.column.key),
                 )
             )
         elif x.column.HasField("conditional_aggregation"):
@@ -176,7 +176,7 @@ def _convert_order_by(
                     direction=direction,
                     expression=aggregation_to_expression(
                         x.column.conditional_aggregation,
-                        attribute_key_to_expression_eap_items,
+                        attribute_key_to_expression,
                         use_sampling_factor(request_meta),
                     ),
                 )
@@ -232,7 +232,7 @@ def _get_reliability_context_columns(
         context_columns = []
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items,
+            attribute_key_to_expression,
         )
         if confidence_interval_column is not None:
             context_columns.append(
@@ -244,7 +244,7 @@ def _get_reliability_context_columns(
 
         average_sample_rate_column = get_average_sample_rate_column(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items,
+            attribute_key_to_expression,
         )
         context_columns.append(
             SelectedExpression(
@@ -255,7 +255,7 @@ def _get_reliability_context_columns(
 
         count_column = get_count_column(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items,
+            attribute_key_to_expression,
         )
         context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
@@ -289,11 +289,11 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     Given a column protobuf object, translates it into a Expression object and returns it.
     """
     if column.HasField("key"):
-        return attribute_key_to_expression_eap_items(column.key)
+        return attribute_key_to_expression(column.key)
     elif column.HasField("conditional_aggregation"):
         function_expr = aggregation_to_expression(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items,
+            attribute_key_to_expression,
             use_sampling_factor(request_meta),
         )
         # aggregation label may not be set and the column label takes priority anyways.
@@ -334,9 +334,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
     item_type_conds = [
         f.equals(snuba_column("item_type"), request.meta.trace_item_type)
     ]
-    groupby = [
-        attribute_key_to_expression_eap_items(attr_key) for attr_key in request.group_by
-    ]
+    groupby = [attribute_key_to_expression(attr_key) for attr_key in request.group_by]
     res = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -344,7 +342,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
             request.meta,
             trace_item_filters_to_expression(
                 request.filter,
-                attribute_key_to_expression_eap_items,
+                attribute_key_to_expression,
             ),
             *item_type_conds,
         ),
@@ -366,7 +364,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
         ),
     )
     treeify_or_and_conditions(res)
-    apply_virtual_columns_eap_items(res, request.virtual_column_contexts)
+    apply_virtual_columns(res, request.virtual_column_contexts)
     add_existence_check_to_subscriptable_references(res)
     return res
 
