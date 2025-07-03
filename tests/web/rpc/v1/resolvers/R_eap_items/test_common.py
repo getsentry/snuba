@@ -44,7 +44,7 @@ class TestCommon:
 
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_INT, name="derp"),
-        ) == f.CAST(
+        ) == f.cast(
             SubscriptableReference(
                 alias=None,
                 column=column("attributes_float"),
@@ -56,7 +56,7 @@ class TestCommon:
 
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="derp"),
-        ) == f.CAST(
+        ) == f.cast(
             SubscriptableReference(
                 alias=None,
                 column=column("attributes_float"),
@@ -66,7 +66,7 @@ class TestCommon:
             alias="derp_TYPE_BOOLEAN",
         )
 
-    def test_coalesce(self):
+    def test_coalesce(self) -> None:
         assert attribute_key_to_expression(
             AttributeKey(
                 type=AttributeKey.TYPE_STRING,
