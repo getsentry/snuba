@@ -1,4 +1,4 @@
-from typing import Final, Mapping, Optional, Sequence
+from typing import Final, Mapping, Sequence
 
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
@@ -8,7 +8,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 from snuba.query import Query
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal, literals_array
-from snuba.query.expressions import Expression, SubscriptableReference
+from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 COLUMN_PREFIX: str = "sentry."
@@ -49,7 +49,7 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
 }
 
 # TODO: Replace with the dict from the sentry-conventions package
-ATTRIBUTES_TO_COALESCE: dict[str, set] = {
+ATTRIBUTES_TO_COALESCE: dict[str, set[str]] = {
     "sentry.segment_name": {
         "sentry.transaction_name",
     },
@@ -57,33 +57,40 @@ ATTRIBUTES_TO_COALESCE: dict[str, set] = {
 
 
 def _build_label_mapping_key(attr_key: AttributeKey) -> str:
-    return attr_key.name + "_" + AttributeKey.Type.Name(attr_key.type)
+    return _build_alias(attr_key.name, attr_key.type)
+
+
+def _build_alias(
+    attribute_name: str,
+    attribute_type: AttributeKey.Type.ValueType,
+) -> str:
+    return f"{attribute_name}_{AttributeKey.Type.Name(attribute_type)}"
 
 
 def _generate_subscriptable_reference(
     attribute_name: str,
     attribute_type: AttributeKey.Type.ValueType,
-    alias: Optional[str] = None,
-) -> SubscriptableReference:
+    alias: str | None = None,
+) -> SubscriptableReference | FunctionCall:
     if attribute_type == AttributeKey.Type.TYPE_BOOLEAN:
-        return f.CAST(
+        return f.cast(
             SubscriptableReference(
                 column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
                 key=literal(attribute_name),
                 alias=None,
             ),
             "Nullable(Boolean)",
-            alias=alias,
+            alias=alias if alias else _build_alias(attribute_name, attribute_type),
         )
     elif attribute_type == AttributeKey.Type.TYPE_INT:
-        return f.CAST(
+        return f.cast(
             SubscriptableReference(
                 column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
                 key=literal(attribute_name),
                 alias=None,
             ),
             "Nullable(Int64)",
-            alias=alias,
+            alias=alias if alias else _build_alias(attribute_name, attribute_type),
         )
     return SubscriptableReference(
         column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
