@@ -4,6 +4,7 @@ from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
 from snuba.query.expressions import SubscriptableReference
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
+    ATTRIBUTES_TO_COALESCE,
     attribute_key_to_expression,
 )
 
@@ -67,21 +68,24 @@ class TestCommon:
         )
 
     def test_coalesce(self) -> None:
+        new_attribute = list(ATTRIBUTES_TO_COALESCE.keys())[0]
+        old_attribute = ATTRIBUTES_TO_COALESCE[new_attribute][0]
+
         assert attribute_key_to_expression(
             AttributeKey(
                 type=AttributeKey.TYPE_STRING,
-                name="sentry.segment_name",
+                name=new_attribute,
             ),
         ) == f.coalesce(
             SubscriptableReference(
                 alias=None,
                 column=column("attributes_string"),
-                key=literal("sentry.segment_name"),
+                key=literal(new_attribute),
             ),
             SubscriptableReference(
                 alias=None,
                 column=column("attributes_string"),
-                key=literal("sentry.transaction_name"),
+                key=literal(old_attribute),
             ),
-            alias="sentry.segment_name_TYPE_STRING",
+            alias=f"{new_attribute}_TYPE_STRING",
         )
