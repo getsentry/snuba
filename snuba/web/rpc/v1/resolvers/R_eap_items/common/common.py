@@ -50,7 +50,7 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
 
 # TODO: Replace with the dict from the sentry-conventions package
 # https://github.com/getsentry/sentry-conventions/blob/main/shared/deprecated_attributes.json
-ATTRIBUTES_TO_COALESCE: dict[str, set[str]] = {
+ATTRIBUTES_TO_COALESCE: dict[str, list[str]] = {
     "code.file.path": ["code.filepath"],
     "code.function.name": ["code.namespace"],
     "code.line.number": ["code.lineno"],
