@@ -3203,8 +3203,10 @@ class TestTraceItemTable(BaseApiTest):
     def test_coalesce_attributes(self) -> None:
         span_ts = BASE_TIME + timedelta(minutes=1)
 
+        # we write the old attribute name
         write_eap_item(span_ts, {"ai.model_id": "sentaur"})
 
+        # we query and filter on the new attribute name
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
