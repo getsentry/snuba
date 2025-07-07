@@ -49,10 +49,66 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
 }
 
 # TODO: Replace with the dict from the sentry-conventions package
+# https://github.com/getsentry/sentry-conventions/blob/main/shared/deprecated_attributes.json
 ATTRIBUTES_TO_COALESCE: dict[str, set[str]] = {
-    "sentry.segment_name": {
-        "sentry.transaction_name",
+    "environment": {"sentry.environment"},
+    "method": {"http.request.method"},
+    "profile_id": {"sentry.profile_id"},
+    "release": {"sentry.release"},
+    "replay_id": {"sentry.replay_id"},
+    "route": {"http.route"},
+    "transaction": {"sentry.transaction"},
+    "url": {"url.full", "http.url"},
+    "ai.completion_tokens.used": {
+        "gen_ai.usage.completion_tokens",
+        "gen_ai.usage.output_tokens",
     },
+    "ai.input_messages": {"gen_ai.prompt", "gen_ai.request.messages"},
+    "ai.model_id": {"gen_ai.response.model"},
+    "ai.prompt_tokens.used": {
+        "gen_ai.usage.input_tokens",
+        "gen_ai.usage.prompt_tokens",
+    },
+    "code.filepath": {"code.file.path"},
+    "code.function": {"code.function.name"},
+    "code.lineno": {"code.lineno"},
+    "db.name": {"db.namespace"},
+    "db.operation": {"db.operation.name"},
+    "db.statement": {"db.query.text"},
+    "db.system": {"db.system.name"},
+    "gen_ai.usage.completion_tokens": {
+        "ai.completion_tokens.used",
+        "gen_ai.usage.output_tokens",
+    },
+    "gen_ai.usage.prompt_tokens": {
+        "gen_ai.usage.input_tokens",
+        "ai.prompt_tokens.used",
+    },
+    "http.client_ip": {"client.address"},
+    "http.flavor": {"network.protocol.version"},
+    "http.host": {"server.address", "client.address"},
+    "http.method": {"http.request.method"},
+    "http.response_content_length": {
+        "http.response.header['content-length']",
+        "http.response.body.size",
+        "http.response.header.content-length",
+    },
+    "http.response_transfer_size": {"http.response.size"},
+    "http.scheme": {"url.scheme"},
+    "http.server_name": {"server.address"},
+    "http.status_code": {"http.response.status_code"},
+    "http.url": {"url.full", "http.url"},
+    "http.user_agent": {"user_agent.original"},
+    "net.host.ip": {"network.local.address"},
+    "net.host.name": {"server.address"},
+    "net.host.port": {"server.port"},
+    "net.peer.ip": {"network.peer.address"},
+    "net.protocol.name": {"network.protocol.name"},
+    "net.protocol.version": {"network.protocol.version"},
+    "net.sock.host.addr": {"network.local.address"},
+    "net.sock.host.port": {"network.local.port"},
+    "net.sock.peer.addr": {"network.peer.address"},
+    "net.transport": {"network.transport"},
 }
 
 
