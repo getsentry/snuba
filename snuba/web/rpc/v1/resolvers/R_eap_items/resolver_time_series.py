@@ -59,7 +59,7 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
 )
 
 OP_TO_EXPR = {
@@ -73,7 +73,7 @@ OP_TO_EXPR = {
 def _get_attribute_key_to_expression_function(
     request_meta: RequestMeta,
 ) -> Callable[[AttributeKey], Expression]:
-    return attribute_key_to_expression
+    return attribute_key_to_expression_eap_items
 
 
 def _convert_result_timeseries(
@@ -252,7 +252,7 @@ def _proto_expression_to_ast_expression(
         case "conditional_aggregation":
             return aggregation_to_expression(
                 expr.conditional_aggregation,
-                (attribute_key_to_expression),
+                (attribute_key_to_expression_eap_items),
                 use_sampling_factor(request_meta),
             )
         case "formula":

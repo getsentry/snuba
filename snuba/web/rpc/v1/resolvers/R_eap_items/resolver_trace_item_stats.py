@@ -51,7 +51,7 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
 )
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -180,7 +180,7 @@ def _build_attr_distribution_query(
 
     trace_item_filters_expression = trace_item_filters_to_expression(
         in_msg.filter,
-        (attribute_key_to_expression),
+        (attribute_key_to_expression_eap_items),
     )
 
     query = Query(

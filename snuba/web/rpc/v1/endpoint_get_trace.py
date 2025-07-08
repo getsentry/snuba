@@ -37,7 +37,7 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
 )
 
 NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
@@ -53,7 +53,7 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
         SelectedExpression(
             name="id",
             expression=(
-                attribute_key_to_expression(
+                attribute_key_to_expression_eap_items(
                     AttributeKey(
                         name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING
                     )
@@ -64,7 +64,7 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
             name="timestamp",
             expression=f.cast(
                 (
-                    attribute_key_to_expression(
+                    attribute_key_to_expression_eap_items(
                         AttributeKey(
                             name="sentry.start_timestamp_precise",
                             type=AttributeKey.Type.TYPE_DOUBLE,
@@ -82,7 +82,7 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
             selected_columns.append(
                 SelectedExpression(
                     name=attribute_key.name,
-                    expression=(attribute_key_to_expression(attribute_key)),
+                    expression=(attribute_key_to_expression_eap_items(attribute_key)),
                 )
             )
     else:

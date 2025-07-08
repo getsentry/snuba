@@ -45,7 +45,7 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression,
+    attribute_key_to_expression_eap_items,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -143,7 +143,7 @@ def _get_attribute_expression(
     attribute_type: AttributeKey.Type.ValueType,
     request_meta: RequestMeta,
 ) -> Expression:
-    return attribute_key_to_expression(
+    return attribute_key_to_expression_eap_items(
         AttributeKey(name=attribute_name, type=attribute_type)
     )
 
@@ -427,7 +427,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> list[str]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
-            (attribute_key_to_expression),
+            (attribute_key_to_expression_eap_items),
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(
@@ -491,7 +491,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> list[GetTracesResponse.Trace]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
-            (attribute_key_to_expression),
+            (attribute_key_to_expression_eap_items),
         )
 
         selected_columns: list[SelectedExpression] = []
