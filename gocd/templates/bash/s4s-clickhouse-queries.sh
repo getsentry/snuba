@@ -18,10 +18,10 @@ fi
 SNUBA_COMPONENT_NAME="query-${SNUBA_CMD_TYPE}-gocd"
 SNUBA_CMD="query-${SNUBA_CMD_TYPE} ${ARGS[@]}"
 
-eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
+eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 /devinfra/scripts/k8s/k8stunnel
 
-/devinfra/scripts/k8s/k8s-spawn-job.py \
+k8s-spawn-job \
   --label-selector="service=snuba,component=${SNUBA_COMPONENT_NAME}" \
   --container-name="${SNUBA_COMPONENT_NAME}" \
   --try-deployments-and-statefulsets \

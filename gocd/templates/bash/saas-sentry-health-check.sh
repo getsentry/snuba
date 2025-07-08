@@ -1,6 +1,6 @@
 #!/bin/bash
 
-/devinfra/scripts/checks/sentry/release_new_issues.py \
+checks-sentry-release-new-issues \
   --project-id=300688 \
   --project-slug=snuba \
   --release="${GO_REVISION_SNUBA_REPO}" \
