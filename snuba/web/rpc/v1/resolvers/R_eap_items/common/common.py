@@ -113,30 +113,18 @@ def _generate_subscriptable_reference(
     attribute_type: AttributeKey.Type.ValueType,
     alias: str | None = None,
 ) -> SubscriptableReference | FunctionCall:
-    if attribute_type == AttributeKey.Type.TYPE_BOOLEAN:
-        return f.cast(
-            SubscriptableReference(
-                column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
-                key=literal(attribute_name),
-                alias=None,
-            ),
-            "Nullable(Boolean)",
-            alias=alias,
-        )
-    elif attribute_type == AttributeKey.Type.TYPE_INT:
-        return f.cast(
-            SubscriptableReference(
-                column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
-                key=literal(attribute_name),
-                alias=None,
-            ),
-            "Nullable(Int64)",
-            alias=alias,
-        )
-    return SubscriptableReference(
-        column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
-        key=literal(attribute_name),
-        alias=alias,
+    kwargs = {}
+    if alias:
+        kwargs["alias"] = alias
+    clickhouse_type = PROTO_TYPE_TO_CLICKHOUSE_TYPE[attribute_type]
+    return f.cast(
+        SubscriptableReference(
+            column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
+            key=literal(attribute_name),
+            alias=None,
+        ),
+        f"Nullable({clickhouse_type})",
+        **kwargs,
     )
 
 
