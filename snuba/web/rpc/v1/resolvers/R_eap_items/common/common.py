@@ -117,14 +117,20 @@ def _generate_subscriptable_reference(
     if alias:
         kwargs["alias"] = alias
     clickhouse_type = PROTO_TYPE_TO_CLICKHOUSE_TYPE[attribute_type]
-    return f.cast(
-        SubscriptableReference(
-            column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
-            key=literal(attribute_name),
-            alias=None,
-        ),
-        f"Nullable({clickhouse_type})",
-        **kwargs,
+    if attribute_type in {AttributeKey.Type.TYPE_INT, AttributeKey.Type.TYPE_BOOLEAN}:
+        return f.cast(
+            SubscriptableReference(
+                column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
+                key=literal(attribute_name),
+                alias=None,
+            ),
+            f"Nullable({clickhouse_type})",
+            **kwargs,
+        )
+    return SubscriptableReference(
+        column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
+        key=literal(attribute_name),
+        alias=alias,
     )
 
 
