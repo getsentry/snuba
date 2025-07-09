@@ -161,8 +161,8 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             )
 
         return f.cast(
-            column=column(attr_key.name[len(COLUMN_PREFIX) :]),
-            key=PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
+            column(attr_key.name[len(COLUMN_PREFIX) :]),
+            PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
             alias=alias,
         )
 
