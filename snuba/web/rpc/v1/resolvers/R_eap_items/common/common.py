@@ -104,15 +104,8 @@ ATTRIBUTES_TO_COALESCE: dict[str, list[str]] = {
 }
 
 
-def _build_label_mapping_key(attr_key: AttributeKey) -> str:
-    return _build_alias(attr_key.name, attr_key.type)
-
-
-def _build_alias(
-    attribute_name: str,
-    attribute_type: AttributeKey.Type.ValueType,
-) -> str:
-    return f"{attribute_name}_{AttributeKey.Type.Name(attribute_type)}"
+def _build_label_mapping_key(attribute_key: AttributeKey) -> str:
+    return f"{attribute_key.name}_{AttributeKey.Type.Name(attribute_key.type)}"
 
 
 def _generate_subscriptable_reference(
@@ -128,7 +121,7 @@ def _generate_subscriptable_reference(
                 alias=None,
             ),
             "Nullable(Boolean)",
-            alias=alias if alias else _build_alias(attribute_name, attribute_type),
+            alias=alias,
         )
     elif attribute_type == AttributeKey.Type.TYPE_INT:
         return f.cast(
@@ -138,7 +131,7 @@ def _generate_subscriptable_reference(
                 alias=None,
             ),
             "Nullable(Int64)",
-            alias=alias if alias else _build_alias(attribute_name, attribute_type),
+            alias=alias,
         )
     return SubscriptableReference(
         column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
@@ -167,9 +160,9 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
                 f"Attribute {attr_key.name} must be one of [{formatted_attribute_types}], got {AttributeKey.Type.Name(attr_key.type)}"
             )
 
-        return f.CAST(
-            column(attr_key.name[len(COLUMN_PREFIX) :]),
-            PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
+        return f.cast(
+            column=column(attr_key.name[len(COLUMN_PREFIX) :]),
+            key=PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
             alias=alias,
         )
 
