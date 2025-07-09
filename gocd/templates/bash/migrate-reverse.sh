@@ -1,6 +1,6 @@
 #!/bin/bash
 
-eval $(region-project-env-vars --region="${SENTRY_REGION}")
+eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 /devinfra/scripts/k8s/k8stunnel
 
 k8s-spawn-job \
