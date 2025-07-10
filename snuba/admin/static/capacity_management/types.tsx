@@ -37,10 +37,41 @@ type RowData = {
   edit: ReactNode;
 };
 
+interface StorageEntity {
+  type: "storage";
+  name: string;
+}
+
+interface StrategyEntity {
+  type: "strategy";
+  name: string;
+}
+
+type Entity = StorageEntity | StrategyEntity;
+
+// Usage
+function getEntityName(entity: Entity): string {
+  return entity.name; // Works for both types
+}
+
+function isStorage(entity: Entity): entity is StorageEntity {
+  return entity.type === "storage";
+}
+
+function isStrategy(entity: Entity): entity is StrategyEntity {
+  return entity.type === "strategy";
+}
+
 export {
   AllocationPolicy,
   AllocationPolicyConfig,
   AllocationPolicyOptionalConfigDefinition,
   AllocationPolicyConfigParams,
   RowData,
+  Entity,
+  getEntityName,
+  isStorage,
+  isStrategy,
+  StorageEntity,
+  StrategyEntity,
 };

@@ -2,6 +2,9 @@ from typing import Any, List, Set
 
 from snuba import settings
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    BaseRoutingStrategy,
+)
 
 
 def _validate_projects_in_query(project_ids: List[int]) -> None:
@@ -30,3 +33,7 @@ def validate_request_meta(request_proto: Any) -> None:
     project_ids = list(meta.project_ids)
     _validate_org_ids_in_query(org_id)
     _validate_projects_in_query(project_ids)
+
+
+def get_routing_strategies() -> List[str]:
+    return list(BaseRoutingStrategy.all_names())

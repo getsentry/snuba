@@ -18,6 +18,7 @@ import DeleteTool from "SnubaAdmin/delete_tool";
 import ViewCustomJobs from "SnubaAdmin/manual_jobs";
 import DatabaseClusters from "./database_clusters";
 import RpcEndpoints from "SnubaAdmin/rpc_endpoints";
+import CapacityBasedRoutingSystem from "SnubaAdmin/cbrs";
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
@@ -111,6 +112,11 @@ const NAV_ITEMS = [
     id: "database-clusters",
     display: "🗂️ Database Clusters",
     component: DatabaseClusters,
+  },
+  {
+    id: "capacity-based-routing-system",
+    display: "🔄 Capacity Based Routing System",
+    component: CapacityBasedRoutingSystem,
   },
 ];
 

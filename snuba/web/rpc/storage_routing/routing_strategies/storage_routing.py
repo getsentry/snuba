@@ -14,7 +14,16 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 
 from snuba import environment, settings, state
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
+from snuba.query.allocation_policies import AllocationPolicy
+from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
+    BytesScannedRejectingPolicy,
+)
+from snuba.query.allocation_policies.concurrent_rate_limit import (
+    ConcurrentRateLimitAllocationPolicy,
+)
+from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
 from snuba.utils.metrics.timer import Timer
@@ -181,6 +190,26 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             meta.downsampled_storage_config.mode
             == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
         )
+
+    @classmethod
+    def get_allocation_policies(cls) -> list[AllocationPolicy]:
+        return [
+            ConcurrentRateLimitAllocationPolicy(
+                storage_key=StorageKey("eap_items"),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+            ReferrerGuardRailPolicy(
+                storage_key=StorageKey("eap_items"),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+            BytesScannedRejectingPolicy(
+                storage_key=StorageKey("eap_items"),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+        ]
 
     def merge_clickhouse_settings(
         self,

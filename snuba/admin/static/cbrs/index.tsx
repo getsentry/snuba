@@ -5,33 +5,33 @@ import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { COLORS } from "SnubaAdmin/theme";
 
-function CapacityManagement(props: { api: Client }) {
+function CapacityBasedRoutingSystem(props: { api: Client }) {
   const { api } = props;
 
-  const [storages, setStorages] = useState<string[]>([]);
-  const [selectedStorage, setStorage] = useState<string | undefined>();
+  const [strategies, setStrategies] = useState<string[]>([]);
+  const [selectedStrategy, setStrategy] = useState<string | undefined>();
   const [allocationPolicies, setAllocationPolicies] = useState<
     AllocationPolicy[]
   >([]);
 
   useEffect(() => {
-    api.getStoragesWithAllocationPolicies().then((res) => {
-      setStorages(res);
-      const previousStorage = getParamFromStorage("storage");
-      if (previousStorage) {
-        selectStorage(previousStorage);
+    api.getRoutingStrategies().then((res) => {
+      setStrategies(res);
+      const previousStrategy = getParamFromStorage("strategy");
+      if (previousStrategy) {
+        selectStrategy(previousStrategy);
       }
     });
   }, []);
 
-  function selectStorage(storage: string) {
-    setStorage(storage);
-    loadAllocationPolicies(storage);
+  function selectStrategy(strategy: string) {
+    setStrategy(strategy);
+    loadAllocationPolicies(strategy);
   }
 
-  function loadAllocationPolicies(storage: string) {
+  function loadAllocationPolicies(strategy: string) {
     api
-      .getAllocationPolicies({ type: "storage", name: storage })
+      .getAllocationPolicies({ type: "strategy", name: strategy })
       .then((res) => {
         setAllocationPolicies(res);
       })
@@ -41,8 +41,8 @@ function CapacityManagement(props: { api: Client }) {
   }
 
   function renderPolicies(policies: AllocationPolicy[]) {
-    if (!selectedStorage) {
-      return <p>Storage not selected.</p>;
+    if (!selectedStrategy) {
+      return <p>Strategy not selected.</p>;
     }
     if (policies.length == 0) {
       return null;
@@ -55,9 +55,9 @@ function CapacityManagement(props: { api: Client }) {
         {policies.map((policy: AllocationPolicy) => (
           <AllocationPolicyConfigs
             api={api}
-            entity={{ type: "storage", name: selectedStorage }}
+            entity={{ type: "strategy", name: selectedStrategy }}
             policy={policy}
-            key={selectedStorage + policy.policy_name}
+            key={selectedStrategy + policy.policy_name}
           />
         ))}
       </div>
@@ -67,12 +67,12 @@ function CapacityManagement(props: { api: Client }) {
   return (
     <div>
       <p>
-        Storage:
+        Strategy:
         <CustomSelect
-          value={selectedStorage || ""}
-          onChange={selectStorage}
-          name="storage"
-          options={storages}
+          value={selectedStrategy || ""}
+          onChange={selectStrategy}
+          name="strategy"
+          options={strategies}
         />
       </p>
 
@@ -96,4 +96,4 @@ const policyTypeStyle = {
   padding: "5px",
 };
 
-export default CapacityManagement;
+export default CapacityBasedRoutingSystem;

@@ -611,7 +611,7 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
         "snuba.datasets.storage.ReadableTableStorage.get_allocation_policies",
         side_effect=mock_get_policies,
     ):
-        response = admin_api.get("/allocation_policy_configs/errors")
+        response = admin_api.get("/allocation_policy_configs/storage/errors")
 
     assert response.status_code == 200
     assert response.json is not None and len(response.json) == 1
@@ -664,7 +664,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         assert response.status_code == 200, response.json
         # make sure an auditlog entry was recorded
         assert auditlog_records.pop()
-        response = admin_api.get("/allocation_policy_configs/errors")
+        response = admin_api.get("/allocation_policy_configs/storage/errors")
         assert response.status_code == 200
 
         # three policies
@@ -706,7 +706,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             == 200
         )
 
-        response = admin_api.get("/allocation_policy_configs/errors")
+        response = admin_api.get("/allocation_policy_configs/storage/errors")
         assert response.status_code == 200
         assert response.json is not None and len(response.json) == 5
         assert {
