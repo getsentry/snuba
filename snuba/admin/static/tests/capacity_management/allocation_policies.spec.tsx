@@ -43,7 +43,7 @@ it("should populate configs table upon render", async () => {
   let { getByText, getByTestId } = render(
     <AllocationPolicyConfigs
       api={Client()}
-      storage="storage1"
+      entity={{ type: "storage", name: "storage1" }}
       policy={allocationPolicy}
     />
   );

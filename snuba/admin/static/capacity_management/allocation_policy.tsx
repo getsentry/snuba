@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { Table, createCustomTableStyles } from "../table";
 import { COLORS } from "SnubaAdmin/theme";
 import Client from "SnubaAdmin/api_client";
-import { AllocationPolicy, AllocationPolicyConfig } from "SnubaAdmin/capacity_management/types";
+import { AllocationPolicy, AllocationPolicyConfig, Entity } from "SnubaAdmin/capacity_management/types";
 import { containerStyle, linkStyle, paragraphStyle } from "SnubaAdmin/capacity_management/styles";
 import { getReadonlyRow } from "SnubaAdmin/capacity_management/row_data";
 import EditConfigModal from "SnubaAdmin/capacity_management/edit_config_modal";
@@ -39,10 +39,10 @@ function getTableColor(configs: AllocationPolicyConfig[]): string {
 
 function AllocationPolicyConfigs(props: {
   api: Client;
-  storage: string;
+  entity: Entity;
   policy: AllocationPolicy;
 }) {
-  const { api, storage, policy } = props;
+  const { api, entity, policy } = props;
 
   const [configs, setConfigs] = useState<AllocationPolicyConfig[]>([]);
 
@@ -69,7 +69,7 @@ function AllocationPolicyConfigs(props: {
   function deleteConfig(toDelete: AllocationPolicyConfig) {
     api
       .deleteAllocationPolicyConfig(
-        storage,
+        entity.name,
         policy.policy_name,
         toDelete.name,
         toDelete.params
@@ -89,7 +89,7 @@ function AllocationPolicyConfigs(props: {
   function saveConfig(config: AllocationPolicyConfig) {
     api
       .setAllocationPolicyConfig(
-        storage,
+        entity,
         policy.policy_name,
         config.name,
         config.value,
