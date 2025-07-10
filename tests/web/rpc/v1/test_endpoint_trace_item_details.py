@@ -18,7 +18,10 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.v1.endpoint_trace_item_details import EndpointTraceItemDetails
+from snuba.web.rpc.v1.endpoint_trace_item_details import (
+    EndpointTraceItemDetails,
+    _convert_results,
+)
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -325,3 +328,36 @@ class TestTraceItemDetails(BaseApiTest):
             "str_tag",
         }:
             assert k in attributes_returned, k
+
+
+def test_convert_results_dedupes() -> None:
+    """
+    Makes sure that _convert_results dedupes int/bool and float
+    attributes. We store float versions of int and bool attributes
+    for computational reasons but we don't want to return the
+    duplicate float attrs to the user.
+    """
+    data = [
+        {
+            "timestamp": 1750964400,
+            "hex_item_id": "e70ef5b1b5bc4611840eff9964b7a767",
+            "trace_id": "cb190d6e7d5743d5bc1494c650592cd2",
+            "organization_id": 1,
+            "project_id": 1,
+            "item_type": 1,
+            "attributes_string": {
+                "relay_protocol_version": "3",
+                "sentry.segment_id": "30c64b1f21b54799",
+            },
+            "attributes_int": {"sentry.duration_ms": 152},
+            "attributes_float": {"sentry.is_segment": 1.0, "num_of_spans": 50.0},
+            "attributes_bool": {
+                "my.true.bool.field": True,
+                "sentry.is_segment": True,
+                "my.false.bool.field": False,
+            },
+        }
+    ]
+    _, _, attrs = _convert_results(data)
+    is_segment_attrs = list(filter(lambda x: x.name == "sentry.is_segment", attrs))
+    assert len(is_segment_attrs) == 1

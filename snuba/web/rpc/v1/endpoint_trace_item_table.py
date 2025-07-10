@@ -8,6 +8,8 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
+from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
+from snuba.state import get_int_config
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.proto_visitor import (
@@ -19,7 +21,14 @@ from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
     SparseAggregateAttributeTransformer,
 )
-from snuba.web.rpc.v1.visitors.visitor_v2 import RejectTimestampAsStringVisitor
+from snuba.web.rpc.v1.visitors.time_series_request_visitor import (
+    RejectTimestampAsStringVisitor,
+)
+from snuba.web.rpc.v1.visitors.trace_item_table_request_visitor import (
+    NormalizeFormulaLabelsVisitor,
+    SetAggregateLabelsVisitor,
+    SetColumnLabelsVisitor,
+)
 
 _GROUP_BY_DISALLOWED_COLUMNS = ["timestamp"]
 
@@ -74,8 +83,8 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
 
 
 def _validate_order_by(in_msg: TraceItemTableRequest) -> None:
-    order_by_cols = set([ob.column.label for ob in in_msg.order_by])
-    selected_columns = set([c.label for c in in_msg.columns])
+    order_by_cols = {ob.column.label for ob in in_msg.order_by if ob.column.label}
+    selected_columns = {c.label for c in in_msg.columns}
     if not order_by_cols.issubset(selected_columns):
         raise BadSnubaRPCRequestException(
             f"Ordered by columns {order_by_cols} not selected: {selected_columns}"
@@ -87,7 +96,16 @@ def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
     This function is for initial processing and transformation of the request after recieving it.
     It is similar to the query processor step of the snql pipeline.
     """
-    return SparseAggregateAttributeTransformer(request).transform()
+    request = SparseAggregateAttributeTransformer(request).transform()
+    if get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
+        # TODO: replace SetColumnLabelsVisitor with ValidateColumnLabelsVisitor currently blocked
+        # by sentry integration tests
+        SetColumnLabelsVisitor().visit(request)
+        # SetAggregateLabelsVisitor should come after ValidateColumnLabelsVisitor because it
+        # relies on the labels in the columns being set.
+        SetAggregateLabelsVisitor().visit(request)
+        NormalizeFormulaLabelsVisitor().visit(request)
+    return request
 
 
 class EndpointTraceItemTable(
@@ -136,4 +154,4 @@ class EndpointTraceItemTable(
         in_msg = _transform_request(in_msg)
 
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
-        return resolver.resolve(in_msg)
+        return resolver.resolve(in_msg, self.routing_decision)

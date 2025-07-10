@@ -1,6 +1,6 @@
 import os
 from bisect import bisect_left
-from typing import Generic, List, Tuple, Type, TypeVar, cast, final
+from typing import Generic, List, Tuple, Type, cast, final
 
 import sentry_sdk
 from google.protobuf.message import DecodeError
@@ -9,7 +9,8 @@ from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageCon
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
-from snuba import environment
+from snuba import environment, settings, state
+from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -19,14 +20,21 @@ from snuba.utils.registered_class import (
     import_submodules_in_directory,
 )
 from snuba.web import QueryException
+from snuba.web.rpc.common.common import Tin, Tout
 from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
-
-Tin = TypeVar("Tin", bound=ProtobufMessage)
-Tout = TypeVar("Tout", bound=ProtobufMessage)
+from snuba.web.rpc.storage_routing.defaults import get_default_routing_decision
+from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingContext,
+    RoutingDecision,
+)
+from snuba.web.rpc.storage_routing.routing_strategy_selector import (
+    RoutingStrategySelector,
+)
 
 _TIME_PERIOD_HOURS_BUCKETS = [
     1,
@@ -83,7 +91,7 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
             shape,
         )
 
-    def resolve(self, in_msg: Tin) -> Tout:
+    def resolve(self, in_msg: Tin, routing_decision: RoutingDecision) -> Tout:
         raise NotImplementedError
 
 
@@ -91,6 +99,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(self, metrics_backend: MetricsBackend | None = None) -> None:
         self._timer = Timer("endpoint_timing")
         self._metrics_backend = metrics_backend or environment.metrics
+        self.routing_decision = get_default_routing_decision(None)
 
     @classmethod
     def request_class(cls) -> Type[Tin]:
@@ -148,10 +157,19 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
+        self.routing_decision.routing_context = RoutingContext(
+            timer=self._timer, in_msg=in_msg
+        )
+
         self.__before_execute(in_msg)
         error = None
         try:
-            out = self._execute(in_msg)
+            if self.routing_decision.can_run:
+                with sentry_sdk.start_span(op="execute") as span:
+                    span.set_data("selected_tier", self.routing_decision.tier)
+                    out = self._execute(in_msg)
+            else:
+                raise AllocationPolicyViolations
         except QueryException as e:
             if (
                 "error_code" in e.extra["stats"]
@@ -190,6 +208,20 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def __before_execute(self, in_msg: Tin) -> None:
         self._timer.update_tags(self.__extract_request_tags(in_msg))
+
+        # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
+        # the result is currently not used in storage routing
+        # can turn off on Snuba Admin
+        if state.get_config("storage_routing.enable_get_cluster_loadinfo", True):
+            get_cluster_loadinfo()
+
+        selected_strategy = RoutingStrategySelector().select_routing_strategy(
+            self.routing_decision.routing_context
+        )
+        self.routing_decision.strategy = selected_strategy
+        self.routing_decision = selected_strategy.get_routing_decision(
+            self.routing_decision.routing_context
+        )
         self._timer.mark("rpc_start")
         self._before_execute(in_msg)
 
@@ -237,6 +269,12 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self, in_msg: Tin, out_msg: Tout, error: Exception | None
     ) -> Tout:
         res = self._after_execute(in_msg, out_msg, error)
+        output_metrics_error = None
+        try:
+            self.routing_decision.strategy.output_metrics(self.routing_decision)
+        except Exception as e:
+            output_metrics_error = e
+
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
@@ -244,6 +282,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             if isinstance(error, BadSnubaRPCRequestException):
                 self.metrics.increment(
                     "request_invalid",
+                    tags=self._timer.tags,
+                )
+            elif isinstance(error, AllocationPolicyViolations):
+                self.metrics.increment(
+                    "request_rate_limited",
                     tags=self._timer.tags,
                 )
             else:
@@ -257,6 +300,15 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 "request_success",
                 tags=self._timer.tags,
             )
+
+        if output_metrics_error is not None:
+            self.metrics.increment("metrics_failure")
+            sentry_sdk.capture_message(
+                f"Error in routing strategy output metrics: {output_metrics_error}"
+            )
+            if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
+                raise output_metrics_error
+
         return res
 
     def _after_execute(
@@ -296,7 +348,6 @@ def run_rpc_handler(
                 message=f"endpoint {name} with version {version} does not exist (did you use the correct version and capitalization?) {e}",
             )
         )
-
     try:
         deserialized_protobuf = endpoint.parse_from_string(data)
     except DecodeError as e:

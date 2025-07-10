@@ -217,6 +217,31 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                     f"--log-level={log_level}",
                 ],
             ),
+            (
+                "subscriptions-scheduler-eap-items",
+                [
+                    "snuba",
+                    "subscriptions-scheduler",
+                    "--entity=eap_items",
+                    "--consumer-group=snuba-eap_items-subscriptions-scheduler",
+                    "--followed-consumer-group=eap_items_group",
+                    "--auto-offset-reset=latest",
+                    f"--log-level={log_level}",
+                    "--schedule-ttl=10",
+                ],
+            ),
+            (
+                "subscriptions-executor-eap-items",
+                [
+                    "snuba",
+                    "subscriptions-executor",
+                    "--dataset=events_analytics_platform",
+                    "--entity=eap_items_span",
+                    "--consumer-group=snuba-eap_items-subscription-executor",
+                    "--auto-offset-reset=latest",
+                    f"--log-level={log_level}",
+                ],
+            ),
         ]
 
     else:
@@ -262,6 +287,22 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                     "--entity=eap_items_span",
                     "--consumer-group=snuba-eap_spans-subscription-executor",
                     "--followed-consumer-group=eap_items_span_group",
+                    "--auto-offset-reset=latest",
+                    "--no-strict-offset-reset",
+                    f"--log-level={log_level}",
+                    "--schedule-ttl=10",
+                    "--stale-threshold-seconds=900",
+                ],
+            ),
+            (
+                "subscriptions-scheduler-executor-eap-items",
+                [
+                    "snuba",
+                    "subscriptions-scheduler-executor",
+                    "--dataset=events_analytics_platform",
+                    "--entity=eap_items",
+                    "--consumer-group=snuba-eap_items-subscriptions-scheduler",
+                    "--followed-consumer-group=eap_items_group",
                     "--auto-offset-reset=latest",
                     "--no-strict-offset-reset",
                     f"--log-level={log_level}",

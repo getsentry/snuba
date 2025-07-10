@@ -16,7 +16,9 @@ from snuba.web.rpc.proto_visitor import (
     TimeSeriesRequestWrapper,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
-from snuba.web.rpc.v1.visitors.visitor_v2 import preprocess_expression_labels
+from snuba.web.rpc.v1.visitors.time_series_request_visitor import (
+    preprocess_expression_labels,
+)
 
 _VALID_GRANULARITY_SECS = set(
     [
@@ -37,8 +39,8 @@ _VALID_GRANULARITY_SECS = set(
     ]
 )
 
-# MAX 15 minute granularity over 28 days
-_MAX_BUCKETS_IN_REQUEST = 2688
+# MAX 15 minute granularity over 28 days (2688 buckets) + 1 bucket to allow for partial time buckets on
+_MAX_BUCKETS_IN_REQUEST = 2689
 
 
 def _enforce_no_duplicate_labels(request: TimeSeriesRequest) -> None:
@@ -135,4 +137,4 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         in_msg_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
         preprocess_expression_labels(in_msg)
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
-        return resolver.resolve(in_msg)
+        return resolver.resolve(in_msg, self.routing_decision)

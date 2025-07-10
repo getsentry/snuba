@@ -4,14 +4,16 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Tuple
 
 import sentry_sdk
+from google.protobuf.message import Message as ProtobufMessage
 
+from snuba import settings
 from snuba.state import get_config
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.linear_bytes_scanned_storage_routing import (
-    LinearBytesScannedRoutingStrategy,
+from snuba.web.rpc.storage_routing.common import extract_message_meta
+from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
+    OutcomesBasedRoutingStrategy,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.storage_routing.routing_strategies.storage_routing import (
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
-    RoutedRequestType,
     RoutingContext,
 )
 
@@ -86,9 +88,10 @@ _DEFAULT_STORAGE_ROUTING_CONFIG = StorageRoutingConfig(
 
 class RoutingStrategySelector:
     def get_storage_routing_config(
-        self, in_msg: RoutedRequestType
+        self, in_msg: ProtobufMessage
     ) -> StorageRoutingConfig:
-        organization_id = str(in_msg.meta.organization_id)
+        in_msg_meta = extract_message_meta(in_msg)
+        organization_id = str(in_msg_meta.organization_id)
         try:
             overrides = json.loads(
                 str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}"))
@@ -105,20 +108,27 @@ class RoutingStrategySelector:
     def select_routing_strategy(
         self, routing_context: RoutingContext
     ) -> BaseRoutingStrategy:
-        combined_org_and_project_ids = f"{routing_context.in_msg.meta.organization_id}:{'.'.join(str(pid) for pid in sorted(routing_context.in_msg.meta.project_ids))}"
-        bucket = (
-            int(hashlib.md5(combined_org_and_project_ids.encode()).hexdigest(), 16)
-            % _NUM_BUCKETS
-        )
-        config = self.get_storage_routing_config(routing_context.in_msg)
-        cumulative_buckets = 0.0
-        for (
-            strategy_name,
-            percentage,
-        ) in config.get_routing_strategy_and_percentage_routed():
-            cumulative_buckets += percentage * _NUM_BUCKETS
-            if bucket < cumulative_buckets:
-                return BaseRoutingStrategy.get_from_name(strategy_name)()
+        try:
+            in_msg_meta = extract_message_meta(routing_context.in_msg)
+            combined_org_and_project_ids = f"{in_msg_meta.organization_id}:{'.'.join(str(pid) for pid in sorted(in_msg_meta.project_ids))}"
+            bucket = (
+                int(hashlib.md5(combined_org_and_project_ids.encode()).hexdigest(), 16)
+                % _NUM_BUCKETS
+            )
+            config = self.get_storage_routing_config(routing_context.in_msg)
+            cumulative_buckets = 0.0
+            for (
+                strategy_name,
+                percentage,
+            ) in config.get_routing_strategy_and_percentage_routed():
+                cumulative_buckets += percentage * _NUM_BUCKETS
+                if bucket < cumulative_buckets:
+                    return BaseRoutingStrategy.get_from_name(strategy_name)()
+        except Exception as e:
+            if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
+                raise e
+            sentry_sdk.capture_message(f"Error selecting routing strategy: {e}")
+            return OutcomesBasedRoutingStrategy()
 
         # this should never happen because the percentages were validated in StorageRoutingConfig.from_json
-        return LinearBytesScannedRoutingStrategy()
+        return OutcomesBasedRoutingStrategy()

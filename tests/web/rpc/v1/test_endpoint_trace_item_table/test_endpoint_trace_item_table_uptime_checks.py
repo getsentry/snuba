@@ -174,7 +174,9 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             page_token=PageToken(offset=10),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -253,7 +255,9 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             page_token=PageToken(offset=10),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
