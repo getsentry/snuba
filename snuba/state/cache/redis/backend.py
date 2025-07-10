@@ -1,6 +1,9 @@
 import logging
 from typing import Callable, Optional
 
+import sentry_sdk
+
+from redis import RedisError
 from redis.exceptions import ConnectionError, ReadOnlyError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from snuba import environment, settings
@@ -74,11 +77,16 @@ class RedisCache(Cache[TValue]):
         else:
             try:
                 value = function()
-                self.__client.set(
-                    result_key,
-                    self.__codec.encode(value),
-                    ex=get_config("cache_expiry_sec", 1),
-                )
+                try:
+                    self.__client.set(
+                        result_key,
+                        self.__codec.encode(value),
+                        ex=get_config("cache_expiry_sec", 1),
+                    )
+                except RedisError as e:
+                    metrics.increment("redis_cache_set_error", tags=metric_tags)
+                    sentry_sdk.capture_exception(e)
+                    return value
                 record_cache_hit_type(RESULT_EXECUTE)
                 if timer is not None:
                     timer.mark("cache_set")

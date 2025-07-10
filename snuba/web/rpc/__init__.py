@@ -157,7 +157,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
-        self.routing_context = RoutingContext(timer=self._timer, in_msg=in_msg)
+        self.routing_decision.routing_context = RoutingContext(
+            timer=self._timer, in_msg=in_msg
+        )
 
         self.__before_execute(in_msg)
         error = None
@@ -218,7 +220,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         )
         self.routing_decision.strategy = selected_strategy
         self.routing_decision = selected_strategy.get_routing_decision(
-            self.routing_context
+            self.routing_decision.routing_context
         )
         self._timer.mark("rpc_start")
         self._before_execute(in_msg)

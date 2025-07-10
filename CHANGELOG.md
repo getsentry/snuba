@@ -1,5 +1,37 @@
 # Changelog
 
+## 25.6.2
+
+### Various fixes & improvements
+
+- chore(consumers): bump statsdproxy (#7256) by @lcian
+- feat: enable reliability of formulas to be returned in trace_item_table endpoint (#7226) by @kylemumma
+- fix(TraceItemsDetails): dedupe int,bool and float attrs (#7260) by @MeredithAnya
+- remove sentry logging (#7263) by @MeredithAnya
+- chore(traces): Remove standalone spans condition (#7257) by @Zylphrex
+- fix(ci): Tag snuba docker images using PR commit shas (#7259) by @hubertdeng123
+- feat(logs): Add support for creating logs subscriptions (#7261) by @shruthilayaj
+- feat: open fail for snuba cache write failures (#7255) by @kylemumma
+- feat(consumers): Re-implement batching consumer (#7248) by @volokluev
+- Revert "chore(consumers): Bump statsdproxy (#7251)" (889d1e26) by @getsentry-bot
+- chore(consumers): Bump statsdproxy (#7251) by @lcian
+- ci: acquire docker image from ghcr for release (#7245) by @aldy505
+- ref: bump sentry-protos to 0.3.0 (#7249) by @getsentry-bot
+- ref: bump sentry-protos to 0.2.1 (#7247) by @getsentry-bot
+- fix(cbrs): set request in routing decision (#7241) by @xurui-c
+- chore(eap-timeseries): Bump max allowed bucktes by 1 (DAIN-667) (#7246) by @shruthilayaj
+- chore(devservices): Bump devservices to 1.2.1 (#7244) by @hubertdeng123
+- meta: Bump new development version (2aee9c59)
+
+## 25.6.1
+
+### Various fixes & improvements
+
+- feat(capman): Fix model ID for workflow querying referrer (#7243) by @kcons
+- Revert "feat(capman): Fix model ID for workflow querying referrer (#7239)" (b8889e71) by @getsentry-bot
+- feat(capman): Fix model ID for workflow querying referrer (#7239) by @kcons
+- meta: Bump new development version (57f19402)
+
 ## 25.6.0
 
 ### Various fixes & improvements

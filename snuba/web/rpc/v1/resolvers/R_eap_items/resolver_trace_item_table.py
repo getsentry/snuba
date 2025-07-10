@@ -34,6 +34,8 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
+from snuba.state import get_int_config
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
@@ -195,7 +197,31 @@ def _get_reliability_context_columns(
     """
     extrapolated aggregates need to request extra columns to calculate the reliability of the result.
     this function returns the list of columns that need to be requested.
+
+    If alias_prefix is provided, it will be prepended to the alias of the returned columns.
     """
+
+    if column.HasField("formula"):
+        if not get_int_config(
+            "enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT
+        ):
+            return []
+        # also query for the left and right parts of the formula separately
+        # this will be used later to calculate the reliability of the formula
+        # ex: SELECT agg1/agg2 will become SELECT agg1/agg2, agg1, agg2
+        context_cols = []
+        for col in [column.formula.left, column.formula.right]:
+            if not col.HasField("formula"):
+                context_cols.append(
+                    SelectedExpression(
+                        name=col.label,
+                        expression=_column_to_expression(col, request_meta),
+                    )
+                )
+            context_cols.extend(_get_reliability_context_columns(col, request_meta))
+
+        return context_cols
+
     if not (column.HasField("conditional_aggregation")):
         return []
 
@@ -220,15 +246,16 @@ def _get_reliability_context_columns(
             column.conditional_aggregation,
             attribute_key_to_expression_eap_items,
         )
-        count_column = get_count_column(
-            column.conditional_aggregation,
-            attribute_key_to_expression_eap_items,
-        )
         context_columns.append(
             SelectedExpression(
                 name=average_sample_rate_column.alias,
                 expression=average_sample_rate_column,
             )
+        )
+
+        count_column = get_count_column(
+            column.conditional_aggregation,
+            attribute_key_to_expression_eap_items,
         )
         context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
