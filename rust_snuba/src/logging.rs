@@ -9,12 +9,13 @@ pub fn setup_logging() {
         .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
 
-    // Capture errors & warnings as exceptions
+    // Capture errors & warnings as exceptions, and also send everything at or above INFO as logs
+    // instead of breadcrumbs.
     let sentry_layer =
-        sentry::integrations::tracing::layer().event_filter(|metadata| match metadata.level() {
-            &Level::ERROR | &Level::WARN => EventFilter::Exception,
-            &Level::INFO => EventFilter::Breadcrumb,
-            &Level::DEBUG | &Level::TRACE => EventFilter::Ignore,
+        sentry::integrations::tracing::layer().event_filter(|metadata| match *metadata.level() {
+            Level::ERROR | Level::WARN => EventFilter::Event | EventFilter::Log,
+            Level::INFO => EventFilter::Log,
+            Level::DEBUG | Level::TRACE => EventFilter::Ignore,
         });
 
     tracing_subscriber::registry()
@@ -31,6 +32,7 @@ pub fn setup_sentry(sentry_dsn: &str) -> ClientInitGuard {
             // the value for release is also computed in python snuba, please keep the
             // logic in sync
             release: std::env::var("SNUBA_RELEASE").ok().map(From::from),
+            enable_logs: true,
             ..Default::default()
         },
     ))
