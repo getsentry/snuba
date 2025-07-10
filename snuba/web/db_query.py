@@ -39,7 +39,6 @@ from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.querylog.query_metadata import (
-    SLO,
     ClickhouseQueryMetadata,
     QueryStatus,
     RequestStatus,
@@ -502,9 +501,6 @@ def _raw_query(
             status = QueryStatus.TIMEOUT
         elif isinstance(cause, ExecutionTimeoutError):
             status = QueryStatus.TIMEOUT
-
-        if request_status.slo == SLO.AGAINST:
-            logger.exception("Error running query: %s\n%s", sql, cause)
 
         with configure_scope() as scope:
             if scope.span:
