@@ -1,6 +1,6 @@
 #!/bin/bash
 
-/devinfra/scripts/checks/githubactions/checkruns.py \
+checks-githubactions-checkruns \
   --timeout-mins 60 \
   getsentry/snuba \
   ${GO_REVISION_SNUBA_REPO} \

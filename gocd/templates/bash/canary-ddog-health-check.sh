@@ -1,6 +1,6 @@
 #!/bin/bash
 
-/devinfra/scripts/checks/datadog/monitor_status.py \
+checks-datadog-monitor-status \
   140973101
 
 
