@@ -351,7 +351,9 @@ SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV = os.environ.get(
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 # (entity name, buffer size)
-SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}
+SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {
+    "eap_items": 4,
+}
 
 # Enable profiles ingestion
 ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
