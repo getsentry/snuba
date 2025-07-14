@@ -519,7 +519,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         elif request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
             item_type = request.meta.trace_item_type
         else:
-            raise BadSnubaRPCRequestException("No item type specified")
+            item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
 
         trace_item_filters_expression = trace_item_filters_to_expression(
             TraceItemFilter(
@@ -599,6 +599,10 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             trace_item_filters_expression = filter_expressions_by_item_type[
                 request.meta.trace_item_type
             ]
+        elif len(filter_expressions_by_item_type) == 1:
+            trace_item_filters_expression = next(
+                iter(filter_expressions_by_item_type.values())
+            )
         elif len(filter_expressions_by_item_type) > 1:
             trace_item_filters_expression = or_cond(
                 *[expression for expression in filter_expressions_by_item_type.values()]

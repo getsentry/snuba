@@ -646,6 +646,9 @@ class TestGetTraces(BaseApiTest):
         ):
             EndpointGetTraces().execute(message)
 
+    def test_with_data_and_cross_event_query(self, setup_teardown: Any) -> None:
+        pass
+
 
 def generate_spans(spans_data: list[bytes]) -> list[TraceItem]:
     spans: list[TraceItem] = []
