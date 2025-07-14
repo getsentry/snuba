@@ -1,7 +1,7 @@
 #!/bin/bash
 
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
-/devinfra/scripts/k8s/k8stunnel
+/devinfra/scripts/get-cluster-credentials
 
 k8s-spawn-job \
   --label-selector="service=${SNUBA_SERVICE_NAME}" \

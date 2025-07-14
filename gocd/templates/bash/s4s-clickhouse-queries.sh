@@ -19,7 +19,7 @@ SNUBA_COMPONENT_NAME="query-${SNUBA_CMD_TYPE}-gocd"
 SNUBA_CMD="query-${SNUBA_CMD_TYPE} ${ARGS[@]}"
 
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
-/devinfra/scripts/k8s/k8stunnel
+/devinfra/scripts/get-cluster-credentials
 
 k8s-spawn-job \
   --label-selector="service=snuba,component=${SNUBA_COMPONENT_NAME}" \
