@@ -1,7 +1,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
-use sentry_arroyo::gauge;
 use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use sentry_arroyo::{counter, gauge};
 use std::mem;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::{channel, Sender};
@@ -148,6 +148,7 @@ impl BatchFactory {
                 if !response.status().is_success() {
                     let status = response.status();
                     let body = response.text().await;
+                    counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status.to_string());
                     anyhow::bail!(
                         "bad response while inserting rows, status: {}, response body: {:?}",
                         status,

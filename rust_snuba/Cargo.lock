@@ -3558,9 +3558,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_arroyo"
-version = "2.25.0"
+version = "2.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3c26499a688f5faf0d434aee9d2de16d52a7c90e0ee4a7f65dbb20acf85dfdf"
+checksum = "e9556aa8820b4e81f28ca6490a9e31d87699f945eee380202d9c88a896205078"
 dependencies = [
  "chrono",
  "coarsetime",
@@ -3568,7 +3568,7 @@ dependencies = [
  "parking_lot",
  "rand 0.8.5",
  "rdkafka 0.37.0",
- "sentry",
+ "sentry-core",
  "serde",
  "serde_json",
  "thiserror",

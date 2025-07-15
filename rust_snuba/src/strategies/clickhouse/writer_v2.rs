@@ -172,6 +172,7 @@ impl ClickhouseClient {
             .await?;
 
         if res.status() != reqwest::StatusCode::OK {
+            counter!("rust_consumer.clickhouse_insert_error", 1, "status" => res.status().to_string());
             anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
         }
 

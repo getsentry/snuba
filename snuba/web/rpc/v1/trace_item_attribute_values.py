@@ -35,12 +35,12 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression_eap_items,
+    attribute_key_to_expression,
 )
 
 
 def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
-    attribute_key = attribute_key_to_expression_eap_items(request.key)
+    attribute_key = attribute_key_to_expression(request.key)
 
     conditions: list[Expression] = [
         f.has(
@@ -94,7 +94,7 @@ def _build_query(
         schema=get_entity(entity_key).get_data_model(),
         sample=None,
     )
-    attr_value = attribute_key_to_expression_eap_items(request.key)
+    attr_value = attribute_key_to_expression(request.key)
     assert attr_value.alias
     inner_query = Query(
         from_clause=entity,

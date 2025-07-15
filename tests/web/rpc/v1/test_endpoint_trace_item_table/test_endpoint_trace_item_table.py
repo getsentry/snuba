@@ -3200,6 +3200,53 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    def test_coalesce_attributes(self) -> None:
+        span_ts = BASE_TIME + timedelta(minutes=1)
+
+        # we write the old attribute name
+        write_eap_item(span_ts, {"ai.model_id": "sentaur"})
+
+        # we query and filter on the new attribute name
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING,
+                        name="gen_ai.response.model",
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="sentaur"),
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING,
+                        name="gen_ai.response.model",
+                    )
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="gen_ai.response.model",
+                results=[
+                    AttributeValue(val_str="sentaur"),
+                ],
+            ),
+        ]
+
 
 class TestUtils:
     def test_apply_labels_to_columns_backward_compat(self) -> None:
