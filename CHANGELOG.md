@@ -1,5 +1,21 @@
 # Changelog
 
+## 25.7.0
+
+### Various fixes & improvements
+
+- obs(consumers): Emit a metric when a write to clickouse fails (#7276) by @volokluev
+- fix(manual_jobs): use a redis pipeline instead of mget for manual jobs (#7230) by @volokluev
+- feat(eap): Allow to coalesce specific attributes (#7272) by @phacops
+- ref(deps): Bump arroyo to 2.27.0 (#7270) by @untitaker
+- feat(attributes): add sampling to autocomplete (#7267) by @volokluev
+- Revert "feat(eap): Allow to coalesce specific attributes (#7269)" (beabc915) by @getsentry-bot
+- feat(eap): Allow to coalesce specific attributes (#7269) by @phacops
+- Revert "Use v2 consumer everywhere (#7262)" (a5740c8b) by @getsentry-bot
+- Use v2 consumer everywhere (#7262) by @volokluev
+- chore(consumers): Bump Rust toolchain version (#7252) by @lcian
+- meta: Bump new development version (5451c41d)
+
 ## 25.6.2
 
 ### Various fixes & improvements
