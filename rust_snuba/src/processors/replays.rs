@@ -1,6 +1,7 @@
 use crate::config::ProcessorConfig;
 use anyhow::{anyhow, Context};
 use chrono::DateTime;
+use sentry::{add_breadcrumb, Breadcrumb, Level};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -184,17 +185,24 @@ pub fn deserialize_message(
             }]
         }
         ReplayPayload::EventLinkEvent(event) => {
-            event
+            let result = event
                 .debug_id
                 .or(event.error_id)
                 .or(event.fatal_id)
                 .or(event.info_id)
                 .or(event.warning_id)
-                .ok_or(anyhow!(
-                    "missing level id {} {}",
-                    replay_message.project_id,
-                    event.event_hash
-                ))?;
+                .ok_or(anyhow!("missing level id"));
+            if result.is_err() {
+                add_breadcrumb(Breadcrumb {
+                    category: Some("meta".into()),
+                    message: Some(format!(
+                        "Project id: {}\nEvent Hash: {}",
+                        replay_message.project_id, event.event_hash
+                    )),
+                    level: Level::Info,
+                    ..Default::default()
+                });
+            }
 
             vec![ReplayRow {
                 debug_id: event.debug_id.unwrap_or_default(),
