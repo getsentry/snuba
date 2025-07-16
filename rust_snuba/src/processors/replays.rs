@@ -1,7 +1,6 @@
 use crate::config::ProcessorConfig;
 use anyhow::{anyhow, Context};
 use chrono::DateTime;
-use sentry::{add_breadcrumb, Breadcrumb, Level};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -193,15 +192,11 @@ pub fn deserialize_message(
                 .or(event.warning_id)
                 .ok_or(anyhow!("missing level id"));
             if result.is_err() {
-                add_breadcrumb(Breadcrumb {
-                    category: Some("meta".into()),
-                    message: Some(format!(
-                        "Project id: {}\nEvent Hash: {}",
-                        replay_message.project_id, event.event_hash
-                    )),
-                    level: Level::Info,
-                    ..Default::default()
-                });
+                tracing::info!(
+                    "Project: {}, Event Hash: {}",
+                    replay_message.project_id,
+                    event.event_hash
+                );
             }
 
             vec![ReplayRow {
