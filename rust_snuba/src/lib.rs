@@ -1,6 +1,7 @@
 mod config;
 mod consumer;
 mod factory;
+mod factory_v2;
 mod logging;
 mod metrics;
 mod processors;
@@ -27,6 +28,7 @@ pub use config::{
     StorageConfig, TopicConfig,
 };
 pub use factory::ConsumerStrategyFactory;
+pub use factory_v2::ConsumerStrategyFactoryV2;
 pub use metrics::statsd::StatsDBackend;
 pub use processors::{ProcessingFunction, ProcessingFunctionType, PROCESSORS};
 pub use strategies::noop::Noop;

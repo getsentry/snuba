@@ -306,6 +306,83 @@ class TestTraceItemTable(BaseApiTest):
             error_proto.ParseFromString(response.data)
         assert response.status_code == 400, error_proto
 
+    def test_invalid_orderby_label(self, setup_teardown: Any) -> None:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name")
+                )
+            ],
+            order_by=[TraceItemTableRequest.OrderBy(column=Column(label="some_label"))],
+        )
+        with pytest.raises(BadSnubaRPCRequestException) as excinfo:
+            EndpointTraceItemTable().execute(message)
+        assert (
+            str(excinfo.value)
+            == "Ordered by columns {'some_label'} not selected: {'server_name'}"
+        )
+
+    def test_with_orderby_label(self, setup_teardown: Any) -> None:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name")
+                )
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(column=Column(label="server_name"))
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        expected_response = TraceItemTableResponse(
+            column_values=[
+                TraceItemColumnValues(
+                    attribute_name="server_name",
+                    results=[
+                        AttributeValue(val_str=SERVER_NAME) for _ in range(_SPAN_COUNT)
+                    ],
+                )
+            ],
+            page_token=PageToken(offset=_SPAN_COUNT),
+            meta=ResponseMeta(
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                downsampled_storage_meta=DownsampledStorageMeta(
+                    can_go_to_higher_accuracy_tier=False,
+                ),
+            ),
+        )
+        assert MessageToDict(response) == MessageToDict(expected_response)
+
     def test_with_data(self, setup_teardown: Any) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -3119,6 +3196,53 @@ class TestTraceItemTable(BaseApiTest):
                     AttributeValue(val_double=0.0),
                     AttributeValue(val_double=5),
                     AttributeValue(val_double=inf),
+                ],
+            ),
+        ]
+
+    def test_coalesce_attributes(self) -> None:
+        span_ts = BASE_TIME + timedelta(minutes=1)
+
+        # we write the old attribute name
+        write_eap_item(span_ts, {"ai.model_id": "sentaur"})
+
+        # we query and filter on the new attribute name
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING,
+                        name="gen_ai.response.model",
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="sentaur"),
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING,
+                        name="gen_ai.response.model",
+                    )
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="gen_ai.response.model",
+                results=[
+                    AttributeValue(val_str="sentaur"),
                 ],
             ),
         ]

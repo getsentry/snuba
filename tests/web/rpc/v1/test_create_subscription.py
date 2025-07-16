@@ -284,3 +284,64 @@ class TestCreateSubscriptionApi(BaseApiTest):
         error = Error()
         error.ParseFromString(response.data)
         assert error_message in error.message
+
+    def test_create_valid_logs_subscription(self) -> None:
+        message = CreateSubscriptionRequest(
+            time_series_request=TimeSeriesRequest(
+                meta=RequestMeta(
+                    project_ids=[1],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                ),
+                aggregations=[
+                    AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                        ),
+                        label="sum",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    ),
+                ],
+                granularity_secs=300,
+            ),
+            time_window_secs=300,
+            resolution_secs=60,
+        )
+        response = self.app.post(
+            "/rpc/CreateSubscriptionRequest/v1", data=message.SerializeToString()
+        )
+
+        assert response.status_code == 200
+
+        response_class = CreateSubscriptionResponse()
+        response_class.ParseFromString(response.data)
+
+        assert response_class.subscription_id
+
+        partition = int(response_class.subscription_id.split("/", 1)[0])
+        rpc_subscription_data = list(
+            RedisSubscriptionDataStore(
+                get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+                EntityKey(
+                    "eap_items"
+                ),  # Logs subscriptions always get created in eap_items
+                PartitionId(partition),
+            ).all()
+        )[0][1]
+
+        assert isinstance(rpc_subscription_data, RPCSubscriptionData)
+
+        request_class = TimeSeriesRequest()
+        request_class.ParseFromString(
+            base64.b64decode(rpc_subscription_data.time_series_request)
+        )
+
+        assert request_class.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG
+
+        assert rpc_subscription_data.time_window_sec == 300
+        assert rpc_subscription_data.resolution_sec == 60
+        assert rpc_subscription_data.request_name == "TimeSeriesRequest"
+        assert rpc_subscription_data.request_version == "v1"

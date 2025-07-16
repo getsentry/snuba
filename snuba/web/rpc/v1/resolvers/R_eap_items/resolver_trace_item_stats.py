@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     TraceItemStatsResponse,
     TraceItemStatsResult,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -35,7 +35,6 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.utils.constants import ATTRIBUTE_BUCKETS_EAP_ITEMS
-from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     base_conditions_and,
@@ -47,9 +46,12 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS,
-    attribute_key_to_expression_eap_items,
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
+)
+from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
+from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
+    attribute_key_to_expression,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -59,12 +61,28 @@ DEFAULT_BUCKETS = 10
 
 COUNT_LABEL = "count()"
 
+# These are attributes that were not stored in attr_str_ or attr_num_ in eap_spans because they were stored in columns.
+# Since we store these in the attribute columns in eap_items, we need to exclude them in endpoints that don't expect them to be in the attribute columns.
+ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS: set[str] = {
+    "sentry.raw_description",
+    "sentry.transaction",
+    "sentry.start_timestamp_precise",
+    "sentry.end_timestamp_precise",
+    "sentry.duration_ms",
+    "sentry.event_id",
+    "sentry.exclusive_time_ms",
+    "sentry.is_segment",
+    "sentry.parent_span_id",
+    "sentry.profile_id",
+    "sentry.received",
+    "sentry.segment_id",
+}
+
 
 def _transform_results(
     results: Iterable[Dict[str, Any]],
     request_meta: RequestMeta,
 ) -> Iterable[AttributeDistribution]:
-
     # Maintain the order of keys, so it is in descending order
     # of most prevelant key-value pair.
     res: OrderedDict[Tuple[str, str], AttributeDistribution] = OrderedDict()
@@ -83,11 +101,15 @@ def _transform_results(
 
 
 def _build_attr_distribution_snuba_request(
-    request: TraceItemStatsRequest, query: Query
+    request: TraceItemStatsRequest, query: Query, routing_decision: RoutingDecision
 ) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
+    routing_decision.strategy.merge_clickhouse_settings(
+        routing_decision, query_settings
+    )
+    query_settings.set_sampling_tier(routing_decision.tier)
 
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
@@ -158,7 +180,7 @@ def _build_attr_distribution_query(
 
     trace_item_filters_expression = trace_item_filters_to_expression(
         in_msg.filter,
-        (attribute_key_to_expression_eap_items),
+        (attribute_key_to_expression),
     )
 
     query = Query(
@@ -204,11 +226,15 @@ def _build_attr_distribution_query(
     return query
 
 
-class ResolverTraceItemStatsEAPItems:
+class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
+    @classmethod
+    def trace_item_type(cls) -> TraceItemType.ValueType:
+        return TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+
     def resolve(
         self,
         in_msg: TraceItemStatsRequest,
-        timer: Timer,
+        routing_decision: RoutingDecision,
     ) -> TraceItemStatsResponse:
         results = []
         for requested_type in in_msg.stats_types:
@@ -223,13 +249,16 @@ class ResolverTraceItemStatsEAPItems:
                     in_msg, requested_type.attribute_distributions
                 )
                 treeify_or_and_conditions(query)
-                snuba_request = _build_attr_distribution_snuba_request(in_msg, query)
+                snuba_request = _build_attr_distribution_snuba_request(
+                    in_msg, query, routing_decision
+                )
 
                 query_res = run_query(
                     dataset=PluggableDataset(name="eap", all_entities=[]),
                     request=snuba_request,
-                    timer=timer,
+                    timer=self._timer,
                 )
+                routing_decision.routing_context.query_result = query_res
 
                 attributes = _transform_results(
                     query_res.result.get("data", []), in_msg.meta
@@ -244,7 +273,7 @@ class ResolverTraceItemStatsEAPItems:
             in_msg.meta.request_id,
             in_msg.meta.debug,
             [],
-            [timer],
+            [self._timer],
         )
 
         return TraceItemStatsResponse(
