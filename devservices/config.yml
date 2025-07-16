@@ -76,7 +76,7 @@ services:
     restart: unless-stopped
 
   snuba:
-    image: ghcr.io/getsentry/snuba-ci:refs-pull-7233-merge
+    image: ghcr.io/getsentry/snuba-ci:latest
     ports:
       - 127.0.0.1:1218:1218
       - 127.0.0.1:1219:1219
