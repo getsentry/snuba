@@ -28,10 +28,8 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
 
     if bootstrap:
         cmd = ["snuba", "bootstrap", "--force", "--no-migrate"]
-        if not workers:
-            cmd.append("--no-kafka")
         returncode = call(cmd)
-        if returncode > 0:
+        if returncode > 0 and workers:
             sys.exit(returncode)
 
         # Run migrations
