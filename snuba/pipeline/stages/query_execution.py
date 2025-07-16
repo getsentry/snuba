@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import textwrap
+from collections import defaultdict
 from dataclasses import replace
 from math import floor
 from typing import Any, MutableMapping, Optional
@@ -148,23 +149,13 @@ def _run_and_apply_column_names(
         cluster_name,
     )
 
-    alias_name_mapping: MutableMapping[str, list[str]] = {}
+    alias_name_mapping: MutableMapping[str, list[str]] = defaultdict(list)
     for select_col in clickhouse_query.get_selected_columns():
         alias = select_col.expression.alias
         name = select_col.name
-        if alias is None or name is None:
-            logger.warning(
-                "Missing alias or name for selected expression",
-                extra={
-                    "selected_expression_name": name,
-                    "selected_expression_alias": alias,
-                },
-                exc_info=True,
-            )
-        elif alias in alias_name_mapping and name not in alias_name_mapping[alias]:
-            alias_name_mapping[alias].append(name)
-        else:
-            alias_name_mapping[alias] = [name]
+        if alias is None or name is None or name in alias_name_mapping[alias]:
+            continue
+        alias_name_mapping[alias].append(name)
 
     transform_column_names(result, alias_name_mapping)
     return result
