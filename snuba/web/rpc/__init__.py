@@ -22,9 +22,9 @@ from snuba.utils.registered_class import (
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import Tin, Tout
 from snuba.web.rpc.common.exceptions import (
-    BadSnubaRPCRequestException,
     RPCRequestException,
     convert_rpc_exception_to_proto,
+    is_400,
 )
 from snuba.web.rpc.storage_routing.defaults import get_default_routing_decision
 from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
@@ -278,18 +278,19 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            sentry_sdk.capture_exception(error)
-            if isinstance(error, BadSnubaRPCRequestException):
+            if isinstance(error, RPCRequestException) and is_400(error.status_code):
                 self.metrics.increment(
                     "request_invalid",
                     tags=self._timer.tags,
                 )
             elif isinstance(error, AllocationPolicyViolations):
+                sentry_sdk.capture_exception(error)
                 self.metrics.increment(
                     "request_rate_limited",
                     tags=self._timer.tags,
                 )
             else:
+                sentry_sdk.capture_exception(error)
                 self.metrics.increment(
                     "request_error",
                     tags=self._timer.tags,

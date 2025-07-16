@@ -29,3 +29,10 @@ def convert_rpc_exception_to_proto(
         inferred_status = 429
 
     return ErrorProto(code=inferred_status, message=str(exc))
+
+
+def is_400(status_code: int) -> bool:
+    """
+    Returns True iff the status code is a 4xx error.
+    """
+    return int(status_code / 100) == 4
