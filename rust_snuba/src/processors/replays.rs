@@ -184,16 +184,17 @@ pub fn deserialize_message(
             }]
         }
         ReplayPayload::EventLinkEvent(event) => {
-            let level_id = event
+            event
                 .debug_id
                 .or(event.error_id)
                 .or(event.fatal_id)
                 .or(event.info_id)
                 .or(event.warning_id)
-                .unwrap_or_default();
-            if level_id.is_nil() {
-                return Err(anyhow!("missing level id"));
-            }
+                .ok_or(anyhow!(
+                    "missing level id {} {}",
+                    replay_message.project_id,
+                    event.event_hash
+                ))?;
 
             vec![ReplayRow {
                 debug_id: event.debug_id.unwrap_or_default(),
