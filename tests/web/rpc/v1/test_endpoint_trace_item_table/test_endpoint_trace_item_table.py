@@ -3322,7 +3322,7 @@ class TestUtils:
         assert message.columns[1].label == "avg(custom_measurement_2)"
 
 
-def test_build_query_with_order_by_optimization():
+def test_build_query_with_order_by_optimization() -> None:
     request = TraceItemTableRequest(
         meta=RequestMeta(
             project_ids=[1],
@@ -3378,7 +3378,7 @@ def test_build_query_with_order_by_optimization():
     ]
 
 
-def test_build_query_with_order_by_optimization_multiple_orderby():
+def test_build_query_with_order_by_optimization_multiple_orderby() -> None:
     request = TraceItemTableRequest(
         meta=RequestMeta(
             project_ids=[1],
@@ -3443,7 +3443,7 @@ def test_build_query_with_order_by_optimization_multiple_orderby():
     ]
 
 
-def test_build_query_with_order_by_optimization_disabled_because_multiproject():
+def test_build_query_with_order_by_optimization_disabled_because_multiproject() -> None:
     request = TraceItemTableRequest(
         meta=RequestMeta(
             project_ids=[1, 2],
@@ -3491,7 +3491,7 @@ def test_build_query_with_order_by_optimization_disabled_because_multiproject():
     ]
 
 
-def test_build_query_with_order_by_optimization_disabled_because_groupby():
+def test_build_query_with_order_by_optimization_disabled_because_groupby() -> None:
     request = TraceItemTableRequest(
         meta=RequestMeta(
             project_ids=[1],
