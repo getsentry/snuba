@@ -14,7 +14,17 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 
 from snuba import environment, settings, state
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
+from snuba.query.allocation_policies import AllocationPolicy
+from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
+    BytesScannedRejectingPolicy,
+)
+from snuba.query.allocation_policies.concurrent_rate_limit import (
+    ConcurrentRateLimitAllocationPolicy,
+)
+from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
+from snuba.query.configuration import ConfigurableComponent, Configuration
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
 from snuba.utils.metrics.timer import Timer
@@ -156,7 +166,60 @@ def _construct_hacky_querylog_payload(
     }
 
 
-class BaseRoutingStrategy(metaclass=RegisteredClass):
+@dataclass()
+class RoutingStrategyConfig(Configuration):
+    name: str
+    description: str
+    value_type: type
+    default: Any
+    param_types: dict[str, type] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if type(self.default) != self.value_type:
+            raise ValueError(
+                f"Config item `{self.name}` expects type {self.value_type} got value `{self.default}` of type {type(self.default)}"
+            )
+
+    def __to_base_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "type": self.value_type.__name__,
+            "default": self.default,
+            "description": self.description,
+        }
+
+    def to_definition_dict(self) -> dict[str, Any]:
+        """Returns a dict representation of the definition of a Config."""
+        return {
+            **self.__to_base_dict(),
+            "params": [
+                {"name": param, "type": self.param_types[param].__name__}
+                for param in self.param_types
+            ],
+        }
+
+    def to_config_dict(
+        self, value: Any = None, params: dict[str, Any] = {}
+    ) -> dict[str, Any]:
+        """Returns a dict representation of a live Config."""
+        return {
+            **self.__to_base_dict(),
+            "value": value if value is not None else self.default,
+            "params": params,
+        }
+
+
+class BaseRoutingStrategy(ConfigurableComponent, metaclass=RegisteredClass):
+    def __init__(self) -> None:
+        self._configurations = [
+            RoutingStrategyConfig(
+                name="max_load",
+                description="The maximum load we allow the Clickhouse cluster to reach",
+                value_type=int,
+                default=0,
+            ),
+        ]
+
     @classmethod
     def config_key(cls) -> str:
         return cls.__name__
@@ -168,6 +231,12 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             "routing_strategy",
             tags={"routing_strategy_name": self.__class__.__name__},
         )
+
+    def component_namespace(self) -> str:
+        return "routing_strategy"
+
+    def get_configurations(self) -> list[Configuration]:
+        return cast(list[Configuration], self._configurations)
 
     @classmethod
     def get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
@@ -181,6 +250,26 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             meta.downsampled_storage_config.mode
             == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
         )
+
+    @classmethod
+    def get_allocation_policies(cls) -> list[AllocationPolicy]:
+        return [
+            ConcurrentRateLimitAllocationPolicy(
+                storage_key=StorageKey("eap_items"),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+            ReferrerGuardRailPolicy(
+                storage_key=StorageKey("eap_items"),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+            BytesScannedRejectingPolicy(
+                storage_key=StorageKey("eap_items"),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+        ]
 
     def merge_clickhouse_settings(
         self,

@@ -32,7 +32,7 @@ it("should display allocation policy configs once a storage is selected", async 
   let storages = ["storage1", "storage2"];
   let allocationPolicies: AllocationPolicy[] = [
     {
-      policy_name: "some_policy",
+      name: "some_policy",
       configs: [
         {
           name: "key1",
@@ -46,7 +46,7 @@ it("should display allocation policy configs once a storage is selected", async 
       query_type: "select",
     },
     {
-      policy_name: "some_other_policy",
+      name: "some_other_policy",
       configs: [
         {
           name: "key2",
