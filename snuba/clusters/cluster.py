@@ -426,7 +426,8 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             ClickhouseNode(*host)
             for host in self.get_query_connection(ClickhouseClientSettings.QUERY)
             .execute(
-                f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}",
+                "select host_name, port, shard_num, replica_num from system.clusters where cluster=%(cluster_name)s",
+                {"cluster_name": escape_string(cluster_name)},
                 retryable=True,
             )
             .results
