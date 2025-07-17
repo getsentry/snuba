@@ -116,7 +116,7 @@ def test_rename_table() -> None:
 def test_drop_table() -> None:
     assert (
         DropTable(StorageSetKey.EVENTS, "test_table").format_sql()
-        == "DROP TABLE IF EXISTS test_table;"
+        == "DROP TABLE IF EXISTS test_table SYNC;"
     )
 
 
