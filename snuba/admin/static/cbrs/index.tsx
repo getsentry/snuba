@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
-import { AllocationPolicyConfigs } from "SnubaAdmin/capacity_management/allocation_policy";
-import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
+import { Configurations } from "SnubaAdmin/capacity_management/allocation_policy";
+import { AllocationPolicy, Configuration, ConfigurableComponent } from "SnubaAdmin/capacity_management/types";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { COLORS } from "SnubaAdmin/theme";
 
@@ -13,6 +13,7 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
   const [allocationPolicies, setAllocationPolicies] = useState<
     AllocationPolicy[]
   >([]);
+  const [strategyConfigs, setStrategyConfigs] = useState<Configuration[]>([]);
 
   useEffect(() => {
     api.getRoutingStrategies().then((res) => {
@@ -27,6 +28,7 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
   function selectStrategy(strategy: string) {
     setStrategy(strategy);
     loadAllocationPolicies(strategy);
+    loadStrategyConfigs(strategy);
   }
 
   function loadAllocationPolicies(strategy: string) {
@@ -38,6 +40,43 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
       .catch((err) => {
         window.alert(err);
       });
+  }
+
+  function loadStrategyConfigs(strategy: string) {
+    api
+      .getRoutingStrategyConfigs(strategy)
+      .then((res) => {
+        setStrategyConfigs(res);
+      })
+      .catch((err) => {
+        window.alert(err);
+      });
+  }
+
+  function renderStrategy() {
+    if (!selectedStrategy) {
+      return <p>Strategy not selected.</p>;
+    }
+    if (strategyConfigs.length === 0) {
+      return <p>No strategy configurations found.</p>;
+    }
+
+    const strategyComponent: ConfigurableComponent = {
+      name: selectedStrategy,
+      configs: strategyConfigs,
+      optional_config_definitions: [],
+    };
+
+    return (
+      <div>
+        <p style={policyTypeStyle}>Strategy Configurations</p>
+        <Configurations
+          api={api}
+          entity={{ type: "strategy", name: selectedStrategy }}
+          configurable_component={strategyComponent}
+        />
+      </div>
+    );
   }
 
   function renderPolicies(policies: AllocationPolicy[]) {
@@ -53,11 +92,11 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
           Policy Type: {policies[0].query_type.toUpperCase()}
         </p>
         {policies.map((policy: AllocationPolicy) => (
-          <AllocationPolicyConfigs
+          <Configurations
             api={api}
             entity={{ type: "strategy", name: selectedStrategy }}
-            policy={policy}
-            key={selectedStrategy + policy.policy_name}
+            configurable_component={policy}
+            key={selectedStrategy + policy.name}
           />
         ))}
       </div>
@@ -75,6 +114,8 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
           options={strategies}
         />
       </p>
+
+      {renderStrategy()}
 
       {renderPolicies(
         allocationPolicies.filter((policy) => policy.query_type == "select")

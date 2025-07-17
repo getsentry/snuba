@@ -8,6 +8,7 @@ from typing import Any, cast
 
 from snuba import environment, settings
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.configuration import ConfigurableComponent, Configuration
 from snuba.state import delete_config as delete_runtime_config
 from snuba.state import get_all_configs as get_all_runtime_configs
 from snuba.state import get_config as get_runtime_config
@@ -48,7 +49,7 @@ class QueryResultOrError:
 
 
 @dataclass()
-class AllocationPolicyConfig:
+class AllocationPolicyConfig(Configuration):
     name: str
     description: str
     value_type: type
@@ -187,7 +188,7 @@ class AllocationPolicyViolations(SerializableException):
         )
 
 
-class AllocationPolicy(ABC, metaclass=RegisteredClass):
+class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
     """This class should be the centralized place for policy decisions regarding
     resource usage of a clickhouse cluster. It is meant to live as a configurable item
     on a storage.
@@ -855,6 +856,12 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     @property
     def storage_key(self) -> StorageKey:
         return self._storage_key
+
+    def component_namespace(self) -> str:
+        return "allocation_policy"
+
+    def get_configurations(self) -> list[Configuration]:
+        return cast(list[Configuration], self.config_definitions().values())
 
 
 class PassthroughPolicy(AllocationPolicy):

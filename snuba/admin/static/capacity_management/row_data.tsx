@@ -1,9 +1,9 @@
 import React from "react";
-import { AllocationPolicyConfig, RowData } from "SnubaAdmin/capacity_management/types";
+import { Configuration, RowData } from "SnubaAdmin/capacity_management/types";
 import Button from "react-bootstrap/Button";
 
 function getReadonlyRow(
-  config: AllocationPolicyConfig,
+  config: Configuration,
   edit: () => void
 ): RowData {
   return {

@@ -1,13 +1,19 @@
 import { ReactNode } from "react";
 
-type AllocationPolicy = {
-  policy_name: string;
-  configs: AllocationPolicyConfig[];
-  optional_config_definitions: AllocationPolicyOptionalConfigDefinition[];
+
+type ConfigurableComponent = {
+  name: string;
+  configs: Configuration[];
+  optional_config_definitions: OptionalConfigurationDefinition[];
+};
+
+type AllocationPolicy = ConfigurableComponent & {
   query_type: string;
 };
 
-type AllocationPolicyConfig = {
+type RoutingStrategy = ConfigurableComponent;
+
+type Configuration = {
   name: string;
   value: string;
   description: string;
@@ -15,17 +21,17 @@ type AllocationPolicyConfig = {
   params: object;
 };
 
-type AllocationPolicyConfigParams = {
+type ConfigurationParams = {
   name: string;
   type: string;
 };
 
-type AllocationPolicyOptionalConfigDefinition = {
+type OptionalConfigurationDefinition = {
   name: string;
   type: string;
   default: string;
   description: string;
-  params: AllocationPolicyConfigParams[];
+  params: ConfigurationParams[];
 };
 
 type RowData = {
@@ -49,9 +55,8 @@ interface StrategyEntity {
 
 type Entity = StorageEntity | StrategyEntity;
 
-// Usage
 function getEntityName(entity: Entity): string {
-  return entity.name; // Works for both types
+  return entity.name;
 }
 
 function isStorage(entity: Entity): entity is StorageEntity {
@@ -64,14 +69,14 @@ function isStrategy(entity: Entity): entity is StrategyEntity {
 
 export {
   AllocationPolicy,
-  AllocationPolicyConfig,
-  AllocationPolicyOptionalConfigDefinition,
-  AllocationPolicyConfigParams,
+  Configuration,
+  OptionalConfigurationDefinition,
+  ConfigurationParams,
   RowData,
   Entity,
   getEntityName,
   isStorage,
   isStrategy,
   StorageEntity,
-  StrategyEntity,
+  StrategyEntity, ConfigurableComponent,
 };

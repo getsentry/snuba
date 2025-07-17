@@ -1,6 +1,6 @@
 import Client from "SnubaAdmin/api_client";
 
-import { AllocationPolicyConfigs } from "SnubaAdmin/capacity_management/allocation_policy";
+import { Configurations } from "SnubaAdmin/capacity_management/allocation_policy";
 import { it, expect } from "@jest/globals";
 import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
 import { act, fireEvent, render } from "@testing-library/react";
@@ -8,7 +8,7 @@ import React from "react";
 
 it("should populate configs table upon render", async () => {
   let allocationPolicy: AllocationPolicy = {
-    policy_name: "some_policy",
+    name: "some_policy",
     configs: [
       {
         name: "key1",
@@ -41,10 +41,10 @@ it("should populate configs table upon render", async () => {
   };
 
   let { getByText, getByTestId } = render(
-    <AllocationPolicyConfigs
+    <Configurations
       api={Client()}
       entity={{ type: "storage", name: "storage1" }}
-      policy={allocationPolicy}
+      configurable_component={allocationPolicy}
     />
   );
 

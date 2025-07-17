@@ -1029,6 +1029,23 @@ def get_allocation_policy_configs_of_routing_strategy(strategy_name: str) -> Res
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
+@application.route("/routing_strategy_configs/<path:strategy_name>", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
+def get_routing_strategy_configs(strategy_name: str) -> Response:
+    from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+        RoutingStrategyConfig,
+    )
+
+    configs = BaseRoutingStrategy.get_from_name(strategy_name)().get_configurations()
+    serialized_configs = [
+        cast(RoutingStrategyConfig, config).to_definition_dict() for config in configs
+    ]
+    print("isithere")
+    return Response(
+        json.dumps(serialized_configs), 200, {"Content-Type": "application/json"}
+    )
+
+
 @application.route("/allocation_policy_config", methods=["POST", "DELETE"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def set_allocation_policy_config() -> Response:
