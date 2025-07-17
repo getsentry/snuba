@@ -6,7 +6,7 @@ storage:
   key: spans
   set_key: spans
 
-readiness_state: complete
+readiness_state: deprecate
 
 schema:
   columns:
