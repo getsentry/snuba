@@ -54,13 +54,21 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query import OrderBy, OrderByDirection
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import column as snuba_column
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.proto_visitor import (
+    AggregationToConditionalAggregationVisitor,
+    TraceItemTableRequestWrapper,
+)
 from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
     _apply_labels_to_columns,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (
@@ -1128,7 +1136,7 @@ class TestTraceItemTable(BaseApiTest):
     def test_order_by_does_not_error_if_groupby_exists(self) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
-                project_ids=[1, 2, 3],
+                project_ids=[1],
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -3312,3 +3320,221 @@ class TestUtils:
         _apply_labels_to_columns(message)
         assert message.columns[0].label == "avg(custom_measurement)"
         assert message.columns[1].label == "avg(custom_measurement_2)"
+
+
+def test_build_query_with_order_by_optimization() -> None:
+    request = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+            ),
+            Column(
+                aggregation=AttributeAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    ),
+                )
+            ),
+        ],
+        order_by=[
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    )
+                ),
+                descending=True,
+            ),
+        ],
+    )
+
+    wrapper = TraceItemTableRequestWrapper(request)
+    wrapper.accept(AggregationToConditionalAggregationVisitor())
+    request = _apply_labels_to_columns(request)
+
+    query = build_query(request)
+    assert query.get_orderby() == [
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("organization_id"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("project_id"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("item_type"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("timestamp"),
+        ),
+    ]
+
+
+def test_build_query_with_order_by_optimization_multiple_orderby() -> None:
+    request = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+            ),
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo")),
+        ],
+        order_by=[
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    )
+                ),
+                descending=True,
+            ),
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.item_id"
+                    )
+                ),
+                descending=True,
+            ),
+        ],
+    )
+
+    wrapper = TraceItemTableRequestWrapper(request)
+    wrapper.accept(AggregationToConditionalAggregationVisitor())
+    request = _apply_labels_to_columns(request)
+
+    query = build_query(request)
+    assert query.get_orderby() == [
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("organization_id"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("project_id"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("item_type"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("timestamp"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=f.cast(
+                snuba_column("item_id"),
+                "String",
+                alias="sentry.item_id_TYPE_STRING",
+            ),
+        ),
+    ]
+
+
+def test_build_query_with_order_by_optimization_disabled_because_multiproject() -> None:
+    request = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1, 2],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+            ),
+            Column(
+                aggregation=AttributeAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    ),
+                )
+            ),
+        ],
+        order_by=[
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    )
+                ),
+                descending=True,
+            ),
+        ],
+    )
+
+    wrapper = TraceItemTableRequestWrapper(request)
+    wrapper.accept(AggregationToConditionalAggregationVisitor())
+    request = _apply_labels_to_columns(request)
+
+    query = build_query(request)
+    assert query.get_orderby() == [
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=f.cast(
+                snuba_column("timestamp"),
+                "String",
+                alias="sentry.timestamp_TYPE_STRING",
+            ),
+        ),
+    ]
+
+
+def test_build_query_with_order_by_optimization_disabled_because_groupby() -> None:
+    request = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+            ),
+            Column(
+                aggregation=AttributeAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    ),
+                )
+            ),
+        ],
+        group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")],
+        order_by=[
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    )
+                ),
+                descending=True,
+            ),
+        ],
+    )
+
+    wrapper = TraceItemTableRequestWrapper(request)
+    wrapper.accept(AggregationToConditionalAggregationVisitor())
+    request = _apply_labels_to_columns(request)
+
+    query = build_query(request)
+    assert query.get_orderby() == [
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=f.cast(
+                snuba_column("timestamp"),
+                "String",
+                alias="sentry.timestamp_TYPE_STRING",
+            ),
+        ),
+    ]

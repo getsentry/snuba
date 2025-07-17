@@ -135,35 +135,42 @@ def _convert_order_by(
     order_by: Sequence[TraceItemTableRequest.OrderBy],
     request_meta: RequestMeta,
 ) -> Sequence[OrderBy]:
-    if len(order_by) == 1:
-        order = order_by[0]
-        if order.column.key.name == "sentry.timestamp" and len(groupby) == 0:
-            direction = (
-                OrderByDirection.DESC if order.descending else OrderByDirection.ASC
-            )
-            return [
-                OrderBy(
-                    direction=direction,
-                    expression=snuba_column("organization_id"),
-                ),
-                OrderBy(
-                    direction=direction,
-                    expression=snuba_column("project_id"),
-                ),
-                OrderBy(
-                    direction=direction,
-                    expression=snuba_column("item_type"),
-                ),
-                OrderBy(
-                    direction=direction,
-                    expression=snuba_column("timestamp"),
-                ),
-            ]
-
     res: list[OrderBy] = []
-    for x in order_by:
+    for i, x in enumerate(order_by):
         direction = OrderByDirection.DESC if x.descending else OrderByDirection.ASC
-        if x.column.HasField("key"):
+
+        # OPTIMIZATION: If the first ORDER BY is timestamp and there is only 1
+        # project and no group bys, it means we can replace it with the following
+        # ORDER BY which matches the table's ORDER BY to take advantage of the
+        # `optimize_read_in_order` setting.
+        if (
+            i == 0
+            and len(request_meta.project_ids) == 1
+            and len(groupby) == 0
+            and x.column.HasField("key")
+            and x.column.key.name == "sentry.timestamp"
+        ):
+            res.extend(
+                [
+                    OrderBy(
+                        direction=direction,
+                        expression=snuba_column("organization_id"),
+                    ),
+                    OrderBy(
+                        direction=direction,
+                        expression=snuba_column("project_id"),
+                    ),
+                    OrderBy(
+                        direction=direction,
+                        expression=snuba_column("item_type"),
+                    ),
+                    OrderBy(
+                        direction=direction,
+                        expression=snuba_column("timestamp"),
+                    ),
+                ]
+            )
+        elif x.column.HasField("key"):
             res.append(
                 OrderBy(
                     direction=direction,
