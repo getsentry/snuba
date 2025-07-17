@@ -381,8 +381,8 @@ def optimize_partitions(
     tracker: Optional[OptimizedPartitionTracker] = None,
     clickhouse_host: Optional[str] = None,
 ) -> None:
-    query_template = """\
-        OPTIMIZE TABLE %(database)s.%(table)s
+    query_template = f"""\
+        OPTIMIZE TABLE {database}.{table}
         PARTITION %(partition)s FINAL
     """
 
@@ -394,10 +394,11 @@ def optimize_partitions(
             )
             return
 
+        partition_parts = partition.strip("()").split(",")
+        partition_tuple = (int(partition_parts[0]), partition_parts[1].strip("'"))
+
         args = {
-            "database": database,
-            "table": table,
-            "partition": partition,
+            "partition": partition_tuple,
         }
 
         logger.info(f"Optimizing partition: {partition}")
