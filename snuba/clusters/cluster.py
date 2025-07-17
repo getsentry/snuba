@@ -19,7 +19,6 @@ from typing import (
 import structlog
 
 from snuba import settings
-from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clusters.storage_sets import (
@@ -427,7 +426,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             for host in self.get_query_connection(ClickhouseClientSettings.QUERY)
             .execute(
                 "select host_name, port, shard_num, replica_num from system.clusters where cluster=%(cluster_name)s",
-                {"cluster_name": escape_string(cluster_name)},
+                {"cluster_name": cluster_name},
                 retryable=True,
             )
             .results
