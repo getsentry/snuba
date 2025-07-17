@@ -516,7 +516,7 @@ def _raw_query(
             # This exception needs to have the message of the cause in it for sentry
             # to pick it up properly
             cause.__class__.__name__,
-            str(cause),
+            cause.message if isinstance(cause, ClickhouseError) else str(cause),
             {
                 "stats": stats,
                 "sql": sql,
