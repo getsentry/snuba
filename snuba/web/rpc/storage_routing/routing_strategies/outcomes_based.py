@@ -1,6 +1,7 @@
 import uuid
 from typing import cast
 
+import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
@@ -140,6 +141,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         )
 
     def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
+        span = sentry_sdk.get_current_span()
         routing_decision = RoutingDecision(
             routing_context=routing_context,
             strategy=self,
@@ -186,4 +188,12 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             routing_decision.tier = Tier.TIER_64
         elif ingested_items > max_items_before_downsampling * 100:
             routing_decision.tier = Tier.TIER_512
+
+        if span:
+            span.set_data("ingested_items", ingested_items)
+            span.set_data(
+                "max_items_before_downsampling", max_items_before_downsampling
+            )
+            span.set_data("tier", routing_decision.tier.name)
+
         return routing_decision
