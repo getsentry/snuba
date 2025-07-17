@@ -1052,13 +1052,13 @@ def set_allocation_policy_config() -> Response:
     data = json.loads(request.data)
     user = request.headers.get(USER_HEADER_KEY)
 
+    print("dataaaaaa", data)
+
     try:
         if "storage" in data:
             storage, key, policy_name = (data["storage"], data["key"], data["policy"])
         else:
             strategy, key, policy_name = (data["strategy"], data["key"], data["policy"])
-
-        storage, key, policy_name = (data["storage"], data["key"], data["policy"])
 
         params = data.get("params", {})
 

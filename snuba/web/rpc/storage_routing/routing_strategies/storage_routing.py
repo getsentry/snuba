@@ -216,7 +216,7 @@ class BaseRoutingStrategy(ConfigurableComponent, metaclass=RegisteredClass):
                 name="max_load",
                 description="The maximum load we allow the Clickhouse cluster to reach",
                 value_type=int,
-                default=0,
+                default=100,
             ),
         ]
 
