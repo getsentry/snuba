@@ -175,6 +175,11 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: Path) -> None:
 
     assert storage is not None
 
+    admin_client = AdminClient(get_default_kafka_configuration())
+
+    create_topics(admin_client, [SnubaTopic.ITEMS], 1)
+    create_topics(admin_client, [SnubaTopic.ITEMS_COMMIT_LOG], 1)
+
     stream_loader = storage.get_table_writer().get_stream_loader()
     mock_scheduler_producer = mock.Mock()
 
@@ -274,8 +279,6 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: Path) -> None:
     assert payload["task"]["data"]["request_version"] == "v1"
     time_series_request = payload["task"]["data"]["time_series_request"]
     TimeSeriesRequest().ParseFromString(base64.b64decode(time_series_request))
-
-    settings.KAFKA_TOPIC_MAP = {}
 
 
 def test_tick_time_shift() -> None:
