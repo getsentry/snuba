@@ -26,7 +26,6 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic as SnubaTopic
-from snuba.web.rpc.v1.create_subscription import subscription_entity_name
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_endpoint_time_series.test_endpoint_time_series import (
     DummyMetric,
@@ -244,7 +243,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         rpc_subscription_data = list(
             RedisSubscriptionDataStore(
                 get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-                EntityKey(subscription_entity_name()),
+                EntityKey("eap_items"),
                 PartitionId(partition),
             ).all()
         )[0][1]

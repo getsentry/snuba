@@ -25,7 +25,6 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query.exceptions import InvalidQueryException, ValidationException
 from snuba.query.validation.validators import ColumnValidationMode
 from snuba.redis import RedisClientKey, get_redis_client
@@ -346,9 +345,17 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
         )
 
 
-TESTS_CREATE_RPC_SUBSCRIPTIONS = [
-    pytest.param(
-        RPCSubscriptionData.from_proto(
+class TestRPCSubscriptionCreator:
+    timer = Timer("test")
+
+    def setup_method(self) -> None:
+        self.dataset = get_dataset("events_analytics_platform")
+
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_rpc_subscription_creator(self) -> None:
+        creator = SubscriptionCreator(self.dataset, EntityKey.EAP_ITEMS)
+        subscription = RPCSubscriptionData.from_proto(
             CreateSubscriptionRequestProto(
                 time_series_request=TimeSeriesRequest(
                     meta=RequestMeta(
@@ -379,29 +386,15 @@ TESTS_CREATE_RPC_SUBSCRIPTIONS = [
                 time_window_secs=300,
                 resolution_secs=60,
             ),
-            EntityKey.EAP_ITEMS_SPAN,
-        ),
-        id="EAP spans RPC subscription",
-    ),
-]
-
-
-class TestEAPSpansRPCSubscriptionCreator:
-    timer = Timer("test")
-
-    @pytest.mark.parametrize("subscription", TESTS_CREATE_RPC_SUBSCRIPTIONS)
-    @pytest.mark.clickhouse_db
-    @pytest.mark.redis_db
-    def test(self, subscription: SubscriptionData) -> None:
-        dataset = PluggableDataset(name="eap", all_entities=[])
-        creator = SubscriptionCreator(dataset, EntityKey.EAP_ITEMS_SPAN)
+            EntityKey.EAP_ITEMS,
+        )
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
                     get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-                    EntityKey.EAP_ITEMS_SPAN,
+                    EntityKey.EAP_ITEMS,
                     identifier.partition,
                 ).all(),
             )[0][1]
