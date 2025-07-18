@@ -5,6 +5,7 @@ use anyhow::Error;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use pyo3::prelude::*;
+use pyo3::types::PyAnyMethods;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
@@ -275,7 +276,7 @@ struct InvalidMessageMetadata {
 }
 
 impl FromPyObject<'_> for InvalidMessageMetadata {
-    fn extract(dict: &'_ PyAny) -> PyResult<Self> {
+    fn extract_bound(dict: &Bound<'_, PyAny>) -> PyResult<Self> {
         Ok(InvalidMessageMetadata {
             topic: dict.get_item("topic")?.extract()?,
             partition: dict.get_item("partition")?.extract()?,
