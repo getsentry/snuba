@@ -441,7 +441,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                             filters=filters_by_item_type[item_type],
                         ),
                     ),
-                    (attribute_key_to_expression_eap_items),
+                    (attribute_key_to_expression),
                 ),
             )
 
