@@ -67,7 +67,7 @@ jobs:
 
         git push origin HEAD --quiet
 
-        gh pr create --fill "$PR_OPTIONS"
+        gh pr create --fill
       env:
         # Using this instead of BUMP_SENTRY_TOKEN as per advice from asottile
         GH_TOKEN: ${{ secrets.GETSENTRY_BOT_REVERT_TOKEN }}
@@ -75,4 +75,3 @@ jobs:
         VERSION: ${{ inputs.version }}
         SENDER: ${{ github.event.sender.login }}
         SENDER_ID: ${{ github.event.sender.id }}
-        PR_OPTIONS: ${{ inputs.pr_options }}
