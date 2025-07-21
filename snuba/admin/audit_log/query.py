@@ -42,11 +42,11 @@ def audit_log(fn: Callable[[str, str], Return]) -> Callable[[str, str], Return]:
             result = fn(query, user)
         except Exception:
             data["status"] = QueryExecutionStatus.FAILED.value
-            data["end_timestamp"] = datetime.now().strftime(DATETIME_FORMAT)
+            data["end_timestamp"] = datetime.now(timezone.utc).strftime(DATETIME_FORMAT)
             audit_log_notify(data=data)
             raise
         data["status"] = QueryExecutionStatus.SUCCEEDED.value
-        data["end_timestamp"] = datetime.now().strftime(DATETIME_FORMAT)
+        data["end_timestamp"] = datetime.now(timezone.utc).strftime(DATETIME_FORMAT)
         audit_log_notify(data=data)
         return result
 
