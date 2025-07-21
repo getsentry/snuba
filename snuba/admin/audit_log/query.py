@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from functools import partial
 from typing import Callable, MutableMapping, TypeVar, Union
 
-DATETIME_FORMAT = "%B %d, %Y %H:%M:%S %p"
+DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
