@@ -39,7 +39,6 @@ from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.querylog.query_metadata import (
-    SLO,
     ClickhouseQueryMetadata,
     QueryStatus,
     RequestStatus,
@@ -503,9 +502,6 @@ def _raw_query(
         elif isinstance(cause, ExecutionTimeoutError):
             status = QueryStatus.TIMEOUT
 
-        if request_status.slo == SLO.AGAINST:
-            logger.exception("Error running query: %s\n%s", sql, cause)
-
         with configure_scope() as scope:
             if scope.span:
                 sentry_sdk.set_tag("slo_status", request_status.status.value)
@@ -520,7 +516,7 @@ def _raw_query(
             # This exception needs to have the message of the cause in it for sentry
             # to pick it up properly
             cause.__class__.__name__,
-            str(cause),
+            cause.message if isinstance(cause, ClickhouseError) else str(cause),
             {
                 "stats": stats,
                 "sql": sql,
