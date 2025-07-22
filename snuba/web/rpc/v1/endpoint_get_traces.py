@@ -458,7 +458,10 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         ), "At least two item types are required for a cross-event query"
 
         trace_item_filters_and_expression = and_cond(
-            *[expression for expression in filter_expressions_by_item_type.values()]
+            *[
+                f.greater(f.countIf(expression), 0)
+                for expression in filter_expressions_by_item_type.values()
+            ]
         )
         trace_item_filters_or_expression = or_cond(
             *[expression for expression in filter_expressions_by_item_type.values()]
