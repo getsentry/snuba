@@ -218,7 +218,7 @@ class TestTraceItemTable(BaseApiTest):
             sentry_sdk_mock.assert_called()
             assert metrics_mock.increment.call_args_list.count(call("OOM_query")) == 1
 
-    def test_timeoutt(self, monkeypatch: Any) -> None:
+    def test_timeout(self, monkeypatch: Any) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
         message = TraceItemTableRequest(
@@ -231,7 +231,7 @@ class TestTraceItemTable(BaseApiTest):
                 end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                    mode=DownsampledStorageConfig.MODE_NORMAL
                 ),
             ),
             filter=TraceItemFilter(
@@ -261,19 +261,18 @@ class TestTraceItemTable(BaseApiTest):
                     code=159,
                 ),
             ),
-            patch("snuba.web.rpc.sentry_sdk.capture_exception") as sentry_sdk_mock,
         ):
             with pytest.raises(QueryException) as e:
                 EndpointTraceItemTable().execute(message)
             assert "DB::Exception: Timeout exceeded" in str(e.value)
 
-            sentry_sdk_mock.assert_called()
             metrics_mock.increment.assert_any_call(
                 "timeout_query",
                 1,
                 {
                     "endpoint": "EndpointTraceItemTable",
-                    "storage_routing_mode": "MODE_BEST_EFFORT",
+                    "storage_routing_mode": "MODE_NORMAL",
+                    "referrer": "something",
                 },
             )
 
