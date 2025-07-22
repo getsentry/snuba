@@ -156,7 +156,6 @@ def _build_attr_distribution_query(
         in_msg.filter,
         (attribute_key_to_expression),
     )
-
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -171,8 +170,8 @@ def _build_attr_distribution_query(
             ),
         ],
         groupby=[
-            attrs_string_keys,
-            attrs_string_values,
+            column("attr_key"),
+            column("attr_value"),
         ],
         limitby=LimitBy(
             limit=(
@@ -180,7 +179,7 @@ def _build_attr_distribution_query(
                 if distributions_params.max_buckets > 0
                 else DEFAULT_BUCKETS
             ),
-            columns=[attrs_string_keys],
+            columns=[column("attr_key")],
         ),
         limit=(
             distributions_params.max_attributes

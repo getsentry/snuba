@@ -142,6 +142,9 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
     alias = _build_label_mapping_key(attr_key)
 
+    if attr_key.name == "attr_key":
+        return column("attr_key")
+
     if attr_key.name in NORMALIZED_COLUMNS_EAP_ITEMS:
         if attr_key.type not in NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name]:
             formatted_attribute_types = ", ".join(
