@@ -181,13 +181,15 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 and e.extra["stats"]["error_code"] == 159
             ):
                 tags = {"endpoint": str(self.__class__.__name__)}
-
-                if hasattr(in_msg.meta, "referrer"):
-                    tags["referrer"] = in_msg.meta.referrer
-                if self._uses_storage_routing(in_msg):
-                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
-                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
-                    )
+                if hasattr(in_msg, "meta"):
+                    if hasattr(in_msg.meta, "referrer"):
+                        tags["referrer"] = in_msg.meta.referrer
+                    if self._uses_storage_routing(in_msg):
+                        tags[
+                            "storage_routing_mode"
+                        ] = DownsampledStorageConfig.Mode.Name(
+                            in_msg.meta.downsampled_storage_config.mode
+                        )
                 self.metrics.increment("timeout_query", 1, tags)
             if (
                 "error_code" in e.extra["stats"]
