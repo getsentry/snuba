@@ -305,9 +305,6 @@ RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = False
 # require live and up to date data, so caching should be avoided entirely.
 BYPASS_CACHE_REFERRERS = ["subscriptions_executor"]
 
-# (logical topic name, # of partitions)
-TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}
-
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
