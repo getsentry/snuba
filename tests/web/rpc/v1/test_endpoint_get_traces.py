@@ -32,10 +32,10 @@ from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (
-    create_comparison_filter,
-    create_or_filter,
+    comparison_filter,
     create_request_meta,
     gen_item_message,
+    or_filter,
 )
 
 _TRACE_IDS = [uuid.uuid4().hex for _ in range(10)]
@@ -656,19 +656,19 @@ class TestGetTraces(BaseApiTest):
         write_cross_item_data_to_storage(all_items)
 
         filters = [
-            create_trace_filter(
-                create_comparison_filter("span.attr1", "val1"),
+            trace_filter(
+                comparison_filter("span.attr1", "val1"),
                 TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
-            create_trace_filter(
-                create_comparison_filter("log.attr2", "val2"),
+            trace_filter(
+                comparison_filter("log.attr2", "val2"),
                 TraceItemType.TRACE_ITEM_TYPE_LOG,
             ),
-            create_trace_filter(
-                create_or_filter(
+            trace_filter(
+                or_filter(
                     [
-                        create_comparison_filter("error.attr3", "val3"),
-                        create_comparison_filter("error.attr4", "val4"),
+                        comparison_filter("error.attr3", "val3"),
+                        comparison_filter("error.attr4", "val4"),
                     ]
                 ),
                 TraceItemType.TRACE_ITEM_TYPE_ERROR,
@@ -704,12 +704,12 @@ class TestGetTraces(BaseApiTest):
         write_cross_item_data_to_storage(all_items)
 
         filters = [
-            create_trace_filter(
-                create_comparison_filter("span.attr1", "val1"),
+            trace_filter(
+                comparison_filter("span.attr1", "val1"),
                 TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
-            create_trace_filter(
-                create_comparison_filter("log.attr2", "val2"),
+            trace_filter(
+                comparison_filter("log.attr2", "val2"),
                 TraceItemType.TRACE_ITEM_TYPE_LOG,
             ),
         ]
@@ -744,12 +744,12 @@ class TestGetTraces(BaseApiTest):
         write_cross_item_data_to_storage(all_items)
 
         filters = [
-            create_trace_filter(
-                create_comparison_filter("span.attr1", "val1"),
+            trace_filter(
+                comparison_filter("span.attr1", "val1"),
                 TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
-            create_trace_filter(
-                create_comparison_filter("log.attr2", "val2"),
+            trace_filter(
+                comparison_filter("log.attr2", "val2"),
                 TraceItemType.TRACE_ITEM_TYPE_LOG,
             ),
         ]
@@ -891,7 +891,7 @@ def create_cross_item_test_data() -> tuple[list[str], list[bytes], datetime, dat
     return trace_ids, all_items, start_time, end_time
 
 
-def create_trace_filter(
+def trace_filter(
     filter: TraceItemFilter,
     item_type: TraceItemType.ValueType,
 ) -> GetTracesRequest.TraceFilter:

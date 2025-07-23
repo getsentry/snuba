@@ -1,6 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Optional
+from typing import Any, Optional
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
@@ -184,21 +184,32 @@ def create_request_meta(
     )
 
 
-def create_comparison_filter(
+def comparison_filter(
     field_name: str,
-    field_value: str,
+    field_value: Any,
     op: ComparisonFilter.Op.ValueType = ComparisonFilter.Op.OP_EQUALS,
 ) -> TraceItemFilter:
+    if isinstance(field_value, str):
+        value = AttributeValue(val_str=field_value)
+    elif isinstance(field_value, bool):
+        value = AttributeValue(val_bool=field_value)
+    elif isinstance(field_value, int):
+        value = AttributeValue(val_int=field_value)
+    elif isinstance(field_value, float):
+        value = AttributeValue(val_double=field_value)
+    else:
+        raise ValueError(f"Unsupported field value type: {type(field_value)}")
+
     return TraceItemFilter(
         comparison_filter=ComparisonFilter(
             key=AttributeKey(name=field_name, type=AttributeKey.TYPE_STRING),
             op=op,
-            value=AttributeValue(val_str=field_value),
+            value=value,
         ),
     )
 
 
-def create_and_filter(filters: list[TraceItemFilter]) -> TraceItemFilter:
+def and_filter(filters: list[TraceItemFilter]) -> TraceItemFilter:
     return TraceItemFilter(
         and_filter=AndFilter(
             filters=filters,
@@ -206,7 +217,7 @@ def create_and_filter(filters: list[TraceItemFilter]) -> TraceItemFilter:
     )
 
 
-def create_or_filter(filters: list[TraceItemFilter]) -> TraceItemFilter:
+def or_filter(filters: list[TraceItemFilter]) -> TraceItemFilter:
     return TraceItemFilter(
         or_filter=OrFilter(
             filters=filters,

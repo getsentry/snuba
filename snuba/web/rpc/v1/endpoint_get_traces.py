@@ -441,7 +441,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                             filters=filters_by_item_type[item_type],
                         ),
                     ),
-                    (attribute_key_to_expression),
+                    attribute_key_to_expression,
                 ),
             )
 
@@ -530,7 +530,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     filters=[f.filter for f in request.filters],
                 ),
             ),
-            (attribute_key_to_expression),
+            attribute_key_to_expression,
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(
