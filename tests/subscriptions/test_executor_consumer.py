@@ -31,6 +31,7 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.executor_consumer import (
     ExecuteQuery,
+    SubscriptionQueryException,
     build_executor_consumer,
     calculate_max_concurrent_queries,
 )
@@ -174,6 +175,7 @@ def test_executor_consumer() -> None:
 def generate_message(
     entity_key: EntityKey,
     subscription_identifier: Optional[SubscriptionIdentifier] = None,
+    bad_query: Optional[bool] = False,
 ) -> Iterator[Message[KafkaPayload]]:
     codec = SubscriptionScheduledTaskEncoder()
     epoch = datetime(1970, 1, 1)
@@ -188,6 +190,12 @@ def generate_message(
 
     entity = get_entity(entity_key)
 
+    query = (
+        f"MATCH ({entity_key.value}) SELECT sum()"
+        if bad_query
+        else f"MATCH ({entity_key.value}) SELECT count()"
+    )
+
     while True:
         payload = codec.encode(
             ScheduledSubscriptionTask(
@@ -200,7 +208,7 @@ def generate_message(
                             project_id=1,
                             time_window_sec=60,
                             resolution_sec=60,
-                            query=f"MATCH ({entity_key.value}) SELECT count()",
+                            query=query,
                             entity=entity,
                             metadata=metadata,
                         ),
@@ -247,6 +255,38 @@ def test_execute_query_strategy() -> None:
 
     assert result["data"] == [{"count()": 0}]
     assert result["meta"] == [{"name": "count()", "type": "UInt64"}]
+
+    strategy.close()
+    strategy.join()
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_execute_query_exception() -> None:
+    next_step = mock.Mock()
+
+    strategy = ExecuteQuery(
+        dataset=get_dataset("events"),
+        entity_names=["events"],
+        max_concurrent_queries=2,
+        stale_threshold_seconds=None,
+        metrics=TestingMetricsBackend(),
+        next_step=next_step,
+    )
+
+    make_message = generate_message(EntityKey.EVENTS, bad_query=True)
+    message = next(make_message)
+
+    strategy.submit(message)
+
+    with pytest.raises(SubscriptionQueryException):
+        # wait until future is done
+        while next_step.submit.call_count == 0:
+            time.sleep(0.1)
+            strategy.poll()
+
+    assert isinstance(message.value, BrokerValue)
+    assert next_step.submit.call_count == 0
 
     strategy.close()
     strategy.join()
