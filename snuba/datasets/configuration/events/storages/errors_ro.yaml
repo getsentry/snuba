@@ -260,6 +260,11 @@ schema:
         type: Float,
         args: { schema_modifiers: [nullable], size: 64 },
       },
+      {
+        name: group_first_seen,
+        type: DateTime,
+        args: { schema_modifiers: [nullable] },
+      },
     ]
   local_table_name: errors_local
   dist_table_name: errors_dist_ro
