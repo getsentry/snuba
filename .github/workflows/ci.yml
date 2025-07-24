@@ -39,21 +39,22 @@ jobs:
           app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
         with:
           version: '0.8.2'
+          # we just cache the venv-dir directly in action-setup-venv
+          enable-cache: false
+
+      - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
+        with:
+          python-version: 3.11.11
+          cache-dependency-path: uv.lock
+          install-cmd: uv sync --frozen
 
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
-
-      - name: Install dependencies
-        run: uv sync --only-dev --frozen
 
       - name: Setup pre-commit
         run: pre-commit install-hooks
@@ -112,16 +113,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         name: Checkout code
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
 
       - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
         with:
           version: '0.8.2'
+          # we just cache the venv-dir directly in action-setup-venv
+          enable-cache: false
 
-      - name: Install dependencies
-        run: uv sync --only-dev --frozen
+      - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
+        with:
+          python-version: 3.11.11
+          cache-dependency-path: uv.lock
+          install-cmd: uv sync --only-dev --frozen
 
       - name: Run mypy
         run: |
@@ -134,16 +137,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         name: Checkout code
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
 
       - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
         with:
           version: '0.8.2'
+          # we just cache the venv-dir directly in action-setup-venv
+          enable-cache: false
 
-      - name: Install dependencies
-        run: uv sync --frozen
+      - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
+        with:
+          python-version: 3.11.11
+          cache-dependency-path: uv.lock
+          install-cmd: uv sync --frozen
 
       - name: Validate configs
         run: |
