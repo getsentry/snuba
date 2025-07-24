@@ -10,13 +10,6 @@ In order to set up Clickhouse, Redis, and Kafka, please refer to :doc:`/getstart
 Prerequisites
 -------------
 It is assumed that you have completed the steps to set up the `sentry dev environment <https://develop.sentry.dev/environment/>`_.
-Install `pyenv <https://github.com/pyenv/pyenv#installation>`_ on your system using Homebrew::
-
-    brew install pyenv
-
-You may have other than Python 3.11.8 installed on your machine, but Snuba needs Python 3.11.8::
-
-    pyenv install 3.11.8
 
 You will need an installation of Rust to develop Snuba. Go `here <https://rustup.rs>`_ to get one::
 
@@ -40,10 +33,7 @@ Clone this repo into your workspace::
 These commands set up the Python virtual environment::
 
     cd snuba
-    python -m venv .venv
-    source .venv/bin/activate
-    pip install --upgrade pip==22.2.2
-    make develop
+    devenv sync
 
 This command starts the Snuba api, which is capable of processing queries::
 
@@ -59,7 +49,6 @@ Running tests
 
 This command runs unit and integration tests::
 
-    make develop (if you have not run it already)
     make test
 
 Running sentry tests against snuba

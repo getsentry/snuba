@@ -47,7 +47,7 @@ install-rs-dev:
 .PHONY: install-rs-dev
 
 snubadocs:
-	pip install -U -r ./docs-requirements.txt
+	uv pip install -U -r ./docs-requirements.txt
 	sphinx-build -W -b html docs/source docs/build
 
 build-admin:
@@ -67,7 +67,7 @@ validate-configs:
 	python3 snuba/validate_configs.py
 
 generate-config-docs:
-	pip install -U -r ./docs-requirements.txt
+	uv pip install -U -r ./docs-requirements.txt
 	python3 -m snuba.datasets.configuration.generate_config_docs
 
 watch-rust-snuba:

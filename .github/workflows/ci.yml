@@ -38,19 +38,26 @@ jobs:
         with:
           app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+        with:
+          version: '0.8.2'
+
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
-      - name: Setup pre-commit
-        run: make setup-git
+
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          make install-python-dependencies
+        run: uv sync --dev-only --frozen
+
+      - name: Setup pre-commit
+        run: pre-commit install-hooks
+
       - uses: getsentry/paths-filter@v2
         id: files
         with:
@@ -65,6 +72,7 @@ jobs:
           filters: |
             all:
               - added|modified: '**/*'
+
       - name: Run pre-commit checks
         # Run pre-commit to lint and format check files that were changed (but not deleted) compared to master.
         # XXX: there is a very small chance that it'll expand to exceed Linux's limits
@@ -96,6 +104,7 @@ jobs:
         run: |
           make lint-rust format-rust-ci
 
+  # TODO: this should be rolled up into pre-commit
   typing:
     name: "mypy typing"
     runs-on: ubuntu-latest
@@ -106,10 +115,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+        with:
+          version: '0.8.2'
+
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          make install-python-dependencies
+        run: uv sync --dev-only --frozen
+
       - name: Run mypy
         run: |
           make backend-typing
@@ -124,10 +137,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+        with:
+          version: '0.8.2'
+
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          make install-python-dependencies
+        run: uv sync --frozen
+
       - name: Validate configs
         run: |
           make validate-configs
@@ -319,7 +336,6 @@ jobs:
       - name: Setup steps
         id: setup
         run: |
-          pip install --upgrade pip wheel
           # We cannot execute actions that are not placed under .github of the main repo
           mkdir -p .github/actions
           cp -r sentry/.github/actions/* .github/actions
