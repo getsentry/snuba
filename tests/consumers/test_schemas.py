@@ -79,9 +79,7 @@ def test_all_schemas(case: Case) -> None:
 
 
 # Topic that is deprecated but is still in snuba's codebase
-DEPRECATED_TOPICS = [
-    "cdc",
-]
+DEPRECATED_TOPICS = ["cdc", "snuba-spans"]
 
 
 def test_has_kafka_schema() -> None:
