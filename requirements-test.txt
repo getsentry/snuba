@@ -1,5 +1,19 @@
 --index-url https://pypi.devinfra.sentry.io/simple
 
+devservices==1.2.1
+
+pre-commit==4.2.0
+black==24.3.0
+flake8==7.0.0
+pytest==8.3.3
+pytest-cov==4.1.0
+pytest-watch==4.2.0
+freezegun==1.2.2
+honcho==1.1.0
+
+typing-extensions==4.12.2
+types-protobuf==5.27.0.20240626
+
 time-machine==2.13.0
 
 # for typing

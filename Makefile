@@ -9,12 +9,8 @@ reset-python:
 	rm -rf .venv
 .PHONY: reset-python
 
-develop: install-rs-dev setup-git
-
-setup-git:
-	mkdir -p .git/hooks && cd .git/hooks && ln -sf ../../config/hooks/* ./
-	pip install 'pre-commit==3.6.0'
-	pre-commit install --install-hooks
+develop:
+	devenv sync
 
 test:
 	SNUBA_SETTINGS=test pytest -vv tests -v -m "not ci_only"

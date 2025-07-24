@@ -25,8 +25,8 @@ def main(context: dict[str, str]) -> int:
     print(f"syncing .venv ...")
     proc.run(("uv", "sync", "--frozen", "--quiet"))
 
-    print("running make develop...")
-    os.system("make develop")
+    print("running make install-rs-dev...")
+    os.system("make install-rs-dev")
 
     # start colima if it's not already running
     colima.start(reporoot)
