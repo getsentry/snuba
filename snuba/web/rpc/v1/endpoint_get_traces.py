@@ -26,7 +26,15 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
+from snuba.query.dsl import (
+    and_cond,
+    column,
+    if_cond,
+    in_cond,
+    literal,
+    literals_array,
+    or_cond,
+)
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -157,10 +165,25 @@ def _attribute_to_expression(
     ) -> Expression:
         return f.argMinIf(
             _get_attribute_expression(attribute_name, attribute_type, request_meta),
-            _get_attribute_expression(
-                "sentry.start_timestamp",
-                AttributeKey.Type.TYPE_DOUBLE,
-                request_meta,
+            if_cond(
+                f.equals(
+                    _get_attribute_expression(
+                        "sentry.start_timestamp",
+                        AttributeKey.Type.TYPE_DOUBLE,
+                        request_meta,
+                    ),
+                    literal(0),
+                ),
+                _get_attribute_expression(
+                    "sentry.timestamp",
+                    AttributeKey.Type.TYPE_DOUBLE,
+                    request_meta,
+                ),
+                _get_attribute_expression(
+                    "sentry.start_timestamp",
+                    AttributeKey.Type.TYPE_DOUBLE,
+                    request_meta,
+                ),
             ),
             and_cond(
                 f.equals(column("item_type"), TraceItemType.TRACE_ITEM_TYPE_SPAN),
@@ -182,10 +205,25 @@ def _attribute_to_expression(
     ) -> Expression:
         return f.argMinIf(
             _get_attribute_expression(attribute_name, attribute_type, request_meta),
-            _get_attribute_expression(
-                "sentry.start_timestamp",
-                AttributeKey.Type.TYPE_DOUBLE,
-                request_meta,
+            if_cond(
+                f.equals(
+                    _get_attribute_expression(
+                        "sentry.start_timestamp",
+                        AttributeKey.Type.TYPE_DOUBLE,
+                        request_meta,
+                    ),
+                    literal(0),
+                ),
+                _get_attribute_expression(
+                    "sentry.timestamp",
+                    AttributeKey.Type.TYPE_DOUBLE,
+                    request_meta,
+                ),
+                _get_attribute_expression(
+                    "sentry.start_timestamp",
+                    AttributeKey.Type.TYPE_DOUBLE,
+                    request_meta,
+                ),
             ),
             f.equals(column("item_type"), TraceItemType.TRACE_ITEM_TYPE_SPAN),
             alias=alias,
@@ -199,10 +237,25 @@ def _attribute_to_expression(
         )
         return f.argMinIf(
             _get_attribute_expression(attribute_name, attribute_type, request_meta),
-            _get_attribute_expression(
-                "sentry.start_timestamp",
-                AttributeKey.Type.TYPE_DOUBLE,
-                request_meta,
+            if_cond(
+                f.equals(
+                    _get_attribute_expression(
+                        "sentry.start_timestamp_precise",
+                        AttributeKey.Type.TYPE_DOUBLE,
+                        request_meta,
+                    ),
+                    literal(0),
+                ),
+                _get_attribute_expression(
+                    "sentry.timestamp",
+                    AttributeKey.Type.TYPE_DOUBLE,
+                    request_meta,
+                ),
+                _get_attribute_expression(
+                    "sentry.start_timestamp_precise",
+                    AttributeKey.Type.TYPE_DOUBLE,
+                    request_meta,
+                ),
             ),
             and_cond(
                 f.equals(column("item_type"), TraceItemType.TRACE_ITEM_TYPE_SPAN),
@@ -223,10 +276,25 @@ def _attribute_to_expression(
         if key == TraceAttribute.Key.KEY_START_TIMESTAMP:
             return f.cast(
                 f.min(
-                    _get_attribute_expression(
-                        "sentry.start_timestamp_precise",
-                        AttributeKey.Type.TYPE_DOUBLE,
-                        request_meta,
+                    if_cond(
+                        f.equals(
+                            _get_attribute_expression(
+                                "sentry.start_timestamp_precise",
+                                AttributeKey.Type.TYPE_DOUBLE,
+                                request_meta,
+                            ),
+                            literal(0),
+                        ),
+                        _get_attribute_expression(
+                            "sentry.timestamp",
+                            AttributeKey.Type.TYPE_DOUBLE,
+                            request_meta,
+                        ),
+                        _get_attribute_expression(
+                            "sentry.start_timestamp_precise",
+                            AttributeKey.Type.TYPE_DOUBLE,
+                            request_meta,
+                        ),
                     )
                 ),
                 clickhouse_type,
@@ -235,10 +303,25 @@ def _attribute_to_expression(
         elif key == TraceAttribute.Key.KEY_END_TIMESTAMP:
             return f.cast(
                 f.max(
-                    _get_attribute_expression(
-                        "sentry.end_timestamp_precise",
-                        AttributeKey.Type.TYPE_DOUBLE,
-                        request_meta,
+                    if_cond(
+                        f.equals(
+                            _get_attribute_expression(
+                                "sentry.end_timestamp_precise",
+                                AttributeKey.Type.TYPE_DOUBLE,
+                                request_meta,
+                            ),
+                            literal(0),
+                        ),
+                        _get_attribute_expression(
+                            "sentry.timestamp",
+                            AttributeKey.Type.TYPE_DOUBLE,
+                            request_meta,
+                        ),
+                        _get_attribute_expression(
+                            "sentry.end_timestamp_precise",
+                            AttributeKey.Type.TYPE_DOUBLE,
+                            request_meta,
+                        ),
                     )
                 ),
                 clickhouse_type,
