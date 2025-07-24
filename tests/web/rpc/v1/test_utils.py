@@ -1,16 +1,9 @@
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any, Optional
+from typing import Optional
 
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
-    AndFilter,
-    ComparisonFilter,
-    OrFilter,
-    TraceItemFilter,
-)
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
 from snuba.datasets.storages.factory import get_storage
@@ -165,61 +158,3 @@ def gen_item_message(
         server_sample_rate=server_sample_rate,
         attributes=attributes,
     ).SerializeToString()
-
-
-def create_request_meta(
-    start_timestamp: datetime,
-    end_timestamp: datetime,
-    trace_item_type: TraceItemType.ValueType = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED,
-) -> RequestMeta:
-    return RequestMeta(
-        project_ids=[1],
-        organization_id=1,
-        cogs_category="test",
-        referrer="test",
-        start_timestamp=Timestamp(seconds=int(start_timestamp.timestamp())),
-        end_timestamp=Timestamp(seconds=int(end_timestamp.timestamp())),
-        trace_item_type=trace_item_type,
-        request_id=uuid.uuid4().hex,
-    )
-
-
-def comparison_filter(
-    field_name: str,
-    field_value: Any,
-    op: ComparisonFilter.Op.ValueType = ComparisonFilter.Op.OP_EQUALS,
-) -> TraceItemFilter:
-    if isinstance(field_value, str):
-        value = AttributeValue(val_str=field_value)
-    elif isinstance(field_value, bool):
-        value = AttributeValue(val_bool=field_value)
-    elif isinstance(field_value, int):
-        value = AttributeValue(val_int=field_value)
-    elif isinstance(field_value, float):
-        value = AttributeValue(val_double=field_value)
-    else:
-        raise ValueError(f"Unsupported field value type: {type(field_value)}")
-
-    return TraceItemFilter(
-        comparison_filter=ComparisonFilter(
-            key=AttributeKey(name=field_name, type=AttributeKey.TYPE_STRING),
-            op=op,
-            value=value,
-        ),
-    )
-
-
-def and_filter(filters: list[TraceItemFilter]) -> TraceItemFilter:
-    return TraceItemFilter(
-        and_filter=AndFilter(
-            filters=filters,
-        ),
-    )
-
-
-def or_filter(filters: list[TraceItemFilter]) -> TraceItemFilter:
-    return TraceItemFilter(
-        or_filter=OrFilter(
-            filters=filters,
-        ),
-    )
