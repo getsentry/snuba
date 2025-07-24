@@ -1,0 +1,7 @@
+[project]
+name = "snuba"
+version = "0.0.0"
+
+[build-system]
+requires = ["uv_build==0.8.2"]
+build-backend = "uv_build"
