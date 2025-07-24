@@ -1,4 +1,4 @@
-.PHONY: develop setup-git test install-python-dependencies install-py-dev
+.PHONY: develop setup-git test
 
 apply-migrations:
 	snuba migrations migrate --force
@@ -9,7 +9,7 @@ reset-python:
 	rm -rf .venv
 .PHONY: reset-python
 
-develop: install-python-dependencies install-brew-dev install-rs-dev setup-git
+develop: install-rs-dev setup-git
 
 setup-git:
 	mkdir -p .git/hooks && cd .git/hooks && ln -sf ../../config/hooks/* ./
@@ -44,25 +44,11 @@ api-tests:
 backend-typing:
 	mypy snuba tests scripts --strict --config-file mypy.ini --exclude 'tests/datasets|tests/query'
 
-install-python-dependencies:
-	pip uninstall -qqy uwsgi  # pip doesn't do well with swapping drop-ins
-	pip install `grep ^-- requirements.txt` -r requirements-build.txt
-	pip install `grep ^-- requirements.txt` -e .
-	pip install `grep ^-- requirements.txt` -r requirements-test.txt
-.PHONY: install-python-dependencies
-
-# install-rs-dev/install-py-dev mimick sentry's naming conventions
+# install-rs-dev mimicks sentry's naming conventions
 install-rs-dev:
 	@which cargo || (echo "!!! You need an installation of Rust in order to develop snuba. Go to https://rustup.rs to get one." && exit 1)
 	. scripts/rust-envvars && cd rust_snuba/ && maturin develop
 .PHONY: install-rs-dev
-
-install-py-dev: install-python-dependencies
-.PHONY: install-py-dev
-
-install-brew-dev:
-	brew bundle
-.PHONY: install-brew-dev
 
 snubadocs:
 	pip install -U -r ./docs-requirements.txt
