@@ -63,6 +63,7 @@ class Topic(Enum):
     DEAD_LETTER_GENERIC_EVENTS = "snuba-dead-letter-generic-events"
     DEAD_LETTER_QUERYLOG = "snuba-dead-letter-querylog"
     DEAD_LETTER_GROUP_ATTRIBUTES = "snuba-dead-letter-group-attributes"
+    DEAD_LETTER_ITEMS = "snuba-dead-letter-items"
 
     SPANS = "snuba-spans"
     EAP_SPANS_COMMIT_LOG = "snuba-eap-spans-commit-log"
