@@ -775,7 +775,7 @@ class TestGetTraces(BaseApiTest):
                 count_attr.value.val_int == 2
             ), f"Expected count of 2 items per trace (1 span + 1 log), got {count_attr.value.val_int}"
 
-    def test_multiple_item_types__start_timestamp(self, setup_teardown: Any) -> None:
+    def test_multiple_item_types_start_timestamp(self, setup_teardown: Any) -> None:
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
         write_cross_item_data_to_storage(all_items)
 
