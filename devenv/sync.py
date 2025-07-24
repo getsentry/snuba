@@ -22,7 +22,7 @@ def main(context: dict[str, str]) -> int:
         reporoot,
     )
 
-    print(f"syncing .venv ...")
+    print("syncing .venv ...")
     proc.run(("uv", "sync", "--frozen", "--quiet"))
 
     print("running make install-rs-dev...")

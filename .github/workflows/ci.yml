@@ -124,7 +124,7 @@ jobs:
         with:
           python-version: 3.11.11
           cache-dependency-path: uv.lock
-          install-cmd: uv sync --only-dev --frozen
+          install-cmd: uv sync --frozen
 
       - name: Run mypy
         run: |
@@ -227,7 +227,7 @@ jobs:
 
 
   tests:
-    needs: [linting, snuba-image]
+    # needs: [linting, snuba-image]
     name: Tests and code coverage
     runs-on: ubuntu-latest
     timeout-minutes: 40
