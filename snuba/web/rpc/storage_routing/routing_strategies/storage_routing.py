@@ -133,7 +133,7 @@ def _construct_hacky_querylog_payload(
                 "end_timestamp": in_message_meta.end_timestamp.seconds,
                 "stats": _get_stats_dict(routing_decision),
                 "status": "0",
-                "trace_id": cur_span.trace_id if cur_span else "no_current_span",
+                "trace_id": cur_span.trace_id if cur_span else "",
                 "profile": {
                     "time_range": None,
                     "table": "eap_items",
