@@ -233,6 +233,11 @@ schema:
       type: Float,
       args: { schema_modifiers: [nullable], size: 64 },
     },
+    {
+      name: group_first_seen,
+      type: DateTime,
+      args: { schema_modifiers: [nullable] },
+    },
   ]
 required_time_column: timestamp
 storages:
