@@ -50,6 +50,9 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-root = ""
 
+[project.scripts]
+snuba = "snuba.cli:main"
+
 [dependency-groups]
 dev = [
     "black==24.3.0",
