@@ -53,7 +53,7 @@ jobs:
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
 
       - name: Install dependencies
-        run: uv sync --dev-only --frozen
+        run: uv sync --only-dev --frozen
 
       - name: Setup pre-commit
         run: pre-commit install-hooks
@@ -121,7 +121,7 @@ jobs:
           version: '0.8.2'
 
       - name: Install dependencies
-        run: uv sync --dev-only --frozen
+        run: uv sync --only-dev --frozen
 
       - name: Run mypy
         run: |

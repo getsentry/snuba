@@ -64,11 +64,11 @@ test-frontend-admin:
 	cd snuba/admin && yarn install && yarn run test
 
 validate-configs:
-	python3 snuba/validate_configs.py
+	.venv/bin/python snuba/validate_configs.py
 
 generate-config-docs:
 	uv pip install -U -r ./docs-requirements.txt
-	python3 -m snuba.datasets.configuration.generate_config_docs
+	.venv/bin/python -m snuba.datasets.configuration.generate_config_docs
 
 watch-rust-snuba:
 	which cargo-watch || cargo install cargo-watch
