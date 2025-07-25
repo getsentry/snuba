@@ -75,6 +75,7 @@ class Topic(Enum):
     ITEMS_COMMIT_LOG = "snuba-items-commit-log"
     SUBSCRIPTION_SCHEDULED_EAP_ITEMS = "scheduled-subscriptions-eap-items"
     SUBSCRIPTION_RESULTS_EAP_ITEMS = "subscription-results-eap-items"
+    DEAD_LETTER_ITEMS = "snuba-dead-letter-items"
 
     LW_DELETIONS_GENERIC_EVENTS = "snuba-lw-deletions-generic-events"
 

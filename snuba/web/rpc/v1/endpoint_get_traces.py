@@ -26,7 +26,15 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
+from snuba.query.dsl import (
+    and_cond,
+    column,
+    if_cond,
+    in_cond,
+    literal,
+    literals_array,
+    or_cond,
+)
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -157,17 +165,37 @@ def _attribute_to_expression(
     ) -> Expression:
         return f.argMinIf(
             _get_attribute_expression(attribute_name, attribute_type, request_meta),
-            _get_attribute_expression(
-                "sentry.start_timestamp",
-                AttributeKey.Type.TYPE_DOUBLE,
-                request_meta,
-            ),
-            f.equals(
-                _get_attribute_expression(
-                    "sentry.parent_span_id", AttributeKey.Type.TYPE_STRING, request_meta
+            if_cond(
+                f.equals(
+                    _get_attribute_expression(
+                        "sentry.start_timestamp",
+                        AttributeKey.Type.TYPE_DOUBLE,
+                        request_meta,
+                    ),
+                    literal(0),
                 ),
-                # root spans don't have a parent span set so the value defaults to empty string
-                literal(""),
+                _get_attribute_expression(
+                    "sentry.timestamp",
+                    AttributeKey.Type.TYPE_DOUBLE,
+                    request_meta,
+                ),
+                _get_attribute_expression(
+                    "sentry.start_timestamp",
+                    AttributeKey.Type.TYPE_DOUBLE,
+                    request_meta,
+                ),
+            ),
+            and_cond(
+                f.equals(column("item_type"), TraceItemType.TRACE_ITEM_TYPE_SPAN),
+                f.equals(
+                    _get_attribute_expression(
+                        "sentry.parent_span_id",
+                        AttributeKey.Type.TYPE_STRING,
+                        request_meta,
+                    ),
+                    # root spans don't have a parent span set so the value defaults to empty string
+                    literal(""),
+                ),
             ),
             alias=alias,
         )
@@ -175,13 +203,29 @@ def _attribute_to_expression(
     def _get_earliest_span_attribute(
         attribute_name: str, attribute_type: AttributeKey.Type.ValueType
     ) -> Expression:
-        return f.argMin(
+        return f.argMinIf(
             _get_attribute_expression(attribute_name, attribute_type, request_meta),
-            _get_attribute_expression(
-                "sentry.start_timestamp",
-                AttributeKey.Type.TYPE_DOUBLE,
-                request_meta,
+            if_cond(
+                f.equals(
+                    _get_attribute_expression(
+                        "sentry.start_timestamp",
+                        AttributeKey.Type.TYPE_DOUBLE,
+                        request_meta,
+                    ),
+                    literal(0),
+                ),
+                _get_attribute_expression(
+                    "sentry.timestamp",
+                    AttributeKey.Type.TYPE_DOUBLE,
+                    request_meta,
+                ),
+                _get_attribute_expression(
+                    "sentry.start_timestamp",
+                    AttributeKey.Type.TYPE_DOUBLE,
+                    request_meta,
+                ),
             ),
+            f.equals(column("item_type"), TraceItemType.TRACE_ITEM_TYPE_SPAN),
             alias=alias,
         )
 
@@ -193,14 +237,32 @@ def _attribute_to_expression(
         )
         return f.argMinIf(
             _get_attribute_expression(attribute_name, attribute_type, request_meta),
-            _get_attribute_expression(
-                "sentry.start_timestamp",
-                AttributeKey.Type.TYPE_DOUBLE,
-                request_meta,
+            if_cond(
+                f.equals(
+                    _get_attribute_expression(
+                        "sentry.start_timestamp_precise",
+                        AttributeKey.Type.TYPE_DOUBLE,
+                        request_meta,
+                    ),
+                    literal(0),
+                ),
+                _get_attribute_expression(
+                    "sentry.timestamp",
+                    AttributeKey.Type.TYPE_DOUBLE,
+                    request_meta,
+                ),
+                _get_attribute_expression(
+                    "sentry.start_timestamp_precise",
+                    AttributeKey.Type.TYPE_DOUBLE,
+                    request_meta,
+                ),
             ),
-            or_cond(
-                f.equals(span_op, literal("pageload")),
-                f.equals(span_op, literal("navigation")),
+            and_cond(
+                f.equals(column("item_type"), TraceItemType.TRACE_ITEM_TYPE_SPAN),
+                or_cond(
+                    f.equals(span_op, literal("pageload")),
+                    f.equals(span_op, literal("navigation")),
+                ),
             ),
             alias=alias,
         )
@@ -214,10 +276,25 @@ def _attribute_to_expression(
         if key == TraceAttribute.Key.KEY_START_TIMESTAMP:
             return f.cast(
                 f.min(
-                    _get_attribute_expression(
-                        "sentry.start_timestamp_precise",
-                        AttributeKey.Type.TYPE_DOUBLE,
-                        request_meta,
+                    if_cond(
+                        f.equals(
+                            _get_attribute_expression(
+                                "sentry.start_timestamp_precise",
+                                AttributeKey.Type.TYPE_DOUBLE,
+                                request_meta,
+                            ),
+                            literal(0),
+                        ),
+                        _get_attribute_expression(
+                            "sentry.timestamp",
+                            AttributeKey.Type.TYPE_DOUBLE,
+                            request_meta,
+                        ),
+                        _get_attribute_expression(
+                            "sentry.start_timestamp_precise",
+                            AttributeKey.Type.TYPE_DOUBLE,
+                            request_meta,
+                        ),
                     )
                 ),
                 clickhouse_type,
@@ -226,10 +303,25 @@ def _attribute_to_expression(
         elif key == TraceAttribute.Key.KEY_END_TIMESTAMP:
             return f.cast(
                 f.max(
-                    _get_attribute_expression(
-                        "sentry.end_timestamp_precise",
-                        AttributeKey.Type.TYPE_DOUBLE,
-                        request_meta,
+                    if_cond(
+                        f.equals(
+                            _get_attribute_expression(
+                                "sentry.end_timestamp_precise",
+                                AttributeKey.Type.TYPE_DOUBLE,
+                                request_meta,
+                            ),
+                            literal(0),
+                        ),
+                        _get_attribute_expression(
+                            "sentry.timestamp",
+                            AttributeKey.Type.TYPE_DOUBLE,
+                            request_meta,
+                        ),
+                        _get_attribute_expression(
+                            "sentry.end_timestamp_precise",
+                            AttributeKey.Type.TYPE_DOUBLE,
+                            request_meta,
+                        ),
                     )
                 ),
                 clickhouse_type,
@@ -598,18 +690,23 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             request.filters
         )
         trace_item_filters_expression = None
+        item_type = None
         if request.meta.trace_item_type in filter_expressions_by_item_type:
             trace_item_filters_expression = filter_expressions_by_item_type[
                 request.meta.trace_item_type
             ]
+            item_type = request.meta.trace_item_type
         elif len(filter_expressions_by_item_type) == 1:
             trace_item_filters_expression = next(
                 iter(filter_expressions_by_item_type.values())
             )
+            item_type = next(iter(filter_expressions_by_item_type.keys()))
         elif len(filter_expressions_by_item_type) > 1:
             trace_item_filters_expression = or_cond(
                 *[expression for expression in filter_expressions_by_item_type.values()]
             )
+        else:
+            item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
 
         selected_columns: list[SelectedExpression] = []
         start_timestamp_requested = False
@@ -648,16 +745,28 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             sample=None,
         )
 
-        query = Query(
-            from_clause=entity,
-            selected_columns=selected_columns,
-            condition=base_conditions_and(
+        if item_type:
+            condition = base_conditions_and(
                 request.meta,
                 in_cond(
                     column("trace_id"),
                     literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
                 ),
-            ),
+                f.equals(column("item_type"), item_type),
+            )
+        else:
+            condition = base_conditions_and(
+                request.meta,
+                in_cond(
+                    column("trace_id"),
+                    literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
+                ),
+            )
+
+        query = Query(
+            from_clause=entity,
+            selected_columns=selected_columns,
+            condition=condition,
             groupby=[
                 _attribute_to_expression(
                     TraceAttribute(

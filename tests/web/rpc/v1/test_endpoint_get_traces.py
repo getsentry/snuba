@@ -651,7 +651,7 @@ class TestGetTraces(BaseApiTest):
         ):
             EndpointGetTraces().execute(message)
 
-    def test_with_data_and_cross_event_query(self, setup_teardown: Any) -> None:
+    def test_with_data_and_cross_event_query(self) -> None:
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
         write_cross_item_data_to_storage(all_items)
 
@@ -697,9 +697,7 @@ class TestGetTraces(BaseApiTest):
             returned_trace_ids == expected_trace_ids
         ), f"Expected {expected_trace_ids}, got {returned_trace_ids}"
 
-    def test_cross_item_filtered_count_with_span_restriction(
-        self, setup_teardown: Any
-    ) -> None:
+    def test_cross_item_filtered_count_with_span_restriction(self) -> None:
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
         write_cross_item_data_to_storage(all_items)
 
@@ -737,9 +735,7 @@ class TestGetTraces(BaseApiTest):
                 count_attr.value.val_int == 1
             ), f"Expected count of 1 span per trace, got {count_attr.value.val_int}"
 
-    def test_cross_item_filtered_count_without_restriction(
-        self, setup_teardown: Any
-    ) -> None:
+    def test_cross_item_filtered_count_without_restriction(self) -> None:
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
         write_cross_item_data_to_storage(all_items)
 
@@ -774,6 +770,64 @@ class TestGetTraces(BaseApiTest):
             assert (
                 count_attr.value.val_int == 2
             ), f"Expected count of 2 items per trace (1 span + 1 log), got {count_attr.value.val_int}"
+
+    def test_multiple_item_types_start_timestamp(self) -> None:
+        trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
+        write_cross_item_data_to_storage(all_items)
+
+        message = GetTracesRequest(
+            meta=create_request_meta(start_time, end_time),
+            attributes=[
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_START_TIMESTAMP,
+                    type=AttributeKey.TYPE_DOUBLE,
+                ),
+            ],
+        )
+
+        response = EndpointGetTraces().execute(message)
+
+        assert len(response.traces) == 6
+        for i, trace in enumerate(response.traces):
+            # Traces are returned in descending order of start timestamp
+            trace_index = 5 - i
+            expected_timestamp = (
+                start_time + timedelta(minutes=trace_index * 10, seconds=10)
+            ).timestamp()
+            assert trace.attributes[0].value.val_double == expected_timestamp
+
+    def test_default_start_timestamp(self) -> None:
+        spans = [
+            TraceItem(
+                organization_id=1,
+                project_id=1,
+                item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                timestamp=Timestamp(seconds=int(_BASE_TIME.timestamp())),
+                trace_id=uuid.uuid4().hex,
+                item_id=uuid.uuid4().int.to_bytes(16, byteorder="little"),
+                received=Timestamp(seconds=int(_BASE_TIME.timestamp())),
+                retention_days=90,
+                server_sample_rate=1.0,
+                attributes={},
+            ).SerializeToString()
+        ]
+        write_cross_item_data_to_storage(spans)
+
+        message = GetTracesRequest(
+            meta=create_request_meta(_BASE_TIME, _BASE_TIME + timedelta(hours=1)),
+            attributes=[
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_START_TIMESTAMP,
+                    type=AttributeKey.TYPE_DOUBLE,
+                ),
+            ],
+        )
+        response = EndpointGetTraces().execute(message)
+
+        assert len(response.traces) == 1
+        assert (
+            response.traces[0].attributes[0].value.val_double == _BASE_TIME.timestamp()
+        )
 
 
 def generate_spans(spans_data: list[bytes]) -> list[TraceItem]:
@@ -829,25 +883,6 @@ def create_cross_item_test_data() -> tuple[list[str], list[bytes], datetime, dat
         # Spread items evenly across the 1-hour window
         item_time = start_time + timedelta(minutes=i * 10)
 
-        if i < 3:  # First 3 traces have matching span attributes
-            span_attrs = {
-                "span.attr1": AnyValue(string_value="val1"),
-            }
-        else:  # Last 3 traces have different span attributes
-            span_attrs = {
-                "span.attr1": AnyValue(string_value="other_val1"),
-            }
-
-        all_items.append(
-            gen_item_message(
-                start_timestamp=item_time,
-                trace_id=trace_id,
-                type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                attributes=span_attrs,
-                remove_default_attributes=True,
-            )
-        )
-
         if i < 3:  # First 3 traces have matching log attributes
             log_attrs = {
                 "log.attr2": AnyValue(string_value="val2"),
@@ -859,10 +894,29 @@ def create_cross_item_test_data() -> tuple[list[str], list[bytes], datetime, dat
 
         all_items.append(
             gen_item_message(
-                start_timestamp=item_time + timedelta(seconds=10),
+                start_timestamp=item_time,
                 trace_id=trace_id,
                 type=TraceItemType.TRACE_ITEM_TYPE_LOG,
                 attributes=log_attrs,
+                remove_default_attributes=True,
+            )
+        )
+
+        if i < 3:  # First 3 traces have matching span attributes
+            span_attrs = {
+                "span.attr1": AnyValue(string_value="val1"),
+            }
+        else:  # Last 3 traces have different span attributes
+            span_attrs = {
+                "span.attr1": AnyValue(string_value="other_val1"),
+            }
+
+        all_items.append(
+            gen_item_message(
+                start_timestamp=item_time + timedelta(seconds=10),
+                trace_id=trace_id,
+                type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                attributes=span_attrs,
                 remove_default_attributes=True,
             )
         )
