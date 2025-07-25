@@ -307,18 +307,4 @@ mod tests {
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("after 5 attempts"));
     }
-
-    #[tokio::test]
-    async fn test_retry_fails_after_max_attempts() {
-        // This test is redundant with the previous one since both test the same scenario
-        // (network errors causing all retries to fail)
-        // The previous test already covers this case
-    }
-
-    #[tokio::test]
-    async fn test_retry_with_network_errors() {
-        // This test is also covered by the first test since network errors
-        // are the primary failure mode when connecting to a non-existent server
-        // The first test already verifies the retry behavior with network errors
-    }
 }
