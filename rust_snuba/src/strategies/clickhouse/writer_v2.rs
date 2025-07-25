@@ -205,6 +205,8 @@ impl ClickhouseClient {
                     }
                 }
                 Err(e) => {
+                    counter!("rust_consumer.clickhouse_insert_error", 1, "status" => "network_error");
+
                     if attempt == MAX_RETRIES {
                         anyhow::bail!(
                             "error writing to clickhouse after {} attempts: {}",
