@@ -187,13 +187,13 @@ impl ClickhouseClient {
                         return Ok(response);
                     } else {
                         let status = response.status().to_string();
-                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status);
                         let error_text = response
                             .text()
                             .await
                             .unwrap_or_else(|_| "unknown error".to_string());
 
                         if attempt == MAX_RETRIES {
+                            counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "false");
                             anyhow::bail!(
                                 "error writing to clickhouse after {} attempts: {}",
                                 MAX_RETRIES + 1,
@@ -201,6 +201,7 @@ impl ClickhouseClient {
                             );
                         }
 
+                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "true");
                         tracing::warn!(
                             "ClickHouse write failed (attempt {}/{}): status={}, error={}",
                             attempt + 1,
@@ -211,15 +212,15 @@ impl ClickhouseClient {
                     }
                 }
                 Err(e) => {
-                    counter!("rust_consumer.clickhouse_insert_error", 1, "status" => "network_error");
-
                     if attempt == MAX_RETRIES {
+                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => "network_error", "retried" => "false");
                         anyhow::bail!(
                             "error writing to clickhouse after {} attempts: {}",
                             MAX_RETRIES + 1,
                             e
                         );
                     }
+                    counter!("rust_consumer.clickhouse_insert_error", 1, "status" => "network_error", "retried" => "true");
 
                     tracing::warn!(
                         "ClickHouse write failed (attempt {}/{}): {}",
