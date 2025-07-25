@@ -43,6 +43,15 @@ dependencies = [
     "werkzeug==3.0.6",
 ]
 
+[tool.uv]
+environments = ["sys_platform == 'darwin' or sys_platform == 'linux'"]
+
+[[tool.uv.index]]
+# We don't allow using public pypi - submit a PR to
+# https://github.com/getsentry/pypi to add a dependency.
+url = "https://pypi.devinfra.sentry.io/simple"
+default = true
+
 [build-system]
 requires = ["uv_build==0.8.2"]
 build-backend = "uv_build"
