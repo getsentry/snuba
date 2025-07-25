@@ -149,19 +149,22 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             clickhouse_settings={},
             can_run=True,
         )
+        in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
         if span:
             span.set_data(
                 "downsampling_mode",
                 "highest_accuracy"
-                if self._is_highest_accuracy_mode(routing_context)
+                if self._is_highest_accuracy_mode(in_msg_meta)
                 else "normal",
             )
-        if self._is_highest_accuracy_mode(routing_context):
+        if (
+            self._is_highest_accuracy_mode(in_msg_meta)
+            or in_msg_meta.trace_item_type not in _ITEM_TYPE_TO_OUTCOME
+        ):
             if span:
                 span.set_data("tier", routing_decision.tier.name)
             return routing_decision
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
-        in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
         start_ts = in_msg_meta.start_timestamp.seconds
         end_ts = in_msg_meta.end_timestamp.seconds
         time_range_secs = end_ts - start_ts
