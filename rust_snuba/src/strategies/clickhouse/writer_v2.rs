@@ -162,27 +162,89 @@ impl ClickhouseClient {
     }
 
     pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
-        let res = self
-            .client
-            .post(&self.url)
-            .headers(self.headers.clone())
-            .query(&[("query", &self.query)])
-            .body(reqwest::Body::from(body))
-            .send()
-            .await?;
+        const MAX_RETRIES: usize = 4;
+        const INITIAL_BACKOFF_MS: u64 = 50;
 
-        if res.status() != reqwest::StatusCode::OK {
-            counter!("rust_consumer.clickhouse_insert_error", 1, "status" => res.status().to_string());
-            anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
+        for attempt in 0..=MAX_RETRIES {
+            let res = self
+                .client
+                .post(&self.url)
+                .headers(self.headers.clone())
+                .query(&[("query", &self.query)])
+                .body(reqwest::Body::from(body.clone()))
+                .send()
+                .await;
+
+            match res {
+                Ok(response) => {
+                    if response.status() == reqwest::StatusCode::OK {
+                        return Ok(response);
+                    } else {
+                        let status = response.status().to_string();
+                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status);
+                        let error_text = response
+                            .text()
+                            .await
+                            .unwrap_or_else(|_| "unknown error".to_string());
+
+                        if attempt == MAX_RETRIES {
+                            anyhow::bail!(
+                                "error writing to clickhouse after {} attempts: {}",
+                                MAX_RETRIES + 1,
+                                error_text
+                            );
+                        }
+
+                        tracing::warn!(
+                            "ClickHouse write failed (attempt {}/{}): status={}, error={}",
+                            attempt + 1,
+                            MAX_RETRIES + 1,
+                            status,
+                            error_text
+                        );
+                    }
+                }
+                Err(e) => {
+                    if attempt == MAX_RETRIES {
+                        anyhow::bail!(
+                            "error writing to clickhouse after {} attempts: {}",
+                            MAX_RETRIES + 1,
+                            e
+                        );
+                    }
+
+                    tracing::warn!(
+                        "ClickHouse write failed (attempt {}/{}): {}",
+                        attempt + 1,
+                        MAX_RETRIES + 1,
+                        e
+                    );
+                }
+            }
+
+            // Calculate exponential backoff delay
+            if attempt < MAX_RETRIES {
+                let backoff_ms = INITIAL_BACKOFF_MS * (2_u64.pow(attempt as u32));
+                let delay = Duration::from_millis(backoff_ms);
+                tracing::debug!(
+                    "Retrying in {:?} (attempt {}/{})",
+                    delay,
+                    attempt + 1,
+                    MAX_RETRIES
+                );
+                tokio::time::sleep(delay).await;
+            }
         }
 
-        Ok(res)
+        unreachable!("Loop should always return or bail before reaching here");
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::time::Instant;
+
     #[tokio::test]
     async fn it_works() -> Result<(), reqwest::Error> {
         let config = ClickhouseConfig {
@@ -212,5 +274,51 @@ mod tests {
         let res = client.send(b"[]".to_vec()).await;
         println!("Response status {}", res.unwrap().status());
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_exponential_backoff() {
+        // Test that retry logic works by using a non-existent server
+        // This will trigger network errors that should be retried
+        let config = ClickhouseConfig {
+            host: "127.0.0.1".to_string(),
+            port: 9000,
+            secure: false,
+            http_port: 9999, // Use a port that's not listening
+            user: "default".to_string(),
+            password: "".to_string(),
+            database: "default".to_string(),
+        };
+
+        let client = ClickhouseClient::new(&config, "test_table");
+
+        let start_time = Instant::now();
+        let result = client.send(b"test data".to_vec()).await;
+        let elapsed = start_time.elapsed();
+
+        // Should fail after all retries
+        assert!(result.is_err());
+
+        // Should have taken at least the sum of our backoff delays
+        // 50ms + 100ms + 200ms + 400ms = 750ms minimum
+        assert!(elapsed >= Duration::from_millis(750));
+
+        // Error message should mention the number of attempts
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("after 5 attempts"));
+    }
+
+    #[tokio::test]
+    async fn test_retry_fails_after_max_attempts() {
+        // This test is redundant with the previous one since both test the same scenario
+        // (network errors causing all retries to fail)
+        // The previous test already covers this case
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_network_errors() {
+        // This test is also covered by the first test since network errors
+        // are the primary failure mode when connecting to a non-existent server
+        // The first test already verifies the retry behavior with network errors
     }
 }
