@@ -587,17 +587,6 @@ wheels = [
 ]
 
 [[package]]
-name = "maturin"
-version = "1.4.0"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/maturin-1.4.0-py3-none-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:076970a73da7fa3648204a584cd347b899c1ea67f8124b212bccd06728e63ed9" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/maturin-1.4.0-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:f8eded83abdb30b2b6ae6d32c80b8192bdd8bcfec0ebfacee6ac02434aa499d6" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/maturin-1.4.0-py3-none-manylinux_2_12_x86_64.manylinux2010_x86_64.musllinux_1_1_x86_64.whl", hash = "sha256:16239a7648ef17976585353e381840c18e650d352576ed9545abca407d65e534" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/maturin-1.4.0-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.musllinux_1_1_aarch64.whl", hash = "sha256:77428c043d585f038f4b056c4d617e00a8027b49598ab6d065b8f6b9b9b8d144" },
-]
-
-[[package]]
 name = "mccabe"
 version = "0.7.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -1204,7 +1193,6 @@ dependencies = [
     { name = "pyuwsgi", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pyyaml", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "redis", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-    { name = "rust-snuba", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "sentry-arroyo", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "sentry-kafka-schemas", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "sentry-protos", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1222,6 +1210,11 @@ dependencies = [
     { name = "werkzeug", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 
+[package.optional-dependencies]
+rust = [
+    { name = "rust-snuba", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "black", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1229,7 +1222,6 @@ dev = [
     { name = "flake8", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "freezegun", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "honcho", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-    { name = "maturin", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "mypy", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pre-commit", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pytest", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1272,7 +1264,7 @@ requires-dist = [
     { name = "pyuwsgi", specifier = "==2.0.23" },
     { name = "pyyaml", specifier = "==6.0" },
     { name = "redis", specifier = "==4.5.4" },
-    { name = "rust-snuba", editable = "rust_snuba" },
+    { name = "rust-snuba", marker = "extra == 'rust'", editable = "rust_snuba" },
     { name = "sentry-arroyo", specifier = "==2.27.0" },
     { name = "sentry-kafka-schemas", specifier = "==1.3.7" },
     { name = "sentry-protos", specifier = "==0.3.0" },
@@ -1289,6 +1281,7 @@ requires-dist = [
     { name = "urllib3", specifier = "==2.2.3" },
     { name = "werkzeug", specifier = "==3.0.6" },
 ]
+provides-extras = ["rust"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1297,7 +1290,6 @@ dev = [
     { name = "flake8", specifier = "==7.0.0" },
     { name = "freezegun", specifier = "==1.2.2" },
     { name = "honcho", specifier = "==1.1.0" },
-    { name = "maturin", specifier = "==1.4.0" },
     { name = "mypy", specifier = "==1.1.1" },
     { name = "pre-commit", specifier = "==4.2.0" },
     { name = "pytest", specifier = "==8.3.3" },

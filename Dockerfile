@@ -6,8 +6,8 @@ WORKDIR /usr/src/snuba
 # We don't want uv-managed python, we want to use python from the image.
 RUN python3 -m venv .venv
 
-ENV PATH=/usr/src/getsentry/.venv/bin:$PATH UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1
-COPY --from=ghcr.io/astral-sh/uv:0.8.2 /uv /bin/
+ENV PATH=/usr/src/snuba/.venv/bin:$PATH UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1
+COPY --from=ghcr.io/astral-sh/uv:0.8.2 /uv /uvx /bin/
 
 RUN set -ex; \
     \
@@ -43,7 +43,7 @@ FROM build_base AS base
 COPY pyproject.toml uv.lock ./
 RUN set -ex; \
     \
-    uv sync --no-dev --frozen; \
+    uv sync --no-dev --frozen --no-install-project; \
     mkdir /tmp/uwsgi-dogstatsd; \
     wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
     | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
@@ -79,6 +79,8 @@ ENV PATH="/root/.cargo/bin/:${PATH}"
 
 FROM build_rust_snuba_base AS build_rust_snuba_deps
 
+COPY ./rust_snuba/pyproject.toml ./rust_snuba/pyproject.toml
+COPY ./uv.lock ./uv.lock
 COPY ./rust_snuba/Cargo.toml ./rust_snuba/Cargo.toml
 COPY ./rust_snuba/rust-toolchain.toml ./rust_snuba/rust-toolchain.toml
 COPY ./rust_snuba/Cargo.lock ./rust_snuba/Cargo.lock
@@ -88,7 +90,8 @@ RUN set -ex; \
     sh scripts/rust-dummy-build.sh; \
     cd ./rust_snuba/; \
     rustup show active-toolchain || rustup toolchain install; \
-    maturin build --release --compatibility linux --locked
+    uv tool install 'maturin==1.4.0'; \
+    uvx maturin build --release --compatibility linux --locked
 
 FROM build_rust_snuba_base AS build_rust_snuba
 COPY ./rust_snuba/ ./rust_snuba/
@@ -97,7 +100,8 @@ COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
     cd ./rust_snuba/; \
     rustup show active-toolchain || rustup toolchain install; \
-    maturin build --release --compatibility linux --locked
+    uv tool install 'maturin==1.4.0'; \
+    uvx maturin build --release --compatibility linux --locked
 
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
@@ -159,11 +163,12 @@ USER snuba
 FROM application_base AS testing
 
 USER 0
-RUN uv sync --frozen
-
 COPY ./rust_snuba/ ./rust_snuba/
 # re-"install" rust for the testing image
 COPY --from=build_rust_snuba /root/.cargo/ /root/.cargo/
 COPY --from=build_rust_snuba /root/.rustup/ /root/.rustup/
+
+RUN uv sync --extra rust --frozen
+
 ENV PATH="${PATH}:/root/.cargo/bin/"
 USER snuba

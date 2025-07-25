@@ -42,8 +42,9 @@ backend-typing:
 
 # install-rs-dev mimicks sentry's naming conventions
 install-rs-dev:
+	uv tool install 'maturin==1.4.0'
 	@which cargo || (echo "!!! You need an installation of Rust in order to develop snuba. Go to https://rustup.rs to get one." && exit 1)
-	. scripts/rust-envvars && cd rust_snuba/ && maturin develop
+	. scripts/rust-envvars && cd rust_snuba/ && uvx maturin develop
 .PHONY: install-rs-dev
 
 snubadocs:
@@ -73,7 +74,7 @@ generate-config-docs:
 watch-rust-snuba:
 	which cargo-watch || cargo install cargo-watch
 	. scripts/rust-envvars && \
-		cd rust_snuba/ && cargo watch -s 'maturin develop'
+		cd rust_snuba/ && cargo watch -s 'uvx maturin develop'
 .PHONY: watch-rust-snuba
 
 test-rust:

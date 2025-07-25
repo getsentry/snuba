@@ -40,6 +40,12 @@ dependencies = [
     "structlog-sentry==2.0.0",
     "urllib3==2.2.3",
     "werkzeug==3.0.6",
+]
+
+[project.optional-dependencies]
+# not an optional dependency, but it's kept to an extra
+# for better docker layers
+rust = [
     "rust-snuba",
 ]
 
@@ -75,7 +81,6 @@ dev = [
     "flake8==7.0.0",
     "freezegun==1.2.2",
     "honcho==1.1.0",
-    "maturin==1.4.0",
     "mypy==1.1.1",
     "pre-commit==4.2.0",
     "pytest==8.3.3",
