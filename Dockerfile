@@ -3,12 +3,11 @@ ARG PYTHON_VERSION=3.11.11
 FROM python:${PYTHON_VERSION}-slim-bookworm AS build_base
 WORKDIR /usr/src/snuba
 
-ENV PIP_NO_CACHE_DIR=off \
-    PIP_DISABLE_PIP_VERSION_CHECK=on
+# We don't want uv-managed python, we want to use python from the image.
+RUN python3 -m venv .venv
 
-# requirements-build.txt is separate from requirements.txt so that Python
-# dependency bumps do not cause invalidation of the Rust layer.
-COPY requirements-build.txt ./
+ENV PATH=/usr/src/snuba/.venv/bin:$PATH UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1
+COPY --from=ghcr.io/astral-sh/uv:0.8.2 /uv /uvx /bin/
 
 RUN set -ex; \
     \
@@ -36,18 +35,15 @@ RUN set -ex; \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps $runtimeDeps --no-install-recommends; \
-    pip install -r requirements-build.txt; \
     ln -s /usr/lib/*/libjemalloc.so.2 /usr/src/snuba/libjemalloc.so.2; \
     echo "$buildDeps" > /tmp/build-deps.txt
 
 FROM build_base AS base
 
-# Install dependencies first because requirements.txt is way less likely to be
-# changed compared to the rest of the application.
-COPY requirements.txt ./
+COPY pyproject.toml uv.lock ./
 RUN set -ex; \
     \
-    pip install -r requirements.txt; \
+    uv sync --no-dev --frozen --no-install-project; \
     mkdir /tmp/uwsgi-dogstatsd; \
     wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
     | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
@@ -83,6 +79,8 @@ ENV PATH="/root/.cargo/bin/:${PATH}"
 
 FROM build_rust_snuba_base AS build_rust_snuba_deps
 
+COPY ./rust_snuba/pyproject.toml ./rust_snuba/pyproject.toml
+COPY ./uv.lock ./uv.lock
 COPY ./rust_snuba/Cargo.toml ./rust_snuba/Cargo.toml
 COPY ./rust_snuba/rust-toolchain.toml ./rust_snuba/rust-toolchain.toml
 COPY ./rust_snuba/Cargo.lock ./rust_snuba/Cargo.lock
@@ -92,7 +90,8 @@ RUN set -ex; \
     sh scripts/rust-dummy-build.sh; \
     cd ./rust_snuba/; \
     rustup show active-toolchain || rustup toolchain install; \
-    maturin build --release --compatibility linux --locked
+    uv tool install 'maturin==1.4.0'; \
+    uvx maturin build --release --compatibility linux --locked
 
 FROM build_rust_snuba_base AS build_rust_snuba
 COPY ./rust_snuba/ ./rust_snuba/
@@ -101,7 +100,8 @@ COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
     cd ./rust_snuba/; \
     rustup show active-toolchain || rustup toolchain install; \
-    maturin build --release --compatibility linux --locked
+    uv tool install 'maturin==1.4.0'; \
+    uvx maturin build --release --compatibility linux --locked
 
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
@@ -132,9 +132,8 @@ RUN set -ex; \
     # Ensure that we are always importing the installed rust_snuba wheel, and not the
     # (basically empty) rust_snuba folder
     rm -rf ./rust_snuba/; \
-    [ -z "`find /tmp/rust_wheels -type f`" ] || pip install /tmp/rust_wheels/*; \
+    [ -z "`find /tmp/rust_wheels -type f`" ] || uv pip install /tmp/rust_wheels/*; \
     rm -rf /tmp/rust_wheels/; \
-    pip install -e .; \
     snuba --help
 
 ARG SOURCE_COMMIT
@@ -164,11 +163,12 @@ USER snuba
 FROM application_base AS testing
 
 USER 0
-RUN pip install -r requirements-test.txt
-
 COPY ./rust_snuba/ ./rust_snuba/
 # re-"install" rust for the testing image
 COPY --from=build_rust_snuba /root/.cargo/ /root/.cargo/
 COPY --from=build_rust_snuba /root/.rustup/ /root/.rustup/
+
+RUN uv sync --extra rust --frozen
+
 ENV PATH="${PATH}:/root/.cargo/bin/"
 USER snuba
