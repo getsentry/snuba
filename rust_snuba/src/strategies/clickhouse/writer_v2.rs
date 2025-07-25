@@ -165,13 +165,17 @@ impl ClickhouseClient {
         const MAX_RETRIES: usize = 4;
         const INITIAL_BACKOFF_MS: u64 = 50;
 
+        // Convert to Bytes once for efficient cloning since sending the request
+        // moves the body into the request body.
+        let body_bytes = bytes::Bytes::from(body);
+
         for attempt in 0..=MAX_RETRIES {
             let res = self
                 .client
                 .post(&self.url)
                 .headers(self.headers.clone())
                 .query(&[("query", &self.query)])
-                .body(reqwest::Body::from(body.clone()))
+                .body(reqwest::Body::from(body_bytes.clone()))
                 .send()
                 .await;
 
