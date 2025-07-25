@@ -28,6 +28,7 @@ fn clickhouse_task_runner(
             let batch_len = insert_batch.len();
             let (rows, empty_batch) = insert_batch.take();
             let encoded_rows = rows.into_encoded_rows();
+            let num_bytes = encoded_rows.len();
 
             let write_start = SystemTime::now();
 
@@ -58,6 +59,7 @@ fn clickhouse_task_runner(
             }
 
 
+            counter!("insertions.batch_write_bytes", num_bytes as i64);
             counter!("insertions.batch_write_msgs", batch_len as i64);
             empty_batch.record_message_latency();
 
