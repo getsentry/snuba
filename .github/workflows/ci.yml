@@ -227,7 +227,7 @@ jobs:
 
 
   tests:
-    # needs: [linting, snuba-image]
+    needs: [linting, snuba-image]
     name: Tests and code coverage
     runs-on: ubuntu-latest
     timeout-minutes: 40

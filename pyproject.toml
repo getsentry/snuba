@@ -14,7 +14,6 @@ dependencies = [
     "google-cloud-storage==2.18.0",
     "googleapis-common-protos==1.63.2",
     "jsonschema==4.23.0",
-    "maturin==1.4.0",
     "packaging==24.1",
     "parsimonious==0.10.0",
     "progressbar2==4.2.0",
@@ -41,10 +40,17 @@ dependencies = [
     "structlog-sentry==2.0.0",
     "urllib3==2.2.3",
     "werkzeug==3.0.6",
+    "rust-snuba",
 ]
 
 [tool.uv]
 environments = ["sys_platform == 'darwin' or sys_platform == 'linux'"]
+
+[tool.uv.sources]
+rust-snuba = { workspace = true }
+
+[tool.uv.workspace]
+members = ["rust_snuba"]
 
 [[tool.uv.index]]
 # We don't allow using public pypi - submit a PR to
@@ -69,6 +75,7 @@ dev = [
     "flake8==7.0.0",
     "freezegun==1.2.2",
     "honcho==1.1.0",
+    "maturin==1.4.0",
     "mypy==1.1.1",
     "pre-commit==4.2.0",
     "pytest==8.3.3",
