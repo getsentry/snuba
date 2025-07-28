@@ -129,13 +129,12 @@ RUN set -ex; \
     groupadd -r snuba --gid 1000; \
     useradd -r -g snuba --uid 1000 snuba; \
     chown -R snuba:snuba ./; \
+    uv sync --no-dev --frozen; \
     # Ensure that we are always importing the installed rust_snuba wheel, and not the
     # (basically empty) rust_snuba folder
     rm -rf ./rust_snuba/; \
     [ -z "`find /tmp/rust_wheels -type f`" ] || uv pip install /tmp/rust_wheels/*; \
     rm -rf /tmp/rust_wheels/; \
-    # This should be very fast as we're only installing the project now
-    uv sync --no-dev --frozen; \
     snuba --help
 
 ARG SOURCE_COMMIT
