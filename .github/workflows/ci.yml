@@ -468,7 +468,7 @@ jobs:
           /version/ { if (pkg == "devservices") print "version="$2 }
         ' uv.lock >> $GITHUB_OUTPUT
 
-    - uses: getsentry/action-validate-devservices-config@ba40928c79514fc62b969faadc763b79f01beeda
+    - uses: getsentry/action-validate-devservices-config@711ae7221998ddf81211f25f5e3873ecffd22387
       name: Validate devservices config
       with:
         devservices-version: ${{ steps.get-devservices-version.outputs.version }}
