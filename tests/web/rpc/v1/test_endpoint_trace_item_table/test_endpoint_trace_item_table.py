@@ -2328,6 +2328,203 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
+    def test_aggregation_filter_with_binary_formula(self) -> None:
+        """
+        This test ensures that BinaryFormula can be used in aggregation_filter
+        to filter groups based on calculated aggregation results (like failure rate).
+        This simulates a SQL HAVING clause with complex expressions.
+        """
+        # Write test data with different success/failure patterns for different services
+        items_storage = get_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+
+        # Service A: High success rate (9 success, 1 failure = 10% failure rate)
+        service_a_messages = [
+            gen_item_message(
+                msg_timestamp,
+                attributes={
+                    "service_name": AnyValue(string_value="service_a"),
+                    "status": AnyValue(string_value="success"),
+                },
+            )
+            for _ in range(9)
+        ] + [
+            gen_item_message(
+                msg_timestamp,
+                attributes={
+                    "service_name": AnyValue(string_value="service_a"),
+                    "status": AnyValue(string_value="failure"),
+                },
+            )
+            for _ in range(1)
+        ]
+
+        # Service B: Medium failure rate (6 success, 4 failure = 40% failure rate)
+        service_b_messages = [
+            gen_item_message(
+                msg_timestamp,
+                attributes={
+                    "service_name": AnyValue(string_value="service_b"),
+                    "status": AnyValue(string_value="success"),
+                },
+            )
+            for _ in range(6)
+        ] + [
+            gen_item_message(
+                msg_timestamp,
+                attributes={
+                    "service_name": AnyValue(string_value="service_b"),
+                    "status": AnyValue(string_value="failure"),
+                },
+            )
+            for _ in range(4)
+        ]
+
+        # Service C: High failure rate (2 success, 8 failure = 80% failure rate)
+        service_c_messages = [
+            gen_item_message(
+                msg_timestamp,
+                attributes={
+                    "service_name": AnyValue(string_value="service_c"),
+                    "status": AnyValue(string_value="success"),
+                },
+            )
+            for _ in range(2)
+        ] + [
+            gen_item_message(
+                msg_timestamp,
+                attributes={
+                    "service_name": AnyValue(string_value="service_c"),
+                    "status": AnyValue(string_value="failure"),
+                },
+            )
+            for _ in range(8)
+        ]
+
+        all_messages = service_a_messages + service_b_messages + service_c_messages
+        write_raw_unprocessed_events(items_storage, all_messages)  # type: ignore
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="service_name")
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="service_name")
+                ),
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="status"
+                                ),
+                                filter=TraceItemFilter(
+                                    comparison_filter=ComparisonFilter(
+                                        key=AttributeKey(
+                                            type=AttributeKey.TYPE_STRING, name="status"
+                                        ),
+                                        op=ComparisonFilter.OP_EQUALS,
+                                        value=AttributeValue(val_str="failure"),
+                                    )
+                                ),
+                                label="failure_count",
+                            ),
+                        ),
+                        right=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="status"
+                                ),
+                                label="total_count",
+                            ),
+                        ),
+                    ),
+                    label="failure_rate",
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="service_name")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="service_name"
+                        )
+                    )
+                ),
+            ],
+            aggregation_filter=AggregationFilter(
+                comparison_filter=AggregationComparisonFilter(
+                    # Using the actual failure rate formula instead of placeholder
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="status"
+                                ),
+                                filter=TraceItemFilter(
+                                    comparison_filter=ComparisonFilter(
+                                        key=AttributeKey(
+                                            type=AttributeKey.TYPE_STRING, name="status"
+                                        ),
+                                        op=ComparisonFilter.OP_EQUALS,
+                                        value=AttributeValue(val_str="failure"),
+                                    )
+                                ),
+                                label="failure_count",
+                            ),
+                        ),
+                        right=Column(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="status"
+                                ),
+                                label="total_count",
+                            ),
+                        ),
+                    ),
+                    op=AggregationComparisonFilter.OP_GREATER_THAN,
+                    val=0.3,  # Filter for failure rate > 30%
+                )
+            ),
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        expected_response_column_values = [
+            TraceItemColumnValues(
+                attribute_name="service_name",
+                results=[
+                    AttributeValue(val_str="service_b"),
+                    AttributeValue(val_str="service_c"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="failure_rate",
+                results=[
+                    AttributeValue(val_double=0.4),  # 4/10 = 40%
+                    AttributeValue(val_double=0.8),  # 8/10 = 80%
+                ],
+            ),
+        ]
+        assert response.column_values == expected_response_column_values
+
     def test_offset_pagination(self, setup_teardown: Any) -> None:
         def make_request(page_token: PageToken) -> TraceItemTableRequest:
             return TraceItemTableRequest(

@@ -94,6 +94,19 @@ def aggregation_filter_to_expression(
                 raise BadSnubaRPCRequestException(
                     f"Unsupported aggregation filter op: {AggregationComparisonFilter.Op.Name(agg_filter.comparison_filter.op)}"
                 )
+            if agg_filter.comparison_filter.HasField(
+                "formula"
+            ) and agg_filter.comparison_filter.HasField("aggregation"):
+                raise BadSnubaRPCRequestException(
+                    "Cannot use formula and aggregation in the same filter"
+                )
+            elif agg_filter.comparison_filter.HasField("formula"):
+                return op_expr(
+                    _formula_to_expression(
+                        agg_filter.comparison_filter.formula, request_meta
+                    ),
+                    agg_filter.comparison_filter.val,
+                )
             return op_expr(
                 aggregation_to_expression(
                     agg_filter.comparison_filter.conditional_aggregation,
@@ -313,6 +326,7 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     elif column.HasField("literal"):
         return literal(column.literal.val_double)
     else:
+        print(column)
         raise BadSnubaRPCRequestException(
             "Column is not one of: aggregate, attribute key, or formula"
         )
