@@ -134,6 +134,7 @@ RUN set -ex; \
     rm -rf ./rust_snuba/; \
     [ -z "`find /tmp/rust_wheels -type f`" ] || uv pip install /tmp/rust_wheels/*; \
     rm -rf /tmp/rust_wheels/; \
+    # This should be very fast as we're only installing the project now
     uv sync --no-dev --frozen; \
     snuba --help
 
@@ -168,8 +169,6 @@ COPY ./rust_snuba/ ./rust_snuba/
 # re-"install" rust for the testing image
 COPY --from=build_rust_snuba /root/.cargo/ /root/.cargo/
 COPY --from=build_rust_snuba /root/.rustup/ /root/.rustup/
-
-RUN uv sync --extra rust --frozen
 
 ENV PATH="${PATH}:/root/.cargo/bin/"
 USER snuba

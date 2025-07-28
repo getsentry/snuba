@@ -3,7 +3,6 @@ import sys
 from subprocess import call, list2cmdline
 
 import click
-from honcho.manager import Manager
 
 from snuba import settings
 
@@ -582,6 +581,8 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                 ],
             ),
         ]
+
+    from honcho.manager import Manager
 
     manager = Manager()
     for name, cmd in daemons:
