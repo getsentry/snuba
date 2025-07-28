@@ -64,6 +64,13 @@ pub struct ConsumerStrategyFactoryV2 {
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
     fn update_partitions(&self, partitions: &HashMap<Partition, u64>) {
+        let assigned_partitions = partitions
+            .keys()
+            .map(|partition| partition.index.to_string())
+            .collect::<Vec<_>>()
+            .join("-");
+        set_global_tag("assigned_partitions".to_owned(), assigned_partitions);
+
         match partitions.keys().map(|partition| partition.index).min() {
             Some(min) => set_global_tag("min_partition".to_owned(), min.to_string()),
             None => set_global_tag("min_partition".to_owned(), "none".to_owned()),
