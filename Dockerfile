@@ -96,7 +96,7 @@ COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
     cd ./rust_snuba/; \
     uv tool install 'maturin==1.4.0'; \
-    uvx maturin build --release --compatibility linux --locked
+    RUSTFLAGS="-g" uvx maturin build --compatibility linux --locked
 
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
