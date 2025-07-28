@@ -1,0 +1,17 @@
+<yandex>
+    <profiles>
+        <default>
+            <!-- artificially low  to induce OOM errors -->
+            <max_memory_usage>10000</max_memory_usage>
+            <!-- other settings -->
+        </default>
+    </profiles>
+    <users>
+        <default>
+            <profile>default</profile>
+            <no_password/>
+            <!-- other user settings -->
+        </default>
+        <!-- other users -->
+    </users>
+</yandex>

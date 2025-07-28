@@ -67,6 +67,7 @@ services:
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/sentry.xml
+      - ./clickhouse/users.xml:/etc/clickhouse-server/users.xml
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
