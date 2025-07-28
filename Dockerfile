@@ -79,8 +79,6 @@ ENV PATH="/root/.cargo/bin/:${PATH}"
 
 FROM build_rust_snuba_base AS build_rust_snuba_deps
 
-COPY ./rust_snuba/pyproject.toml ./rust_snuba/pyproject.toml
-COPY ./uv.lock ./uv.lock
 COPY ./rust_snuba/Cargo.toml ./rust_snuba/Cargo.toml
 COPY ./rust_snuba/rust-toolchain.toml ./rust_snuba/rust-toolchain.toml
 COPY ./rust_snuba/Cargo.lock ./rust_snuba/Cargo.lock
@@ -89,17 +87,14 @@ COPY ./scripts/rust-dummy-build.sh ./scripts/rust-dummy-build.sh
 RUN set -ex; \
     sh scripts/rust-dummy-build.sh; \
     cd ./rust_snuba/; \
-    rustup show active-toolchain || rustup toolchain install; \
-    uv tool install 'maturin==1.4.0'; \
-    uvx maturin build --release --compatibility linux --locked
+    rustup show active-toolchain || rustup toolchain install;
 
-FROM build_rust_snuba_base AS build_rust_snuba
+FROM build_rust_snuba_deps AS build_rust_snuba
 COPY ./rust_snuba/ ./rust_snuba/
 COPY --from=build_rust_snuba_deps /usr/src/snuba/rust_snuba/target/ ./rust_snuba/target/
 COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
     cd ./rust_snuba/; \
-    rustup show active-toolchain || rustup toolchain install; \
     uv tool install 'maturin==1.4.0'; \
     uvx maturin build --release --compatibility linux --locked
 
