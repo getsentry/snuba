@@ -68,7 +68,7 @@ validate-configs:
 	.venv/bin/python snuba/validate_configs.py
 
 generate-config-docs:
-	uv pip install -U -r ./docs-requirements.txt
+	uv pip install -r ./docs-requirements.txt
 	.venv/bin/python -m snuba.datasets.configuration.generate_config_docs
 
 watch-rust-snuba:
