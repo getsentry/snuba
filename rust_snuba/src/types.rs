@@ -276,6 +276,7 @@ impl BytesInsertBatch<RowData> {
 
     pub fn merge(mut self, other: BytesInsertBatch<RowData>) -> Self {
         self.rows.encoded_rows.extend(other.rows.encoded_rows);
+        self.rows.row_offsets.extend(other.rows.row_offsets);
         self.rows.num_rows += other.rows.num_rows;
         self.commit_log_offsets.merge(other.commit_log_offsets);
         self.message_timestamp.merge(other.message_timestamp);
@@ -306,6 +307,9 @@ impl BytesInsertBatch<HttpBatch> {
 pub struct RowData {
     pub encoded_rows: Vec<u8>,
     pub num_rows: usize,
+    /// The offset of each row in the encoded_rows vector. This way, if the batch needs to
+    /// be split into multiple batches, we can do so by slicing the encoded_rows vector
+    pub row_offsets: Vec<usize>,
 }
 
 impl RowData {
@@ -315,31 +319,37 @@ impl RowData {
     {
         let mut encoded_rows = Vec::new();
         let mut num_rows = 0;
+        let mut row_offsets = Vec::new();
         for row in rows {
             serde_json::to_writer(&mut encoded_rows, &row)?;
             debug_assert!(encoded_rows.ends_with(b"}"));
             encoded_rows.push(b'\n');
             num_rows += 1;
+            row_offsets.push(encoded_rows.len());
         }
 
         Ok(RowData {
             num_rows,
             encoded_rows,
+            row_offsets,
         })
     }
 
     pub fn from_encoded_rows(rows: Vec<Vec<u8>>) -> Self {
         let mut encoded_rows = Vec::new();
         let mut num_rows = 0;
+        let mut row_offsets = Vec::new();
         for row in rows {
             encoded_rows.extend_from_slice(&row);
             encoded_rows.push(b'\n');
             num_rows += 1;
+            row_offsets.push(encoded_rows.len());
         }
 
         RowData {
             encoded_rows,
             num_rows,
+            row_offsets,
         }
     }
 
@@ -381,5 +391,21 @@ mod tests {
         let now = Utc.timestamp_opt(65, 0).unwrap();
         assert_eq!(accumulator.max_value_ms(now), 4000);
         assert_eq!(accumulator.avg_value_ms(now), 3000);
+    }
+
+    #[test]
+    fn test_row_offsets() {
+        let rows = vec![
+            serde_json::json!({"hello": "world"}),
+            serde_json::json!({"hello1": "world1"}),
+        ];
+        let row_data = RowData::from_rows(rows).unwrap();
+        let row_1 = &row_data.encoded_rows[0..row_data.row_offsets[0]];
+        // verify the first row is valid JSON
+        let row_1_json: serde_json::Value = serde_json::from_slice(&row_1).unwrap();
+        assert_eq!(row_1_json, serde_json::json!({"hello": "world"}));
+        let row_2 = &row_data.encoded_rows[row_data.row_offsets[0]..row_data.row_offsets[1]];
+        let row_2_json: serde_json::Value = serde_json::from_slice(&row_2).unwrap();
+        assert_eq!(row_2_json, serde_json::json!({"hello1": "world1"}));
     }
 }
