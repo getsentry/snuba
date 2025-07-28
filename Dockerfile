@@ -134,6 +134,7 @@ RUN set -ex; \
     rm -rf ./rust_snuba/; \
     [ -z "`find /tmp/rust_wheels -type f`" ] || uv pip install /tmp/rust_wheels/*; \
     rm -rf /tmp/rust_wheels/; \
+    uv sync --no-dev --frozen; \
     snuba --help
 
 ARG SOURCE_COMMIT
