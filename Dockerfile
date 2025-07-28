@@ -164,5 +164,14 @@ COPY ./rust_snuba/ ./rust_snuba/
 COPY --from=build_rust_snuba /root/.cargo/ /root/.cargo/
 COPY --from=build_rust_snuba /root/.rustup/ /root/.rustup/
 
+COPY --from=build_rust_snuba /usr/src/snuba/rust_snuba/target/wheels/ /tmp/rust_wheels/
+RUN set -ex; \
+    # we need to resync, this time with dev dependencies
+    uv sync --frozen; \
+    # this will uninstall the rust wheel so we need to reinstall again
+    uv pip install /tmp/rust_wheels/*; \
+    rm -rf /tmp/rust_wheels/; \
+    snuba --help
+
 ENV PATH="${PATH}:/root/.cargo/bin/"
 USER snuba
