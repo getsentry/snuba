@@ -452,7 +452,6 @@ jobs:
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
-
   validate-devservices-config:
     runs-on: ubuntu-24.04
     needs: files-changed
@@ -460,7 +459,16 @@ jobs:
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       name: Checkout repository
-    - uses: getsentry/action-validate-devservices-config@02a078d1280293e6598cabfbd318a01609c12c83
+
+    - name: Get devservices version
+      id: get-devservices-version
+      run: |
+        awk -F'"' '
+          /name/ { pkg = $2 }
+          /version/ { if (pkg == "devservices") print "version="$2 }
+        ' uv.lock >> $GITHUB_OUTPUT
+
+    - uses: getsentry/action-validate-devservices-config@ba40928c79514fc62b969faadc763b79f01beeda
       name: Validate devservices config
       with:
-        requirements-file-path: requirements.txt
+        devservices-version: ${{ steps.get-devservices-version.outputs.version }}
