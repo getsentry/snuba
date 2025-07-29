@@ -9,6 +9,7 @@ from snuba.utils.schemas import UUID, Bool, DateTime, Float, Int, Map, String
 
 num_attr_buckets = 40
 storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
+sampling_weights = [8, 8**2, 8**3]
 old_version = 2
 new_version = 3
 
@@ -102,12 +103,10 @@ def generate_new_materialized_view_expression(sampling_weight: int) -> str:
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
-    sampling_weights = [8, 8**2, 8**3]
-
     def forwards_ops(self) -> Sequence[SqlOperation]:
         ops: List[SqlOperation] = []
 
-        for sampling_weight in self.sampling_weights:
+        for sampling_weight in sampling_weights:
             local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
 
             ops.append(
@@ -123,7 +122,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ops.append(
                 [
                     operations.DropTable(
-                        storage_set=self.storage_set_key,
+                        storage_set=storage_set_key,
                         table_name=f"eap_items_1_downsample_{sampling_weight}_mv_{old_version}",
                         target=OperationTarget.LOCAL,
                     ),
@@ -135,7 +134,7 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_ops(self) -> Sequence[SqlOperation]:
         ops: List[SqlOperation] = []
 
-        for sampling_weight in self.sampling_weights:
+        for sampling_weight in sampling_weights:
             local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
 
             ops.append(
@@ -151,7 +150,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ops.append(
                 [
                     operations.DropTable(
-                        storage_set=self.storage_set_key,
+                        storage_set=storage_set_key,
                         table_name=f"eap_items_1_downsample_{sampling_weight}_mv_{new_version}",
                         target=OperationTarget.LOCAL,
                     ),
