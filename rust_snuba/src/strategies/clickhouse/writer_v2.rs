@@ -132,7 +132,7 @@ impl Default for RetryConfig {
         Self {
             initial_backoff_ms: 500.0,
             max_retries: 4,
-            jitter_factor: 0.1,
+            jitter_factor: 0.2,
         }
     }
 }
@@ -248,10 +248,10 @@ impl ClickhouseClient {
             if attempt < retry_config.max_retries {
                 let backoff_ms =
                     retry_config.initial_backoff_ms * (2_u64.pow(attempt as u32) as f64);
-                // add/subtract up to 10% jitter to avoid every consumer retrying at the same time
+                // add/subtract up to 10% jitter (by default) to avoid every consumer retrying at the same time
                 // causing too many simultaneous queries
                 let jitter = rand::random::<f64>() * retry_config.jitter_factor
-                    - retry_config.jitter_factor / 2.0; // Random value between -0.1 and 0.1
+                    - retry_config.jitter_factor / 2.0; // Random value between (-jitter_factor/2, jitter_factor/2)
                 let delay = Duration::from_millis((backoff_ms * (1.0 + jitter)).round() as u64);
                 tracing::debug!(
                     "Retrying in {:?} (attempt {}/{})",
