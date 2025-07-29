@@ -165,7 +165,7 @@ impl ClickhouseClient {
 
     pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
         const MAX_RETRIES: usize = 4;
-        const INITIAL_BACKOFF_MS: u64 = 50;
+        const INITIAL_BACKOFF_MS: f64 = 500.0;
 
         // Convert to Bytes once for efficient cloning since sending the request
         // moves the body into the request body.
@@ -233,8 +233,11 @@ impl ClickhouseClient {
 
             // Calculate exponential backoff delay
             if attempt < MAX_RETRIES {
-                let backoff_ms = INITIAL_BACKOFF_MS * (2_u64.pow(attempt as u32));
-                let delay = Duration::from_millis(backoff_ms);
+                let backoff_ms = INITIAL_BACKOFF_MS * (2_u64.pow(attempt as u32) as f64);
+                // add/subtract up to 10% jitter to avoid every consumer retrying at the same time
+                // causing too many simultaneous queries
+                let jitter = rand::random::<f64>() * 0.2 - 0.1; // Random value between -0.1 and 0.1
+                let delay = Duration::from_millis((backoff_ms * (1.0 + jitter)).round() as u64);
                 tracing::debug!(
                     "Retrying in {:?} (attempt {}/{})",
                     delay,
