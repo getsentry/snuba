@@ -74,7 +74,7 @@ function Configurations(props: {
   function deleteConfig(toDelete: Configuration) {
     api
       .deleteConfiguration(
-        entity.name,
+        entity,
         configurable_component.name,
         toDelete.name,
         toDelete.params

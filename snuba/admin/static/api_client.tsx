@@ -89,14 +89,14 @@ interface Client {
   getRoutingStrategyConfigs: (strategy_name: string) => Promise<Configuration[]>;
   setConfiguration: (
     entity: Entity,
-    policy: string,
+    configurable_component_name: string,
     key: string,
     value: string,
     params: object,
   ) => Promise<void>;
   deleteConfiguration: (
-    entity_name: string,
-    policy: string,
+    entity: Entity,
+    configurable_component_name: string,
     key: string,
     params: object,
   ) => Promise<void>;
@@ -480,8 +480,19 @@ function Client(): Client {
       value: string,
       params: object,
     ) => {
-      const body = entity.type === "storage" ? JSON.stringify({ storage: entity.name, configurable_component_name, key, value, params }) : JSON.stringify({ strategy: entity.name, configurable_component_name, key, value, params });
-      const url = baseUrl + "allocation_policy_config";
+      console.log("dowenotheithere")
+      let body: string;
+      let url: string;
+
+      console.log("paramskdjlak", params)
+
+      if (entity.type === "storage") {
+        body = JSON.stringify({ storage: entity.name, policy: configurable_component_name, key, value, params })
+        url = baseUrl + "allocation_policy_config";
+      } else {
+        body = JSON.stringify({ strategy: configurable_component_name, key, value, params });
+        url = baseUrl + "routing_strategy_config";
+      }
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
@@ -498,16 +509,28 @@ function Client(): Client {
       });
     },
     deleteConfiguration: (
-      entity_name: string,
+      entity: Entity,
       configurable_component_name: string,
       key: string,
       params: object,
     ) => {
-      const url = baseUrl + "allocation_policy_config";
+      let body: string;
+      let url: string;
+
+      if (entity.type === "storage") {
+        body = JSON.stringify({ storage: entity.name, policy: configurable_component_name, key, params })
+        url = baseUrl + "allocation_policy_config";
+      } else {
+        body = JSON.stringify({ strategy: configurable_component_name, key, params });
+        url = baseUrl + "routing_strategy_config";
+      }
+
+      console.log("paramskdjlakdelete???", params)
+
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "DELETE",
-        body: JSON.stringify({ entity_name, configurable_component_name, key, params }),
+        body: body,
       }).then((res) => {
         if (res.ok) {
           return;

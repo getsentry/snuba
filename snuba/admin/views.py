@@ -79,7 +79,7 @@ from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
-from snuba.query.allocation_policies import AllocationPolicy
+from snuba.query.allocation_policies import CAPMAN_HASH, AllocationPolicy
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.replacers.replacements_and_expiry import (
@@ -100,6 +100,7 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
 )
 from snuba.web.views import dataset_query
+from snuba.query.allocation_policies import CAPMAN_HASH
 
 logger = structlog.get_logger().bind(module=__name__)
 
@@ -720,6 +721,7 @@ def configs() -> Response:
             assert key != "", "Key cannot be empty string"
 
         except (KeyError, AssertionError) as exc:
+            print("11111")
             return Response(
                 json.dumps({"error": f"Invalid config: {str(exc)}"}),
                 400,
@@ -843,6 +845,7 @@ def config(config_key: str) -> Response:
             state.set_config_description(config_key, new_desc, user=user)
 
         except (KeyError, AssertionError) as exc:
+            print("2222222")
             return Response(
                 json.dumps({"error": f"Invalid config: {str(exc)}"}),
                 400,
@@ -1038,12 +1041,50 @@ def get_routing_strategy_configs(strategy_name: str) -> Response:
 
     configs = BaseRoutingStrategy.get_from_name(strategy_name)().get_configurations()
     serialized_configs = [
-        cast(RoutingStrategyConfig, config).to_definition_dict() for config in configs
+        cast(RoutingStrategyConfig, config).to_definition_dict() for config in configs.values()
     ]
     print("isithere")
     return Response(
         json.dumps(serialized_configs), 200, {"Content-Type": "application/json"}
     )
+
+@application.route("/routing_strategy_config", methods=["POST", "DELETE"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
+def set_routing_strategy_config() -> Response:
+    data = json.loads(request.data)
+    print("datafsdfsdf", data)
+    user = request.headers.get(USER_HEADER_KEY)
+
+    try:
+        print("datafsdfsdf", data)
+        strategy, key = (data["strategy"], data["key"])
+        params = data.get("params", {})
+        print("params", params)
+
+        assert isinstance(strategy, str), "Invalid strategy"
+        assert isinstance(key, str), "Invalid key"
+        print("paramsssss", params)
+        assert isinstance(params, dict), "Invalid params"
+        assert key != "", "Key cannot be empty string"
+
+        strategies = list(BaseRoutingStrategy.all_names())
+        strategy = next(
+            (s for s in strategies if s == strategy),
+            None,
+        )
+        assert strategy is not None, "Strategy not found"
+
+    except (KeyError, AssertionError) as exc:
+        print("333333")
+        return Response(
+            json.dumps({"error": f"Invalid config: {str(exc)}"}),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+    if request.method == "DELETE":
+        strategy.delete_config_value(config_key=key, params=params, user=user)
+    return Response("", 200)
 
 
 @application.route("/allocation_policy_config", methods=["POST", "DELETE"])
@@ -1052,33 +1093,21 @@ def set_allocation_policy_config() -> Response:
     data = json.loads(request.data)
     user = request.headers.get(USER_HEADER_KEY)
 
-    print("dataaaaaa", data)
-
     try:
-        if "storage" in data:
-            storage, key, policy_name = (data["storage"], data["key"], data["policy"])
-        else:
-            strategy, key, policy_name = (data["strategy"], data["key"], data["policy"])
+        storage, key, policy_name = (data["storage"], data["key"], data["policy"])
 
         params = data.get("params", {})
 
-        assert isinstance(storage, str) or isinstance(
-            strategy, str
-        ), "Invalid storage or routing strategy"
+        assert isinstance(storage, str), "Invalid storage"
         assert isinstance(key, str), "Invalid key"
         assert isinstance(params, dict), "Invalid params"
         assert key != "", "Key cannot be empty string"
         assert isinstance(policy_name, str), "Invalid policy name"
 
-        if storage:
-            policies = (
-                get_storage(StorageKey(storage)).get_allocation_policies()
-                + get_storage(StorageKey(storage)).get_delete_allocation_policies()
-            )
-        else:
-            policies = BaseRoutingStrategy.get_from_name(
-                data["strategy"]
-            ).get_allocation_policies()
+        policies = (
+            get_storage(StorageKey(storage)).get_allocation_policies()
+            + get_storage(StorageKey(storage)).get_delete_allocation_policies()
+        )
         policy = next(
             (p for p in policies if p.config_key() == policy_name),
             None,
@@ -1086,6 +1115,7 @@ def set_allocation_policy_config() -> Response:
         assert policy is not None, "Policy not found on storage"
 
     except (KeyError, AssertionError) as exc:
+        print("4444444")
         return Response(
             json.dumps({"error": f"Invalid config: {str(exc)}"}),
             400,
@@ -1093,16 +1123,11 @@ def set_allocation_policy_config() -> Response:
         )
 
     if request.method == "DELETE":
-        policy.delete_config_value(config_key=key, params=params, user=user)
-        audit_log_data = (
-            {"storage": storage, "policy": policy.config_key(), "key": key}
-            if storage
-            else {"strategy": strategy, "policy": policy.config_key(), "key": key}
-        )
+        policy.delete_config_value(config_key=key, hash=CAPMAN_HASH, params=params, user=user)
         audit_log.record(
             user or "",
             AuditLogAction.ALLOCATION_POLICY_DELETE,
-            audit_log_data,
+            {"storage": storage, "policy": policy.config_key(), "key": key},
             notify=True,
         )
         return Response("", 200)
@@ -1113,31 +1138,21 @@ def set_allocation_policy_config() -> Response:
             policy.set_config_value(
                 config_key=key, value=value, params=params, user=user
             )
-            audit_log_data = (
+            audit_log.record(
+                user or "",
+                AuditLogAction.ALLOCATION_POLICY_UPDATE,
                 {
                     "storage": storage,
                     "policy": policy.config_key(),
                     "key": key,
                     "value": value,
                     "params": str(params),
-                }
-                if storage
-                else {
-                    "strategy": strategy,
-                    "policy": policy.config_key(),
-                    "key": key,
-                    "value": value,
-                    "params": str(params),
-                }
-            )
-            audit_log.record(
-                user or "",
-                AuditLogAction.ALLOCATION_POLICY_UPDATE,
-                audit_log_data,
+                },
                 notify=True,
             )
             return Response("", 200)
         except (KeyError, AssertionError) as exc:
+            print("5555555")
             return Response(
                 json.dumps({"error": f"Invalid config: {str(exc)}"}),
                 400,
