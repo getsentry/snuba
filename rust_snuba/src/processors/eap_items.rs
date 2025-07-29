@@ -30,6 +30,12 @@ pub fn process_message(
 
     eap_item.retention_days = retention_days;
 
+    if trace_item.downsampled_retention_days > 0 {
+        eap_item.downsampled_retention_days = from.downsampled_retention_days;
+    } else {
+        eap_item.downsampled_retention_days = retention_days;
+    }
+
     InsertBatch::from_rows([eap_item], origin_timestamp)
 }
 
@@ -49,6 +55,7 @@ struct EAPItem {
     sampling_weight: u64,
 
     retention_days: Option<u16>,
+    downsampled_retention_days: Option<u16>,
 }
 
 impl TryFrom<TraceItem> for EAPItem {
@@ -65,6 +72,7 @@ impl TryFrom<TraceItem> for EAPItem {
             timestamp: timestamp.seconds as u32,
             attributes: Default::default(),
             retention_days: Default::default(),
+            downsampled_retention_days: Default::default(),
             sampling_factor: 1.0,
             sampling_weight: 1,
         };
