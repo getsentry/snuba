@@ -1,11 +1,12 @@
 import os
 
 from devenv import constants
-from devenv.lib import brew, colima, config, proc, venv
+from devenv.lib import brew, colima, config, proc, uv
 
 
 def main(context: dict[str, str]) -> int:
     reporoot = context["reporoot"]
+    cfg = config.get_repo(reporoot)
 
     brew.install()
 
@@ -14,18 +15,18 @@ def main(context: dict[str, str]) -> int:
         cwd=reporoot,
     )
 
-    venv_dir, python_version, requirements, editable_paths, bins = venv.get(
-        reporoot, "venv"
+    uv.install(
+        cfg["uv"]["version"],
+        cfg["uv"][constants.SYSTEM_MACHINE],
+        cfg["uv"][f"{constants.SYSTEM_MACHINE}_sha256"],
+        reporoot,
     )
-    url, sha256 = config.get_python(reporoot, python_version)
-    print(f"ensuring venv at {venv_dir}...")
-    venv.ensure(venv_dir, python_version, url, sha256)
 
-    print(f"syncing venv with {requirements}...")
-    venv.sync(reporoot, venv_dir, requirements, editable_paths, bins)
+    print("syncing .venv ...")
+    proc.run(("uv", "sync", "--frozen", "--quiet"))
 
-    print("running make develop...")
-    os.system("make develop")
+    print("running make install-rs-dev...")
+    os.system("make install-rs-dev")
 
     # start colima if it's not already running
     colima.start(reporoot)
