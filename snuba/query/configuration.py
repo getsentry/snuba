@@ -1,10 +1,12 @@
 from dataclasses import dataclass, field
 from typing import Any
+
 from snuba.state import delete_config as delete_runtime_config
 
 
 class InvalidConfig(Exception):
     pass
+
 
 @dataclass()
 class Configuration:
@@ -106,7 +108,7 @@ class ConfigurableComponent:
     ) -> None:
         pass
 
-    def __validate_config_params(
+    def _validate_config_params(
         self, config_key: str, params: dict[str, Any], value: Any = None
     ) -> Configuration:
         definitions = self.get_configurations()
@@ -208,7 +210,7 @@ class ConfigurableComponent:
         Deletes an instance of an optional config on this AllocationPolicy.
         If this function is run on a required config, it resets the value to default instead.
         """
-        self.__validate_config_params(config_key, params)
+        self._validate_config_params(config_key, params)
         delete_runtime_config(
             key=self.__build_runtime_config_key(config_key, params),
             user=user,

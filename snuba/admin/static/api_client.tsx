@@ -35,7 +35,7 @@ import {
   CardinalityQueryResult,
 } from "SnubaAdmin/cardinality_analyzer/types";
 
-import { AllocationPolicy, Configuration, Entity } from "SnubaAdmin/capacity_management/types";
+import { AllocationPolicy, ConfigurableComponent, Configuration, Entity } from "SnubaAdmin/capacity_management/types";
 
 import { ReplayInstruction, Topic } from "SnubaAdmin/dead_letter_queue/types";
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
@@ -89,14 +89,14 @@ interface Client {
   getRoutingStrategyConfigs: (strategy_name: string) => Promise<Configuration[]>;
   setConfiguration: (
     entity: Entity,
-    configurable_component_name: string,
+    configurable_component: ConfigurableComponent,
     key: string,
     value: string,
     params: object,
   ) => Promise<void>;
   deleteConfiguration: (
     entity: Entity,
-    configurable_component_name: string,
+    configurable_component: ConfigurableComponent,
     key: string,
     params: object,
   ) => Promise<void>;
@@ -475,24 +475,25 @@ function Client(): Client {
     },
     setConfiguration: (
       entity: Entity,
-      configurable_component_name: string,
+      configurable_component: ConfigurableComponent,
       key: string,
       value: string,
       params: object,
     ) => {
-      console.log("dowenotheithere")
       let body: string;
       let url: string;
 
-      console.log("paramskdjlak", params)
-
-      if (entity.type === "storage") {
-        body = JSON.stringify({ storage: entity.name, policy: configurable_component_name, key, value, params })
-        url = baseUrl + "allocation_policy_config";
-      } else {
-        body = JSON.stringify({ strategy: configurable_component_name, key, value, params });
+      if (configurable_component.type === "routing_strategy") {
+        body = JSON.stringify({ strategy: configurable_component.name, key, value, params });
         url = baseUrl + "routing_strategy_config";
+      } else if (entity.type === "strategy" && configurable_component.type === "allocation_policy") {
+        body = JSON.stringify({ strategy: entity.name, policy: configurable_component.name, key, value, params })
+        url = baseUrl + "allocation_policy_config_for_strategy";
+      } else {
+        body = JSON.stringify({ storage: entity.name, policy: configurable_component.name, key, value, params })
+        url = baseUrl + "allocation_policy_config_for_storage";
       }
+
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
@@ -510,22 +511,20 @@ function Client(): Client {
     },
     deleteConfiguration: (
       entity: Entity,
-      configurable_component_name: string,
+      configurable_component: ConfigurableComponent,
       key: string,
       params: object,
     ) => {
       let body: string;
       let url: string;
 
-      if (entity.type === "storage") {
-        body = JSON.stringify({ storage: entity.name, policy: configurable_component_name, key, params })
+      if (configurable_component.type === "allocation_policy") {
+        body = JSON.stringify({ storage: entity.name, policy: configurable_component.name, key, params })
         url = baseUrl + "allocation_policy_config";
       } else {
-        body = JSON.stringify({ strategy: configurable_component_name, key, params });
+        body = JSON.stringify({ strategy: configurable_component.name, key, params });
         url = baseUrl + "routing_strategy_config";
       }
-
-      console.log("paramskdjlakdelete???", params)
 
       return fetch(url, {
         headers: { "Content-Type": "application/json" },

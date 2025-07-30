@@ -8,6 +8,7 @@ import React from "react";
 
 it("should populate configs table upon render", async () => {
   let allocationPolicy: AllocationPolicy = {
+    type: "allocation_policy",
     name: "some_policy",
     configs: [
       {

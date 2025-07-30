@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import { Configurations } from "SnubaAdmin/capacity_management/allocation_policy";
-import { AllocationPolicy, Configuration, ConfigurableComponent } from "SnubaAdmin/capacity_management/types";
+import { AllocationPolicy, Configuration, ConfigurableComponent, RoutingStrategy } from "SnubaAdmin/capacity_management/types";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { COLORS } from "SnubaAdmin/theme";
 
@@ -61,7 +61,8 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
       return <p>No strategy configurations found.</p>;
     }
 
-    const strategyComponent: ConfigurableComponent = {
+    const strategyComponent: RoutingStrategy = {
+      type: "routing_strategy",
       name: selectedStrategy,
       configs: strategyConfigs,
       optional_config_definitions: [],

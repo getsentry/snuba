@@ -1,17 +1,21 @@
 import { ReactNode } from "react";
 
 
-type ConfigurableComponent = {
+interface ConfigurableComponent {
+  type: string;
   name: string;
   configs: Configuration[];
   optional_config_definitions: OptionalConfigurationDefinition[];
 };
 
-type AllocationPolicy = ConfigurableComponent & {
+interface AllocationPolicy extends ConfigurableComponent {
+  type: "allocation_policy";
   query_type: string;
 };
 
-type RoutingStrategy = ConfigurableComponent;
+interface RoutingStrategy extends ConfigurableComponent {
+  type: "routing_strategy";
+}
 
 type Configuration = {
   name: string;
@@ -78,5 +82,5 @@ export {
   isStorage,
   isStrategy,
   StorageEntity,
-  StrategyEntity, ConfigurableComponent,
+  StrategyEntity, ConfigurableComponent, RoutingStrategy
 };

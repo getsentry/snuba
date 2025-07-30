@@ -8,12 +8,7 @@ from typing import Any, cast
 
 from snuba import environment, settings
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.configuration import (
-    ConfigurableComponent,
-    Configuration,
-    InvalidConfig,
-)
-from snuba.state import delete_config as delete_runtime_config
+from snuba.query.configuration import ConfigurableComponent, Configuration
 from snuba.state import get_all_configs as get_all_runtime_configs
 from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
@@ -494,7 +489,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
     ) -> Any:
         """Returns value of a config on this Allocation Policy, or the default if none exists in Redis."""
         config_definition = (
-            self.__validate_config_params(config_key, params)
+            self._validate_config_params(config_key, params)
             if validate
             else self.get_configurations()[config_key]
         )
@@ -512,7 +507,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         user: str | None = None,
     ) -> None:
         """Sets a value of a config on this AllocationPolicy."""
-        config_definition = self.__validate_config_params(config_key, params, value)
+        config_definition = self._validate_config_params(config_key, params, value)
         # ensure correct type is stored
         value = config_definition.value_type(value)
         set_runtime_config(
@@ -522,23 +517,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             force=True,
             config_key=CAPMAN_HASH,
         )
-
-    # def delete_config_value(
-    #     self,
-    #     config_key: str,
-    #     params: dict[str, Any] = {},
-    #     user: str | None = None,
-    # ) -> None:
-    #     """
-    #     Deletes an instance of an optional config on this AllocationPolicy.
-    #     If this function is run on a required config, it resets the value to default instead.
-    #     """
-    #     self.__validate_config_params(config_key, params)
-    #     delete_runtime_config(
-    #         key=self.__build_runtime_config_key(config_key, params),
-    #         user=user,
-    #         config_key=CAPMAN_HASH,
-    #     )
 
     def get_current_configs(self) -> list[dict[str, Any]]:
         """Returns a list of live configs with their definitions on this AllocationPolicy."""
@@ -618,7 +596,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
                 param_value = self.__unescape_delimiter_chars(param_value)
                 params_dict[param_key] = param_value
 
-        self.__validate_config_params(config_key=config_key, params=params_dict)
+        self._validate_config_params(config_key=config_key, params=params_dict)
 
         return config_key, params_dict
 

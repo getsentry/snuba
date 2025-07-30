@@ -33,6 +33,7 @@ from snuba.utils.registered_class import RegisteredClass, import_submodules_in_d
 from snuba.web import QueryResult
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 
+CBRS_HASH = "cbrs"
 _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
 _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
 _END_ESTIMATION_MARK = "end_sampling_in_storage_estimation"
@@ -213,7 +214,10 @@ class BaseRoutingStrategy(ConfigurableComponent, metaclass=RegisteredClass):
             == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
         )
 
-    @classmethod
+    def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
+        return []
+
+    # @classmethod
     def get_allocation_policies(cls) -> list[AllocationPolicy]:
         return [
             ConcurrentRateLimitAllocationPolicy(
@@ -420,7 +424,6 @@ class BaseRoutingStrategy(ConfigurableComponent, metaclass=RegisteredClass):
     @property
     def runtime_config_prefix(self) -> str:
         return self.component_name()
-
 
 
 import_submodules_in_directory(
