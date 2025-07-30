@@ -26,15 +26,15 @@ pub fn process_message(
         Some(trace_item.retention_days as u16),
         &config.env_config,
     ));
+    let downsampled_retention_days = if trace_item.downsampled_retention_days > 0 {
+        Some(trace_item.downsampled_retention_days as u16)
+    } else {
+        retention_days
+    };
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
     eap_item.retention_days = retention_days;
-
-    if trace_item.downsampled_retention_days > 0 {
-        eap_item.downsampled_retention_days = from.downsampled_retention_days;
-    } else {
-        eap_item.downsampled_retention_days = retention_days;
-    }
+    eap_item.downsampled_retention_days = downsampled_retention_days;
 
     InsertBatch::from_rows([eap_item], origin_timestamp)
 }
@@ -202,6 +202,7 @@ mod tests {
         let item_id = Uuid::new_v4();
         let trace_item = TraceItem {
             attributes: Default::default(),
+            downsampled_retention_days: 1,
             item_id: item_id.as_u128().to_le_bytes().to_vec(),
             item_type: TraceItemType::Span.into(),
             organization_id: 1,
