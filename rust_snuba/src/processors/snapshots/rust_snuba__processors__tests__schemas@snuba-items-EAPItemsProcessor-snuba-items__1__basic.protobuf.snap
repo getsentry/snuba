@@ -22,6 +22,7 @@ expression: snapshot_payload
     "attributes_string_32": {
       "one_attribute": "blah"
     },
+    "downsampled_retention_days": 90,
     "item_id": 140754042156678400000000000000000000000.0,
     "item_type": 1,
     "organization_id": 1,
