@@ -12,6 +12,7 @@ from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
+from sentry_protos.snuba.v1.request_common_pb2 import ResponseMeta
 
 from snuba import environment, settings, state
 from snuba.downsampled_storage_tiers import Tier
@@ -133,7 +134,7 @@ def _construct_hacky_querylog_payload(
                 "end_timestamp": in_message_meta.end_timestamp.seconds,
                 "stats": _get_stats_dict(routing_decision),
                 "status": "0",
-                "trace_id": cur_span.trace_id if cur_span else "no_current_span",
+                "trace_id": cur_span.trace_id if cur_span else "",
                 "profile": {
                     "time_range": None,
                     "table": "eap_items",
@@ -173,12 +174,11 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
     def get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
         return cast("Type[BaseRoutingStrategy]", cls.class_from_name(name))
 
-    def _is_highest_accuracy_mode(self, routing_context: RoutingContext) -> bool:
-        meta = extract_message_meta(routing_context.in_msg)
-        if not hasattr(meta, "downsampled_storage_config"):
+    def _is_highest_accuracy_mode(self, in_msg_meta: ResponseMeta) -> bool:
+        if not hasattr(in_msg_meta, "downsampled_storage_config"):
             return False
         return bool(
-            meta.downsampled_storage_config.mode
+            in_msg_meta.downsampled_storage_config.mode
             == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
         )
 
@@ -320,7 +320,9 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
     def _emit_routing_mistake(self, routing_decision: RoutingDecision) -> None:
         if routing_decision.routing_context.query_result is None:
             return
-        if self._is_highest_accuracy_mode(routing_decision.routing_context):
+        if self._is_highest_accuracy_mode(
+            extract_message_meta(routing_decision.routing_context.in_msg)
+        ):
             return
         profile = (
             routing_decision.routing_context.query_result.result.get("profile", {})
