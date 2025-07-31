@@ -1,11 +1,11 @@
 use anyhow::Context;
 use chrono::DateTime;
+use prost::Message;
 use seq_macro::seq;
 use serde::Serialize;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use prost::Message;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::TraceItem;
@@ -187,10 +187,36 @@ impl AttributeMap {
 
 #[cfg(test)]
 mod tests {
+    use std::time::SystemTime;
+
     use prost_types::Timestamp;
     use sentry_protos::snuba::v1::TraceItemType;
+    use serde::Deserialize;
 
     use super::*;
+
+    fn generate_trace_item(item_id: Uuid) -> TraceItem {
+        TraceItem {
+            attributes: Default::default(),
+            downsampled_retention_days: Default::default(),
+            item_id: item_id.as_u128().to_le_bytes().to_vec(),
+            item_type: TraceItemType::Span.into(),
+            organization_id: 1,
+            project_id: 1,
+            received: Some(Timestamp {
+                seconds: 1745562493,
+                nanos: 0,
+            }),
+            retention_days: 90,
+            timestamp: Some(Timestamp {
+                seconds: 1745562493,
+                nanos: 0,
+            }),
+            trace_id: Uuid::new_v4().to_string(),
+            client_sample_rate: 1.0,
+            server_sample_rate: 1.0,
+        }
+    }
 
     #[test]
     fn test_fnv_1a() {
@@ -200,26 +226,68 @@ mod tests {
     #[test]
     fn test_item_id_is_properly_decoded() {
         let item_id = Uuid::new_v4();
-        let trace_item = TraceItem {
-            attributes: Default::default(),
-            downsampled_retention_days: 1,
-            item_id: item_id.as_u128().to_le_bytes().to_vec(),
-            item_type: TraceItemType::Span.into(),
-            organization_id: 1,
-            project_id: 1,
-            received: Default::default(),
-            retention_days: 1,
-            timestamp: Some(Timestamp {
-                seconds: 1745562493,
-                nanos: 0,
-            }),
-            trace_id: Uuid::new_v4().to_string(),
-            client_sample_rate: 1.0,
-            server_sample_rate: 1.0,
-        };
+        let trace_item = generate_trace_item(item_id);
         let eap_item = EAPItem::try_from(trace_item);
 
         assert!(eap_item.is_ok());
         assert_eq!(item_id.as_u128(), eap_item.unwrap().item_id);
+    }
+
+    #[test]
+    fn test_downsampled_retention_days_default() {
+        let item_id = Uuid::new_v4();
+        let trace_item = generate_trace_item(item_id);
+        let mut payload = Vec::new();
+
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let batch = process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        #[derive(Deserialize)]
+        pub struct Item {
+            retention_days: u16,
+            downsampled_retention_days: u16,
+        }
+
+        let item: Item = serde_json::from_slice(&batch.rows.encoded_rows).unwrap();
+
+        assert_eq!(item.retention_days, item.downsampled_retention_days);
+    }
+
+    #[test]
+    fn test_downsampled_retention_days_extended() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+
+        trace_item.downsampled_retention_days = 365;
+
+        let mut payload = Vec::new();
+
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let batch = process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        #[derive(Deserialize)]
+        pub struct Item {
+            downsampled_retention_days: u16,
+        }
+
+        let item: Item = serde_json::from_slice(&batch.rows.encoded_rows).unwrap();
+
+        assert_eq!(item.downsampled_retention_days, 365);
     }
 }
