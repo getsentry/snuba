@@ -326,7 +326,6 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     elif column.HasField("literal"):
         return literal(column.literal.val_double)
     else:
-        print(column)
         raise BadSnubaRPCRequestException(
             "Column is not one of: aggregate, attribute key, or formula"
         )
