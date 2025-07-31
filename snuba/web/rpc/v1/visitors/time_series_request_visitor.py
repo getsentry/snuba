@@ -17,6 +17,9 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 from snuba.state import get_config
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.visitors.trace_item_table_request_visitor import (
+    NormalizeFormulaLabelsVisitor,
+)
 from snuba.web.rpc.v1.visitors.visitor_v2 import RequestVisitor
 
 
@@ -136,6 +139,33 @@ class RejectTimestampAsStringVisitor(RequestVisitor):
                     )
 
 
+class GetSubformulaLabelsVisitor(RequestVisitor):
+    """
+    given a formula, returns a list that looks like:
+    [myformlabel.left, myformlabel.right, myformlabel.left.left, ...]
+    depending on the depth of the formula.
+    """
+
+    def __init__(self) -> None:
+        self.labels: list[str] = []
+        super().__init__()
+
+    def visit_TimeSeriesRequest(self, node: TimeSeriesRequest) -> None:
+        for expr in node.expressions:
+            if expr.WhichOneof("expression") == "formula":
+                self.visit(expr.formula, expr.label)
+
+    def visit_BinaryFormula(
+        self, node: Expression.BinaryFormula, curr_label: str = ""
+    ) -> None:
+        self.labels.append(curr_label + ".left")
+        self.labels.append(curr_label + ".right")
+        if node.left.WhichOneof("expression") == "formula":
+            self.visit(node.left.formula, curr_label + ".left")
+        if node.right.WhichOneof("expression") == "formula":
+            self.visit(node.right.formula, curr_label + ".right")
+
+
 def preprocess_expression_labels(msg: TimeSeriesRequest) -> None:
     RejectTimestampAsStringVisitor().visit(msg)
     ValidateAliasVisitor().visit(msg)
@@ -144,3 +174,4 @@ def preprocess_expression_labels(msg: TimeSeriesRequest) -> None:
     # We need this visitor because the endpoint only behaves correctly if
     # all aggregates have the exact same label as the expression they are in
     AddAggregateLabelsVisitor().visit(msg)
+    NormalizeFormulaLabelsVisitor().visit(msg)
