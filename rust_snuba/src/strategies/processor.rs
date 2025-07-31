@@ -197,6 +197,7 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
         self,
         message: Message<KafkaPayload>,
     ) -> Result<Message<TNext>, RunTaskError<anyhow::Error>> {
+        let start_time = Instant::now();
         validate_schema(&message, &self.schema, self.enforce_schema)?;
 
         let msg = match message.inner_message {
@@ -220,7 +221,7 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
 
         record_message_stats(payload);
 
-        self.process_payload(msg).map_err(|error| {
+        let processed_message = self.process_payload(msg).map_err(|error| {
             counter!("invalid_message");
 
             sentry::with_scope(
@@ -237,7 +238,12 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
             );
 
             maybe_err
-        })
+        });
+
+        let elapsed = start_time.elapsed();
+        counter!("message_processing_time_ms", elapsed.as_millis() as i64);
+
+        processed_message
     }
 
     #[tracing::instrument(skip_all)]
