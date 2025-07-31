@@ -19,6 +19,7 @@ use crate::types::{
     BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
     KafkaMessageMetadata, RowData,
 };
+use tokio::time::Instant;
 
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
