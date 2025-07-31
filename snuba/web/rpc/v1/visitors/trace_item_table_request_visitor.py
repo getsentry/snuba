@@ -3,6 +3,10 @@ from random import randint
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
+    Expression,
+    TimeSeriesRequest,
+)
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
@@ -87,6 +91,18 @@ class NormalizeFormulaLabelsVisitor(RequestVisitor):
     10 would get the label myformula.left.left,
     20 would get the label myformula.left.right,
     """
+
+    def visit_TimeSeriesRequest(self, node: TimeSeriesRequest) -> None:
+        for expr in node.expressions:
+            if expr.WhichOneof("expression") == "formula":
+                self.visit(expr.formula.left, f"{expr.label}.left")
+                self.visit(expr.formula.right, f"{expr.label}.right")
+
+    def visit_Expression(self, node: Expression, new_label: str) -> None:
+        node.label = new_label
+        whichone = node.WhichOneof("expression")
+        assert whichone is not None
+        self.visit(getattr(node, whichone), new_label)
 
     def visit_TraceItemTableRequest(self, node: TraceItemTableRequest) -> None:
         for column in node.columns:
