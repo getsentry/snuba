@@ -728,3 +728,139 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 ],
             ),
         ]
+
+    def test_formula_reliability(self) -> None:
+        # store a a test metric with a value of 1, every second for an hour
+        granularity_secs = 120
+        query_duration = 3600
+        sample_rate = 0.5
+        metric_value = 10
+        store_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("my_test_metric", get_value=lambda x: metric_value)],
+            server_sample_rate=lambda s: sample_rate,
+        )
+        expr1 = Expression(
+            aggregation=AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my_test_metric"),
+                label="expr1 + expr2.left",
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ),
+            label="expr1 + expr2.left",
+        )
+        expr2 = Expression(
+            aggregation=AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my_test_metric"),
+                label="expr1 + expr2.right",
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ),
+            label="expr1 + expr2.right",
+        )
+        expr3 = Expression(
+            aggregation=AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my_test_metric"),
+                label="expr3",
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ),
+            label="expr3",
+        )
+        expr4 = Expression(
+            aggregation=AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my_test_metric"),
+                label="expr4",
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ),
+            label="expr4",
+        )
+        myform2 = Expression(
+            formula=Expression.BinaryFormula(
+                op=Expression.BinaryFormula.OP_ADD,
+                left=expr3,
+                right=expr4,
+            ),
+            label="myform2",
+        )
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_ADD,
+                        left=expr1,
+                        right=expr2,
+                    ),
+                    label="expr1 + expr2",
+                ),
+                myform2,
+                expr3,
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        expected_expr1 = (granularity_secs * metric_value) / sample_rate
+        expected_expr2 = (granularity_secs * metric_value) / sample_rate
+        expected_sum_plus_sum = expected_expr1 + expected_expr2
+        tmp = sorted(response.result_timeseries, key=lambda x: x.label)
+        tmp2 = [
+            TimeSeries(
+                label="expr1",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(
+                        data=expected_expr1,
+                        data_present=True,
+                        avg_sampling_rate=sample_rate,
+                        sample_count=120,
+                        reliability=Reliability.RELIABILITY_HIGH,
+                    )
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+            TimeSeries(
+                label="expr1 + expr2",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(
+                        data=expected_sum_plus_sum,
+                        data_present=True,
+                        reliability=Reliability.RELIABILITY_HIGH,
+                    )
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+            TimeSeries(
+                label="expr2",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(
+                        data=expected_expr2,
+                        data_present=True,
+                        avg_sampling_rate=sample_rate,
+                        sample_count=120,
+                        reliability=Reliability.RELIABILITY_HIGH,
+                    )
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
+        assert tmp == tmp2
