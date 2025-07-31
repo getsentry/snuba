@@ -1028,6 +1028,8 @@ def get_allocation_policy_configs_of_routing_strategy(strategy_name: str) -> Res
     data: list[dict[str, Any]] = []
     _add_policy_data(policies, "select", data)
 
+    print("allocationpolicyyyyy", data[0])
+
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
@@ -1043,6 +1045,7 @@ def get_routing_strategy_configs(strategy_name: str) -> Response:
         cast(RoutingStrategyConfig, config).to_config_dict()
         for config in configs.values()
     ]
+    print("serialized_configssssssss", serialized_configs)
     return Response(
         json.dumps(serialized_configs), 200, {"Content-Type": "application/json"}
     )
