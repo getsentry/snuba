@@ -721,7 +721,6 @@ def configs() -> Response:
             assert key != "", "Key cannot be empty string"
 
         except (KeyError, AssertionError) as exc:
-            print("11111")
             return Response(
                 json.dumps({"error": f"Invalid config: {str(exc)}"}),
                 400,
@@ -845,7 +844,6 @@ def config(config_key: str) -> Response:
             state.set_config_description(config_key, new_desc, user=user)
 
         except (KeyError, AssertionError) as exc:
-            print("2222222")
             return Response(
                 json.dumps({"error": f"Invalid config: {str(exc)}"}),
                 400,
@@ -1045,7 +1043,6 @@ def get_routing_strategy_configs(strategy_name: str) -> Response:
         cast(RoutingStrategyConfig, config).to_config_dict()
         for config in configs.values()
     ]
-    print("isithereRACHELITSHERE", serialized_configs)
     return Response(
         json.dumps(serialized_configs), 200, {"Content-Type": "application/json"}
     )
@@ -1055,32 +1052,25 @@ def get_routing_strategy_configs(strategy_name: str) -> Response:
 @check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
 def set_routing_strategy_config() -> Response:
     data = json.loads(request.data)
-    print("datafsdfsdf", data)
     user = request.headers.get(USER_HEADER_KEY)
 
     try:
-        print("datafsdfsdf", data, data["strategy"])
         strategy, key = (data["strategy"], data["key"])
         params = data.get("params", {})
-        print("params", params)
 
         assert isinstance(strategy, str), "Invalid strategy"
         assert isinstance(key, str), "Invalid key"
-        print("paramsssss", params)
         assert isinstance(params, dict), "Invalid params"
         assert key != "", "Key cannot be empty string"
 
         strategies = list(BaseRoutingStrategy.all_names())
-        print("strategies", strategies)
         strategy = next(
             (s for s in strategies if s == strategy),
             None,
         )
-        print("strategyyyy", strategy)
         assert strategy is not None, "Strategy not found"
 
     except (KeyError, AssertionError) as exc:
-        print("333333")
         return Response(
             json.dumps({"error": f"Invalid config: {str(exc)}"}),
             400,
@@ -1100,7 +1090,6 @@ def set_allocation_policy_config_for_strategy() -> Response:
 
     try:
         strategy, key, policy_name = (data["strategy"], data["key"], data["policy"])
-        print("dkfjlskjflks", data)
 
         params = data.get("params", {})
 

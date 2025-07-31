@@ -325,20 +325,10 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
     * Every allocation policy takes a `storage_key` in its init. The storage_key is like a pseudo-tenant. In different
         environments, storages may be co-located on the same cluster. To facilitate resource sharing, every allocation policy
         knows which storage_key it is serving. This is used to create unique keys for saving the config values.
-        See `__build_runtime_config_key()` for more info.
+        See `_build_runtime_config_key()` for more info.
     * Reiterating that you should no longer use `snuba.state.{get,set}_config()` for runtime configs for a specific Policy. Refer to the Configurations
         section of this docstring for more info.
     """
-
-    # # This component builds redis strings that are delimited by dots, commas, colons
-    # # in order to allow those characters to exist in config we replace them with their
-    # # counterparts on write/read. It may be better to just replace our serialization with JSON
-    # # instead of what we're doing but this is where we're at rn 1/10/24
-    # __KEY_DELIMITERS_TO_ESCAPE_SEQUENCES = {
-    #     ".": "__dot_literal__",
-    #     ",": "__comma_literal__",
-    #     ":": "__colon_literal__",
-    # }
 
     def __init__(
         self,
@@ -494,7 +484,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             else self.get_configurations()[config_key]
         )
         return get_runtime_config(
-            key=self.__build_runtime_config_key(config_key, params),
+            key=self._build_runtime_config_key(config_key, params),
             default=config_definition.default,
             config_key=CAPMAN_HASH,
         )
@@ -511,7 +501,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         # ensure correct type is stored
         value = config_definition.value_type(value)
         set_runtime_config(
-            key=self.__build_runtime_config_key(config_key, params),
+            key=self._build_runtime_config_key(config_key, params),
             value=value,
             user=user,
             force=True,
@@ -554,22 +544,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
 
         return detailed_configs
 
-    def __build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
-        """
-        Builds a unique key to be used in the actual datastore containing these configs.
-
-        Example return values:
-        - `"mystorage.MyAllocationPolicy.my_config"`            # no params
-        - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`    # sorted params
-        """
-        parameters = "."
-        for param in sorted(list(params.keys())):
-            param_sanitized = self.__escape_delimiter_chars(param)
-            value_sanitized = self.__escape_delimiter_chars(params[param])
-            parameters += f"{param_sanitized}:{value_sanitized},"
-        parameters = parameters[:-1]
-        return f"{self.runtime_config_prefix}.{config}{parameters}"
-
     def __deserialize_runtime_config_key(self, key: str) -> tuple[str, dict[str, Any]]:
         """
         Given a raw runtime config key, deconstructs it into it's AllocationPolicy config
@@ -600,25 +574,11 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
 
         return config_key, params_dict
 
-    # def __escape_delimiter_chars(self, key: str) -> str:
-    #     if not isinstance(key, str):
-    #         return key
-    #     for (
-    #         delimiter_char,
-    #         escape_sequence,
-    #     ) in self.__KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
-    #         if escape_sequence in str(key):
-    #             raise InvalidConfig(
-    #                 f"{escape_sequence} is not a valid string for a policy config"
-    #             )
-    #         key = key.replace(delimiter_char, escape_sequence)
-    #     return key
-
     def __unescape_delimiter_chars(self, key: str) -> str:
         for (
             delimiter_char,
             escape_sequence,
-        ) in self.__KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
+        ) in self._KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
             key = key.replace(escape_sequence, delimiter_char)
         return key
 
@@ -731,9 +691,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
 
     def component_namespace(self) -> str:
         return "allocation_policy"
-
-    # def get_configurations(self) -> list[Configuration]:
-    #     return cast(list[Configuration], self.config_definitions().values())
 
 
 class PassthroughPolicy(AllocationPolicy):

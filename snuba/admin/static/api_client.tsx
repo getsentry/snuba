@@ -518,12 +518,15 @@ function Client(): Client {
       let body: string;
       let url: string;
 
-      if (configurable_component.type === "allocation_policy") {
-        body = JSON.stringify({ storage: entity.name, policy: configurable_component.name, key, params })
-        url = baseUrl + "allocation_policy_config";
-      } else {
+      if (configurable_component.type === "routing_strategy") {
         body = JSON.stringify({ strategy: configurable_component.name, key, params });
         url = baseUrl + "routing_strategy_config";
+      } else if (entity.type === "strategy" && configurable_component.type === "allocation_policy") {
+        body = JSON.stringify({ strategy: entity.name, policy: configurable_component.name, key, params })
+        url = baseUrl + "allocation_policy_config_for_strategy";
+      } else {
+        body = JSON.stringify({ storage: entity.name, policy: configurable_component.name, key, params })
+        url = baseUrl + "allocation_policy_config_for_storage";
       }
 
       return fetch(url, {

@@ -6,13 +6,13 @@ from typing import Any, cast
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicyConfig,
-    InvalidConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
 from snuba.query.allocation_policies.concurrent_rate_limit import (
     BaseConcurrentRateLimitAllocationPolicy,
 )
+from snuba.query.configuration import InvalidConfig
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.rate_limit import RateLimitParameters
 from snuba.utils.serializable_exception import JsonSerializable

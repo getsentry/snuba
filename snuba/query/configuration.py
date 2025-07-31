@@ -57,7 +57,7 @@ class ConfigurableComponent:
     # in order to allow those characters to exist in config we replace them with their
     # counterparts on write/read. It may be better to just replace our serialization with JSON
     # instead of what we're doing but this is where we're at rn 1/10/24
-    __KEY_DELIMITERS_TO_ESCAPE_SEQUENCES = {
+    _KEY_DELIMITERS_TO_ESCAPE_SEQUENCES = {
         ".": "__dot_literal__",
         ",": "__comma_literal__",
         ":": "__colon_literal__",
@@ -169,13 +169,13 @@ class ConfigurableComponent:
 
         return config
 
-    def __escape_delimiter_chars(self, key: str) -> str:
+    def _escape_delimiter_chars(self, key: str) -> str:
         if not isinstance(key, str):
             return key
         for (
             delimiter_char,
             escape_sequence,
-        ) in self.__KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
+        ) in self._KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
             if escape_sequence in str(key):
                 raise InvalidConfig(
                     f"{escape_sequence} is not a valid string for a config"
@@ -183,7 +183,7 @@ class ConfigurableComponent:
             key = key.replace(delimiter_char, escape_sequence)
         return key
 
-    def __build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
+    def _build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
         """
         Builds a unique key to be used in the actual datastore containing these configs.
 
@@ -193,8 +193,8 @@ class ConfigurableComponent:
         """
         parameters = "."
         for param in sorted(list(params.keys())):
-            param_sanitized = self.__escape_delimiter_chars(param)
-            value_sanitized = self.__escape_delimiter_chars(params[param])
+            param_sanitized = self._escape_delimiter_chars(param)
+            value_sanitized = self._escape_delimiter_chars(params[param])
             parameters += f"{param_sanitized}:{value_sanitized},"
         parameters = parameters[:-1]
         return f"{self.runtime_config_prefix}.{config}{parameters}"
@@ -212,7 +212,7 @@ class ConfigurableComponent:
         """
         self._validate_config_params(config_key, params)
         delete_runtime_config(
-            key=self.__build_runtime_config_key(config_key, params),
+            key=self._build_runtime_config_key(config_key, params),
             user=user,
             config_key=config_key,
         )

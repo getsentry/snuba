@@ -33,7 +33,6 @@ def build_blocks(
 def build_allocation_policy_changed_text(
     data: Any, action: AuditLogAction
 ) -> Optional[str]:
-    # rachelhandlethis
     base = f"*Storage {data['storage']} Allocation Policy Changed:*"
 
     if action == AuditLogAction.ALLOCATION_POLICY_DELETE:

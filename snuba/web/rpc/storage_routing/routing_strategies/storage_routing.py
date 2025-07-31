@@ -217,7 +217,6 @@ class BaseRoutingStrategy(ConfigurableComponent, metaclass=RegisteredClass):
     def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
         return []
 
-    # @classmethod
     def get_allocation_policies(cls) -> list[AllocationPolicy]:
         return [
             ConcurrentRateLimitAllocationPolicy(
