@@ -141,9 +141,9 @@ class RejectTimestampAsStringVisitor(RequestVisitor):
 
 class GetSubformulaLabelsVisitor(RequestVisitor):
     """
-    given a formula, returns a list that looks like:
-    [myformlabel.left, myformlabel.right, myformlabel.left.left, ...]
-    depending on the depth of the formula.
+    given a formula, returns a list of the expected labels for the leaf nodes (non-formula nodes)
+    of the formula:
+    ex: for (a+b)+c it would be [myformlabel.right, myformlabel.left.left, formula.left.right...]
     """
 
     def __init__(self) -> None:
@@ -158,12 +158,15 @@ class GetSubformulaLabelsVisitor(RequestVisitor):
     def visit_BinaryFormula(
         self, node: Expression.BinaryFormula, curr_label: str = ""
     ) -> None:
-        self.labels.append(curr_label + ".left")
-        self.labels.append(curr_label + ".right")
         if node.left.WhichOneof("expression") == "formula":
             self.visit(node.left.formula, curr_label + ".left")
+        else:
+            self.labels.append(curr_label + ".left")
+
         if node.right.WhichOneof("expression") == "formula":
             self.visit(node.right.formula, curr_label + ".right")
+        else:
+            self.labels.append(curr_label + ".right")
 
 
 def preprocess_expression_labels(msg: TimeSeriesRequest) -> None:
