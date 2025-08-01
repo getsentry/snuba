@@ -1,10 +1,34 @@
+import importlib.metadata
 import os
 
 from devenv import constants
 from devenv.lib import brew, colima, config, proc, uv
 
 
+def check_minimum_version(minimum_version: str) -> bool:
+    version = importlib.metadata.version("sentry-devenv")
+
+    parsed_version = tuple(map(int, version.split(".")))
+    parsed_minimum_version = tuple(map(int, minimum_version.split(".")))
+
+    return parsed_version >= parsed_minimum_version
+
+
 def main(context: dict[str, str]) -> int:
+    minimum_version = "1.22.1"
+    if not check_minimum_version(minimum_version):
+        raise SystemExit(
+            f"""
+In order to use uv, devenv must be at least version {minimum_version}.
+
+Please run the following to update your global devenv:
+devenv update
+
+Then, use it to run sync:
+{constants.root}/bin/devenv sync
+"""
+        )
+
     reporoot = context["reporoot"]
     cfg = config.get_repo(reporoot)
 
