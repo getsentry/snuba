@@ -158,15 +158,26 @@ class GetSubformulaLabelsVisitor(RequestVisitor):
     def visit_BinaryFormula(
         self, node: Expression.BinaryFormula, curr_label: str = ""
     ) -> None:
-        if node.left.WhichOneof("expression") == "formula":
-            self.visit(node.left.formula, curr_label + ".left")
-        else:
-            self.labels.append(curr_label + ".left")
+        self.visit(node.left, curr_label + ".left")
+        self.visit(node.right, curr_label + ".right")
 
-        if node.right.WhichOneof("expression") == "formula":
-            self.visit(node.right.formula, curr_label + ".right")
-        else:
-            self.labels.append(curr_label + ".right")
+    def visit_Expression(self, node: Expression, curr_label: str = "") -> None:
+        expr_type = node.WhichOneof("expression")
+        assert expr_type is not None
+        self.visit(getattr(node, expr_type), curr_label)
+
+    def visit_AttributeAggregation(
+        self, node: AttributeAggregation, curr_label: str = ""
+    ) -> None:
+        self.labels.append(curr_label)
+
+    def visit_AttributeConditionalAggregation(
+        self, node: AttributeConditionalAggregation, curr_label: str = ""
+    ) -> None:
+        self.labels.append(curr_label)
+
+    def visit_Literal(self, node: Literal, curr_label: str = "") -> None:
+        return
 
 
 def preprocess_expression_labels(msg: TimeSeriesRequest) -> None:
