@@ -1,3 +1,4 @@
+import re
 import uuid
 from collections import defaultdict
 from dataclasses import replace
@@ -221,6 +222,7 @@ def _compute_formula_reliabilities(
     but no reliabilities set for the formula timeseries'.
     """
     formulas_and_children = _get_formulas_and_children(expressions, result_timeseries)
+    # compute the reliability of the formulas based on the reliabilities of the children
     for formula_key, children in formulas_and_children.items():
         formula_timeseries = result_timeseries[formula_key]
         new_reliabilities: list[None | Reliability.ValueType] = [None] * len(
@@ -278,30 +280,30 @@ def _get_formulas_and_children(
             todo_formula_labels.add(expr.label)
 
     # map the labels to keys in result_timeseries, this accounts for group bys
-    todo_formula_keys = []
+    # theres a key for each formula, and the value is a list of the children
+    formula_keys_to_children: dict[tuple[str, str], list[tuple[str, str]]] = {}
     for result_timeseries_key in result_timeseries.keys():
         if result_timeseries_key[1] in todo_formula_labels:
-            todo_formula_keys.append(result_timeseries_key)
+            formula_keys_to_children[result_timeseries_key] = []
 
-    def get_children(
-        formula_key: tuple[str, str], sofar: list[tuple[str, str]]
-    ) -> None:
-        left_child = (formula_key[0], f"{formula_key[1]}.left")
-        if left_child in result_timeseries:
-            sofar.append(left_child)
-            get_children(left_child, sofar)
-        right_child = (formula_key[0], f"{formula_key[1]}.right")
-        if right_child in result_timeseries:
-            sofar.append(right_child)
-            get_children(right_child, sofar)
+    # now theres a key for each formula, add the children to the corresponding parent
+    for result_timeseries_key in result_timeseries.keys():
+        parent_key = _is_formula_child(result_timeseries_key)
+        if parent_key is not None and parent_key in formula_keys_to_children:
+            formula_keys_to_children[parent_key].append(result_timeseries_key)
 
-    formulas_and_children = {}
-    for formula_key in todo_formula_keys:
-        children: list[tuple[str, str]] = []
-        get_children(formula_key, children)
-        formulas_and_children[formula_key] = children
+    return formula_keys_to_children
 
-    return formulas_and_children
+
+def _is_formula_child(result_timeseries_key: tuple[str, str]) -> None | tuple[str, str]:
+    """
+    If the given key is a formula child, returns the key of the parent formula. otherwise returns None
+    ex: given ("", myform.left.right), returns ("", myform)
+    """
+    match = re.search(r"(\.left|\.right)+$", result_timeseries_key[1])
+    if match is None:
+        return None
+    return (result_timeseries_key[0], result_timeseries_key[1][: match.start()])
 
 
 def _get_reliability_context_columns(
