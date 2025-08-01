@@ -3,6 +3,7 @@ import itertools
 import json
 import pickle
 from datetime import datetime
+from pathlib import Path
 from pickle import PickleBuffer
 from typing import MutableSequence
 from unittest.mock import Mock, call
@@ -10,7 +11,6 @@ from unittest.mock import Mock, call
 import pytest
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
-from py._path.local import LocalPath
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
@@ -35,7 +35,7 @@ from tests.backends.metrics import TestingMetricsBackend, Timing
 from tests.fixtures import get_raw_error_message
 
 
-def test_streaming_consumer_strategy(tmpdir: LocalPath) -> None:
+def test_streaming_consumer_strategy(tmpdir: Path) -> None:
     messages = (
         Message(
             BrokerValue(
@@ -87,7 +87,7 @@ def test_streaming_consumer_strategy(tmpdir: LocalPath) -> None:
         processes=None,
         input_block_size=None,
         output_block_size=None,
-        health_check_file=health_check_file.strpath,
+        health_check_file=str(health_check_file),
         metrics_tags={},
     )
 
@@ -115,19 +115,19 @@ def test_streaming_consumer_strategy(tmpdir: LocalPath) -> None:
 
     expected_write_count = 1
 
-    with assert_changes(
-        get_number_of_insertion_metrics, 0, expected_write_count
-    ), assert_changes(
-        lambda: writer.write.call_count, 0, expected_write_count
-    ), assert_changes(
-        lambda: replacements_producer.produce.call_count,
-        0,
-        1,
+    with (
+        assert_changes(get_number_of_insertion_metrics, 0, expected_write_count),
+        assert_changes(lambda: writer.write.call_count, 0, expected_write_count),
+        assert_changes(
+            lambda: replacements_producer.produce.call_count,
+            0,
+            1,
+        ),
     ):
         strategy.close()
         strategy.join()
 
-    assert health_check_file.check()
+    assert health_check_file.exists()
 
 
 def test_json_row_batch_pickle_simple() -> None:
@@ -213,9 +213,10 @@ def test_metrics_writing_e2e() -> None:
     ]
 
     # 4 rows written, one for each metrics granularity
-    with assert_changes(
-        lambda: get_row_count(distributions_storage), 0, 4
-    ), assert_changes(lambda: get_row_count(distributions_storage), 0, 4):
+    with (
+        assert_changes(lambda: get_row_count(distributions_storage), 0, 4),
+        assert_changes(lambda: get_row_count(distributions_storage), 0, 4),
+    ):
         for message in messages:
             strategy.submit(message)
 

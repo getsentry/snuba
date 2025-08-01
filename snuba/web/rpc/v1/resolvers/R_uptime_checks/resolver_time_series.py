@@ -7,6 +7,7 @@ from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     DataPoint,
+    Expression,
     TimeSeries,
     TimeSeriesRequest,
     TimeSeriesResponse,
@@ -26,10 +27,17 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
-from snuba.web.rpc.common.common import trace_item_filters_to_expression
+from snuba.web.rpc.common.common import (
+    trace_item_filters_to_expression,
+    use_sampling_factor,
+)
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
+)
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
@@ -38,6 +46,18 @@ from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
     base_conditions_and,
     treeify_or_and_conditions,
 )
+
+
+def _get_aggregation_label(expr: Expression) -> str:
+    match expr.WhichOneof("expression"):
+        case "conditional_aggregation":
+            return expr.conditional_aggregation.label
+        case "formula":
+            raise BadSnubaRPCRequestException(
+                "formulas are not supported for uptime checks"
+            )
+        case default:
+            raise BadSnubaRPCRequestException(f"Unknown expression type: {default}")
 
 
 def _convert_result_timeseries(
@@ -85,7 +105,10 @@ def _convert_result_timeseries(
 
     # to convert the results, need to know which were the groupby columns and which ones
     # were aggregations
-    aggregation_labels = set([agg.label for agg in request.aggregations])
+    aggregation_labels = set(
+        [_get_aggregation_label(expr) for expr in request.expressions]
+    )
+
     group_by_labels = set([attr.name for attr in request.group_by])
 
     # create a mapping with (all the group by attribute key,val pairs as strs, label name)
@@ -158,16 +181,26 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         sample=None,
     )
 
-    aggregation_columns = [
-        SelectedExpression(
-            name=aggregation.label,
-            expression=aggregation_to_expression(
-                aggregation,
-                attribute_key_to_expression(aggregation.key),
-            ),
-        )
-        for aggregation in request.aggregations
-    ]
+    aggregation_columns = []
+    for expr in request.expressions:
+        match expr.WhichOneof("expression"):
+            case "conditional_aggregation":
+                aggregation_columns.append(
+                    SelectedExpression(
+                        name=expr.conditional_aggregation.label,
+                        expression=aggregation_to_expression(
+                            expr.conditional_aggregation,
+                            attribute_key_to_expression,
+                            use_sampling_factor(request.meta),
+                        ),
+                    )
+                )
+            case "formula":
+                raise BadSnubaRPCRequestException(
+                    "formulas are not supported for uptime checks"
+                )
+            case default:
+                raise BadSnubaRPCRequestException(f"Unknown expression type: {default}")
 
     groupby_columns = [
         SelectedExpression(
@@ -257,7 +290,9 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
     def trace_item_type(cls) -> TraceItemType.ValueType:
         return TraceItemType.TRACE_ITEM_TYPE_UPTIME_CHECK
 
-    def resolve(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
+    def resolve(
+        self, in_msg: TimeSeriesRequest, routing_decision: RoutingDecision
+    ) -> TimeSeriesResponse:
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),

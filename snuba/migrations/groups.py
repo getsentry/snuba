@@ -172,7 +172,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.EVENTS_ANALYTICS_PLATFORM: _MigrationGroup(
         loader=EventsAnalyticsPlatformLoader(),
         storage_sets_keys={StorageSetKey.EVENTS_ANALYTICS_PLATFORM},
-        readiness_state=ReadinessState.PARTIAL,
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.GROUP_ATTRIBUTES: _MigrationGroup(
         loader=GroupAttributesLoader(),
@@ -182,7 +182,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.PROFILE_CHUNKS: _MigrationGroup(
         loader=ProfileChunksLoader(),
         storage_sets_keys={StorageSetKey.PROFILE_CHUNKS},
-        readiness_state=ReadinessState.PARTIAL,
+        readiness_state=ReadinessState.COMPLETE,
     ),
 }
 

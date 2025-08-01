@@ -124,14 +124,6 @@ query_processors:
       columns: !!set
         span_id: null
   - processor: EventsBooleanContextsProcessor
-  - processor: PrewhereProcessor
-    args:
-      prewhere_candidates:
-        - event_id
-        - release
-        - transaction_name
-        - environment
-        - project_id
   - processor: NullColumnCaster
     args:
       merge_table_sources:

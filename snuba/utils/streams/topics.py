@@ -71,6 +71,12 @@ class Topic(Enum):
     EAP_MUTATIONS = "snuba-eap-mutations"
     OURLOGS = "snuba-ourlogs"
 
+    ITEMS = "snuba-items"
+    ITEMS_COMMIT_LOG = "snuba-items-commit-log"
+    SUBSCRIPTION_SCHEDULED_EAP_ITEMS = "scheduled-subscriptions-eap-items"
+    SUBSCRIPTION_RESULTS_EAP_ITEMS = "subscription-results-eap-items"
+    DEAD_LETTER_ITEMS = "snuba-dead-letter-items"
+
     LW_DELETIONS_GENERIC_EVENTS = "snuba-lw-deletions-generic-events"
 
     COGS_SHARED_RESOURCES_USAGE = "shared-resources-usage"

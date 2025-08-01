@@ -52,6 +52,7 @@ def gen_message(
         },
         "http_status_code": 200,
         "trace_id": _TRACE_ID,
+        "incident_status": 0,
         "request_info": {
             "request_type": "GET",
             "http_status_code": 200,
@@ -173,7 +174,9 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             page_token=PageToken(offset=10),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -252,7 +255,9 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             page_token=PageToken(offset=10),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 

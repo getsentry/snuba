@@ -90,6 +90,8 @@ jobs:
         name: Checkout code
       - name: Install protoc
         uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run linter
         run: |
           make lint-rust format-rust-ci
@@ -180,10 +182,10 @@ jobs:
 
           docker buildx build \
             --pull \
-            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
+            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} \
             --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
             --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:latest \
-            --tag ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
+            --tag ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} \
             --tag ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
             --target testing \
             "${args[@]}" \
@@ -206,7 +208,7 @@ jobs:
     needs: [linting, snuba-image]
     name: Tests and code coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     strategy:
       matrix:
         snuba_settings:
@@ -237,23 +239,23 @@ jobs:
 
       - name: Docker Snuba Rust tests
         run: |
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test-rust
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test-rust
         if: ${{ matrix.snuba_settings == 'test_rust' }}
 
       - name: Docker Snuba tests
         run: |
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker compose -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test' || matrix.snuba_settings  == 'test_distributed' }}
 
       - name: Docker Snuba Multi-Node Tests
         run: |
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml up -d
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml up -d
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test_distributed_migrations' }}
 
       - name: Docker Snuba Init Tests
         run: |
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker compose -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test' }}
 
       - name: Upload test results to Codecov
@@ -339,7 +341,7 @@ jobs:
             -e PYTHONUNBUFFERED=1 \
             -e SNUBA_SETTINGS=docker \
             -e DEBUG=1 \
-            -e DEFAULT_BROKERS=kafka:9092 \
+            -e DEFAULT_BROKERS=kafka:9093 \
             -e CLICKHOUSE_HOST=clickhouse \
             -e CLICKHOUSE_PORT=9000 \
             -e CLICKHOUSE_HTTP_PORT=8123 \
@@ -348,7 +350,7 @@ jobs:
             -e REDIS_DB=1 \
             --name snuba-snuba-1 \
             --network devservices \
-            ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+            ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
           docker exec snuba-snuba-1 snuba migrations migrate --force
 
       - name: Run snuba tests
@@ -364,22 +366,22 @@ jobs:
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
-          pytest -k 'not __In' tests/snuba \
+          pytest -k 'not __In' \
+              tests/snuba \
+              tests/sentry/snuba \
               tests/sentry/eventstream/kafka \
               tests/sentry/post_process_forwarder \
-              tests/sentry/snuba \
               tests/sentry/eventstore/snuba \
               tests/sentry/search/events \
               tests/sentry/event_manager \
               tests/sentry/api/endpoints/test_organization_profiling_functions.py \
               tests/sentry/integrations/slack/test_unfurl.py \
-              tests/snuba/api/endpoints/test_organization_events_stats_span_indexed.py \
-              tests/snuba/api/endpoints/test_organization_events_stats_mep.py \
-              tests/sentry/sentry_metrics/querying \
-              tests/snuba/test_snql_snuba.py \
-              tests/snuba/test_metrics_layer.py \
+              tests/sentry/uptime/endpoints/test_project_uptime_alert_check_index.py \
+              tests/sentry/uptime/endpoints/test_organization_uptime_stats.py \
+              tests/sentry/api/endpoints/test_organization_traces.py \
               tests/sentry/api/endpoints/test_organization_spans_fields.py \
-              tests/snuba/api/endpoints/test_organization_events_span_indexed.py \
+              tests/sentry/api/endpoints/test_organization_spans_fields_stats.py \
+              tests/sentry/sentry_metrics/querying \
               -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run CI module tests
@@ -423,7 +425,7 @@ jobs:
       - name: Docker Snuba Test other ClickHouse versions
         run: |
           export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{matrix.version}}
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test
 
       - name: Upload to codecov
         run: |
@@ -437,7 +439,7 @@ jobs:
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       name: Checkout repository
-    - uses: getsentry/action-validate-devservices-config@6477ef1e9c96e456bfad726006e731f89fcd81db
+    - uses: getsentry/action-validate-devservices-config@02a078d1280293e6598cabfbd318a01609c12c83
       name: Validate devservices config
       with:
         requirements-file-path: requirements.txt

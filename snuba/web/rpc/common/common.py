@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
-from typing import Callable
+from typing import Callable, TypeVar, cast
 
+from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
@@ -8,6 +9,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
+from snuba import settings, state
 from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
@@ -23,6 +25,9 @@ from snuba.query.dsl import (
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
+Tin = TypeVar("Tin", bound=ProtobufMessage)
+Tout = TypeVar("Tout", bound=ProtobufMessage)
+
 
 def _check_non_string_values_cannot_ignore_case(
     comparison_filter: ComparisonFilter,
@@ -32,6 +37,14 @@ def _check_non_string_values_cannot_ignore_case(
         and comparison_filter.value.WhichOneof("value") != "val_str_array"
     ):
         raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
+
+
+def next_monday(dt: datetime) -> datetime:
+    return dt + timedelta(days=(7 - dt.weekday()) or 7)
+
+
+def prev_monday(dt: datetime) -> datetime:
+    return dt - timedelta(days=(dt.weekday() % 7))
 
 
 def truncate_request_meta_to_day(meta: RequestMeta) -> None:
@@ -49,6 +62,23 @@ def truncate_request_meta_to_day(meta: RequestMeta) -> None:
 
     meta.start_timestamp.seconds = int(start_timestamp.timestamp())
     meta.end_timestamp.seconds = int(end_timestamp.timestamp())
+
+
+def use_sampling_factor(meta: RequestMeta) -> bool:
+    """
+    Since we started writing the sampling factor on a specific date, we should only use it on queries that start after that date.
+    """
+    use_sampling_factor_timestamp_seconds = cast(
+        int,
+        state.get_int_config(
+            "use_sampling_factor_timestamp_seconds",
+            settings.USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS,
+        ),
+    )
+    if use_sampling_factor_timestamp_seconds == 0:
+        return False
+
+    return meta.start_timestamp.seconds >= use_sampling_factor_timestamp_seconds
 
 
 def treeify_or_and_conditions(query: Query) -> None:
@@ -160,27 +190,6 @@ def trace_item_filters_to_expression(
             )
         )
 
-    if item_filter.HasField("not_filter"):
-        filters = item_filter.not_filter.filters
-        if len(filters) == 0:
-            raise BadSnubaRPCRequestException(
-                "Invalid trace item filter, empty 'not' clause"
-            )
-        elif len(filters) == 1:
-            return not_cond(
-                trace_item_filters_to_expression(
-                    filters[0], attribute_key_to_expression
-                )
-            )
-        return not_cond(
-            and_cond(
-                *(
-                    trace_item_filters_to_expression(x, attribute_key_to_expression)
-                    for x in filters
-                )
-            )
-        )
-
     if item_filter.HasField("comparison_filter"):
         k = item_filter.comparison_filter.key
         k_expression = attribute_key_to_expression(k)
@@ -230,18 +239,30 @@ def trace_item_filters_to_expression(
 
         if op == ComparisonFilter.OP_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-            return (
+            expr = (
                 f.equals(f.lower(k_expression), f.lower(v_expression))
                 if item_filter.comparison_filter.ignore_case
                 else f.equals(k_expression, v_expression)
             )
+            # we redefine the way equals works for nulls
+            # now null=null is true
+            expr_with_null = or_cond(
+                expr, and_cond(f.isNull(k_expression), f.isNull(v_expression))
+            )
+            return expr_with_null
         if op == ComparisonFilter.OP_NOT_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-            return (
+            expr = (
                 f.notEquals(f.lower(k_expression), f.lower(v_expression))
                 if item_filter.comparison_filter.ignore_case
                 else f.notEquals(k_expression, v_expression)
             )
+            # we redefine the way not equals works for nulls
+            # now null!=null is true
+            expr_with_null = or_cond(
+                expr, f.xor(f.isNull(k_expression), f.isNull(v_expression))
+            )
+            return expr_with_null
         if op == ComparisonFilter.OP_LIKE:
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
@@ -253,7 +274,11 @@ def trace_item_filters_to_expression(
                 raise BadSnubaRPCRequestException(
                     "the NOT LIKE comparison is only supported on string keys"
                 )
-            return f.notLike(k_expression, v_expression)
+            expr = f.notLike(k_expression, v_expression)
+            # we redefine the way not like works for nulls
+            # now null not like "%anything%" is true
+            expr_with_null = or_cond(expr, f.isNull(k_expression))
+            return expr_with_null
         if op == ComparisonFilter.OP_LESS_THAN:
             return f.less(k_expression, v_expression)
         if op == ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
@@ -270,7 +295,15 @@ def trace_item_filters_to_expression(
                     None,
                     list(map(lambda x: literal(x.lower()), v.val_str_array.values)),
                 )
-            return in_cond(k_expression, v_expression)
+            expr = in_cond(k_expression, v_expression)
+            # note: v_expression must be an array
+            # we redefine the way in works for nulls
+            # now null in ['hi', null] is true
+            expr_with_null = or_cond(
+                expr,
+                and_cond(f.isNull(k_expression), f.has(v_expression, literal(None))),
+            )
+            return expr_with_null
         if op == ComparisonFilter.OP_NOT_IN:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             if item_filter.comparison_filter.ignore_case:
@@ -279,7 +312,18 @@ def trace_item_filters_to_expression(
                     None,
                     list(map(lambda x: literal(x.lower()), v.val_str_array.values)),
                 )
-            return not_cond(in_cond(k_expression, v_expression))
+            expr = not_cond(in_cond(k_expression, v_expression))
+            # note: v_expression must be an array
+            # we redefine the way not in works for nulls
+            # now null not in ['hi'] is true
+            expr_with_null = or_cond(
+                expr,
+                and_cond(
+                    f.isNull(k_expression),
+                    not_cond(f.has(v_expression, literal(None))),
+                ),
+            )
+            return expr_with_null
 
         raise BadSnubaRPCRequestException(
             f"Invalid string comparison, unknown op: {item_filter.comparison_filter}"

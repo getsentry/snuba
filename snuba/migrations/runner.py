@@ -9,12 +9,7 @@ from clickhouse_driver import errors
 from snuba import settings
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.escaping import escape_string
-from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import (
-    ClickhouseClientSettings,
-    ClickhouseNodeType,
-    get_cluster,
-)
+from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.migrations.connect import (
@@ -34,8 +29,7 @@ from snuba.migrations.groups import (
     get_group_loader,
     get_group_readiness_state,
 )
-from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
-from snuba.migrations.operations import RunSqlAsCode
+from snuba.migrations.migration import ClickhouseNodeMigration
 from snuba.migrations.status import Status
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -135,7 +129,8 @@ class Runner:
         )
 
         local_node_connection.execute(
-            f"ALTER TABLE {LOCAL_TABLE_NAME} UPDATE status='{new_status.value}' WHERE migration_id='{migration_id}'"
+            f"ALTER TABLE {LOCAL_TABLE_NAME} UPDATE status=%(status)s WHERE migration_id=%(migration_id)s",
+            {"status": new_status.value, "migration_id": migration_id},
         )
 
     def show_all(
@@ -390,6 +385,65 @@ class Runner:
         else:
             self._reverse_migration_impl(migration_key)
 
+    def reverse_all(
+        self,
+        *,
+        through: str = "all",
+        fake: bool = False,
+        force: bool = False,
+        include_system: bool = False,
+        group: Optional[MigrationGroup] = None,
+        readiness_states: Optional[Sequence[ReadinessState]] = None,
+    ) -> None:
+
+        if not force:
+            raise MigrationError("Requires force to reverse migrations")
+
+        groups = (
+            [group]
+            if group
+            else (
+                get_active_migration_groups()
+                if include_system
+                else [
+                    g
+                    for g in get_active_migration_groups()
+                    if g != MigrationGroup.SYSTEM
+                ]
+            )
+        )
+        completed_migrations = self._get_completed_migrations(groups)
+
+        if readiness_states:
+            completed_migrations = [
+                m
+                for m in completed_migrations
+                if get_group_readiness_state(m.group) in readiness_states
+            ]
+
+        use_through = through != "all"
+
+        def exact_migration_exists(through: str) -> bool:
+            migration_ids = [
+                key.migration_id
+                for key in completed_migrations
+                if key.migration_id.startswith(through)
+            ]
+            return len(migration_ids) == 1
+
+        if use_through and not exact_migration_exists(through):
+            raise MigrationError(f"No exact match for: {through}")
+
+        for migration_key in completed_migrations:
+            if fake:
+                self._update_migration_status(migration_key, Status.NOT_STARTED)
+            else:
+                self._reverse_migration_impl(migration_key)
+
+            if use_through and migration_key.migration_id.startswith(through):
+                logger.info(f"Reverse through: {migration_key.migration_id}")
+                break
+
     def reverse_in_progress(
         self,
         fake: bool = False,
@@ -494,6 +548,37 @@ class Runner:
 
         return group_migrations
 
+    def _get_completed_migrations(
+        self, groups: Sequence[MigrationGroup]
+    ) -> List[MigrationKey]:
+        """
+        Get a list of completed migrations for a list of groups
+        """
+        migration_status = self._get_migration_status()
+
+        group_migrations: List[MigrationKey] = []
+        for group in groups:
+            group_loader = get_group_loader(group)
+            completed_migrations = 0
+            for migration_id in group_loader.get_migrations():
+                migration_key = MigrationKey(group, migration_id)
+                status = migration_status.get(migration_key, Status.NOT_STARTED)
+                if status == Status.IN_PROGRESS:
+                    # can't reverse migrations if one is stuck pending
+                    raise MigrationInProgress(str(migration_key))
+                elif status == Status.COMPLETED:
+                    group_migrations.append(migration_key)
+                    completed_migrations += 1
+                elif completed_migrations > 0:
+                    # once we've seen completed migrations for a group
+                    # we shoudln't see anymore that are NOT_STARTED
+                    raise MigrationError(
+                        f"Unexpected not_started migration {migration_key} while reverting migrations"
+                    )
+        # need opposite order
+        group_migrations.reverse()
+        return group_migrations
+
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
     ) -> None:
@@ -561,49 +646,3 @@ class Runner:
                 raise e
 
         return data
-
-    @classmethod
-    def add_node(
-        self,
-        node_type: ClickhouseNodeType,
-        storage_sets: Sequence[StorageSetKey],
-        host_name: str,
-        port: int,
-        user: str,
-        password: str,
-        database: str,
-        secure: bool = False,
-        ca_certs: Optional[str] = None,
-        verify: Optional[bool] = False,
-    ) -> None:
-        client_settings = ClickhouseClientSettings.MIGRATE.value
-        clickhouse = ClickhousePool(
-            host_name,
-            port,
-            user,
-            password,
-            database,
-            secure,
-            ca_certs,
-            verify,
-            client_settings=client_settings.settings,
-            send_receive_timeout=client_settings.timeout,
-        )
-
-        migrations: List[Migration] = []
-
-        for group in get_active_migration_groups():
-            group_loader = get_group_loader(group)
-
-            for migration_id in group_loader.get_migrations():
-                migration = group_loader.load_migration(migration_id)
-                migrations.append(migration)
-
-        for migration in migrations:
-            if isinstance(migration, ClickhouseNodeMigration):
-                for sql_op in migration.forwards_ops():
-                    op = RunSqlAsCode(sql_op)
-                    op.execute_new_node(storage_sets, node_type, clickhouse)
-            elif isinstance(migration, CodeMigration):
-                for python_op in migration.forwards_global():
-                    python_op.execute_new_node(storage_sets, node_type, clickhouse)

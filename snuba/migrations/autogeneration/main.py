@@ -109,7 +109,7 @@ def write_migration(
             f"Error: The migration number {nextnum} was larger than the last migration in the group loader '{group_loader_name}', but the migration already exists"
         )
 
-    from black import Mode, format_str  # type: ignore
+    from black import Mode, format_str
 
     with open(newpath, "w") as f:
         f.write(format_str(migration, mode=Mode()))

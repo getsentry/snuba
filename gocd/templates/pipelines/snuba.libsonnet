@@ -80,6 +80,7 @@ local saas_health_check(region) =
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
                 DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
                 LABEL_SELECTOR: 'service=snuba',
+                SENTRY_ENVIRONMENT: 'us',
               },
               elastic_profile_id: 'snuba',
               tasks: [

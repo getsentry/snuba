@@ -53,6 +53,7 @@ fn create_factory(
         clickhouse_cluster: ClickhouseConfig {
             host: "test".into(),
             port: 1234,
+            secure: false,
             http_port: 1234,
             user: "test".into(),
             password: "test".into(),
@@ -99,6 +100,8 @@ fn create_factory(
         },
         stop_at_timestamp: None,
         batch_write_timeout: None,
+        join_timeout_ms: None,
+        health_check: "arroyo".to_string(),
     };
     Box::new(factory)
 }
@@ -202,7 +205,7 @@ fn run_processor_bench(
 
 fn main() {
     // this sends to nowhere, but because it's UDP we won't error.
-    metrics::init(StatsDBackend::new("127.0.0.1", 8081, "snuba.consumer", 0.0)).unwrap();
+    metrics::init(StatsDBackend::new("127.0.0.1", 8081, "snuba.consumer")).unwrap();
 
     let mut c = Criterion::default().configure_from_args();
 

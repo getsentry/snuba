@@ -42,6 +42,9 @@ def _prepare_environ(
 
 def run(module: str, bind: str, **kwargs: bool | int | str | None) -> NoReturn:
     protocol = os.environ.pop("UWSGI_PROTOCOL", "http")
+    autoreload = os.environ.pop("UWSGI_AUTORELOAD", None)
+    if autoreload is not None:
+        kwargs["py_autoreload"] = int(autoreload)
     options: dict[str, bool | int | str | None] = {
         "auto_procname": True,
         "binary_path": sys.executable,

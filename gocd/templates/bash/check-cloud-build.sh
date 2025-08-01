@@ -1,6 +1,8 @@
 #!/bin/bash
 
-/devinfra/scripts/checks/googlecloud/checkcloudbuild.py \
-  ${GO_REVISION_SNUBA_REPO} \
+checks-googlecloud-check-cloudbuild \
   sentryio \
-  "us-central1-docker.pkg.dev/sentryio/snuba/image"
+  snuba \
+  build-on-branch-push \
+  ${GO_REVISION_SNUBA_REPO} \
+  master

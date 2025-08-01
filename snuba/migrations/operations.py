@@ -23,6 +23,10 @@ from snuba.migrations.table_engines import TableEngine
 logger = structlog.get_logger().bind(module=__name__)
 
 
+class OperationMissingNodes(Exception):
+    pass
+
+
 class OperationTarget(Enum):
     """
     Represents the target nodes of an operation.
@@ -53,19 +57,35 @@ class SqlOperation(ABC):
         return self._storage_set
 
     def get_nodes(self) -> Sequence[ClickhouseNode]:
+        """
+        This should return the given local or dist nodes for which the operation should
+        be ran. If there are no nodes found, this probably means something is wrong.
+
+        However, this will return `[]` in the event that the target typs is for the
+        distributed nodes and the cluster is a single node cluster, since there are
+        no dist nodes in a single node cluster.
+        """
+        if self.target not in [OperationTarget.LOCAL, OperationTarget.DISTRIBUTED]:
+            raise ValueError(f"Target not set for {self}")
+
         cluster = get_cluster(self._storage_set)
-        local_nodes, dist_nodes = (
-            cluster.get_local_nodes(),
-            cluster.get_distributed_nodes(),
+
+        nodes = (
+            cluster.get_local_nodes()
+            if self.target == OperationTarget.LOCAL
+            else cluster.get_distributed_nodes()
         )
 
-        if self.target == OperationTarget.LOCAL:
-            nodes = local_nodes
-        elif self.target == OperationTarget.DISTRIBUTED:
-            nodes = dist_nodes
-        else:
-            raise ValueError(f"Target not set for {self}")
-        return nodes
+        if nodes or (
+            not nodes
+            and self.target == OperationTarget.DISTRIBUTED
+            and cluster.is_single_node()
+        ):
+            return nodes
+
+        raise OperationMissingNodes(
+            f"No {self.target.value} nodes found for {cluster.get_clickhouse_cluster_name()}"
+        )
 
     def execute(self) -> None:
         nodes = self.get_nodes()
@@ -131,6 +151,20 @@ class RunSql(SqlOperation):
 
     def format_sql(self) -> str:
         return self.__statement
+
+
+class RetryOnSyncError:
+    def execute(self) -> None:
+        for i in range(30, -1, -1):  # wait at most ~30 seconds
+            try:
+                super().execute()  # type: ignore
+                break
+            except Exception as e:
+                # Metadata on replica is not up to date with common metadata in Zookeeper (status code = 517)
+                if i and e.code == 517:  # type: ignore
+                    time.sleep(1)
+                else:
+                    raise
 
 
 class CreateTable(SqlOperation):
@@ -212,7 +246,7 @@ class DropTable(SqlOperation):
         self.table_name = table_name
 
     def format_sql(self) -> str:
-        return f"DROP TABLE IF EXISTS {self.table_name};"
+        return f"DROP TABLE IF EXISTS {self.table_name} SYNC;"
 
 
 class TruncateTable(SqlOperation):
@@ -282,7 +316,7 @@ class RemoveTableTTL(SqlOperation):
         return f"ALTER TABLE {self.__table_name} REMOVE TTL;"
 
 
-class AddColumn(SqlOperation):
+class AddColumn(RetryOnSyncError, SqlOperation):
     """
     Adds a column to a table.
 
@@ -321,7 +355,7 @@ class AddColumn(SqlOperation):
         return f"AddColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column={repr(self.column)}, after={repr(self.__after)}, target={repr(self.target)})"
 
 
-class DropColumn(SqlOperation):
+class DropColumn(RetryOnSyncError, SqlOperation):
     """
     Drops a column from a table.
 
@@ -352,7 +386,7 @@ class DropColumn(SqlOperation):
         return f"DropColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column_name={repr(self.column_name)}, target={repr(self.target)})"
 
 
-class ModifyColumn(SqlOperation):
+class ModifyColumn(RetryOnSyncError, SqlOperation):
     """
     Modify a column in a table.
 
@@ -507,7 +541,7 @@ class AddIndices(SqlOperation):
         return f"ALTER TABLE {self.__table_name} {', '.join(statements)};"
 
 
-class DropIndex(SqlOperation):
+class DropIndex(RetryOnSyncError, SqlOperation):
     """
     Drops an index.
     """
@@ -540,7 +574,7 @@ class DropIndex(SqlOperation):
             super()._block_on_mutations(conn, poll_seconds, timeout_seconds)
 
 
-class DropIndices(SqlOperation):
+class DropIndices(RetryOnSyncError, SqlOperation):
     """
     Drops many indices.
     Only works with the MergeTree family of tables.

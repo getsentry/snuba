@@ -1,8 +1,8 @@
-pub(crate) mod eap_spans;
+mod eap_items;
+pub(crate) mod eap_items_span;
 mod errors;
 mod functions;
 mod generic_metrics;
-mod ourlogs;
 mod outcomes;
 mod profile_chunks;
 mod profiles;
@@ -58,8 +58,6 @@ define_processing_functions! {
     ("ReplaysProcessor", "ingest-replay-events", ProcessingFunctionType::ProcessingFunction(replays::process_message)),
     ("UptimeMonitorChecksProcessor", "snuba-uptime-results", ProcessingFunctionType::ProcessingFunction(uptime_monitor_checks::process_message)),
     ("SpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(spans::process_message)),
-    ("EAPSpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(eap_spans::process_message)),
-    ("OurlogsMessageProcessor", "snuba-ourlogs", ProcessingFunctionType::ProcessingFunction(ourlogs::process_message)),
     ("OutcomesProcessor", "outcomes", ProcessingFunctionType::ProcessingFunction(outcomes::process_message)),
     ("GenericCountersMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_counter_message)),
     ("GenericSetsMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_set_message)),
@@ -68,6 +66,8 @@ define_processing_functions! {
     ("PolymorphicMetricsProcessor", "snuba-metrics", ProcessingFunctionType::ProcessingFunction(release_health_metrics::process_metrics_message)),
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
     ("ProfileChunksProcessor", "snuba-profile-chunks", ProcessingFunctionType::ProcessingFunction(profile_chunks::process_message)),
+    ("EAPItemsProcessor", "snuba-items", ProcessingFunctionType::ProcessingFunction(eap_items::process_message)),
+    ("EAPItemsSpanProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(eap_items_span::process_message)),
 }
 
 // COGS is recorded for these processors
@@ -158,7 +158,11 @@ mod tests {
                     settings.add_redaction(".*.message_timestamp", "<event timestamp>");
                 }
 
-                settings.set_description(std::str::from_utf8(example.payload()).unwrap());
+                // This payload is protobuf (so binary), not JSON (so text).
+                if *topic_name != "snuba-items" {
+                    settings.set_description(std::str::from_utf8(example.payload()).unwrap());
+                }
+
                 let _guard = settings.bind_to_scope();
 
                 let payload = KafkaPayload::new(None, None, Some(example.payload().to_vec()));

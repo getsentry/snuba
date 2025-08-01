@@ -1,11 +1,12 @@
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
-use sentry_arroyo::gauge;
 use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use sentry_arroyo::{counter, gauge};
 use std::mem;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -41,10 +42,11 @@ impl BatchFactory {
         concurrency: &ConcurrencyConfig,
         clickhouse_user: &str,
         clickhouse_password: &str,
+        clickhouse_secure: bool,
         async_inserts: bool,
         batch_write_timeout: Option<Duration>,
     ) -> Self {
-        let mut headers = HeaderMap::with_capacity(5);
+        let mut headers = HeaderMap::with_capacity(6);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
         headers.insert(
@@ -70,7 +72,9 @@ impl BatchFactory {
             }
         }
 
-        let url = format!("http://{hostname}:{http_port}?{query_params}");
+        let scheme = if clickhouse_secure { "https" } else { "http" };
+
+        let url = format!("{scheme}://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
         let client = if let Some(timeout_duration) = batch_write_timeout {
@@ -115,11 +119,14 @@ impl BatchFactory {
         let client = self.client.clone();
 
         let result_handle = self.handle.spawn(async move {
+            let mut sleep_time = 0;
             while receiver.is_empty() && !receiver.is_closed() {
                 // continously check on the receiver stream, only when it's
                 // not empty do we write to clickhouse
+                sleep_time += 800;
                 sleep(Duration::from_millis(800)).await;
             }
+            gauge!("rust_consumer.receiver_sleep_time_ms", sleep_time as u64);
 
             if !receiver.is_empty() {
                 // only make the request to clickhouse if there is data
@@ -134,6 +141,7 @@ impl BatchFactory {
                 if !response.status().is_success() {
                     let status = response.status();
                     let body = response.text().await;
+                    counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status.to_string());
                     anyhow::bail!(
                         "bad response while inserting rows, status: {}, response body: {:?}",
                         status,
@@ -223,7 +231,13 @@ impl HttpBatch {
         // finish stream
         drop(self.sender.take());
         if let Some(handle) = self.result_handle.take() {
-            handle.await??;
+            // timeout on writing a batch to clickhouse after 2 minutes
+            match timeout(Duration::from_millis(120000), handle).await {
+                Ok(res) => res??,
+                Err(_) => {
+                    anyhow::bail!("Timedout writing to clickhouse");
+                }
+            }
             Ok(true)
         } else {
             Ok(false)
@@ -267,6 +281,7 @@ mod tests {
             "default",
             "",
             false,
+            false,
             None,
         );
 
@@ -301,6 +316,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
             true,
             None,
         );
@@ -336,6 +352,7 @@ mod tests {
             "default",
             "",
             false,
+            false,
             None,
         );
 
@@ -367,6 +384,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
             false,
             None,
         );
@@ -401,6 +419,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
             true,
             // pass in an unreasonably short timeout
             // which prevents the client request from reaching Clickhouse
@@ -436,6 +455,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
             true,
             // pass in a reasonable timeout
             Some(Duration::from_millis(1000)),

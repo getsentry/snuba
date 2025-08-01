@@ -77,6 +77,7 @@ NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "check_status_reason": AttributeKey.Type.TYPE_STRING,
     "http_status_code": AttributeKey.Type.TYPE_INT,
     "trace_id": AttributeKey.Type.TYPE_STRING,
+    "incident_status": AttributeKey.Type.TYPE_INT,
     "retention_days": AttributeKey.Type.TYPE_INT,
 }
 

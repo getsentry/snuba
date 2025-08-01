@@ -11,6 +11,7 @@ import pytest
 import rapidjson
 from sentry_redis_tools.failover_redis import FailoverRedis
 
+from redis import RedisError
 from redis.exceptions import ReadOnlyError
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state import set_config
@@ -247,3 +248,10 @@ def test_transient_error(backend: Cache[bytes]) -> None:
         setter.result()
 
     assert waiter.result() == b"hello"
+
+
+@pytest.mark.redis_db
+def test_set_fails_open(backend: Cache[bytes]) -> None:
+    assert isinstance(backend, RedisCache)
+    with mock.patch.object(redis_client, "set", side_effect=RedisError()):
+        backend.get_readthrough("key", lambda: b"value", noop)
