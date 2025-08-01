@@ -258,7 +258,7 @@ class SchedulerBuilder:
         except AssertionError:
             raise
         except Exception:
-            # if we are unable to load the topic config for some reason, probably shoudln't
+            # if we are unable to load the topic config for some reason, probably shouldn't
             # crash the consumer
             logger.exception(
                 f"failed to confirm LogAppendTime for {default_topic_spec.get_physical_topic_name()} topic"
