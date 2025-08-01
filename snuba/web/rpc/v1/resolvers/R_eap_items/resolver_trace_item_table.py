@@ -94,6 +94,19 @@ def aggregation_filter_to_expression(
                 raise BadSnubaRPCRequestException(
                     f"Unsupported aggregation filter op: {AggregationComparisonFilter.Op.Name(agg_filter.comparison_filter.op)}"
                 )
+            if agg_filter.comparison_filter.HasField(
+                "formula"
+            ) and agg_filter.comparison_filter.HasField("conditional_aggregation"):
+                raise BadSnubaRPCRequestException(
+                    "Cannot use formula and conditional aggregation in the same ComparisonFilter"
+                )
+            elif agg_filter.comparison_filter.HasField("formula"):
+                return op_expr(
+                    _formula_to_expression(
+                        agg_filter.comparison_filter.formula, request_meta
+                    ),
+                    agg_filter.comparison_filter.val,
+                )
             return op_expr(
                 aggregation_to_expression(
                     agg_filter.comparison_filter.conditional_aggregation,
