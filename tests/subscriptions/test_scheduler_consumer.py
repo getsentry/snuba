@@ -202,7 +202,7 @@ def test_scheduler_logappendtime_check(
     mock_config.return_value = config
 
     admin_client = AdminClient(get_default_kafka_configuration())
-    create_topics(admin_client, [SnubaTopic.EVENTS], 2)
+    create_topics(admin_client, [SnubaTopic.EVENTS], 1)
     create_topics(admin_client, [SnubaTopic.COMMIT_LOG], 1)
 
     metrics_backend = TestingMetricsBackend()
