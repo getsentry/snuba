@@ -1,13 +1,23 @@
 import { ReactNode } from "react";
 
-type AllocationPolicy = {
-  policy_name: string;
-  configs: AllocationPolicyConfig[];
-  optional_config_definitions: AllocationPolicyOptionalConfigDefinition[];
+
+interface ConfigurableComponent {
+  type: string;
+  name: string;
+  configs: Configuration[];
+  optional_config_definitions: OptionalConfigurationDefinition[];
+};
+
+interface AllocationPolicy extends ConfigurableComponent {
+  type: "allocation_policy";
   query_type: string;
 };
 
-type AllocationPolicyConfig = {
+interface RoutingStrategy extends ConfigurableComponent {
+  type: "routing_strategy";
+}
+
+type Configuration = {
   name: string;
   value: string;
   description: string;
@@ -15,17 +25,17 @@ type AllocationPolicyConfig = {
   params: object;
 };
 
-type AllocationPolicyConfigParams = {
+type ConfigurationParams = {
   name: string;
   type: string;
 };
 
-type AllocationPolicyOptionalConfigDefinition = {
+type OptionalConfigurationDefinition = {
   name: string;
   type: string;
   default: string;
   description: string;
-  params: AllocationPolicyConfigParams[];
+  params: ConfigurationParams[];
 };
 
 type RowData = {
@@ -37,10 +47,40 @@ type RowData = {
   edit: ReactNode;
 };
 
+interface StorageEntity {
+  type: "storage";
+  name: string;
+}
+
+interface StrategyEntity {
+  type: "strategy";
+  name: string;
+}
+
+type Entity = StorageEntity | StrategyEntity;
+
+function getEntityName(entity: Entity): string {
+  return entity.name;
+}
+
+function isStorage(entity: Entity): entity is StorageEntity {
+  return entity.type === "storage";
+}
+
+function isStrategy(entity: Entity): entity is StrategyEntity {
+  return entity.type === "strategy";
+}
+
 export {
   AllocationPolicy,
-  AllocationPolicyConfig,
-  AllocationPolicyOptionalConfigDefinition,
-  AllocationPolicyConfigParams,
+  Configuration,
+  OptionalConfigurationDefinition,
+  ConfigurationParams,
   RowData,
+  Entity,
+  getEntityName,
+  isStorage,
+  isStrategy,
+  StorageEntity,
+  StrategyEntity, ConfigurableComponent, RoutingStrategy
 };

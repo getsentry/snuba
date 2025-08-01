@@ -46,7 +46,7 @@ from snuba.admin.migrations_policies import (
     get_migration_group_policies,
 )
 from snuba.admin.production_queries.prod_queries import run_mql_query, run_snql_query
-from snuba.admin.rpc.rpc_queries import validate_request_meta
+from snuba.admin.rpc.rpc_queries import get_routing_strategies, validate_request_meta
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -79,7 +79,7 @@ from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
-from snuba.query.allocation_policies import AllocationPolicy
+from snuba.query.allocation_policies import CAPMAN_HASH, AllocationPolicy
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.replacers.replacements_and_expiry import (
@@ -96,6 +96,10 @@ from snuba.web.delete_query import (
     deletes_are_enabled,
 )
 from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names, run_rpc_handler
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    CBRS_HASH,
+    BaseRoutingStrategy,
+)
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -958,6 +962,16 @@ def snuba_debug() -> Response:
         explain_cleanup()
 
 
+@application.route("/routing_strategies")
+@check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
+def routing_strategies() -> Response:
+    return Response(
+        json.dumps(get_routing_strategies()),
+        200,
+        {"Content-Type": "application/json"},
+    )
+
+
 @application.route("/storages_with_allocation_policies")
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def storages_with_allocation_policies() -> Response:
@@ -968,37 +982,196 @@ def storages_with_allocation_policies() -> Response:
     )
 
 
-@application.route("/allocation_policy_configs/<path:storage_key>", methods=["GET"])
+def _add_policy_data(
+    policies: Sequence[AllocationPolicy], query_type: str, data: list[dict[str, Any]]
+) -> None:
+    for policy in policies:
+        data.append(
+            {
+                "type": "allocation_policy",
+                "name": policy.config_key(),
+                "configs": policy.get_current_configs(),
+                "optional_config_definitions": policy.get_optional_config_definitions_json(),
+                "query_type": query_type,
+            }
+        )
+
+
+@application.route(
+    "/allocation_policy_configs/storage/<path:storage_key>", methods=["GET"]
+)
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def get_allocation_policy_configs(storage_key: str) -> Response:
+def get_allocation_policy_configs_of_storage(storage_key: str) -> Response:
 
     policies = get_storage(StorageKey(storage_key)).get_allocation_policies()
     delete_policies = get_storage(
         StorageKey(storage_key)
     ).get_delete_allocation_policies()
 
-    data = []
-
-    def add_policy_data(policies: Sequence[AllocationPolicy], query_type: str) -> None:
-        for policy in policies:
-            data.append(
-                {
-                    "policy_name": policy.config_key(),
-                    "configs": policy.get_current_configs(),
-                    "optional_config_definitions": policy.get_optional_config_definitions_json(),
-                    "query_type": query_type,
-                }
-            )
-
-    add_policy_data(policies, "select")
-    add_policy_data(delete_policies, "delete")
+    data: list[dict[str, Any]] = []
+    _add_policy_data(policies, "select", data)
+    _add_policy_data(delete_policies, "delete", data)
 
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
-@application.route("/allocation_policy_config", methods=["POST", "DELETE"])
+@application.route(
+    "/allocation_policy_configs/strategy/<path:strategy_name>", methods=["GET"]
+)
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def set_allocation_policy_config() -> Response:
+def get_allocation_policy_configs_of_routing_strategy(strategy_name: str) -> Response:
+
+    policies = BaseRoutingStrategy.get_from_name(
+        strategy_name
+    )().get_allocation_policies()
+
+    data: list[dict[str, Any]] = []
+    _add_policy_data(policies, "select", data)
+
+    print("allocationpolicyyyyy", data[0])
+
+    return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
+
+
+@application.route("/routing_strategy_configs/<path:strategy_name>", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
+def get_routing_strategy_configs(strategy_name: str) -> Response:
+    from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+        RoutingStrategyConfig,
+    )
+
+    configs = BaseRoutingStrategy.get_from_name(strategy_name)().get_configurations()
+    serialized_configs = [
+        cast(RoutingStrategyConfig, config).to_config_dict()
+        for config in configs.values()
+    ]
+    print("serialized_configssssssss", serialized_configs)
+    return Response(
+        json.dumps(serialized_configs), 200, {"Content-Type": "application/json"}
+    )
+
+
+@application.route("/routing_strategy_config", methods=["POST", "DELETE"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
+def set_routing_strategy_config() -> Response:
+    data = json.loads(request.data)
+    user = request.headers.get(USER_HEADER_KEY)
+
+    try:
+        strategy, key = (data["strategy"], data["key"])
+        params = data.get("params", {})
+
+        assert isinstance(strategy, str), "Invalid strategy"
+        assert isinstance(key, str), "Invalid key"
+        assert isinstance(params, dict), "Invalid params"
+        assert key != "", "Key cannot be empty string"
+
+        strategies = list(BaseRoutingStrategy.all_names())
+        strategy = next(
+            (s for s in strategies if s == strategy),
+            None,
+        )
+        assert strategy is not None, "Strategy not found"
+
+    except (KeyError, AssertionError) as exc:
+        return Response(
+            json.dumps({"error": f"Invalid config: {str(exc)}"}),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+    if request.method == "DELETE":
+        strategy.delete_config_value(config_key=key, params=params, user=user)
+    return Response("", 200)
+
+
+@application.route("/allocation_policy_config_for_strategy", methods=["POST", "DELETE"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def set_allocation_policy_config_for_strategy() -> Response:
+    data = json.loads(request.data)
+    user = request.headers.get(USER_HEADER_KEY)
+
+    try:
+        strategy, key, policy_name = (data["strategy"], data["key"], data["policy"])
+
+        params = data.get("params", {})
+
+        assert isinstance(strategy, str), "Invalid strategy"
+        assert isinstance(key, str), "Invalid key"
+        assert isinstance(params, dict), "Invalid params"
+        assert key != "", "Key cannot be empty string"
+        assert isinstance(policy_name, str), "Invalid policy name"
+        strategy = BaseRoutingStrategy.get_from_name(strategy)
+        assert strategy is not None, "Strategy not found"
+        policies = (
+            strategy().get_allocation_policies()
+            + strategy().get_delete_allocation_policies()
+        )
+        policy = next(
+            (p for p in policies if p.config_key() == policy_name),
+            None,
+        )
+        assert policy is not None, "Policy not found on strategy"
+
+    except (KeyError, AssertionError) as exc:
+        return Response(
+            json.dumps({"error": f"Invalid config: {str(exc)}"}),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+    if request.method == "DELETE":
+        policy.delete_config_value(
+            config_key=key, hash=CBRS_HASH, params=params, user=user
+        )
+        audit_log.record(
+            user or "",
+            AuditLogAction.ALLOCATION_POLICY_DELETE,
+            {
+                "storage": strategy,
+                "policy": policy.config_key(),
+                "key": key,
+            },  # todo: make audit log handle strategy in addition to storage
+            notify=True,
+        )
+        return Response("", 200)
+    elif request.method == "POST":
+        try:
+            value = data["value"]
+            assert isinstance(value, str), "Invalid value"
+            policy.set_config_value(
+                config_key=key, value=value, params=params, user=user
+            )
+            audit_log.record(
+                user or "",
+                AuditLogAction.ALLOCATION_POLICY_UPDATE,
+                {
+                    "storage": strategy,  # todo: make audit log handle strategy in addition to storage
+                    "policy": policy.config_key(),
+                    "key": key,
+                    "value": value,
+                    "params": str(params),
+                },
+                notify=True,
+            )
+            return Response("", 200)
+        except (KeyError, AssertionError) as exc:
+            return Response(
+                json.dumps({"error": f"Invalid config: {str(exc)}"}),
+                400,
+                {"Content-Type": "application/json"},
+            )
+    else:
+        return Response(
+            json.dumps({"error": "Method not allowed"}),
+            405,
+            {"Content-Type": "application/json"},
+        )
+
+
+@application.route("/allocation_policy_config_for_storage", methods=["POST", "DELETE"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def set_allocation_policy_config_for_storage() -> Response:
     data = json.loads(request.data)
     user = request.headers.get(USER_HEADER_KEY)
 
@@ -1031,7 +1204,9 @@ def set_allocation_policy_config() -> Response:
         )
 
     if request.method == "DELETE":
-        policy.delete_config_value(config_key=key, params=params, user=user)
+        policy.delete_config_value(
+            config_key=key, hash=CAPMAN_HASH, params=params, user=user
+        )
         audit_log.record(
             user or "",
             AuditLogAction.ALLOCATION_POLICY_DELETE,
