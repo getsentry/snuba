@@ -165,6 +165,87 @@ def test_scheduler_consumer(tmpdir: Path) -> None:
     del stream_loader.get_default_topic_spec().partitions_number
 
 
+@pytest.mark.parametrize(
+    "config, should_crash",
+    [
+        pytest.param(
+            {"message.timestamp.type": "CreateTime"},
+            True,
+            id="assert error",
+        ),
+        pytest.param("invalid_config", False, id="non assert error"),
+    ],
+)
+@mock.patch(
+    "snuba.datasets.table_storage.KafkaTopicSpec.topic_current_config_values",
+    new_callable=mock.PropertyMock,
+)
+def test_scheduler_logappendtime_check(
+    mock_config: mock.Mock, config: Any, should_crash: bool, tmpdir: Path
+) -> None:
+    """
+    The scheduler needs the original topic (the one the commit log topic follows)
+    to have ``LogAppend`` time set as the ``"message.timestamp.type"``.
+
+    Here we test the two following cases:
+    * We have the topic config and can verify LogAppendTime, and subsequently
+      raise an AssertionError if the setting is incorrect, crashing the consumer
+    * We run into some issue getting the config and cant determine the setting,
+      in which case we log the exception but continue spinning up the consumer
+    """
+    settings.KAFKA_TOPIC_MAP = {
+        "events": "events-scheduler-consumer-test",
+        "snuba-commit-log": "snuba-commit-log-test",
+    }
+    importlib.reload(scheduler_consumer)
+
+    mock_config.return_value = config
+
+    admin_client = AdminClient(get_default_kafka_configuration())
+    create_topics(admin_client, [SnubaTopic.EVENTS], 2)
+    create_topics(admin_client, [SnubaTopic.COMMIT_LOG], 1)
+
+    metrics_backend = TestingMetricsBackend()
+    entity_name = "events"
+    entity_key = EntityKey(entity_name)
+    entity = get_entity(entity_key)
+    storage = entity.get_writable_storage()
+    assert storage is not None
+
+    mock_scheduler_producer = mock.Mock()
+    entity = get_entity(EntityKey.EVENTS)
+
+    if should_crash:
+        with pytest.raises(AssertionError):
+            scheduler_consumer.SchedulerBuilder(
+                entity_name,
+                str(uuid.uuid1().hex),
+                "events",
+                [],
+                mock_scheduler_producer,
+                "latest",
+                False,
+                60 * 5,
+                None,
+                metrics_backend,
+                health_check_file=str(tmpdir / "health.txt"),
+            )
+    else:
+        scheduler_consumer.SchedulerBuilder(
+            entity_name,
+            str(uuid.uuid1().hex),
+            "events",
+            [],
+            mock_scheduler_producer,
+            "latest",
+            False,
+            60 * 5,
+            None,
+            metrics_backend,
+            health_check_file=str(tmpdir / "health.txt"),
+        )
+
+
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_scheduler_consumer_rpc_subscriptions(tmpdir: Path) -> None:

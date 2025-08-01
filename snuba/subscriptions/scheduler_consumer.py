@@ -252,7 +252,9 @@ class SchedulerBuilder:
         try:
             default_topic_spec = stream_loader.get_default_topic_spec()
             default_topic_config = default_topic_spec.topic_current_config_values
-            assert default_topic_config["message.timestamp.type"] == "LogAppendTime"
+            assert (
+                default_topic_config["message.timestamp.type"] == "LogAppendTime"
+            ), f"{default_topic_spec.get_physical_topic_name()} topic requires LogAppendTime"
         except AssertionError:
             raise
         except Exception:
