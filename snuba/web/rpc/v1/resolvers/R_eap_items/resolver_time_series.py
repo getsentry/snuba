@@ -37,6 +37,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
+    add_existence_check_to_subscriptable_references,
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
@@ -366,6 +367,7 @@ def build_query(request: TimeSeriesRequest) -> Query:
         ],
     )
     treeify_or_and_conditions(res)
+    add_existence_check_to_subscriptable_references(res)
     return res
 
 
