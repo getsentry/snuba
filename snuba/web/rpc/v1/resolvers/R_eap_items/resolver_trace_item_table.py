@@ -96,9 +96,9 @@ def aggregation_filter_to_expression(
                 )
             if agg_filter.comparison_filter.HasField(
                 "formula"
-            ) and agg_filter.comparison_filter.HasField("aggregation"):
+            ) and agg_filter.comparison_filter.HasField("conditional_aggregation"):
                 raise BadSnubaRPCRequestException(
-                    "Cannot use formula and aggregation in the same filter"
+                    "Cannot use formula and conditional aggregation in the same ComparisonFilter"
                 )
             elif agg_filter.comparison_filter.HasField("formula"):
                 return op_expr(

@@ -2035,6 +2035,62 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    def test_aggregation_filter_with_key_and_formula_fails(self) -> None:
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(
+                TraceItemTableRequest(
+                    meta=RequestMeta(
+                        project_ids=[1, 2, 3],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                        start_timestamp=START_TIMESTAMP,
+                        end_timestamp=END_TIMESTAMP,
+                        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    ),
+                    filter=TraceItemFilter(
+                        exists_filter=ExistsFilter(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="t1")
+                        )
+                    ),
+                    columns=[
+                        Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="t2")
+                        )
+                    ],
+                    aggregation_filter=AggregationFilter(
+                        comparison_filter=AggregationComparisonFilter(
+                            aggregation=AttributeAggregation(
+                                label="sum(my.float.field)",
+                            ),
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                                ),
+                                label="sum(my.float.field)",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            ),
+                            formula=Column.BinaryFormula(
+                                left=Column(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_STRING, name="t1"
+                                    )
+                                ),
+                                right=Column(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_STRING, name="t2"
+                                    )
+                                ),
+                                op=Column.BinaryFormula.OP_DIVIDE,
+                            ),
+                            op=AggregationComparisonFilter.OP_GREATER_THAN,
+                            val=350,
+                        )
+                    ),
+                )
+            )
+
     def test_aggregation_filter_and_or(self, setup_teardown: Any) -> None:
         """
         This test ensures that aggregates are properly filtered out
