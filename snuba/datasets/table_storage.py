@@ -2,7 +2,12 @@ from functools import cached_property
 from typing import Any, Mapping, Optional, Sequence
 
 from arroyo.backends.kafka import KafkaPayload
-from confluent_kafka.admin import AdminClient, _TopicCollection
+from confluent_kafka.admin import (
+    AdminClient,
+    ConfigResource,
+    ResourceType,
+    _TopicCollection,
+)
 
 from snuba import settings
 from snuba.clickhouse.http import InsertStatement, JSONRow
@@ -70,6 +75,18 @@ class KafkaTopicSpec:
             .result()
             .partitions
         )
+
+    @cached_property
+    def topic_current_config_values(self) -> dict[str, Any]:
+        config = get_default_kafka_configuration(self.__topic, None)
+        client = AdminClient(config)
+        topic_name = self.get_physical_topic_name()
+        config_resource = ConfigResource(restype=ResourceType.TOPIC, name=topic_name)
+        config = client.describe_configs(
+            resources=[config_resource],
+            request_timeout=30,
+        )[config_resource].result()
+        return {name: entry.value for name, entry in config.items()}
 
     @property
     def topic_creation_config(self) -> Mapping[str, str]:

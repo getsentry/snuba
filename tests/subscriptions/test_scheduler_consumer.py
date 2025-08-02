@@ -165,6 +165,105 @@ def test_scheduler_consumer(tmpdir: Path) -> None:
     del stream_loader.get_default_topic_spec().partitions_number
 
 
+@mock.patch(
+    "snuba.datasets.table_storage.KafkaTopicSpec.topic_current_config_values",
+    return_value="invalid_config",
+    new_callable=mock.PropertyMock,
+)
+def test_scheduler_logappendtime_check_dontcrash(
+    mock_config: mock.Mock, tmpdir: Path
+) -> None:
+    """
+    The scheduler needs the original topic (the one the commit log topic follows)
+    to have ``LogAppend`` time set as the ``"message.timestamp.type"``.
+
+    However, if we run into some issue getting the config and cant determine the setting,
+    then we log the exception but continue spinning up the consumer.
+    """
+    settings.KAFKA_TOPIC_MAP = {
+        "events": "events-scheduler-consumer-test",
+        "snuba-commit-log": "snuba-commit-log-test",
+    }
+    importlib.reload(scheduler_consumer)
+
+    admin_client = AdminClient(get_default_kafka_configuration())
+    create_topics(admin_client, [SnubaTopic.EVENTS], 1)
+    create_topics(admin_client, [SnubaTopic.COMMIT_LOG], 1)
+
+    metrics_backend = TestingMetricsBackend()
+    entity_name = "events"
+    entity_key = EntityKey(entity_name)
+    entity = get_entity(entity_key)
+    storage = entity.get_writable_storage()
+    assert storage is not None
+
+    mock_scheduler_producer = mock.Mock()
+    entity = get_entity(EntityKey.EVENTS)
+
+    scheduler_consumer.SchedulerBuilder(
+        entity_name,
+        str(uuid.uuid1().hex),
+        "events",
+        [],
+        mock_scheduler_producer,
+        "latest",
+        False,
+        60 * 5,
+        None,
+        metrics_backend,
+        health_check_file=str(tmpdir / "health.txt"),
+    )
+
+
+@mock.patch(
+    "snuba.datasets.table_storage.KafkaTopicSpec.topic_current_config_values",
+    return_value={"message.timestamp.type": "CreateTime"},
+    new_callable=mock.PropertyMock,
+)
+def test_scheduler_logappendtime_crash(mock_config: mock.Mock, tmpdir: Path) -> None:
+    """
+    The scheduler needs the original topic (the one the commit log topic follows)
+    to have ``LogAppend`` time set as the ``"message.timestamp.type"``.
+
+    If we have the topic config and can verify LogAppendTime then we raise
+    an AssertionError if the setting is incorrect, crashing the consumer.
+    """
+    settings.KAFKA_TOPIC_MAP = {
+        "events": "events-scheduler-consumer-test",
+        "snuba-commit-log": "snuba-commit-log-test",
+    }
+    importlib.reload(scheduler_consumer)
+
+    admin_client = AdminClient(get_default_kafka_configuration())
+    create_topics(admin_client, [SnubaTopic.EVENTS], 1)
+    create_topics(admin_client, [SnubaTopic.COMMIT_LOG], 1)
+
+    metrics_backend = TestingMetricsBackend()
+    entity_name = "events"
+    entity_key = EntityKey(entity_name)
+    entity = get_entity(entity_key)
+    storage = entity.get_writable_storage()
+    assert storage is not None
+
+    mock_scheduler_producer = mock.Mock()
+    entity = get_entity(EntityKey.EVENTS)
+
+    with pytest.raises(AssertionError):
+        scheduler_consumer.SchedulerBuilder(
+            entity_name,
+            str(uuid.uuid1().hex),
+            "events",
+            [],
+            mock_scheduler_producer,
+            "latest",
+            False,
+            60 * 5,
+            None,
+            metrics_backend,
+            health_check_file=str(tmpdir / "health.txt"),
+        )
+
+
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_scheduler_consumer_rpc_subscriptions(tmpdir: Path) -> None:
