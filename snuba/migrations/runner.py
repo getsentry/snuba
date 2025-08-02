@@ -646,3 +646,80 @@ class Runner:
                 raise e
 
         return data
+
+    def spans_to_eap_items(self) -> None:
+        """
+        Migrate spans to eap_items. This should be safe to run multiple times.
+        """
+        try:
+            data = self.__connection.execute(
+                f"SELECT * FROM spans_local",
+            ).results
+
+            for row in data:
+                # TODO: Populate these attributes from the spans table
+                attributes_bool = {}
+                attributes_str = {}
+                attributes_int = {}
+                attributes_float = {}
+
+                self.__connection.execute(
+                    f"""
+                    INSERT INTO
+                        eap_items_1_local
+                        (
+                            organization_id,
+                            project_id,
+                            item_type,
+                            timestamp,
+                            trace_id,
+                            item_id,
+                            sampling_weight,
+                            sampling_Factor,
+                            retention_days,
+                            downsampled_retention_days,
+                            attributes_bool,
+                            attributes_int,
+                            attributes_string,
+                            attributes_float
+                        )
+                    VALUES
+                        (
+                            %(organization_id),
+                            %(project_id),
+                            1,
+                            %(timestamp),
+                            %(trace_id),
+                            %(item_id),
+                            %(sampling_weight),
+                            %(sampling_factor),
+                            %(retention_days),
+                            %(downsampled_retention_days),
+                            %(attributes_bool),
+                            %(attributes_int),
+                            %(attributes_string),
+                            %(attributes_float)
+                        )
+                """,
+                    {
+                        "organization_id": row[
+                            "organization_id"
+                        ],  # FIXME: organization_id does not exists on spans table
+                        "project_id": row["project_id"],
+                        "timestamp": row["start_timestamp"],
+                        "trace_id": row["trace_id"],
+                        "item_id": row["span_id"],
+                        "sampling_weight": row["sampling_weight"],
+                        "sampling_factor": row["sampling_factor"],
+                        "retention_days": row["retention_days"],
+                        "downsampled_retention_days": row["retention_days"],
+                        "attributes_bool": attributes_bool,
+                        "attributes_int": attributes_int,
+                        "attributes_string": attributes_str,
+                        "attributes_float": attributes_float,
+                    },
+                )
+        except ClickhouseError as e:
+            # If the table wasn't created yet, no migrations have started.
+            if e.code != errors.ErrorCodes.UNKNOWN_TABLE:
+                raise e
