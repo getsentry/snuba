@@ -649,7 +649,8 @@ class Runner:
 
     def spans_to_eap_items(self) -> None:
         """
-        Migrate spans to eap_items. This should be safe to run multiple times.
+        Migrate spans to eap_items. Although this is a one-off thing to do,
+        this should be safe to run multiple times.
         """
         try:
             data = self.__connection.execute(
@@ -659,9 +660,27 @@ class Runner:
             for row in data:
                 # TODO: Populate these attributes from the spans table
                 attributes_bool = {}
-                attributes_str = {}
                 attributes_int = {}
+                # The content of `attributes_str` and `attributes_float` should be
+                # ```python
+                # attributes_str = {
+                #   "0": {},
+                #   "1": {},
+                #   # ... until 39
+                # }
+                # ```
+                attributes_str = {}
                 attributes_float = {}
+                for i in range(40):
+                    attributes_str[str(i)] = {}
+                    attributes_float[str(i)] = {}
+
+                flattened_attributes_str = {}
+                flattened_attributes_float = {}
+                for k, v in attributes_str.items():
+                    flattened_attributes_str[f"attributes_string_{k}"] = v
+                for k, v in attributes_float.items():
+                    flattened_attributes_float[f"attributes_float_{k}"] = v
 
                 self.__connection.execute(
                     f"""
@@ -675,13 +694,13 @@ class Runner:
                             trace_id,
                             item_id,
                             sampling_weight,
-                            sampling_Factor,
+                            sampling_factor,
                             retention_days,
                             downsampled_retention_days,
                             attributes_bool,
                             attributes_int,
-                            attributes_string,
-                            attributes_float
+                            {",\n".join(f"attributes_string_{i}" for i in range(40))},
+                            {",\n".join(f"attributes_float_{i}" for i in range(40))}
                         )
                     VALUES
                         (
@@ -697,8 +716,8 @@ class Runner:
                             %(downsampled_retention_days),
                             %(attributes_bool),
                             %(attributes_int),
-                            %(attributes_string),
-                            %(attributes_float)
+                            {",\n".join(f"%(attributes_string_{i})" for i in range(40))},
+                            {",\n".join(f"%(attributes_float_{i})" for i in range(40))}
                         )
                 """,
                     {
@@ -715,8 +734,8 @@ class Runner:
                         "downsampled_retention_days": row["retention_days"],
                         "attributes_bool": attributes_bool,
                         "attributes_int": attributes_int,
-                        "attributes_string": attributes_str,
-                        "attributes_float": attributes_float,
+                        **flattened_attributes_str,
+                        **flattened_attributes_float,
                     },
                 )
         except ClickhouseError as e:
