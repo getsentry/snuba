@@ -723,6 +723,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                     DataPoint(
                         data=expected_sum_plus_sum,
                         data_present=True,
+                        reliability=Reliability.RELIABILITY_HIGH,
                     )
                     for _ in range(len(expected_buckets))
                 ],
