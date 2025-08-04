@@ -72,6 +72,7 @@ services:
   clickhouse:
     image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable}"
     environment:
+      CLICKHOUSE_USER:
       CLICKHOUSE_PASSWORD:
     hostname: clickhouse.local
     extra_hosts:
@@ -96,6 +97,7 @@ services:
       - zookeeper
     image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable}"
     environment:
+      CLICKHOUSE_USER:
       CLICKHOUSE_PASSWORD:
     hostname: clickhouse-query.local
     extra_hosts:
@@ -113,6 +115,7 @@ services:
       - zookeeper
     image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable}"
     environment:
+      CLICKHOUSE_USER:
       CLICKHOUSE_PASSWORD:
     hostname: clickhouse-01.local
     extra_hosts:
@@ -131,6 +134,7 @@ services:
       - zookeeper
     image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable}"
     environment:
+      CLICKHOUSE_USER:
       CLICKHOUSE_PASSWORD:
     hostname: clickhouse-02.local
     extra_hosts:
@@ -149,6 +153,7 @@ services:
       - zookeeper
     image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable}"
     environment:
+      CLICKHOUSE_USER:
       CLICKHOUSE_PASSWORD:
     hostname: clickhouse-03.local
     extra_hosts:
@@ -167,6 +172,7 @@ services:
       - zookeeper
     image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable}"
     environment:
+      CLICKHOUSE_USER:
       CLICKHOUSE_PASSWORD:
     hostname: clickhouse-04.local
     extra_hosts:
