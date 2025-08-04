@@ -180,30 +180,16 @@ def test_scheduler_logappendtime_check_dontcrash(
     However, if we run into some issue getting the config and cant determine the setting,
     then we log the exception but continue spinning up the consumer.
     """
-    settings.KAFKA_TOPIC_MAP = {
-        "events": "events-scheduler-consumer-test",
-        "snuba-commit-log": "snuba-commit-log-test",
-    }
     importlib.reload(scheduler_consumer)
 
-    admin_client = AdminClient(get_default_kafka_configuration())
-    create_topics(admin_client, [SnubaTopic.EVENTS], 1)
-    create_topics(admin_client, [SnubaTopic.COMMIT_LOG], 1)
-
     metrics_backend = TestingMetricsBackend()
-    entity_name = "events"
-    entity_key = EntityKey(entity_name)
-    entity = get_entity(entity_key)
-    storage = entity.get_writable_storage()
-    assert storage is not None
-
+    entity_name = "eap_items"
     mock_scheduler_producer = mock.Mock()
-    entity = get_entity(EntityKey.EVENTS)
 
     scheduler_consumer.SchedulerBuilder(
         entity_name,
         str(uuid.uuid1().hex),
-        "events",
+        "eap_items",
         [],
         mock_scheduler_producer,
         "latest",
@@ -228,31 +214,17 @@ def test_scheduler_logappendtime_crash(mock_config: mock.Mock, tmpdir: Path) -> 
     If we have the topic config and can verify LogAppendTime then we raise
     an AssertionError if the setting is incorrect, crashing the consumer.
     """
-    settings.KAFKA_TOPIC_MAP = {
-        "events": "events-scheduler-consumer-test",
-        "snuba-commit-log": "snuba-commit-log-test",
-    }
     importlib.reload(scheduler_consumer)
 
-    admin_client = AdminClient(get_default_kafka_configuration())
-    create_topics(admin_client, [SnubaTopic.EVENTS], 1)
-    create_topics(admin_client, [SnubaTopic.COMMIT_LOG], 1)
-
     metrics_backend = TestingMetricsBackend()
-    entity_name = "events"
-    entity_key = EntityKey(entity_name)
-    entity = get_entity(entity_key)
-    storage = entity.get_writable_storage()
-    assert storage is not None
-
+    entity_name = "eap_items"
     mock_scheduler_producer = mock.Mock()
-    entity = get_entity(EntityKey.EVENTS)
 
     with pytest.raises(AssertionError):
         scheduler_consumer.SchedulerBuilder(
             entity_name,
             str(uuid.uuid1().hex),
-            "events",
+            "eap_items",
             [],
             mock_scheduler_producer,
             "latest",
