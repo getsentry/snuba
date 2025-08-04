@@ -1,13 +1,20 @@
 ARG PYTHON_VERSION=3.11.11
 
 FROM python:${PYTHON_VERSION}-slim-bookworm AS build_base
-WORKDIR /usr/src/snuba
+
+ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    UV_PROJECT_ENVIRONMENT=/.venv UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1
+
+ENV PATH="$UV_PROJECT_ENVIRONMENT/bin:$PATH"
+
+RUN python3 -m pip install \
+		--index-url 'https://pypi.devinfra.sentry.io/simple' 'uv==0.8.2'
 
 # We don't want uv-managed python, we want to use python from the image.
-RUN python3 -m venv .venv
+# We only want to use uv to manage dependencies.
+RUN python3 -m venv "$UV_PROJECT_ENVIRONMENT"
 
-ENV PATH=/usr/src/snuba/.venv/bin:$PATH UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1
-COPY --from=ghcr.io/astral-sh/uv:0.8.2 /uv /uvx /bin/
+WORKDIR /usr/src/snuba
 
 RUN set -ex; \
     \
