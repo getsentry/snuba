@@ -170,8 +170,13 @@ def test_scheduler_consumer(tmpdir: Path) -> None:
     return_value="invalid_config",
     new_callable=mock.PropertyMock,
 )
+@mock.patch(
+    "snuba.datasets.table_storage.KafkaTopicSpec.partitions_number",
+    return_value=2,
+    new_callable=mock.PropertyMock,
+)
 def test_scheduler_logappendtime_check_dontcrash(
-    mock_config: mock.Mock, tmpdir: Path
+    mock_config: mock.Mock, mock_paritions_num: mock.Mock, tmpdir: Path
 ) -> None:
     """
     The scheduler needs the original topic (the one the commit log topic follows)
