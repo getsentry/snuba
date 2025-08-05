@@ -24,6 +24,7 @@ from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     NO_UNITS,
     AllocationPolicy,
+    AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -574,7 +575,7 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
     class FakePolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[Configuration]:
             return [
-                Configuration(
+                AllocationPolicyConfig(
                     "fake_optional_config", "", int, -1, param_types={"org_id": int}
                 )
             ]

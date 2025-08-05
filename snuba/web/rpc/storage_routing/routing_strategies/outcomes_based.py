@@ -66,17 +66,14 @@ def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
 
 class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
     def _additional_config_definitions(self) -> list[Configuration]:
-        return cast(
-            list[Configuration],
-            [
-                RoutingStrategyConfig(
-                    name="some_additional_config",
-                    description="Placeholder for now",
-                    value_type=int,
-                    default=50,
-                ),
-            ],
-        )
+        return [
+            RoutingStrategyConfig(
+                name="some_additional_config",
+                description="Placeholder for now",
+                value_type=int,
+                default=50,
+            ),
+        ]
 
     def get_ingested_items_for_timerange(self, routing_context: RoutingContext) -> int:
         in_msg_meta = extract_message_meta(routing_context.in_msg)

@@ -96,30 +96,27 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
     WINDOW_GRANULARITY_SECONDS = 60
 
     def _additional_config_definitions(self) -> list[Configuration]:
-        return cast(
-            list[Configuration],
-            [
-                AllocationPolicyConfig(
-                    name="org_limit_bytes_scanned",
-                    description="Number of bytes any org can scan in a 10 minute window.",
-                    value_type=int,
-                    default=DEFAULT_BYTES_SCANNED_LIMIT,
-                ),
-                AllocationPolicyConfig(
-                    name="org_limit_bytes_scanned_override",
-                    description="Number of bytes a specific org can scan in a 10 minute window.",
-                    value_type=int,
-                    default=DEFAULT_OVERRIDE_LIMIT,
-                    param_types={"org_id": int},
-                ),
-                AllocationPolicyConfig(
-                    name="throttled_thread_number",
-                    description="Number of threads any throttled query gets assigned.",
-                    value_type=int,
-                    default=1,
-                ),
-            ],
-        )
+        return [
+            AllocationPolicyConfig(
+                name="org_limit_bytes_scanned",
+                description="Number of bytes any org can scan in a 10 minute window.",
+                value_type=int,
+                default=DEFAULT_BYTES_SCANNED_LIMIT,
+            ),
+            AllocationPolicyConfig(
+                name="org_limit_bytes_scanned_override",
+                description="Number of bytes a specific org can scan in a 10 minute window.",
+                value_type=int,
+                default=DEFAULT_OVERRIDE_LIMIT,
+                param_types={"org_id": int},
+            ),
+            AllocationPolicyConfig(
+                name="throttled_thread_number",
+                description="Number of threads any throttled query gets assigned.",
+                value_type=int,
+                default=1,
+            ),
+        ]
 
     def _are_tenant_ids_valid(
         self, tenant_ids: dict[str, str | int]

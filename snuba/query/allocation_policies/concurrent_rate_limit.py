@@ -48,27 +48,24 @@ import typing
 
 class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[Configuration]:
-        return cast(
-            list[Configuration],
-            [
-                Configuration(
-                    name="rate_limit_shard_factor",
-                    description="""number of shards that each redis set is supposed to have.
+        return [
+            AllocationPolicyConfig(
+                name="rate_limit_shard_factor",
+                description="""number of shards that each redis set is supposed to have.
                  increasing this value multiplies the number of redis keys by that
                  factor, and (on average) reduces the size of each redis set. You probably don't need to change this
                  unless you're scaling out redis for some reason
                  """,
-                    value_type=int,
-                    default=1,
-                ),
-                AllocationPolicyConfig(
-                    name="max_query_duration_s",
-                    description="""maximum duration of a query in seconds. Queries that exceed this duration  are considered finished by the rate limiter. This reduces memory usage. If you turn this down lower than the actual timeout period, the system can start undercounting concurrent queries""",
-                    value_type=int,
-                    default=state.max_query_duration_s,
-                ),
-            ],
-        )
+                value_type=int,
+                default=1,
+            ),
+            AllocationPolicyConfig(
+                name="max_query_duration_s",
+                description="""maximum duration of a query in seconds. Queries that exceed this duration  are considered finished by the rate limiter. This reduces memory usage. If you turn this down lower than the actual timeout period, the system can start undercounting concurrent queries""",
+                value_type=int,
+                default=state.max_query_duration_s,
+            ),
+        ]
 
     @property
     def rate_limit_name(self) -> str:
