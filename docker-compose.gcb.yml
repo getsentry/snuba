@@ -70,10 +70,7 @@ services:
       KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
       KAFKA_TOOLS_LOG4J_LOGLEVEL: "WARN"
   clickhouse:
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable}"
-    environment:
-      CLICKHOUSE_USER:
-      CLICKHOUSE_PASSWORD:
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:23.8.11.294.altinitystable}"
     hostname: clickhouse.local
     extra_hosts:
       - "clickhouse.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -85,7 +82,6 @@ services:
       - ./config/clickhouse/macros.xml:/etc/clickhouse-server/config.d/macros.xml
       - ./config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
       - ./config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
-      - ./devservices/clickhouse/users.xml:/etc/clickhouse-server/users.xml
       - ./config/clickhouse/default-password.xml:/etc/clickhouse-server/users.d/default-password.xml
     ulimits:
       nofile:
@@ -96,10 +92,7 @@ services:
   clickhouse-query:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable}"
-    environment:
-      CLICKHOUSE_USER:
-      CLICKHOUSE_PASSWORD:
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:23.8.11.294.altinitystable}"
     hostname: clickhouse-query.local
     extra_hosts:
       - "clickhouse-query.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -107,7 +100,6 @@ services:
     volumes:
       - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
       - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
-      - ./devservices/clickhouse/users.xml:/etc/clickhouse-server/users.xml
       - ./config/clickhouse/default-password.xml:/etc/clickhouse-server/users.d/default-password.xml
     ulimits:
       nofile:
@@ -116,10 +108,7 @@ services:
   clickhouse-01:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable}"
-    environment:
-      CLICKHOUSE_USER:
-      CLICKHOUSE_PASSWORD:
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:23.8.11.294.altinitystable}"
     hostname: clickhouse-01.local
     extra_hosts:
       - "clickhouse-01.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -128,7 +117,6 @@ services:
       - ./test_distributed_migrations/config/clickhouse/macros-01.xml:/etc/clickhouse-server/config.d/macros.xml
       - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
       - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
-      - ./devservices/clickhouse/users.xml:/etc/clickhouse-server/users.xml
       - ./config/clickhouse/default-password.xml:/etc/clickhouse-server/users.d/default-password.xml
     ulimits:
       nofile:
@@ -137,10 +125,7 @@ services:
   clickhouse-02:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable}"
-    environment:
-      CLICKHOUSE_USER:
-      CLICKHOUSE_PASSWORD:
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:23.8.11.294.altinitystable}"
     hostname: clickhouse-02.local
     extra_hosts:
       - "clickhouse-02.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -149,7 +134,6 @@ services:
       - ./test_distributed_migrations/config/clickhouse/macros-02.xml:/etc/clickhouse-server/config.d/macros.xml
       - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
       - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
-      - ./devservices/clickhouse/users.xml:/etc/clickhouse-server/users.xml
       - ./config/clickhouse/default-password.xml:/etc/clickhouse-server/users.d/default-password.xml
     ulimits:
       nofile:
@@ -158,10 +142,7 @@ services:
   clickhouse-03:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable}"
-    environment:
-      CLICKHOUSE_USER:
-      CLICKHOUSE_PASSWORD:
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:23.8.11.294.altinitystable}"
     hostname: clickhouse-03.local
     extra_hosts:
       - "clickhouse-03.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -170,7 +151,6 @@ services:
       - ./test_distributed_migrations/config/clickhouse/macros-03.xml:/etc/clickhouse-server/config.d/macros.xml
       - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
       - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
-      - ./devservices/clickhouse/users.xml:/etc/clickhouse-server/users.xml
       - ./config/clickhouse/default-password.xml:/etc/clickhouse-server/users.d/default-password.xml
     ulimits:
       nofile:
@@ -179,10 +159,7 @@ services:
   clickhouse-04:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable}"
-    environment:
-      CLICKHOUSE_USER:
-      CLICKHOUSE_PASSWORD:
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:23.8.11.294.altinitystable}"
     hostname: clickhouse-04.local
     extra_hosts:
       - "clickhouse-04.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -191,7 +168,6 @@ services:
       - ./test_distributed_migrations/config/clickhouse/macros-04.xml:/etc/clickhouse-server/config.d/macros.xml
       - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
       - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
-      - ./devservices/clickhouse/users.xml:/etc/clickhouse-server/users.xml
       - ./config/clickhouse/default-password.xml:/etc/clickhouse-server/users.d/default-password.xml
     ulimits:
       nofile:
