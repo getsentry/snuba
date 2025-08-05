@@ -4,9 +4,10 @@ from unittest import TestCase, mock
 
 import pytest
 
-from snuba.configs.configuration import CAPMAN_HASH, Configuration, InvalidConfig
+from snuba.configs.configuration import Configuration, InvalidConfig
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
+    CAPMAN_HASH,
     DEFAULT_PASSTHROUGH_POLICY,
     MAX_THRESHOLD,
     NO_SUGGESTION,

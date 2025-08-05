@@ -265,7 +265,7 @@ class ConfigurableComponent(ABC):
     def get_current_configs(self) -> list[dict[str, Any]]:
         """Returns a list of live configs with their definitions on this ConfigurableComponent."""
 
-        runtime_configs = get_all_runtime_configs(self.__get_hash())
+        runtime_configs = get_all_runtime_configs(self._get_hash())
         definitions = self.config_definitions()
 
         required_configs = set(
@@ -362,7 +362,7 @@ class ConfigurableComponent(ABC):
         return f"{self.component_name()}.{config}{parameters}"
 
     def _get_hash(self) -> str:
-        raise NotImplementedError
+        return self.component_namespace()
 
     def get_config_value(
         self,

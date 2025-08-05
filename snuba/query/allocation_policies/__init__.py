@@ -362,6 +362,9 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
 
+    def component_namespace(self) -> str:
+        return "AllocationPolicy"
+
     def _get_hash(self) -> str:
         return CAPMAN_HASH
 
