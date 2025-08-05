@@ -22,6 +22,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.state import set_config
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -654,6 +655,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         ]
 
     def test_formula(self) -> None:
+        set_config("enable_formula_reliability", True)
         # store a a test metric with a value of 1, every second for an hour
         granularity_secs = 120
         query_duration = 3600
@@ -731,6 +733,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         ]
 
     def test_formula_reliability(self) -> None:
+        set_config("enable_formula_reliability", True)
         """
         this tests that formula reliability works in the following cases:
         * a simple formula that adds two reliable aggregates returns reliable

@@ -129,12 +129,13 @@ def _convert_result_timeseries(
 
     # the aggregations that we will include in the result
     aggregation_labels = set([expr.label for expr in request.expressions])
-    # we also want to grab all the subchildren of formulas,
-    # this is used for computing reliabilities and they will be removed later so they
-    # arent actually included in the result
-    vis = GetSubformulaLabelsVisitor()
-    vis.visit(request)
-    aggregation_labels.update(vis.labels)
+    if get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
+        # we also want to grab all the subchildren of formulas,
+        # this is used for computing reliabilities and they will be removed later so they
+        # arent actually included in the result
+        vis = GetSubformulaLabelsVisitor()
+        vis.visit(request)
+        aggregation_labels.update(vis.labels)
 
     group_by_labels = set([attr.name for attr in request.group_by])
 
@@ -208,7 +209,8 @@ def _convert_result_timeseries(
                 else:
                     timeseries.data_points.append(DataPoint(data=0, data_present=False))
 
-    _compute_formula_reliabilities(request.expressions, result_timeseries)
+    if get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
+        _compute_formula_reliabilities(request.expressions, result_timeseries)
     return result_timeseries.values()
 
 
