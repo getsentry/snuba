@@ -10,8 +10,6 @@ from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
 
 logger = logging.getLogger("snuba.configurable_component")
-CAPMAN_HASH = "capman"
-CBRS_HASH = "cbrs"
 
 
 class InvalidConfig(Exception):
@@ -363,11 +361,8 @@ class ConfigurableComponent(ABC):
         parameters = parameters[:-1]
         return f"{self.component_name()}.{config}{parameters}"
 
-    def __get_hash(self) -> str:
-        if self.component_namespace() == "AllocationPolicy":
-            return CAPMAN_HASH
-        else:
-            return CBRS_HASH
+    def _get_hash(self) -> str:
+        raise NotImplementedError
 
     def get_config_value(
         self,
@@ -384,7 +379,7 @@ class ConfigurableComponent(ABC):
         return get_runtime_config(
             key=self.__build_runtime_config_key(config_key, params),
             default=config_definition.default,
-            config_key=self.__get_hash(),
+            config_key=self._get_hash(),
         )
 
     def set_config_value(
@@ -403,7 +398,7 @@ class ConfigurableComponent(ABC):
             value=value,
             user=user,
             force=True,
-            config_key=self.__get_hash(),
+            config_key=self._get_hash(),
         )
 
     def delete_config_value(
@@ -420,5 +415,5 @@ class ConfigurableComponent(ABC):
         delete_runtime_config(
             key=self.__build_runtime_config_key(config_key, params),
             user=user,
-            config_key=self.__get_hash(),
+            config_key=self._get_hash(),
         )

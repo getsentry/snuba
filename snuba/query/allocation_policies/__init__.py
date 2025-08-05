@@ -19,7 +19,7 @@ from snuba.utils.serializable_exception import JsonSerializable, SerializableExc
 from snuba.web import QueryException, QueryResult
 
 CAPMAN_PREFIX = "capman"
-
+CAPMAN_HASH = "capman"
 
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
@@ -362,8 +362,8 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
 
-    def component_namespace(self) -> str:
-        return "AllocationPolicy"
+    def _get_hash(self) -> str:
+        return CAPMAN_HASH
 
     @property
     def metrics(self) -> MetricsWrapper:
