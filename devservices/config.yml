@@ -68,6 +68,7 @@ services:
       - clickhouse-data:/var/lib/clickhouse
       - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/sentry.xml
       - ./clickhouse/users.xml:/etc/clickhouse-server/users.xml
+      - ./clickhouse/default-password.xml:/etc/clickhouse-server/users.d/default-password.xml
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
