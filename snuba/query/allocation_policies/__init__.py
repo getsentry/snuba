@@ -18,10 +18,8 @@ from snuba.utils.registered_class import RegisteredClass, import_submodules_in_d
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryException, QueryResult
 
-# logger = logging.getLogger("snuba.query.allocation_policy_base")
 CAPMAN_PREFIX = "capman"
 
-# CAPMAN_HASH = "capman"
 
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"

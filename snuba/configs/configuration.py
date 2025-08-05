@@ -157,7 +157,7 @@ class ConfigurableComponent(ABC):
         raise NotImplementedError
 
     def config_definitions(self) -> dict[str, Configuration]:
-        """Returns a dictionary of config definitions on this AllocationPolicy."""
+        """Returns a dictionary of configuration definitions on this ConfigurableComponent."""
         return {
             config.name: config
             for config in self._get_default_config_definitions()
@@ -265,7 +265,7 @@ class ConfigurableComponent(ABC):
         return config_key, params_dict
 
     def get_current_configs(self) -> list[dict[str, Any]]:
-        """Returns a list of live configs with their definitions on this AllocationPolicy."""
+        """Returns a list of live configs with their definitions on this ConfigurableComponent."""
 
         runtime_configs = get_all_runtime_configs(self.__get_hash())
         definitions = self.config_definitions()
@@ -375,7 +375,7 @@ class ConfigurableComponent(ABC):
         params: dict[str, Any] = {},
         validate: bool = True,
     ) -> Any:
-        """Returns value of a config on this Allocation Policy, or the default if none exists in Redis."""
+        """Returns value of a configuration on this ConfigurableComponent, or the default if none exists in Redis."""
         config_definition = (
             self._validate_config_params(config_key, params)
             if validate
@@ -394,7 +394,7 @@ class ConfigurableComponent(ABC):
         params: dict[str, Any] = {},
         user: str | None = None,
     ) -> None:
-        """Sets a value of a config on this AllocationPolicy."""
+        """Sets a value of a configuration on this ConfigurableComponent."""
         config_definition = self._validate_config_params(config_key, params, value)
         # ensure correct type is stored
         value = config_definition.value_type(value)
@@ -413,8 +413,8 @@ class ConfigurableComponent(ABC):
         user: str | None = None,
     ) -> None:
         """
-        Deletes an instance of an optional config on this AllocationPolicy.
-        If this function is run on a required config, it resets the value to default instead.
+        Deletes an instance of an optional configuration on this ConfigurableComponent.
+        If this function is run on a required configuration, it resets the value to default instead.
         """
         self._validate_config_params(config_key, params)
         delete_runtime_config(
