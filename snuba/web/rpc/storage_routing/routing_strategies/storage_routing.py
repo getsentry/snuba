@@ -200,8 +200,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
     @property
     def resource_identifier(self) -> ResourceIdentifier:
         return ResourceIdentifier(
-            storage_key=StorageKey.EAP_ITEMS,
-            non_storage_resource_id=self.__class__.__name__,
+            StorageKey.EAP_ITEMS,
         )
 
     @classmethod

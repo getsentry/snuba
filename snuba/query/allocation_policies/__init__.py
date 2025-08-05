@@ -551,7 +551,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
 
     @property
     def resource_identifier(self) -> ResourceIdentifier:
-        return ResourceIdentifier(storage_key=self._storage_key)
+        return ResourceIdentifier(self._storage_key)
 
 
 class PassthroughPolicy(AllocationPolicy):
