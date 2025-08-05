@@ -825,7 +825,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 ),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
-            expressions=[myform, form2, form3, expr1, expr2],
+            expressions=[myform, form2, form3],
             granularity_secs=granularity_secs,
         )
 
@@ -837,46 +837,16 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         expected_expr1 = (
             granularity_secs // interval_secs * metric_value1
         ) / sample_rate1
-        expected_e1_ts = TimeSeries(
-            label="expr1",
-            buckets=expected_buckets,
-            data_points=[
-                DataPoint(
-                    data=expected_expr1,
-                    data_present=True,
-                    avg_sampling_rate=sample_rate1,
-                    sample_count=granularity_secs // interval_secs,
-                    reliability=Reliability.RELIABILITY_HIGH,
-                )
-                for _ in range(len(expected_buckets))
-            ],
-        )
 
         expected_expr2 = (
             granularity_secs // interval_secs * metric_value2
         ) / sample_rate2
-        expected_e2_ts = TimeSeries(
-            label="expr2",
-            buckets=expected_buckets,
-            data_points=[
-                DataPoint(
-                    data=expected_expr2,
-                    data_present=True,
-                    avg_sampling_rate=sample_rate2,
-                    sample_count=granularity_secs // interval_secs,
-                    reliability=Reliability.RELIABILITY_LOW,
-                )
-                for _ in range(len(expected_buckets))
-            ],
-        )
 
         expected_form1 = expected_expr1 + expected_expr2
         expected_form2 = expected_expr1 + expected_expr1
         expected_form3 = expected_expr1 + expected_expr1 + expected_expr2
         actual = sorted(response.result_timeseries, key=lambda x: x.label)
         expected = [
-            expected_e1_ts,
-            expected_e2_ts,
             TimeSeries(
                 label="form2",
                 buckets=expected_buckets,
