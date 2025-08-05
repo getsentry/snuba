@@ -4,16 +4,15 @@ from unittest import TestCase, mock
 
 import pytest
 
+from snuba.configs.configuration import CAPMAN_HASH, Configuration, InvalidConfig
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
-    CAPMAN_HASH,
     DEFAULT_PASSTHROUGH_POLICY,
     MAX_THRESHOLD,
     NO_SUGGESTION,
     NO_UNITS,
     AllocationPolicy,
     AllocationPolicyConfig,
-    InvalidPolicyConfig,
     InvalidTenantsForAllocationPolicy,
     PassthroughPolicy,
     QueryResultOrError,
@@ -160,29 +159,29 @@ def test_passes_through_on_error() -> None:
 @pytest.mark.redis_db
 def test_bad_config_keys() -> None:
     policy = PassthroughPolicy(StorageKey("something"), [], {})
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value("bad_config", 1)
     assert str(err.value) == "'bad_config' is not a valid config for PassthroughPolicy!"
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value("is_active", "bad_value")
     assert (
         str(err.value)
         == "'is_active' value needs to be of type int (not str) for PassthroughPolicy!"
     )
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value("is_enforced", "bad_value")
     assert (
         str(err.value)
         == "'is_enforced' value needs to be of type int (not str) for PassthroughPolicy!"
     )
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value("max_threads", "bad_value")
     assert (
         str(err.value)
         == "'max_threads' value needs to be of type int (not str) for PassthroughPolicy!"
     )
 
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.get_config_value("does_not_exist")
     assert (
         str(err.value)
@@ -191,11 +190,9 @@ def test_bad_config_keys() -> None:
 
 
 class SomeParametrizedConfigPolicy(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         return [
-            AllocationPolicyConfig(
-                name="my_config", description="", value_type=int, default=10
-            ),
+            Configuration(name="my_config", description="", value_type=int, default=10),
             AllocationPolicyConfig(
                 name="my_param_config",
                 description="",
@@ -245,9 +242,9 @@ class TestAllocationPolicyLogs(TestCase):
         assert len(captured.records) == 3
         logs = set([record.getMessage() for record in captured.records])
         assert logs == {
-            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_bad_config.org:10,ref:ref",
-            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10",
-            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10,ref:ref,yeet:yeet",
+            "allocation_policy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_bad_config.org:10,ref:ref",
+            "allocation_policy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10",
+            "allocation_policy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10,ref:ref,yeet:yeet",
         }
 
 
@@ -259,7 +256,7 @@ def policy() -> AllocationPolicy:
 
 @pytest.mark.redis_db
 def test_config_validation(policy: AllocationPolicy) -> None:
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value(
             config_key="my_config", value=10, params={"bad_param": 10}
         )
@@ -267,20 +264,20 @@ def test_config_validation(policy: AllocationPolicy) -> None:
         str(err.value)
         == "'my_config' takes no params for SomeParametrizedConfigPolicy!"
     )
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value(config_key="my_config", value="lol")
     assert (
         str(err.value)
         == "'my_config' value needs to be of type int (not str) for SomeParametrizedConfigPolicy!"
     )
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value(config_key="my_param_config", value=10)
     assert (
         str(err.value)
         == "'my_param_config' missing required parameters: {'org': 'int', 'ref': 'str'} for SomeParametrizedConfigPolicy!"
     )
 
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value(
             config_key="my_param_config", value=10, params={"org": "lol", "ref": "test"}
         )
@@ -558,7 +555,7 @@ def test_configs_with_delimiter_values() -> None:
 
 def test_cannot_use_escape_sequences() -> None:
     policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
-    with pytest.raises(InvalidPolicyConfig):
+    with pytest.raises(InvalidConfig):
         policy.set_config_value(
             "my_param_config", 5, {"ref": "a__dot_literal__.b.c", "org": 1}
         )

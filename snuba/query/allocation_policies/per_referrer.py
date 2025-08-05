@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from snuba.configs.configuration import Configuration
 from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     AllocationPolicyConfig,
@@ -49,7 +50,7 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
     def rate_limit_name(self) -> str:
         return "referrer_guard_rail_policy"
 
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         return super()._additional_config_definitions() + [
             AllocationPolicyConfig(
                 name="default_concurrent_request_per_referrer",

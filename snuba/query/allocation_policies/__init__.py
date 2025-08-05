@@ -1,26 +1,27 @@
 from __future__ import annotations
 
-import logging
 import os
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, field
 from typing import Any, cast
 
 from snuba import environment, settings
+from snuba.configs.configuration import (
+    ConfigurableComponent,
+    Configuration,
+    ResourceIdentifier,
+    logger,
+)
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state import delete_config as delete_runtime_config
-from snuba.state import get_all_configs as get_all_runtime_configs
-from snuba.state import get_config as get_runtime_config
-from snuba.state import set_config as set_runtime_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryException, QueryResult
 
-logger = logging.getLogger("snuba.query.allocation_policy_base")
+# logger = logging.getLogger("snuba.query.allocation_policy_base")
 CAPMAN_PREFIX = "capman"
 
-CAPMAN_HASH = "capman"
+# CAPMAN_HASH = "capman"
 
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
@@ -48,50 +49,51 @@ class QueryResultOrError:
 
 
 @dataclass()
-class AllocationPolicyConfig:
-    name: str
-    description: str
-    value_type: type
-    default: Any
-    param_types: dict[str, type] = field(default_factory=dict)
+class AllocationPolicyConfig(Configuration):
+    # name: str
+    # description: str
+    # value_type: type
+    # default: Any
+    # param_types: dict[str, type] = field(default_factory=dict)
 
-    def __post_init__(self) -> None:
-        if type(self.default) != self.value_type:
-            raise ValueError(
-                f"Config item `{self.name}` expects type {self.value_type} got value `{self.default}` of type {type(self.default)}"
-            )
+    # def __post_init__(self) -> None:
+    #     if type(self.default) != self.value_type:
+    #         raise ValueError(
+    #             f"Config item `{self.name}` expects type {self.value_type} got value `{self.default}` of type {type(self.default)}"
+    #         )
 
-    def __to_base_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "type": self.value_type.__name__,
-            "default": self.default,
-            "description": self.description,
-        }
+    # def __to_base_dict(self) -> dict[str, Any]:
+    #     return {
+    #         "name": self.name,
+    #         "type": self.value_type.__name__,
+    #         "default": self.default,
+    #         "description": self.description,
+    #     }
 
-    def to_definition_dict(self) -> dict[str, Any]:
-        """Returns a dict representation of the definition of a Config."""
-        return {
-            **self.__to_base_dict(),
-            "params": [
-                {"name": param, "type": self.param_types[param].__name__}
-                for param in self.param_types
-            ],
-        }
+    # def to_definition_dict(self) -> dict[str, Any]:
+    #     """Returns a dict representation of the definition of a Config."""
+    #     return {
+    #         **self.__to_base_dict(),
+    #         "params": [
+    #             {"name": param, "type": self.param_types[param].__name__}
+    #             for param in self.param_types
+    #         ],
+    #     }
 
-    def to_config_dict(
-        self, value: Any = None, params: dict[str, Any] = {}
-    ) -> dict[str, Any]:
-        """Returns a dict representation of a live Config."""
-        return {
-            **self.__to_base_dict(),
-            "value": value if value is not None else self.default,
-            "params": params,
-        }
-
-
-class InvalidPolicyConfig(Exception):
+    # def to_config_dict(
+    #     self, value: Any = None, params: dict[str, Any] = {}
+    # ) -> dict[str, Any]:
+    #     """Returns a dict representation of a live Config."""
+    #     return {
+    #         **self.__to_base_dict(),
+    #         "value": value if value is not None else self.default,
+    #         "params": params,
+    #     }
     pass
+
+
+# class InvalidPolicyConfig(Exception):
+#     pass
 
 
 @dataclass(frozen=True)
@@ -187,7 +189,7 @@ class AllocationPolicyViolations(SerializableException):
         )
 
 
-class AllocationPolicy(ABC, metaclass=RegisteredClass):
+class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
     """This class should be the centralized place for policy decisions regarding
     resource usage of a clickhouse cluster. It is meant to live as a configurable item
     on a storage.
@@ -372,15 +374,15 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         section of this docstring for more info.
     """
 
-    # This component builds redis strings that are delimited by dots, commas, colons
-    # in order to allow those characters to exist in config we replace them with their
-    # counterparts on write/read. It may be better to just replace our serialization with JSON
-    # instead of what we're doing but this is where we're at rn 1/10/24
-    __KEY_DELIMITERS_TO_ESCAPE_SEQUENCES = {
-        ".": "__dot_literal__",
-        ",": "__comma_literal__",
-        ":": "__colon_literal__",
-    }
+    # # This component builds redis strings that are delimited by dots, commas, colons
+    # # in order to allow those characters to exist in config we replace them with their
+    # # counterparts on write/read. It may be better to just replace our serialization with JSON
+    # # instead of what we're doing but this is where we're at rn 1/10/24
+    # __KEY_DELIMITERS_TO_ESCAPE_SEQUENCES = {
+    #     ".": "__dot_literal__",
+    #     ",": "__comma_literal__",
+    #     ":": "__colon_literal__",
+    # }
 
     def __init__(
         self,
@@ -412,7 +414,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             ),
         ]
         self._overridden_additional_config_definitions = (
-            self.__get_overridden_additional_config_defaults(default_config_overrides)
+            self._get_overridden_additional_config_defaults(default_config_overrides)
         )
 
     @property
@@ -427,9 +429,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             },
         )
 
-    @property
-    def runtime_config_prefix(self) -> str:
-        return f"{self._storage_key.value}.{self.__class__.__name__}"
+    def component_namespace(self) -> str:
+        return "allocation_policy"  # todo(rachel): consider distinguishing between allocation policy on strat vs allocation policy on storage
 
     @property
     def is_active(self) -> bool:
@@ -487,267 +488,270 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             **kwargs,
         )
 
-    def __get_overridden_additional_config_defaults(
-        self, default_config_overrides: dict[str, Any]
-    ) -> list[AllocationPolicyConfig]:
-        """overrides the defaults specified for the config in code with the default specified
-        to the instance of the policy
-        """
-        definitions = self._additional_config_definitions()
-        return [
-            replace(
-                definition,
-                default=default_config_overrides.get(
-                    definition.name, definition.default
-                ),
-            )
-            for definition in definitions
-        ]
+    # def __get_overridden_additional_config_defaults(
+    #     self, default_config_overrides: dict[str, Any]
+    # ) -> list[AllocationPolicyConfig]:
+    #     """overrides the defaults specified for the config in code with the default specified
+    #     to the instance of the policy
+    #     """
+    #     definitions = self._additional_config_definitions()
+    #     return [
+    #         replace(
+    #             definition,
+    #             default=default_config_overrides.get(
+    #                 definition.name, definition.default
+    #             ),
+    #         )
+    #         for definition in definitions
+    #     ]
 
-    def additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def additional_config_definitions(self) -> list[Configuration]:
         return self._overridden_additional_config_definitions
 
-    @abstractmethod
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
-        """
-        Define policy specific config definitions, these will be used along
-        with the default definitions of the base class. (is_enforced, is_active)
-        """
-        pass
+    # @abstractmethod
+    # def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    #     """
+    #     Define policy specific config definitions, these will be used along
+    #     with the default definitions of the base class. (is_enforced, is_active)
+    #     """
+    #     pass
 
-    def config_definitions(self) -> dict[str, AllocationPolicyConfig]:
-        """Returns a dictionary of config definitions on this AllocationPolicy."""
-        return {
-            config.name: config
-            for config in self._default_config_definitions
-            + self.additional_config_definitions()
-        }
+    # def config_definitions(self) -> dict[str, AllocationPolicyConfig]:
+    #     """Returns a dictionary of config definitions on this AllocationPolicy."""
+    #     return {
+    #         config.name: config
+    #         for config in self._default_config_definitions
+    #         + self.additional_config_definitions()
+    #     }
 
-    def get_optional_config_definitions_json(self) -> list[dict[str, Any]]:
-        """Returns a json-like dictionary of optional config definitions on this AllocationPolicy."""
-        return [
-            definition.to_definition_dict()
-            for definition in self.config_definitions().values()
-            if definition.param_types
-        ]
+    # def get_optional_config_definitions_json(self) -> list[dict[str, Any]]:
+    #     """Returns a json-like dictionary of optional config definitions on this AllocationPolicy."""
+    #     return [
+    #         definition.to_definition_dict()
+    #         for definition in self.config_definitions().values()
+    #         if definition.param_types
+    #     ]
 
-    def get_config_value(
-        self, config_key: str, params: dict[str, Any] = {}, validate: bool = True
-    ) -> Any:
-        """Returns value of a config on this Allocation Policy, or the default if none exists in Redis."""
-        config_definition = (
-            self.__validate_config_params(config_key, params)
-            if validate
-            else self.config_definitions()[config_key]
-        )
-        return get_runtime_config(
-            key=self.__build_runtime_config_key(config_key, params),
-            default=config_definition.default,
-            config_key=CAPMAN_HASH,
-        )
+    # def get_config_value(
+    #     self, config_key: str, params: dict[str, Any] = {}, validate: bool = True
+    # ) -> Any:
+    #     """Returns value of a config on this Allocation Policy, or the default if none exists in Redis."""
+    #     config_definition = (
+    #         self._validate_config_params(config_key, params)
+    #         if validate
+    #         else self.config_definitions()[config_key]
+    #     )
+    #     return get_runtime_config(
+    #         key=self.__build_runtime_config_key(config_key, params),
+    #         default=config_definition.default,
+    #         config_key=CAPMAN_HASH,
+    #     )
 
-    def set_config_value(
-        self,
-        config_key: str,
-        value: Any,
-        params: dict[str, Any] = {},
-        user: str | None = None,
-    ) -> None:
-        """Sets a value of a config on this AllocationPolicy."""
-        config_definition = self.__validate_config_params(config_key, params, value)
-        # ensure correct type is stored
-        value = config_definition.value_type(value)
-        set_runtime_config(
-            key=self.__build_runtime_config_key(config_key, params),
-            value=value,
-            user=user,
-            force=True,
-            config_key=CAPMAN_HASH,
-        )
+    # def set_config_value(
+    #     self,
+    #     config_key: str,
+    #     value: Any,
+    #     params: dict[str, Any] = {},
+    #     user: str | None = None,
+    # ) -> None:
+    #     """Sets a value of a config on this AllocationPolicy."""
+    #     config_definition = self._validate_config_params(config_key, params, value)
+    #     # ensure correct type is stored
+    #     value = config_definition.value_type(value)
+    #     set_runtime_config(
+    #         key=self.__build_runtime_config_key(config_key, params),
+    #         value=value,
+    #         user=user,
+    #         force=True,
+    #         config_key=CAPMAN_HASH,
+    #     )
 
-    def delete_config_value(
-        self,
-        config_key: str,
-        params: dict[str, Any] = {},
-        user: str | None = None,
-    ) -> None:
-        """
-        Deletes an instance of an optional config on this AllocationPolicy.
-        If this function is run on a required config, it resets the value to default instead.
-        """
-        self.__validate_config_params(config_key, params)
-        delete_runtime_config(
-            key=self.__build_runtime_config_key(config_key, params),
-            user=user,
-            config_key=CAPMAN_HASH,
-        )
+    # def delete_config_value(
+    #     self,
+    #     config_key: str,
+    #     params: dict[str, Any] = {},
+    #     user: str | None = None,
+    # ) -> None:
+    #     """
+    #     Deletes an instance of an optional config on this AllocationPolicy.
+    #     If this function is run on a required config, it resets the value to default instead.
+    #     """
+    #     self._validate_config_params(config_key, params)
+    #     delete_runtime_config(
+    #         key=self.__build_runtime_config_key(config_key, params),
+    #         user=user,
+    #         config_key=CAPMAN_HASH,
+    #     )
 
-    def get_current_configs(self) -> list[dict[str, Any]]:
-        """Returns a list of live configs with their definitions on this AllocationPolicy."""
+    # def get_current_configs(self) -> list[dict[str, Any]]:
+    #     """Returns a list of live configs with their definitions on this AllocationPolicy."""
 
-        runtime_configs = get_all_runtime_configs(CAPMAN_HASH)
-        definitions = self.config_definitions()
+    #     runtime_configs = get_all_runtime_configs(CAPMAN_HASH)
+    #     definitions = self.config_definitions()
 
-        required_configs = set(
-            config_name
-            for config_name, config_def in definitions.items()
-            if not config_def.param_types
-        )
+    #     required_configs = set(
+    #         config_name
+    #         for config_name, config_def in definitions.items()
+    #         if not config_def.param_types
+    #     )
 
-        detailed_configs: list[dict[str, Any]] = []
+    #     detailed_configs: list[dict[str, Any]] = []
 
-        for key in runtime_configs:
-            if key.startswith(self.runtime_config_prefix):
-                try:
-                    config_key, params = self.__deserialize_runtime_config_key(key)
-                except Exception:
-                    logger.exception(
-                        f"AllocationPolicy could not deserialize a key: {key}"
-                    )
-                    continue
-                detailed_configs.append(
-                    definitions[config_key].to_config_dict(
-                        value=runtime_configs[key], params=params
-                    )
-                )
-                if config_key in required_configs:
-                    required_configs.remove(config_key)
+    #     for key in runtime_configs:
+    #         if key.startswith(self.runtime_config_prefix):
+    #             try:
+    #                 config_key, params = self.__deserialize_runtime_config_key(key)
+    #             except Exception:
+    #                 logger.exception(
+    #                     f"AllocationPolicy could not deserialize a key: {key}"
+    #                 )
+    #                 continue
+    #             detailed_configs.append(
+    #                 definitions[config_key].to_config_dict(
+    #                     value=runtime_configs[key], params=params
+    #                 )
+    #             )
+    #             if config_key in required_configs:
+    #                 required_configs.remove(config_key)
 
-        for required_config_key in required_configs:
-            detailed_configs.append(definitions[required_config_key].to_config_dict())
+    #     for required_config_key in required_configs:
+    #         detailed_configs.append(definitions[required_config_key].to_config_dict())
 
-        return detailed_configs
+    #     return detailed_configs
 
-    def __build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
-        """
-        Builds a unique key to be used in the actual datastore containing these configs.
+    def _get_default_config_definitions(self) -> list[Configuration]:
+        return cast(list[Configuration], self._default_config_definitions)
 
-        Example return values:
-        - `"mystorage.MyAllocationPolicy.my_config"`            # no params
-        - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`    # sorted params
-        """
-        parameters = "."
-        for param in sorted(list(params.keys())):
-            param_sanitized = self.__escape_delimiter_chars(param)
-            value_sanitized = self.__escape_delimiter_chars(params[param])
-            parameters += f"{param_sanitized}:{value_sanitized},"
-        parameters = parameters[:-1]
-        return f"{self.runtime_config_prefix}.{config}{parameters}"
+    # def __build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
+    #     """
+    #     Builds a unique key to be used in the actual datastore containing these configs.
 
-    def __deserialize_runtime_config_key(self, key: str) -> tuple[str, dict[str, Any]]:
-        """
-        Given a raw runtime config key, deconstructs it into it's AllocationPolicy config
-        key and parameters components.
+    #     Example return values:
+    #     - `"mystorage.MyAllocationPolicy.my_config"`            # no params
+    #     - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`    # sorted params
+    #     """
+    #     parameters = "."
+    #     for param in sorted(list(params.keys())):
+    #         param_sanitized = self.__escape_delimiter_chars(param)
+    #         value_sanitized = self.__escape_delimiter_chars(params[param])
+    #         parameters += f"{param_sanitized}:{value_sanitized},"
+    #     parameters = parameters[:-1]
+    #     return f"{self.runtime_config_prefix}.{config}{parameters}"
 
-        Examples:
-        - `"mystorage.MyAllocationPolicy.my_config"`
-            - returns `"my_config", {}`
-        - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`
-            - returns `"my_config", {"a": 1, "b": 2}`
-        """
+    # def __deserialize_runtime_config_key(self, key: str) -> tuple[str, dict[str, Any]]:
+    #     """
+    #     Given a raw runtime config key, deconstructs it into it's AllocationPolicy config
+    #     key and parameters components.
 
-        # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
-        _, _, config_key, *params = key.split(".")
-        # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
-        params_dict = dict()
-        if params:
-            # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
-            [params_string] = params
-            params_split = params_string.split(",")
-            for param_string in params_split:
-                param_key, param_value = param_string.split(":")
-                param_key = self.__unescape_delimiter_chars(param_key)
-                param_value = self.__unescape_delimiter_chars(param_value)
-                params_dict[param_key] = param_value
+    #     Examples:
+    #     - `"mystorage.MyAllocationPolicy.my_config"`
+    #         - returns `"my_config", {}`
+    #     - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`
+    #         - returns `"my_config", {"a": 1, "b": 2}`
+    #     """
 
-        self.__validate_config_params(config_key=config_key, params=params_dict)
+    #     # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
+    #     _, _, config_key, *params = key.split(".")
+    #     # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
+    #     params_dict = dict()
+    #     if params:
+    #         # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
+    #         [params_string] = params
+    #         params_split = params_string.split(",")
+    #         for param_string in params_split:
+    #             param_key, param_value = param_string.split(":")
+    #             param_key = self.__unescape_delimiter_chars(param_key)
+    #             param_value = self.__unescape_delimiter_chars(param_value)
+    #             params_dict[param_key] = param_value
 
-        return config_key, params_dict
+    #     self.__validate_config_params(config_key=config_key, params=params_dict)
 
-    def __escape_delimiter_chars(self, key: str) -> str:
-        if not isinstance(key, str):
-            return key
-        for (
-            delimiter_char,
-            escape_sequence,
-        ) in self.__KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
-            if escape_sequence in str(key):
-                raise InvalidPolicyConfig(
-                    f"{escape_sequence} is not a valid string for a policy config"
-                )
-            key = key.replace(delimiter_char, escape_sequence)
-        return key
+    #     return config_key, params_dict
+
+    # def __escape_delimiter_chars(self, key: str) -> str:
+    #     if not isinstance(key, str):
+    #         return key
+    #     for (
+    #         delimiter_char,
+    #         escape_sequence,
+    #     ) in self._KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
+    #         if escape_sequence in str(key):
+    #             raise InvalidPolicyConfig(
+    #                 f"{escape_sequence} is not a valid string for a policy config"
+    #             )
+    #         key = key.replace(delimiter_char, escape_sequence)
+    #     return key
 
     def __unescape_delimiter_chars(self, key: str) -> str:
         for (
             delimiter_char,
             escape_sequence,
-        ) in self.__KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
+        ) in self._KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
             key = key.replace(escape_sequence, delimiter_char)
         return key
 
-    def __validate_config_params(
-        self, config_key: str, params: dict[str, Any], value: Any = None
-    ) -> AllocationPolicyConfig:
-        definitions = self.config_definitions()
+    # def __validate_config_params(
+    #     self, config_key: str, params: dict[str, Any], value: Any = None
+    # ) -> AllocationPolicyConfig:
+    #     definitions = self.config_definitions()
 
-        class_name = self.__class__.__name__
+    #     class_name = self.__class__.__name__
 
-        # config doesn't exist
-        if config_key not in definitions:
-            raise InvalidPolicyConfig(
-                f"'{config_key}' is not a valid config for {class_name}!"
-            )
+    #     # config doesn't exist
+    #     if config_key not in definitions:
+    #         raise InvalidPolicyConfig(
+    #             f"'{config_key}' is not a valid config for {class_name}!"
+    #         )
 
-        config = definitions[config_key]
+    #     config = definitions[config_key]
 
-        # missing required parameters
-        if (
-            diff := {
-                key: config.param_types[key].__name__
-                for key in config.param_types
-                if key not in params
-            }
-        ) != dict():
-            raise InvalidPolicyConfig(
-                f"'{config_key}' missing required parameters: {diff} for {class_name}!"
-            )
+    #     # missing required parameters
+    #     if (
+    #         diff := {
+    #             key: config.param_types[key].__name__
+    #             for key in config.param_types
+    #             if key not in params
+    #         }
+    #     ) != dict():
+    #         raise InvalidPolicyConfig(
+    #             f"'{config_key}' missing required parameters: {diff} for {class_name}!"
+    #         )
 
-        # not an optional config (no parameters)
-        if params and not config.param_types:
-            raise InvalidPolicyConfig(
-                f"'{config_key}' takes no params for {class_name}!"
-            )
+    #     # not an optional config (no parameters)
+    #     if params and not config.param_types:
+    #         raise InvalidPolicyConfig(
+    #             f"'{config_key}' takes no params for {class_name}!"
+    #         )
 
-        # parameters aren't correct types
-        if params:
-            for param_name in params:
-                if not isinstance(params[param_name], config.param_types[param_name]):
-                    try:
-                        # try casting to the right type, eg try int("10")
-                        expected_type = config.param_types[param_name]
-                        params[param_name] = expected_type(params[param_name])
-                    except Exception:
-                        raise InvalidPolicyConfig(
-                            f"'{config_key}' parameter '{param_name}' needs to be of type"
-                            f" {config.param_types[param_name].__name__} (not {type(params[param_name]).__name__})"
-                            f" for {class_name}!"
-                        )
+    #     # parameters aren't correct types
+    #     if params:
+    #         for param_name in params:
+    #             if not isinstance(params[param_name], config.param_types[param_name]):
+    #                 try:
+    #                     # try casting to the right type, eg try int("10")
+    #                     expected_type = config.param_types[param_name]
+    #                     params[param_name] = expected_type(params[param_name])
+    #                 except Exception:
+    #                     raise InvalidPolicyConfig(
+    #                         f"'{config_key}' parameter '{param_name}' needs to be of type"
+    #                         f" {config.param_types[param_name].__name__} (not {type(params[param_name]).__name__})"
+    #                         f" for {class_name}!"
+    #                     )
 
-        # value isn't correct type
-        if value is not None:
-            if not isinstance(value, config.value_type):
-                try:
-                    # try casting to the right type
-                    config.value_type(value)
-                except Exception:
-                    raise InvalidPolicyConfig(
-                        f"'{config_key}' value needs to be of type"
-                        f" {config.value_type.__name__} (not {type(value).__name__})"
-                        f" for {class_name}!"
-                    )
+    #     # value isn't correct type
+    #     if value is not None:
+    #         if not isinstance(value, config.value_type):
+    #             try:
+    #                 # try casting to the right type
+    #                 config.value_type(value)
+    #             except Exception:
+    #                 raise InvalidPolicyConfig(
+    #                     f"'{config_key}' value needs to be of type"
+    #                     f" {config.value_type.__name__} (not {type(value).__name__})"
+    #                     f" for {class_name}!"
+    #                 )
 
-        return config
+    #     return config
 
     def get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
@@ -856,9 +860,13 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def storage_key(self) -> StorageKey:
         return self._storage_key
 
+    @property
+    def resource_identifier(self) -> ResourceIdentifier:
+        return ResourceIdentifier(storage_key=self._storage_key)
+
 
 class PassthroughPolicy(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
     def _get_quota_allowance(

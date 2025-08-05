@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from abc import ABC
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Type, TypeAlias, Union, cast, final
 
@@ -15,6 +16,12 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableR
 from sentry_protos.snuba.v1.request_common_pb2 import ResponseMeta
 
 from snuba import environment, settings, state
+from snuba.configs.configuration import (
+    ConfigurableComponent,
+    Configuration,
+    ResourceIdentifier,
+)
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
@@ -157,7 +164,41 @@ def _construct_hacky_querylog_payload(
     }
 
 
-class BaseRoutingStrategy(metaclass=RegisteredClass):
+@dataclass()
+class RoutingStrategyConfig(Configuration):
+    pass
+
+
+class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
+    def __init__(self, default_config_overrides: dict[str, Any] = {}) -> None:
+        self._default_config_definitions = [
+            RoutingStrategyConfig(
+                name="some_default_config",
+                description="Placeholder for now",
+                value_type=int,
+                default=100,
+            ),
+        ]
+        self._overridden_additional_config_definitions = (
+            self._get_overridden_additional_config_defaults(default_config_overrides)
+        )
+
+    def component_namespace(self) -> str:
+        return "routing_strategy"
+
+    def _get_default_config_definitions(self) -> list[Configuration]:
+        return cast(list[Configuration], self._default_config_definitions)
+
+    def additional_config_definitions(self) -> list[Configuration]:
+        return self._overridden_additional_config_definitions
+
+    @property
+    def resource_identifier(self) -> ResourceIdentifier:
+        return ResourceIdentifier(
+            storage_key=StorageKey.EAP_ITEMS,
+            non_storage_resource_id=self.__class__.__name__,
+        )
+
     @classmethod
     def config_key(cls) -> str:
         return cls.__name__

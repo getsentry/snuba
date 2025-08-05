@@ -34,6 +34,7 @@ class StorageRoutingConfig:
     @classmethod
     def from_json(cls, config_dict: dict[str, Any]) -> "StorageRoutingConfig":
         if config_dict == {}:
+            print("1111111")
             return _DEFAULT_STORAGE_ROUTING_CONFIG
         try:
             if "version" not in config_dict or not isinstance(
@@ -74,6 +75,7 @@ class StorageRoutingConfig:
                 _routing_strategy_and_percentage_routed=routing_strategy_and_percentage_routed,
             )
         except Exception as e:
+            print("2222222", e)
             sentry_sdk.capture_message(f"Error parsing storage routing config: {e}")
             return _DEFAULT_STORAGE_ROUTING_CONFIG
 
@@ -102,6 +104,7 @@ class RoutingStrategySelector:
             config = str(get_config(_DEFAULT_STORAGE_ROUTING_CONFIG_KEY, "{}"))
             return StorageRoutingConfig.from_json(json.loads(config))
         except Exception as e:
+            print("dithishappen")
             sentry_sdk.capture_message(f"Error getting storage routing config: {e}")
             return _DEFAULT_STORAGE_ROUTING_CONFIG
 
