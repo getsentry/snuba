@@ -1,9 +1,5 @@
 <clickhouse>
     <profiles>
-        <default>
-            <allow_experimental_analyzer>0</allow_experimental_analyzer>
-        </default>
-
         <readonly>
             <readonly>1</readonly>
         </readonly>
