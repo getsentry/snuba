@@ -242,9 +242,9 @@ class TestAllocationPolicyLogs(TestCase):
         assert len(captured.records) == 3
         logs = set([record.getMessage() for record in captured.records])
         assert logs == {
-            "allocation_policy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_bad_config.org:10,ref:ref",
-            "allocation_policy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10",
-            "allocation_policy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10,ref:ref,yeet:yeet",
+            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_bad_config.org:10,ref:ref",
+            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10",
+            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10,ref:ref,yeet:yeet",
         }
 
 

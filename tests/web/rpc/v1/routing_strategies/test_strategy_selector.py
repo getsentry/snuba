@@ -85,7 +85,6 @@ def test_valid_config_is_parsed_correctly() -> None:
         TimeSeriesRequest(meta=RequestMeta(organization_id=1))
     )
 
-    print("storage_routing_configgg", storage_routing_config)
     assert storage_routing_config.version == 1
     assert storage_routing_config.get_routing_strategy_and_percentage_routed() == [
         ("OutcomesBasedRoutingStrategy", 0.1),

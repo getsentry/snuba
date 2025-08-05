@@ -118,9 +118,11 @@ def _construct_hacky_querylog_payload(
         "request": {
             "id": uuid.uuid4().hex,
             "app_id": "storage_routing",
-            "body": MessageToDict(routing_decision.routing_context.in_msg)
-            if routing_decision.routing_context.in_msg
-            else {},
+            "body": (
+                MessageToDict(routing_decision.routing_context.in_msg)
+                if routing_decision.routing_context.in_msg
+                else {}
+            ),
             "referrer": strategy.__class__.__name__,
         },
         "dataset": "storage_routing",
@@ -184,7 +186,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
         )
 
     def component_namespace(self) -> str:
-        return "routing_strategy"
+        return "RoutingStrategy"
 
     def _get_default_config_definitions(self) -> list[Configuration]:
         return cast(list[Configuration], self._default_config_definitions)

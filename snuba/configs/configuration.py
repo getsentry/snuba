@@ -38,6 +38,11 @@ class ResourceIdentifier:
 
 @dataclass()
 class Configuration:
+    """
+    A configuration is a key-value pair that can be used to configure a ConfigurableComponent.
+    example: configure whether an allocation policy is enforced or not via `is_enforced`.
+    """
+
     name: str
     description: str
     value_type: type
@@ -80,6 +85,44 @@ class Configuration:
 
 
 class ConfigurableComponent(ABC):
+
+    """
+    A ConfigurableComponent is a component that can be configured via configurations.
+    example: an allocation policy, a routing strategy, a strategy selector.
+
+    Configurations are used to configure the component at runtime.
+    example: configure whether an allocation policy is enforced or not via `is_enforced`.
+
+    To make your own ConfigurableComponent:
+    ===================================
+
+        >>> class MyConfigurableComponent(ConfigurableComponent):
+
+        >>>     def _additional_config_definitions(self) -> list[Configuration]:
+        >>>         # Define component specific config definitions, these will be used along
+        >>>         # with the default definitions of the base class. (is_enforced, is_active)
+        >>>         pass
+
+        >>>     def component_namespace(self) -> str:
+        >>>         return "MyConfigurableComponent"
+
+        >>>     def _get_default_config_definitions(self) -> list[Configuration]:
+        >>>         return [
+        >>>             Configuration(name="my_config", description="My config", value_type=int, default=100),
+        >>>         ]
+
+        >>>     def additional_config_definitions(self) -> list[Configuration]:
+        >>>         # Define component specific config definitions, these will be used along
+        >>>         # with the default definitions of the base class. (is_enforced, is_active)
+        >>>         pass
+
+        >>>     def resource_identifier(self) -> ResourceIdentifier:
+        >>>         # describes what is the underlying resource of this ConfigurableComponent
+        >>>         # example: BytesScannedRejectingPolicy (ConfigurableComponent) is a policy that is applied to a storage (underlying resource)
+        >>>         return ResourceIdentifier(storage_key=StorageKey("my_storage"))
+
+    """
+
     # This component builds redis strings that are delimited by dots, commas, colons
     # in order to allow those characters to exist in config we replace them with their
     # counterparts on write/read. It may be better to just replace our serialization with JSON
@@ -321,7 +364,7 @@ class ConfigurableComponent(ABC):
         return f"{self.component_name()}.{config}{parameters}"
 
     def __get_hash(self) -> str:
-        if self.component_namespace() == "allocation_policy":
+        if self.component_namespace() == "AllocationPolicy":
             return CAPMAN_HASH
         else:
             return CBRS_HASH

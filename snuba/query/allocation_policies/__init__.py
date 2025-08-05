@@ -364,6 +364,9 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
 
+    def component_namespace(self) -> str:
+        return "AllocationPolicy"
+
     @property
     def metrics(self) -> MetricsWrapper:
         return MetricsWrapper(
@@ -375,9 +378,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
                 "policy_class": self.__class__.__name__,
             },
         )
-
-    def component_namespace(self) -> str:
-        return "allocation_policy"  # todo(rachel): consider distinguishing between allocation policy on strat vs allocation policy on storage
 
     @property
     def is_active(self) -> bool:
