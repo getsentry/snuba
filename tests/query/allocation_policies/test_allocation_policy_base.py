@@ -413,6 +413,7 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
     } in policy_configs
     assert policy.is_enforced == 0
     assert policy.max_threads == 4
+    assert False
 
 
 @pytest.mark.redis_db
