@@ -19,7 +19,6 @@ from snuba.query.allocation_policies import (
     NO_UNITS,
     PASS_THROUGH_REFERRERS_SUGGESTION,
     AllocationPolicy,
-    AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -97,20 +96,20 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
 
     def _additional_config_definitions(self) -> list[Configuration]:
         return [
-            AllocationPolicyConfig(
+            Configuration(
                 name="org_limit_bytes_scanned",
                 description="Number of bytes any org can scan in a 10 minute window.",
                 value_type=int,
                 default=DEFAULT_BYTES_SCANNED_LIMIT,
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 name="org_limit_bytes_scanned_override",
                 description="Number of bytes a specific org can scan in a 10 minute window.",
                 value_type=int,
                 default=DEFAULT_OVERRIDE_LIMIT,
                 param_types={"org_id": int},
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 name="throttled_thread_number",
                 description="Number of threads any throttled query gets assigned.",
                 value_type=int,

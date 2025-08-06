@@ -5,11 +5,7 @@ from typing import Any, cast
 
 from snuba.configs.configuration import Configuration, InvalidConfig
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.allocation_policies import (
-    AllocationPolicyConfig,
-    QueryResultOrError,
-    QuotaAllowance,
-)
+from snuba.query.allocation_policies import QueryResultOrError, QuotaAllowance
 from snuba.query.allocation_policies.concurrent_rate_limit import (
     BaseConcurrentRateLimitAllocationPolicy,
 )
@@ -83,14 +79,14 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
 
     def _additional_config_definitions(self) -> list[Configuration]:
         return super()._additional_config_definitions() + [
-            AllocationPolicyConfig(
+            Configuration(
                 name="referrer_concurrent_override",
                 description="""override the concurrent limit for a referrer""",
                 value_type=int,
                 param_types={"referrer": str},
                 default=-1,
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 name="referrer_max_threads_override",
                 description="""override the max_threads for a referrer, applies to every query made by that referrer""",
                 param_types={"referrer": str},

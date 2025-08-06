@@ -20,7 +20,6 @@ from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     PASS_THROUGH_REFERRERS_SUGGESTION,
     AllocationPolicy,
-    AllocationPolicyConfig,
     InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
     QuotaAllowance,
@@ -68,57 +67,57 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         # Overrides are prioritized in order of specificity.
         # If two overrides applicable available to the request, the one with a smaller value takes precedence
         return [
-            AllocationPolicyConfig(
+            Configuration(
                 "referrer_all_projects_scan_limit_override",
                 f"Specific referrer scan limit in the last {self.WINDOW_SECONDS/ 60} mins, APPLIES TO ALL PROJECTS",
                 int,
                 DEFAULT_OVERRIDE_LIMIT,
                 param_types={"referrer": str},
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 "referrer_all_organizations_scan_limit_override",
                 f"Specific referrer scan limit in the last {self.WINDOW_SECONDS/ 60} mins, APPLIES TO ALL ORGANIZATIONS",
                 int,
                 DEFAULT_OVERRIDE_LIMIT,
                 param_types={"referrer": str},
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 "project_referrer_scan_limit",
                 f"DEFAULT: how many bytes can a project scan per referrer in the last {self.WINDOW_SECONDS/ 60} mins before queries start getting rejected",
                 int,
                 DEFAULT_BYTES_SCANNED_LIMIT,
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 "organization_referrer_scan_limit",
                 f"DEFAULT: how many bytes can an organization scan per referrer in the last {self.WINDOW_SECONDS/ 60} mins before queries start getting rejected. Cross-project queries are limited by organization_id",
                 int,
                 DEFAULT_BYTES_SCANNED_LIMIT * 2,
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 "clickhouse_timeout_bytes_scanned_penalization",
                 "If a clickhouse query times out, how many bytes does the policy assume the query scanned? Increasing the number increases the penalty for queries that time out",
                 int,
                 DEFAULT_TIMEOUT_PENALIZATION,
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 "bytes_throttle_divider",
                 "Divide the scan limit by this number gives the throttling threshold",
                 float,
                 DEFAULT_BYTES_THROTTLE_DIVIDER,
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 "threads_throttle_divider",
                 "max threads divided by this number is the number of threads we use to execute queries for a throttled (project_id|organization_id, referrer)",
                 int,
                 DEFAULT_THREADS_THROTTLE_DIVIDER,
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 "limit_bytes_instead_of_rejecting",
                 "instead of rejecting a query, limit its bytes with max_bytes_to_read on clickhouse",
                 int,
                 0,
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 "max_bytes_to_read_scan_limit_divider",
                 "if limit_bytes_instead_of_rejecting is set and the scan limit is reached, scan_limit/ max_bytes_to_read_scan_limit_divider is how many bytes each query will be capped to",
                 float,

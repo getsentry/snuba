@@ -46,7 +46,7 @@ class SomeConfigurableComponent(ConfigurableComponent):
 
     def _additional_config_definitions(self) -> list[Configuration]:
         return [
-            RoutingStrategyConfig(
+            Configuration(
                 name="additional_config_1",
                 description="An additional configuration",
                 value_type=int,
