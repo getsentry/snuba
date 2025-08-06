@@ -35,7 +35,7 @@ import {
   CardinalityQueryResult,
 } from "SnubaAdmin/cardinality_analyzer/types";
 
-import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
+import { AllocationPolicy, ConfigurableComponent, Configuration, Entity } from "SnubaAdmin/capacity_management/types";
 
 import { ReplayInstruction, Topic } from "SnubaAdmin/dead_letter_queue/types";
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
@@ -83,18 +83,20 @@ interface Client {
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
+  getRoutingStrategies: () => Promise<string[]>;
   getStoragesWithAllocationPolicies: () => Promise<string[]>;
-  getAllocationPolicies: (storage: string) => Promise<AllocationPolicy[]>;
-  setAllocationPolicyConfig: (
-    storage: string,
-    policy: string,
+  getAllocationPolicies: (entity: Entity) => Promise<AllocationPolicy[]>;
+  getRoutingStrategyConfigs: (strategy_name: string) => Promise<Configuration[]>;
+  setConfiguration: (
+    entity: Entity,
+    configurable_component: ConfigurableComponent,
     key: string,
     value: string,
     params: object,
   ) => Promise<void>;
-  deleteAllocationPolicyConfig: (
-    storage: string,
-    policy: string,
+  deleteConfiguration: (
+    entity: Entity,
+    configurable_component: ConfigurableComponent,
     key: string,
     params: object,
   ) => Promise<void>;
@@ -445,31 +447,57 @@ function Client(): Client {
       }).then((resp) => resp.json());
     },
 
+    getRoutingStrategies: () => {
+      const url = baseUrl + "routing_strategies";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
+
     getStoragesWithAllocationPolicies: () => {
       const url = baseUrl + "storages_with_allocation_policies";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
     },
-    getAllocationPolicies: (storage: string) => {
+    getAllocationPolicies: (entity: Entity) => {
       const url =
-        baseUrl + "allocation_policy_configs/" + encodeURIComponent(storage);
+        baseUrl + "allocation_policy_configs/" + entity.type + "/" + encodeURIComponent(entity.name);
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
     },
-    setAllocationPolicyConfig: (
-      storage: string,
-      policy: string,
+    getRoutingStrategyConfigs: (strategy_name: string) => {
+      const url = baseUrl + "routing_strategy_configs/" + strategy_name;
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
+    setConfiguration: (
+      entity: Entity,
+      configurable_component: ConfigurableComponent,
       key: string,
       value: string,
       params: object,
     ) => {
-      const url = baseUrl + "allocation_policy_config";
+      let body: string;
+      let url: string;
+
+      if (configurable_component.type === "routing_strategy") {
+        body = JSON.stringify({ strategy: configurable_component.name, key, value, params });
+        url = baseUrl + "routing_strategy_config";
+      } else if (entity.type === "strategy" && configurable_component.type === "allocation_policy") {
+        body = JSON.stringify({ strategy: entity.name, policy: configurable_component.name, key, value, params })
+        url = baseUrl + "allocation_policy_config_for_strategy";
+      } else {
+        body = JSON.stringify({ storage: entity.name, policy: configurable_component.name, key, value, params })
+        url = baseUrl + "allocation_policy_config_for_storage";
+      }
+
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
-        body: JSON.stringify({ storage, policy, key, value, params }),
+        body: body,
       }).then((res) => {
         if (res.ok) {
           return;
@@ -481,17 +509,30 @@ function Client(): Client {
         }
       });
     },
-    deleteAllocationPolicyConfig: (
-      storage: string,
-      policy: string,
+    deleteConfiguration: (
+      entity: Entity,
+      configurable_component: ConfigurableComponent,
       key: string,
       params: object,
     ) => {
-      const url = baseUrl + "allocation_policy_config";
+      let body: string;
+      let url: string;
+
+      if (configurable_component.type === "routing_strategy") {
+        body = JSON.stringify({ strategy: configurable_component.name, key, params });
+        url = baseUrl + "routing_strategy_config";
+      } else if (entity.type === "strategy" && configurable_component.type === "allocation_policy") {
+        body = JSON.stringify({ strategy: entity.name, policy: configurable_component.name, key, params })
+        url = baseUrl + "allocation_policy_config_for_strategy";
+      } else {
+        body = JSON.stringify({ storage: entity.name, policy: configurable_component.name, key, params })
+        url = baseUrl + "allocation_policy_config_for_storage";
+      }
+
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "DELETE",
-        body: JSON.stringify({ storage, policy, key, params }),
+        body: body,
       }).then((res) => {
         if (res.ok) {
           return;

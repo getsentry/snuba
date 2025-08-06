@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
-import { AllocationPolicyConfigs } from "SnubaAdmin/capacity_management/allocation_policy";
+import { Configurations } from "SnubaAdmin/capacity_management/allocation_policy";
 import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { COLORS } from "SnubaAdmin/theme";
@@ -31,7 +31,7 @@ function CapacityManagement(props: { api: Client }) {
 
   function loadAllocationPolicies(storage: string) {
     api
-      .getAllocationPolicies(storage)
+      .getAllocationPolicies({ type: "storage", name: storage })
       .then((res) => {
         setAllocationPolicies(res);
       })
@@ -53,11 +53,11 @@ function CapacityManagement(props: { api: Client }) {
           Policy Type: {policies[0].query_type.toUpperCase()}
         </p>
         {policies.map((policy: AllocationPolicy) => (
-          <AllocationPolicyConfigs
+          <Configurations
             api={api}
-            storage={selectedStorage}
-            policy={policy}
-            key={selectedStorage + policy.policy_name}
+            entity={{ type: "storage", name: selectedStorage }}
+            configurable_component={policy}
+            key={selectedStorage + policy.name}
           />
         ))}
       </div>

@@ -6,13 +6,13 @@ from typing import Any, cast
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicyConfig,
-    InvalidPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
 from snuba.query.allocation_policies.concurrent_rate_limit import (
     BaseConcurrentRateLimitAllocationPolicy,
 )
+from snuba.query.configuration import InvalidConfig
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.rate_limit import RateLimitParameters
 from snuba.utils.serializable_exception import JsonSerializable
@@ -76,7 +76,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         ):
             referrer = params.get("referrer", None)
             if referrer is not None and not self._referrer_is_registered(referrer):
-                raise InvalidPolicyConfig(
+                raise InvalidConfig(
                     f"Referrer {referrer} is not registered in the the {self._storage_key.value} yaml. Register it first to be able to override its limits"
                 )
         super().set_config_value(config_key, value, params, user)

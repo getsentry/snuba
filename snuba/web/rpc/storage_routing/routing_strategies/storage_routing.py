@@ -15,7 +15,17 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableR
 from sentry_protos.snuba.v1.request_common_pb2 import ResponseMeta
 
 from snuba import environment, settings, state
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
+from snuba.query.allocation_policies import AllocationPolicy
+from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
+    BytesScannedRejectingPolicy,
+)
+from snuba.query.allocation_policies.concurrent_rate_limit import (
+    ConcurrentRateLimitAllocationPolicy,
+)
+from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
+from snuba.query.configuration import ConfigurableComponent, Configuration
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
 from snuba.utils.metrics.timer import Timer
@@ -24,6 +34,7 @@ from snuba.utils.registered_class import RegisteredClass, import_submodules_in_d
 from snuba.web import QueryResult
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 
+CBRS_HASH = "cbrs"
 _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
 _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
 _END_ESTIMATION_MARK = "end_sampling_in_storage_estimation"
@@ -157,7 +168,22 @@ def _construct_hacky_querylog_payload(
     }
 
 
-class BaseRoutingStrategy(metaclass=RegisteredClass):
+@dataclass()
+class RoutingStrategyConfig(Configuration):
+    pass
+
+
+class BaseRoutingStrategy(ConfigurableComponent, metaclass=RegisteredClass):
+    def __init__(self) -> None:
+        self._configurations = [
+            RoutingStrategyConfig(
+                name="max_load",
+                description="The maximum load we allow the Clickhouse cluster to reach",
+                value_type=int,
+                default=100,
+            ),
+        ]
+
     @classmethod
     def config_key(cls) -> str:
         return cls.__name__
@@ -170,6 +196,12 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             tags={"routing_strategy_name": self.__class__.__name__},
         )
 
+    def component_namespace(self) -> str:
+        return "routing_strategy"
+
+    def get_configurations(self) -> dict[str, Configuration]:
+        return {config.name: config for config in self._configurations}
+
     @classmethod
     def get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
         return cast("Type[BaseRoutingStrategy]", cls.class_from_name(name))
@@ -181,6 +213,28 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             in_msg_meta.downsampled_storage_config.mode
             == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
         )
+
+    def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
+        return []
+
+    def get_allocation_policies(cls) -> list[AllocationPolicy]:
+        return [
+            ConcurrentRateLimitAllocationPolicy(
+                storage_key=StorageKey("eap_items"),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+            ReferrerGuardRailPolicy(
+                storage_key=StorageKey("eap_items"),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+            BytesScannedRejectingPolicy(
+                storage_key=StorageKey("eap_items"),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+        ]
 
     def merge_clickhouse_settings(
         self,
@@ -367,6 +421,10 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
                         "tier": routing_decision.tier.name,
                     },
                 )
+
+    @property
+    def runtime_config_prefix(self) -> str:
+        return self.component_name()
 
 
 import_submodules_in_directory(
