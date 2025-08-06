@@ -382,6 +382,8 @@ jobs:
               tests/sentry/api/endpoints/test_organization_spans_fields.py \
               tests/sentry/api/endpoints/test_organization_spans_fields_stats.py \
               tests/sentry/sentry_metrics/querying \
+              tests/acceptance/test_replay_detail.py \
+              tests/acceptance/test_replay_list.py \
               -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run CI module tests
