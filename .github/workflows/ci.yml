@@ -362,10 +362,9 @@ jobs:
             -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run full tests
-        # TODO: Adjust which changed files we care about
-        if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
+          # TODO: Adjust which changed files we care about
           pytest -k 'not __In' \
               tests/snuba \
               tests/sentry/snuba \
