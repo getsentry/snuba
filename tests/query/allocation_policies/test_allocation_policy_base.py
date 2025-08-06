@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+import inspect
 from unittest import TestCase, mock
 
 import pytest
@@ -19,6 +21,11 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
+from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import BytesScannedRejectingPolicy
+from snuba.query.allocation_policies.bytes_scanned_window_policy import BytesScannedWindowAllocationPolicy
+from snuba.query.allocation_policies.concurrent_rate_limit import ConcurrentRateLimitAllocationPolicy
+from snuba.query.allocation_policies.cross_org import CrossOrgQueryAllocationPolicy
+from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.state import set_config
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.web import QueryResult
@@ -413,7 +420,6 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
     } in policy_configs
     assert policy.is_enforced == 0
     assert policy.max_threads == 4
-    assert False
 
 
 @pytest.mark.redis_db
@@ -561,3 +567,46 @@ def test_cannot_use_escape_sequences() -> None:
         policy.set_config_value(
             "my_param_config", 5, {"ref": "a__dot_literal__.b.c", "org": 1}
         )
+
+class TestComponentNameBackwardsCompatibility:
+    """Test that component_name() returns the same value as the old runtime_config_prefix property."""
+
+    def get_all_allocation_policy_classes(self) -> list[type[AllocationPolicy]]:
+        return [
+            ReferrerGuardRailPolicy,
+            ConcurrentRateLimitAllocationPolicy,
+            BytesScannedRejectingPolicy,
+            CrossOrgQueryAllocationPolicy,
+            BytesScannedWindowAllocationPolicy,
+        ]
+
+    @pytest.mark.parametrize("storage_key", [
+        StorageKey.DISCOVER,
+        StorageKey.EAP_ITEMS,
+        StorageKey.EAP_ITEMS_DOWNSAMPLE_8,
+        StorageKey.EAP_ITEMS_DOWNSAMPLE_64,
+        StorageKey.EAP_ITEMS_DOWNSAMPLE_512,
+        StorageKey.ERRORS,
+        StorageKey.ERRORS_RO,
+        StorageKey.FUNCTIONS,
+        StorageKey.FUNCTIONS_RAW,
+        StorageKey.GENERIC_METRICS_SETS
+    ])
+    def test_component_name_equals_old_runtime_config_prefix_pattern(self, storage_key: StorageKey) -> None:
+        """Test that component_name() follows the same pattern as the old runtime_config_prefix."""
+        policy_classes = self.get_all_allocation_policy_classes()
+
+        for policy_class in policy_classes:
+            # Create an instance of the policy
+            policy = policy_class(
+                storage_key=storage_key,
+                required_tenant_types=["organization_id"],
+                default_config_overrides={}
+            )
+
+            # What the old runtime_config_prefix property would return
+            # https://github.com/getsentry/snuba/blob/master/snuba/query/allocation_policies/__init__.py#L430-L432
+            expected_old_prefix = f"{storage_key.value}.{policy_class.__name__}"
+
+            # They should be the same
+            assert policy.component_name() == expected_old_prefix

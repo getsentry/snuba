@@ -151,6 +151,7 @@ def test_component() -> SomeConfigurableComponent:
 def test_component_with_delimiters() -> TestConfigurableComponentWithDelimiters:
     return TestConfigurableComponentWithDelimiters()
 
+
 @pytest.mark.redis_db
 class TestConfigurableComponentBasic:
     """Test basic functionality of ConfigurableComponent."""
@@ -170,19 +171,53 @@ class TestConfigurableComponentBasic:
             ["default_config_1", "additional_config_1", "override_config_for_org_id"]
         ) == set(test_component.config_definitions().keys())
 
-    def test_get_current_configs(self, test_component: SomeConfigurableComponent) -> None:
+    def test_get_current_configs(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
         """Test that get_current_configs returns the correct configs."""
         configs = test_component.get_current_configs()
         assert len(configs) == 2
-        assert {'name': 'default_config_1', 'type': 'int', 'default': 100, 'description': 'A default configuration', 'value': 100, 'params': {}} in configs
-        assert {'name': 'additional_config_1', 'type': 'int', 'default': 50, 'description': 'An additional configuration', 'value': 50, 'params': {}} in configs
+        assert {
+            "name": "default_config_1",
+            "type": "int",
+            "default": 100,
+            "description": "A default configuration",
+            "value": 100,
+            "params": {},
+        } in configs
+        assert {
+            "name": "additional_config_1",
+            "type": "int",
+            "default": 50,
+            "description": "An additional configuration",
+            "value": 50,
+            "params": {},
+        } in configs
 
         # add an instance of an optional config
-        test_component.set_config_value(config_key="override_config_for_org_id", value=100, params={"organization_id": 10})
+        test_component.set_config_value(
+            config_key="override_config_for_org_id",
+            value=100,
+            params={"organization_id": 10},
+        )
         configs = test_component.get_current_configs()
         assert len(configs) == 3
-        assert {'name': 'default_config_1', 'type': 'int', 'default': 100, 'description': 'A default configuration', 'value': 100, 'params': {}} in configs
-        assert {'name': 'additional_config_1', 'type': 'int', 'default': 50, 'description': 'An additional configuration', 'value': 50, 'params': {}} in configs
+        assert {
+            "name": "default_config_1",
+            "type": "int",
+            "default": 100,
+            "description": "A default configuration",
+            "value": 100,
+            "params": {},
+        } in configs
+        assert {
+            "name": "additional_config_1",
+            "type": "int",
+            "default": 50,
+            "description": "An additional configuration",
+            "value": 50,
+            "params": {},
+        } in configs
         assert {
             "name": "override_config_for_org_id",
             "type": "int",
@@ -195,7 +230,8 @@ class TestConfigurableComponentBasic:
     def test_invalid_default_value_type(self) -> None:
         """Test that Configuration with invalid default value type raises ValueError."""
         with pytest.raises(
-            ValueError, match="Config item `invalid_config` expects type <class 'int'> got value `not_an_int` of type <class 'str'>"
+            ValueError,
+            match="Config item `invalid_config` expects type <class 'int'> got value `not_an_int` of type <class 'str'>",
         ):
             TestConfigurableComponentInvalidDefault()
 
@@ -205,37 +241,53 @@ class TestConfigurableComponentBasic:
 class TestConfigurableComponentValidation:
     """Test configuration parameter validation."""
 
-    def test_validate_config_params_valid_config(self, test_component: SomeConfigurableComponent) -> None:
+    def test_validate_config_params_valid_config(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
         """Test validation with valid config and parameters."""
         config = test_component._validate_config_params(
-            config_key="override_config_for_org_id",
-            params={"organization_id": 42}
+            config_key="override_config_for_org_id", params={"organization_id": 42}
         )
         assert config.name == "override_config_for_org_id"
         assert config.param_types == {"organization_id": int}
 
-    def test_validate_config_params_invalid_config(self, test_component: SomeConfigurableComponent) -> None:
+    def test_validate_config_params_invalid_config(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
         """Test validation with invalid config key."""
-        with pytest.raises(InvalidConfig, match="'invalid_config' is not a valid config for SomeConfigurableComponent"):
+        with pytest.raises(
+            InvalidConfig,
+            match="'invalid_config' is not a valid config for SomeConfigurableComponent",
+        ):
             test_component._validate_config_params("invalid_config", {})
 
-    def test_validate_config_params_missing_required_params(self, test_component: SomeConfigurableComponent) -> None:
-        with pytest.raises(InvalidConfig, match="'override_config_for_org_id' missing required parameters: {'organization_id': 'int'} for SomeConfigurableComponent!"):
+    def test_validate_config_params_missing_required_params(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
+        with pytest.raises(
+            InvalidConfig,
+            match="'override_config_for_org_id' missing required parameters: {'organization_id': 'int'} for SomeConfigurableComponent!",
+        ):
             test_component._validate_config_params("override_config_for_org_id", {})
 
-    def test_validate_config_params_wrong_param_type(self, test_component: SomeConfigurableComponent) -> None:
-        with pytest.raises(InvalidConfig, match="parameter 'organization_id' needs to be of type int"):
+    def test_validate_config_params_wrong_param_type(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
+        with pytest.raises(
+            InvalidConfig, match="parameter 'organization_id' needs to be of type int"
+        ):
             test_component._validate_config_params(
-                "override_config_for_org_id",
-                {"organization_id": "not_an_int"}
+                "override_config_for_org_id", {"organization_id": "not_an_int"}
             )
 
-    def test_validate_config_params_wrong_value_type(self, test_component: SomeConfigurableComponent) -> None:
+    def test_validate_config_params_wrong_value_type(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
         with pytest.raises(InvalidConfig, match="value needs to be of type int"):
             test_component._validate_config_params(
                 "override_config_for_org_id",
                 {"organization_id": 42},
-                value="not_an_int"
+                value="not_an_int",
             )
 
 
@@ -243,25 +295,37 @@ class TestConfigurableComponentValidation:
 class TestConfigurableComponentConfigOperations:
     """Test config get/set/delete operations."""
 
-    def test_get_config_value_default(self, test_component: SomeConfigurableComponent) -> None:
+    def test_get_config_value_default(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
         """Test getting config value with default."""
-        assert test_component.get_config_value("default_config_1") == 100  # Default value
+        assert (
+            test_component.get_config_value("default_config_1") == 100
+        )  # Default value
 
-    def test_get_config_value_with_params(self, test_component: SomeConfigurableComponent) -> None:
+    def test_get_config_value_with_params(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
         """Test getting config value with parameters."""
-        test_component.set_config_value("override_config_for_org_id", 100, params={"organization_id": 10})
+        test_component.set_config_value(
+            "override_config_for_org_id", 100, params={"organization_id": 10}
+        )
 
-        assert test_component.get_config_value(
-            "override_config_for_org_id",
-            params={"organization_id": 10}
-        ) == 100
+        assert (
+            test_component.get_config_value(
+                "override_config_for_org_id", params={"organization_id": 10}
+            )
+            == 100
+        )
 
     def test_set_config_value(self, test_component: SomeConfigurableComponent) -> None:
         """Test setting config value."""
         test_component.set_config_value("default_config_1", 200)
         assert test_component.get_config_value("default_config_1") == 200
 
-    def test_delete_config_value(self, test_component: SomeConfigurableComponent) -> None:
+    def test_delete_config_value(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
         """Test deleting config value."""
         config_key = "default_config_1"
 
@@ -272,26 +336,38 @@ class TestConfigurableComponentConfigOperations:
         # back to default
         assert test_component.get_config_value(config_key=config_key) == 100
 
-    def test_delete_config_value_with_params(self, test_component: SomeConfigurableComponent) -> None:
+    def test_delete_config_value_with_params(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
         config_key = "override_config_for_org_id"
         params = {"organization_id": 10}
 
         test_component.set_config_value(config_key=config_key, value=100, params=params)
-        assert test_component.get_config_value(config_key=config_key, params=params) == 100
+        assert (
+            test_component.get_config_value(config_key=config_key, params=params) == 100
+        )
 
         test_component.delete_config_value(config_key=config_key, params=params)
         # back to default
-        assert test_component.get_config_value(config_key=config_key, params=params) == -1
+        assert (
+            test_component.get_config_value(config_key=config_key, params=params) == -1
+        )
 
-    def test_get_config_value_invalid_config(self, test_component: SomeConfigurableComponent) -> None:
+    def test_get_config_value_invalid_config(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
         with pytest.raises(InvalidConfig):
             test_component.get_config_value("invalid_config")
 
-    def test_set_config_value_invalid_config(self, test_component: SomeConfigurableComponent) -> None:
+    def test_set_config_value_invalid_config(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
         with pytest.raises(InvalidConfig):
             test_component.set_config_value("invalid_config", "value")
 
-    def test_delete_config_value_invalid_config(self, test_component: SomeConfigurableComponent) -> None:
+    def test_delete_config_value_invalid_config(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
         with pytest.raises(InvalidConfig):
             test_component.delete_config_value("invalid_config")
 
@@ -299,7 +375,9 @@ class TestConfigurableComponentConfigOperations:
 class TestConfigurableComponentConfigRetrieval:
     """Test config retrieval methods."""
 
-    def test_get_optional_config_definitions_json(self, test_component: SomeConfigurableComponent) -> None:
+    def test_get_optional_config_definitions_json(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
         optional_configs = test_component.get_optional_config_definitions_json()
 
         assert len(optional_configs) == 1
@@ -308,4 +386,3 @@ class TestConfigurableComponentConfigRetrieval:
         assert len(optional_configs[0]["params"]) == 1
         assert optional_configs[0]["params"][0]["name"] == "organization_id"
         assert optional_configs[0]["params"][0]["type"] == "int"
-
