@@ -1,5 +1,4 @@
-from typing import Any, Dict
-from unittest.mock import MagicMock, Mock, patch
+from typing import cast
 
 import pytest
 
@@ -40,7 +39,7 @@ class SomeConfigurableComponent(ConfigurableComponent):
         return "SomeConfigurableComponent"
 
     def _get_default_config_definitions(self) -> list[Configuration]:
-        return self._default_config_definitions
+        return cast(list[Configuration], self._default_config_definitions)
 
     def additional_config_definitions(self) -> list[Configuration]:
         return self._overridden_additional_config_definitions
@@ -58,45 +57,6 @@ class SomeConfigurableComponent(ConfigurableComponent):
     @property
     def resource_identifier(self) -> ResourceIdentifier:
         return ResourceIdentifier("some_non_storage_resource")
-
-
-# class TestConfigurableComponentWithOverrides(SomeConfigurableComponent):
-#     """Test implementation with default config overrides."""
-
-#     def __init__(self):
-#         super().__init__()
-#         self._overridden_additional_config_definitions = (
-#             self._get_overridden_additional_config_defaults({
-#                 "additional_config": False,
-#                 "test_config": 200,
-#             })
-#         )
-
-#     def additional_config_definitions(self) -> list[Configuration]:
-#         return self._overridden_additional_config_definitions
-
-
-class TestConfigurableComponentWithDelimiters(SomeConfigurableComponent):
-    """Test implementation that uses delimiter characters in config names."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._default_config_definitions = [
-            RoutingStrategyConfig(
-                name="config.with.dots",
-                description="A config with dots",
-                value_type=str,
-                default="default",
-                param_types={"param:with:colons": str, "param,with,commas": int},
-            ),
-        ]
-
-    def _additional_config_definitions(self) -> list[Configuration]:
-        return []
-
-    @property
-    def resource_identifier(self) -> ResourceIdentifier:
-        return ResourceIdentifier(StorageKey("test.storage"))
 
 
 class TestConfigurableComponentInvalid(SomeConfigurableComponent):
@@ -142,16 +102,6 @@ def test_component() -> SomeConfigurableComponent:
     return SomeConfigurableComponent()
 
 
-# @pytest.fixture
-# def test_component_with_overrides():
-#     return TestConfigurableComponentWithOverrides()
-
-
-@pytest.fixture
-def test_component_with_delimiters() -> TestConfigurableComponentWithDelimiters:
-    return TestConfigurableComponentWithDelimiters()
-
-
 @pytest.mark.redis_db
 class TestConfigurableComponentBasic:
     """Test basic functionality of ConfigurableComponent."""
@@ -162,7 +112,6 @@ class TestConfigurableComponentBasic:
             == "some_non_storage_resource.SomeConfigurableComponent"
         )
 
-    # @pytest.mark.redis_db
     def test_config_definitions(
         self, test_component: SomeConfigurableComponent
     ) -> None:
@@ -234,8 +183,6 @@ class TestConfigurableComponentBasic:
             match="Config item `invalid_config` expects type <class 'int'> got value `not_an_int` of type <class 'str'>",
         ):
             TestConfigurableComponentInvalidDefault()
-
-    # do set config delete config get config
 
 
 class TestConfigurableComponentValidation:
