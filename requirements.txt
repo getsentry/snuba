@@ -32,7 +32,7 @@ sentry-kafka-schemas==2.0.1
 sentry-protos==0.3.3
 sentry-redis-tools==0.5.0
 sentry-relay==0.9.5
-sentry-sdk==2.18.0
+sentry-sdk==2.33.2
 simplejson==3.17.6
 snuba-sdk==3.0.39
 structlog==22.3.0
