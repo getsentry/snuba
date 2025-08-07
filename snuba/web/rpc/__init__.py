@@ -98,7 +98,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(self, metrics_backend: MetricsBackend | None = None) -> None:
         self._timer = Timer("endpoint_timing")
         self._metrics_backend = metrics_backend or environment.metrics
-        self.routing_decision = get_default_routing_decision(None)
+        self.routing_decision = self.set_routing_decision()
 
     @classmethod
     def request_class(cls) -> Type[Tin]:
@@ -148,6 +148,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             and in_msg.meta.downsampled_storage_config.mode
             != DownsampledStorageConfig.MODE_UNSPECIFIED
         )
+
+    def set_routing_decision(self) -> RoutingDecision:
+        return get_default_routing_decision(None)
 
     @final
     def execute(self, in_msg: Tin) -> Tout:

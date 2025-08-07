@@ -39,6 +39,10 @@ from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     RPCRequestException,
 )
+from snuba.web.rpc.storage_routing.defaults import get_highest_accuracy_routing_decision
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
+)
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression,
 )
@@ -213,6 +217,9 @@ class EndpointTraceItemDetails(
     @classmethod
     def response_class(cls) -> Type[TraceItemDetailsResponse]:
         return TraceItemDetailsResponse
+
+    def set_routing_decision(self) -> RoutingDecision:
+        return get_highest_accuracy_routing_decision()
 
     def _execute(self, in_msg: TraceItemDetailsRequest) -> TraceItemDetailsResponse:
         if in_msg.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:

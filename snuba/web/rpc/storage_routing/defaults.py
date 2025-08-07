@@ -26,3 +26,16 @@ def get_default_routing_decision(
         tier=Tier.TIER_1,
         can_run=True,
     )
+
+
+def get_highest_accuracy_routing_decision() -> RoutingDecision:
+    from snuba.web.rpc.storage_routing.routing_strategies.highest_accuracy import (
+        HighestAccuracyRoutingStrategy,
+    )
+
+    return RoutingDecision(
+        routing_context=_DEFAULT_ROUTING_CONTEXT,
+        strategy=HighestAccuracyRoutingStrategy(),
+        tier=Tier.TIER_1,
+        can_run=True,
+    )
