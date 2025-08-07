@@ -10,6 +10,7 @@ import pytest
 import simplejson as json
 
 from snuba import state
+from snuba.configs.configuration import Configuration
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -19,7 +20,6 @@ from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     NO_UNITS,
     AllocationPolicy,
-    AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -33,7 +33,7 @@ from tests.helpers import override_entity_column_validator, write_unprocessed_ev
 
 
 class MaxBytesPolicy123(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
     def _get_quota_allowance(
@@ -62,7 +62,7 @@ class MaxBytesPolicy123(AllocationPolicy):
 
 
 class RejectAllocationPolicy123(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
     def _get_quota_allowance(

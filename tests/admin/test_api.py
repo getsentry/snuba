@@ -16,6 +16,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 
 from snuba import state
 from snuba.admin.auth import USER_HEADER_KEY
+from snuba.configs.configuration import Configuration
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
@@ -23,7 +24,6 @@ from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     NO_UNITS,
     AllocationPolicy,
-    AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -572,9 +572,9 @@ def test_snuba_debug_explain_query(admin_api: FlaskClient) -> None:
 @pytest.mark.redis_db
 def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
     class FakePolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[Configuration]:
             return [
-                AllocationPolicyConfig(
+                Configuration(
                     "fake_optional_config", "", int, -1, param_types={"org_id": int}
                 )
             ]

@@ -4,6 +4,7 @@ from unittest import TestCase, mock
 
 import pytest
 
+from snuba.configs.configuration import Configuration, InvalidConfig
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     CAPMAN_HASH,
@@ -13,12 +14,22 @@ from snuba.query.allocation_policies import (
     NO_UNITS,
     AllocationPolicy,
     AllocationPolicyConfig,
-    InvalidPolicyConfig,
     InvalidTenantsForAllocationPolicy,
     PassthroughPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
+from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
+    BytesScannedRejectingPolicy,
+)
+from snuba.query.allocation_policies.bytes_scanned_window_policy import (
+    BytesScannedWindowAllocationPolicy,
+)
+from snuba.query.allocation_policies.concurrent_rate_limit import (
+    ConcurrentRateLimitAllocationPolicy,
+)
+from snuba.query.allocation_policies.cross_org import CrossOrgQueryAllocationPolicy
+from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.state import set_config
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.web import QueryResult
@@ -160,29 +171,29 @@ def test_passes_through_on_error() -> None:
 @pytest.mark.redis_db
 def test_bad_config_keys() -> None:
     policy = PassthroughPolicy(StorageKey("something"), [], {})
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value("bad_config", 1)
     assert str(err.value) == "'bad_config' is not a valid config for PassthroughPolicy!"
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value("is_active", "bad_value")
     assert (
         str(err.value)
         == "'is_active' value needs to be of type int (not str) for PassthroughPolicy!"
     )
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value("is_enforced", "bad_value")
     assert (
         str(err.value)
         == "'is_enforced' value needs to be of type int (not str) for PassthroughPolicy!"
     )
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value("max_threads", "bad_value")
     assert (
         str(err.value)
         == "'max_threads' value needs to be of type int (not str) for PassthroughPolicy!"
     )
 
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.get_config_value("does_not_exist")
     assert (
         str(err.value)
@@ -191,11 +202,9 @@ def test_bad_config_keys() -> None:
 
 
 class SomeParametrizedConfigPolicy(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         return [
-            AllocationPolicyConfig(
-                name="my_config", description="", value_type=int, default=10
-            ),
+            Configuration(name="my_config", description="", value_type=int, default=10),
             AllocationPolicyConfig(
                 name="my_param_config",
                 description="",
@@ -259,7 +268,7 @@ def policy() -> AllocationPolicy:
 
 @pytest.mark.redis_db
 def test_config_validation(policy: AllocationPolicy) -> None:
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value(
             config_key="my_config", value=10, params={"bad_param": 10}
         )
@@ -267,20 +276,20 @@ def test_config_validation(policy: AllocationPolicy) -> None:
         str(err.value)
         == "'my_config' takes no params for SomeParametrizedConfigPolicy!"
     )
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value(config_key="my_config", value="lol")
     assert (
         str(err.value)
         == "'my_config' value needs to be of type int (not str) for SomeParametrizedConfigPolicy!"
     )
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value(config_key="my_param_config", value=10)
     assert (
         str(err.value)
         == "'my_param_config' missing required parameters: {'org': 'int', 'ref': 'str'} for SomeParametrizedConfigPolicy!"
     )
 
-    with pytest.raises(InvalidPolicyConfig) as err:
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value(
             config_key="my_param_config", value=10, params={"org": "lol", "ref": "test"}
         )
@@ -558,7 +567,56 @@ def test_configs_with_delimiter_values() -> None:
 
 def test_cannot_use_escape_sequences() -> None:
     policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
-    with pytest.raises(InvalidPolicyConfig):
+    with pytest.raises(InvalidConfig):
         policy.set_config_value(
             "my_param_config", 5, {"ref": "a__dot_literal__.b.c", "org": 1}
         )
+
+
+class TestComponentNameBackwardsCompatibility:
+    """Test that component_name() returns the same value as the old runtime_config_prefix property."""
+
+    def get_all_allocation_policy_classes(self) -> list[type[AllocationPolicy]]:
+        return [
+            ReferrerGuardRailPolicy,
+            ConcurrentRateLimitAllocationPolicy,
+            BytesScannedRejectingPolicy,
+            CrossOrgQueryAllocationPolicy,
+            BytesScannedWindowAllocationPolicy,
+        ]
+
+    @pytest.mark.parametrize(
+        "storage_key",
+        [
+            StorageKey.DISCOVER,
+            StorageKey.EAP_ITEMS,
+            StorageKey.EAP_ITEMS_DOWNSAMPLE_8,
+            StorageKey.EAP_ITEMS_DOWNSAMPLE_64,
+            StorageKey.EAP_ITEMS_DOWNSAMPLE_512,
+            StorageKey.ERRORS,
+            StorageKey.ERRORS_RO,
+            StorageKey.FUNCTIONS,
+            StorageKey.FUNCTIONS_RAW,
+            StorageKey.GENERIC_METRICS_SETS,
+        ],
+    )
+    def test_component_name_equals_old_runtime_config_prefix_pattern(
+        self, storage_key: StorageKey
+    ) -> None:
+        """Test that component_name() follows the same pattern as the old runtime_config_prefix."""
+        policy_classes = self.get_all_allocation_policy_classes()
+
+        for policy_class in policy_classes:
+            # Create an instance of the policy
+            policy = policy_class(
+                storage_key=storage_key,
+                required_tenant_types=["organization_id"],
+                default_config_overrides={},
+            )
+
+            # What the old runtime_config_prefix property would return
+            # https://github.com/getsentry/snuba/blob/master/snuba/query/allocation_policies/__init__.py#L430-L432
+            expected_old_prefix = f"{storage_key.value}.{policy_class.__name__}"
+
+            # They should be the same
+            assert policy.component_name() == expected_old_prefix
