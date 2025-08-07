@@ -56,11 +56,7 @@ jobs:
           CARGO_PACKAGE="$(echo "$PACKAGE" | sed 's/-/_/g')"
           if ! cargo update --package "$CARGO_PACKAGE" 2>/dev/null; then
             # If that fails, try with the original package name
-            if ! cargo update --package "$PACKAGE" 2>/dev/null; then
-              # If both fail, do a full cargo update to be safe
-              echo "Warning: Could not update specific package, running full cargo update"
-              cargo update
-            fi
+            cargo update --package "$PACKAGE"
           fi
           cd ..
         fi
