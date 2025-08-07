@@ -37,8 +37,9 @@ from snuba.query.dsl import (
 )
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.state import get_config
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
@@ -381,9 +382,12 @@ def _attribute_to_expression(
 
 
 def _build_snuba_request(
-    request: GetTracesRequest, query: Query, clickhouse_settings: dict[str, Any] = {}
+    request: GetTracesRequest,
+    query: Query,
+    clickhouse_settings: dict[str, Any] = {},
+    query_settings: QuerySettings | None = None,
 ) -> SnubaRequest:
-    query_settings = (
+    query_settings = query_settings or (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
 
@@ -668,10 +672,14 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         )
 
         treeify_or_and_conditions(query)
-
+        settings = (
+            setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
+        )
+        if get_config("enable_trace_sampling", False):
+            settings.set_sampling_tier(self.routing_decision.tier)
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=_build_snuba_request(request, query),
+            request=_build_snuba_request(request, query, query_settings=settings),
             timer=self._timer,
         )
         trace_ids: list[str] = []
