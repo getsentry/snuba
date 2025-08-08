@@ -28,6 +28,7 @@ class AdminTools(Enum):
     AUDIT_LOG = "audit-log"
     KAFKA = "kafka"
     CAPACITY_MANAGEMENT = "capacity-management"
+    CAPACITY_BASED_ROUTING_SYSTEM = "capacity-based-routing-system"
     PRODUCTION_QUERIES = "production-queries"
     CARDINALITY_ANALYZER = "cardinality-analyzer"
     SNUBA_EXPLAIN = "snuba-explain"
