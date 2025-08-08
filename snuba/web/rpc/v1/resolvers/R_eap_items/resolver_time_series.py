@@ -1,3 +1,4 @@
+import re
 import uuid
 from collections import defaultdict
 from dataclasses import replace
@@ -20,6 +21,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     ExtrapolationMode,
+    Reliability,
 )
 
 from snuba.attribution.appid import AppID
@@ -35,6 +37,8 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
+from snuba.state import get_int_config
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
@@ -61,6 +65,9 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression,
+)
+from snuba.web.rpc.v1.visitors.time_series_request_visitor import (
+    GetSubformulaLabelsVisitor,
 )
 
 OP_TO_EXPR = {
@@ -120,9 +127,15 @@ def _convert_result_timeseries(
 
     """
 
-    # to convert the results, need to know which were the groupby columns and which ones
-    # were aggregations
+    # the aggregations that we will include in the result
     aggregation_labels = set([expr.label for expr in request.expressions])
+    if get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
+        # we also want to grab all the subchildren of formulas,
+        # this is used for computing reliabilities and they will be removed later so they
+        # arent actually included in the result
+        vis = GetSubformulaLabelsVisitor()
+        vis.visit(request)
+        aggregation_labels.update(vis.labels)
 
     group_by_labels = set([attr.name for attr in request.group_by])
 
@@ -195,23 +208,120 @@ def _convert_result_timeseries(
                     )
                 else:
                     timeseries.data_points.append(DataPoint(data=0, data_present=False))
+
+    if get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
+        _compute_formula_reliabilities(request.expressions, result_timeseries)
     return result_timeseries.values()
 
 
-def _get_reliability_context_columns(
+def _compute_formula_reliabilities(
     expressions: Iterable[ProtoExpression],
+    result_timeseries: dict[tuple[str, str], TimeSeries],
+) -> None:
+    """
+    Given a list of expressions and a result timeseries, compute the reliabilities for each formula.
+    This modifies the given result_timeseries. It assumes that result_timeseries has reliabilities set for each non-formula timeseries,
+    but no reliabilities set for the formula timeseries'.
+    """
+    formulas_and_children = _get_formulas_and_children(expressions, result_timeseries)
+    # compute the reliability of the formulas based on the reliabilities of the children
+    for formula_key, children in formulas_and_children.items():
+        formula_timeseries = result_timeseries[formula_key]
+        new_reliabilities: list[None | Reliability.ValueType] = [None] * len(
+            formula_timeseries.buckets
+        )
+        for child_key in children:
+            child_timeseries = result_timeseries[child_key]
+            if child_timeseries.buckets != formula_timeseries.buckets:
+                raise ValueError(
+                    f"Child timeseries {child_key} has different buckets than formula timeseries {formula_key}"
+                )
+            # merge the reliabilities of the children into new_reliabilities
+            for i in range(len(child_timeseries.data_points)):
+                if new_reliabilities[i] is None:
+                    new_reliabilities[i] = child_timeseries.data_points[i].reliability
+                else:
+                    curr = new_reliabilities[i]
+                    assert curr is not None
+                    new_reliabilities[i] = min(
+                        curr,
+                        child_timeseries.data_points[i].reliability,
+                    )
+        # set the reliabilities for the formula timeseries to the merged reliabilities
+        for i in range(len(formula_timeseries.data_points)):
+            curr = new_reliabilities[i]
+            if curr is not None:
+                formula_timeseries.data_points[i].reliability = curr
+    _remove_non_requested_expressions(expressions, result_timeseries)
+
+
+def _remove_non_requested_expressions(
+    expressions: Iterable[ProtoExpression],
+    result_timeseries: dict[tuple[str, str], TimeSeries],
+) -> None:
+    requested_expressions = set([expr.label for expr in expressions])
+    to_remove = []
+    for timeseries_key in result_timeseries.keys():
+        if timeseries_key[1] not in requested_expressions:
+            to_remove.append(timeseries_key)
+    for timeseries_key in to_remove:
+        del result_timeseries[timeseries_key]
+
+
+def _get_formulas_and_children(
+    expressions: Iterable[ProtoExpression],
+    result_timeseries: dict[tuple[str, str], TimeSeries],
+) -> dict[tuple[str, str], list[tuple[str, str]]]:
+    """
+    Given a list of expressions and a result timeseries, return a dictionary of formula keys to their children.
+    """
+    # labels of formulas that need reliabilities computed
+    todo_formula_labels = set()
+    for expr in expressions:
+        if expr.WhichOneof("expression") == "formula":
+            todo_formula_labels.add(expr.label)
+
+    # map the labels to keys in result_timeseries, this accounts for group bys
+    # theres a key for each formula, and the value is a list of the children
+    formula_keys_to_children: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for result_timeseries_key in result_timeseries.keys():
+        if result_timeseries_key[1] in todo_formula_labels:
+            formula_keys_to_children[result_timeseries_key] = []
+
+    # now theres a key for each formula, add the children to the corresponding parent
+    for result_timeseries_key in result_timeseries.keys():
+        parent_key = _is_formula_child(result_timeseries_key)
+        if parent_key is not None and parent_key in formula_keys_to_children:
+            formula_keys_to_children[parent_key].append(result_timeseries_key)
+
+    return formula_keys_to_children
+
+
+def _is_formula_child(result_timeseries_key: tuple[str, str]) -> None | tuple[str, str]:
+    """
+    If the given key is a formula child, returns the key of the parent formula. otherwise returns None
+    ex: given ("", myform.left.right), returns ("", myform)
+    """
+    match = re.search(r"(\.left|\.right)+$", result_timeseries_key[1])
+    if match is None:
+        return None
+    return (result_timeseries_key[0], result_timeseries_key[1][: match.start()])
+
+
+def _get_reliability_context_columns(
+    expr: ProtoExpression,
     request_meta: RequestMeta,
 ) -> list[SelectedExpression]:
     # this reliability logic ignores formulas, meaning formulas may not properly support reliability
     additional_context_columns = []
 
-    aggregates = []
-    for e in expressions:
-        if e.WhichOneof("expression") == "conditional_aggregation":
-            # ignore formulas
-            aggregates.append(e.conditional_aggregation)
-
-    for aggregation in aggregates:
+    if (
+        expr.WhichOneof("expression") == "conditional_aggregation"
+        or expr.WhichOneof("expression") == "aggregation"
+    ):
+        which_oneof = expr.WhichOneof("expression")
+        assert which_oneof in ["conditional_aggregation", "aggregation"]
+        aggregation = getattr(expr, which_oneof)
         if (
             aggregation.extrapolation_mode
             == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
@@ -236,13 +346,31 @@ def _get_reliability_context_columns(
                     expression=average_sample_rate_column,
                 )
             )
-
         count_column = get_count_column(
             aggregation, _get_attribute_key_to_expression_function(request_meta)
         )
         additional_context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
         )
+    elif expr.WhichOneof("expression") == "formula":
+        if not get_int_config(
+            "enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT
+        ):
+            return []
+        # also query for the left and right parts of the formula separately
+        # this will be used later to calculate the reliability of the formula
+        # ex: SELECT agg1/agg2 will become SELECT agg1/agg2, agg1, agg2
+        for e in [expr.formula.left, expr.formula.right]:
+            if not e.HasField("formula"):
+                additional_context_columns.append(
+                    SelectedExpression(
+                        name=e.label,
+                        expression=_proto_expression_to_ast_expression(e, request_meta),
+                    )
+                )
+            additional_context_columns.extend(
+                _get_reliability_context_columns(e, request_meta)
+            )
     return additional_context_columns
 
 
@@ -298,9 +426,11 @@ def build_query(request: TimeSeriesRequest) -> Query:
         for expr in request.expressions
     ]
 
-    additional_context_columns = _get_reliability_context_columns(
-        request.expressions, request.meta
-    )
+    additional_context_columns = []
+    for expr in request.expressions:
+        additional_context_columns.extend(
+            _get_reliability_context_columns(expr, request.meta)
+        )
 
     groupby_columns = [
         SelectedExpression(
