@@ -1,6 +1,7 @@
 import pytest
 
-from snuba.query.allocation_policies import InvalidPolicyConfig, QueryResultOrError
+from snuba.configs.configuration import InvalidConfig
+from snuba.query.allocation_policies import QueryResultOrError
 from snuba.query.allocation_policies.cross_org import CrossOrgQueryAllocationPolicy
 from snuba.web import QueryResult
 
@@ -146,7 +147,7 @@ class TestCrossOrgQueryAllocationPolicy:
                 },
             }
         )
-        with pytest.raises(InvalidPolicyConfig):
+        with pytest.raises(InvalidConfig):
             policy.set_config_value(
                 "referrer_concurrent_override",
                 6,

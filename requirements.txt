@@ -27,12 +27,12 @@ pytest-watch==4.2.0
 python-dateutil==2.8.2
 python-rapidjson==1.8
 redis==4.5.4
-sentry-arroyo==2.28.4
+sentry-arroyo==2.29.1
 sentry-kafka-schemas==2.0.2
-sentry-protos==0.3.2
+sentry-protos==0.3.3
 sentry-redis-tools==0.5.0
 sentry-relay==0.9.5
-sentry-sdk==2.18.0
+sentry-sdk==2.33.2
 simplejson==3.17.6
 snuba-sdk==3.0.39
 structlog==22.3.0
