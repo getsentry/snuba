@@ -16,6 +16,8 @@ class AuditLogAction(Enum):
     FORCE_MIGRATION_OVERWRITE = "force.migration.overwrite"
     ALLOCATION_POLICY_UPDATE = "allocation_policy.update"
     ALLOCATION_POLICY_DELETE = "allocation_policy.delete"
+    ROUTING_STRATEGY_UPDATE = "routing_strategy.update"
+    ROUTING_STRATEGY_DELETE = "routing_strategy.delete"
     DLQ_REPLAY = "dlq.replay"
     RAN_SUDO_SYSTEM_QUERY = "ran.sudo.system.query"
 
@@ -38,4 +40,9 @@ MIGRATION_ACTIONS = [
 ALLOCATION_POLICY_ACTIONS = [
     AuditLogAction.ALLOCATION_POLICY_DELETE,
     AuditLogAction.ALLOCATION_POLICY_UPDATE,
+]
+
+ROUTING_STRATEGY_ACTIONS = [
+    AuditLogAction.ROUTING_STRATEGY_UPDATE,
+    AuditLogAction.ROUTING_STRATEGY_DELETE,
 ]
