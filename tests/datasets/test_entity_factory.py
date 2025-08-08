@@ -52,7 +52,6 @@ ENTITY_KEYS = [
     EntityKey.GENERIC_METRICS_COUNTERS_META_TAG_VALUES,
     EntityKey.UPTIME_CHECKS,
     EntityKey.EAP_ITEMS,
-    EntityKey.EAP_ITEMS_SPAN,
 ]
 
 
