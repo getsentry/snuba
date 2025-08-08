@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_kafka_schemas import get_codec
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
@@ -15,6 +16,7 @@ from snuba.configs.configuration import Configuration
 from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
+from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
     RoutingContext,
@@ -85,6 +87,30 @@ class RoutingStrategySelectsTier8(BaseRoutingStrategy):
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
+
+
+# a routing strategy that returns tier 1 if the tier is highest accuracy otherwise tier 8
+class RoutingStrategyHighestAccuracy(BaseRoutingStrategy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
+
+    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
+        if self._is_highest_accuracy_mode(extract_message_meta(routing_context.in_msg)):
+            return RoutingDecision(
+                routing_context=routing_context,
+                strategy=self,
+                tier=Tier.TIER_1,
+                clickhouse_settings={},
+                can_run=True,
+            )
+        else:
+            return RoutingDecision(
+                routing_context=routing_context,
+                strategy=self,
+                tier=Tier.TIER_8,
+                clickhouse_settings={},
+                can_run=True,
+            )
 
 
 class RoutingStrategyUpdatesQuerySettings(BaseRoutingStrategy):
@@ -171,6 +197,41 @@ def test_merge_query_settings() -> None:
     )
     assert routing_decision.tier == Tier.TIER_8
     assert routing_decision.clickhouse_settings == {"some_setting": "some_value"}
+
+
+@pytest.mark.redis_db
+def test_routing_strategy_selects_tier_1_if_highest_accuracy_mode() -> None:
+    ts = Timestamp()
+    ts.GetCurrentTime()
+    tstart = Timestamp(seconds=ts.seconds - 3600)
+    # don't set downsampled_storage_config
+    in_msg = TimeSeriesRequest(
+        meta=RequestMeta(
+            request_id=RANDOM_REQUEST_ID,
+            project_ids=[1, 2, 3],
+            organization_id=1,
+            cogs_category="something",
+            referrer="something",
+            start_timestamp=tstart,
+            end_timestamp=ts,
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        granularity_secs=60,
+    )
+    routing_context = deepcopy(ROUTING_CONTEXT)
+    routing_context.in_msg = in_msg
+    routing_decision = RoutingStrategyHighestAccuracy().get_routing_decision(
+        routing_context
+    )
+    assert routing_decision.tier == Tier.TIER_8
+
+    in_msg.meta.downsampled_storage_config.mode = (
+        DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+    )
+    routing_decision = RoutingStrategyHighestAccuracy().get_routing_decision(
+        routing_context
+    )
+    assert routing_decision.tier == Tier.TIER_1
 
 
 @pytest.mark.redis_db

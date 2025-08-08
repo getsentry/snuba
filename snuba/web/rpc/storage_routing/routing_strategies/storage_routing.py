@@ -13,7 +13,7 @@ from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
-from sentry_protos.snuba.v1.request_common_pb2 import ResponseMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 
 from snuba import environment, settings, state
 from snuba.configs.configuration import (
@@ -219,13 +219,13 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
     def get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
         return cast("Type[BaseRoutingStrategy]", cls.class_from_name(name))
 
-    def _is_highest_accuracy_mode(self, in_msg_meta: ResponseMeta) -> bool:
-        if not hasattr(in_msg_meta, "downsampled_storage_config"):
-            return False
-        return bool(
-            in_msg_meta.downsampled_storage_config.mode
-            == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
-        )
+    def _is_highest_accuracy_mode(self, in_msg_meta: RequestMeta) -> bool:
+        if in_msg_meta.HasField("downsampled_storage_config"):
+            return bool(
+                in_msg_meta.downsampled_storage_config.mode
+                == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+            )
+        return False
 
     def merge_clickhouse_settings(
         self,

@@ -164,9 +164,11 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         if span:
             span.set_data(
                 "downsampling_mode",
-                "highest_accuracy"
-                if self._is_highest_accuracy_mode(in_msg_meta)
-                else "normal",
+                (
+                    "highest_accuracy"
+                    if self._is_highest_accuracy_mode(in_msg_meta)
+                    else "normal"
+                ),
             )
         if (
             self._is_highest_accuracy_mode(in_msg_meta)
