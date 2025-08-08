@@ -270,7 +270,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
             OutcomesBasedRoutingStrategy,
         )
 
-        with sentry_sdk.start_span(op="decide_tier"):
+        with sentry_sdk.start_span(op="decide_tier") as span:
             try:
                 routing_context.timer.mark(_START_ESTIMATION_MARK)
                 routing_decision = self._get_routing_decision(routing_context)
@@ -297,7 +297,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
 
                 if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
                     raise e
-
+            span.set_data("decided_tier", routing_decision.tier)
             return routing_decision
 
     @final
