@@ -220,12 +220,12 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
         return cast("Type[BaseRoutingStrategy]", cls.class_from_name(name))
 
     def _is_highest_accuracy_mode(self, in_msg_meta: RequestMeta) -> bool:
-        if not in_msg_meta.HasField("downsampled_storage_config"):
-            return False
-        return bool(
-            in_msg_meta.downsampled_storage_config.mode
-            == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
-        )
+        if in_msg_meta.HasField("downsampled_storage_config"):
+            return bool(
+                in_msg_meta.downsampled_storage_config.mode
+                == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+            )
+        return False
 
     def merge_clickhouse_settings(
         self,
