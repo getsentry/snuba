@@ -98,7 +98,6 @@ from snuba.web.delete_query import (
 from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names, run_rpc_handler
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
-    RoutingStrategyConfig,
 )
 from snuba.web.views import dataset_query
 
@@ -1020,13 +1019,7 @@ def get_allocation_policy_configs_of_routing_strategy(strategy_name: str) -> Res
 @check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
 def get_routing_strategy_configs(strategy_name: str) -> Response:
     configs = BaseRoutingStrategy.get_from_name(strategy_name)().get_current_configs()
-    serialized_configs = [
-        cast(RoutingStrategyConfig, config).to_config_dict()
-        for config in configs  # rachel: this cud b a problem
-    ]
-    return Response(
-        json.dumps(serialized_configs), 200, {"Content-Type": "application/json"}
-    )
+    return Response(json.dumps(configs), 200, {"Content-Type": "application/json"})
 
 
 @application.route("/allocation_policy_configs/<path:storage_key>", methods=["GET"])
@@ -1045,6 +1038,15 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
+def _assert_valid_routing_strategy_config(
+    strategy: str, key: str, params: dict[str, Any]
+) -> None:
+    assert isinstance(strategy, str), "Invalid strategy"
+    assert isinstance(key, str), "Invalid key"
+    assert isinstance(params, dict), "Invalid params"
+    assert key != "", "Key cannot be empty string"
+
+
 @application.route("/routing_strategy_config", methods=["POST", "DELETE"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
 def set_routing_strategy_config() -> Response:
@@ -1055,12 +1057,9 @@ def set_routing_strategy_config() -> Response:
         strategy, key = (data["strategy"], data["key"])
         params = data.get("params", {})
 
-        assert isinstance(strategy, str), "Invalid strategy"
-        assert isinstance(key, str), "Invalid key"
-        assert isinstance(params, dict), "Invalid params"
-        assert key != "", "Key cannot be empty string"
+        _assert_valid_routing_strategy_config(strategy, key, params)
 
-        strategy = BaseRoutingStrategy.get_from_name(strategy)
+        strategy = BaseRoutingStrategy.get_from_name(strategy)()
         assert strategy is not None, "Strategy not found"
 
     except (KeyError, AssertionError) as exc:
@@ -1120,15 +1119,11 @@ def set_allocation_policy_config_for_strategy() -> Response:
 
     try:
         strategy, key, policy_name = (data["strategy"], data["key"], data["policy"])
-
         params = data.get("params", {})
 
-        assert isinstance(strategy, str), "Invalid strategy"
-        assert isinstance(key, str), "Invalid key"
-        assert isinstance(params, dict), "Invalid params"
-        assert key != "", "Key cannot be empty string"
+        _assert_valid_routing_strategy_config(strategy, key, params)
         assert isinstance(policy_name, str), "Invalid policy name"
-        strategy = BaseRoutingStrategy.get_from_name(strategy)
+        strategy = BaseRoutingStrategy.get_from_name(strategy)()
         assert strategy is not None, "Strategy not found"
         policies = (
             strategy.get_allocation_policies()
