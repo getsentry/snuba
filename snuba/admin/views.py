@@ -1054,12 +1054,12 @@ def set_routing_strategy_config() -> Response:
     user = request.headers.get(USER_HEADER_KEY)
 
     try:
-        strategy, key = (data["strategy"], data["key"])
+        strategy_name, key = (data["strategy"], data["key"])
         params = data.get("params", {})
 
-        _assert_valid_routing_strategy_config(strategy, key, params)
+        _assert_valid_routing_strategy_config(strategy_name, key, params)
 
-        strategy = BaseRoutingStrategy.get_from_name(strategy)()
+        strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
         assert strategy is not None, "Strategy not found"
 
     except (KeyError, AssertionError) as exc:
@@ -1074,7 +1074,7 @@ def set_routing_strategy_config() -> Response:
         audit_log.record(
             user or "",
             AuditLogAction.ROUTING_STRATEGY_DELETE,
-            {"strategy": strategy, "key": key},
+            {"strategy": strategy_name, "key": key},
             notify=True,
         )
         return Response("", 200)
@@ -1089,7 +1089,7 @@ def set_routing_strategy_config() -> Response:
                 user or "",
                 AuditLogAction.ROUTING_STRATEGY_UPDATE,
                 {
-                    "strategy": strategy,
+                    "strategy": strategy_name,
                     "key": key,
                     "value": value,
                     "params": str(params),
@@ -1118,12 +1118,16 @@ def set_allocation_policy_config_for_strategy() -> Response:
     user = request.headers.get(USER_HEADER_KEY)
 
     try:
-        strategy, key, policy_name = (data["strategy"], data["key"], data["policy"])
+        strategy_name, key, policy_name = (
+            data["strategy"],
+            data["key"],
+            data["policy"],
+        )
         params = data.get("params", {})
 
-        _assert_valid_routing_strategy_config(strategy, key, params)
+        _assert_valid_routing_strategy_config(strategy_name, key, params)
         assert isinstance(policy_name, str), "Invalid policy name"
-        strategy = BaseRoutingStrategy.get_from_name(strategy)()
+        strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
         assert strategy is not None, "Strategy not found"
         policies = (
             strategy.get_allocation_policies()
@@ -1148,7 +1152,7 @@ def set_allocation_policy_config_for_strategy() -> Response:
             user or "",
             AuditLogAction.ALLOCATION_POLICY_DELETE,
             {
-                "strategy": strategy,
+                "strategy": strategy_name,
                 "policy": policy.config_key(),
                 "key": key,
             },
@@ -1166,7 +1170,7 @@ def set_allocation_policy_config_for_strategy() -> Response:
                 user or "",
                 AuditLogAction.ALLOCATION_POLICY_UPDATE,
                 {
-                    "strategy": strategy,
+                    "strategy": strategy_name,
                     "policy": policy.config_key(),
                     "key": key,
                     "value": value,

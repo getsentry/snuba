@@ -235,7 +235,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
             )
         return False
 
-    def get_allocation_policies(cls) -> list[AllocationPolicy]:
+    def get_allocation_policies(self) -> list[AllocationPolicy]:
         return [
             ConcurrentRateLimitAllocationPolicy(
                 storage_key=StorageKey("eap_items"),
@@ -254,7 +254,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
             ),
         ]
 
-    def get_delete_allocation_policies(cls) -> list[AllocationPolicy]:
+    def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
         return []
 
     def merge_clickhouse_settings(
