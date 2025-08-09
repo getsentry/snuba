@@ -3,13 +3,9 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
+from snuba.configs.configuration import Configuration, InvalidConfig
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.allocation_policies import (
-    AllocationPolicyConfig,
-    InvalidPolicyConfig,
-    QueryResultOrError,
-    QuotaAllowance,
-)
+from snuba.query.allocation_policies import QueryResultOrError, QuotaAllowance
 from snuba.query.allocation_policies.concurrent_rate_limit import (
     BaseConcurrentRateLimitAllocationPolicy,
 )
@@ -76,21 +72,21 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         ):
             referrer = params.get("referrer", None)
             if referrer is not None and not self._referrer_is_registered(referrer):
-                raise InvalidPolicyConfig(
+                raise InvalidConfig(
                     f"Referrer {referrer} is not registered in the the {self._storage_key.value} yaml. Register it first to be able to override its limits"
                 )
         super().set_config_value(config_key, value, params, user)
 
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         return super()._additional_config_definitions() + [
-            AllocationPolicyConfig(
+            Configuration(
                 name="referrer_concurrent_override",
                 description="""override the concurrent limit for a referrer""",
                 value_type=int,
                 param_types={"referrer": str},
                 default=-1,
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 name="referrer_max_threads_override",
                 description="""override the max_threads for a referrer, applies to every query made by that referrer""",
                 param_types={"referrer": str},

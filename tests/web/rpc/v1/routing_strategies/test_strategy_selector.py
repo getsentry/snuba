@@ -6,6 +6,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 
 from snuba import state
+from snuba.configs.configuration import Configuration
 from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
@@ -23,15 +24,18 @@ from snuba.web.rpc.storage_routing.routing_strategy_selector import (
 
 
 class ToyRoutingStrategy1(BaseRoutingStrategy):
-    pass
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
 
 
 class ToyRoutingStrategy2(BaseRoutingStrategy):
-    pass
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
 
 
 class ToyRoutingStrategy3(BaseRoutingStrategy):
-    pass
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
 
 
 @pytest.mark.redis_db
@@ -80,6 +84,7 @@ def test_valid_config_is_parsed_correctly() -> None:
     storage_routing_config = RoutingStrategySelector().get_storage_routing_config(
         TimeSeriesRequest(meta=RequestMeta(organization_id=1))
     )
+
     assert storage_routing_config.version == 1
     assert storage_routing_config.get_routing_strategy_and_percentage_routed() == [
         ("OutcomesBasedRoutingStrategy", 0.1),

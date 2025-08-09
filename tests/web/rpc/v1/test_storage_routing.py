@@ -11,6 +11,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba import state
+from snuba.configs.configuration import Configuration
 from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
@@ -59,6 +60,9 @@ def get_query_result(elapsed_ms: int = 1000) -> QueryResult:
 
 
 class RoutingStrategyFailsToSelectTier(BaseRoutingStrategy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
+
     def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
         raise Exception
 
@@ -67,6 +71,9 @@ class RoutingStrategyFailsToSelectTier(BaseRoutingStrategy):
 
 
 class RoutingStrategySelectsTier8(BaseRoutingStrategy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
+
     def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
         return RoutingDecision(
             routing_context=routing_context,
@@ -81,6 +88,9 @@ class RoutingStrategySelectsTier8(BaseRoutingStrategy):
 
 
 class RoutingStrategyUpdatesQuerySettings(BaseRoutingStrategy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
+
     def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
         return RoutingDecision(
             routing_context=routing_context,
@@ -95,6 +105,9 @@ class RoutingStrategyUpdatesQuerySettings(BaseRoutingStrategy):
 
 
 class RoutingStrategyBadMetrics(BaseRoutingStrategy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
+
     def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
         return RoutingDecision(
             routing_context=routing_context,
@@ -110,6 +123,9 @@ class RoutingStrategyBadMetrics(BaseRoutingStrategy):
 
 
 class RoutingStrategyQueryFails(BaseRoutingStrategy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
+
     def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
         return RoutingDecision(
             routing_context=routing_context,

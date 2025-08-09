@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from abc import ABC
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Type, TypeAlias, Union, cast, final
 
@@ -15,6 +16,12 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableR
 from sentry_protos.snuba.v1.request_common_pb2 import ResponseMeta
 
 from snuba import environment, settings, state
+from snuba.configs.configuration import (
+    ConfigurableComponent,
+    Configuration,
+    ResourceIdentifier,
+)
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
@@ -31,7 +38,7 @@ DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX = "StorageRouting"
 MetricsBackendType: TypeAlias = Callable[
     [str, Union[int, float], Optional[Dict[str, str]], Optional[str]], None
 ]
-
+CBRS_HASH = "cbrs"
 RoutedRequestType = Union[TimeSeriesRequest, TraceItemTableRequest]
 ClickhouseQuerySettings = Dict[str, Any]
 
@@ -111,9 +118,11 @@ def _construct_hacky_querylog_payload(
         "request": {
             "id": uuid.uuid4().hex,
             "app_id": "storage_routing",
-            "body": MessageToDict(routing_decision.routing_context.in_msg)
-            if routing_decision.routing_context.in_msg
-            else {},
+            "body": (
+                MessageToDict(routing_decision.routing_context.in_msg)
+                if routing_decision.routing_context.in_msg
+                else {}
+            ),
             "referrer": strategy.__class__.__name__,
         },
         "dataset": "storage_routing",
@@ -157,7 +166,43 @@ def _construct_hacky_querylog_payload(
     }
 
 
-class BaseRoutingStrategy(metaclass=RegisteredClass):
+@dataclass()
+class RoutingStrategyConfig(Configuration):
+    pass
+
+
+class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
+    def __init__(self, default_config_overrides: dict[str, Any] = {}) -> None:
+        self._default_config_definitions = [
+            RoutingStrategyConfig(
+                name="some_default_config",
+                description="Placeholder for now",
+                value_type=int,
+                default=100,
+            ),
+        ]
+        self._overridden_additional_config_definitions = (
+            self._get_overridden_additional_config_defaults(default_config_overrides)
+        )
+
+    def component_namespace(self) -> str:
+        return "RoutingStrategy"
+
+    def _get_hash(self) -> str:
+        return CBRS_HASH
+
+    def _get_default_config_definitions(self) -> list[Configuration]:
+        return cast(list[Configuration], self._default_config_definitions)
+
+    def additional_config_definitions(self) -> list[Configuration]:
+        return self._overridden_additional_config_definitions
+
+    @property
+    def resource_identifier(self) -> ResourceIdentifier:
+        return ResourceIdentifier(
+            StorageKey.EAP_ITEMS,
+        )
+
     @classmethod
     def config_key(cls) -> str:
         return cls.__name__
@@ -225,7 +270,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             OutcomesBasedRoutingStrategy,
         )
 
-        with sentry_sdk.start_span(op="decide_tier"):
+        with sentry_sdk.start_span(op="decide_tier") as span:
             try:
                 routing_context.timer.mark(_START_ESTIMATION_MARK)
                 routing_decision = self._get_routing_decision(routing_context)
@@ -252,7 +297,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
                 if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
                     raise e
-
+            span.set_data("decided_tier", routing_decision.tier)
             return routing_decision
 
     @final
