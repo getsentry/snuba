@@ -1140,6 +1140,16 @@ def set_allocation_policy_config_for_strategy() -> Response:
         assert policy is not None, "Policy not found on strategy"
 
     except (KeyError, AssertionError) as exc:
+        if "Policy not found" in str(exc):
+            return Response(
+                json.dumps(
+                    {
+                        "error": f"Policy {policy_name} not found on strategy {strategy_name}"
+                    }
+                ),
+                404,
+                {"Content-Type": "application/json"},
+            )
         return Response(
             json.dumps({"error": f"Invalid config: {str(exc)}"}),
             400,
@@ -1221,6 +1231,14 @@ def set_allocation_policy_config() -> Response:
         assert policy is not None, "Policy not found on storage"
 
     except (KeyError, AssertionError) as exc:
+        if "Policy not found" in str(exc):
+            return Response(
+                json.dumps(
+                    {"error": f"Policy {policy_name} not found on storage {storage}"}
+                ),
+                404,
+                {"Content-Type": "application/json"},
+            )
         return Response(
             json.dumps({"error": f"Invalid config: {str(exc)}"}),
             400,
