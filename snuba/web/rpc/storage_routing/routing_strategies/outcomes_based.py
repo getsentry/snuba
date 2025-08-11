@@ -170,12 +170,14 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                     else "normal"
                 ),
             )
-        if (
-            self._is_highest_accuracy_mode(in_msg_meta)
-            or in_msg_meta.trace_item_type not in _ITEM_TYPE_TO_OUTCOME
+        if self._is_highest_accuracy_mode(in_msg_meta) or (
+            # unspecified item type will be assumed as spans when querying
+            # for GetTraces, there is no type specified so we assume spans because
+            # that is necessary for traces anyways
+            # if the type is specified and we don't know its outcome, route to Tier_1
+            in_msg_meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+            and in_msg_meta.trace_item_type not in _ITEM_TYPE_TO_OUTCOME
         ):
-            if span:
-                span.set_data("tier", routing_decision.tier.name)
             return routing_decision
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
         start_ts = in_msg_meta.start_timestamp.seconds
