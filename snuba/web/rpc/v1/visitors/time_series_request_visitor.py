@@ -147,12 +147,15 @@ class GetSubformulaLabelsVisitor(RequestVisitor):
     """
 
     def __init__(self) -> None:
-        self.labels: list[str] = []
+        self.labels: dict[str, list[str]] = {}
+        self.curr_formula: str = ""
         super().__init__()
 
     def visit_TimeSeriesRequest(self, node: TimeSeriesRequest) -> None:
         for expr in node.expressions:
             if expr.WhichOneof("expression") == "formula":
+                self.curr_formula = expr.label
+                self.labels[self.curr_formula] = []
                 self.visit(expr.formula, expr.label)
 
     def visit_BinaryFormula(
@@ -169,12 +172,12 @@ class GetSubformulaLabelsVisitor(RequestVisitor):
     def visit_AttributeAggregation(
         self, node: AttributeAggregation, curr_label: str = ""
     ) -> None:
-        self.labels.append(curr_label)
+        self.labels[self.curr_formula].append(curr_label)
 
     def visit_AttributeConditionalAggregation(
         self, node: AttributeConditionalAggregation, curr_label: str = ""
     ) -> None:
-        self.labels.append(curr_label)
+        self.labels[self.curr_formula].append(curr_label)
 
     def visit_Literal(self, node: Literal, curr_label: str = "") -> None:
         return
