@@ -157,6 +157,8 @@ class GetSubformulaLabelsVisitor(RequestVisitor):
                 self.curr_formula = expr.label
                 self.labels[self.curr_formula] = []
                 self.visit(expr.formula, expr.label)
+                if self.labels[self.curr_formula] == []:
+                    del self.labels[self.curr_formula]
 
     def visit_BinaryFormula(
         self, node: Expression.BinaryFormula, curr_label: str = ""
