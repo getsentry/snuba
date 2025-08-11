@@ -34,7 +34,9 @@ class FormulaReliabilityCalculator:
                         curr_row_reliabilities[formula] = context.reliability
                     else:
                         curr_row_reliabilities[formula] = min(
-                            context.reliability, curr_row_reliabilities[formula]
+                            context.reliability,
+                            curr_row_reliabilities[formula],
+                            key=reliability_priority,
                         )
                 if formula not in self.reliabilities:
                     self.reliabilities[formula] = []
@@ -48,3 +50,12 @@ class FormulaReliabilityCalculator:
 
     def __contains__(self, value: str) -> bool:
         return value in self.keys_cache
+
+
+def reliability_priority(reliablity: Reliability.ValueType) -> int:
+    priority_map = {
+        Reliability.RELIABILITY_HIGH: 2,
+        Reliability.RELIABILITY_LOW: 1,
+        Reliability.RELIABILITY_UNSPECIFIED: 0,
+    }
+    return priority_map[reliablity]

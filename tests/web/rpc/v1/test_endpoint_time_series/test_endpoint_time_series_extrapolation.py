@@ -732,15 +732,95 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             ),
         ]
 
-    def test_formula_reliability(self) -> None:
+    def test_formula_reliability_basic(self) -> None:
         set_config("enable_formula_reliability", True)
         """
-        this tests that formula reliability works in the following cases:
-        * a simple formula that adds two reliable aggregates returns reliable
-        * a simple formula that adds a reliable and an unreliable aggregate returns unreliable
-        * a nested formula that adds two reliable aggregatesand an unreliable aggregate returns unreliable
+        this tests a simple formula that adds two reliable aggregates is reliable
         """
+        # store metrics every 10 seconds for 10 minutes
+        granularity_secs = 120
+        query_duration = 600  # Reduced from 3600 to 600 seconds (10 minutes)
+        sample_rate1 = 0.5
+        sample_rate2 = 0.01
+        metric_value1 = 10
+        metric_value2 = 1
+        interval_secs = 10
+        store_timeseries(
+            BASE_TIME,
+            interval_secs,  # Reduced from 1 to 10 second intervals
+            600,  # Reduced duration
+            metrics=[DummyMetric("my_test_metric1", get_value=lambda x: metric_value1)],
+            server_sample_rate=lambda s: sample_rate1,
+        )
+        store_timeseries(
+            BASE_TIME,
+            interval_secs,  # Reduced from 1 to 10 second intervals
+            600,  # Reduced duration
+            metrics=[DummyMetric("my_test_metric2", get_value=lambda x: metric_value2)],
+            server_sample_rate=lambda s: sample_rate2,
+        )
+        expr1 = Expression(
+            aggregation=AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my_test_metric1"),
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ),
+            label="expr1",
+        )
+        # high reliable + high reliable = high reliable
+        form2 = Expression(
+            formula=Expression.BinaryFormula(
+                op=Expression.BinaryFormula.OP_ADD,
+                left=expr1,
+                right=expr1,
+            ),
+            label="form2",
+        )
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[form2],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        expected_expr1 = (
+            granularity_secs // interval_secs * metric_value1
+        ) / sample_rate1
+        expected_form2 = expected_expr1 + expected_expr1
+        expected = [
+            TimeSeries(
+                label="form2",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(
+                        data=expected_form2,
+                        data_present=True,
+                        reliability=Reliability.RELIABILITY_HIGH,
+                    )
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
+        assert response.result_timeseries == expected
 
+    def test_formula_reliability_unreliable(self) -> None:
+        set_config("enable_formula_reliability", True)
+        """
+        this tests a simple formula that adds a reliable and an unreliable aggregate returns unreliable
+        """
         # store metrics every 10 seconds for 10 minutes
         granularity_secs = 120
         query_duration = 600  # Reduced from 3600 to 600 seconds (10 minutes)
@@ -788,16 +868,95 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             ),
             label="myform",
         )
-        # high reliable + high reliable = high reliable
-        form2 = Expression(
-            formula=Expression.BinaryFormula(
-                op=Expression.BinaryFormula.OP_ADD,
-                left=expr1,
-                right=expr1,
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
-            label="form2",
+            expressions=[myform],
+            granularity_secs=granularity_secs,
         )
 
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        expected_expr1 = (
+            granularity_secs // interval_secs * metric_value1
+        ) / sample_rate1
+
+        expected_expr2 = (
+            granularity_secs // interval_secs * metric_value2
+        ) / sample_rate2
+        expected_form1 = expected_expr1 + expected_expr2
+        actual = sorted(response.result_timeseries, key=lambda x: x.label)
+        expected = [
+            TimeSeries(
+                label="myform",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(
+                        data=expected_form1,
+                        data_present=True,
+                        reliability=Reliability.RELIABILITY_LOW,
+                    )
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
+        assert actual == expected
+
+    def test_formula_reliability_nested(self) -> None:
+        set_config("enable_formula_reliability", True)
+        """
+        this tests that a nested formula that adds two reliable aggregates and an unreliable aggregate returns unreliable
+        """
+        # store metrics every 10 seconds for 10 minutes
+        granularity_secs = 120
+        query_duration = 600  # Reduced from 3600 to 600 seconds (10 minutes)
+        sample_rate1 = 0.5
+        sample_rate2 = 0.01
+        metric_value1 = 10
+        metric_value2 = 1
+        interval_secs = 10
+        store_timeseries(
+            BASE_TIME,
+            interval_secs,  # Reduced from 1 to 10 second intervals
+            600,  # Reduced duration
+            metrics=[DummyMetric("my_test_metric1", get_value=lambda x: metric_value1)],
+            server_sample_rate=lambda s: sample_rate1,
+        )
+        store_timeseries(
+            BASE_TIME,
+            interval_secs,  # Reduced from 1 to 10 second intervals
+            600,  # Reduced duration
+            metrics=[DummyMetric("my_test_metric2", get_value=lambda x: metric_value2)],
+            server_sample_rate=lambda s: sample_rate2,
+        )
+        expr1 = Expression(
+            aggregation=AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my_test_metric1"),
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ),
+            label="expr1",
+        )
+        expr2 = Expression(
+            aggregation=AttributeAggregation(
+                aggregate=Function.FUNCTION_SUM,
+                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my_test_metric2"),
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ),
+            label="expr2",
+        )
         # still works w nested formulas
         form3 = Expression(
             formula=Expression.BinaryFormula(
@@ -825,10 +984,9 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 ),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
-            expressions=[myform, form2, form3],
+            expressions=[form3],
             granularity_secs=granularity_secs,
         )
-
         response = EndpointTimeSeries().execute(message)
         expected_buckets = [
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
@@ -841,42 +999,15 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         expected_expr2 = (
             granularity_secs // interval_secs * metric_value2
         ) / sample_rate2
-
-        expected_form1 = expected_expr1 + expected_expr2
-        expected_form2 = expected_expr1 + expected_expr1
         expected_form3 = expected_expr1 + expected_expr1 + expected_expr2
         actual = sorted(response.result_timeseries, key=lambda x: x.label)
         expected = [
-            TimeSeries(
-                label="form2",
-                buckets=expected_buckets,
-                data_points=[
-                    DataPoint(
-                        data=expected_form2,
-                        data_present=True,
-                        reliability=Reliability.RELIABILITY_HIGH,
-                    )
-                    for _ in range(len(expected_buckets))
-                ],
-            ),
             TimeSeries(
                 label="form3",
                 buckets=expected_buckets,
                 data_points=[
                     DataPoint(
                         data=expected_form3,
-                        data_present=True,
-                        reliability=Reliability.RELIABILITY_LOW,
-                    )
-                    for _ in range(len(expected_buckets))
-                ],
-            ),
-            TimeSeries(
-                label="myform",
-                buckets=expected_buckets,
-                data_points=[
-                    DataPoint(
-                        data=expected_form1,
                         data_present=True,
                         reliability=Reliability.RELIABILITY_LOW,
                     )
