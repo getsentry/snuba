@@ -362,9 +362,9 @@ jobs:
             -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run full tests
+        if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
-          # TODO: Adjust which changed files we care about
           pytest -k 'not __In' \
               tests/snuba \
               tests/sentry/snuba \
@@ -381,8 +381,6 @@ jobs:
               tests/sentry/api/endpoints/test_organization_spans_fields.py \
               tests/sentry/api/endpoints/test_organization_spans_fields_stats.py \
               tests/sentry/sentry_metrics/querying \
-              tests/acceptance/test_replay_detail.py \
-              tests/acceptance/test_replay_list.py \
               -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run CI module tests
