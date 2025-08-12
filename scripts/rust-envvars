@@ -5,4 +5,5 @@ export SNUBA_TEST_PYTHONPATH="$(python -c 'import sys; print(":".join(sys.path))
 export SNUBA_TEST_PYTHONEXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
 
 # load cargo envvars explicitly in case user forgot
+touch "${CARGO_HOME:-$HOME/.cargo}/env"
 . "${CARGO_HOME:-$HOME/.cargo}/env"

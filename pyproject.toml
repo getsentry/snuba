@@ -44,21 +44,8 @@ dependencies = [
     "werkzeug>=3.0.6",
 ]
 
-[project.optional-dependencies]
-# not an optional dependency, but it's kept to an extra
-# for better docker layers
-rust = [
-    "rust-snuba",
-]
-
 [tool.uv]
 environments = ["sys_platform == 'darwin' or sys_platform == 'linux'"]
-
-[tool.uv.sources]
-rust-snuba = { workspace = true }
-
-[tool.uv.workspace]
-members = ["rust_snuba"]
 
 [[tool.uv.index]]
 # We don't allow using public pypi - submit a PR to

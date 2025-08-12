@@ -94,7 +94,8 @@ COPY ./scripts/rust-dummy-build.sh ./scripts/rust-dummy-build.sh
 RUN set -ex; \
     sh scripts/rust-dummy-build.sh; \
     cd ./rust_snuba/; \
-    rustup show active-toolchain || rustup toolchain install;
+    rustup show active-toolchain || rustup toolchain install; \
+    uv tool install 'maturin==1.4.0'
 
 FROM build_rust_snuba_deps AS build_rust_snuba
 COPY ./rust_snuba/ ./rust_snuba/
@@ -102,7 +103,6 @@ COPY --from=build_rust_snuba_deps /usr/src/snuba/rust_snuba/target/ ./rust_snuba
 COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
     cd ./rust_snuba/; \
-    uv tool install 'maturin==1.4.0'; \
     uvx maturin build --release --compatibility linux --locked
 
 # Install nodejs and yarn and build the admin UI
