@@ -45,12 +45,12 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
-      - name: Setup pre-commit
-        run: make setup-git
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          make install-python-dependencies
+          python -m pip install -r requirements-test.txt
+      - name: Setup pre-commit
+        run: make setup-git
       - uses: getsentry/paths-filter@v2
         id: files
         with:
