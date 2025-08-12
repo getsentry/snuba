@@ -1,0 +1,52 @@
+name: ddl-changes
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+
+jobs:
+  post_changes:
+    name: Post new DDL changes from migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        name: Checkout master for diffing
+        with:
+          ref: master
+          fetch-depth: 200
+      - uses: actions/checkout@v4
+        name: Checkout HEAD of code that may have migration changes
+        with:
+          clean: false
+          fetch-depth: 200
+
+      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+        with:
+          version: '0.8.2'
+          # we just cache the venv-dir directly in action-setup-venv
+          enable-cache: false
+
+      - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
+        with:
+          python-version: 3.11.11
+          cache-dependency-path: uv.lock
+          install-cmd: uv sync --frozen --active
+
+      - name: Run the migration script
+        run: |
+          SNUBA_SETTINGS=test_distributed python scripts/ddl-changes.py
+      - name: Generate SQL for migration
+        uses: getsentry/action-migrations@v1.2.2
+        env:
+          SNUBA_SETTINGS: test_distributed
+        with:
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          migration: "./snuba/migrations/groups.py"
+          cmd: python scripts/ddl-changes.py
+
+      - name: Check migrations are not coupled with other changes
+        run: |
+          # Check that the migration is not coupled with other changes
+          # If the label skip-check-migrations is present, the check is skipped
+          SNUBA_SETTINGS=test_distributed python scripts/check-migrations.py --labels ${{join(github.event.pull_request.labels.*.name, '')}}
