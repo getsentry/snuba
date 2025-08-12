@@ -25,6 +25,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
+from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -90,6 +91,7 @@ _ADDITIONAL_SPANS = [
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
+    state.set_config("enable_trace_sampling", True)
 
     write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
     write_raw_unprocessed_events(items_storage, _ADDITIONAL_SPANS)  # type: ignore

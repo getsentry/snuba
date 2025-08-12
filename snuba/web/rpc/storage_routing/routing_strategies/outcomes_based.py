@@ -9,6 +9,7 @@ from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Expression
+from snuba.configs.configuration import Configuration
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
@@ -63,6 +64,16 @@ def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
 
 
 class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return [
+            Configuration(
+                name="some_additional_config",
+                description="Placeholder for now",
+                value_type=int,
+                default=50,
+            ),
+        ]
+
     def get_ingested_items_for_timerange(self, routing_context: RoutingContext) -> int:
         in_msg_meta = extract_message_meta(routing_context.in_msg)
         entity = Entity(
@@ -153,9 +164,11 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         if span:
             span.set_data(
                 "downsampling_mode",
-                "highest_accuracy"
-                if self._is_highest_accuracy_mode(in_msg_meta)
-                else "normal",
+                (
+                    "highest_accuracy"
+                    if self._is_highest_accuracy_mode(in_msg_meta)
+                    else "normal"
+                ),
             )
         if (
             self._is_highest_accuracy_mode(in_msg_meta)
