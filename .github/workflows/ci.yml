@@ -442,4 +442,4 @@ jobs:
     - uses: getsentry/action-validate-devservices-config@02a078d1280293e6598cabfbd318a01609c12c83
       name: Validate devservices config
       with:
-        requirements-file-path: requirements.txt
+        requirements-file-path: requirements-test.txt
