@@ -1032,13 +1032,13 @@ source = { editable = "rust_snuba" }
 
 [[package]]
 name = "sentry-arroyo"
-version = "2.27.0"
+version = "2.29.1"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "confluent-kafka", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_arroyo-2.27.0-py3-none-any.whl", hash = "sha256:eee650daa7e9a9ed4ceaea23ca78e943314d898173f01f2d7e9fd1984cbb6fa4" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_arroyo-2.29.1-py3-none-any.whl", hash = "sha256:028ce5118ee9b1e1fae6fc617c0230a531502c27767b76f162190f2d08e048c0" },
 ]
 
 [[package]]
@@ -1055,7 +1055,7 @@ wheels = [
 
 [[package]]
 name = "sentry-kafka-schemas"
-version = "1.3.7"
+version = "2.0.2"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "fastjsonschema", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1066,12 +1066,12 @@ dependencies = [
     { name = "typing-extensions", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_kafka_schemas-1.3.7-py2.py3-none-any.whl", hash = "sha256:0bdb7d6efad95a0dc7ca52c69a7f57383765e76ceed009082402d81429a900f6" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_kafka_schemas-2.0.2-py2.py3-none-any.whl", hash = "sha256:560fd499277c0be0c1514150f74878706188025a607dcdbd31c545057e242789" },
 ]
 
 [[package]]
 name = "sentry-protos"
-version = "0.3.0"
+version = "0.3.3"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "grpc-stubs", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1079,7 +1079,7 @@ dependencies = [
     { name = "protobuf", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_protos-0.3.0-py3-none-any.whl", hash = "sha256:e1d78b78a83d5632c50a084713b97f3ab5d785c62d57f75d766c39792e80429f" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_protos-0.3.3-py3-none-any.whl", hash = "sha256:66ea80c9b5c839906c237ceee966e474cad3adc1aed8101dad40e7f120440968" },
 ]
 
 [[package]]
@@ -1109,14 +1109,14 @@ wheels = [
 
 [[package]]
 name = "sentry-sdk"
-version = "2.18.0"
+version = "2.33.2"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "certifi", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "urllib3", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_sdk-2.18.0-py2.py3-none-any.whl", hash = "sha256:ee70e27d1bbe4cd52a38e1bd28a5fadb9b17bc29d91b5f2b97ae29c0a7610442" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_sdk-2.33.2-py2.py3-none-any.whl", hash = "sha256:8d57a3b4861b243aa9d558fda75509ad487db14f488cbdb6c78c614979d77632" },
 ]
 
 [[package]]
@@ -1167,7 +1167,7 @@ wheels = [
 
 [[package]]
 name = "snuba"
-version = "0.0.0"
+version = "25.8.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "blinker", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1175,8 +1175,10 @@ dependencies = [
     { name = "clickhouse-driver", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "confluent-kafka", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "datadog", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "devservices", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "fastjsonschema", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "flask", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "freezegun", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "google-api-core", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "google-api-python-client", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "google-cloud-storage", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1246,8 +1248,10 @@ requires-dist = [
     { name = "clickhouse-driver", specifier = "==0.2.9" },
     { name = "confluent-kafka", specifier = "==2.7.0" },
     { name = "datadog", specifier = "==0.21.0" },
+    { name = "devservices", specifier = "==1.2.1" },
     { name = "fastjsonschema", specifier = "==2.16.2" },
     { name = "flask", specifier = "==2.2.5" },
+    { name = "freezegun", specifier = "==1.2.2" },
     { name = "google-api-core", specifier = "==2.19.1" },
     { name = "google-api-python-client", specifier = "==2.88.0" },
     { name = "google-cloud-storage", specifier = "==2.18.0" },
@@ -1265,12 +1269,12 @@ requires-dist = [
     { name = "pyyaml", specifier = "==6.0" },
     { name = "redis", specifier = "==4.5.4" },
     { name = "rust-snuba", marker = "extra == 'rust'", editable = "rust_snuba" },
-    { name = "sentry-arroyo", specifier = "==2.27.0" },
-    { name = "sentry-kafka-schemas", specifier = "==1.3.7" },
-    { name = "sentry-protos", specifier = "==0.3.0" },
+    { name = "sentry-arroyo", specifier = "==2.29.1" },
+    { name = "sentry-kafka-schemas", specifier = "==2.0.2" },
+    { name = "sentry-protos", specifier = "==0.3.3" },
     { name = "sentry-redis-tools", specifier = "==0.5.0" },
     { name = "sentry-relay", specifier = "==0.9.5" },
-    { name = "sentry-sdk", specifier = "==2.18.0" },
+    { name = "sentry-sdk", specifier = "==2.33.2" },
     { name = "sentry-usage-accountant", specifier = "==0.0.11" },
     { name = "simplejson", specifier = "==3.17.6" },
     { name = "snuba-sdk", specifier = "==3.0.39" },
