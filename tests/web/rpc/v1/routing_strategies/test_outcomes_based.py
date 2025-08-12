@@ -158,3 +158,26 @@ def test_outcomes_based_routing_highest_accuracy_mode(store_outcomes_data: Any) 
     assert routing_decision.tier == Tier.TIER_1
     assert routing_decision.clickhouse_settings == {}
     assert routing_decision.can_run
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_outcomes_based_routing_defaults_to_spans_for_unspecified_item_type(
+    store_outcomes_data: Any,
+) -> None:
+    strategy = OutcomesBasedRoutingStrategy()
+
+    request = TraceItemTableRequest(meta=_get_request_meta())
+    request.meta.trace_item_type = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+    state.set_config(
+        "OutcomesBasedRoutingStrategy.max_items_before_downsampling", 50_000
+    )
+    routing_decision = strategy.get_routing_decision(
+        RoutingContext(
+            in_msg=request,
+            timer=Timer("test"),
+        )
+    )
+    assert routing_decision.tier == Tier.TIER_512
+    assert routing_decision.clickhouse_settings == {}
+    assert routing_decision.can_run
