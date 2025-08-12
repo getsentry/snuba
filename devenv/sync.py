@@ -47,7 +47,7 @@ Then, use it to run sync:
     )
 
     print("syncing .venv ...")
-    proc.run(("uv", "sync", "--frozen", "--quiet"))
+    proc.run(("uv", "sync", "--frozen", "--quiet", "--active"))
 
     print("running make install-rs-dev...")
     os.system("make install-rs-dev")

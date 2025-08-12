@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: 3.11.11
           cache-dependency-path: uv.lock
-          install-cmd: uv sync --frozen
+          install-cmd: uv sync --frozen --active
 
       - name: Run the migration script
         run: |
