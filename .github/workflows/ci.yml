@@ -147,20 +147,13 @@ jobs:
             ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
           docker exec snuba-snuba-1 snuba migrations migrate --force
 
-      - name: Run snuba tests
-        working-directory: sentry
-        run: |
-          echo $PWD
-          ls -lah
-          ls -lah ..
-          pytest -k 'not __In' tests \
-            -m snuba_ci \
-            -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
-
       - name: Run full tests
         # TODO: Adjust which changed files we care about
         working-directory: sentry
         run: |
+          echo $PWD
+          ls -lah tests
+          ls -lah tests/sentry/eventstore/snuba
           pytest -k 'not __In' \
               tests/snuba \
               tests/sentry/snuba \
