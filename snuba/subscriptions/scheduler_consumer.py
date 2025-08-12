@@ -249,6 +249,21 @@ class SchedulerBuilder:
         assert commit_log_topic_spec is not None
         self.__commit_log_topic_spec = commit_log_topic_spec
 
+        try:
+            default_topic_spec = stream_loader.get_default_topic_spec()
+            default_topic_config = default_topic_spec.topic_current_config_values
+            assert (
+                default_topic_config["message.timestamp.type"] == "LogAppendTime"
+            ), f"{default_topic_spec.get_physical_topic_name()} topic requires LogAppendTime"
+        except AssertionError:
+            raise
+        except Exception:
+            # if we are unable to load the topic config for some reason, probably shouldn't
+            # crash the consumer
+            logger.exception(
+                f"failed to confirm LogAppendTime for {default_topic_spec.get_physical_topic_name()} topic"
+            )
+
         scheduled_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
         assert scheduled_topic_spec is not None
         self.__scheduled_topic_spec = scheduled_topic_spec

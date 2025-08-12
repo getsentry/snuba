@@ -9,6 +9,7 @@ from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Expression
+from snuba.configs.configuration import Configuration
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
@@ -63,6 +64,16 @@ def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
 
 
 class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return [
+            Configuration(
+                name="some_additional_config",
+                description="Placeholder for now",
+                value_type=int,
+                default=50,
+            ),
+        ]
+
     def get_ingested_items_for_timerange(self, routing_context: RoutingContext) -> int:
         in_msg_meta = extract_message_meta(routing_context.in_msg)
         entity = Entity(
@@ -153,16 +164,20 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         if span:
             span.set_data(
                 "downsampling_mode",
-                "highest_accuracy"
-                if self._is_highest_accuracy_mode(in_msg_meta)
-                else "normal",
+                (
+                    "highest_accuracy"
+                    if self._is_highest_accuracy_mode(in_msg_meta)
+                    else "normal"
+                ),
             )
-        if (
-            self._is_highest_accuracy_mode(in_msg_meta)
-            or in_msg_meta.trace_item_type not in _ITEM_TYPE_TO_OUTCOME
+        if self._is_highest_accuracy_mode(in_msg_meta) or (
+            # unspecified item type will be assumed as spans when querying
+            # for GetTraces, there is no type specified so we assume spans because
+            # that is necessary for traces anyways
+            # if the type is specified and we don't know its outcome, route to Tier_1
+            in_msg_meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+            and in_msg_meta.trace_item_type not in _ITEM_TYPE_TO_OUTCOME
         ):
-            if span:
-                span.set_data("tier", routing_decision.tier.name)
             return routing_decision
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
         start_ts = in_msg_meta.start_timestamp.seconds

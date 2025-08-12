@@ -77,12 +77,6 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Kafka bootstrap server to use to produce replacements.",
 )
 @click.option(
-    "--slice-id",
-    "slice_id",
-    type=int,
-    help="The slice id for the storage",
-)
-@click.option(
     "--max-batch-size",
     default=settings.DEFAULT_MAX_BATCH_SIZE,
     type=int,
@@ -171,12 +165,6 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Optional timeout for batch writer client connecting and sending request to Clickhouse",
 )
 @click.option(
-    "--custom-envoy-request-timeout",
-    type=int,
-    default=None,
-    help="Optional request timeout value for Snuba -> Envoy -> Clickhouse connection",
-)
-@click.option(
     "--quantized-rebalance-consumer-group-delay-secs",
     type=int,
     default=None,
@@ -214,7 +202,6 @@ def rust_consumer(
     bootstrap_servers: Sequence[str],
     commit_log_bootstrap_servers: Sequence[str],
     replacement_bootstrap_servers: Sequence[str],
-    slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
     log_level: str,
@@ -232,7 +219,6 @@ def rust_consumer(
     batch_write_timeout_ms: Optional[int],
     max_dlq_buffer_length: Optional[int],
     quantized_rebalance_consumer_group_delay_secs: Optional[int],
-    custom_envoy_request_timeout: Optional[int],
     join_timeout_ms: Optional[int],
     consumer_version: Optional[str],
 ) -> None:
@@ -252,10 +238,9 @@ def rust_consumer(
         max_batch_time_ms=max_batch_time_ms,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
-        slice_id=slice_id,
+        slice_id=None,
         group_instance_id=group_instance_id,
         quantized_rebalance_consumer_group_delay_secs=quantized_rebalance_consumer_group_delay_secs,
-        custom_envoy_request_timeout=custom_envoy_request_timeout,
     )
 
     consumer_config_raw = json.dumps(asdict(consumer_config))
@@ -289,7 +274,6 @@ def rust_consumer(
         stop_at_timestamp,
         batch_write_timeout_ms,
         max_dlq_buffer_length,
-        custom_envoy_request_timeout,
         join_timeout_ms,
         consumer_version,
     )
