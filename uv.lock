@@ -8,12 +8,6 @@ supported-markers = [
     "sys_platform == 'darwin' or sys_platform == 'linux'",
 ]
 
-[manifest]
-members = [
-    "rust-snuba",
-    "snuba",
-]
-
 [[package]]
 name = "async-timeout"
 version = "4.0.3"
@@ -1026,11 +1020,6 @@ wheels = [
 ]
 
 [[package]]
-name = "rust-snuba"
-version = "0.0.0"
-source = { editable = "rust_snuba" }
-
-[[package]]
 name = "sentry-arroyo"
 version = "2.29.1"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -1212,11 +1201,6 @@ dependencies = [
     { name = "werkzeug", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 
-[package.optional-dependencies]
-rust = [
-    { name = "rust-snuba", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-]
-
 [package.dev-dependencies]
 dev = [
     { name = "black", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1268,7 +1252,6 @@ requires-dist = [
     { name = "pyuwsgi", specifier = ">=2.0.23" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "redis", specifier = ">=4.5.4" },
-    { name = "rust-snuba", marker = "extra == 'rust'", editable = "rust_snuba" },
     { name = "sentry-arroyo", specifier = ">=2.29.1" },
     { name = "sentry-kafka-schemas", specifier = ">=2.0.2" },
     { name = "sentry-protos", specifier = ">=0.3.3" },
@@ -1285,7 +1268,6 @@ requires-dist = [
     { name = "urllib3", specifier = ">=2.2.3" },
     { name = "werkzeug", specifier = ">=3.0.6" },
 ]
-provides-extras = ["rust"]
 
 [package.metadata.requires-dev]
 dev = [
