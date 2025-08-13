@@ -186,7 +186,6 @@ def _convert_result_timeseries(
 
     # Go through every possible time bucket in the query, if there's row data for it, fill in its data
     # otherwise put a dummy datapoint in
-
     for bucket in time_buckets:
         for timeseries_key, timeseries in result_timeseries.items():
             row_data = result_timeseries_timestamp_to_row.get(timeseries_key, {}).get(
@@ -212,7 +211,7 @@ def _convert_result_timeseries(
                     timeseries.data_points.append(DataPoint(data=0, data_present=False))
 
     if get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
-        frc = FormulaReliabilityCalculator(request, data)
+        frc = FormulaReliabilityCalculator(request, data, time_buckets)
         for timeseries in result_timeseries.values():
             if timeseries.label in frc:
                 reliabilities = frc.get(timeseries.label)
