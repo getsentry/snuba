@@ -372,6 +372,7 @@ jobs:
               tests/sentry/eventstream/kafka \
               tests/sentry/post_process_forwarder \
               tests/sentry/search/events \
+              tests/sentry/services/eventstore/snuba \
               tests/sentry/event_manager \
               tests/sentry/api/endpoints/test_organization_profiling_functions.py \
               tests/sentry/integrations/slack/test_unfurl.py \
