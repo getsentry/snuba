@@ -29,6 +29,9 @@ class FormulaReliabilityCalculator:
         children = vis.labels
         # stores the keys of formulas that will have the reliability calculated
         self.keys_cache = set(children.keys())
+        if len(self.keys_cache) == 0:
+            # theres no formulas to calculate reliability for
+            return
         # a list of reliability contexts for each time bucket
         self.contexts: list[FormulaReliabilityContext | None] = []
 
