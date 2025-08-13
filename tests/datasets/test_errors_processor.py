@@ -49,6 +49,9 @@ class ErrorEvent:
             "retention_days": 58,
             "event_id": self.event_id,
             "group_id": self.group_id,
+            "group_first_seen": (self.timestamp - timedelta(days=2)).strftime(
+                PAYLOAD_DATETIME_FORMAT
+            ),
             "project_id": self.project_id,
             "platform": self.platform,
             "message": "",
@@ -348,6 +351,9 @@ class ErrorEvent:
             "retention_days": 90,
             "deleted": 0,
             "group_id": self.group_id,
+            "group_first_seen": int(
+                (self.timestamp - timedelta(days=2)).timestamp() * 1000
+            ),
             "primary_hash": "04233d08-ac90-cf6f-c015-b1be5932e7e2",
             "received": int(
                 self.received_timestamp.replace(tzinfo=timezone.utc)
