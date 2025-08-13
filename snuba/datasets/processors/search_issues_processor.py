@@ -90,6 +90,7 @@ class SearchIssueEvent(TypedDict, total=False):
     project_id: int
     event_id: str
     group_id: int
+    group_first_seen: str
     platform: str
     primary_hash: str
     message: str
@@ -267,6 +268,14 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
                 )
             client_timestamp = _client_timestamp
 
+        group_first_seen = None
+        if "group_first_seen" in event:
+            group_first_seen = _ensure_valid_date(
+                datetime.strptime(
+                    event["group_first_seen"], settings.PAYLOAD_DATETIME_FORMAT
+                )
+            )
+
         fingerprints = event_occurrence_data["fingerprint"]
         fingerprints = fingerprints[: self.FINGERPRINTS_HARD_LIMIT_SIZE - 1]
 
@@ -310,6 +319,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         return [
             {
                 "group_id": event["group_id"],
+                "group_first_seen": group_first_seen,
                 **fields,
                 "message_timestamp": metadata.timestamp,
                 "retention_days": retention_days,
