@@ -36,7 +36,7 @@ def build_blocks(
 def build_routing_strategy_changed_text(
     data: Any, action: AuditLogAction
 ) -> Optional[str]:
-    base = f"*Routing strategy {data['strategy']} changed:*"
+    base = f"*Routing strategy {data['strategy']} configuration changed:*"
     if action == AuditLogAction.ROUTING_STRATEGY_DELETE:
         removed = f"~```{data['key']}({data.get('params', {})})```~"
         return f"{base} :put_litter_in_its_place:\n\n{removed}"

@@ -1038,13 +1038,18 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
-def _assert_valid_routing_strategy_config(
-    strategy: str, key: str, params: dict[str, Any]
+def _assert_valid_payload(
+    strategy_or_storage: str,
+    key: str,
+    params: dict[str, Any],
+    policy: Optional[str] = None,
 ) -> None:
-    assert isinstance(strategy, str), "Invalid strategy"
+    assert isinstance(strategy_or_storage, str), "Invalid strategy or storage"
     assert isinstance(key, str), "Invalid key"
     assert isinstance(params, dict), "Invalid params"
     assert key != "", "Key cannot be empty string"
+    if policy:
+        assert isinstance(policy, str), "Invalid policy"
 
 
 @application.route("/routing_strategy_config", methods=["POST", "DELETE"])
@@ -1056,11 +1061,8 @@ def set_routing_strategy_config() -> Response:
     try:
         strategy_name, key = (data["strategy"], data["key"])
         params = data.get("params", {})
-
-        _assert_valid_routing_strategy_config(strategy_name, key, params)
-
+        _assert_valid_payload(strategy_name, key, params)
         strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
-        assert strategy is not None, "Strategy not found"
 
     except (KeyError, AssertionError) as exc:
         return Response(
@@ -1125,10 +1127,8 @@ def set_allocation_policy_config_for_strategy() -> Response:
         )
         params = data.get("params", {})
 
-        _assert_valid_routing_strategy_config(strategy_name, key, params)
-        assert isinstance(policy_name, str), "Invalid policy name"
+        _assert_valid_payload(strategy_name, key, params, policy_name)
         strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
-        assert strategy is not None, "Strategy not found"
         policies = (
             strategy.get_allocation_policies()
             + strategy.get_delete_allocation_policies()
@@ -1214,11 +1214,7 @@ def set_allocation_policy_config() -> Response:
 
         params = data.get("params", {})
 
-        assert isinstance(storage, str), "Invalid storage"
-        assert isinstance(key, str), "Invalid key"
-        assert isinstance(params, dict), "Invalid params"
-        assert key != "", "Key cannot be empty string"
-        assert isinstance(policy_name, str), "Invalid policy name"
+        _assert_valid_payload(storage, key, params, policy_name)
 
         policies = (
             get_storage(StorageKey(storage)).get_allocation_policies()
