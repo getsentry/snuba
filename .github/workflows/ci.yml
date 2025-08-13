@@ -362,7 +362,6 @@ jobs:
             -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run full tests
-        # TODO: Adjust which changed files we care about
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
@@ -399,8 +398,8 @@ jobs:
       matrix:
         version:
           [
-            "24.3.5.47.altinitystable",
             "24.8.11.51285.altinitystable",
+            "25.3.6.10034.altinitystable",
           ]
 
     steps:
