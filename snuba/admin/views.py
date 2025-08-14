@@ -995,31 +995,27 @@ def add_policy_data(
         )
 
 
-@application.route(
-    "/allocation_policy_configs/strategy/<path:strategy_name>", methods=["GET"]
-)
+@application.route("/routing_strategy_configs/<path:strategy_name>", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
-def get_allocation_policy_configs_of_routing_strategy(strategy_name: str) -> Response:
-
-    policies = BaseRoutingStrategy.get_from_name(
-        strategy_name
-    )().get_allocation_policies()
-    delete_policies = BaseRoutingStrategy.get_from_name(
-        strategy_name
-    )().get_delete_allocation_policies()
-
+def get_routing_strategy_configs(strategy_name: str) -> Response:
     data: list[dict[str, Any]] = []
+
+    strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
+    data.append(
+        {
+            "strategy_name": strategy_name,
+            "configs": strategy.get_current_configs(),
+            "optional_config_definitions": strategy.get_optional_config_definitions_json(),
+        }
+    )
+
+    policies = strategy.get_allocation_policies()
+    delete_policies = strategy.get_delete_allocation_policies()
+
     add_policy_data(policies, "select", data)
     add_policy_data(delete_policies, "delete", data)
 
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
-
-
-@application.route("/routing_strategy_configs/<path:strategy_name>", methods=["GET"])
-@check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
-def get_routing_strategy_configs(strategy_name: str) -> Response:
-    configs = BaseRoutingStrategy.get_from_name(strategy_name)().get_current_configs()
-    return Response(json.dumps(configs), 200, {"Content-Type": "application/json"})
 
 
 @application.route("/allocation_policy_configs/<path:storage_key>", methods=["GET"])

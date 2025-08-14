@@ -27,7 +27,6 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.web.rpc import RPCEndpoint
-
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
 )
@@ -509,10 +508,11 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     assert response.json is not None
 
-    # Should return the default configs from BaseRoutingStrategy plus our additional one
     configs = response.json
-    assert len(configs) == 2  # 1 default + 1 additional
+    assert len(configs) == 3
 
+    assert configs[0]["strategy_name"] == "fake_routing_strategy"
+    assert len(configs[0]["configs"]) == 2
     assert {
         "name": "some_default_config",
         "type": "int",
@@ -520,7 +520,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "description": "Placeholder for now",
         "value": 100,
         "params": {},
-    } in configs
+    } in configs[0]["configs"]
     assert {
         "name": "fake_strategy_config",
         "type": "int",
@@ -528,7 +528,112 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "description": "A fake config for testing",
         "value": 50,
         "params": {},
-    } in configs
+    } in configs[0]["configs"]
+    assert configs[0]["optional_config_definitions"] == []
+
+    assert configs[1]["policy_name"] == "FakePolicy"
+    assert len(configs[1]["configs"]) == 5
+    assert {
+        "name": "fake_optional_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "value": 15,
+        "params": {"org_id": 15},
+    } in configs[1]["configs"]
+    assert {
+        "name": "fake_optional_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "value": 20,
+        "params": {"org_id": 20},
+    } in configs[1]["configs"]
+    assert {
+        "name": "is_enforced",
+        "type": "int",
+        "default": 1,
+        "description": "Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
+        "value": 1,
+        "params": {},
+    } in configs[1]["configs"]
+    assert {
+        "name": "is_active",
+        "type": "int",
+        "default": 1,
+        "description": "Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
+        "value": 1,
+        "params": {},
+    } in configs[1]["configs"]
+    assert {
+        "name": "max_threads",
+        "type": "int",
+        "default": 10,
+        "description": "The max threads Clickhouse can use for the query.",
+        "value": 10,
+        "params": {},
+    } in configs[1]["configs"]
+    assert len(configs[1]["optional_config_definitions"]) == 1
+    assert {
+        "name": "fake_optional_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "params": [{"name": "org_id", "type": "int"}],
+    } in configs[1]["optional_config_definitions"]
+    assert configs[1]["query_type"] == "select"
+
+    assert configs[2]["policy_name"] == "FakePolicy"
+    assert len(configs[2]["configs"]) == 5
+    assert {
+        "name": "fake_optional_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "value": 15,
+        "params": {"org_id": 15},
+    } in configs[2]["configs"]
+    assert {
+        "name": "fake_optional_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "value": 20,
+        "params": {"org_id": 20},
+    } in configs[2]["configs"]
+    assert {
+        "name": "is_enforced",
+        "type": "int",
+        "default": 1,
+        "description": "Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
+        "value": 1,
+        "params": {},
+    } in configs[2]["configs"]
+    assert {
+        "name": "is_active",
+        "type": "int",
+        "default": 1,
+        "description": "Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
+        "value": 1,
+        "params": {},
+    } in configs[2]["configs"]
+    assert {
+        "name": "max_threads",
+        "type": "int",
+        "default": 10,
+        "description": "The max threads Clickhouse can use for the query.",
+        "value": 10,
+        "params": {},
+    } in configs[2]["configs"]
+    assert len(configs[2]["optional_config_definitions"]) == 1
+    assert {
+        "name": "fake_optional_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "params": [{"name": "org_id", "type": "int"}],
+    } in configs[2]["optional_config_definitions"]
+    assert configs[2]["query_type"] == "delete"
 
 
 class FakePolicy(AllocationPolicy):
@@ -561,59 +666,6 @@ class FakePolicy(AllocationPolicy):
         result_or_error: QueryResultOrError,
     ) -> None:
         pass
-
-
-@pytest.mark.redis_db
-def test_get_allocation_policy_configs_of_routing_strategy(
-    admin_api: FlaskClient,
-) -> None:
-    with mock.patch(
-        "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.BaseRoutingStrategy.get_from_name",
-        side_effect=lambda strategy_name: FakeRoutingStrategy,
-    ):
-        response = admin_api.get(
-            "/allocation_policy_configs/strategy/fake_routing_strategy"
-        )
-
-    assert response.status_code == 200
-    assert response.json is not None and len(response.json) == 2
-
-    # Check select policies
-    select_data = [data for data in response.json if data["query_type"] == "select"]
-    assert len(select_data) == 1
-    [select_policy] = select_data
-    assert select_policy["policy_name"] == "FakePolicy"
-    assert select_policy["optional_config_definitions"] == [
-        {
-            "name": "fake_optional_config",
-            "type": "int",
-            "default": -1,
-            "description": "",
-            "params": [{"name": "org_id", "type": "int"}],
-        }
-    ]
-    assert {
-        "name": "fake_optional_config",
-        "type": "int",
-        "default": -1,
-        "description": "",
-        "value": 15,
-        "params": {"org_id": 15},
-    } in select_policy["configs"]
-
-    # Check delete policies
-    delete_data = [data for data in response.json if data["query_type"] == "delete"]
-    assert len(delete_data) == 1
-    [delete_policy] = delete_data
-    assert delete_policy["policy_name"] == "FakePolicy"
-    assert {
-        "name": "fake_optional_config",
-        "type": "int",
-        "default": -1,
-        "description": "",
-        "value": 20,
-        "params": {"org_id": 20},
-    } in delete_policy["configs"]
 
 
 @pytest.mark.redis_db
