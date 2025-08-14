@@ -46,7 +46,7 @@ from snuba.admin.migrations_policies import (
     get_migration_group_policies,
 )
 from snuba.admin.production_queries.prod_queries import run_mql_query, run_snql_query
-from snuba.admin.rpc.rpc_queries import validate_request_meta
+from snuba.admin.rpc.rpc_queries import get_routing_strategies, validate_request_meta
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -96,6 +96,9 @@ from snuba.web.delete_query import (
     deletes_are_enabled,
 )
 from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names, run_rpc_handler
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    BaseRoutingStrategy,
+)
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -958,6 +961,16 @@ def snuba_debug() -> Response:
         explain_cleanup()
 
 
+@application.route("/routing_strategies")
+@check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
+def routing_strategies() -> Response:
+    return Response(
+        json.dumps(get_routing_strategies()),
+        200,
+        {"Content-Type": "application/json"},
+    )
+
+
 @application.route("/storages_with_allocation_policies")
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def storages_with_allocation_policies() -> Response:
@@ -966,6 +979,43 @@ def storages_with_allocation_policies() -> Response:
         200,
         {"Content-Type": "application/json"},
     )
+
+
+def add_policy_data(
+    policies: Sequence[AllocationPolicy], query_type: str, data: list[dict[str, Any]]
+) -> None:
+    for policy in policies:
+        data.append(
+            {
+                "policy_name": policy.config_key(),
+                "configs": policy.get_current_configs(),
+                "optional_config_definitions": policy.get_optional_config_definitions_json(),
+                "query_type": query_type,
+            }
+        )
+
+
+@application.route("/routing_strategy_configs/<path:strategy_name>", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
+def get_routing_strategy_configs(strategy_name: str) -> Response:
+    data: list[dict[str, Any]] = []
+
+    strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
+    data.append(
+        {
+            "strategy_name": strategy_name,
+            "configs": strategy.get_current_configs(),
+            "optional_config_definitions": strategy.get_optional_config_definitions_json(),
+        }
+    )
+
+    policies = strategy.get_allocation_policies()
+    delete_policies = strategy.get_delete_allocation_policies()
+
+    add_policy_data(policies, "select", data)
+    add_policy_data(delete_policies, "delete", data)
+
+    return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
 @application.route("/allocation_policy_configs/<path:storage_key>", methods=["GET"])
@@ -977,23 +1027,120 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
         StorageKey(storage_key)
     ).get_delete_allocation_policies()
 
-    data = []
-
-    def add_policy_data(policies: Sequence[AllocationPolicy], query_type: str) -> None:
-        for policy in policies:
-            data.append(
-                {
-                    "policy_name": policy.config_key(),
-                    "configs": policy.get_current_configs(),
-                    "optional_config_definitions": policy.get_optional_config_definitions_json(),
-                    "query_type": query_type,
-                }
-            )
-
-    add_policy_data(policies, "select")
-    add_policy_data(delete_policies, "delete")
+    data: list[dict[str, Any]] = []
+    add_policy_data(policies, "select", data)
+    add_policy_data(delete_policies, "delete", data)
 
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
+
+
+@application.route("/routing_strategy_config", methods=["POST", "DELETE"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
+def set_config_for_routing_strategy() -> Response:
+    data = json.loads(request.data)
+    user = request.headers.get(USER_HEADER_KEY)
+
+    try:
+        strategy_name, key = (data["strategy"], data["key"])
+        params = data.get("params", {})
+        policy = None
+        if "policy" in data:
+            policy_name = data["policy"]
+            assert isinstance(policy_name, str), "Invalid policy name"
+            strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
+            policies = (
+                strategy.get_allocation_policies()
+                + strategy.get_delete_allocation_policies()
+            )
+            policy = next(
+                (p for p in policies if p.config_key() == policy_name),
+                None,
+            )
+            assert policy is not None, "Policy not found on strategy"
+        assert isinstance(strategy_name, str), "Invalid strategy"
+        assert isinstance(key, str), "Invalid key"
+        assert isinstance(params, dict), "Invalid params"
+        assert key != "", "Key cannot be empty string"
+        strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
+
+    except (KeyError, AssertionError) as exc:
+        return Response(
+            json.dumps({"error": f"Invalid config: {str(exc)}"}),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+    if request.method == "DELETE":
+        if policy:
+            policy.delete_config_value(config_key=key, params=params, user=user)
+            audit_log.record(
+                user or "",
+                AuditLogAction.ALLOCATION_POLICY_DELETE,
+                {
+                    "strategy": strategy_name,
+                    "policy": policy.config_key(),
+                    "key": key,
+                },
+                notify=True,
+            )
+        else:
+            strategy.delete_config_value(config_key=key, params=params, user=user)
+            audit_log.record(
+                user or "",
+                AuditLogAction.ROUTING_STRATEGY_DELETE,
+                {"strategy": strategy_name, "key": key},
+                notify=True,
+            )
+        return Response("", 200)
+    elif request.method == "POST":
+        try:
+            value = data["value"]
+            assert isinstance(value, str), "Invalid value"
+            if policy:
+                policy.set_config_value(
+                    config_key=key, value=value, params=params, user=user
+                )
+                audit_log.record(
+                    user or "",
+                    AuditLogAction.ALLOCATION_POLICY_UPDATE,
+                    {
+                        "strategy": strategy_name,
+                        "policy": policy.config_key(),
+                        "key": key,
+                        "value": value,
+                        "params": str(params),
+                    },
+                    notify=True,
+                )
+            else:
+                print("kjdflakjdflajdfljka")
+                strategy.set_config_value(
+                    config_key=key, value=value, params=params, user=user
+                )
+                audit_log.record(
+                    user or "",
+                    AuditLogAction.ROUTING_STRATEGY_UPDATE,
+                    {
+                        "strategy": strategy_name,
+                        "key": key,
+                        "value": value,
+                        "params": str(params),
+                    },
+                    notify=True,
+                )
+            return Response("", 200)
+        except (KeyError, AssertionError) as exc:
+            return Response(
+                json.dumps({"error": f"Invalid config: {str(exc)}"}),
+                400,
+                {"Content-Type": "application/json"},
+            )
+    else:
+        return Response(
+            json.dumps({"error": "Method not allowed"}),
+            405,
+            {"Content-Type": "application/json"},
+        )
 
 
 @application.route("/allocation_policy_config", methods=["POST", "DELETE"])
@@ -1024,6 +1171,14 @@ def set_allocation_policy_config() -> Response:
         assert policy is not None, "Policy not found on storage"
 
     except (KeyError, AssertionError) as exc:
+        if "Policy not found" in str(exc):
+            return Response(
+                json.dumps(
+                    {"error": f"Policy {policy_name} not found on storage {storage}"}
+                ),
+                404,
+                {"Content-Type": "application/json"},
+            )
         return Response(
             json.dumps({"error": f"Invalid config: {str(exc)}"}),
             400,
