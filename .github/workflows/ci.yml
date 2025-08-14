@@ -55,10 +55,26 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
+<<<<<<< HEAD
 
       - name: Setup pre-commit
         run: pre-commit install-hooks
 
+||||||| 7616b58
+      - name: Setup pre-commit
+        run: make setup-git
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          make install-python-dependencies
+=======
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-test.txt
+      - name: Setup pre-commit
+        run: make setup-git
+>>>>>>> origin
       - uses: getsentry/paths-filter@v2
         id: files
         with:
@@ -383,7 +399,6 @@ jobs:
             -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run full tests
-        # TODO: Adjust which changed files we care about
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
@@ -392,6 +407,7 @@ jobs:
               tests/sentry/snuba \
               tests/sentry/eventstream/kafka \
               tests/sentry/post_process_forwarder \
+              tests/sentry/services/eventstore/snuba \
               tests/sentry/search/events \
               tests/sentry/event_manager \
               tests/sentry/api/endpoints/test_organization_profiling_functions.py \
@@ -419,8 +435,8 @@ jobs:
       matrix:
         version:
           [
-            "24.3.5.47.altinitystable",
             "24.8.11.51285.altinitystable",
+            "25.3.6.10034.altinitystable",
           ]
 
     steps:
@@ -470,4 +486,10 @@ jobs:
     - uses: getsentry/action-validate-devservices-config@711ae7221998ddf81211f25f5e3873ecffd22387
       name: Validate devservices config
       with:
+<<<<<<< HEAD
         devservices-version: ${{ steps.get-devservices-version.outputs.version }}
+||||||| 7616b58
+        requirements-file-path: requirements.txt
+=======
+        requirements-file-path: requirements-test.txt
+>>>>>>> origin

@@ -49,6 +49,7 @@ Running tests
 
 This command runs unit and integration tests::
 
+    devenv sync (if you have not run it already)
     make test
 
 Running sentry tests against snuba
