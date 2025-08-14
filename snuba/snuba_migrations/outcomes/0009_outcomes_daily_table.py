@@ -30,10 +30,10 @@ materialized_view_columns: Sequence[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
-    def forwards_local(self) -> Sequence[operations.SqlOperation]:
+    def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.OUTCOMES,
@@ -45,6 +45,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                     partition_by="(toMonth(timestamp))",
                     ttl="timestamp + toIntervalMonth(13)",
                 ),
+                target=operations.OperationTarget.LOCAL,
             ),
             operations.CreateMaterializedView(
                 storage_set=StorageSetKey.OUTCOMES,
@@ -65,23 +66,8 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                     FROM outcomes_raw_local
                     GROUP BY org_id, project_id, key_id, timestamp, outcome, reason, category
                 """,
+                target=operations.OperationTarget.LOCAL,
             ),
-        ]
-
-    def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropTable(
-                storage_set=StorageSetKey.OUTCOMES,
-                table_name="outcomes_mv_daily_local",
-            ),
-            operations.DropTable(
-                storage_set=StorageSetKey.OUTCOMES,
-                table_name="outcomes_daily_local",
-            ),
-        ]
-
-    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return [
             operations.CreateTable(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_daily_dist",
@@ -90,12 +76,25 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                     local_table_name="outcomes_daily_local",
                     sharding_key="org_id",
                 ),
+                target=operations.OperationTarget.DISTRIBUTED,
             ),
         ]
 
-    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
+    def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.OUTCOMES, table_name="outcomes_daily_dist"
+                storage_set=StorageSetKey.OUTCOMES,
+                table_name="outcomes_daily_dist",
+                target=operations.OperationTarget.DISTRIBUTED,
+            ),
+            operations.DropTable(
+                storage_set=StorageSetKey.OUTCOMES,
+                table_name="outcomes_mv_daily_local",
+                target=operations.OperationTarget.LOCAL,
+            ),
+            operations.DropTable(
+                storage_set=StorageSetKey.OUTCOMES,
+                table_name="outcomes_daily_local",
+                target=operations.OperationTarget.LOCAL,
             ),
         ]
