@@ -1,6 +1,8 @@
 import os
 from typing import Any, Dict, List, Optional, Union
 
+import sentry_sdk
+
 from snuba import settings
 from snuba.admin.audit_log.action import (
     ALLOCATION_POLICY_ACTIONS,
@@ -46,6 +48,9 @@ def build_routing_strategy_changed_text(
     else:
         # todo: raise error, cause slack won't accept this
         # if it is none
+        sentry_sdk.capture_message(
+            f"Unknown action: {action.value} with data: {data}", level="error"
+        )
         return f"{action.value}: {data}"
 
 
@@ -66,6 +71,9 @@ def build_allocation_policy_changed_text(
     else:
         # todo: raise error, cause slack won't accept this
         # if it is none
+        sentry_sdk.capture_message(
+            f"Unknown action: {action.value} with data: {data}", level="error"
+        )
         return f"{action.value}: {data}"
 
 
@@ -84,6 +92,9 @@ def build_runtime_config_text(data: Any, action: AuditLogAction) -> Optional[str
     else:
         # todo: raise error, cause slack won't accept this
         # if it is none
+        sentry_sdk.capture_message(
+            f"Unknown action: {action.value} with data: {data}", level="error"
+        )
         return None
 
 
