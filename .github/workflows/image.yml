@@ -6,7 +6,7 @@ on:
       - release/**
 
 jobs:
-  build:
+  build-multiplatform:
     strategy:
       matrix:
         include:
@@ -29,15 +29,31 @@ jobs:
         platforms: linux/${{ matrix.platform }}
         dockerfile_path: 'Dockerfile'
         tag_suffix: -${{ matrix.platform }}
-        build_args: |
-          SOURCE_COMMIT=${{ github.sha }}
-          TARGETARCH=${{ matrix.platform }}
         ghcr: true
         tag_nightly: false
         tag_latest: false
 
+  build-production:
+    runs-on: ubuntu-24.04
+    if: ${{ github.ref_name == 'master' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: getsentry/action-build-and-push-images@6a8b87ba640ef1a79854ce57a7ba4411deb84762
+        with:
+          image_name: 'snuba'
+          platforms: linux/amd64
+          dockerfile_path: './Dockerfile'
+          ghcr: false
+          # TODO: remove this once we cutover to using images published from GHA in prod
+          tag_suffix: -gha
+          tag_nightly: false
+          google_ar: true
+          google_ar_image_name: us-central1-docker.pkg.dev/sentryio/snuba/image
+          google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
+          google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
+
   assemble:
-    needs: [build]
+    needs: [build-multiplatform]
     if: ${{ (github.ref_name == 'master' || startsWith(github.ref_name, 'releases/')) && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
