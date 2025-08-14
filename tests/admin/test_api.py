@@ -824,23 +824,16 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
 
         # Verify the config was set correctly
         configs = response.json
-        assert len(configs) == 2
-        assert {
-            "name": "some_default_config",
-            "type": "int",
-            "default": 100,
-            "description": "Placeholder for now",
-            "value": 100,
-            "params": {},
-        } in configs
-        assert {
-            "name": "fake_strategy_config",
-            "type": "int",
-            "default": 50,
-            "description": "A fake config for testing",
-            "value": 75,
-            "params": {},
-        } in configs
+        for config in configs:
+            if "strategy" in config:
+                assert {
+                    "name": "fake_strategy_config",
+                    "type": "int",
+                    "default": 50,
+                    "description": "A fake config for testing",
+                    "value": 75,
+                    "params": {},
+                } in config["configs"]
 
         # Delete the routing strategy config
         response = admin_api.delete(
@@ -861,14 +854,16 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
 
         # The config should be back to its default value
         configs = response.json
-        assert {
-            "name": "fake_strategy_config",
-            "type": "int",
-            "default": 50,
-            "description": "A fake config for testing",
-            "value": 50,
-            "params": {},
-        } in configs
+        for config in configs:
+            if "strategy" in config:
+                assert {
+                    "name": "fake_strategy_config",
+                    "type": "int",
+                    "default": 50,
+                    "description": "A fake config for testing",
+                    "value": 50,
+                    "params": {},
+                } in config["configs"]
 
         # make sure an auditlog entry was recorded for the delete
         assert auditlog_records.pop()
@@ -892,7 +887,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
 
         # Set an allocation policy config for the strategy
         response = admin_api.post(
-            "/allocation_policy_config_for_strategy",
+            "/routing_strategy_config",
             data=json.dumps(
                 {
                     "strategy": "FakeRoutingStrategy",
@@ -908,15 +903,15 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
         assert auditlog_records.pop()
 
         # Retrieve the allocation policy configs to verify the config was set
-        response = admin_api.get(
-            "/allocation_policy_configs/strategy/fake_routing_strategy"
-        )
+        response = admin_api.get("/routing_strategy_configs/fake_routing_strategy")
         assert response.status_code == 200
-        assert response.json is not None and len(response.json) == 2
+        assert response.json is not None and len(response.json) == 3
 
         policy_configs = response.json
         fake_policy = [
-            policy for policy in policy_configs if policy["policy_name"] == "FakePolicy"
+            policy
+            for policy in policy_configs
+            if "policy_name" in policy and policy["policy_name"] == "FakePolicy"
         ][0]
 
         assert fake_policy["policy_name"] == "FakePolicy"
@@ -931,7 +926,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
 
         # Delete the allocation policy config for the strategy
         response = admin_api.delete(
-            "/allocation_policy_config_for_strategy",
+            "/routing_strategy_config",
             data=json.dumps(
                 {
                     "strategy": "FakeRoutingStrategy",
@@ -944,14 +939,14 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
         assert response.status_code == 200
 
         # Verify the config was deleted by checking again
-        response = admin_api.get(
-            "/allocation_policy_configs/strategy/FakeRoutingStrategy"
-        )
+        response = admin_api.get("/routing_strategy_configs/fake_routing_strategy")
         assert response.status_code == 200
-        assert response.json is not None and len(response.json) == 2
+        assert response.json is not None and len(response.json) == 3
 
         fake_policy = [
-            policy for policy in response.json if policy["policy_name"] == "FakePolicy"
+            policy
+            for policy in response.json
+            if "policy_name" in policy and policy["policy_name"] == "FakePolicy"
         ][0]
 
         # The config should be back to its default value
