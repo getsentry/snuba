@@ -49,6 +49,9 @@ Then, use it to run sync:
     print("syncing .venv ...")
     proc.run(("uv", "sync", "--frozen", "--quiet", "--active"))
 
+    print("installing pre-commit hooks ...")
+    proc.run(("pre-commit", "install-hooks"))
+
     print("running make install-rs-dev...")
     os.system("make install-rs-dev")
 
