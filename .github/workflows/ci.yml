@@ -362,7 +362,6 @@ jobs:
             -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run full tests
-        # TODO: Adjust which changed files we care about
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
@@ -371,8 +370,8 @@ jobs:
               tests/sentry/snuba \
               tests/sentry/eventstream/kafka \
               tests/sentry/post_process_forwarder \
-              tests/sentry/search/events \
               tests/sentry/services/eventstore/snuba \
+              tests/sentry/search/events \
               tests/sentry/event_manager \
               tests/sentry/api/endpoints/test_organization_profiling_functions.py \
               tests/sentry/integrations/slack/test_unfurl.py \
@@ -399,8 +398,8 @@ jobs:
       matrix:
         version:
           [
-            "24.3.5.47.altinitystable",
             "24.8.11.51285.altinitystable",
+            "25.3.6.10034.altinitystable",
           ]
 
     steps:
