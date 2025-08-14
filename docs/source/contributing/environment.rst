@@ -40,10 +40,7 @@ Clone this repo into your workspace::
 These commands set up the Python virtual environment::
 
     cd snuba
-    python -m venv .venv
-    source .venv/bin/activate
-    pip install --upgrade pip==22.2.2
-    make develop
+    devenv sync
 
 This command starts the Snuba api, which is capable of processing queries::
 
@@ -59,7 +56,7 @@ Running tests
 
 This command runs unit and integration tests::
 
-    make develop (if you have not run it already)
+    devenv sync (if you have not run it already)
     make test
 
 Running sentry tests against snuba

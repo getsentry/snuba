@@ -9,11 +9,11 @@ reset-python:
 	rm -rf .venv
 .PHONY: reset-python
 
-develop: install-python-dependencies install-brew-dev install-rs-dev setup-git
+develop: install-python-dependencies install-brew-dev install-rs-dev
+	make setup-git
 
 setup-git:
 	mkdir -p .git/hooks && cd .git/hooks && ln -sf ../../config/hooks/* ./
-	pip install 'pre-commit==3.6.0'
 	pre-commit install --install-hooks
 
 test:

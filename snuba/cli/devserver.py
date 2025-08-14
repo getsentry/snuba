@@ -3,7 +3,6 @@ import sys
 from subprocess import call, list2cmdline
 
 import click
-from honcho.manager import Manager
 
 from snuba import settings
 
@@ -23,6 +22,8 @@ COMMON_RUST_CONSUMER_DEV_OPTIONS = [
 )
 def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
     "Starts all Snuba processes for local development."
+
+    from honcho.manager import Manager
 
     os.environ["PYTHONUNBUFFERED"] = "1"
 
