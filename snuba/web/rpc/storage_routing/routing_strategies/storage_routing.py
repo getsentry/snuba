@@ -252,14 +252,12 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
     ) -> None:
         name = _SAMPLING_IN_STORAGE_PREFIX + name
         metrics_backend_func(name, value, tags, None)
-        span = sentry_sdk.get_current_span()
         routing_context.extra_info[name] = {
             "type": metrics_backend_func.__name__,
             "value": value,
             "tags": tags,
         }
-        if span is not None:
-            span.set_data(name, value)
+        sentry_sdk.update_current_span(attributes={name: value})
 
     def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
         raise NotImplementedError

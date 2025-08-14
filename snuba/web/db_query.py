@@ -293,15 +293,12 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
-    span = sentry_sdk.get_current_span()
-
     if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
         "enable_bypass_cache_referrers"
     ):
         query_id = f"randomized-{uuid.uuid4().hex}"
         clickhouse_query_settings["query_id"] = query_id
-        if span:
-            span.set_data("query_id", query_id)
+        sentry_sdk.update_current_span(attributes={"query_id": query_id})
         return execute_query(
             clickhouse_query,
             query_settings,
@@ -315,8 +312,7 @@ def execute_query_with_readthrough_caching(
 
     clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
 
-    if span:
-        span.set_data("query_id", query_id)
+    sentry_sdk.update_current_span(attributes={"query_id": query_id})
 
     def record_cache_hit_type(hit_type: int) -> None:
         span_tag = "cache_miss"
@@ -329,8 +325,7 @@ def execute_query_with_readthrough_caching(
         elif hit_type == SIMPLE_READTHROUGH:
             stats["cache_hit_simple"] = 1
         sentry_sdk.set_tag("cache_status", span_tag)
-        if span:
-            span.set_data("cache_status", span_tag)
+        sentry_sdk.update_current_span(attributes={"cache_status": span_tag})
 
     cache_partition = _get_cache_partition(reader)
     metrics.increment(
