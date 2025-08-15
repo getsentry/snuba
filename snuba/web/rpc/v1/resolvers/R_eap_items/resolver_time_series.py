@@ -67,9 +67,6 @@ from snuba.web.rpc.v1.resolvers.common.formula_reliability import (
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression,
 )
-from snuba.web.rpc.v1.visitors.time_series_request_visitor import (
-    GetSubformulaLabelsVisitor,
-)
 
 OP_TO_EXPR = {
     ProtoExpression.BinaryFormula.OP_ADD: f.plus,
@@ -130,14 +127,6 @@ def _convert_result_timeseries(
 
     # the aggregations that we will include in the result
     aggregation_labels = set([expr.label for expr in request.expressions])
-    if get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
-        # we also want to grab all the subchildren of formulas,
-        # this is used for computing reliabilities and they will be removed later so they
-        # arent actually included in the result
-        vis = GetSubformulaLabelsVisitor()
-        vis.visit(request)
-        for e in vis.labels.values():
-            aggregation_labels.update(e)
 
     group_by_labels = set([attr.name for attr in request.group_by])
 
@@ -210,7 +199,9 @@ def _convert_result_timeseries(
                 else:
                     timeseries.data_points.append(DataPoint(data=0, data_present=False))
 
-    if get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
+    if get_int_config(
+        "enable_formula_reliability_ts", ENABLE_FORMULA_RELIABILITY_DEFAULT
+    ):
         frc = FormulaReliabilityCalculator(request, data, time_buckets)
         for timeseries in result_timeseries.values():
             if timeseries.label in frc:
@@ -281,7 +272,7 @@ def _get_reliability_context_columns(
         )
     elif expr.WhichOneof("expression") == "formula":
         if not get_int_config(
-            "enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT
+            "enable_formula_reliability_ts", ENABLE_FORMULA_RELIABILITY_DEFAULT
         ):
             return []
         # also query for the left and right parts of the formula separately
