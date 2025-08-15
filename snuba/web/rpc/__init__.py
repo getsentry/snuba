@@ -3,6 +3,7 @@ from bisect import bisect_left
 from typing import Generic, List, Tuple, Type, cast, final
 
 import sentry_sdk
+from clickhouse_driver.errors import ErrorCodes as clickhouse_errors
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
@@ -22,6 +23,8 @@ from snuba.utils.registered_class import (
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import Tin, Tout
 from snuba.web.rpc.common.exceptions import (
+    HighAccuracyQueryTimeoutException,
+    QueryTimeoutException,
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
@@ -170,40 +173,52 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             else:
                 raise AllocationPolicyViolations
         except QueryException as e:
+            out = self.response_class()()
             if (
                 "error_code" in e.extra["stats"]
-                and e.extra["stats"]["error_code"] == 241
+                and e.extra["stats"]["error_code"] == clickhouse_errors.TIMEOUT_EXCEEDED
             ):
-                self.metrics.increment("OOM_query")
-                sentry_sdk.capture_exception(e)
-            if (
-                "error_code" in e.extra["stats"]
-                and e.extra["stats"]["error_code"] == 159
-            ):
+                sampling_mode = DownsampledStorageConfig.MODE_NORMAL
                 tags = {"endpoint": str(self.__class__.__name__)}
                 if hasattr(in_msg, "meta"):
                     if hasattr(in_msg.meta, "referrer"):
                         tags["referrer"] = in_msg.meta.referrer
                     if self._uses_storage_routing(in_msg):
+                        sampling_mode = in_msg.meta.downsampled_storage_config.mode
+                tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
+                    sampling_mode
+                )
+                self.metrics.increment("timeout_query", 1, tags)
+                if sampling_mode == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY:
+                    error = HighAccuracyQueryTimeoutException(
+                        "High accuracy query timed out, you may be scanning too much data in one request. Try querying in normal mode to get results"
+                    )
+                else:
+                    error = QueryTimeoutException(
+                        "Query timed out, this violates the EAP SLO"
+                    )
+            else:
+                if (
+                    "error_code" in e.extra["stats"]
+                    and e.extra["stats"]["error_code"]
+                    == clickhouse_errors.MEMORY_LIMIT_EXCEEDED
+                ):
+                    self.metrics.increment("OOM_query")
+                    sentry_sdk.capture_exception(e)
+                if (
+                    "error_code" in e.extra["stats"]
+                    and e.extra["stats"]["error_code"] == clickhouse_errors.TOO_SLOW
+                ):
+                    tags = {"endpoint": str(self.__class__.__name__)}
+                    if self._uses_storage_routing(in_msg):
                         tags[
                             "storage_routing_mode"
                         ] = DownsampledStorageConfig.Mode.Name(
-                            in_msg.meta.downsampled_storage_config.mode
+                            in_msg.meta.downsampled_storage_config.mode  # type: ignore
                         )
-                self.metrics.increment("timeout_query", 1, tags)
-            if (
-                "error_code" in e.extra["stats"]
-                and e.extra["stats"]["error_code"] == 160
-            ):
-                tags = {"endpoint": str(self.__class__.__name__)}
-                if self._uses_storage_routing(in_msg):
-                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
-                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
-                    )
-                self.metrics.increment("estimated_execution_timeout", 1, tags)
-                sentry_sdk.capture_exception(e)
-            out = self.response_class()()
-            error = e
+                    self.metrics.increment("estimated_execution_timeout", 1, tags)
+                    sentry_sdk.capture_exception(e)
+                error = e
         except Exception as e:
             out = self.response_class()()
             error = e  # type: ignore
