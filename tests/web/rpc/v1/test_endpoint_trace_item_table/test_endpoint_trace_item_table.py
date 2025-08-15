@@ -59,7 +59,10 @@ from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column as snuba_column
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.exceptions import (
+    BadSnubaRPCRequestException,
+    QueryTimeoutException,
+)
 from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     TraceItemTableRequestWrapper,
@@ -262,9 +265,9 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ),
         ):
-            with pytest.raises(QueryException) as e:
+            with pytest.raises(QueryTimeoutException) as e:
                 EndpointTraceItemTable().execute(message)
-            assert "DB::Exception: Timeout exceeded" in str(e.value)
+            assert "Query timed out" in str(e.value)
 
             metrics_mock.increment.assert_any_call(
                 "timeout_query",
