@@ -203,13 +203,14 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 self.metrics.increment("estimated_execution_timeout", 1, tags)
                 sentry_sdk.capture_exception(e)
             out = self.response_class()()
-            # For timeout errors (code 159) with HIGHEST_ACCURACY mode, don't set error 
+            # For timeout errors (code 159) with HIGHEST_ACCURACY mode, don't set error
             # since these timeouts are expected behavior and shouldn't be reported to Sentry
             if (
                 "error_code" in e.extra["stats"]
                 and e.extra["stats"]["error_code"] == 159
                 and self._uses_storage_routing(in_msg)
-                and in_msg.meta.downsampled_storage_config.mode == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+                and in_msg.meta.downsampled_storage_config.mode
+                == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
             ):
                 error = None
             else:
