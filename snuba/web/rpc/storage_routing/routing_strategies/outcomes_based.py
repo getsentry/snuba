@@ -152,7 +152,6 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         )
 
     def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
-        span = sentry_sdk.get_current_span()
         routing_decision = RoutingDecision(
             routing_context=routing_context,
             strategy=self,
@@ -161,15 +160,15 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             can_run=True,
         )
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
-        if span:
-            span.set_data(
-                "downsampling_mode",
-                (
+        sentry_sdk.update_current_span(
+            attributes={
+                "downsampling_mode": (
                     "highest_accuracy"
                     if self._is_highest_accuracy_mode(in_msg_meta)
                     else "normal"
                 ),
-            )
+            }
+        )
         if self._is_highest_accuracy_mode(in_msg_meta) or (
             # unspecified item type will be assumed as spans when querying
             # for GetTraces, there is no type specified so we assume spans because
@@ -216,11 +215,12 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         elif ingested_items > max_items_before_downsampling * 100:
             routing_decision.tier = Tier.TIER_512
 
-        if span:
-            span.set_data("ingested_items", ingested_items)
-            span.set_data(
-                "max_items_before_downsampling", max_items_before_downsampling
-            )
-            span.set_data("tier", routing_decision.tier.name)
+        sentry_sdk.update_current_span(
+            attributes={
+                "ingested_items": ingested_items,
+                "max_items_before_downsampling": max_items_before_downsampling,
+                "tier": routing_decision.tier.name,
+            }
+        )
 
         return routing_decision
