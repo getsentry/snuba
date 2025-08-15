@@ -655,7 +655,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         ]
 
     def test_formula(self) -> None:
-        set_config("enable_formula_reliability", True)
+        set_config("enable_formula_reliability_ts", True)
         # store a a test metric with a value of 1, every second for an hour
         granularity_secs = 120
         query_duration = 3600
@@ -733,7 +733,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         ]
 
     def test_formula_reliability_basic(self) -> None:
-        set_config("enable_formula_reliability", True)
+        set_config("enable_formula_reliability_ts", True)
         """
         this tests a simple formula that adds two reliable aggregates is reliable
         """
@@ -817,7 +817,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         assert response.result_timeseries == expected
 
     def test_formula_reliability_unreliable(self) -> None:
-        set_config("enable_formula_reliability", True)
+        set_config("enable_formula_reliability_ts", True)
         """
         this tests a simple formula that adds a reliable and an unreliable aggregate returns unreliable
         """
@@ -915,7 +915,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         assert actual == expected
 
     def test_formula_reliability_nested(self) -> None:
-        set_config("enable_formula_reliability", True)
+        set_config("enable_formula_reliability_ts", True)
         """
         this tests that a nested formula that adds two reliable aggregates and an unreliable aggregate returns unreliable
         """
