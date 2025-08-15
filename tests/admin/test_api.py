@@ -651,7 +651,7 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_force_overwrite(admin_api: FlaskClient) -> None:
-    migration_id = "0010_add_group_first_seen"
+    migration_id = "0011_add_timestamp_ms"
     migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
     downgraded_migration = [
         m for m in migrations if m.get("migration_id") == migration_id
