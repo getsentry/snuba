@@ -124,6 +124,13 @@ class TestSearchIssuesMessageProcessor:
         self.process_message(with_data_client_timestamp)
         self.process_message(with_event_datetime)
 
+    def test_extract_timestamp_ms(self, message_base):
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert insert_row["timestamp_ms"].isoformat() + "Z" == message_base["datetime"]
+        assert insert_row["timestamp_ms"] == insert_row["client_timestamp"]
+
     def test_extract_user(self, message_base):
         message_with_user = message_base
         message_with_user["data"]["user"] = {

@@ -225,6 +225,11 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         else:
             processed["transaction_duration"] = 0
 
+    def _process_timestamp_ms(
+        self, event_data: IssueEventData, processed: MutableMapping[str, Any]
+    ) -> None:
+        processed["timestamp_ms"] = processed["client_timestamp"]
+
     def process_insert_v1(
         self, event: SearchIssueEvent, metadata: KafkaMessageMetadata
     ) -> Sequence[Mapping[str, Any]]:
@@ -293,6 +298,9 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
 
         # start_timestamp, timestamp
         self._process_transaction_duration(event_data, fields)
+
+        # timestamp_ms
+        self._process_timestamp_ms(event_data, fields)
 
         return [
             {
