@@ -1,5 +1,36 @@
 # Changelog
 
+## 25.8.0
+
+### Various fixes & improvements
+
+- ref: consolidate all dev requirements (#7352) by @joshuarli
+- fix: fix broken ci (#7354) by @kylemumma
+- fix(gocd): Do not ignore errors from EAP consumers (#7353) by @phacops
+- fix(issues): Start processing new_group_first_seen in merge case (#7351) by @thetruecpaul
+- chore: Test ClickHouse 25.3 (#7339) by @phacops
+- fix(storage-routing): If item type is unspecified, default to spans (#7350) by @volokluev
+- ref(eap): Remove more references to spans, eap-spans and eap-items-span (#7301) by @phacops
+- fix(storage_routing): fix routing strategy assuming highest accuracy by default (#7347) by @volokluev
+- chore: bump sentry-sdk to 2.33.2 again (#7344) by @MeredithAnya
+- feat(eap): enable sampling for GetTraces single item queries (#7345) by @volokluev
+- ref: bump sentry-arroyo to 2.29.1 (#7343) by @getsentry-bot
+- feat: Add Rust support to bump-version workflow (#7342) by @davidtsuk
+- feat(errors): Add group_first_seen column to issues platform entity (#7335) by @thetruecpaul
+- feat(errors): Add group_first_seen column to issues platform storage (#7336) by @thetruecpaul
+- feat(errors): Add group_first_seen column on issues platform (#7334) by @thetruecpaul
+- feat(cbrs): unify allocation policy and routing strategy (#7337) by @xurui-c
+- feat(eap): add BinaryFormula to AggregationComparisonFilter (#7314) by @onewland
+- Revert "chore: Test ClickHouse 25.3 (#7338)" (7e32590f) by @getsentry-bot
+- chore: Test ClickHouse 25.3 (#7338) by @phacops
+- Revert "chore: Test ClickHouse 25.3 (#7332)" (4854e6cb) by @getsentry-bot
+- chore: Test ClickHouse 25.3 (#7332) by @phacops
+- ref(subscriptions): crash schedulers that dont have LogAppendTime on default topic (#7325) by @MeredithAnya
+- feat(clickhouse): Add missing user config for ClickHouse in dev (#6868) by @hubertdeng123
+- cleanup(consumers): remove slice and custom envoy request timeout (#7328) by @volokluev
+
+_Plus 45 more_
+
 ## 25.7.0
 
 ### Various fixes & improvements
