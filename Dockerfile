@@ -49,7 +49,7 @@ FROM build_base AS base
 COPY pyproject.toml uv.lock ./
 RUN set -ex; \
     \
-    uv sync --no-dev --frozen --no-install-project; \
+    uv sync --no-dev --frozen --no-install-project --no-install-workspace; \
     mkdir /tmp/uwsgi-dogstatsd; \
     wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
     | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
