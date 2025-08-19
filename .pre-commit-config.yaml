@@ -32,6 +32,13 @@ repos:
         types: [python]
         require_serial: true
 
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
+        require_serial: true
+
       - id: validate-configs-syntax
         name: validate-configs-syntax
         entry: env SNUBA_SETTINGS=test python3 -m snuba.validate_configs

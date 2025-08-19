@@ -37,9 +37,6 @@ tests: test
 api-tests:
 	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
 
-backend-typing:
-	mypy snuba tests scripts --strict --config-file mypy.ini --exclude 'tests/datasets|tests/query'
-
 # install-rs-dev mimicks sentry's naming conventions
 install-rs-dev:
 	@which cargo || (echo "!!! You need an installation of Rust in order to develop snuba. Go to https://rustup.rs to get one." && exit 1)
