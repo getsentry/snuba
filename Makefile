@@ -37,12 +37,6 @@ tests: test
 api-tests:
 	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
 
-# install-rs-dev mimicks sentry's naming conventions
-install-rs-dev:
-	@which cargo || (echo "!!! You need an installation of Rust in order to develop snuba. Go to https://rustup.rs to get one." && exit 1)
-	. scripts/rust-envvars && cd rust_snuba/ && uvx 'maturin@1.4.0' develop
-.PHONY: install-rs-dev
-
 snubadocs:
 	uv pip install -U -r ./docs-requirements.txt
 	sphinx-build -W -b html docs/source docs/build
@@ -70,7 +64,7 @@ generate-config-docs:
 watch-rust-snuba:
 	which cargo-watch || cargo install cargo-watch
 	. scripts/rust-envvars && \
-		cd rust_snuba/ && cargo watch -s "uvx maturin@1.4.0 develop"
+		cd rust_snuba/ && cargo watch -s "uvx maturin develop"
 .PHONY: watch-rust-snuba
 
 test-rust:

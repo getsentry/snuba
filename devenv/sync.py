@@ -1,7 +1,8 @@
 import importlib.metadata
+import shutil
 
 from devenv import constants
-from devenv.lib import brew, colima, config, proc, uv
+from devenv.lib import brew, config, proc, uv
 
 
 def check_minimum_version(minimum_version: str) -> bool:
@@ -38,6 +39,9 @@ Then, use it to run sync:
         cwd=reporoot,
     )
 
+    if not shutil.which("cargo"):
+        raise SystemExit("cargo not on PATH. Did you run `direnv allow`?")
+
     uv.install(
         cfg["uv"]["version"],
         cfg["uv"][constants.SYSTEM_MACHINE],
@@ -46,15 +50,9 @@ Then, use it to run sync:
     )
 
     print("syncing .venv ...")
-    proc.run(("uv", "sync", "--frozen", "--quiet", "--active"))
+    proc.run(("uv", "sync", "--frozen", "--verbose", "--active"))
 
     print("installing pre-commit hooks ...")
     proc.run(("pre-commit", "install-hooks"))
-
-    print("running make install-rs-dev...")
-    proc.run(("make", "install-rs-dev"))
-
-    # start colima if it's not already running
-    colima.start(reporoot)
 
     return 0

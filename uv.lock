@@ -8,6 +8,12 @@ supported-markers = [
     "sys_platform == 'darwin' or sys_platform == 'linux'",
 ]
 
+[manifest]
+members = [
+    "rust-snuba",
+    "snuba",
+]
+
 [[package]]
 name = "async-timeout"
 version = "4.0.3"
@@ -1028,6 +1034,11 @@ wheels = [
 ]
 
 [[package]]
+name = "rust-snuba"
+version = "0.0.0"
+source = { editable = "rust_snuba" }
+
+[[package]]
 name = "sentry-arroyo"
 version = "2.29.1"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -1192,6 +1203,7 @@ dependencies = [
     { name = "pyuwsgi", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pyyaml", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "redis", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "rust-snuba", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "sentry-arroyo", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "sentry-kafka-schemas", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "sentry-protos", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1261,6 +1273,7 @@ requires-dist = [
     { name = "pyuwsgi", specifier = ">=2.0.23" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "redis", specifier = ">=4.5.4" },
+    { name = "rust-snuba", editable = "rust_snuba" },
     { name = "sentry-arroyo", specifier = ">=2.29.1" },
     { name = "sentry-kafka-schemas", specifier = ">=2.0.2" },
     { name = "sentry-protos", specifier = ">=0.3.3" },

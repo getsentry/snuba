@@ -93,8 +93,7 @@ COPY ./scripts/rust-dummy-build.sh ./scripts/rust-dummy-build.sh
 RUN set -ex; \
     sh scripts/rust-dummy-build.sh; \
     cd ./rust_snuba/; \
-    rustup show active-toolchain || rustup toolchain install; \
-    uv tool install 'maturin==1.4.0'
+    rustup show active-toolchain || rustup toolchain install
 
 FROM build_rust_snuba_deps AS build_rust_snuba
 COPY ./rust_snuba/ ./rust_snuba/
