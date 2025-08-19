@@ -518,6 +518,14 @@ wheels = [
 ]
 
 [[package]]
+name = "isort"
+version = "5.12.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/isort-5.12.0-py3-none-any.whl", hash = "sha256:f84c2818376e66cf843d497486ea8fed8700b340f308f076c6fb1229dff318b6" },
+]
+
+[[package]]
 name = "itsdangerous"
 version = "2.2.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -1208,6 +1216,7 @@ dev = [
     { name = "flake8", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "freezegun", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "honcho", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "isort", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "mypy", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pre-commit", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pytest", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1276,6 +1285,7 @@ dev = [
     { name = "flake8", specifier = ">=7.0.0" },
     { name = "freezegun", specifier = ">=1.2.2" },
     { name = "honcho", specifier = ">=1.1.0" },
+    { name = "isort", specifier = "==5.12.0" },
     { name = "mypy", specifier = ">=1.1.1" },
     { name = "pre-commit", specifier = ">=4.2.0" },
     { name = "pytest", specifier = ">=8.3.3" },

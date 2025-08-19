@@ -1,5 +1,4 @@
 import importlib.metadata
-import os
 
 from devenv import constants
 from devenv.lib import brew, colima, config, proc, uv
@@ -53,7 +52,7 @@ Then, use it to run sync:
     proc.run(("pre-commit", "install-hooks"))
 
     print("running make install-rs-dev...")
-    os.system("make install-rs-dev")
+    proc.run(("make", "install-rs-dev"))
 
     # start colima if it's not already running
     colima.start(reporoot)
