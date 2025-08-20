@@ -129,7 +129,7 @@ RUN set -ex; \
     groupadd -r snuba --gid 1000; \
     useradd -r -g snuba --uid 1000 snuba; \
     chown -R snuba:snuba ./; \
-    uv sync --no-dev --frozen; \
+    uv sync --no-dev --frozen --no-install-workspace; \
     # Ensure that we are always importing the installed rust_snuba wheel, and not the
     # (basically empty) rust_snuba folder
     rm -rf ./rust_snuba/; \
