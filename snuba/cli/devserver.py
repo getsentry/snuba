@@ -517,8 +517,6 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
             ),
         ]
 
-    from honcho.manager import Manager
-
     manager = Manager()
     for name, cmd in daemons:
         manager.add_process(

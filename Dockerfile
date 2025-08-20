@@ -129,7 +129,7 @@ RUN set -ex; \
     groupadd -r snuba --gid 1000; \
     useradd -r -g snuba --uid 1000 snuba; \
     chown -R snuba:snuba ./; \
-    uv sync --no-dev --frozen --no-install-workspace; \
+    uv sync --no-dev --frozen --no-install-package rust_snuba; \
     # Ensure that we are always importing the installed rust_snuba wheel, and not the
     # (basically empty) rust_snuba folder
     rm -rf ./rust_snuba/; \
@@ -172,7 +172,7 @@ COPY --from=build_rust_snuba /root/.rustup/ /root/.rustup/
 COPY --from=build_rust_snuba /usr/src/snuba/rust_snuba/target/wheels/ /tmp/rust_wheels/
 RUN set -ex; \
     # we need to resync, this time with dev dependencies
-    uv sync --frozen; \
+    uv sync --frozen --no-install-package rust_snuba; \
     # this will uninstall the rust wheel so we need to reinstall again
     uv pip install /tmp/rust_wheels/*; \
     rm -rf /tmp/rust_wheels/; \
