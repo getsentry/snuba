@@ -20,9 +20,9 @@ jobs:
 
       - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
         with:
-          python-version: 3.8
-          cache-dependency-path: uv.lock
-          install-cmd: uv sync --frozen --active
+          python-version: 3.11.11
+          cache-dependency-path: docs-requirements.txt
+          install-cmd: echo
 
       - name: Generate config schema docs
         run: |
@@ -31,6 +31,7 @@ jobs:
       - name: Build docs
         run: |
           make snubadocs
+
       - uses: peaceiris/actions-gh-pages@v4.0.0
         name: Publish to GitHub Pages
         with:
