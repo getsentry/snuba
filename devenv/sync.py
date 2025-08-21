@@ -50,7 +50,17 @@ Then, use it to run sync:
     )
 
     print("syncing .venv ...")
-    proc.run((f"{reporoot}/.devenv/bin/uv", "sync", "--frozen", "--verbose", "--active"))
+    proc.run(
+        (
+            f"{reporoot}/.devenv/bin/uv",
+            "sync",
+            "--frozen",
+            "--active",
+            "--no-install-package",
+            "rust_snuba",
+            "--inexact",
+        )
+    )
 
     print("installing pre-commit hooks ...")
     proc.run((f"{reporoot}/.venv/bin/pre-commit", "install", "--install-hooks"))
