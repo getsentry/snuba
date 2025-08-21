@@ -21,7 +21,7 @@ if grep -E --quiet 'uv.lock' "$files_changed_upstream"; then
 fi
 
 if grep -E --quiet 'rust_snuba/' "$files_changed_upstream"; then
-  command="devenv sync"
+  command="make install-rs-dev"
 fi
 
 if [ -n "$command" ]; then
