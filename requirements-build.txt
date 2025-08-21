@@ -1,4 +1,0 @@
---index-url https://pypi.devinfra.sentry.io/simple
-
-maturin==1.4.0
-types-protobuf==5.27.0.20240626
