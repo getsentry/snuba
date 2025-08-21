@@ -35,6 +35,11 @@ These commands set up the Python virtual environment::
     cd snuba
     devenv sync
 
+This builds rust_snuba (it's expensive, so is kept out of `devenv sync`)::
+
+    make install-rs-dev (one time)
+    make watch-rust-snuba (or watch and rebuild)
+
 This command starts the Snuba api, which is capable of processing queries::
 
     snuba api
