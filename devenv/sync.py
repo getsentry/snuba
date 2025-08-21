@@ -56,6 +56,10 @@ Then, use it to run sync:
             "sync",
             "--frozen",
             "--active",
+            # devenv sync should just quickly update dependencies, not actually
+            # build rust_snuba. However it needs to be declared as a workspace
+            # dependency so the way to do this is to no-install-package and inexact
+            # so it doesn't get removed.
             "--no-install-package",
             "rust_snuba",
             "--inexact",
