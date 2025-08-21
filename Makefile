@@ -11,6 +11,9 @@ reset-python:
 
 develop:
 	devenv sync
+	@# devenv sync is meant to quickly install deps
+	@# building rust_snuba is left to maturin develop
+	make install-rs-dev
 
 test:
 	SNUBA_SETTINGS=test pytest -vv tests -v -m "not ci_only"
@@ -36,6 +39,11 @@ tests: test
 
 api-tests:
 	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
+
+install-rs-dev:
+	@which cargo || (echo "!!! You need an installation of Rust in order to develop snuba. Go to https://rustup.rs to get one." && exit 1)
+	. scripts/rust-envvars && cd rust_snuba/ && uvx maturin develop
+.PHONY: install-rs-dev
 
 snubadocs:
 	uv pip install -U -r ./docs-requirements.txt
