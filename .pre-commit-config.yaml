@@ -23,6 +23,8 @@ repos:
       - id: trailing-whitespace
       - id: fix-encoding-pragma
         args: ["--remove"]
+      - id: no-commit-to-branch
+        args: ['--branch', 'master']
   - repo: https://github.com/pycqa/flake8
     rev: 4.0.1
     hooks:
@@ -32,11 +34,6 @@ repos:
     hooks:
       - id: isort
         name: isort (python)
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.2.0
-    hooks:
-      - id: no-commit-to-branch
-        args: ['--branch', 'master']
   - repo: local
     hooks:
       - id: validate-configs-syntax
