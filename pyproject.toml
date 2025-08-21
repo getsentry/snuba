@@ -108,3 +108,48 @@ target-version = ['py311']
 profile = "black"
 line_length = 100
 lines_between_sections = 1
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = false
+files = ["."]
+exclude = ["^rust_snuba/", "^tests/datasets/", "^tests/query/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "_strptime",
+    "clickhouse_driver",
+    "clickhouse_driver.errors",
+    "confluent_kafka",
+    "confluent_kafka.admin",
+    "datadog",
+    "deprecation",
+    "fastjsonschema",
+    "fastjsonschema.exceptions",
+    "honcho.manager",
+    "jsonschema",
+    "jsonschema.exceptions",
+    "jsonschema2md",
+    "markdown",
+    "packaging",
+    "parsimonious.exceptions",
+    "parsimonious.grammar",
+    "parsimonious.nodes",
+    "progressbar",
+    "pytest",
+    "rapidjson",
+    "redis.*",
+    "sentry_relay",
+    "sentry_relay.consts",
+    "sentry_sdk",
+    "setuptools",
+    "urllib3.connectionpool",
+    "urllib3.exceptions",
+    "uwsgi",
+    "sqlparse",
+    "googleapiclient",
+    "googleapiclient.discovery",
+    "googleapiclient.http",
+]
+ignore_missing_imports = true
