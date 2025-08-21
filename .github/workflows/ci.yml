@@ -38,19 +38,27 @@ jobs:
         with:
           app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
-      - uses: actions/setup-python@v5
+
+      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
         with:
-          python-version: '3.11'
+          version: '0.8.2'
+          # we just cache the venv-dir directly in action-setup-venv
+          enable-cache: false
+
+      - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
+        with:
+          python-version: 3.11.11
+          cache-dependency-path: uv.lock
+          install-cmd: uv sync --frozen --active
+
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements-test.txt
+
       - name: Setup pre-commit
-        run: make setup-git
+        run: pre-commit install-hooks
+
       - uses: getsentry/paths-filter@v2
         id: files
         with:
@@ -65,6 +73,7 @@ jobs:
           filters: |
             all:
               - added|modified: '**/*'
+
       - name: Run pre-commit checks
         # Run pre-commit to lint and format check files that were changed (but not deleted) compared to master.
         # XXX: there is a very small chance that it'll expand to exceed Linux's limits
@@ -96,24 +105,6 @@ jobs:
         run: |
           make lint-rust format-rust-ci
 
-  typing:
-    name: "mypy typing"
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        name: Checkout code
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          make install-python-dependencies
-      - name: Run mypy
-        run: |
-          make backend-typing
-
   config-validation:
     name: "Dataset Config Validation"
     runs-on: ubuntu-latest
@@ -121,13 +112,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         name: Checkout code
-      - uses: actions/setup-python@v5
+
+      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
         with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          make install-python-dependencies
+          version: '0.8.2'
+          # we just cache the venv-dir directly in action-setup-venv
+          enable-cache: false
+
+      - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
+        with:
+          python-version: 3.11.11
+          cache-dependency-path: uv.lock
+          install-cmd: uv sync --frozen --active
+
       - name: Validate configs
         run: |
           make validate-configs
@@ -319,7 +316,6 @@ jobs:
       - name: Setup steps
         id: setup
         run: |
-          pip install --upgrade pip wheel
           # We cannot execute actions that are not placed under .github of the main repo
           mkdir -p .github/actions
           cp -r sentry/.github/actions/* .github/actions
@@ -430,7 +426,6 @@ jobs:
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
-
   validate-devservices-config:
     runs-on: ubuntu-24.04
     needs: files-changed
@@ -438,7 +433,16 @@ jobs:
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       name: Checkout repository
-    - uses: getsentry/action-validate-devservices-config@02a078d1280293e6598cabfbd318a01609c12c83
+
+    - name: Get devservices version
+      id: get-devservices-version
+      run: |
+        awk -F'"' '
+          /name/ { pkg = $2 }
+          /version/ { if (pkg == "devservices") print "version="$2 }
+        ' uv.lock >> $GITHUB_OUTPUT
+
+    - uses: getsentry/action-validate-devservices-config@711ae7221998ddf81211f25f5e3873ecffd22387
       name: Validate devservices config
       with:
-        requirements-file-path: requirements-test.txt
+        devservices-version: ${{ steps.get-devservices-version.outputs.version }}

@@ -1,11 +1,36 @@
-import os
+import importlib.metadata
+import shutil
 
 from devenv import constants
-from devenv.lib import brew, colima, config, proc, venv
+from devenv.lib import brew, config, proc, uv
+
+
+def check_minimum_version(minimum_version: str) -> bool:
+    version = importlib.metadata.version("sentry-devenv")
+
+    parsed_version = tuple(map(int, version.split(".")))
+    parsed_minimum_version = tuple(map(int, minimum_version.split(".")))
+
+    return parsed_version >= parsed_minimum_version
 
 
 def main(context: dict[str, str]) -> int:
+    minimum_version = "1.22.1"
+    if not check_minimum_version(minimum_version):
+        raise SystemExit(
+            f"""
+In order to use uv, devenv must be at least version {minimum_version}.
+
+Please run the following to update your global devenv:
+devenv update
+
+Then, use it to run sync:
+{constants.root}/bin/devenv sync
+"""
+        )
+
     reporoot = context["reporoot"]
+    cfg = config.get_repo(reporoot)
 
     brew.install()
 
@@ -14,20 +39,20 @@ def main(context: dict[str, str]) -> int:
         cwd=reporoot,
     )
 
-    venv_dir, python_version, requirements, editable_paths, bins = venv.get(
-        reporoot, "venv"
+    if not shutil.which("cargo"):
+        raise SystemExit("cargo not on PATH. Did you run `direnv allow`?")
+
+    uv.install(
+        cfg["uv"]["version"],
+        cfg["uv"][constants.SYSTEM_MACHINE],
+        cfg["uv"][f"{constants.SYSTEM_MACHINE}_sha256"],
+        reporoot,
     )
-    url, sha256 = config.get_python(reporoot, python_version)
-    print(f"ensuring venv at {venv_dir}...")
-    venv.ensure(venv_dir, python_version, url, sha256)
 
-    print(f"syncing venv with {requirements}...")
-    venv.sync(reporoot, venv_dir, requirements, editable_paths, bins)
+    print("syncing .venv ...")
+    proc.run(("uv", "sync", "--frozen", "--verbose", "--active"))
 
-    print("running make develop...")
-    os.system("make develop")
-
-    # start colima if it's not already running
-    colima.start(reporoot)
+    print("installing pre-commit hooks ...")
+    proc.run(("pre-commit", "install-hooks"))
 
     return 0
