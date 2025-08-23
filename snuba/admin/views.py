@@ -1113,7 +1113,6 @@ def set_config_for_routing_strategy() -> Response:
                     notify=True,
                 )
             else:
-                print("kjdflakjdflajdfljka")
                 strategy.set_config_value(
                     config_key=key, value=value, params=params, user=user
                 )

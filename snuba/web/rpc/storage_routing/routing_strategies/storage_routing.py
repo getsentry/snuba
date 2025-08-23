@@ -238,17 +238,17 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
     def get_allocation_policies(self) -> list[AllocationPolicy]:
         return [
             ConcurrentRateLimitAllocationPolicy(
-                storage_key=StorageKey("eap_items"),
+                storage_key=ResourceIdentifier(self.__class__.__name__),
                 required_tenant_types=["organization_id", "referrer", "project_id"],
                 default_config_overrides={"is_enforced": 0},
             ),
             ReferrerGuardRailPolicy(
-                storage_key=StorageKey("eap_items"),
+                storage_key=ResourceIdentifier(self.__class__.__name__),
                 required_tenant_types=["organization_id", "referrer", "project_id"],
                 default_config_overrides={"is_enforced": 0},
             ),
             BytesScannedRejectingPolicy(
-                storage_key=StorageKey("eap_items"),
+                storage_key=ResourceIdentifier(self.__class__.__name__),
                 required_tenant_types=["organization_id", "referrer", "project_id"],
                 default_config_overrides={"is_enforced": 0},
             ),
