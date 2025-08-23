@@ -15,7 +15,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
 
 from snuba import state
 from snuba.admin.auth import USER_HEADER_KEY
-from snuba.configs.configuration import Configuration
+from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
@@ -487,12 +487,12 @@ class FakeRoutingStrategy(BaseRoutingStrategy):
         ]
 
     def get_allocation_policies(self) -> list[AllocationPolicy]:
-        policy = FakePolicy(StorageKey("eap_items"), [], {})
+        policy = FakePolicy(ResourceIdentifier(StorageKey("eap_items")), [], {})
         policy.set_config_value("fake_optional_config", 15, {"org_id": 15})
         return [policy]
 
     def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
-        policy = FakePolicy(StorageKey("eap_items"), [], {})
+        policy = FakePolicy(ResourceIdentifier(StorageKey("eap_items")), [], {})
         policy.set_config_value("fake_optional_config", 20, {"org_id": 20})
         return [policy]
 
@@ -671,7 +671,7 @@ class FakePolicy(AllocationPolicy):
 @pytest.mark.redis_db
 def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
     def mock_get_policies() -> list[AllocationPolicy]:
-        policy = FakePolicy(StorageKey("nothing"), [], {})
+        policy = FakePolicy(ResourceIdentifier(StorageKey("nothing")), [], {})
         policy.set_config_value("fake_optional_config", 10, {"org_id": 10})
         return [policy]
 

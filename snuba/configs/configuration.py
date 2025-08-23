@@ -19,12 +19,12 @@ class InvalidConfig(Exception):
 class ResourceIdentifier:
     def __init__(
         self,
-        resource_identifier_name: StorageKey | str,
+        resource_identifier: StorageKey | str,
     ):
         self.resource_identifier_name = (
-            resource_identifier_name.value
-            if isinstance(resource_identifier_name, StorageKey)
-            else resource_identifier_name
+            resource_identifier.value
+            if isinstance(resource_identifier, StorageKey)
+            else resource_identifier
         )
 
     @property

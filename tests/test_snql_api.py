@@ -10,7 +10,7 @@ import pytest
 import simplejson as json
 
 from snuba import state
-from snuba.configs.configuration import Configuration
+from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -1339,7 +1339,9 @@ class TestSnQLApi(BaseApiTest):
         with patch(
             "snuba.web.db_query._get_allocation_policies",
             return_value=[
-                MaxBytesPolicy123(StorageKey("doesntmatter"), ["a", "b", "c"], {})
+                MaxBytesPolicy123(
+                    ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
+                )
             ],
         ):
             response = self.post(
@@ -1373,7 +1375,7 @@ class TestSnQLApi(BaseApiTest):
             "snuba.web.db_query._get_allocation_policies",
             return_value=[
                 RejectAllocationPolicy123(
-                    StorageKey("doesntmatter"), ["a", "b", "c"], {}
+                    ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
                 )
             ],
         ):
