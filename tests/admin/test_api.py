@@ -805,7 +805,7 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
 
         # Set a routing strategy config
         response = admin_api.post(
-            "/routing_strategy_config",
+            "/allocation_policy_config",
             data=json.dumps(
                 {
                     "strategy": "FakeRoutingStrategy",
@@ -837,7 +837,7 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
 
         # Delete the routing strategy config
         response = admin_api.delete(
-            "/routing_strategy_config",
+            "/allocation_policy_config",
             data=json.dumps(
                 {
                     "strategy": "FakeRoutingStrategy",
@@ -887,7 +887,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
 
         # Set an allocation policy config for the strategy
         response = admin_api.post(
-            "/routing_strategy_config",
+            "/allocation_policy_config",
             data=json.dumps(
                 {
                     "strategy": "FakeRoutingStrategy",
@@ -926,7 +926,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
 
         # Delete the allocation policy config for the strategy
         response = admin_api.delete(
-            "/routing_strategy_config",
+            "/allocation_policy_config",
             data=json.dumps(
                 {
                     "strategy": "FakeRoutingStrategy",
