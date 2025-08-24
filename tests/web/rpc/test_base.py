@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
@@ -14,7 +15,12 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
+from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names
+from snuba.web.rpc.common.exceptions import (
+    HighAccuracyQueryTimeoutException,
+    QueryTimeoutException,
+)
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.backends.metrics import TestingMetricsBackend
 from tests.web.rpc.v1.test_utils import BASE_TIME
@@ -72,6 +78,19 @@ class ErrorRPC(RPCEndpoint[TimeSeriesRequest, TimeSeriesRequest]):
     def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesRequest:
         time.sleep(self.duration_millis / 1000)
         raise RPCException("This is meant to error!")
+
+
+class TimeoutRPC(RPCEndpoint[TimeSeriesRequest, TimeSeriesRequest]):
+    @classmethod
+    def version(cls) -> str:
+        return "v1"
+
+    @classmethod
+    def response_class(cls) -> Type[TimeSeriesRequest]:
+        return TimeSeriesRequest
+
+    def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesRequest:
+        raise QueryException("timed out", extra={"stats": {"error_code": 159}})
 
 
 def test_endpoint_name_resolution() -> None:
@@ -221,3 +240,43 @@ def test_tagged_metrics(hours: int, expected_time_bucket: str) -> None:
         }
         for _ in range(len(metrics_backend.calls))
     ]
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_timeout_errors():
+    ts = Timestamp()
+    ts.GetCurrentTime()
+    message = TimeSeriesRequest(
+        meta=RequestMeta(
+            project_ids=[1, 2, 3],
+            organization_id=1,
+            cogs_category="something",
+            referrer="something",
+            start_timestamp=ts,
+            end_timestamp=ts,
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            downsampled_storage_config=DownsampledStorageConfig(
+                mode=DownsampledStorageConfig.MODE_NORMAL
+            ),
+        ),
+    )
+    with pytest.raises(QueryTimeoutException):
+        TimeoutRPC().execute(message)
+
+    message = TimeSeriesRequest(
+        meta=RequestMeta(
+            project_ids=[1, 2, 3],
+            organization_id=1,
+            cogs_category="something",
+            referrer="something",
+            start_timestamp=ts,
+            end_timestamp=ts,
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            downsampled_storage_config=DownsampledStorageConfig(
+                mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+            ),
+        ),
+    )
+    with pytest.raises(HighAccuracyQueryTimeoutException):
+        TimeoutRPC().execute(message)
