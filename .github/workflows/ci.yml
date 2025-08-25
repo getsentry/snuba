@@ -160,37 +160,16 @@ jobs:
 
       - run: docker buildx create --driver docker-container --use
 
-      - name: Build snuba docker image for CI
-        run: |
-          set -euxo pipefail
-
-          args=()
-
-          if [ ${{ github.event_name }} = 'push' ]; then
-            args+=(
-              --tag ghcr.io/getsentry/snuba-ci:latest
-              --cache-to type=registry,ref=ghcr.io/getsentry/snuba-ci:latest,mode=max
-              --push
-            )
-          fi
-
-          if [ ${{ github.event.pull_request.head.repo.full_name }} = ${{ github.repository }} ]; then
-            args+=(
-              --cache-to type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }},mode=max
-            )
-          fi
-
-          docker buildx build \
-            --pull \
-            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
-            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
-            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:latest \
-            --tag ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
-            --tag ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
-            --target testing \
-            "${args[@]}" \
-            -o type=docker,dest=/tmp/snuba-ci.tar \
-            .
+      - uses: getsentry/action-build-and-push-images@a53f146fc1ea3cb404f2dcf7378f5b60dd98d3ca
+        with:
+          image_name: 'snuba-ci'
+          platforms: linux/amd64
+          dockerfile_path: 'Dockerfile'
+          ghcr: true
+          tag_nightly: false
+          tag_latest: false
+          publish_on_pr: true
+          outputs: type=docker,dest=/tmp/snuba-ci.tar
 
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
