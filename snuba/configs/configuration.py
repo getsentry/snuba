@@ -19,13 +19,9 @@ class InvalidConfig(Exception):
 class ResourceIdentifier:
     def __init__(
         self,
-        resource_identifier_name: StorageKey | str,
+        resource: StorageKey | str,
     ):
-        self.resource_identifier_name = (
-            resource_identifier_name.value
-            if isinstance(resource_identifier_name, StorageKey)
-            else resource_identifier_name
-        )
+        self.resource = resource
 
     def __hash__(self) -> int:
         return hash(self.value)
@@ -33,9 +29,16 @@ class ResourceIdentifier:
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, ResourceIdentifier) and other.value == self.value
 
+    def __repr__(self) -> str:
+        return str(self.resource)
+
     @property
     def value(self) -> str:
-        return self.resource_identifier_name
+        return (
+            self.resource.value
+            if isinstance(self.resource, StorageKey)
+            else self.resource
+        )
 
 
 @dataclass()
@@ -87,7 +90,6 @@ class Configuration:
 
 
 class ConfigurableComponent(ABC):
-
     """
     A ConfigurableComponent is a component that can be configured via configurations.
     example: an allocation policy, a routing strategy, a strategy selector.

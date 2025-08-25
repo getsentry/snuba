@@ -4,7 +4,6 @@ import logging
 from typing import Any, cast
 
 from snuba.configs.configuration import Configuration, InvalidConfig, ResourceIdentifier
-from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import QueryResultOrError, QuotaAllowance
 from snuba.query.allocation_policies.concurrent_rate_limit import (
     BaseConcurrentRateLimitAllocationPolicy,
@@ -112,13 +111,13 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
 
     def __init__(
         self,
-        storage_key: StorageKey,
+        storage_key: ResourceIdentifier,
         required_tenant_types: list[str],
         default_config_overrides: dict[str, Any],
         **kwargs: str,
     ) -> None:
         super().__init__(
-            ResourceIdentifier(storage_key),
+            storage_key,
             required_tenant_types,
             default_config_overrides,
             **kwargs,

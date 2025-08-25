@@ -427,7 +427,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         assert isinstance(storage_key, str)
         return cls(
             required_tenant_types=required_tenant_types,
-            storage_key=StorageKey(storage_key),
+            storage_key=ResourceIdentifier(StorageKey(storage_key)),
             default_config_overrides=default_config_overrides,
             **kwargs,
         )
