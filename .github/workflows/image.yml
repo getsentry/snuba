@@ -79,7 +79,7 @@ jobs:
             ghcr.io/getsentry/snuba:${{ github.sha }}-arm64
 
   self-hosted-end-to-end:
-    needs: [build, assemble]
+    needs: [build-multiplatform, assemble]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
