@@ -8,7 +8,7 @@ from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
-from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba import environment, settings, state
 from snuba.query.allocation_policies import AllocationPolicyViolations
@@ -165,6 +165,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
         self.__before_execute(in_msg)
         error: Exception | None = None
+        meta = getattr(in_msg, "meta", RequestMeta())
         try:
             if self.routing_decision.can_run:
                 with sentry_sdk.start_span(op="execute") as span:
@@ -181,10 +182,10 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 sampling_mode = DownsampledStorageConfig.MODE_NORMAL
                 tags = {"endpoint": str(self.__class__.__name__)}
                 if hasattr(in_msg, "meta"):
-                    if hasattr(in_msg.meta, "referrer"):
-                        tags["referrer"] = in_msg.meta.referrer
+                    if hasattr(meta, "referrer"):
+                        tags["referrer"] = meta.referrer
                     if self._uses_storage_routing(in_msg):
-                        sampling_mode = in_msg.meta.downsampled_storage_config.mode
+                        sampling_mode = meta.downsampled_storage_config.mode
                 tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
                     sampling_mode
                 )
@@ -214,7 +215,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                         tags[
                             "storage_routing_mode"
                         ] = DownsampledStorageConfig.Mode.Name(
-                            in_msg.meta.downsampled_storage_config.mode  # type: ignore
+                            meta.downsampled_storage_config.mode
                         )
                     self.metrics.increment("estimated_execution_timeout", 1, tags)
                     sentry_sdk.capture_exception(e)
