@@ -244,7 +244,7 @@ def test_tagged_metrics(hours: int, expected_time_bucket: str) -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
-def test_timeout_errors():
+def test_timeout_errors() -> None:
     ts = Timestamp()
     ts.GetCurrentTime()
     message = TimeSeriesRequest(

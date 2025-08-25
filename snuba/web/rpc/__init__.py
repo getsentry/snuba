@@ -164,7 +164,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         )
 
         self.__before_execute(in_msg)
-        error = None
+        error: Exception | None = None
         try:
             if self.routing_decision.can_run:
                 with sentry_sdk.start_span(op="execute") as span:
@@ -221,7 +221,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 error = e
         except Exception as e:
             out = self.response_class()()
-            error = e  # type: ignore
+            error = e
         return self.__after_execute(in_msg, out, error)
 
     def __before_execute(self, in_msg: Tin) -> None:
