@@ -1035,6 +1035,38 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
+def _get_configurable_component(
+    resource_type: str, resource_name: str, policy_name: str | None
+) -> ConfigurableComponent:
+
+    if policy_name:
+        if resource_type == "storage":
+            policies = (
+                get_storage(StorageKey(resource_name)).get_allocation_policies()
+                + get_storage(
+                    StorageKey(resource_name)
+                ).get_delete_allocation_policies()
+            )
+        else:
+            strategy = BaseRoutingStrategy.get_from_name(resource_name)()
+            policies = (
+                strategy.get_allocation_policies()
+                + strategy.get_delete_allocation_policies()
+            )
+
+        configurable_component = next(
+            (p for p in policies if p.config_key() == policy_name),
+            None,
+        )
+        if configurable_component is None:
+            raise Exception(
+                f"Policy '{policy_name}' not found on {resource_type} '{resource_name}'"
+            )
+        return configurable_component
+    else:
+        return BaseRoutingStrategy.get_from_name(resource_name)()
+
+
 # todo(rachel): change url name
 @application.route("/allocation_policy_config", methods=["POST", "DELETE"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
@@ -1066,39 +1098,9 @@ def set_configuration() -> Response:
         if policy_name:
             assert isinstance(policy_name, str), "Invalid policy name"
 
-        configurable_component: ConfigurableComponent | None = None
-
-        if policy_name:
-            if resource_type == "storage":
-                policies = (
-                    get_storage(StorageKey(resource_name)).get_allocation_policies()
-                    + get_storage(
-                        StorageKey(resource_name)
-                    ).get_delete_allocation_policies()
-                )
-            else:
-                strategy = BaseRoutingStrategy.get_from_name(resource_name)()
-                policies = (
-                    strategy.get_allocation_policies()
-                    + strategy.get_delete_allocation_policies()
-                )
-
-            configurable_component = next(
-                (p for p in policies if p.config_key() == policy_name),
-                None,
-            )
-            if configurable_component is None:
-                return Response(
-                    json.dumps(
-                        {
-                            "error": f"Policy '{policy_name}' not found on {resource_type} '{resource_name}'"
-                        }
-                    ),
-                    404,
-                    {"Content-Type": "application/json"},
-                )
-        else:
-            configurable_component = BaseRoutingStrategy.get_from_name(resource_name)()
+        configurable_component = _get_configurable_component(
+            resource_type, resource_name, policy_name
+        )
 
     except Exception as exc:
         return Response(

@@ -397,10 +397,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         return int(self.get_config_value(MAX_THREADS))
 
     @classmethod
-    def config_key(cls) -> str:
-        return cls.__name__
-
-    @classmethod
     def get_from_name(cls, name: str) -> "AllocationPolicy":
         return cast("AllocationPolicy", cls.class_from_name(name))
 

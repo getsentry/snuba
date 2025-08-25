@@ -19,12 +19,12 @@ class InvalidConfig(Exception):
 class ResourceIdentifier:
     def __init__(
         self,
-        resource_identifier: StorageKey | str,
+        resource_identifier_name: StorageKey | str,
     ):
         self.resource_identifier_name = (
-            resource_identifier.value
-            if isinstance(resource_identifier, StorageKey)
-            else resource_identifier
+            resource_identifier_name.value
+            if isinstance(resource_identifier_name, StorageKey)
+            else resource_identifier_name
         )
 
     @property
@@ -415,3 +415,7 @@ class ConfigurableComponent(ABC):
             user=user,
             config_key=self._get_hash(),
         )
+
+    @classmethod
+    def config_key(cls) -> str:
+        return cls.__name__
