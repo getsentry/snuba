@@ -46,7 +46,6 @@ pub fn consumer(
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
     max_dlq_buffer_length: Option<usize>,
-    custom_envoy_request_timeout: Option<u64>,
     join_timeout_ms: Option<u64>,
     consumer_version: Option<&str>,
 ) -> usize {
@@ -68,7 +67,6 @@ pub fn consumer(
                 stop_at_timestamp,
                 batch_write_timeout_ms,
                 max_dlq_buffer_length,
-                custom_envoy_request_timeout,
                 join_timeout_ms,
                 health_check,
             )
@@ -91,7 +89,6 @@ pub fn consumer(
                 stop_at_timestamp,
                 batch_write_timeout_ms,
                 max_dlq_buffer_length,
-                custom_envoy_request_timeout,
                 join_timeout_ms,
                 health_check,
             )
@@ -116,7 +113,6 @@ pub fn consumer_v2_impl(
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
     max_dlq_buffer_length: Option<usize>,
-    custom_envoy_request_timeout: Option<u64>,
     join_timeout_ms: Option<u64>,
     health_check: &str,
 ) -> usize {
@@ -179,13 +175,7 @@ pub fn consumer_v2_impl(
         set_global_tag("storage".to_owned(), storage_name);
         set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
 
-        metrics::init(StatsDBackend::new(
-            &host,
-            port,
-            "snuba.consumer",
-            env_config.ddm_metrics_sample_rate,
-        ))
-        .unwrap();
+        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer")).unwrap();
     }
 
     if !use_rust_processor {
@@ -300,7 +290,6 @@ pub fn consumer_v2_impl(
         accountant_topic_config: consumer_config.accountant_topic,
         stop_at_timestamp,
         batch_write_timeout,
-        custom_envoy_request_timeout,
         join_timeout_ms,
         health_check: health_check.to_string(),
     };
@@ -351,7 +340,6 @@ pub fn consumer_impl(
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
     max_dlq_buffer_length: Option<usize>,
-    custom_envoy_request_timeout: Option<u64>,
     join_timeout_ms: Option<u64>,
     health_check: &str,
 ) -> usize {
@@ -414,13 +402,7 @@ pub fn consumer_impl(
         set_global_tag("storage".to_owned(), storage_name);
         set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
 
-        metrics::init(StatsDBackend::new(
-            &host,
-            port,
-            "snuba.consumer",
-            env_config.ddm_metrics_sample_rate,
-        ))
-        .unwrap();
+        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer")).unwrap();
     }
 
     if !use_rust_processor {
@@ -535,7 +517,6 @@ pub fn consumer_impl(
         accountant_topic_config: consumer_config.accountant_topic,
         stop_at_timestamp,
         batch_write_timeout,
-        custom_envoy_request_timeout,
         join_timeout_ms,
         health_check: health_check.to_string(),
     };
@@ -569,7 +550,10 @@ pub fn consumer_impl(
     }
 }
 
-pyo3::create_exception!(rust_snuba, SnubaRustError, pyo3::exceptions::PyException);
+mod exceptions {
+    pyo3::create_exception!(rust_snuba, SnubaRustError, pyo3::exceptions::PyException);
+}
+use exceptions::*;
 
 /// insert: encoded rows
 type PyInsert = PyObject;

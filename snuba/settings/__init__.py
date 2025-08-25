@@ -305,9 +305,6 @@ RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = False
 # require live and up to date data, so caching should be avoided entirely.
 BYPASS_CACHE_REFERRERS = ["subscriptions_executor"]
 
-# (logical topic name, # of partitions)
-TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}
-
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
@@ -457,6 +454,10 @@ VALIDATE_DATASET_YAMLS_ON_STARTUP = False
 
 MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
 SNQL_DISABLED_DATASETS: set[str] = set([])
+
+# this is the fallback default for enable_formula_reliability
+# will be overwritten by get_config i.e. snuba admin runtime config
+ENABLE_FORMULA_RELIABILITY_DEFAULT = 0
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

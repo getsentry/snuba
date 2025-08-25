@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from abc import ABC
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Type, TypeAlias, Union, cast, final
 
@@ -12,8 +13,15 @@ from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 
 from snuba import environment, settings, state
+from snuba.configs.configuration import (
+    ConfigurableComponent,
+    Configuration,
+    ResourceIdentifier,
+)
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
@@ -30,7 +38,7 @@ DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX = "StorageRouting"
 MetricsBackendType: TypeAlias = Callable[
     [str, Union[int, float], Optional[Dict[str, str]], Optional[str]], None
 ]
-
+CBRS_HASH = "cbrs"
 RoutedRequestType = Union[TimeSeriesRequest, TraceItemTableRequest]
 ClickhouseQuerySettings = Dict[str, Any]
 
@@ -110,9 +118,11 @@ def _construct_hacky_querylog_payload(
         "request": {
             "id": uuid.uuid4().hex,
             "app_id": "storage_routing",
-            "body": MessageToDict(routing_decision.routing_context.in_msg)
-            if routing_decision.routing_context.in_msg
-            else {},
+            "body": (
+                MessageToDict(routing_decision.routing_context.in_msg)
+                if routing_decision.routing_context.in_msg
+                else {}
+            ),
             "referrer": strategy.__class__.__name__,
         },
         "dataset": "storage_routing",
@@ -133,7 +143,7 @@ def _construct_hacky_querylog_payload(
                 "end_timestamp": in_message_meta.end_timestamp.seconds,
                 "stats": _get_stats_dict(routing_decision),
                 "status": "0",
-                "trace_id": cur_span.trace_id if cur_span else "no_current_span",
+                "trace_id": cur_span.trace_id if cur_span else "",
                 "profile": {
                     "time_range": None,
                     "table": "eap_items",
@@ -156,7 +166,43 @@ def _construct_hacky_querylog_payload(
     }
 
 
-class BaseRoutingStrategy(metaclass=RegisteredClass):
+@dataclass()
+class RoutingStrategyConfig(Configuration):
+    pass
+
+
+class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
+    def __init__(self, default_config_overrides: dict[str, Any] = {}) -> None:
+        self._default_config_definitions = [
+            RoutingStrategyConfig(
+                name="some_default_config",
+                description="Placeholder for now",
+                value_type=int,
+                default=100,
+            ),
+        ]
+        self._overridden_additional_config_definitions = (
+            self._get_overridden_additional_config_defaults(default_config_overrides)
+        )
+
+    def component_namespace(self) -> str:
+        return "RoutingStrategy"
+
+    def _get_hash(self) -> str:
+        return CBRS_HASH
+
+    def _get_default_config_definitions(self) -> list[Configuration]:
+        return cast(list[Configuration], self._default_config_definitions)
+
+    def additional_config_definitions(self) -> list[Configuration]:
+        return self._overridden_additional_config_definitions
+
+    @property
+    def resource_identifier(self) -> ResourceIdentifier:
+        return ResourceIdentifier(
+            StorageKey.EAP_ITEMS,
+        )
+
     @classmethod
     def config_key(cls) -> str:
         return cls.__name__
@@ -173,14 +219,13 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
     def get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
         return cast("Type[BaseRoutingStrategy]", cls.class_from_name(name))
 
-    def _is_highest_accuracy_mode(self, routing_context: RoutingContext) -> bool:
-        meta = extract_message_meta(routing_context.in_msg)
-        if not hasattr(meta, "downsampled_storage_config"):
-            return False
-        return bool(
-            meta.downsampled_storage_config.mode
-            == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
-        )
+    def _is_highest_accuracy_mode(self, in_msg_meta: RequestMeta) -> bool:
+        if in_msg_meta.HasField("downsampled_storage_config"):
+            return bool(
+                in_msg_meta.downsampled_storage_config.mode
+                == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+            )
+        return False
 
     def merge_clickhouse_settings(
         self,
@@ -207,14 +252,12 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
     ) -> None:
         name = _SAMPLING_IN_STORAGE_PREFIX + name
         metrics_backend_func(name, value, tags, None)
-        span = sentry_sdk.get_current_span()
         routing_context.extra_info[name] = {
             "type": metrics_backend_func.__name__,
             "value": value,
             "tags": tags,
         }
-        if span is not None:
-            span.set_data(name, value)
+        sentry_sdk.update_current_span(attributes={name: value})
 
     def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
         raise NotImplementedError
@@ -225,7 +268,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
             OutcomesBasedRoutingStrategy,
         )
 
-        with sentry_sdk.start_span(op="decide_tier"):
+        with sentry_sdk.start_span(op="decide_tier") as span:
             try:
                 routing_context.timer.mark(_START_ESTIMATION_MARK)
                 routing_decision = self._get_routing_decision(routing_context)
@@ -252,7 +295,7 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
                 if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
                     raise e
-
+            span.set_data("decided_tier", routing_decision.tier)
             return routing_decision
 
     @final
@@ -319,9 +362,10 @@ class BaseRoutingStrategy(metaclass=RegisteredClass):
 
     def _emit_routing_mistake(self, routing_decision: RoutingDecision) -> None:
         if routing_decision.routing_context.query_result is None:
-            sentry_sdk.capture_message("storage routing: query_result is None")
             return
-        if self._is_highest_accuracy_mode(routing_decision.routing_context):
+        if self._is_highest_accuracy_mode(
+            extract_message_meta(routing_decision.routing_context.in_msg)
+        ):
             return
         profile = (
             routing_decision.routing_context.query_result.result.get("profile", {})

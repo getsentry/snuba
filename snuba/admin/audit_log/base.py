@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Mapping, MutableMapping, Optional, Union
 
 import structlog
@@ -27,7 +27,7 @@ class AuditLog:
         data: Mapping[str, Union[str, int]],
         notify: Optional[bool] = False,
     ) -> None:
-        timestamp = datetime.now().strftime("%B %d, %Y %H:%M:%S %p")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         self.logger.info(
             event=action.value,
             user=user,

@@ -1,6 +1,7 @@
 import uuid
 from typing import cast
 
+import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
@@ -8,6 +9,7 @@ from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Expression
+from snuba.configs.configuration import Configuration
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
@@ -62,6 +64,16 @@ def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
 
 
 class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return [
+            Configuration(
+                name="some_additional_config",
+                description="Placeholder for now",
+                value_type=int,
+                default=50,
+            ),
+        ]
+
     def get_ingested_items_for_timerange(self, routing_context: RoutingContext) -> int:
         in_msg_meta = extract_message_meta(routing_context.in_msg)
         entity = Entity(
@@ -147,10 +159,26 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             clickhouse_settings={},
             can_run=True,
         )
-        if self._is_highest_accuracy_mode(routing_context):
+        in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
+        sentry_sdk.update_current_span(
+            attributes={
+                "downsampling_mode": (
+                    "highest_accuracy"
+                    if self._is_highest_accuracy_mode(in_msg_meta)
+                    else "normal"
+                ),
+            }
+        )
+        if self._is_highest_accuracy_mode(in_msg_meta) or (
+            # unspecified item type will be assumed as spans when querying
+            # for GetTraces, there is no type specified so we assume spans because
+            # that is necessary for traces anyways
+            # if the type is specified and we don't know its outcome, route to Tier_1
+            in_msg_meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+            and in_msg_meta.trace_item_type not in _ITEM_TYPE_TO_OUTCOME
+        ):
             return routing_decision
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
-        in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
         start_ts = in_msg_meta.start_timestamp.seconds
         end_ts = in_msg_meta.end_timestamp.seconds
         time_range_secs = end_ts - start_ts
@@ -186,4 +214,13 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             routing_decision.tier = Tier.TIER_64
         elif ingested_items > max_items_before_downsampling * 100:
             routing_decision.tier = Tier.TIER_512
+
+        sentry_sdk.update_current_span(
+            attributes={
+                "ingested_items": ingested_items,
+                "max_items_before_downsampling": max_items_before_downsampling,
+                "tier": routing_decision.tier.name,
+            }
+        )
+
         return routing_decision
