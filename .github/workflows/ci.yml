@@ -152,14 +152,6 @@ jobs:
         # it can be used as a docker tag
         run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
 
-      # We are only using ghcr here for CI as `setup-gcloud` is a bit slow
-      # Should revisit this when we move off of google cloud build (we may want to move these to GCR)
-      - name: Registry login
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
-
-      - run: docker buildx create --driver docker-container --use
-
       - uses: getsentry/action-build-and-push-images@a53f146fc1ea3cb404f2dcf7378f5b60dd98d3ca
         with:
           image_name: 'snuba-ci'
