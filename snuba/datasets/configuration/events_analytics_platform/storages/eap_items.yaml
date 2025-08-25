@@ -106,7 +106,7 @@ schema:
       { name: attributes_float_38, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
       { name: attributes_float_39, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
     ]
-  local_table_name: eap_items_1_local
+  local_table_name: eap_items_iceberg
   dist_table_name: eap_items_1_dist
   partition_format: [date]
 allocation_policies:

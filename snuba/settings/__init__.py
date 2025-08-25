@@ -83,14 +83,14 @@ CLICKHOUSE_MAX_POOL_SIZE = 25
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
-        "host": os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
+        "host": os.environ.get("CLICKHOUSE_HOST", "34.122.107.80"),
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "max_connections": int(os.environ.get("CLICKHOUSE_MAX_CONNECTIONS", 1)),
         "block_connections": bool(
             os.environ.get("CLICKHOUSE_BLOCK_CONNECTIONS", False)
         ),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
-        "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
+        "password": os.environ.get("CLICKHOUSE_PASSWORD", "default_password"),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
         "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "secure": os.environ.get("CLICKHOUSE_SECURE", "False").lower() in ("true", "1"),
