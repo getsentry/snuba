@@ -152,13 +152,13 @@ jobs:
       - uses: getsentry/action-build-and-push-images@a53f146fc1ea3cb404f2dcf7378f5b60dd98d3ca
         with:
           image_name: 'snuba-ci'
-          platforms: linux/amd64
+          platforms: 'linux/amd64'
           dockerfile_path: 'Dockerfile'
           ghcr: true
           tag_nightly: false
           tag_latest: false
           publish_on_pr: true
-          outputs: "type=docker,dest=/tmp/snuba-ci"
+          outputs: 'type=docker,dest=/tmp/snuba-ci.tar'
 
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
@@ -169,7 +169,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: snuba-ci
-          path: /tmp/snuba-ci
+          path: /tmp/snuba-ci.tar
 
 
   tests:
