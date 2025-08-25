@@ -27,6 +27,12 @@ class ResourceIdentifier:
             else resource_identifier_name
         )
 
+    def __hash__(self) -> int:
+        return hash(self.value)
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, ResourceIdentifier) and other.value == self.value
+
     @property
     def value(self) -> str:
         return self.resource_identifier_name
