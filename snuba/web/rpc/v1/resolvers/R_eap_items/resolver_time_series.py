@@ -35,6 +35,8 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
+from snuba.state import get_int_config
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
@@ -58,6 +60,9 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_average_sample_rate_column,
     get_confidence_interval_column,
     get_count_column,
+)
+from snuba.web.rpc.v1.resolvers.common.formula_reliability import (
+    FormulaReliabilityCalculator,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression,
@@ -120,8 +125,7 @@ def _convert_result_timeseries(
 
     """
 
-    # to convert the results, need to know which were the groupby columns and which ones
-    # were aggregations
+    # the aggregations that we will include in the result
     aggregation_labels = set([expr.label for expr in request.expressions])
 
     group_by_labels = set([attr.name for attr in request.group_by])
@@ -171,7 +175,6 @@ def _convert_result_timeseries(
 
     # Go through every possible time bucket in the query, if there's row data for it, fill in its data
     # otherwise put a dummy datapoint in
-
     for bucket in time_buckets:
         for timeseries_key, timeseries in result_timeseries.items():
             row_data = result_timeseries_timestamp_to_row.get(timeseries_key, {}).get(
@@ -195,23 +198,48 @@ def _convert_result_timeseries(
                     )
                 else:
                     timeseries.data_points.append(DataPoint(data=0, data_present=False))
+
+    if get_int_config(
+        "enable_formula_reliability_ts", ENABLE_FORMULA_RELIABILITY_DEFAULT
+    ):
+        frc = FormulaReliabilityCalculator(request, data, time_buckets)
+        for timeseries in result_timeseries.values():
+            if timeseries.label in frc:
+                reliabilities = frc.get(timeseries.label)
+                for i in range(len(timeseries.data_points)):
+                    timeseries.data_points[i].reliability = reliabilities[i]
+        _remove_non_requested_expressions(request.expressions, result_timeseries)
+
     return result_timeseries.values()
 
 
-def _get_reliability_context_columns(
+def _remove_non_requested_expressions(
     expressions: Iterable[ProtoExpression],
+    result_timeseries: dict[tuple[str, str], TimeSeries],
+) -> None:
+    requested_expressions = set([expr.label for expr in expressions])
+    to_remove = []
+    for timeseries_key in result_timeseries.keys():
+        if timeseries_key[1] not in requested_expressions:
+            to_remove.append(timeseries_key)
+    for timeseries_key in to_remove:
+        del result_timeseries[timeseries_key]
+
+
+def _get_reliability_context_columns(
+    expr: ProtoExpression,
     request_meta: RequestMeta,
 ) -> list[SelectedExpression]:
     # this reliability logic ignores formulas, meaning formulas may not properly support reliability
     additional_context_columns = []
 
-    aggregates = []
-    for e in expressions:
-        if e.WhichOneof("expression") == "conditional_aggregation":
-            # ignore formulas
-            aggregates.append(e.conditional_aggregation)
-
-    for aggregation in aggregates:
+    if (
+        expr.WhichOneof("expression") == "conditional_aggregation"
+        or expr.WhichOneof("expression") == "aggregation"
+    ):
+        which_oneof = expr.WhichOneof("expression")
+        assert which_oneof in ["conditional_aggregation", "aggregation"]
+        aggregation = getattr(expr, which_oneof)
         if (
             aggregation.extrapolation_mode
             == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
@@ -236,13 +264,31 @@ def _get_reliability_context_columns(
                     expression=average_sample_rate_column,
                 )
             )
-
         count_column = get_count_column(
             aggregation, _get_attribute_key_to_expression_function(request_meta)
         )
         additional_context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
         )
+    elif expr.WhichOneof("expression") == "formula":
+        if not get_int_config(
+            "enable_formula_reliability_ts", ENABLE_FORMULA_RELIABILITY_DEFAULT
+        ):
+            return []
+        # also query for the left and right parts of the formula separately
+        # this will be used later to calculate the reliability of the formula
+        # ex: SELECT agg1/agg2 will become SELECT agg1/agg2, agg1, agg2
+        for e in [expr.formula.left, expr.formula.right]:
+            if not e.HasField("formula"):
+                additional_context_columns.append(
+                    SelectedExpression(
+                        name=e.label,
+                        expression=_proto_expression_to_ast_expression(e, request_meta),
+                    )
+                )
+            additional_context_columns.extend(
+                _get_reliability_context_columns(e, request_meta)
+            )
     return additional_context_columns
 
 
@@ -298,9 +344,11 @@ def build_query(request: TimeSeriesRequest) -> Query:
         for expr in request.expressions
     ]
 
-    additional_context_columns = _get_reliability_context_columns(
-        request.expressions, request.meta
-    )
+    additional_context_columns = []
+    for expr in request.expressions:
+        additional_context_columns.extend(
+            _get_reliability_context_columns(expr, request.meta)
+        )
 
     groupby_columns = [
         SelectedExpression(

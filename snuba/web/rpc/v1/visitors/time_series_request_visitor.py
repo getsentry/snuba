@@ -17,6 +17,9 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 from snuba.state import get_config
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.visitors.trace_item_table_request_visitor import (
+    NormalizeFormulaLabelsVisitor,
+)
 from snuba.web.rpc.v1.visitors.visitor_v2 import RequestVisitor
 
 
@@ -136,6 +139,52 @@ class RejectTimestampAsStringVisitor(RequestVisitor):
                     )
 
 
+class GetSubformulaLabelsVisitor(RequestVisitor):
+    """
+    given a formula, returns a list of the expected labels for the leaf nodes (non-formula nodes)
+    of the formula:
+    ex: for (a+b)+c it would be [myformlabel.right, myformlabel.left.left, formula.left.right...]
+    """
+
+    def __init__(self) -> None:
+        self.labels: dict[str, list[str]] = {}
+        self.curr_formula: str = ""
+        super().__init__()
+
+    def visit_TimeSeriesRequest(self, node: TimeSeriesRequest) -> None:
+        for expr in node.expressions:
+            if expr.WhichOneof("expression") == "formula":
+                self.curr_formula = expr.label
+                self.labels[self.curr_formula] = []
+                self.visit(expr.formula, expr.label)
+                if self.labels[self.curr_formula] == []:
+                    del self.labels[self.curr_formula]
+
+    def visit_BinaryFormula(
+        self, node: Expression.BinaryFormula, curr_label: str = ""
+    ) -> None:
+        self.visit(node.left, curr_label + ".left")
+        self.visit(node.right, curr_label + ".right")
+
+    def visit_Expression(self, node: Expression, curr_label: str = "") -> None:
+        expr_type = node.WhichOneof("expression")
+        assert expr_type is not None
+        self.visit(getattr(node, expr_type), curr_label)
+
+    def visit_AttributeAggregation(
+        self, node: AttributeAggregation, curr_label: str = ""
+    ) -> None:
+        self.labels[self.curr_formula].append(curr_label)
+
+    def visit_AttributeConditionalAggregation(
+        self, node: AttributeConditionalAggregation, curr_label: str = ""
+    ) -> None:
+        self.labels[self.curr_formula].append(curr_label)
+
+    def visit_Literal(self, node: Literal, curr_label: str = "") -> None:
+        return
+
+
 def preprocess_expression_labels(msg: TimeSeriesRequest) -> None:
     RejectTimestampAsStringVisitor().visit(msg)
     ValidateAliasVisitor().visit(msg)
@@ -144,3 +193,4 @@ def preprocess_expression_labels(msg: TimeSeriesRequest) -> None:
     # We need this visitor because the endpoint only behaves correctly if
     # all aggregates have the exact same label as the expression they are in
     AddAggregateLabelsVisitor().visit(msg)
+    NormalizeFormulaLabelsVisitor().visit(msg)
