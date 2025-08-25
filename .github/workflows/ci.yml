@@ -158,7 +158,7 @@ jobs:
           tag_nightly: false
           tag_latest: false
           publish_on_pr: true
-          outputs: "type=docker,dest=/tmp/snuba-ci.tar"
+          outputs: "type=docker,dest=/tmp/snuba-ci"
 
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
@@ -169,7 +169,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: snuba-ci
-          path: /tmp/snuba-ci.tar
+          path: /tmp/snuba-ci
 
 
   tests:
