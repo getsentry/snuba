@@ -73,6 +73,7 @@ schema:
       type: DateTime,
       args: { schema_modifiers: [nullable] },
     },
+    { name: timestamp_ms, type: DateTime64, args: { precision: 3, schema_modifiers: [nullable] } },
   ]
 
 storages:
