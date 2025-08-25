@@ -1,10 +1,13 @@
 import os
 from typing import Any, Dict, List, Optional, Union
 
+import sentry_sdk
+
 from snuba import settings
 from snuba.admin.audit_log.action import (
     ALLOCATION_POLICY_ACTIONS,
     MIGRATION_ACTIONS,
+    ROUTING_STRATEGY_ACTIONS,
     RUNTIME_CONFIG_ACTIONS,
     AuditLogAction,
 )
@@ -19,6 +22,8 @@ def build_blocks(
         text = build_migration_run_text(data, action)
     elif action in ALLOCATION_POLICY_ACTIONS:
         text = build_allocation_policy_changed_text(data, action)
+    elif action in ROUTING_STRATEGY_ACTIONS:
+        text = build_routing_strategy_changed_text(data, action)
     else:
         text = f"{action.value}: {data}"
 
@@ -30,10 +35,32 @@ def build_blocks(
     return [section, build_context(user, timestamp, action)]
 
 
+def build_routing_strategy_changed_text(
+    data: Any, action: AuditLogAction
+) -> Optional[str]:
+    base = f"*Routing strategy {data['strategy']} configuration changed:*"
+    if action == AuditLogAction.ROUTING_STRATEGY_DELETE:
+        removed = f"~```'{data['key']}({data.get('params', {})})'```~"
+        return f"{base} :put_litter_in_its_place:\n\n{removed}"
+    elif action == AuditLogAction.ROUTING_STRATEGY_UPDATE:
+        updated = f"```'{data['key']}({data.get('params', {})})' = '{data['value']}'```"
+        return f"{base} :up: :date:\n\n{updated}"
+    else:
+        # todo: raise error, cause slack won't accept this
+        # if it is none
+        sentry_sdk.capture_message(
+            f"Unknown action: {action.value} with data: {data}", level="error"
+        )
+        return f"{action.value}: {data}"
+
+
 def build_allocation_policy_changed_text(
     data: Any, action: AuditLogAction
 ) -> Optional[str]:
-    base = f"*Storage {data['storage']} Allocation Policy Changed:*"
+    if "strategy" in data:
+        base = f"*Routing strategy {data['strategy']} Allocation Policy Changed:*"
+    else:
+        base = f"*Storage {data['storage']} Allocation Policy Changed:*"
 
     if action == AuditLogAction.ALLOCATION_POLICY_DELETE:
         removed = f"~```'{data['policy']}.{data['key']}({data.get('params', {})})'```~"
@@ -44,6 +71,9 @@ def build_allocation_policy_changed_text(
     else:
         # todo: raise error, cause slack won't accept this
         # if it is none
+        sentry_sdk.capture_message(
+            f"Unknown action: {action.value} with data: {data}", level="error"
+        )
         return f"{action.value}: {data}"
 
 
@@ -62,6 +92,9 @@ def build_runtime_config_text(data: Any, action: AuditLogAction) -> Optional[str
     else:
         # todo: raise error, cause slack won't accept this
         # if it is none
+        sentry_sdk.capture_message(
+            f"Unknown action: {action.value} with data: {data}", level="error"
+        )
         return None
 
 

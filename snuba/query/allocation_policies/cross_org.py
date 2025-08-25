@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from snuba.configs.configuration import Configuration, InvalidConfig
+from snuba.configs.configuration import Configuration, InvalidConfig, ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import QueryResultOrError, QuotaAllowance
 from snuba.query.allocation_policies.concurrent_rate_limit import (
@@ -73,7 +73,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
             referrer = params.get("referrer", None)
             if referrer is not None and not self._referrer_is_registered(referrer):
                 raise InvalidConfig(
-                    f"Referrer {referrer} is not registered in the the {self._storage_key.value} yaml. Register it first to be able to override its limits"
+                    f"Referrer {referrer} is not registered in the the {self._resource_identifier.value} yaml. Register it first to be able to override its limits"
                 )
         super().set_config_value(config_key, value, params, user)
 
@@ -118,7 +118,10 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         **kwargs: str,
     ) -> None:
         super().__init__(
-            storage_key, required_tenant_types, default_config_overrides, **kwargs
+            ResourceIdentifier(storage_key),
+            required_tenant_types,
+            default_config_overrides,
+            **kwargs,
         )
         self._registered_cross_org_referrers = cast(
             "dict[str, dict[str, int]]", kwargs.get("cross_org_referrer_limits", {})
@@ -188,7 +191,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         if not self._referrer_is_registered(referrer):
             decision_explanation[
                 "cross_org_query"
-            ] = f"This referrer is not registered for the current storage {self._storage_key.value}, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"
+            ] = f"This referrer is not registered for the current storage {self._resource_identifier.value}, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"
 
         return QuotaAllowance(
             can_run=can_run,
