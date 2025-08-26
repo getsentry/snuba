@@ -35,7 +35,7 @@ jobs:
 
   assemble:
     needs: [build]
-    if: ${{ (github.ref_name == 'master' || startsWith(github.ref_name, 'releases/')) && github.event_name != 'pull_request' }}
+    # if: ${{ (github.ref_name == 'master' || startsWith(github.ref_name, 'releases/')) && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -53,8 +53,6 @@ jobs:
         run: |
           docker buildx imagetools create \
             --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
-            --tag ghcr.io/getsentry/snuba:nightly \
-            --tag ghcr.io/getsentry/snuba:latest \
             ghcr.io/getsentry/snuba:${{ github.sha }}-amd64 \
             ghcr.io/getsentry/snuba:${{ github.sha }}-arm64
 
