@@ -54,8 +54,8 @@ jobs:
         run: |
           docker buildx imagetools create \
             --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-amd64 \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-arm64
+            ghcr.io/getsentry/snuba:${{ github.event.pull_request.head.sha || github.sha }}-amd64 \
+            ghcr.io/getsentry/snuba:${{ github.event.pull_request.head.sha || github.sha }}-arm64
 
   self-hosted-end-to-end:
     needs: [build, assemble]
