@@ -21,6 +21,7 @@ class ResourceIdentifier:
         self,
         resource: StorageKey | str,
     ):
+        assert isinstance(resource, StorageKey) or isinstance(resource, str)
         self.resource = resource
 
     def __eq__(self, other: Any) -> bool:
