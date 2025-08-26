@@ -204,7 +204,7 @@ jobs:
 
       - name: Load snuba-ci image
         run: |
-          docker buildx build --load --import-cache type=oci,src=/tmp/snuba-ci.tar
+          docker load --input /tmp/snuba-ci.tar
           docker image ls -a
 
       - name: Docker set up
@@ -281,7 +281,7 @@ jobs:
 
       - name: Load snuba-ci image
         run: |
-          docker buildx build --load --import-cache type=oci,src=/tmp/snuba-ci.tar
+          docker load --input /tmp/snuba-ci.tar
           docker image ls -a
 
       - name: Checkout sentry
@@ -388,7 +388,7 @@ jobs:
 
       - name: Load snuba-ci image
         run: |
-          docker buildx build --load --import-cache type=oci,src=/tmp/snuba-ci.tar
+          docker load --input /tmp/snuba-ci.tar
           docker image ls -a
 
       - name: Docker set up
