@@ -154,11 +154,17 @@ jobs:
           image_name: 'snuba-ci'
           platforms: 'linux/amd64'
           dockerfile_path: 'Dockerfile'
-          ghcr: true
+          ghcr: false
           tag_nightly: false
           tag_latest: false
-          publish_on_pr: true
+          tags: 'ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}'
           outputs: 'type=docker,dest=/tmp/snuba-ci.tar'
+
+      - name: Push snuba-ci image to GHCR
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          docker load --input /tmp/snuba-ci.tar
+          docker push ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
@@ -198,7 +204,7 @@ jobs:
 
       - name: Load snuba-ci image
         run: |
-          docker load --input /tmp/snuba-ci.tar
+          docker buildx build --load --import-cache type=oci,src=/tmp/snuba-ci.tar
           docker image ls -a
 
       - name: Docker set up
@@ -275,7 +281,7 @@ jobs:
 
       - name: Load snuba-ci image
         run: |
-          docker load --input /tmp/snuba-ci.tar
+          docker buildx build --load --import-cache type=oci,src=/tmp/snuba-ci.tar
           docker image ls -a
 
       - name: Checkout sentry
@@ -382,7 +388,7 @@ jobs:
 
       - name: Load snuba-ci image
         run: |
-          docker load --input /tmp/snuba-ci.tar
+          docker buildx build --load --import-cache type=oci,src=/tmp/snuba-ci.tar
           docker image ls -a
 
       - name: Docker set up
