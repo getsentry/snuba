@@ -32,7 +32,7 @@ jobs:
         ghcr: true
         tag_nightly: false
         tag_latest: false
-        publish_on_branch: true
+        publish_on_pr: true
 
   assemble:
     needs: [build]
