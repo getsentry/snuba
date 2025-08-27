@@ -39,7 +39,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    # if: ${{ github.ref_name == 'master' }}
+    if: ${{ github.ref_name == 'master' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: getsentry/action-build-and-push-images@a53f146fc1ea3cb404f2dcf7378f5b60dd98d3ca
@@ -52,7 +52,6 @@ jobs:
           tag_suffix: -gha
           tag_nightly: false
           tag_latest: false
-          publish_on_pr: true
           google_ar: true
           google_ar_image_name: us-central1-docker.pkg.dev/sentryio/snuba/image
           google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
