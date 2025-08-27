@@ -32,9 +32,11 @@ _ORG_ID = 1
 def _get_request_meta(
     start: datetime | None = None,
     end: datetime | None = None,
+    hour_interval: int | None = None,
     downsampled_storage_config: DownsampledStorageConfig | None = None,
 ) -> RequestMeta:
-    start = start or BASE_TIME - timedelta(hours=24)
+    hour_interval = hour_interval or 24
+    start = start or BASE_TIME - timedelta(hours=hour_interval)
     end = end or BASE_TIME
     return RequestMeta(
         project_ids=[_PROJECT_ID],
