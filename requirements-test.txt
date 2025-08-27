@@ -1,5 +1,15 @@
 --index-url https://pypi.devinfra.sentry.io/simple
 
+pre-commit==3.6.0
+
+black==24.3.0
+devservices==1.2.1
+flake8==7.0.0
+freezegun==1.2.2
+honcho==1.1.0
+pytest==8.3.3
+pytest-cov==4.1.0
+pytest-watch==4.2.0
 time-machine==2.13.0
 
 # for typing

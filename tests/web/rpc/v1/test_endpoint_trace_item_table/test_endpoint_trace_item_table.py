@@ -54,13 +54,21 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query import OrderBy, OrderByDirection
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import column as snuba_column
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.proto_visitor import (
+    AggregationToConditionalAggregationVisitor,
+    TraceItemTableRequestWrapper,
+)
 from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
     _apply_labels_to_columns,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (
@@ -210,7 +218,7 @@ class TestTraceItemTable(BaseApiTest):
             sentry_sdk_mock.assert_called()
             assert metrics_mock.increment.call_args_list.count(call("OOM_query")) == 1
 
-    def test_timeoutt(self, monkeypatch: Any) -> None:
+    def test_timeout(self, monkeypatch: Any) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
         message = TraceItemTableRequest(
@@ -223,7 +231,7 @@ class TestTraceItemTable(BaseApiTest):
                 end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_BEST_EFFORT
+                    mode=DownsampledStorageConfig.MODE_NORMAL
                 ),
             ),
             filter=TraceItemFilter(
@@ -253,19 +261,18 @@ class TestTraceItemTable(BaseApiTest):
                     code=159,
                 ),
             ),
-            patch("snuba.web.rpc.sentry_sdk.capture_exception") as sentry_sdk_mock,
         ):
             with pytest.raises(QueryException) as e:
                 EndpointTraceItemTable().execute(message)
             assert "DB::Exception: Timeout exceeded" in str(e.value)
 
-            sentry_sdk_mock.assert_called()
             metrics_mock.increment.assert_any_call(
                 "timeout_query",
                 1,
                 {
                     "endpoint": "EndpointTraceItemTable",
-                    "storage_routing_mode": "MODE_BEST_EFFORT",
+                    "storage_routing_mode": "MODE_NORMAL",
+                    "referrer": "something",
                 },
             )
 
@@ -1128,7 +1135,7 @@ class TestTraceItemTable(BaseApiTest):
     def test_order_by_does_not_error_if_groupby_exists(self) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
-                project_ids=[1, 2, 3],
+                project_ids=[1],
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
@@ -2028,6 +2035,62 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    def test_aggregation_filter_with_key_and_formula_fails(self) -> None:
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(
+                TraceItemTableRequest(
+                    meta=RequestMeta(
+                        project_ids=[1, 2, 3],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                        start_timestamp=START_TIMESTAMP,
+                        end_timestamp=END_TIMESTAMP,
+                        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    ),
+                    filter=TraceItemFilter(
+                        exists_filter=ExistsFilter(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="t1")
+                        )
+                    ),
+                    columns=[
+                        Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="t2")
+                        )
+                    ],
+                    aggregation_filter=AggregationFilter(
+                        comparison_filter=AggregationComparisonFilter(
+                            aggregation=AttributeAggregation(
+                                label="sum(my.float.field)",
+                            ),
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                                ),
+                                label="sum(my.float.field)",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            ),
+                            formula=Column.BinaryFormula(
+                                left=Column(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_STRING, name="t1"
+                                    )
+                                ),
+                                right=Column(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_STRING, name="t2"
+                                    )
+                                ),
+                                op=Column.BinaryFormula.OP_DIVIDE,
+                            ),
+                            op=AggregationComparisonFilter.OP_GREATER_THAN,
+                            val=350,
+                        )
+                    ),
+                )
+            )
+
     def test_aggregation_filter_and_or(self, setup_teardown: Any) -> None:
         """
         This test ensures that aggregates are properly filtered out
@@ -2320,6 +2383,203 @@ class TestTraceItemTable(BaseApiTest):
         )
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
+
+    def test_aggregation_filter_with_binary_formula(self) -> None:
+        """
+        This test ensures that BinaryFormula can be used in aggregation_filter
+        to filter groups based on calculated aggregation results (like failure rate).
+        This simulates a SQL HAVING clause with complex expressions.
+        """
+        # Write test data with different success/failure patterns for different services
+        items_storage = get_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+
+        # Service A: High success rate (9 success, 1 failure = 10% failure rate)
+        service_a_messages = [
+            gen_item_message(
+                msg_timestamp,
+                attributes={
+                    "service_name": AnyValue(string_value="service_a"),
+                    "status": AnyValue(string_value="success"),
+                },
+            )
+            for _ in range(9)
+        ] + [
+            gen_item_message(
+                msg_timestamp,
+                attributes={
+                    "service_name": AnyValue(string_value="service_a"),
+                    "status": AnyValue(string_value="failure"),
+                },
+            )
+            for _ in range(1)
+        ]
+
+        # Service B: Medium failure rate (6 success, 4 failure = 40% failure rate)
+        service_b_messages = [
+            gen_item_message(
+                msg_timestamp,
+                attributes={
+                    "service_name": AnyValue(string_value="service_b"),
+                    "status": AnyValue(string_value="success"),
+                },
+            )
+            for _ in range(6)
+        ] + [
+            gen_item_message(
+                msg_timestamp,
+                attributes={
+                    "service_name": AnyValue(string_value="service_b"),
+                    "status": AnyValue(string_value="failure"),
+                },
+            )
+            for _ in range(4)
+        ]
+
+        # Service C: High failure rate (2 success, 8 failure = 80% failure rate)
+        service_c_messages = [
+            gen_item_message(
+                msg_timestamp,
+                attributes={
+                    "service_name": AnyValue(string_value="service_c"),
+                    "status": AnyValue(string_value="success"),
+                },
+            )
+            for _ in range(2)
+        ] + [
+            gen_item_message(
+                msg_timestamp,
+                attributes={
+                    "service_name": AnyValue(string_value="service_c"),
+                    "status": AnyValue(string_value="failure"),
+                },
+            )
+            for _ in range(8)
+        ]
+
+        all_messages = service_a_messages + service_b_messages + service_c_messages
+        write_raw_unprocessed_events(items_storage, all_messages)  # type: ignore
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="service_name")
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="service_name")
+                ),
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="status"
+                                ),
+                                filter=TraceItemFilter(
+                                    comparison_filter=ComparisonFilter(
+                                        key=AttributeKey(
+                                            type=AttributeKey.TYPE_STRING, name="status"
+                                        ),
+                                        op=ComparisonFilter.OP_EQUALS,
+                                        value=AttributeValue(val_str="failure"),
+                                    )
+                                ),
+                                label="failure_count",
+                            ),
+                        ),
+                        right=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="status"
+                                ),
+                                label="total_count",
+                            ),
+                        ),
+                    ),
+                    label="failure_rate",
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="service_name")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="service_name"
+                        )
+                    )
+                ),
+            ],
+            aggregation_filter=AggregationFilter(
+                comparison_filter=AggregationComparisonFilter(
+                    # Using the actual failure rate formula instead of placeholder
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="status"
+                                ),
+                                filter=TraceItemFilter(
+                                    comparison_filter=ComparisonFilter(
+                                        key=AttributeKey(
+                                            type=AttributeKey.TYPE_STRING, name="status"
+                                        ),
+                                        op=ComparisonFilter.OP_EQUALS,
+                                        value=AttributeValue(val_str="failure"),
+                                    )
+                                ),
+                                label="failure_count",
+                            ),
+                        ),
+                        right=Column(
+                            conditional_aggregation=AttributeConditionalAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="status"
+                                ),
+                                label="total_count",
+                            ),
+                        ),
+                    ),
+                    op=AggregationComparisonFilter.OP_GREATER_THAN,
+                    val=0.3,  # Filter for failure rate > 30%
+                )
+            ),
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        expected_response_column_values = [
+            TraceItemColumnValues(
+                attribute_name="service_name",
+                results=[
+                    AttributeValue(val_str="service_b"),
+                    AttributeValue(val_str="service_c"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="failure_rate",
+                results=[
+                    AttributeValue(val_double=0.4),  # 4/10 = 40%
+                    AttributeValue(val_double=0.8),  # 8/10 = 80%
+                ],
+            ),
+        ]
+        assert response.column_values == expected_response_column_values
 
     def test_offset_pagination(self, setup_teardown: Any) -> None:
         def make_request(page_token: PageToken) -> TraceItemTableRequest:
@@ -3200,6 +3460,53 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    def test_coalesce_attributes(self) -> None:
+        span_ts = BASE_TIME + timedelta(minutes=1)
+
+        # we write the old attribute name
+        write_eap_item(span_ts, {"ai.model_id": "sentaur"})
+
+        # we query and filter on the new attribute name
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING,
+                        name="gen_ai.response.model",
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="sentaur"),
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING,
+                        name="gen_ai.response.model",
+                    )
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="gen_ai.response.model",
+                results=[
+                    AttributeValue(val_str="sentaur"),
+                ],
+            ),
+        ]
+
 
 class TestUtils:
     def test_apply_labels_to_columns_backward_compat(self) -> None:
@@ -3265,3 +3572,221 @@ class TestUtils:
         _apply_labels_to_columns(message)
         assert message.columns[0].label == "avg(custom_measurement)"
         assert message.columns[1].label == "avg(custom_measurement_2)"
+
+
+def test_build_query_with_order_by_optimization() -> None:
+    request = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+            ),
+            Column(
+                aggregation=AttributeAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    ),
+                )
+            ),
+        ],
+        order_by=[
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    )
+                ),
+                descending=True,
+            ),
+        ],
+    )
+
+    wrapper = TraceItemTableRequestWrapper(request)
+    wrapper.accept(AggregationToConditionalAggregationVisitor())
+    request = _apply_labels_to_columns(request)
+
+    query = build_query(request)
+    assert query.get_orderby() == [
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("organization_id"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("project_id"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("item_type"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("timestamp"),
+        ),
+    ]
+
+
+def test_build_query_with_order_by_optimization_multiple_orderby() -> None:
+    request = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+            ),
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo")),
+        ],
+        order_by=[
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    )
+                ),
+                descending=True,
+            ),
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.item_id"
+                    )
+                ),
+                descending=True,
+            ),
+        ],
+    )
+
+    wrapper = TraceItemTableRequestWrapper(request)
+    wrapper.accept(AggregationToConditionalAggregationVisitor())
+    request = _apply_labels_to_columns(request)
+
+    query = build_query(request)
+    assert query.get_orderby() == [
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("organization_id"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("project_id"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("item_type"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=snuba_column("timestamp"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=f.cast(
+                snuba_column("item_id"),
+                "String",
+                alias="sentry.item_id_TYPE_STRING",
+            ),
+        ),
+    ]
+
+
+def test_build_query_with_order_by_optimization_disabled_because_multiproject() -> None:
+    request = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1, 2],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+            ),
+            Column(
+                aggregation=AttributeAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    ),
+                )
+            ),
+        ],
+        order_by=[
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    )
+                ),
+                descending=True,
+            ),
+        ],
+    )
+
+    wrapper = TraceItemTableRequestWrapper(request)
+    wrapper.accept(AggregationToConditionalAggregationVisitor())
+    request = _apply_labels_to_columns(request)
+
+    query = build_query(request)
+    assert query.get_orderby() == [
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=f.cast(
+                snuba_column("timestamp"),
+                "String",
+                alias="sentry.timestamp_TYPE_STRING",
+            ),
+        ),
+    ]
+
+
+def test_build_query_with_order_by_optimization_disabled_because_groupby() -> None:
+    request = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+            ),
+            Column(
+                aggregation=AttributeAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    ),
+                )
+            ),
+        ],
+        group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")],
+        order_by=[
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.timestamp"
+                    )
+                ),
+                descending=True,
+            ),
+        ],
+    )
+
+    wrapper = TraceItemTableRequestWrapper(request)
+    wrapper.accept(AggregationToConditionalAggregationVisitor())
+    request = _apply_labels_to_columns(request)
+
+    query = build_query(request)
+    assert query.get_orderby() == [
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=f.cast(
+                snuba_column("timestamp"),
+                "String",
+                alias="sentry.timestamp_TYPE_STRING",
+            ),
+        ),
+    ]

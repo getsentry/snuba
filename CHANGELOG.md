@@ -1,5 +1,75 @@
 # Changelog
 
+## 25.8.0
+
+### Various fixes & improvements
+
+- ref: consolidate all dev requirements (#7352) by @joshuarli
+- fix: fix broken ci (#7354) by @kylemumma
+- fix(gocd): Do not ignore errors from EAP consumers (#7353) by @phacops
+- fix(issues): Start processing new_group_first_seen in merge case (#7351) by @thetruecpaul
+- chore: Test ClickHouse 25.3 (#7339) by @phacops
+- fix(storage-routing): If item type is unspecified, default to spans (#7350) by @volokluev
+- ref(eap): Remove more references to spans, eap-spans and eap-items-span (#7301) by @phacops
+- fix(storage_routing): fix routing strategy assuming highest accuracy by default (#7347) by @volokluev
+- chore: bump sentry-sdk to 2.33.2 again (#7344) by @MeredithAnya
+- feat(eap): enable sampling for GetTraces single item queries (#7345) by @volokluev
+- ref: bump sentry-arroyo to 2.29.1 (#7343) by @getsentry-bot
+- feat: Add Rust support to bump-version workflow (#7342) by @davidtsuk
+- feat(errors): Add group_first_seen column to issues platform entity (#7335) by @thetruecpaul
+- feat(errors): Add group_first_seen column to issues platform storage (#7336) by @thetruecpaul
+- feat(errors): Add group_first_seen column on issues platform (#7334) by @thetruecpaul
+- feat(cbrs): unify allocation policy and routing strategy (#7337) by @xurui-c
+- feat(eap): add BinaryFormula to AggregationComparisonFilter (#7314) by @onewland
+- Revert "chore: Test ClickHouse 25.3 (#7338)" (7e32590f) by @getsentry-bot
+- chore: Test ClickHouse 25.3 (#7338) by @phacops
+- Revert "chore: Test ClickHouse 25.3 (#7332)" (4854e6cb) by @getsentry-bot
+- chore: Test ClickHouse 25.3 (#7332) by @phacops
+- ref(subscriptions): crash schedulers that dont have LogAppendTime on default topic (#7325) by @MeredithAnya
+- feat(clickhouse): Add missing user config for ClickHouse in dev (#6868) by @hubertdeng123
+- cleanup(consumers): remove slice and custom envoy request timeout (#7328) by @volokluev
+
+_Plus 45 more_
+
+## 25.7.0
+
+### Various fixes & improvements
+
+- obs(consumers): Emit a metric when a write to clickouse fails (#7276) by @volokluev
+- fix(manual_jobs): use a redis pipeline instead of mget for manual jobs (#7230) by @volokluev
+- feat(eap): Allow to coalesce specific attributes (#7272) by @phacops
+- ref(deps): Bump arroyo to 2.27.0 (#7270) by @untitaker
+- feat(attributes): add sampling to autocomplete (#7267) by @volokluev
+- Revert "feat(eap): Allow to coalesce specific attributes (#7269)" (beabc915) by @getsentry-bot
+- feat(eap): Allow to coalesce specific attributes (#7269) by @phacops
+- Revert "Use v2 consumer everywhere (#7262)" (a5740c8b) by @getsentry-bot
+- Use v2 consumer everywhere (#7262) by @volokluev
+- chore(consumers): Bump Rust toolchain version (#7252) by @lcian
+- meta: Bump new development version (5451c41d)
+
+## 25.6.2
+
+### Various fixes & improvements
+
+- chore(consumers): bump statsdproxy (#7256) by @lcian
+- feat: enable reliability of formulas to be returned in trace_item_table endpoint (#7226) by @kylemumma
+- fix(TraceItemsDetails): dedupe int,bool and float attrs (#7260) by @MeredithAnya
+- remove sentry logging (#7263) by @MeredithAnya
+- chore(traces): Remove standalone spans condition (#7257) by @Zylphrex
+- fix(ci): Tag snuba docker images using PR commit shas (#7259) by @hubertdeng123
+- feat(logs): Add support for creating logs subscriptions (#7261) by @shruthilayaj
+- feat: open fail for snuba cache write failures (#7255) by @kylemumma
+- feat(consumers): Re-implement batching consumer (#7248) by @volokluev
+- Revert "chore(consumers): Bump statsdproxy (#7251)" (889d1e26) by @getsentry-bot
+- chore(consumers): Bump statsdproxy (#7251) by @lcian
+- ci: acquire docker image from ghcr for release (#7245) by @aldy505
+- ref: bump sentry-protos to 0.3.0 (#7249) by @getsentry-bot
+- ref: bump sentry-protos to 0.2.1 (#7247) by @getsentry-bot
+- fix(cbrs): set request in routing decision (#7241) by @xurui-c
+- chore(eap-timeseries): Bump max allowed bucktes by 1 (DAIN-667) (#7246) by @shruthilayaj
+- chore(devservices): Bump devservices to 1.2.1 (#7244) by @hubertdeng123
+- meta: Bump new development version (2aee9c59)
+
 ## 25.6.1
 
 ### Various fixes & improvements

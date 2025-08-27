@@ -34,6 +34,8 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
+from snuba.state import get_int_config
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
@@ -59,8 +61,8 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    apply_virtual_columns_eap_items,
-    attribute_key_to_expression_eap_items,
+    apply_virtual_columns,
+    attribute_key_to_expression,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -92,10 +94,23 @@ def aggregation_filter_to_expression(
                 raise BadSnubaRPCRequestException(
                     f"Unsupported aggregation filter op: {AggregationComparisonFilter.Op.Name(agg_filter.comparison_filter.op)}"
                 )
+            if agg_filter.comparison_filter.HasField(
+                "formula"
+            ) and agg_filter.comparison_filter.HasField("conditional_aggregation"):
+                raise BadSnubaRPCRequestException(
+                    "Cannot use formula and conditional aggregation in the same ComparisonFilter"
+                )
+            elif agg_filter.comparison_filter.HasField("formula"):
+                return op_expr(
+                    _formula_to_expression(
+                        agg_filter.comparison_filter.formula, request_meta
+                    ),
+                    agg_filter.comparison_filter.val,
+                )
             return op_expr(
                 aggregation_to_expression(
                     agg_filter.comparison_filter.conditional_aggregation,
-                    attribute_key_to_expression_eap_items,
+                    attribute_key_to_expression,
                     use_sampling_factor(request_meta),
                 ),
                 agg_filter.comparison_filter.val,
@@ -133,39 +148,46 @@ def _convert_order_by(
     order_by: Sequence[TraceItemTableRequest.OrderBy],
     request_meta: RequestMeta,
 ) -> Sequence[OrderBy]:
-    if len(order_by) == 1:
-        order = order_by[0]
-        if order.column.key.name == "sentry.timestamp" and len(groupby) == 0:
-            direction = (
-                OrderByDirection.DESC if order.descending else OrderByDirection.ASC
-            )
-            return [
-                OrderBy(
-                    direction=direction,
-                    expression=snuba_column("organization_id"),
-                ),
-                OrderBy(
-                    direction=direction,
-                    expression=snuba_column("project_id"),
-                ),
-                OrderBy(
-                    direction=direction,
-                    expression=snuba_column("item_type"),
-                ),
-                OrderBy(
-                    direction=direction,
-                    expression=snuba_column("timestamp"),
-                ),
-            ]
-
     res: list[OrderBy] = []
-    for x in order_by:
+    for i, x in enumerate(order_by):
         direction = OrderByDirection.DESC if x.descending else OrderByDirection.ASC
-        if x.column.HasField("key"):
+
+        # OPTIMIZATION: If the first ORDER BY is timestamp and there is only 1
+        # project and no group bys, it means we can replace it with the following
+        # ORDER BY which matches the table's ORDER BY to take advantage of the
+        # `optimize_read_in_order` setting.
+        if (
+            i == 0
+            and len(request_meta.project_ids) == 1
+            and len(groupby) == 0
+            and x.column.HasField("key")
+            and x.column.key.name == "sentry.timestamp"
+        ):
+            res.extend(
+                [
+                    OrderBy(
+                        direction=direction,
+                        expression=snuba_column("organization_id"),
+                    ),
+                    OrderBy(
+                        direction=direction,
+                        expression=snuba_column("project_id"),
+                    ),
+                    OrderBy(
+                        direction=direction,
+                        expression=snuba_column("item_type"),
+                    ),
+                    OrderBy(
+                        direction=direction,
+                        expression=snuba_column("timestamp"),
+                    ),
+                ]
+            )
+        elif x.column.HasField("key"):
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=attribute_key_to_expression_eap_items(x.column.key),
+                    expression=attribute_key_to_expression(x.column.key),
                 )
             )
         elif x.column.HasField("conditional_aggregation"):
@@ -174,7 +196,7 @@ def _convert_order_by(
                     direction=direction,
                     expression=aggregation_to_expression(
                         x.column.conditional_aggregation,
-                        attribute_key_to_expression_eap_items,
+                        attribute_key_to_expression,
                         use_sampling_factor(request_meta),
                     ),
                 )
@@ -195,7 +217,31 @@ def _get_reliability_context_columns(
     """
     extrapolated aggregates need to request extra columns to calculate the reliability of the result.
     this function returns the list of columns that need to be requested.
+
+    If alias_prefix is provided, it will be prepended to the alias of the returned columns.
     """
+
+    if column.HasField("formula"):
+        if not get_int_config(
+            "enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT
+        ):
+            return []
+        # also query for the left and right parts of the formula separately
+        # this will be used later to calculate the reliability of the formula
+        # ex: SELECT agg1/agg2 will become SELECT agg1/agg2, agg1, agg2
+        context_cols = []
+        for col in [column.formula.left, column.formula.right]:
+            if not col.HasField("formula"):
+                context_cols.append(
+                    SelectedExpression(
+                        name=col.label,
+                        expression=_column_to_expression(col, request_meta),
+                    )
+                )
+            context_cols.extend(_get_reliability_context_columns(col, request_meta))
+
+        return context_cols
+
     if not (column.HasField("conditional_aggregation")):
         return []
 
@@ -206,7 +252,7 @@ def _get_reliability_context_columns(
         context_columns = []
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items,
+            attribute_key_to_expression,
         )
         if confidence_interval_column is not None:
             context_columns.append(
@@ -218,17 +264,18 @@ def _get_reliability_context_columns(
 
         average_sample_rate_column = get_average_sample_rate_column(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items,
-        )
-        count_column = get_count_column(
-            column.conditional_aggregation,
-            attribute_key_to_expression_eap_items,
+            attribute_key_to_expression,
         )
         context_columns.append(
             SelectedExpression(
                 name=average_sample_rate_column.alias,
                 expression=average_sample_rate_column,
             )
+        )
+
+        count_column = get_count_column(
+            column.conditional_aggregation,
+            attribute_key_to_expression,
         )
         context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
@@ -262,11 +309,11 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     Given a column protobuf object, translates it into a Expression object and returns it.
     """
     if column.HasField("key"):
-        return attribute_key_to_expression_eap_items(column.key)
+        return attribute_key_to_expression(column.key)
     elif column.HasField("conditional_aggregation"):
         function_expr = aggregation_to_expression(
             column.conditional_aggregation,
-            attribute_key_to_expression_eap_items,
+            attribute_key_to_expression,
             use_sampling_factor(request_meta),
         )
         # aggregation label may not be set and the column label takes priority anyways.
@@ -307,9 +354,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
     item_type_conds = [
         f.equals(snuba_column("item_type"), request.meta.trace_item_type)
     ]
-    groupby = [
-        attribute_key_to_expression_eap_items(attr_key) for attr_key in request.group_by
-    ]
+    groupby = [attribute_key_to_expression(attr_key) for attr_key in request.group_by]
     res = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -317,7 +362,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
             request.meta,
             trace_item_filters_to_expression(
                 request.filter,
-                attribute_key_to_expression_eap_items,
+                attribute_key_to_expression,
             ),
             *item_type_conds,
         ),
@@ -339,7 +384,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
         ),
     )
     treeify_or_and_conditions(res)
-    apply_virtual_columns_eap_items(res, request.virtual_column_contexts)
+    apply_virtual_columns(res, request.virtual_column_contexts)
     add_existence_check_to_subscriptable_references(res)
     return res
 

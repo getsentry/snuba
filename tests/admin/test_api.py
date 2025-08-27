@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from datetime import UTC, datetime, timedelta
 from typing import Any, Sequence, Tuple, Type
 from unittest import mock
@@ -9,13 +8,14 @@ import pytest
 import simplejson as json
 from attr import dataclass
 from flask.testing import FlaskClient
-from google.protobuf import descriptor_pb2
-from google.protobuf.descriptor_pool import DescriptorPool
-from google.protobuf.message_factory import MessageFactory
-from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
+    TimeSeriesRequest,
+    TimeSeriesResponse,
+)
 
 from snuba import state
 from snuba.admin.auth import USER_HEADER_KEY
+from snuba.configs.configuration import Configuration
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
@@ -23,14 +23,10 @@ from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     NO_UNITS,
     AllocationPolicy,
-    AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    RoutingDecision,
-)
 
 BASE_TIME = datetime.utcnow().replace(
     hour=8, minute=0, second=0, microsecond=0, tzinfo=UTC
@@ -50,117 +46,24 @@ def admin_api() -> FlaskClient:
 
 
 @pytest.fixture(scope="session")
-def rpc_test_setup() -> Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]]:
-    pool = DescriptorPool()
-    timestamp_file = descriptor_pb2.FileDescriptorProto(
-        name="google/protobuf/timestamp.proto",
-        package="google.protobuf",
-        message_type=[
-            descriptor_pb2.DescriptorProto(
-                name="Timestamp",
-                field=[
-                    descriptor_pb2.FieldDescriptorProto(
-                        name="seconds",
-                        number=1,
-                        type=descriptor_pb2.FieldDescriptorProto.TYPE_INT64,
-                    ),
-                    descriptor_pb2.FieldDescriptorProto(
-                        name="nanos",
-                        number=2,
-                        type=descriptor_pb2.FieldDescriptorProto.TYPE_INT32,
-                    ),
-                ],
-            )
-        ],
-    )
-    pool.Add(timestamp_file)  # type: ignore
-    request_meta_proto = descriptor_pb2.DescriptorProto(
-        name="RequestMeta",
-        field=[
-            descriptor_pb2.FieldDescriptorProto(
-                name="organization_id",
-                number=1,
-                type=descriptor_pb2.FieldDescriptorProto.TYPE_UINT64,
-            ),
-            descriptor_pb2.FieldDescriptorProto(
-                name="project_ids",
-                number=2,
-                type=descriptor_pb2.FieldDescriptorProto.TYPE_UINT64,
-                label=descriptor_pb2.FieldDescriptorProto.LABEL_REPEATED,
-            ),
-            descriptor_pb2.FieldDescriptorProto(
-                name="start_timestamp",
-                number=3,
-                type=descriptor_pb2.FieldDescriptorProto.TYPE_MESSAGE,
-                type_name="google.protobuf.Timestamp",
-            ),
-            descriptor_pb2.FieldDescriptorProto(
-                name="end_timestamp",
-                number=4,
-                type=descriptor_pb2.FieldDescriptorProto.TYPE_MESSAGE,
-                type_name="google.protobuf.Timestamp",
-            ),
-            descriptor_pb2.FieldDescriptorProto(
-                name="trace_item_type",
-                number=5,
-                type=descriptor_pb2.FieldDescriptorProto.TYPE_UINT64,
-            ),
-            descriptor_pb2.FieldDescriptorProto(
-                name="referrer",
-                number=6,
-                type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING,
-            ),
-            descriptor_pb2.FieldDescriptorProto(
-                name="request_id",
-                number=7,
-                type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING,
-            ),
-        ],
-    )
-    my_request_proto = descriptor_pb2.DescriptorProto(
-        name="MyRequest",
-        field=[
-            descriptor_pb2.FieldDescriptorProto(
-                name="message",
-                number=1,
-                type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING,
-            ),
-            descriptor_pb2.FieldDescriptorProto(
-                name="meta",
-                number=2,
-                type=descriptor_pb2.FieldDescriptorProto.TYPE_MESSAGE,
-                type_name="RequestMeta",
-            ),
-        ],
-    )
-    file_descriptor_proto = descriptor_pb2.FileDescriptorProto(
-        name="dynamic_messages.proto",
-        package="test",
-        message_type=[request_meta_proto, my_request_proto],
-    )
-    pool.Add(file_descriptor_proto)  # type: ignore
-
-    factory = MessageFactory(pool)
-    MyRequest = factory.GetPrototype(pool.FindMessageTypeByName("test.MyRequest"))  # type: ignore
-
-    class TestRPC(RPCEndpoint[MyRequest, Timestamp]):  # type: ignore
+def rpc_test_setup() -> Tuple[Type[Any], Type[RPCEndpoint[Any, TimeSeriesResponse]]]:
+    class TestRPC(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         @classmethod
         def version(cls) -> str:
             return "v1"
 
         @classmethod
-        def request_class(cls) -> type[MyRequest]:  # type: ignore
-            return MyRequest
+        def request_class(cls) -> type[TimeSeriesRequest]:
+            return TimeSeriesRequest
 
         @classmethod
-        def response_class(cls) -> type[Timestamp]:
-            return Timestamp
+        def response_class(cls) -> type[TimeSeriesResponse]:
+            return TimeSeriesResponse
 
-        def _execute(self, routing_decision: RoutingDecision) -> Timestamp:
-            current_time = time.time()
-            return Timestamp(seconds=int(current_time), nanos=0)
+        def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
+            return TimeSeriesResponse()
 
-    return MyRequest, TestRPC
+    return TimeSeriesRequest, TestRPC
 
 
 @pytest.mark.redis_db
@@ -572,9 +475,9 @@ def test_snuba_debug_explain_query(admin_api: FlaskClient) -> None:
 @pytest.mark.redis_db
 def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
     class FakePolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[Configuration]:
             return [
-                AllocationPolicyConfig(
+                Configuration(
                     "fake_optional_config", "", int, -1, param_types={"org_id": int}
                 )
             ]
@@ -748,7 +651,7 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_force_overwrite(admin_api: FlaskClient) -> None:
-    migration_id = "0009_add_message"
+    migration_id = "0011_add_timestamp_ms"
     migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
     downgraded_migration = [
         m for m in migrations if m.get("migration_id") == migration_id
@@ -1081,7 +984,7 @@ def test_clickhouse_system_settings(
 @pytest.mark.clickhouse_db
 def test_execute_rpc_endpoint_success(
     admin_api: FlaskClient,
-    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]],
+    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, TimeSeriesResponse]]],
 ) -> None:
     MyRequest, TestRPC = rpc_test_setup
 
@@ -1090,7 +993,6 @@ def test_execute_rpc_endpoint_success(
 
     payload = json.dumps(
         {
-            "message": "test_execute_rpc_endpoint_success",
             "meta": {
                 "organization_id": 123,
                 "project_ids": [1],
@@ -1111,9 +1013,7 @@ def test_execute_rpc_endpoint_success(
 
     assert response.status_code == 200
     response_data = json.loads(response.data)
-    timestamp = Timestamp()
-    timestamp.FromJsonString(response_data)
-    assert timestamp.seconds != 0 or timestamp.nanos != 0
+    assert response_data == {}
 
 
 @pytest.mark.redis_db
@@ -1142,7 +1042,7 @@ def test_execute_rpc_endpoint_unknown_endpoint(admin_api: FlaskClient) -> None:
 @pytest.mark.redis_db
 def test_execute_rpc_endpoint_invalid_payload(
     admin_api: FlaskClient,
-    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]],
+    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, TimeSeriesResponse]]],
 ) -> None:
     MyRequest, TestRPC = rpc_test_setup
 
@@ -1159,13 +1059,12 @@ def test_execute_rpc_endpoint_invalid_payload(
 @pytest.mark.redis_db
 def test_execute_rpc_endpoint_org_id_not_allowed(
     admin_api: FlaskClient,
-    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]],
+    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, TimeSeriesResponse]]],
 ) -> None:
     MyRequest, TestRPC = rpc_test_setup
 
     payload = json.dumps(
         {
-            "message": "test_execute_rpc_endpoint_org_id_not_allowed",
             "meta": {
                 "organization_id": 999999,
                 "project_ids": [1],

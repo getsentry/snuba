@@ -45,12 +45,12 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
-      - name: Setup pre-commit
-        run: make setup-git
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          make install-python-dependencies
+          python -m pip install -r requirements-test.txt
+      - name: Setup pre-commit
+        run: make setup-git
       - uses: getsentry/paths-filter@v2
         id: files
         with:
@@ -143,54 +143,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Get branch name
         id: branch
         # strip `refs/heads/` from $GITHUB_REF and replace `/` with `-` so that
         # it can be used as a docker tag
         run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
 
-      # We are only using ghcr here for CI as `setup-gcloud` is a bit slow
-      # Should revisit this when we move off of google cloud build (we may want to move these to GCR)
-      - name: Registry login
+      - uses: getsentry/action-build-and-push-images@a53f146fc1ea3cb404f2dcf7378f5b60dd98d3ca
+        with:
+          image_name: 'snuba-ci'
+          platforms: 'linux/amd64'
+          dockerfile_path: 'Dockerfile'
+          ghcr: false
+          tag_nightly: false
+          tag_latest: false
+          tags: 'ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}'
+          outputs: 'type=docker,dest=/tmp/snuba-ci.tar'
+
+      - name: Push snuba-ci image to GHCR
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
-
-      - run: docker buildx create --driver docker-container --use
-
-      - name: Build snuba docker image for CI
-        run: |
-          set -euxo pipefail
-
-          args=()
-
-          if [ ${{ github.event_name }} = 'push' ]; then
-            args+=(
-              --tag ghcr.io/getsentry/snuba-ci:latest
-              --cache-to type=registry,ref=ghcr.io/getsentry/snuba-ci:latest,mode=max
-              --push
-            )
-          fi
-
-          if [ ${{ github.event.pull_request.head.repo.full_name }} = ${{ github.repository }} ]; then
-            args+=(
-              --cache-to type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }},mode=max
-            )
-          fi
-
-          docker buildx build \
-            --pull \
-            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
-            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
-            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:latest \
-            --tag ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
-            --tag ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
-            --target testing \
-            "${args[@]}" \
-            -o type=docker,dest=/tmp/snuba-ci.tar \
-            .
+          docker load --input /tmp/snuba-ci.tar
+          docker push ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
@@ -239,23 +213,23 @@ jobs:
 
       - name: Docker Snuba Rust tests
         run: |
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test-rust
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test-rust
         if: ${{ matrix.snuba_settings == 'test_rust' }}
 
       - name: Docker Snuba tests
         run: |
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker compose -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test' || matrix.snuba_settings  == 'test_distributed' }}
 
       - name: Docker Snuba Multi-Node Tests
         run: |
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml up -d
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml up -d
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test_distributed_migrations' }}
 
       - name: Docker Snuba Init Tests
         run: |
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker compose -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test' }}
 
       - name: Upload test results to Codecov
@@ -341,7 +315,7 @@ jobs:
             -e PYTHONUNBUFFERED=1 \
             -e SNUBA_SETTINGS=docker \
             -e DEBUG=1 \
-            -e DEFAULT_BROKERS=kafka:9092 \
+            -e DEFAULT_BROKERS=kafka:9093 \
             -e CLICKHOUSE_HOST=clickhouse \
             -e CLICKHOUSE_PORT=9000 \
             -e CLICKHOUSE_HTTP_PORT=8123 \
@@ -350,7 +324,7 @@ jobs:
             -e REDIS_DB=1 \
             --name snuba-snuba-1 \
             --network devservices \
-            ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+            ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
           docker exec snuba-snuba-1 snuba migrations migrate --force
 
       - name: Run snuba tests
@@ -362,7 +336,6 @@ jobs:
             -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run full tests
-        # TODO: Adjust which changed files we care about
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
@@ -371,7 +344,7 @@ jobs:
               tests/sentry/snuba \
               tests/sentry/eventstream/kafka \
               tests/sentry/post_process_forwarder \
-              tests/sentry/eventstore/snuba \
+              tests/sentry/services/eventstore/snuba \
               tests/sentry/search/events \
               tests/sentry/event_manager \
               tests/sentry/api/endpoints/test_organization_profiling_functions.py \
@@ -399,8 +372,8 @@ jobs:
       matrix:
         version:
           [
-            "24.3.5.47.altinitystable",
             "24.8.11.51285.altinitystable",
+            "25.3.6.10034.altinitystable",
           ]
 
     steps:
@@ -425,7 +398,7 @@ jobs:
       - name: Docker Snuba Test other ClickHouse versions
         run: |
           export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{matrix.version}}
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test
 
       - name: Upload to codecov
         run: |
@@ -442,4 +415,4 @@ jobs:
     - uses: getsentry/action-validate-devservices-config@02a078d1280293e6598cabfbd318a01609c12c83
       name: Validate devservices config
       with:
-        requirements-file-path: requirements.txt
+        requirements-file-path: requirements-test.txt

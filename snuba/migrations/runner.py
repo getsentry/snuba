@@ -129,7 +129,8 @@ class Runner:
         )
 
         local_node_connection.execute(
-            f"ALTER TABLE {LOCAL_TABLE_NAME} UPDATE status='{new_status.value}' WHERE migration_id='{migration_id}'"
+            f"ALTER TABLE {LOCAL_TABLE_NAME} UPDATE status=%(status)s WHERE migration_id=%(migration_id)s",
+            {"status": new_status.value, "migration_id": migration_id},
         )
 
     def show_all(

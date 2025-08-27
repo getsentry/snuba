@@ -22,7 +22,6 @@ from snuba.utils.registered_class import (
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import Tin, Tout
 from snuba.web.rpc.common.exceptions import (
-    BadSnubaRPCRequestException,
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
@@ -182,12 +181,16 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 and e.extra["stats"]["error_code"] == 159
             ):
                 tags = {"endpoint": str(self.__class__.__name__)}
-                if self._uses_storage_routing(in_msg):
-                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
-                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
-                    )
+                if hasattr(in_msg, "meta"):
+                    if hasattr(in_msg.meta, "referrer"):
+                        tags["referrer"] = in_msg.meta.referrer
+                    if self._uses_storage_routing(in_msg):
+                        tags[
+                            "storage_routing_mode"
+                        ] = DownsampledStorageConfig.Mode.Name(
+                            in_msg.meta.downsampled_storage_config.mode
+                        )
                 self.metrics.increment("timeout_query", 1, tags)
-                sentry_sdk.capture_exception(e)
             if (
                 "error_code" in e.extra["stats"]
                 and e.extra["stats"]["error_code"] == 160
@@ -278,18 +281,22 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            sentry_sdk.capture_exception(error)
-            if isinstance(error, BadSnubaRPCRequestException):
+            if (
+                isinstance(error, RPCRequestException)
+                and 400 <= error.status_code < 500
+            ):
                 self.metrics.increment(
                     "request_invalid",
                     tags=self._timer.tags,
                 )
             elif isinstance(error, AllocationPolicyViolations):
+                sentry_sdk.capture_exception(error)
                 self.metrics.increment(
                     "request_rate_limited",
                     tags=self._timer.tags,
                 )
             else:
+                sentry_sdk.capture_exception(error)
                 self.metrics.increment(
                     "request_error",
                     tags=self._timer.tags,
