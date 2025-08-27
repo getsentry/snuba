@@ -10,9 +10,9 @@ daily_columns: Sequence[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("key_id", UInt(64)),
     Column("timestamp", DateTime()),
-    Column("category", UInt(8)),
     Column("outcome", UInt(8)),
     Column("reason", String(Modifiers(low_cardinality=True))),
+    Column("category", UInt(8)),
     Column("quantity", UInt(64)),
     Column("times_seen", UInt(64)),
 ]
@@ -22,9 +22,9 @@ materialized_view_columns: Sequence[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("key_id", UInt(64)),
     Column("timestamp", DateTime()),
-    Column("category", UInt(8)),
     Column("outcome", UInt(8)),
     Column("reason", String()),
+    Column("category", UInt(8)),
     Column("quantity", UInt(64)),
     Column("times_seen", UInt(64)),
 ]
