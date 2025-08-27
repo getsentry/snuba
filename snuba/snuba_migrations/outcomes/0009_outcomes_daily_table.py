@@ -31,6 +31,11 @@ materialized_view_columns: Sequence[Column[Modifiers]] = [
 
 
 class Migration(migration.ClickhouseNodeMigration):
+    """
+    Outcomes daily table(s) will be used to query outcomes for data that
+    exceeds 90 day retention. It's rolled up by day instead of hour.
+    """
+
     blocking = False
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
