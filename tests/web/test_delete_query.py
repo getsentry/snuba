@@ -8,7 +8,7 @@ from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.configs.configuration import Configuration
+from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
@@ -91,7 +91,11 @@ def test_delete_query_with_rejecting_allocation_policy() -> None:
 
     with mock.patch(
         "snuba.web.delete_query._get_delete_allocation_policies",
-        return_value=[RejectPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {})],
+        return_value=[
+            RejectPolicy(
+                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
+            )
+        ],
     ):
         with pytest.raises(QueryException) as excinfo:
             _execute_query(

@@ -69,8 +69,10 @@ function AllocationPolicyConfigs(props: {
   function deleteConfig(toDelete: AllocationPolicyConfig) {
     api
       .deleteAllocationPolicyConfig(
-        storage,
+        "AllocationPolicy",
         policy.policy_name,
+        "storage",
+        storage,
         toDelete.name,
         toDelete.params
       )
@@ -89,8 +91,10 @@ function AllocationPolicyConfigs(props: {
   function saveConfig(config: AllocationPolicyConfig) {
     api
       .setAllocationPolicyConfig(
-        storage,
+        "AllocationPolicy",
         policy.policy_name,
+        "storage",
+        storage,
         config.name,
         config.value,
         config.params

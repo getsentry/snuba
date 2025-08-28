@@ -16,13 +16,23 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableR
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 
 from snuba import environment, settings, state
+from snuba.admin.utils import get_policy_data
 from snuba.configs.configuration import (
     ConfigurableComponent,
+    ConfigurableComponentData,
     Configuration,
     ResourceIdentifier,
 )
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
+from snuba.query.allocation_policies import AllocationPolicy
+from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
+    BytesScannedRejectingPolicy,
+)
+from snuba.query.allocation_policies.concurrent_rate_limit import (
+    ConcurrentRateLimitAllocationPolicy,
+)
+from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
 from snuba.utils.metrics.timer import Timer
@@ -171,6 +181,10 @@ class RoutingStrategyConfig(Configuration):
     pass
 
 
+class StrategyData(ConfigurableComponentData):
+    policies_data: list[ConfigurableComponentData]
+
+
 class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
     def __init__(self, default_config_overrides: dict[str, Any] = {}) -> None:
         self._default_config_definitions = [
@@ -203,10 +217,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
             StorageKey.EAP_ITEMS,
         )
 
-    @classmethod
-    def config_key(cls) -> str:
-        return cls.__name__
-
     @property
     def metrics(self) -> MetricsWrapper:
         return MetricsWrapper(
@@ -226,6 +236,28 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
                 == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
             )
         return False
+
+    def get_allocation_policies(self) -> list[AllocationPolicy]:
+        return [
+            ConcurrentRateLimitAllocationPolicy(
+                storage_key=ResourceIdentifier(self.__class__.__name__),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+            ReferrerGuardRailPolicy(
+                storage_key=ResourceIdentifier(self.__class__.__name__),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+            BytesScannedRejectingPolicy(
+                storage_key=ResourceIdentifier(self.__class__.__name__),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+        ]
+
+    def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
+        return []
 
     def merge_clickhouse_settings(
         self,
@@ -410,6 +442,19 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
                         "tier": routing_decision.tier.name,
                     },
                 )
+
+    def to_dict(self) -> ConfigurableComponentData:
+        base_data = super().to_dict()
+        return cast(
+            ConfigurableComponentData,
+            dict(
+                base_data,
+                policies_data=get_policy_data(
+                    self.get_allocation_policies(),
+                    self.get_delete_allocation_policies(),
+                ),
+            ),
+        )
 
 
 import_submodules_in_directory(

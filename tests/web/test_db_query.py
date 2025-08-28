@@ -10,7 +10,7 @@ from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.configs.configuration import Configuration
+from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -251,7 +251,9 @@ def test_db_record_bytes_scanned() -> None:
     storage_key = StorageKey("errors_ro")
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
-        allocation_policies=[PassthroughPolicy(storage_key, [], {})],
+        allocation_policies=[
+            PassthroughPolicy(ResourceIdentifier(storage_key), [], {})
+        ],
     )
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
@@ -484,7 +486,7 @@ class MockThrottleAllocationPolicy(AllocationPolicy):
         default_config_overrides: dict[str, Any] = {},
     ) -> None:
         super().__init__(
-            storage_key=storage_key,
+            storage_key=ResourceIdentifier(storage_key),
             required_tenant_types=required_tenant_types,
             default_config_overrides=default_config_overrides,
         )
@@ -635,7 +637,9 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
     with mock.patch(
         "snuba.web.db_query._get_allocation_policies",
         return_value=[
-            RejectAllocationPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {})
+            RejectAllocationPolicy(
+                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
+            )
         ],
     ):
         query_metadata_list: list[ClickhouseQueryMetadata] = []
@@ -765,8 +769,12 @@ def test_allocation_policy_threads_applied_to_query() -> None:
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
         [
-            ThreadLimitPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
-            ThreadLimitPolicyDuplicate(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+            ThreadLimitPolicy(
+                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
+            ),
+            ThreadLimitPolicyDuplicate(
+                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
+            ),
         ],
     )
 
@@ -874,8 +882,12 @@ def test_allocation_policy_updates_quota() -> None:
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
         [
-            CountQueryPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
-            CountQueryPolicyDuplicate(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+            CountQueryPolicy(
+                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
+            ),
+            CountQueryPolicyDuplicate(
+                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
+            ),
         ],
     )
 
@@ -1105,7 +1117,9 @@ def test_policy_sets_max_bytes_to_read() -> None:
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
         [
-            MaxBytesPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+            MaxBytesPolicy(
+                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
+            ),
         ],
     )
 
