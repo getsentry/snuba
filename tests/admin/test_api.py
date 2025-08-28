@@ -725,8 +725,10 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             "/allocation_policy_config",
             data=json.dumps(
                 {
-                    "storage": "errors",
-                    "policy": "BytesScannedWindowAllocationPolicy",
+                    "configurable_component_namespace": "AllocationPolicy",
+                    "configurable_component_name": "BytesScannedWindowAllocationPolicy",
+                    "resource_type": "storage",
+                    "resource_name": "errors",
                     "key": "org_limit_bytes_scanned_override",
                     "params": {"org_id": 1},
                     "value": "420",
@@ -769,8 +771,10 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
                 "/allocation_policy_config",
                 data=json.dumps(
                     {
-                        "storage": "errors",
-                        "policy": "BytesScannedWindowAllocationPolicy",
+                        "configurable_component_namespace": "AllocationPolicy",
+                        "configurable_component_name": "BytesScannedWindowAllocationPolicy",
+                        "resource_type": "storage",
+                        "resource_name": "errors",
                         "key": "org_limit_bytes_scanned_override",
                         "params": {"org_id": 1},
                     }
@@ -813,7 +817,10 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
             "/allocation_policy_config",
             data=json.dumps(
                 {
-                    "strategy": "FakeRoutingStrategy",
+                    "configurable_component_namespace": "RoutingStrategy",
+                    "configurable_component_name": "FakeRoutingStrategy",
+                    "resource_type": "strategy",
+                    "resource_name": "FakeRoutingStrategy",
                     "key": "fake_strategy_config",
                     "value": "75",
                 }
@@ -844,7 +851,10 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
             "/allocation_policy_config",
             data=json.dumps(
                 {
-                    "strategy": "FakeRoutingStrategy",
+                    "configurable_component_namespace": "RoutingStrategy",
+                    "configurable_component_name": "FakeRoutingStrategy",
+                    "resource_type": "strategy",
+                    "resource_name": "FakeRoutingStrategy",
                     "key": "fake_strategy_config",
                 }
             ),
@@ -893,8 +903,10 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
             "/allocation_policy_config",
             data=json.dumps(
                 {
-                    "strategy": "FakeRoutingStrategy",
-                    "policy": "FakePolicy",
+                    "configurable_component_namespace": "AllocationPolicy",
+                    "configurable_component_name": "FakePolicy",
+                    "resource_type": "strategy",
+                    "resource_name": "FakeRoutingStrategy",
                     "key": "fake_optional_config",
                     "params": {"org_id": 1},
                     "value": "420",
@@ -935,8 +947,10 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
             "/allocation_policy_config",
             data=json.dumps(
                 {
-                    "strategy": "FakeRoutingStrategy",
-                    "policy": "FakePolicy",
+                    "configurable_component_namespace": "AllocationPolicy",
+                    "configurable_component_name": "FakePolicy",
+                    "resource_type": "strategy",
+                    "resource_name": "FakeRoutingStrategy",
                     "key": "fake_optional_config",
                     "params": {"org_id": 1},
                 }

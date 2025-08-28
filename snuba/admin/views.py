@@ -1024,38 +1024,6 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
-def _get_configurable_component(
-    resource_type: str, resource_name: str, policy_name: str | None
-) -> ConfigurableComponent:
-
-    if policy_name:
-        if resource_type == "storage":
-            policies = (
-                get_storage(StorageKey(resource_name)).get_allocation_policies()
-                + get_storage(
-                    StorageKey(resource_name)
-                ).get_delete_allocation_policies()
-            )
-        else:
-            strategy = BaseRoutingStrategy.get_from_name(resource_name)()
-            policies = (
-                strategy.get_allocation_policies()
-                + strategy.get_delete_allocation_policies()
-            )
-
-        configurable_component = next(
-            (p for p in policies if p.config_key() == policy_name),
-            None,
-        )
-        if configurable_component is None:
-            raise Exception(
-                f"Policy '{policy_name}' not found on {resource_type} '{resource_name}'"
-            )
-        return configurable_component
-    else:
-        return BaseRoutingStrategy.get_from_name(resource_name)()
-
-
 # todo(rachel): change url name
 @application.route("/allocation_policy_config", methods=["POST", "DELETE"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
@@ -1064,32 +1032,55 @@ def set_configuration() -> Response:
     user = request.headers.get(USER_HEADER_KEY)
 
     try:
-        resource_type = None
-        if "storage" in data:
-            resource_type = "storage"
-        elif "strategy" in data:
-            resource_type = "strategy"
-        else:
-            return Response(
-                json.dumps({"error": "Must specify either 'storage' or 'strategy'"}),
-                400,
-                {"Content-Type": "application/json"},
+        configurable_component_namespace = data["configurable_component_namespace"]
+        configurable_component_name = data["configurable_component_name"]
+        resource_type = data["resource_type"]
+        resource_name = data["resource_name"]
+        assert isinstance(
+            configurable_component_name, str
+        ), f"Invalid configurable_component_name: {configurable_component_name}"
+        assert isinstance(resource_name, str), f"Invalid resource_name {resource_name}"
+
+        configurable_component: ConfigurableComponent | None = None
+        if configurable_component_namespace == "RoutingStrategy":
+            configurable_component = BaseRoutingStrategy.get_from_name(
+                configurable_component_name
+            )()
+        elif configurable_component_namespace == "AllocationPolicy":
+            if resource_type == "storage":
+                policies = (
+                    get_storage(StorageKey(resource_name)).get_allocation_policies()
+                    + get_storage(
+                        StorageKey(resource_name)
+                    ).get_delete_allocation_policies()
+                )
+
+            elif resource_type == "strategy":
+                strategy = BaseRoutingStrategy.get_from_name(resource_name)()
+                policies = (
+                    strategy.get_allocation_policies()
+                    + strategy.get_delete_allocation_policies()
+                )
+            else:
+                raise Exception(f"Invalid resource_type: {resource_type}")
+            configurable_component = next(
+                (p for p in policies if p.config_key() == configurable_component_name),
+                None,
             )
-        resource_name = data[resource_type]
+            if configurable_component is None:
+                raise Exception(
+                    "Invalid configurable_component_name or it's not found on {resource_type} '{resource_name}'"
+                )
+        else:
+            raise Exception(
+                f"Invalid configurable_component_namespace: {configurable_component_namespace}"
+            )
 
         key = data["key"]
         params = data.get("params", {})
-        assert isinstance(resource_name, str), f"Invalid {resource_type}"
         assert isinstance(key, str), "Invalid key"
         assert isinstance(params, dict), "Invalid params"
         assert key != "", "Key cannot be empty string"
-        policy_name = data.get("policy")
-        if policy_name:
-            assert isinstance(policy_name, str), "Invalid policy name"
-
-        configurable_component = _get_configurable_component(
-            resource_type, resource_name, policy_name
-        )
 
     except Exception as exc:
         return Response(
@@ -1106,12 +1097,8 @@ def set_configuration() -> Response:
             user or "",
             AuditLogAction.ALLOCATION_POLICY_DELETE,
             {
-                resource_type: resource_name,
-                **(
-                    {"policy": configurable_component.config_key()}
-                    if policy_name
-                    else {}
-                ),
+                resource_name: resource_name,
+                configurable_component_name: configurable_component.config_key(),
                 "key": key,
             },
             notify=True,
@@ -1128,12 +1115,8 @@ def set_configuration() -> Response:
                 user or "",
                 AuditLogAction.ALLOCATION_POLICY_UPDATE,
                 {
-                    resource_type: resource_name,
-                    **(
-                        {"policy": configurable_component.config_key()}
-                        if policy_name
-                        else {}
-                    ),
+                    resource_name: resource_name,
+                    configurable_component_name: configurable_component.config_key(),
                     "key": key,
                     "value": value,
                     "params": str(params),
