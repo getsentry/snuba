@@ -6,7 +6,7 @@ from snuba.query.allocation_policies import AllocationPolicy, PolicyData
 
 
 def convert(policy_data: PolicyData) -> dict[str, Any]:
-    "We need to convert the policy data to the format that the frontend expects"
+    "We need to convert the policy data to the format that the frontend expects. This will be removed once we update the frontend"
     return {
         "policy_name": policy_data["configurable_component_name"],
         "configs": policy_data["configurations"],

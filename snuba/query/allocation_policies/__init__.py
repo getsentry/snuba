@@ -565,7 +565,11 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         return PolicyType.SELECT
 
     def to_dict(self) -> ConfigurableComponentData:
-        return PolicyData(**super().to_dict(), query_type=self.policy_type.value)
+        base_data = super().to_dict()
+        return cast(
+            ConfigurableComponentData,
+            dict(base_data, query_type=self.policy_type.value),
+        )
 
 
 class PassthroughPolicy(AllocationPolicy):

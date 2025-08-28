@@ -444,11 +444,15 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
                 )
 
     def to_dict(self) -> ConfigurableComponentData:
-        return StrategyData(
-            **super().to_dict(),
-            policies_data=get_policy_data(
-                self.get_allocation_policies(),
-                self.get_delete_allocation_policies(),
+        base_data = super().to_dict()
+        return cast(
+            ConfigurableComponentData,
+            dict(
+                base_data,
+                policies_data=get_policy_data(
+                    self.get_allocation_policies(),
+                    self.get_delete_allocation_policies(),
+                ),
             ),
         )
 
