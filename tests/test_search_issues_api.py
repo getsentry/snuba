@@ -479,3 +479,30 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         assert response.status_code == 200, data
         assert data["stats"]["consistent"]
         assert data["data"] == [{"project_id": 1, "message": message}]
+
+    def test_eventstream_timestamp_ms_precision(self) -> None:
+        """Test that timestamp_ms preserves millisecond precision through the full eventstream"""
+        now = datetime.utcnow()
+        now_ms = now + timedelta(milliseconds=123)
+
+        insert_row = base_insert_event(now_ms)
+        insert_row[2]["data"]["client_timestamp"] = now_ms
+
+        response = self.app.post(
+            "/tests/search_issues/eventstream", data=json.dumps(insert_row)
+        )
+        assert response.status_code == 200
+
+        from_date = (now - timedelta(days=1)).isoformat()
+        to_date = (now + timedelta(days=1)).isoformat()
+        response = self.post_query(
+            f"""
+            MATCH (search_issues)
+            SELECT timestamp_ms
+            WHERE project_id = 1
+            AND timestamp >= toDateTime('{from_date}') AND timestamp < toDateTime('{to_date}')
+            """
+        )
+        data = json.loads(response.data)
+
+        assert data["data"] == [{"timestamp_ms": now_ms}]
