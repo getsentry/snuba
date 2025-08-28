@@ -48,8 +48,6 @@ jobs:
           platforms: linux/amd64
           dockerfile_path: './Dockerfile'
           ghcr: false
-          # TODO: remove this once we cutover to using images published from GHA in prod
-          tag_suffix: -gha
           tag_nightly: false
           tag_latest: false
           google_ar: true
