@@ -18,12 +18,13 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from snuba import environment, settings, state
 from snuba.configs.configuration import (
     ConfigurableComponent,
+    ConfigurableComponentData,
     Configuration,
     ResourceIdentifier,
 )
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
-from snuba.query.allocation_policies import AllocationPolicy
+from snuba.query.allocation_policies import AllocationPolicy, PolicyData
 from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
     BytesScannedRejectingPolicy,
 )
@@ -177,6 +178,10 @@ def _construct_hacky_querylog_payload(
 @dataclass()
 class RoutingStrategyConfig(Configuration):
     pass
+
+
+class StrategyData(ConfigurableComponentData):
+    policies_data: list[PolicyData]
 
 
 class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
@@ -436,6 +441,15 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
                         "tier": routing_decision.tier.name,
                     },
                 )
+
+    def to_dict(
+        self, additional_data: dict[str, Any] = {}
+    ) -> ConfigurableComponentData:
+        base_data = super().to_dict()
+        return StrategyData(
+            **base_data,
+            policies_data=additional_data.get("policies_data", []),
+        )
 
 
 import_submodules_in_directory(

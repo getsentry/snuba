@@ -57,7 +57,7 @@ from snuba.admin.tool_policies import (
     check_tool_perms,
     get_user_allowed_tools,
 )
-from snuba.admin.utils import PolicyData, StrategyData, add_policy_data
+from snuba.admin.utils import get_policy_data
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.configs.configuration import ConfigurableComponent
 from snuba.consumers.dlq import (
@@ -990,17 +990,14 @@ def get_routing_strategy_configs(strategy_name: str) -> Response:
 
     policies = strategy.get_allocation_policies()
     delete_policies = strategy.get_delete_allocation_policies()
-    policies_data: list[PolicyData] = []
-    add_policy_data(policies, "select", policies_data)
-    add_policy_data(delete_policies, "delete", policies_data)
+    policies_data = get_policy_data(policies, delete_policies)
 
     return Response(
         json.dumps(
-            StrategyData(
-                strategy_name=strategy_name,
-                configs=strategy.get_current_configs(),
-                optional_config_definitions=strategy.get_optional_config_definitions_json(),
-                policies_data=policies_data,
+            strategy.to_dict(
+                additional_data={
+                    "policies_data": policies_data,
+                }
             )
         ),
         200,
@@ -1017,11 +1014,11 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
         StorageKey(storage_key)
     ).get_delete_allocation_policies()
 
-    data: list[PolicyData] = []
-    add_policy_data(policies, "select", data)
-    add_policy_data(delete_policies, "delete", data)
-
-    return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
+    return Response(
+        json.dumps(get_policy_data(policies, delete_policies)),
+        200,
+        {"Content-Type": "application/json"},
+    )
 
 
 # todo(rachel): change url name

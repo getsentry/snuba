@@ -1,32 +1,16 @@
-from typing import Any, Sequence, TypedDict
+from typing import Sequence
 
+from snuba.configs.configuration import ConfigurableComponentData
 from snuba.query.allocation_policies import AllocationPolicy
 
 
-class ConfigurableComponentData(TypedDict):
-    configs: list[dict[str, Any]]
-    optional_config_definitions: list[dict[str, Any]]
-
-
-class PolicyData(ConfigurableComponentData):
-    policy_name: str
-    query_type: str
-
-
-class StrategyData(ConfigurableComponentData):
-    strategy_name: str
-    policies_data: list[PolicyData]
-
-
-def add_policy_data(
-    policies: Sequence[AllocationPolicy], query_type: str, data: list[PolicyData]
-) -> None:
-    for policy in policies:
-        data.append(
-            PolicyData(
-                policy_name=policy.config_key(),
-                configs=policy.get_current_configs(),
-                optional_config_definitions=policy.get_optional_config_definitions_json(),
-                query_type=query_type,
-            )
-        )
+def get_policy_data(
+    select_policies: Sequence[AllocationPolicy],
+    delete_policies: Sequence[AllocationPolicy],
+) -> list[ConfigurableComponentData]:
+    policies_data = []
+    for policy in select_policies:
+        policies_data.append(policy.to_dict(additional_data={"query_type": "select"}))
+    for policy in delete_policies:
+        policies_data.append(policy.to_dict(additional_data={"query_type": "delete"}))
+    return policies_data

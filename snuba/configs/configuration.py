@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
-from typing import Any, final
+from typing import Any, TypedDict, final
 
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import delete_config as delete_runtime_config
@@ -36,6 +36,14 @@ class ResourceIdentifier:
             if isinstance(self.resource, StorageKey)
             else self.resource
         )
+
+
+class ConfigurableComponentData(TypedDict):
+    configurable_component_namespace: str
+    configurable_component_name: str
+    resource_identifier: str
+    configurations: list[dict[str, Any]]
+    optional_config_definitions: list[dict[str, Any]]
 
 
 @dataclass()
@@ -424,3 +432,14 @@ class ConfigurableComponent(ABC):
     @classmethod
     def config_key(cls) -> str:
         return cls.__name__
+
+    def to_dict(
+        self, additional_data: dict[str, Any] = {}
+    ) -> ConfigurableComponentData:
+        return ConfigurableComponentData(
+            configurable_component_namespace=self.component_namespace(),
+            configurable_component_name=self.component_name(),
+            resource_identifier=self.resource_identifier.value,
+            configurations=self.get_current_configs(),
+            optional_config_definitions=self.get_optional_config_definitions_json(),
+        )

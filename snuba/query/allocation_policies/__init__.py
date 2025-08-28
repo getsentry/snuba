@@ -8,6 +8,7 @@ from typing import Any, cast
 from snuba import environment, settings
 from snuba.configs.configuration import (
     ConfigurableComponent,
+    ConfigurableComponentData,
     Configuration,
     ResourceIdentifier,
     logger,
@@ -142,6 +143,10 @@ class AllocationPolicyViolations(SerializableException):
             "Query on could not be run due to allocation policies",
             quota_allowances=quota_allowances,
         )
+
+
+class PolicyData(ConfigurableComponentData):
+    query_type: str
 
 
 class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
@@ -548,6 +553,16 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
     @property
     def resource_identifier(self) -> ResourceIdentifier:
         return self._resource_identifier
+
+    def to_dict(
+        self, additional_data: dict[str, Any] = {}
+    ) -> ConfigurableComponentData:
+        base_data = super().to_dict()
+
+        return PolicyData(
+            **base_data,
+            query_type=additional_data.get("query_type", "select"),
+        )
 
 
 class PassthroughPolicy(AllocationPolicy):
