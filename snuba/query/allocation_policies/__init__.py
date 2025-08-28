@@ -147,7 +147,7 @@ class AllocationPolicyViolations(SerializableException):
 
 
 class PolicyData(ConfigurableComponentData):
-    query_type: PolicyType
+    query_type: str
 
 
 class PolicyType(Enum):
@@ -565,7 +565,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         return PolicyType.SELECT
 
     def to_dict(self) -> ConfigurableComponentData:
-        return PolicyData(**super().to_dict(), query_type=self.policy_type)
+        return PolicyData(**super().to_dict(), query_type=self.policy_type.value)
 
 
 class PassthroughPolicy(AllocationPolicy):

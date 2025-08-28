@@ -489,7 +489,7 @@ function Client(): Client {
     },
     deleteAllocationPolicyConfig: (
       configurable_component_namespace: string,
-      configurable_component_name: string,
+      config_key: string,
       resource_type: string,
       resource_name: string,
       key: string,
@@ -499,7 +499,7 @@ function Client(): Client {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "DELETE",
-        body: JSON.stringify({ configurable_component_namespace, configurable_component_name, resource_type, resource_name, key, params }),
+        body: JSON.stringify({ configurable_component_namespace, config_key, resource_type, resource_name, key, params }),
       }).then((res) => {
         if (res.ok) {
           return;

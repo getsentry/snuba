@@ -23,6 +23,7 @@ from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     NO_UNITS,
     AllocationPolicy,
+    PolicyType,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -492,7 +493,7 @@ class FakeRoutingStrategy(BaseRoutingStrategy):
         return [policy]
 
     def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
-        policy = FakePolicy(ResourceIdentifier(StorageKey("eap_items")), [], {})
+        policy = FakeDeletePolicy(ResourceIdentifier(StorageKey("eap_items")), [], {})
         policy.set_config_value("fake_optional_config", 20, {"org_id": 20})
         return [policy]
 
@@ -503,7 +504,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.BaseRoutingStrategy.get_from_name",
         side_effect=lambda strategy_name: FakeRoutingStrategy,
     ):
-        response = admin_api.get("/routing_strategy_configs/fake_routing_strategy")
+        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
 
     assert response.status_code == 200
     assert response.json is not None
@@ -511,8 +512,8 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
     strategy_data = response.json
 
     # Check strategy-level data
-    assert strategy_data["strategy_name"] == "fake_routing_strategy"
-    assert len(strategy_data["configs"]) == 2
+    assert strategy_data["configurable_component_name"] == "FakeRoutingStrategy"
+    assert len(strategy_data["configurations"]) == 2
     assert {
         "name": "some_default_config",
         "type": "int",
@@ -520,7 +521,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "description": "Placeholder for now",
         "value": 100,
         "params": {},
-    } in strategy_data["configs"]
+    } in strategy_data["configurations"]
     assert {
         "name": "fake_strategy_config",
         "type": "int",
@@ -528,16 +529,18 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "description": "A fake config for testing",
         "value": 50,
         "params": {},
-    } in strategy_data["configs"]
+    } in strategy_data["configurations"]
     assert strategy_data["optional_config_definitions"] == []
 
     # Check policies data
     assert len(strategy_data["policies_data"]) == 2
 
     # First policy
-    assert strategy_data["policies_data"][0]["policy_name"] == "FakePolicy"
+    assert (
+        strategy_data["policies_data"][0]["configurable_component_name"] == "FakePolicy"
+    )
     assert strategy_data["policies_data"][0]["query_type"] == "select"
-    assert len(strategy_data["policies_data"][0]["configs"]) == 5
+    assert len(strategy_data["policies_data"][0]["configurations"]) == 4
     assert {
         "name": "fake_optional_config",
         "type": "int",
@@ -545,15 +548,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "description": "",
         "value": 15,
         "params": {"org_id": 15},
-    } in strategy_data["policies_data"][0]["configs"]
-    assert {
-        "name": "fake_optional_config",
-        "type": "int",
-        "default": -1,
-        "description": "",
-        "value": 20,
-        "params": {"org_id": 20},
-    } in strategy_data["policies_data"][0]["configs"]
+    } in strategy_data["policies_data"][0]["configurations"]
     assert {
         "name": "is_enforced",
         "type": "int",
@@ -561,7 +556,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "description": "Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
         "value": 1,
         "params": {},
-    } in strategy_data["policies_data"][0]["configs"]
+    } in strategy_data["policies_data"][0]["configurations"]
     assert {
         "name": "is_active",
         "type": "int",
@@ -569,7 +564,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "description": "Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
         "value": 1,
         "params": {},
-    } in strategy_data["policies_data"][0]["configs"]
+    } in strategy_data["policies_data"][0]["configurations"]
     assert {
         "name": "max_threads",
         "type": "int",
@@ -577,7 +572,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "description": "The max threads Clickhouse can use for the query.",
         "value": 10,
         "params": {},
-    } in strategy_data["policies_data"][0]["configs"]
+    } in strategy_data["policies_data"][0]["configurations"]
     assert len(strategy_data["policies_data"][0]["optional_config_definitions"]) == 1
     assert {
         "name": "fake_optional_config",
@@ -588,17 +583,12 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
     } in strategy_data["policies_data"][0]["optional_config_definitions"]
 
     # Second policy
-    assert strategy_data["policies_data"][1]["policy_name"] == "FakePolicy"
+    assert (
+        strategy_data["policies_data"][1]["configurable_component_name"]
+        == "FakeDeletePolicy"
+    )
     assert strategy_data["policies_data"][1]["query_type"] == "delete"
-    assert len(strategy_data["policies_data"][1]["configs"]) == 5
-    assert {
-        "name": "fake_optional_config",
-        "type": "int",
-        "default": -1,
-        "description": "",
-        "value": 15,
-        "params": {"org_id": 15},
-    } in strategy_data["policies_data"][1]["configs"]
+    assert len(strategy_data["policies_data"][1]["configurations"]) == 4
     assert {
         "name": "fake_optional_config",
         "type": "int",
@@ -606,7 +596,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "description": "",
         "value": 20,
         "params": {"org_id": 20},
-    } in strategy_data["policies_data"][1]["configs"]
+    } in strategy_data["policies_data"][1]["configurations"]
     assert {
         "name": "is_enforced",
         "type": "int",
@@ -614,7 +604,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "description": "Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
         "value": 1,
         "params": {},
-    } in strategy_data["policies_data"][1]["configs"]
+    } in strategy_data["policies_data"][1]["configurations"]
     assert {
         "name": "is_active",
         "type": "int",
@@ -622,7 +612,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "description": "Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
         "value": 1,
         "params": {},
-    } in strategy_data["policies_data"][1]["configs"]
+    } in strategy_data["policies_data"][1]["configurations"]
     assert {
         "name": "max_threads",
         "type": "int",
@@ -630,7 +620,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "description": "The max threads Clickhouse can use for the query.",
         "value": 10,
         "params": {},
-    } in strategy_data["policies_data"][1]["configs"]
+    } in strategy_data["policies_data"][1]["configurations"]
     assert len(strategy_data["policies_data"][1]["optional_config_definitions"]) == 1
     assert {
         "name": "fake_optional_config",
@@ -671,6 +661,42 @@ class FakePolicy(AllocationPolicy):
         result_or_error: QueryResultOrError,
     ) -> None:
         pass
+
+
+class FakeDeletePolicy(AllocationPolicy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return [
+            Configuration(
+                "fake_optional_config", "", int, -1, param_types={"org_id": int}
+            )
+        ]
+
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(
+            can_run=True,
+            max_threads=1,
+            explanation={},
+            is_throttled=False,
+            rejection_threshold=MAX_THRESHOLD,
+            throttle_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        pass
+
+    @property
+    def policy_type(self) -> PolicyType:
+        return PolicyType.DELETE
 
 
 @pytest.mark.redis_db
@@ -830,13 +856,13 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
         assert auditlog_records.pop()
 
         # Retrieve the routing strategy configs to verify the config was set
-        response = admin_api.get("/routing_strategy_configs/fake_routing_strategy")
+        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
         assert response.status_code == 200
         assert response.json is not None
 
         # Verify the config was set correctly
         strategy_data = response.json
-        assert strategy_data["strategy_name"] == "fake_routing_strategy"
+        assert strategy_data["configurable_component_name"] == "FakeRoutingStrategy"
         assert {
             "name": "fake_strategy_config",
             "type": "int",
@@ -844,7 +870,7 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
             "description": "A fake config for testing",
             "value": 75,
             "params": {},
-        } in strategy_data["configs"]
+        } in strategy_data["configurations"]
 
         # Delete the routing strategy config
         response = admin_api.delete(
@@ -862,13 +888,13 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
         assert response.status_code == 200
 
         # Verify the config was deleted by checking again
-        response = admin_api.get("/routing_strategy_configs/fake_routing_strategy")
+        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
         assert response.status_code == 200
         assert response.json is not None
 
         # The config should be back to its default value
         strategy_data = response.json
-        assert strategy_data["strategy_name"] == "fake_routing_strategy"
+        assert strategy_data["configurable_component_name"] == "FakeRoutingStrategy"
         assert {
             "name": "fake_strategy_config",
             "type": "int",
@@ -876,7 +902,7 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
             "description": "A fake config for testing",
             "value": 50,
             "params": {},
-        } in strategy_data["configs"]
+        } in strategy_data["configurations"]
 
         # make sure an auditlog entry was recorded for the delete
         assert auditlog_records.pop()
@@ -918,21 +944,21 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
         assert auditlog_records.pop()
 
         # Retrieve the allocation policy configs to verify the config was set
-        response = admin_api.get("/routing_strategy_configs/fake_routing_strategy")
+        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
         assert response.status_code == 200
         assert response.json is not None
 
         strategy_data = response.json
-        assert strategy_data["strategy_name"] == "fake_routing_strategy"
+        assert strategy_data["configurable_component_name"] == "FakeRoutingStrategy"
         assert len(strategy_data["policies_data"]) == 2
 
         fake_policy = next(
             policy
             for policy in strategy_data["policies_data"]
-            if policy["policy_name"] == "FakePolicy"
+            if policy["configurable_component_name"] == "FakePolicy"
         )
 
-        assert fake_policy["policy_name"] == "FakePolicy"
+        assert fake_policy["configurable_component_name"] == "FakePolicy"
         assert {
             "default": -1,
             "description": "",
@@ -940,7 +966,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
             "params": {"org_id": 1},
             "type": "int",
             "value": 420,
-        } in fake_policy["configs"]
+        } in fake_policy["configurations"]
 
         # Delete the allocation policy config for the strategy
         response = admin_api.delete(
@@ -959,7 +985,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
         assert response.status_code == 200
 
         # Verify the config was deleted by checking again
-        response = admin_api.get("/routing_strategy_configs/fake_routing_strategy")
+        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
         assert response.status_code == 200
         assert response.json is not None
 
@@ -967,7 +993,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
         fake_policy = next(
             policy
             for policy in strategy_data["policies_data"]
-            if policy["policy_name"] == "FakePolicy"
+            if policy["configurable_component_name"] == "FakePolicy"
         )
 
         # The config should be back to its default value
@@ -978,7 +1004,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
             "params": {"org_id": 1},
             "type": "int",
             "value": 420,
-        } not in fake_policy["configs"]
+        } not in fake_policy["configurations"]
 
         # make sure an auditlog entry was recorded for the delete
         assert auditlog_records.pop()

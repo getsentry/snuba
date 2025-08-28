@@ -436,7 +436,7 @@ class ConfigurableComponent(ABC):
     def to_dict(self) -> ConfigurableComponentData:
         return ConfigurableComponentData(
             configurable_component_namespace=self.component_namespace(),
-            configurable_component_name=self.component_name(),
+            configurable_component_name=self.config_key(),
             resource_identifier=self.resource_identifier.value,
             configurations=self.get_current_configs(),
             optional_config_definitions=self.get_optional_config_definitions_json(),
