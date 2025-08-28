@@ -443,7 +443,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
                     },
                 )
 
-    def to_dict(self) -> StrategyData:
+    def to_dict(self) -> ConfigurableComponentData:
         return StrategyData(
             **super().to_dict(),
             policies_data=get_policy_data(

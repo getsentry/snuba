@@ -1007,7 +1007,7 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
     policies_data = get_policy_data(policies, delete_policies)
 
     return Response(
-        json.dumps([convert(policy_data) for policy_data in policies_data]),
+        json.dumps([convert(policy_data) for policy_data in policies_data]),  # type: ignore
         200,
         {"Content-Type": "application/json"},
     )

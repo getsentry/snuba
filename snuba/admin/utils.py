@@ -1,6 +1,7 @@
 from itertools import chain
 from typing import Any, Sequence
 
+from snuba.configs.configuration import ConfigurableComponentData
 from snuba.query.allocation_policies import AllocationPolicy, PolicyData
 
 
@@ -17,7 +18,7 @@ def convert(policy_data: PolicyData) -> dict[str, Any]:
 def get_policy_data(
     select_policies: Sequence[AllocationPolicy],
     delete_policies: Sequence[AllocationPolicy],
-) -> list[PolicyData]:
+) -> list[ConfigurableComponentData]:
     policies_data = []
     for policy in chain(select_policies, delete_policies):
         policies_data.append(policy.to_dict())

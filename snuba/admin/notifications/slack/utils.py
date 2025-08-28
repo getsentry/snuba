@@ -38,7 +38,7 @@ def build_blocks(
 def build_routing_strategy_changed_text(
     data: Any, action: AuditLogAction
 ) -> Optional[str]:
-    base = f"*Routing strategy {data['strategy']} configuration changed:*"
+    base = f"*Routing strategy {data['component_name']} configuration changed:*"
     if action == AuditLogAction.ROUTING_STRATEGY_DELETE:
         removed = f"~```'{data['key']}({data.get('params', {})})'```~"
         return f"{base} :put_litter_in_its_place:\n\n{removed}"
@@ -57,16 +57,14 @@ def build_routing_strategy_changed_text(
 def build_allocation_policy_changed_text(
     data: Any, action: AuditLogAction
 ) -> Optional[str]:
-    if "strategy" in data:
-        base = f"*Routing strategy {data['strategy']} Allocation Policy Changed:*"
-    else:
-        base = f"*Storage {data['storage']} Allocation Policy Changed:*"
+
+    base = f"*{data['component_name']} Allocation Policy Changed:*"
 
     if action == AuditLogAction.ALLOCATION_POLICY_DELETE:
-        removed = f"~```'{data['policy']}.{data['key']}({data.get('params', {})})'```~"
+        removed = f"~```'{data['component_name']}.{data['key']}({data.get('params', {})})'```~"
         return f"{base} :put_litter_in_its_place:\n\n{removed}"
     elif action == AuditLogAction.ALLOCATION_POLICY_UPDATE:
-        updated = f"```'{data['policy']}.{data['key']}({data.get('params', {})})' = '{data['value']}'```"
+        updated = f"```'{data['component_name']}.{data['key']}({data.get('params', {})})' = '{data['value']}'```"
         return f"{base} :up: :date:\n\n{updated}"
     else:
         # todo: raise error, cause slack won't accept this

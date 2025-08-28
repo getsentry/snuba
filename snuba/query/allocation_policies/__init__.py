@@ -345,7 +345,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         storage_key: ResourceIdentifier,
         required_tenant_types: list[str],
         default_config_overrides: dict[str, Any],
-        policy_type: PolicyType = PolicyType.SELECT,
         **kwargs: str,
     ) -> None:
         self._required_tenant_types = set(required_tenant_types)
@@ -373,7 +372,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         self._overridden_additional_config_definitions = (
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
-        self._policy_type = policy_type
 
     def component_namespace(self) -> str:
         return "AllocationPolicy"
@@ -434,7 +432,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         default_config_overrides: dict[str, Any] = cast(
             "dict[str, Any]", kwargs.pop("default_config_overrides", {})
         )
-        policy_type = kwargs.pop("policy_type", PolicyType.SELECT)
         assert isinstance(
             required_tenant_types, list
         ), "required_tenant_types must be a list of strings"
@@ -443,7 +440,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             required_tenant_types=required_tenant_types,
             storage_key=ResourceIdentifier(StorageKey(storage_key)),
             default_config_overrides=default_config_overrides,
-            query_type=policy_type,
             **kwargs,
         )
 
@@ -566,9 +562,9 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
 
     @property
     def policy_type(self) -> PolicyType:
-        return self._policy_type
+        return PolicyType.SELECT
 
-    def to_dict(self) -> PolicyData:
+    def to_dict(self) -> ConfigurableComponentData:
         return PolicyData(**super().to_dict(), query_type=self.policy_type)
 
 
