@@ -483,10 +483,10 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     def test_eventstream_timestamp_ms_precision(self) -> None:
         """Test that timestamp_ms preserves millisecond precision through the full eventstream"""
         now = datetime.utcnow()
-        now_ms = now + timedelta(milliseconds=123)
+        now_ms = now.replace(microsecond=0) + timedelta(milliseconds=123)
 
         insert_row = base_insert_event(now_ms)
-        insert_row[2]["data"]["client_timestamp"] = now_ms
+        insert_row[2]["datetime"] = now_ms.isoformat() + "Z"
 
         response = self.app.post(
             "/tests/search_issues/eventstream", data=json.dumps(insert_row)
