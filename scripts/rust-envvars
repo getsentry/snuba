@@ -4,6 +4,9 @@
 export SNUBA_TEST_PYTHONPATH="$(python -c 'import sys; print(":".join(sys.path))')"
 export SNUBA_TEST_PYTHONEXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
 
+# https://github.com/astral-sh/uv/issues/8821
+export PYTHONHOME="$(dirname $(dirname $(realpath $(which python))))"
+
 # load cargo envvars explicitly in case user forgot
 if [ -n "$FISH_VERSION" ]; then
   set CARGO_HOME $HOME/.cargo
