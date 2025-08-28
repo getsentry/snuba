@@ -57,6 +57,7 @@ from snuba.admin.tool_policies import (
     check_tool_perms,
     get_user_allowed_tools,
 )
+from snuba.admin.utils import PolicyData, StrategyData, add_policy_data
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.configs.configuration import ConfigurableComponent
 from snuba.consumers.dlq import (
@@ -80,7 +81,6 @@ from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
-from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.replacers.replacements_and_expiry import (
@@ -982,32 +982,18 @@ def storages_with_allocation_policies() -> Response:
     )
 
 
-def add_policy_data(
-    policies: Sequence[AllocationPolicy], query_type: str, data: list[dict[str, Any]]
-) -> None:
-    for policy in policies:
-        data.append(
-            {
-                "policy_name": policy.config_key(),
-                "configs": policy.get_current_configs(),
-                "optional_config_definitions": policy.get_optional_config_definitions_json(),
-                "query_type": query_type,
-            }
-        )
-
-
 @application.route("/routing_strategy_configs/<path:strategy_name>", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_BASED_ROUTING_SYSTEM])
 def get_routing_strategy_configs(strategy_name: str) -> Response:
-    data: list[dict[str, Any]] = []
+    data: list[StrategyData] = []
 
     strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
     data.append(
-        {
-            "strategy_name": strategy_name,
-            "configs": strategy.get_current_configs(),
-            "optional_config_definitions": strategy.get_optional_config_definitions_json(),
-        }
+        StrategyData(
+            strategy_name=strategy_name,
+            configs=strategy.get_current_configs(),
+            optional_config_definitions=strategy.get_optional_config_definitions_json(),
+        )
     )
 
     policies = strategy.get_allocation_policies()
@@ -1028,7 +1014,7 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
         StorageKey(storage_key)
     ).get_delete_allocation_policies()
 
-    data: list[dict[str, Any]] = []
+    data: list[PolicyData] = []
     add_policy_data(policies, "select", data)
     add_policy_data(delete_policies, "delete", data)
 
