@@ -16,7 +16,9 @@ from snuba.web.rpc.proto_visitor import (
     TimeSeriesRequestWrapper,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
-from snuba.web.rpc.v1.visitors.visitor_v2 import preprocess_expression_labels
+from snuba.web.rpc.v1.visitors.time_series_request_visitor import (
+    preprocess_expression_labels,
+)
 
 _VALID_GRANULARITY_SECS = set(
     [

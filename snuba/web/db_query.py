@@ -39,7 +39,6 @@ from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.querylog.query_metadata import (
-    SLO,
     ClickhouseQueryMetadata,
     QueryStatus,
     RequestStatus,
@@ -294,15 +293,12 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
-    span = sentry_sdk.get_current_span()
-
     if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
         "enable_bypass_cache_referrers"
     ):
         query_id = f"randomized-{uuid.uuid4().hex}"
         clickhouse_query_settings["query_id"] = query_id
-        if span:
-            span.set_data("query_id", query_id)
+        sentry_sdk.update_current_span(attributes={"query_id": query_id})
         return execute_query(
             clickhouse_query,
             query_settings,
@@ -316,8 +312,7 @@ def execute_query_with_readthrough_caching(
 
     clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
 
-    if span:
-        span.set_data("query_id", query_id)
+    sentry_sdk.update_current_span(attributes={"query_id": query_id})
 
     def record_cache_hit_type(hit_type: int) -> None:
         span_tag = "cache_miss"
@@ -330,8 +325,7 @@ def execute_query_with_readthrough_caching(
         elif hit_type == SIMPLE_READTHROUGH:
             stats["cache_hit_simple"] = 1
         sentry_sdk.set_tag("cache_status", span_tag)
-        if span:
-            span.set_data("cache_status", span_tag)
+        sentry_sdk.update_current_span(attributes={"cache_status": span_tag})
 
     cache_partition = _get_cache_partition(reader)
     metrics.increment(
@@ -503,9 +497,6 @@ def _raw_query(
         elif isinstance(cause, ExecutionTimeoutError):
             status = QueryStatus.TIMEOUT
 
-        if request_status.slo == SLO.AGAINST:
-            logger.exception("Error running query: %s\n%s", sql, cause)
-
         with configure_scope() as scope:
             if scope.span:
                 sentry_sdk.set_tag("slo_status", request_status.status.value)
@@ -520,7 +511,7 @@ def _raw_query(
             # This exception needs to have the message of the cause in it for sentry
             # to pick it up properly
             cause.__class__.__name__,
-            str(cause),
+            cause.message if isinstance(cause, ClickhouseError) else str(cause),
             {
                 "stats": stats,
                 "sql": sql,

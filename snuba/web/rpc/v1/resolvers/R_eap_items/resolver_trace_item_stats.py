@@ -20,16 +20,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
-from snuba.query.dsl import (
-    arrayJoin,
-    column,
-    count,
-    in_cond,
-    literal,
-    literals_array,
-    not_cond,
-    tupleElement,
-)
+from snuba.query.dsl import arrayJoin, column, count, tupleElement
 from snuba.query.expressions import FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -51,7 +42,7 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
 )
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression_eap_items,
+    attribute_key_to_expression,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -60,23 +51,6 @@ MAX_BUCKETS = 100
 DEFAULT_BUCKETS = 10
 
 COUNT_LABEL = "count()"
-
-# These are attributes that were not stored in attr_str_ or attr_num_ in eap_spans because they were stored in columns.
-# Since we store these in the attribute columns in eap_items, we need to exclude them in endpoints that don't expect them to be in the attribute columns.
-ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS: set[str] = {
-    "sentry.raw_description",
-    "sentry.transaction",
-    "sentry.start_timestamp_precise",
-    "sentry.end_timestamp_precise",
-    "sentry.duration_ms",
-    "sentry.event_id",
-    "sentry.exclusive_time_ms",
-    "sentry.is_segment",
-    "sentry.parent_span_id",
-    "sentry.profile_id",
-    "sentry.received",
-    "sentry.segment_id",
-}
 
 
 def _transform_results(
@@ -180,23 +154,14 @@ def _build_attr_distribution_query(
 
     trace_item_filters_expression = trace_item_filters_to_expression(
         in_msg.filter,
-        (attribute_key_to_expression_eap_items),
+        (attribute_key_to_expression),
     )
-
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,
         condition=base_conditions_and(
             in_msg.meta,
             trace_item_filters_expression,
-            not_cond(
-                in_cond(
-                    attrs_string_keys,
-                    literals_array(
-                        None, list(map(literal, ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS))
-                    ),
-                ),
-            ),
         ),
         order_by=[
             OrderBy(
@@ -205,8 +170,8 @@ def _build_attr_distribution_query(
             ),
         ],
         groupby=[
-            attrs_string_keys,
-            attrs_string_values,
+            column("attr_key"),
+            column("attr_value"),
         ],
         limitby=LimitBy(
             limit=(
@@ -214,7 +179,7 @@ def _build_attr_distribution_query(
                 if distributions_params.max_buckets > 0
                 else DEFAULT_BUCKETS
             ),
-            columns=[attrs_string_keys],
+            columns=[column("attr_key")],
         ),
         limit=(
             distributions_params.max_attributes

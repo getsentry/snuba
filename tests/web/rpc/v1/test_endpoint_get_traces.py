@@ -25,13 +25,19 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
+from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.test_utils import gen_item_message
+from tests.web.rpc.v1.test_utils import (
+    comparison_filter,
+    create_request_meta,
+    gen_item_message,
+    or_filter,
+)
 
 _TRACE_IDS = [uuid.uuid4().hex for _ in range(10)]
 _BASE_TIME = datetime.now(tz=timezone.utc).replace(
@@ -67,28 +73,28 @@ _SPANS = [
     )
     for i in range(_SPAN_COUNT)
 ]
+_ADDITIONAL_TRACE_IDS = [uuid.uuid4().hex for _ in range(_SPAN_COUNT)]
+_ADDITIONAL_SPANS = [
+    gen_item_message(
+        start_timestamp=_BASE_TIME + timedelta(hours=1, minutes=i),
+        trace_id=_ADDITIONAL_TRACE_IDS[i],
+        attributes={
+            "span_op": AnyValue(string_value="lcp"),
+            "span_name": AnyValue(string_value="standalone"),
+            "is_segment": AnyValue(bool_value=False),
+        },
+    )
+    for i in range(_SPAN_COUNT)
+]
 
 
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
+    state.set_config("enable_trace_sampling", True)
 
     write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
-    write_raw_unprocessed_events(
-        items_storage,  # type: ignore
-        [
-            gen_item_message(
-                start_timestamp=_BASE_TIME + timedelta(minutes=i),
-                trace_id=uuid.uuid4().hex,
-                attributes={
-                    "span_op": AnyValue(string_value="lcp"),
-                    "span_name": AnyValue(string_value="standalone"),
-                    "is_segment": AnyValue(bool_value=False),
-                },
-            )
-            for i in range(_SPAN_COUNT)
-        ],
-    )
+    write_raw_unprocessed_events(items_storage, _ADDITIONAL_SPANS)  # type: ignore
 
 
 @pytest.mark.clickhouse_db
@@ -128,7 +134,7 @@ class TestGetTraces(BaseApiTest):
         (
             start_timestamp_per_trace_id,
             trace_id_per_start_timestamp,
-        ) = generate_trace_id_timestamp_data()
+        ) = generate_trace_id_timestamp_data(_SPANS + _ADDITIONAL_SPANS)
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -163,14 +169,14 @@ class TestGetTraces(BaseApiTest):
                     sorted(trace_id_per_start_timestamp.keys())
                 )
             ],
-            page_token=PageToken(offset=len(_TRACE_IDS)),
+            page_token=PageToken(offset=len(_TRACE_IDS + _ADDITIONAL_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_data_and_limit(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
-        three_hours_later = int((_BASE_TIME + timedelta(hours=10)).timestamp())
+        ten_hours_later = int((_BASE_TIME + timedelta(hours=10)).timestamp())
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -178,7 +184,7 @@ class TestGetTraces(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=ts,
-                end_timestamp=Timestamp(seconds=three_hours_later),
+                end_timestamp=Timestamp(seconds=ten_hours_later),
                 request_id=_REQUEST_ID,
             ),
             attributes=[
@@ -189,8 +195,10 @@ class TestGetTraces(BaseApiTest):
             limit=1,
         )
         response = EndpointGetTraces().execute(message)
-        spans = generate_spans()
+        spans = generate_spans(_SPANS + _ADDITIONAL_SPANS)
         last_span = spans[0]
+        trace_ids = [span.trace_id for span in spans]
+        print(trace_ids)
         for span in spans:
             if span.timestamp.seconds >= last_span.timestamp.seconds:
                 last_span = span
@@ -281,7 +289,7 @@ class TestGetTraces(BaseApiTest):
         (
             start_timestamp_per_trace_id,
             trace_id_per_start_timestamp,
-        ) = generate_trace_id_timestamp_data()
+        ) = generate_trace_id_timestamp_data(_SPANS)
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -477,7 +485,7 @@ class TestGetTraces(BaseApiTest):
         (
             start_timestamp_per_trace_id,
             trace_id_per_start_timestamp,
-        ) = generate_trace_id_timestamp_data()
+        ) = generate_trace_id_timestamp_data(_SPANS)
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -543,7 +551,7 @@ class TestGetTraces(BaseApiTest):
         (
             start_timestamp_per_trace_id,
             trace_id_per_start_timestamp,
-        ) = generate_trace_id_timestamp_data()
+        ) = generate_trace_id_timestamp_data(_SPANS)
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -645,19 +653,199 @@ class TestGetTraces(BaseApiTest):
         ):
             EndpointGetTraces().execute(message)
 
+    def test_with_data_and_cross_event_query(self) -> None:
+        trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
+        write_cross_item_data_to_storage(all_items)
 
-def generate_spans() -> list[TraceItem]:
+        filters = [
+            trace_filter(
+                comparison_filter("span.attr1", "val1"),
+                TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            trace_filter(
+                comparison_filter("log.attr2", "val2"),
+                TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            trace_filter(
+                or_filter(
+                    [
+                        comparison_filter("error.attr3", "val3"),
+                        comparison_filter("error.attr4", "val4"),
+                    ]
+                ),
+                TraceItemType.TRACE_ITEM_TYPE_ERROR,
+            ),
+        ]
+
+        message = GetTracesRequest(
+            meta=create_request_meta(start_time, end_time),
+            attributes=[
+                TraceAttribute(key=TraceAttribute.Key.KEY_TRACE_ID),
+            ],
+            filters=filters,
+        )
+
+        response = EndpointGetTraces().execute(message)
+
+        assert len(response.traces) == 3
+
+        returned_trace_ids = set()
+        for trace in response.traces:
+            returned_trace_ids.add(trace.attributes[0].value.val_str)
+
+        # Only the first 3 traces should match all filter conditions
+        expected_trace_ids = set(trace_ids[:3])
+        assert (
+            returned_trace_ids == expected_trace_ids
+        ), f"Expected {expected_trace_ids}, got {returned_trace_ids}"
+
+    def test_cross_item_filtered_count_with_span_restriction(self) -> None:
+        trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
+        write_cross_item_data_to_storage(all_items)
+
+        filters = [
+            trace_filter(
+                comparison_filter("span.attr1", "val1"),
+                TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            trace_filter(
+                comparison_filter("log.attr2", "val2"),
+                TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+        ]
+
+        message = GetTracesRequest(
+            meta=create_request_meta(
+                start_time, end_time, TraceItemType.TRACE_ITEM_TYPE_SPAN
+            ),
+            attributes=[
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT,
+                    type=AttributeKey.TYPE_INT,
+                ),
+            ],
+            filters=filters,
+        )
+
+        response = EndpointGetTraces().execute(message)
+
+        assert len(response.traces) == 3
+        for trace in response.traces:
+            count_attr = trace.attributes[0]
+
+            assert (
+                count_attr.value.val_int == 1
+            ), f"Expected count of 1 span per trace, got {count_attr.value.val_int}"
+
+    def test_cross_item_filtered_count_without_restriction(self) -> None:
+        trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
+        write_cross_item_data_to_storage(all_items)
+
+        filters = [
+            trace_filter(
+                comparison_filter("span.attr1", "val1"),
+                TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            trace_filter(
+                comparison_filter("log.attr2", "val2"),
+                TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+        ]
+
+        # Request without meta type restriction - should count all matching items
+        message = GetTracesRequest(
+            meta=create_request_meta(start_time, end_time),
+            attributes=[
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT,
+                    type=AttributeKey.TYPE_INT,
+                ),
+            ],
+            filters=filters,
+        )
+
+        response = EndpointGetTraces().execute(message)
+
+        assert len(response.traces) == 3
+        for trace in response.traces:
+            count_attr = trace.attributes[0]
+            assert (
+                count_attr.value.val_int == 2
+            ), f"Expected count of 2 items per trace (1 span + 1 log), got {count_attr.value.val_int}"
+
+    def test_multiple_item_types_start_timestamp(self) -> None:
+        trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
+        write_cross_item_data_to_storage(all_items)
+
+        message = GetTracesRequest(
+            meta=create_request_meta(start_time, end_time),
+            attributes=[
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_START_TIMESTAMP,
+                    type=AttributeKey.TYPE_DOUBLE,
+                ),
+            ],
+        )
+
+        response = EndpointGetTraces().execute(message)
+
+        assert len(response.traces) == 6
+        for i, trace in enumerate(response.traces):
+            # Traces are returned in descending order of start timestamp
+            trace_index = 5 - i
+            expected_timestamp = (
+                start_time + timedelta(minutes=trace_index * 10, seconds=10)
+            ).timestamp()
+            assert trace.attributes[0].value.val_double == expected_timestamp
+
+    def test_default_start_timestamp(self) -> None:
+        spans = [
+            TraceItem(
+                organization_id=1,
+                project_id=1,
+                item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                timestamp=Timestamp(seconds=int(_BASE_TIME.timestamp())),
+                trace_id=uuid.uuid4().hex,
+                item_id=uuid.uuid4().int.to_bytes(16, byteorder="little"),
+                received=Timestamp(seconds=int(_BASE_TIME.timestamp())),
+                retention_days=90,
+                server_sample_rate=1.0,
+                attributes={},
+            ).SerializeToString()
+        ]
+        write_cross_item_data_to_storage(spans)
+
+        message = GetTracesRequest(
+            meta=create_request_meta(_BASE_TIME, _BASE_TIME + timedelta(hours=1)),
+            attributes=[
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_START_TIMESTAMP,
+                    type=AttributeKey.TYPE_DOUBLE,
+                ),
+            ],
+        )
+        response = EndpointGetTraces().execute(message)
+
+        assert len(response.traces) == 1
+        assert (
+            response.traces[0].attributes[0].value.val_double == _BASE_TIME.timestamp()
+        )
+
+
+def generate_spans(spans_data: list[bytes]) -> list[TraceItem]:
     spans: list[TraceItem] = []
-    for payload in _SPANS:
+    for payload in spans_data:
         span = TraceItem()
         span.ParseFromString(payload)
         spans.append(span)
     return spans
 
 
-def generate_trace_id_timestamp_data() -> tuple[dict[str, float], dict[float, str]]:
+def generate_trace_id_timestamp_data(
+    spans_data: list[bytes],
+) -> tuple[dict[str, float], dict[float, str]]:
     start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
-    for payload in _SPANS:
+    for payload in spans_data:
         s = TraceItem()
         s.ParseFromString(payload)
         start_timestamp_per_trace_id[s.trace_id] = min(
@@ -669,3 +857,108 @@ def generate_trace_id_timestamp_data() -> tuple[dict[str, float], dict[float, st
         for trace_id, timestamp in start_timestamp_per_trace_id.items()
     }
     return start_timestamp_per_trace_id, trace_id_per_start_timestamp
+
+
+def create_cross_item_test_data() -> tuple[list[str], list[bytes], datetime, datetime]:
+    """
+    Create test data with 6 traces. The first 3 traces have items with the following attributes:
+    - span.attr1 = val1
+    - log.attr2 = val2
+    - error.attr3 = val3
+    - error.attr4 = val4
+    The last 3 traces have items with the following attributes:
+    - span.attr1 = other_val1
+    - log.attr2 = other_val2
+    - error.attr3 = other_val3
+    - error.attr4 = other_val4
+    """
+    # Use today's date with a fixed time range (12am to 1am)
+    today = datetime.now(tz=timezone.utc).date()
+    start_time = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc)
+    end_time = start_time + timedelta(hours=1)
+
+    # Create 6 traces - 3 should match all conditions, 3 should not
+    trace_ids = [uuid.uuid4().hex for _ in range(6)]
+    all_items = []
+
+    for i, trace_id in enumerate(trace_ids):
+        # Spread items evenly across the 1-hour window
+        item_time = start_time + timedelta(minutes=i * 10)
+
+        if i < 3:  # First 3 traces have matching log attributes
+            log_attrs = {
+                "log.attr2": AnyValue(string_value="val2"),
+            }
+        else:  # Last 3 traces have different log attributes
+            log_attrs = {
+                "log.attr2": AnyValue(string_value="other_val2"),
+            }
+
+        all_items.append(
+            gen_item_message(
+                start_timestamp=item_time,
+                trace_id=trace_id,
+                type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                attributes=log_attrs,
+                remove_default_attributes=True,
+            )
+        )
+
+        if i < 3:  # First 3 traces have matching span attributes
+            span_attrs = {
+                "span.attr1": AnyValue(string_value="val1"),
+            }
+        else:  # Last 3 traces have different span attributes
+            span_attrs = {
+                "span.attr1": AnyValue(string_value="other_val1"),
+            }
+
+        all_items.append(
+            gen_item_message(
+                start_timestamp=item_time + timedelta(seconds=10),
+                trace_id=trace_id,
+                type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                attributes=span_attrs,
+                remove_default_attributes=True,
+            )
+        )
+
+        if i < 3:  # First 3 traces have matching error attributes
+            error_attrs = {
+                "error.attr3": AnyValue(string_value="val3"),
+                "error.attr4": AnyValue(string_value="val4"),
+            }
+        else:  # Last 3 traces have different error attributes
+            error_attrs = {
+                "error.attr3": AnyValue(string_value="other_val3"),
+                "error.attr4": AnyValue(string_value="other_val4"),
+            }
+
+        all_items.append(
+            gen_item_message(
+                start_timestamp=item_time + timedelta(seconds=20),
+                trace_id=trace_id,
+                type=TraceItemType.TRACE_ITEM_TYPE_ERROR,
+                attributes=error_attrs,
+                remove_default_attributes=True,
+            )
+        )
+
+    return trace_ids, all_items, start_time, end_time
+
+
+def trace_filter(
+    filter: TraceItemFilter,
+    item_type: TraceItemType.ValueType,
+) -> GetTracesRequest.TraceFilter:
+    """Create a trace filter for the specified field and item type."""
+    return GetTracesRequest.TraceFilter(
+        item_type=item_type,
+        filter=filter,
+    )
+
+
+def write_cross_item_data_to_storage(items: list[bytes]) -> None:
+    """Write cross-item test data to storage."""
+    storage = get_storage(StorageKey("eap_items"))
+    write_raw_unprocessed_events(storage, items)  # type: ignore

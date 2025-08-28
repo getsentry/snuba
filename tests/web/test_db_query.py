@@ -10,6 +10,7 @@ from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.configs.configuration import Configuration
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -19,7 +20,6 @@ from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     NO_UNITS,
     AllocationPolicy,
-    AllocationPolicyConfig,
     AllocationPolicyViolations,
     PassthroughPolicy,
     QueryResultOrError,
@@ -514,7 +514,7 @@ class MockThrottleAllocationPolicy(AllocationPolicy):
     ) -> None:
         return
 
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
 
@@ -604,7 +604,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
     update_called = False
 
     class RejectAllocationPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
         def _get_quota_allowance(
@@ -719,7 +719,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
     POLICY_THREADS = 4
 
     class ThreadLimitPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
         def _get_quota_allowance(
@@ -800,7 +800,7 @@ def test_allocation_policy_updates_quota() -> None:
     queries_run = 0
 
     class CountQueryPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
         def _get_quota_allowance(
@@ -835,7 +835,7 @@ def test_allocation_policy_updates_quota() -> None:
     queries_run_duplicate = 0
 
     class CountQueryPolicyDuplicate(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
         def _get_quota_allowance(
@@ -1075,7 +1075,7 @@ def test_cache_metrics_with_simple_readthrough() -> None:
 @pytest.mark.redis_db
 def test_policy_sets_max_bytes_to_read() -> None:
     class MaxBytesPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
         def _get_quota_allowance(

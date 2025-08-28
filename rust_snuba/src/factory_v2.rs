@@ -57,13 +57,24 @@ pub struct ConsumerStrategyFactoryV2 {
     pub accountant_topic_config: config::TopicConfig,
     pub stop_at_timestamp: Option<i64>,
     pub batch_write_timeout: Option<Duration>,
-    pub custom_envoy_request_timeout: Option<u64>,
     pub join_timeout_ms: Option<u64>,
     pub health_check: String,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
     fn update_partitions(&self, partitions: &HashMap<Partition, u64>) {
+        let mut assigned_partitions = partitions
+            .keys()
+            .map(|partition| partition.index)
+            .collect::<Vec<_>>();
+        assigned_partitions.sort_unstable();
+        let assigned_partitions_string = assigned_partitions
+            .iter()
+            .map(|n| n.to_string())
+            .collect::<Vec<String>>()
+            .join("-");
+        set_global_tag("assigned_partitions".to_owned(), assigned_partitions_string);
+
         match partitions.keys().map(|partition| partition.index).min() {
             Some(min) => set_global_tag("min_partition".to_owned(), min.to_string()),
             None => set_global_tag("min_partition".to_owned(), "none".to_owned()),

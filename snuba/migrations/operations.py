@@ -153,6 +153,20 @@ class RunSql(SqlOperation):
         return self.__statement
 
 
+class RetryOnSyncError:
+    def execute(self) -> None:
+        for i in range(30, -1, -1):  # wait at most ~30 seconds
+            try:
+                super().execute()  # type: ignore
+                break
+            except Exception as e:
+                # Metadata on replica is not up to date with common metadata in Zookeeper (status code = 517)
+                if i and e.code == 517:  # type: ignore
+                    time.sleep(1)
+                else:
+                    raise
+
+
 class CreateTable(SqlOperation):
     """
     The create table operation takes a table name, column list and table engine.
@@ -232,7 +246,7 @@ class DropTable(SqlOperation):
         self.table_name = table_name
 
     def format_sql(self) -> str:
-        return f"DROP TABLE IF EXISTS {self.table_name};"
+        return f"DROP TABLE IF EXISTS {self.table_name} SYNC;"
 
 
 class TruncateTable(SqlOperation):
@@ -302,7 +316,7 @@ class RemoveTableTTL(SqlOperation):
         return f"ALTER TABLE {self.__table_name} REMOVE TTL;"
 
 
-class AddColumn(SqlOperation):
+class AddColumn(RetryOnSyncError, SqlOperation):
     """
     Adds a column to a table.
 
@@ -341,7 +355,7 @@ class AddColumn(SqlOperation):
         return f"AddColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column={repr(self.column)}, after={repr(self.__after)}, target={repr(self.target)})"
 
 
-class DropColumn(SqlOperation):
+class DropColumn(RetryOnSyncError, SqlOperation):
     """
     Drops a column from a table.
 
@@ -372,7 +386,7 @@ class DropColumn(SqlOperation):
         return f"DropColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column_name={repr(self.column_name)}, target={repr(self.target)})"
 
 
-class ModifyColumn(SqlOperation):
+class ModifyColumn(RetryOnSyncError, SqlOperation):
     """
     Modify a column in a table.
 
@@ -527,7 +541,7 @@ class AddIndices(SqlOperation):
         return f"ALTER TABLE {self.__table_name} {', '.join(statements)};"
 
 
-class DropIndex(SqlOperation):
+class DropIndex(RetryOnSyncError, SqlOperation):
     """
     Drops an index.
     """
@@ -560,7 +574,7 @@ class DropIndex(SqlOperation):
             super()._block_on_mutations(conn, poll_seconds, timeout_seconds)
 
 
-class DropIndices(SqlOperation):
+class DropIndices(RetryOnSyncError, SqlOperation):
     """
     Drops many indices.
     Only works with the MergeTree family of tables.

@@ -20,6 +20,7 @@ schema:
       { name: sampling_weight, type: UInt, args: { size: 64 } },
       { name: sampling_factor, type: Float, args: { size: 64 } },
       { name: retention_days, type: UInt, args: { size: 16 } },
+      { name: downsampled_retention_days, type: UInt, args: { size: 16 } },
 
       { name: attributes_bool, type: Map, args: { key: { type: String }, value: { type: Bool } } },
       { name: attributes_int, type: Map, args: { key: { type: String }, value: { type: Int, args: { size: 64 } } } },
@@ -169,3 +170,4 @@ stream_loader:
   subscription_scheduled_topic: scheduled-subscriptions-eap-items
   subscription_result_topic: subscription-results-eap-items
   subscription_delay_seconds: 60
+  dlq_topic: snuba-dead-letter-items

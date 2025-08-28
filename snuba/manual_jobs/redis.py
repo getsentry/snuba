@@ -68,14 +68,24 @@ def _get_job_type(job_id: str) -> str:
 
 
 def _get_job_types_multi(job_ids_keys: Sequence[str]) -> List[str]:
-    return [job_type.decode() for job_type in _redis_client.mget(job_ids_keys)]
+    pipeline = _redis_client.pipeline(transaction=False)
+    for job_id_key in job_ids_keys:
+        pipeline.get(job_id_key)
+    redis_statuses = pipeline.execute()
+
+    return [job_type.decode() for job_type in redis_statuses]
 
 
 def _get_job_status_multi(job_ids_keys: Sequence[str]) -> List[JobStatus]:
     if len(job_ids_keys) == 0:
         return []
 
+    pipeline = _redis_client.pipeline(transaction=False)
+    for job_id_key in job_ids_keys:
+        pipeline.get(job_id_key)
+    redis_statuses = pipeline.execute()
+
     return [
         redis_status.decode() if redis_status is not None else JobStatus.NOT_STARTED
-        for redis_status in _redis_client.mget(job_ids_keys)
+        for redis_status in redis_statuses
     ]
