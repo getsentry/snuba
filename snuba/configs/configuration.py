@@ -433,9 +433,7 @@ class ConfigurableComponent(ABC):
     def config_key(cls) -> str:
         return cls.__name__
 
-    def to_dict(
-        self, additional_data: dict[str, Any] = {}
-    ) -> ConfigurableComponentData:
+    def to_dict(self) -> ConfigurableComponentData:
         return ConfigurableComponentData(
             configurable_component_namespace=self.component_namespace(),
             configurable_component_name=self.component_name(),

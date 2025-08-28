@@ -57,7 +57,7 @@ from snuba.admin.tool_policies import (
     check_tool_perms,
     get_user_allowed_tools,
 )
-from snuba.admin.utils import get_policy_data
+from snuba.admin.utils import convert, get_policy_data
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.configs.configuration import ConfigurableComponent
 from snuba.consumers.dlq import (
@@ -988,18 +988,8 @@ def get_routing_strategy_configs(strategy_name: str) -> Response:
 
     strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
 
-    policies = strategy.get_allocation_policies()
-    delete_policies = strategy.get_delete_allocation_policies()
-    policies_data = get_policy_data(policies, delete_policies)
-
     return Response(
-        json.dumps(
-            strategy.to_dict(
-                additional_data={
-                    "policies_data": policies_data,
-                }
-            )
-        ),
+        json.dumps(strategy.to_dict()),
         200,
         {"Content-Type": "application/json"},
     )
@@ -1014,8 +1004,10 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
         StorageKey(storage_key)
     ).get_delete_allocation_policies()
 
+    policies_data = get_policy_data(policies, delete_policies)
+
     return Response(
-        json.dumps(get_policy_data(policies, delete_policies)),
+        json.dumps([convert(policy_data) for policy_data in policies_data]),
         200,
         {"Content-Type": "application/json"},
     )
@@ -1094,8 +1086,7 @@ def set_configuration() -> Response:
             user or "",
             AuditLogAction.ALLOCATION_POLICY_DELETE,
             {
-                resource_name: resource_name,
-                configurable_component_name: configurable_component.config_key(),
+                "component_name": configurable_component.component_name(),
                 "key": key,
             },
             notify=True,
@@ -1112,8 +1103,7 @@ def set_configuration() -> Response:
                 user or "",
                 AuditLogAction.ALLOCATION_POLICY_UPDATE,
                 {
-                    resource_name: resource_name,
-                    configurable_component_name: configurable_component.config_key(),
+                    "component_name": configurable_component.component_name(),
                     "key": key,
                     "value": value,
                     "params": str(params),

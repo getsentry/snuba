@@ -16,6 +16,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableR
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 
 from snuba import environment, settings, state
+from snuba.admin.utils import get_policy_data
 from snuba.configs.configuration import (
     ConfigurableComponent,
     ConfigurableComponentData,
@@ -24,7 +25,7 @@ from snuba.configs.configuration import (
 )
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
-from snuba.query.allocation_policies import AllocationPolicy, PolicyData
+from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
     BytesScannedRejectingPolicy,
 )
@@ -181,7 +182,7 @@ class RoutingStrategyConfig(Configuration):
 
 
 class StrategyData(ConfigurableComponentData):
-    policies_data: list[PolicyData]
+    policies_data: list[ConfigurableComponentData]
 
 
 class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
@@ -442,13 +443,13 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
                     },
                 )
 
-    def to_dict(
-        self, additional_data: dict[str, Any] = {}
-    ) -> ConfigurableComponentData:
-        base_data = super().to_dict()
+    def to_dict(self) -> StrategyData:
         return StrategyData(
-            **base_data,
-            policies_data=additional_data.get("policies_data", []),
+            **super().to_dict(),
+            policies_data=get_policy_data(
+                self.get_allocation_policies(),
+                self.get_delete_allocation_policies(),
+            ),
         )
 
 
