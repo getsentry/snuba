@@ -2,17 +2,6 @@ from typing import Any, Sequence, TypedDict
 
 from snuba.query.allocation_policies import AllocationPolicy
 
-# class ConfigItem(TypedDict):
-#     name: str
-#     type: str
-#     default: Any
-#     description: str
-#     # For optional configs: params is a list of param definitions
-#     # For live configs: params is a dict of actual values
-#     params: Union[List[dict[str, Any]], dict[str, Any]]
-#     # Only present in live configs
-#     value: NotRequired[Any]
-
 
 class ConfigurableComponentData(TypedDict):
     configs: list[dict[str, Any]]
@@ -26,6 +15,7 @@ class PolicyData(ConfigurableComponentData):
 
 class StrategyData(ConfigurableComponentData):
     strategy_name: str
+    policies_data: list[PolicyData]
 
 
 def add_policy_data(
