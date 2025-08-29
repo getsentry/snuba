@@ -505,4 +505,4 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         )
         data = json.loads(response.data)
 
-        assert data["data"] == [{"timestamp_ms": now_ms}]
+        assert datetime.fromisoformat(data["data"][0]["timestamp_ms"]) == now_ms
