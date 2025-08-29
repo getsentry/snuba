@@ -1,6 +1,6 @@
 import numbers
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import (
     Any,
     Dict,
@@ -228,7 +228,12 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
     def _process_timestamp_ms(
         self, event_data: IssueEventData, processed: MutableMapping[str, Any]
     ) -> None:
-        processed["timestamp_ms"] = processed["client_timestamp"]
+        client_timestamp = processed["client_timestamp"]
+        # NOTE: we do this conversion because the JSONRowEncoder will strip out milliseconds out
+        # of datetime objects specifically. To work around that, we convert the datetime to a
+        # timestamp in milliseconds
+        client_timestamp = client_timestamp.replace(tzinfo=timezone.utc)
+        processed["timestamp_ms"] = int(client_timestamp.timestamp() * 1000)
 
     def process_insert_v1(
         self, event: SearchIssueEvent, metadata: KafkaMessageMetadata
