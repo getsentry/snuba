@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
-from typing import Any, final
+from typing import Any, TypedDict, final
 
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import delete_config as delete_runtime_config
@@ -14,6 +14,14 @@ logger = logging.getLogger("snuba.configurable_component")
 
 class InvalidConfig(Exception):
     pass
+
+
+class ConfigurableComponentData(TypedDict):
+    configurable_component_namespace: str
+    configurable_component_config_key: str
+    resource_identifier: str
+    configurations: list[dict[str, Any]]
+    optional_config_definitions: list[dict[str, Any]]
 
 
 class ResourceIdentifier:
@@ -81,7 +89,6 @@ class Configuration:
 
 
 class ConfigurableComponent(ABC):
-
     """
     A ConfigurableComponent is a component that can be configured via configurations.
     example: an allocation policy, a routing strategy, a strategy selector.
@@ -414,4 +421,17 @@ class ConfigurableComponent(ABC):
             key=self.__build_runtime_config_key(config_key, params),
             user=user,
             config_key=self._get_hash(),
+        )
+
+    @classmethod
+    def config_key(cls) -> str:
+        return cls.__name__
+
+    def to_dict(self) -> ConfigurableComponentData:
+        return ConfigurableComponentData(
+            configurable_component_namespace=self.component_namespace(),
+            configurable_component_config_key=self.config_key(),
+            resource_identifier=self.resource_identifier.value,
+            configurations=self.get_current_configs(),
+            optional_config_definitions=self.get_optional_config_definitions_json(),
         )

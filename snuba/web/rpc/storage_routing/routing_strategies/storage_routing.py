@@ -203,10 +203,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
             StorageKey.EAP_ITEMS,
         )
 
-    @classmethod
-    def config_key(cls) -> str:
-        return cls.__name__
-
     @property
     def metrics(self) -> MetricsWrapper:
         return MetricsWrapper(

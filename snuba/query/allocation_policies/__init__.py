@@ -3,11 +3,13 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
+from enum import Enum
 from typing import Any, cast
 
 from snuba import environment, settings
 from snuba.configs.configuration import (
     ConfigurableComponent,
+    ConfigurableComponentData,
     Configuration,
     ResourceIdentifier,
     logger,
@@ -142,6 +144,15 @@ class AllocationPolicyViolations(SerializableException):
             "Query on could not be run due to allocation policies",
             quota_allowances=quota_allowances,
         )
+
+
+class PolicyData(ConfigurableComponentData):
+    query_type: str
+
+
+class QueryType(Enum):
+    SELECT = "select"
+    DELETE = "delete"
 
 
 class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
@@ -397,10 +408,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         return int(self.get_config_value(MAX_THREADS))
 
     @classmethod
-    def config_key(cls) -> str:
-        return cls.__name__
-
-    @classmethod
     def get_from_name(cls, name: str) -> "AllocationPolicy":
         return cast("AllocationPolicy", cls.class_from_name(name))
 
@@ -552,6 +559,14 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
     @property
     def resource_identifier(self) -> ResourceIdentifier:
         return ResourceIdentifier(self._storage_key)
+
+    @property
+    def query_type(self) -> QueryType:
+        return QueryType.SELECT
+
+    def to_dict(self) -> PolicyData:
+        base_data = super().to_dict()
+        return PolicyData(**base_data, query_type=self.query_type.value)  # type: ignore
 
 
 class PassthroughPolicy(AllocationPolicy):
