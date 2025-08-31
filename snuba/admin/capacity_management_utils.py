@@ -3,7 +3,7 @@ from typing import Any, Sequence
 from snuba.query.allocation_policies import AllocationPolicy, PolicyData
 
 
-def _convert(policy_data: PolicyData) -> dict[str, Any]:
+def convert(policy_data: PolicyData) -> dict[str, Any]:
     "We need to convert the policy data to the format that the frontend expects. This will be removed once we update the frontend"
     return {
         "policy_name": policy_data["configurable_component_config_key"],
@@ -15,5 +15,5 @@ def _convert(policy_data: PolicyData) -> dict[str, Any]:
 
 def get_policy_data(
     policies: Sequence[AllocationPolicy],
-) -> list[dict[str, Any]]:
-    return [_convert(policy.to_dict()) for policy in policies]
+) -> list[PolicyData]:
+    return [policy.to_dict() for policy in policies]
