@@ -18,7 +18,7 @@ from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
-from snuba.admin.capacity_management_utils import convert, get_policy_data
+from snuba.admin.capacity_management_utils import get_policy_data
 from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
 from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
@@ -977,7 +977,7 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
     )
 
     return Response(
-        json.dumps([convert(policy_data) for policy_data in policies_data]),
+        json.dumps(policies_data),
         200,
         {"Content-Type": "application/json"},
     )

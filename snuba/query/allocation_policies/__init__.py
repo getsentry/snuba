@@ -342,13 +342,13 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
 
     def __init__(
         self,
-        storage_key: StorageKey,
+        storage_key: ResourceIdentifier,
         required_tenant_types: list[str],
         default_config_overrides: dict[str, Any],
         **kwargs: str,
     ) -> None:
         self._required_tenant_types = set(required_tenant_types)
-        self._storage_key = storage_key
+        self._resource_identifier = storage_key
         self._default_config_definitions = [
             AllocationPolicyConfig(
                 name=IS_ACTIVE,
@@ -385,7 +385,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             environment.metrics,
             "allocation_policy",
             tags={
-                "storage_key": self._storage_key.value,
+                "storage_key": self._resource_identifier.value,
                 "is_enforced": str(self.is_enforced),
                 "policy_class": self.__class__.__name__,
             },
@@ -418,7 +418,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         """
         return (
             bool(self.__class__ == other.__class__)
-            and self._storage_key == other._storage_key
+            and self._resource_identifier == other._resource_identifier
             and self._required_tenant_types == other._required_tenant_types
         )
 
@@ -438,7 +438,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         assert isinstance(storage_key, str)
         return cls(
             required_tenant_types=required_tenant_types,
-            storage_key=StorageKey(storage_key),
+            storage_key=ResourceIdentifier(StorageKey(storage_key)),
             default_config_overrides=default_config_overrides,
             **kwargs,
         )
@@ -514,7 +514,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
                 suggestion=allowance.suggestion,
             )
         # make sure we always know which storage key we rejected a query from
-        allowance.explanation["storage_key"] = str(self._storage_key)
+        allowance.explanation["storage_key"] = str(self._resource_identifier)
         return allowance
 
     @abstractmethod
@@ -554,11 +554,11 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
 
     @property
     def storage_key(self) -> StorageKey:
-        return self._storage_key
+        return StorageKey(self._resource_identifier.value)
 
     @property
     def resource_identifier(self) -> ResourceIdentifier:
-        return ResourceIdentifier(self._storage_key)
+        return self._resource_identifier
 
     @property
     def query_type(self) -> QueryType:
@@ -598,7 +598,7 @@ class PassthroughPolicy(AllocationPolicy):
 
 
 DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
-    StorageKey("default.no_storage_key"),
+    ResourceIdentifier(StorageKey("default.no_storage_key")),
     required_tenant_types=[],
     default_config_overrides={},
 )
