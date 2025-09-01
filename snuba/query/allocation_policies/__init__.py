@@ -553,10 +553,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         pass
 
     @property
-    def storage_key(self) -> StorageKey:
-        return StorageKey(self._resource_identifier.value)
-
-    @property
     def resource_identifier(self) -> ResourceIdentifier:
         return self._resource_identifier
 

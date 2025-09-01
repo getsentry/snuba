@@ -23,7 +23,7 @@ from snuba.clickhouse.formatter.query import format_query_anonymized
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
-from snuba.datasets.storages.storage_key import StorageKey
+from snuba.configs.configuration import ResourceIdentifier
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
@@ -576,7 +576,7 @@ def _record_bytes_scanned(
     result_or_error: QueryResultOrError,
     attribution_info: AttributionInfo,
     dataset_name: str,
-    storage_key: StorageKey,
+    resource_identifier: ResourceIdentifier,
 ) -> None:
     custom_metrics = MetricsWrapper(environment.metrics, "allocation_policy")
 
@@ -588,7 +588,7 @@ def _record_bytes_scanned(
             tags={
                 "referrer": attribution_info.referrer,
                 "dataset": dataset_name,
-                "storage_key": storage_key.value,
+                "storage_key": resource_identifier.value,
             },
         )
 
@@ -708,7 +708,7 @@ def db_query(
             result_or_error,
             attribution_info,
             dataset_name,
-            allocation_policies[0].storage_key,
+            allocation_policies[0].resource_identifier,
         )
         for allocation_policy in allocation_policies:
             allocation_policy.update_quota_balance(
@@ -760,7 +760,7 @@ def _add_quota_info(
         quota_info["quota_used"] = quota_allowance.quota_used
         quota_info["quota_unit"] = quota_allowance.quota_unit
         quota_info["suggestion"] = quota_allowance.suggestion
-        quota_info["storage_key"] = quota_and_policy.policy.storage_key.value
+        quota_info["storage_key"] = quota_and_policy.policy.resource_identifier.value
 
         if action == _REJECTED_BY:
             quota_info["rejection_threshold"] = quota_allowance.rejection_threshold
@@ -790,14 +790,14 @@ def _populate_query_status(
         summary[is_rejected] = True
         summary[
             rejection_storage_key
-        ] = rejection_quota_and_policy.policy.storage_key.value
+        ] = rejection_quota_and_policy.policy.resource_identifier.value
 
     if throttle_quota_and_policy:
         summary[is_successful] = False
         summary[is_throttled] = True
         summary[
             throttle_storage_key
-        ] = throttle_quota_and_policy.policy.storage_key.value
+        ] = throttle_quota_and_policy.policy.resource_identifier.value
 
 
 def _apply_allocation_policies_quota(
@@ -883,19 +883,19 @@ def _apply_allocation_policies_quota(
         if not can_run:
             metrics.increment(
                 "rejected_query",
-                tags={"storage_key": allocation_policies[0].storage_key.value},
+                tags={"storage_key": allocation_policies[0].resource_identifier.value},
             )
             raise AllocationPolicyViolations.from_args(stats["quota_allowance"])
 
         if throttle_quota_and_policy is not None:
             metrics.increment(
                 "throttled_query",
-                tags={"storage_key": allocation_policies[0].storage_key.value},
+                tags={"storage_key": allocation_policies[0].resource_identifier.value},
             )
         else:
             metrics.increment(
                 "successful_query",
-                tags={"storage_key": allocation_policies[0].storage_key.value},
+                tags={"storage_key": allocation_policies[0].resource_identifier.value},
             )
         max_threads = min_threads_across_policies
         span.set_data("max_threads", max_threads)
