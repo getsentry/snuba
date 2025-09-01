@@ -27,23 +27,23 @@ class ConfigurableComponentData(TypedDict):
 class ResourceIdentifier:
     def __init__(
         self,
-        resource: StorageKey | str,
+        resource_identifier_name: StorageKey | str,
     ):
-        self.resource = resource
+        self._resource_identifier_name = (
+            resource_identifier_name.value
+            if isinstance(resource_identifier_name, StorageKey)
+            else resource_identifier_name
+        )
 
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, ResourceIdentifier) and other.value == self.value
 
     def __repr__(self) -> str:
-        return str(self.resource)
+        return self.value
 
     @property
     def value(self) -> str:
-        return (
-            self.resource.value
-            if isinstance(self.resource, StorageKey)
-            else self.resource
-        )
+        return self._resource_identifier_name
 
 
 @dataclass()

@@ -514,7 +514,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
                 suggestion=allowance.suggestion,
             )
         # make sure we always know which storage key we rejected a query from
-        allowance.explanation["storage_key"] = str(self._resource_identifier)
+        allowance.explanation["storage_key"] = self._resource_identifier.value
         return allowance
 
     @abstractmethod
