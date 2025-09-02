@@ -18,6 +18,7 @@ from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
+from snuba.admin.capacity_management_utils import convert
 from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
 from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
@@ -79,7 +80,6 @@ from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
-from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.replacers.replacements_and_expiry import (
@@ -971,29 +971,16 @@ def storages_with_allocation_policies() -> Response:
 @application.route("/allocation_policy_configs/<path:storage_key>", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def get_allocation_policy_configs(storage_key: str) -> Response:
+    storage = get_storage(StorageKey(storage_key))
+    policies = (
+        storage.get_allocation_policies() + storage.get_delete_allocation_policies()
+    )
 
-    policies = get_storage(StorageKey(storage_key)).get_allocation_policies()
-    delete_policies = get_storage(
-        StorageKey(storage_key)
-    ).get_delete_allocation_policies()
-
-    data = []
-
-    def add_policy_data(policies: Sequence[AllocationPolicy], query_type: str) -> None:
-        for policy in policies:
-            data.append(
-                {
-                    "policy_name": policy.config_key(),
-                    "configs": policy.get_current_configs(),
-                    "optional_config_definitions": policy.get_optional_config_definitions_json(),
-                    "query_type": query_type,
-                }
-            )
-
-    add_policy_data(policies, "select")
-    add_policy_data(delete_policies, "delete")
-
-    return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
+    return Response(
+        json.dumps([convert(policy.to_dict()) for policy in policies]),
+        200,
+        {"Content-Type": "application/json"},
+    )
 
 
 @application.route("/allocation_policy_config", methods=["POST", "DELETE"])

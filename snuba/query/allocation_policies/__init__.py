@@ -3,11 +3,13 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
+from enum import Enum
 from typing import Any, cast
 
 from snuba import environment, settings
 from snuba.configs.configuration import (
     ConfigurableComponent,
+    ConfigurableComponentData,
     Configuration,
     ResourceIdentifier,
     logger,
@@ -142,6 +144,15 @@ class AllocationPolicyViolations(SerializableException):
             "Query on could not be run due to allocation policies",
             quota_allowances=quota_allowances,
         )
+
+
+class PolicyData(ConfigurableComponentData):
+    query_type: str
+
+
+class QueryType(Enum):
+    SELECT = "select"
+    DELETE = "delete"
 
 
 class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
@@ -331,13 +342,13 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
 
     def __init__(
         self,
-        storage_key: StorageKey,
+        storage_key: ResourceIdentifier,
         required_tenant_types: list[str],
         default_config_overrides: dict[str, Any],
         **kwargs: str,
     ) -> None:
         self._required_tenant_types = set(required_tenant_types)
-        self._storage_key = storage_key
+        self._resource_identifier = storage_key
         self._default_config_definitions = [
             AllocationPolicyConfig(
                 name=IS_ACTIVE,
@@ -374,7 +385,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             environment.metrics,
             "allocation_policy",
             tags={
-                "storage_key": self._storage_key.value,
+                "storage_key": self._resource_identifier.value,
                 "is_enforced": str(self.is_enforced),
                 "policy_class": self.__class__.__name__,
             },
@@ -397,10 +408,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         return int(self.get_config_value(MAX_THREADS))
 
     @classmethod
-    def config_key(cls) -> str:
-        return cls.__name__
-
-    @classmethod
     def get_from_name(cls, name: str) -> "AllocationPolicy":
         return cast("AllocationPolicy", cls.class_from_name(name))
 
@@ -411,7 +418,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         """
         return (
             bool(self.__class__ == other.__class__)
-            and self._storage_key == other._storage_key
+            and self._resource_identifier == other._resource_identifier
             and self._required_tenant_types == other._required_tenant_types
         )
 
@@ -431,7 +438,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         assert isinstance(storage_key, str)
         return cls(
             required_tenant_types=required_tenant_types,
-            storage_key=StorageKey(storage_key),
+            storage_key=ResourceIdentifier(StorageKey(storage_key)),
             default_config_overrides=default_config_overrides,
             **kwargs,
         )
@@ -507,7 +514,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
                 suggestion=allowance.suggestion,
             )
         # make sure we always know which storage key we rejected a query from
-        allowance.explanation["storage_key"] = str(self._storage_key)
+        allowance.explanation["storage_key"] = self._resource_identifier.value
         return allowance
 
     @abstractmethod
@@ -546,12 +553,16 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         pass
 
     @property
-    def storage_key(self) -> StorageKey:
-        return self._storage_key
+    def resource_identifier(self) -> ResourceIdentifier:
+        return self._resource_identifier
 
     @property
-    def resource_identifier(self) -> ResourceIdentifier:
-        return ResourceIdentifier(self._storage_key)
+    def query_type(self) -> QueryType:
+        return QueryType.SELECT
+
+    def to_dict(self) -> PolicyData:
+        base_data = super().to_dict()
+        return PolicyData(**base_data, query_type=self.query_type.value)  # type: ignore
 
 
 class PassthroughPolicy(AllocationPolicy):
@@ -583,7 +594,7 @@ class PassthroughPolicy(AllocationPolicy):
 
 
 DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
-    StorageKey("default.no_storage_key"),
+    ResourceIdentifier(StorageKey("default.no_storage_key")),
     required_tenant_types=[],
     default_config_overrides={},
 )

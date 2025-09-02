@@ -10,7 +10,7 @@ import pytest
 import simplejson as json
 
 from snuba import state
-from snuba.configs.configuration import Configuration
+from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -1339,7 +1339,9 @@ class TestSnQLApi(BaseApiTest):
         with patch(
             "snuba.web.db_query._get_allocation_policies",
             return_value=[
-                MaxBytesPolicy123(StorageKey("doesntmatter"), ["a", "b", "c"], {})
+                MaxBytesPolicy123(
+                    ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
+                )
             ],
         ):
             response = self.post(
@@ -1373,7 +1375,7 @@ class TestSnQLApi(BaseApiTest):
             "snuba.web.db_query._get_allocation_policies",
             return_value=[
                 RejectAllocationPolicy123(
-                    StorageKey("doesntmatter"), ["a", "b", "c"], {}
+                    ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
                 )
             ],
         ):
@@ -1401,7 +1403,7 @@ class TestSnQLApi(BaseApiTest):
                         "max_threads": 0,
                         "explanation": {
                             "reason": "policy rejects all queries",
-                            "storage_key": "StorageKey.DOESNTMATTER",
+                            "storage_key": "doesntmatter",
                         },
                         "is_throttled": False,
                         "throttle_threshold": 1000000000000,
@@ -1417,14 +1419,14 @@ class TestSnQLApi(BaseApiTest):
                     "is_successful": False,
                     "is_rejected": True,
                     "is_throttled": False,
-                    "rejection_storage_key": "StorageKey.DOESNTMATTER",
+                    "rejection_storage_key": "doesntmatter",
                     "throttle_storage_key": None,
                     "rejected_by": {
                         "policy": "RejectAllocationPolicy123",
                         "quota_used": 0,
                         "quota_unit": "no_units",
                         "suggestion": "no_suggestion",
-                        "storage_key": "StorageKey.DOESNTMATTER",
+                        "storage_key": "doesntmatter",
                         "rejection_threshold": 1000000000000,
                     },
                     "throttled_by": {},
