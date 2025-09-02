@@ -1,6 +1,6 @@
-from typing import Any, Sequence
+from typing import Any
 
-from snuba.query.allocation_policies import AllocationPolicy, PolicyData
+from snuba.query.allocation_policies import PolicyData
 
 
 def convert(policy_data: PolicyData) -> dict[str, Any]:
@@ -11,9 +11,3 @@ def convert(policy_data: PolicyData) -> dict[str, Any]:
         "optional_config_definitions": policy_data["optional_config_definitions"],
         "query_type": policy_data["query_type"],
     }
-
-
-def get_policy_data(
-    policies: Sequence[AllocationPolicy],
-) -> list[PolicyData]:
-    return [policy.to_dict() for policy in policies]
