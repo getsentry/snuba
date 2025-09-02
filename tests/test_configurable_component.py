@@ -35,7 +35,8 @@ class SomeConfigurableComponent(ConfigurableComponent):
             self._get_overridden_additional_config_defaults({"additional_config_1": 50})
         )
 
-    def component_namespace(self) -> str:
+    @classmethod
+    def component_namespace(cls) -> str:
         return "SomeConfigurableComponent"
 
     def _get_default_config_definitions(self) -> list[Configuration]:
@@ -62,7 +63,8 @@ class SomeConfigurableComponent(ConfigurableComponent):
 class TestConfigurableComponentInvalid(SomeConfigurableComponent):
     """Test implementation that raises NotImplementedError for abstract methods."""
 
-    def component_namespace(self) -> str:
+    @classmethod
+    def component_namespace(cls) -> str:
         return "InvalidComponent"
 
     def _get_default_config_definitions(self) -> list[Configuration]:

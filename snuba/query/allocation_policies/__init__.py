@@ -4,7 +4,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, cast
+from typing import Any, Type, cast
 
 from snuba import environment, settings
 from snuba.configs.configuration import (
@@ -16,7 +16,7 @@ from snuba.configs.configuration import (
 )
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
+from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryException, QueryResult
 
@@ -155,7 +155,7 @@ class QueryType(Enum):
     DELETE = "delete"
 
 
-class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
+class AllocationPolicy(ConfigurableComponent, ABC):
     """This class should be the centralized place for policy decisions regarding
     resource usage of a clickhouse cluster. It is meant to live as a configurable item
     on a storage.
@@ -373,7 +373,8 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
 
-    def component_namespace(self) -> str:
+    @classmethod
+    def component_namespace(cls) -> str:
         return "AllocationPolicy"
 
     def _get_hash(self) -> str:
@@ -408,8 +409,8 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         return int(self.get_config_value(MAX_THREADS))
 
     @classmethod
-    def get_from_name(cls, name: str) -> "AllocationPolicy":
-        return cast("AllocationPolicy", cls.class_from_name(name))
+    def _get_from_name(cls, name: str) -> Type["AllocationPolicy"]:
+        return cast("Type[AllocationPolicy]", cls.class_from_name(name))
 
     def __eq__(self, other: Any) -> bool:
         """There should not be a need to compare these except that

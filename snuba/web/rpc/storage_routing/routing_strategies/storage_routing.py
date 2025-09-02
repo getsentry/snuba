@@ -27,7 +27,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
+from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.web import QueryResult
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 
@@ -171,7 +171,7 @@ class RoutingStrategyConfig(Configuration):
     pass
 
 
-class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
+class BaseRoutingStrategy(ConfigurableComponent, ABC):
     def __init__(self, default_config_overrides: dict[str, Any] = {}) -> None:
         self._default_config_definitions = [
             RoutingStrategyConfig(
@@ -185,7 +185,8 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
 
-    def component_namespace(self) -> str:
+    @classmethod
+    def component_namespace(cls) -> str:
         return "RoutingStrategy"
 
     def _get_hash(self) -> str:
@@ -212,7 +213,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
         )
 
     @classmethod
-    def get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
+    def _get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
         return cast("Type[BaseRoutingStrategy]", cls.class_from_name(name))
 
     def _is_highest_accuracy_mode(self, in_msg_meta: RequestMeta) -> bool:

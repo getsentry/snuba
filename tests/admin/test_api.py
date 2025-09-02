@@ -624,6 +624,8 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         # make sure an auditlog entry was recorded
         assert auditlog_records.pop()
 
+        assert False
+
 
 @pytest.mark.redis_db
 def test_prod_snql_query_invalid_dataset(admin_api: FlaskClient) -> None:
