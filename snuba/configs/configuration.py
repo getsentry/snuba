@@ -452,3 +452,9 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     @classmethod
     def get_from_name(cls: Type[T], name: str) -> Type[T]:
         return cast(Type[T], cls.class_from_name(f"{cls.component_namespace()}.{name}"))
+
+    @classmethod
+    def create_minimal_instance(
+        cls, resource_identifier: str
+    ) -> "ConfigurableComponent":
+        raise NotImplementedError
