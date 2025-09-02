@@ -117,7 +117,10 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         **kwargs: str,
     ) -> None:
         super().__init__(
-            storage_key, required_tenant_types, default_config_overrides, **kwargs
+            storage_key,
+            required_tenant_types,
+            default_config_overrides,
+            **kwargs,
         )
         self._registered_cross_org_referrers = cast(
             "dict[str, dict[str, int]]", kwargs.get("cross_org_referrer_limits", {})

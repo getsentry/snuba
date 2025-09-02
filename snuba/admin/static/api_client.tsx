@@ -86,15 +86,17 @@ interface Client {
   getStoragesWithAllocationPolicies: () => Promise<string[]>;
   getAllocationPolicies: (storage: string) => Promise<AllocationPolicy[]>;
   setAllocationPolicyConfig: (
-    storage: string,
-    policy: string,
+    configurable_component_namespace: string,
+    configurable_component_name: string,
+    resource_name: string,
     key: string,
     value: string,
     params: object,
   ) => Promise<void>;
   deleteAllocationPolicyConfig: (
-    storage: string,
-    policy: string,
+    configurable_component_namespace: string,
+    configurable_component_name: string,
+    resource_name: string,
     key: string,
     params: object,
   ) => Promise<void>;
@@ -459,8 +461,9 @@ function Client(): Client {
       }).then((resp) => resp.json());
     },
     setAllocationPolicyConfig: (
-      storage: string,
-      policy: string,
+      configurable_component_namespace: string,
+      configurable_component_name: string,
+      resource_name: string,
       key: string,
       value: string,
       params: object,
@@ -469,7 +472,7 @@ function Client(): Client {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
-        body: JSON.stringify({ storage, policy, key, value, params }),
+        body: JSON.stringify({ configurable_component_namespace, configurable_component_name, resource_name, key, value, params }),
       }).then((res) => {
         if (res.ok) {
           return;
@@ -482,8 +485,9 @@ function Client(): Client {
       });
     },
     deleteAllocationPolicyConfig: (
-      storage: string,
-      policy: string,
+      configurable_component_namespace: string,
+      config_key: string,
+      resource_name: string,
       key: string,
       params: object,
     ) => {
@@ -491,7 +495,7 @@ function Client(): Client {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "DELETE",
-        body: JSON.stringify({ storage, policy, key, params }),
+        body: JSON.stringify({ configurable_component_namespace, config_key, resource_name, key, params }),
       }).then((res) => {
         if (res.ok) {
           return;

@@ -24,9 +24,13 @@ from snuba.query.allocation_policies import (
     NO_UNITS,
     AllocationPolicy,
     QueryResultOrError,
+    QueryType,
     QuotaAllowance,
 )
 from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    BaseRoutingStrategy,
+)
 
 BASE_TIME = datetime.utcnow().replace(
     hour=8, minute=0, second=0, microsecond=0, tzinfo=UTC
@@ -472,39 +476,232 @@ def test_snuba_debug_explain_query(admin_api: FlaskClient) -> None:
         )
 
 
+class FakeRoutingStrategy(BaseRoutingStrategy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return [
+            Configuration(
+                "fake_strategy_config",
+                "A fake config for testing",
+                int,
+                50,
+            )
+        ]
+
+    def get_allocation_policies(self) -> list[AllocationPolicy]:
+        policy = FakePolicy(ResourceIdentifier(self.__class__.__name__), [], {})
+        policy.set_config_value("fake_optional_config", 15, {"org_id": 15})
+        return [policy]
+
+    def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
+        policy = FakeDeletePolicy(ResourceIdentifier(self.__class__.__name__), [], {})
+        policy.set_config_value("fake_optional_config", 20, {"org_id": 20})
+        return [policy]
+
+
+@pytest.mark.redis_db
+def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
+    with mock.patch(
+        "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.BaseRoutingStrategy.get_from_name",
+        side_effect=lambda strategy_name: FakeRoutingStrategy,
+    ):
+        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
+
+    assert response.status_code == 200
+    assert response.json is not None
+
+    strategy_data = response.json
+
+    # Check strategy-level data
+    assert strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
+    assert len(strategy_data["configurations"]) == 2
+    assert {
+        "name": "some_default_config",
+        "type": "int",
+        "default": 100,
+        "description": "Placeholder for now",
+        "value": 100,
+        "params": {},
+    } in strategy_data["configurations"]
+    assert {
+        "name": "fake_strategy_config",
+        "type": "int",
+        "default": 50,
+        "description": "A fake config for testing",
+        "value": 50,
+        "params": {},
+    } in strategy_data["configurations"]
+    assert strategy_data["optional_config_definitions"] == []
+
+    # Check policies data
+    assert len(strategy_data["policies_data"]) == 2
+
+    # First policy
+    assert (
+        strategy_data["policies_data"][0]["configurable_component_config_key"]
+        == "FakePolicy"
+    )
+    assert strategy_data["policies_data"][0]["query_type"] == "select"
+    assert len(strategy_data["policies_data"][0]["configurations"]) == 4
+    assert {
+        "name": "fake_optional_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "value": 15,
+        "params": {"org_id": 15},
+    } in strategy_data["policies_data"][0]["configurations"]
+    assert {
+        "name": "is_enforced",
+        "type": "int",
+        "default": 1,
+        "description": "Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
+        "value": 1,
+        "params": {},
+    } in strategy_data["policies_data"][0]["configurations"]
+    assert {
+        "name": "is_active",
+        "type": "int",
+        "default": 1,
+        "description": "Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
+        "value": 1,
+        "params": {},
+    } in strategy_data["policies_data"][0]["configurations"]
+    assert {
+        "name": "max_threads",
+        "type": "int",
+        "default": 10,
+        "description": "The max threads Clickhouse can use for the query.",
+        "value": 10,
+        "params": {},
+    } in strategy_data["policies_data"][0]["configurations"]
+    assert len(strategy_data["policies_data"][0]["optional_config_definitions"]) == 1
+    assert {
+        "name": "fake_optional_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "params": [{"name": "org_id", "type": "int"}],
+    } in strategy_data["policies_data"][0]["optional_config_definitions"]
+
+    # Second policy
+    assert (
+        strategy_data["policies_data"][1]["configurable_component_config_key"]
+        == "FakeDeletePolicy"
+    )
+    assert strategy_data["policies_data"][1]["query_type"] == "delete"
+    assert len(strategy_data["policies_data"][1]["configurations"]) == 4
+    assert {
+        "name": "fake_optional_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "value": 20,
+        "params": {"org_id": 20},
+    } in strategy_data["policies_data"][1]["configurations"]
+    assert {
+        "name": "is_enforced",
+        "type": "int",
+        "default": 1,
+        "description": "Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
+        "value": 1,
+        "params": {},
+    } in strategy_data["policies_data"][1]["configurations"]
+    assert {
+        "name": "is_active",
+        "type": "int",
+        "default": 1,
+        "description": "Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
+        "value": 1,
+        "params": {},
+    } in strategy_data["policies_data"][1]["configurations"]
+    assert {
+        "name": "max_threads",
+        "type": "int",
+        "default": 10,
+        "description": "The max threads Clickhouse can use for the query.",
+        "value": 10,
+        "params": {},
+    } in strategy_data["policies_data"][1]["configurations"]
+    assert len(strategy_data["policies_data"][1]["optional_config_definitions"]) == 1
+    assert {
+        "name": "fake_optional_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "params": [{"name": "org_id", "type": "int"}],
+    } in strategy_data["policies_data"][1]["optional_config_definitions"]
+
+
+class FakePolicy(AllocationPolicy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return [
+            Configuration(
+                "fake_optional_config", "", int, -1, param_types={"org_id": int}
+            )
+        ]
+
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(
+            can_run=True,
+            max_threads=1,
+            explanation={},
+            is_throttled=False,
+            rejection_threshold=MAX_THRESHOLD,
+            throttle_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        pass
+
+
+class FakeDeletePolicy(AllocationPolicy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return [
+            Configuration(
+                "fake_optional_config", "", int, -1, param_types={"org_id": int}
+            )
+        ]
+
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(
+            can_run=True,
+            max_threads=1,
+            explanation={},
+            is_throttled=False,
+            rejection_threshold=MAX_THRESHOLD,
+            throttle_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        pass
+
+    @property
+    def query_type(self) -> QueryType:
+        return QueryType.DELETE
+
+
 @pytest.mark.redis_db
 def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
-    class FakePolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[Configuration]:
-            return [
-                Configuration(
-                    "fake_optional_config", "", int, -1, param_types={"org_id": int}
-                )
-            ]
-
-        def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int], query_id: str
-        ) -> QuotaAllowance:
-            return QuotaAllowance(
-                can_run=True,
-                max_threads=1,
-                explanation={},
-                is_throttled=False,
-                rejection_threshold=MAX_THRESHOLD,
-                throttle_threshold=MAX_THRESHOLD,
-                quota_used=0,
-                quota_unit=NO_UNITS,
-                suggestion=NO_SUGGESTION,
-            )
-
-        def _update_quota_balance(
-            self,
-            tenant_ids: dict[str, str | int],
-            query_id: str,
-            result_or_error: QueryResultOrError,
-        ) -> None:
-            pass
-
     def mock_get_policies() -> list[AllocationPolicy]:
         policy = FakePolicy(ResourceIdentifier(StorageKey("nothing")), [], {})
         policy.set_config_value("fake_optional_config", 10, {"org_id": 10})
@@ -555,8 +752,9 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             "/allocation_policy_config",
             data=json.dumps(
                 {
-                    "storage": "errors",
-                    "policy": "BytesScannedWindowAllocationPolicy",
+                    "configurable_component_namespace": "AllocationPolicy",
+                    "configurable_component_config_key": "BytesScannedWindowAllocationPolicy",
+                    "resource_name": "errors",
                     "key": "org_limit_bytes_scanned_override",
                     "params": {"org_id": 1},
                     "value": "420",
@@ -599,8 +797,9 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
                 "/allocation_policy_config",
                 data=json.dumps(
                     {
-                        "storage": "errors",
-                        "policy": "BytesScannedWindowAllocationPolicy",
+                        "configurable_component_namespace": "AllocationPolicy",
+                        "configurable_component_config_key": "BytesScannedWindowAllocationPolicy",
+                        "resource_name": "errors",
                         "key": "org_limit_bytes_scanned_override",
                         "params": {"org_id": 1},
                     }
@@ -622,6 +821,193 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             "value": 420,
         } not in response.json[0]["configs"]
         # make sure an auditlog entry was recorded
+        assert auditlog_records.pop()
+
+
+@pytest.mark.redis_db
+def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
+    auditlog_records = []
+
+    def mock_record(user: Any, action: Any, data: Any, notify: Any) -> None:
+        nonlocal auditlog_records
+        auditlog_records.append((user, action, data, notify))
+
+    with mock.patch(
+        "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.BaseRoutingStrategy.get_from_name",
+        side_effect=lambda strategy_name: FakeRoutingStrategy,
+    ), mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record):
+
+        # Set a routing strategy config
+        response = admin_api.post(
+            "/allocation_policy_config",
+            data=json.dumps(
+                {
+                    "configurable_component_namespace": "RoutingStrategy",
+                    "configurable_component_config_key": "FakeRoutingStrategy",
+                    "resource_name": "FakeRoutingStrategy",
+                    "key": "fake_strategy_config",
+                    "value": "75",
+                }
+            ),
+        )
+        assert response.status_code == 200, response.json
+        assert auditlog_records.pop()
+
+        # Retrieve the routing strategy configs to verify the config was set
+        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
+        assert response.status_code == 200
+        assert response.json is not None
+
+        # Verify the config was set correctly
+        strategy_data = response.json
+        assert (
+            strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
+        )
+        assert {
+            "name": "fake_strategy_config",
+            "type": "int",
+            "default": 50,
+            "description": "A fake config for testing",
+            "value": 75,
+            "params": {},
+        } in strategy_data["configurations"]
+
+        # Delete the routing strategy config
+        response = admin_api.delete(
+            "/allocation_policy_config",
+            data=json.dumps(
+                {
+                    "configurable_component_namespace": "RoutingStrategy",
+                    "configurable_component_config_key": "FakeRoutingStrategy",
+                    "resource_name": "FakeRoutingStrategy",
+                    "key": "fake_strategy_config",
+                }
+            ),
+        )
+        assert response.status_code == 200
+
+        # Verify the config was deleted by checking again
+        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
+        assert response.status_code == 200
+        assert response.json is not None
+
+        # The config should be back to its default value
+        strategy_data = response.json
+        assert (
+            strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
+        )
+        assert {
+            "name": "fake_strategy_config",
+            "type": "int",
+            "default": 50,
+            "description": "A fake config for testing",
+            "value": 50,
+            "params": {},
+        } in strategy_data["configurations"]
+
+        # make sure an auditlog entry was recorded for the delete
+        assert auditlog_records.pop()
+
+
+@pytest.mark.redis_db
+def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> None:
+    auditlog_records = []
+
+    def mock_record(user: Any, action: Any, data: Any, notify: Any) -> None:
+        nonlocal auditlog_records
+        auditlog_records.append((user, action, data, notify))
+
+    def mock_get_from_name(strategy_name: str) -> Type[BaseRoutingStrategy]:
+        return FakeRoutingStrategy
+
+    with mock.patch(
+        "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.BaseRoutingStrategy.get_from_name",
+        side_effect=mock_get_from_name,
+    ), mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record):
+
+        # Set an allocation policy config for the strategy
+        response = admin_api.post(
+            "/allocation_policy_config",
+            data=json.dumps(
+                {
+                    "configurable_component_namespace": "AllocationPolicy",
+                    "configurable_component_config_key": "FakePolicy",
+                    "resource_name": "FakeRoutingStrategy",
+                    "key": "fake_optional_config",
+                    "params": {"org_id": 1},
+                    "value": "420",
+                }
+            ),
+        )
+        assert response.status_code == 200, response.json
+        # make sure an auditlog entry was recorded
+        assert auditlog_records.pop()
+
+        # Retrieve the allocation policy configs to verify the config was set
+        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
+        assert response.status_code == 200
+        assert response.json is not None
+
+        strategy_data = response.json
+        assert (
+            strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
+        )
+        assert len(strategy_data["policies_data"]) == 2
+
+        fake_policy = next(
+            policy
+            for policy in strategy_data["policies_data"]
+            if policy["configurable_component_config_key"] == "FakePolicy"
+        )
+
+        assert fake_policy["configurable_component_config_key"] == "FakePolicy"
+        assert {
+            "default": -1,
+            "description": "",
+            "name": "fake_optional_config",
+            "params": {"org_id": 1},
+            "type": "int",
+            "value": 420,
+        } in fake_policy["configurations"]
+
+        # Delete the allocation policy config for the strategy
+        response = admin_api.delete(
+            "/allocation_policy_config",
+            data=json.dumps(
+                {
+                    "configurable_component_namespace": "AllocationPolicy",
+                    "configurable_component_config_key": "FakePolicy",
+                    "resource_name": "FakeRoutingStrategy",
+                    "key": "fake_optional_config",
+                    "params": {"org_id": 1},
+                }
+            ),
+        )
+        assert response.status_code == 200
+
+        # Verify the config was deleted by checking again
+        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
+        assert response.status_code == 200
+        assert response.json is not None
+
+        strategy_data = response.json
+        fake_policy = next(
+            policy
+            for policy in strategy_data["policies_data"]
+            if policy["configurable_component_config_key"] == "FakePolicy"
+        )
+
+        # The config should be back to its default value
+        assert {
+            "default": -1,
+            "description": "",
+            "name": "fake_optional_config",
+            "params": {"org_id": 1},
+            "type": "int",
+            "value": 420,
+        } not in fake_policy["configurations"]
+
+        # make sure an auditlog entry was recorded for the delete
         assert auditlog_records.pop()
 
 

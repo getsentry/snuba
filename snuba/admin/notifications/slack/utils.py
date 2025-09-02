@@ -1,9 +1,11 @@
 import os
 from typing import Any, Dict, List, Optional, Union
 
+import sentry_sdk
+
 from snuba import settings
 from snuba.admin.audit_log.action import (
-    ALLOCATION_POLICY_ACTIONS,
+    CONFIGURABLE_COMPONENT_ACTIONS,
     MIGRATION_ACTIONS,
     RUNTIME_CONFIG_ACTIONS,
     AuditLogAction,
@@ -17,8 +19,8 @@ def build_blocks(
         text = build_runtime_config_text(data, action)
     elif action in MIGRATION_ACTIONS:
         text = build_migration_run_text(data, action)
-    elif action in ALLOCATION_POLICY_ACTIONS:
-        text = build_allocation_policy_changed_text(data, action)
+    elif action in CONFIGURABLE_COMPONENT_ACTIONS:
+        text = build_configurable_component_changed_text(data, action)
     else:
         text = f"{action.value}: {data}"
 
@@ -30,20 +32,24 @@ def build_blocks(
     return [section, build_context(user, timestamp, action)]
 
 
-def build_allocation_policy_changed_text(
+def build_configurable_component_changed_text(
     data: Any, action: AuditLogAction
 ) -> Optional[str]:
-    base = f"*Storage {data['storage']} Allocation Policy Changed:*"
 
-    if action == AuditLogAction.ALLOCATION_POLICY_DELETE:
-        removed = f"~```'{data['policy']}.{data['key']}({data.get('params', {})})'```~"
+    base = f"*Resource {data['resource_identifier']} Configurable Component {data['configurable_component_config_key']} Changed:*"
+
+    if action == AuditLogAction.CONFIGURABLE_COMPONENT_DELETE:
+        removed = f"~```'{data['configurable_component_config_key']}.{data['key']}({data.get('params', {})})'```~"
         return f"{base} :put_litter_in_its_place:\n\n{removed}"
-    elif action == AuditLogAction.ALLOCATION_POLICY_UPDATE:
-        updated = f"```'{data['policy']}.{data['key']}({data.get('params', {})})' = '{data['value']}'```"
+    elif action == AuditLogAction.CONFIGURABLE_COMPONENT_UPDATE:
+        updated = f"```'{data['configurable_component_config_key']}.{data['key']}({data.get('params', {})})' = '{data['value']}'```"
         return f"{base} :up: :date:\n\n{updated}"
     else:
         # todo: raise error, cause slack won't accept this
         # if it is none
+        sentry_sdk.capture_message(
+            f"Unknown action: {action.value} with data: {data}", level="error"
+        )
         return f"{action.value}: {data}"
 
 

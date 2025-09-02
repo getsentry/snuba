@@ -4,7 +4,7 @@ import os
 import uuid
 from abc import ABC
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, TypeAlias, Union, cast, final
+from typing import Any, Callable, Dict, Optional, Type, TypeAlias, Union, cast, final
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -18,11 +18,20 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from snuba import environment, settings, state
 from snuba.configs.configuration import (
     ConfigurableComponent,
+    ConfigurableComponentData,
     Configuration,
     ResourceIdentifier,
 )
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
+from snuba.query.allocation_policies import AllocationPolicy, PolicyData
+from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
+    BytesScannedRejectingPolicy,
+)
+from snuba.query.allocation_policies.concurrent_rate_limit import (
+    ConcurrentRateLimitAllocationPolicy,
+)
+from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
 from snuba.utils.metrics.timer import Timer
@@ -167,6 +176,10 @@ class RoutingStrategyConfig(Configuration):
     pass
 
 
+class StrategyData(ConfigurableComponentData):
+    policies_data: list[PolicyData]
+
+
 class BaseRoutingStrategy(ConfigurableComponent, ABC):
     def __init__(self, default_config_overrides: dict[str, Any] = {}) -> None:
         self._default_config_definitions = [
@@ -208,6 +221,18 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             tags={"routing_strategy_name": self.__class__.__name__},
         )
 
+    @classmethod
+    def get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
+        return cast(Type["BaseRoutingStrategy"], cls.class_from_name(name))
+
+    @classmethod
+    def create_minimal_instance(
+        cls, resource_identifier: str
+    ) -> "ConfigurableComponent":
+        return cls(
+            default_config_overrides={},
+        )
+
     def _is_highest_accuracy_mode(self, in_msg_meta: RequestMeta) -> bool:
         if in_msg_meta.HasField("downsampled_storage_config"):
             return bool(
@@ -215,6 +240,28 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
             )
         return False
+
+    def get_allocation_policies(self) -> list[AllocationPolicy]:
+        return [
+            ConcurrentRateLimitAllocationPolicy(
+                storage_key=ResourceIdentifier(self.__class__.__name__),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+            ReferrerGuardRailPolicy(
+                storage_key=ResourceIdentifier(self.__class__.__name__),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+            BytesScannedRejectingPolicy(
+                storage_key=ResourceIdentifier(self.__class__.__name__),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+        ]
+
+    def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
+        return []
 
     def merge_clickhouse_settings(
         self,
@@ -396,6 +443,13 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                         "tier": routing_decision.tier.name,
                     },
                 )
+
+    def to_dict(self) -> StrategyData:
+        base_data = super().to_dict()
+        policies = (
+            self.get_allocation_policies() + self.get_delete_allocation_policies()
+        )
+        return StrategyData(**base_data, policies_data=[policy.to_dict() for policy in policies])  # type: ignore
 
 
 import_submodules_in_directory(
