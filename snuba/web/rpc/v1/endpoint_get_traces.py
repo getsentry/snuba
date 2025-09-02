@@ -17,7 +17,6 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import AndFilter, TraceItemFilter
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -52,6 +51,9 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    get_trace_ids_for_cross_item_query,
+)
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression,
 )
@@ -495,7 +497,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
         # Get a dict of trace IDs and timestamps.
         if self._is_cross_event_query(in_msg.filters):
-            trace_ids = self._get_trace_ids_for_cross_event_query(request=in_msg)
+            trace_ids = get_trace_ids_for_cross_item_query(
+                in_msg, in_msg.meta, in_msg.filters, self._timer
+            )
         else:
             trace_ids = self._get_trace_ids_for_single_item_query(request=in_msg)
 
@@ -542,72 +546,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             )
 
         return filter_expressions_by_item_type
-
-    def _get_trace_ids_for_cross_event_query(
-        self, request: GetTracesRequest
-    ) -> list[str]:
-        filter_expressions_by_item_type = self._get_trace_item_filter_expressions(
-            request.filters
-        )
-        assert (
-            len(filter_expressions_by_item_type) > 1
-        ), "At least two item types are required for a cross-event query"
-
-        trace_item_filters_and_expression = and_cond(
-            *[
-                f.greater(f.countIf(expression), 0)
-                for expression in filter_expressions_by_item_type.values()
-            ]
-        )
-        trace_item_filters_or_expression = or_cond(
-            *[expression for expression in filter_expressions_by_item_type.values()]
-        )
-        entity = Entity(
-            key=EntityKey("eap_items"),
-            schema=get_entity(EntityKey("eap_items")).get_data_model(),
-            sample=None,
-        )
-        query = Query(
-            from_clause=entity,
-            selected_columns=[
-                SelectedExpression(
-                    name="trace_id",
-                    expression=column("trace_id"),
-                )
-            ],
-            condition=base_conditions_and(
-                request.meta,
-                trace_item_filters_or_expression,
-            ),
-            groupby=[
-                column("trace_id"),
-            ],
-            having=trace_item_filters_and_expression,
-            limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
-            offset=request.page_token.offset,
-        )
-
-        treeify_or_and_conditions(query)
-
-        all_confs = state.get_all_configs()
-        clickhouse_query_settings = {
-            k.split("/", 1)[1]: v
-            for k, v in all_confs.items()
-            if k.startswith("cross_event_query_settings/")
-        }
-
-        results = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=_build_snuba_request(
-                request, query, clickhouse_settings=clickhouse_query_settings
-            ),
-            timer=self._timer,
-        )
-        trace_ids: list[str] = []
-        for row in results.result.get("data", []):
-            trace_ids.append(list(row.values())[0])
-
-        return trace_ids
 
     def _get_trace_ids_for_single_item_query(
         self,

@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import replace
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -29,13 +29,14 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond
 from snuba.query.dsl import column as snuba_column
-from snuba.query.dsl import literal, or_cond
+from snuba.query.dsl import in_cond, literal, literals_array, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
 from snuba.state import get_int_config
+from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
@@ -58,6 +59,9 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_average_sample_rate_column,
     get_confidence_interval_column,
     get_count_column,
+)
+from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    get_trace_ids_for_cross_item_query,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
@@ -331,7 +335,19 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
         )
 
 
-def build_query(request: TraceItemTableRequest) -> Query:
+def _is_cross_item_query(request: TraceItemTableRequest) -> bool:
+    """
+    Determines if this is a cross item query by checking if trace_filters are present
+    and contain more than one item type.
+    """
+    if not request.trace_filters:
+        return False
+
+    # If we have trace_filters, it's a cross item query
+    return len(request.trace_filters) > 1
+
+
+def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
@@ -354,6 +370,20 @@ def build_query(request: TraceItemTableRequest) -> Query:
     item_type_conds = [
         f.equals(snuba_column("item_type"), request.meta.trace_item_type)
     ]
+
+    # Handle cross item queries by first getting trace IDs
+    additional_conditions = []
+    if _is_cross_item_query(request) and timer is not None:
+        trace_ids = get_trace_ids_for_cross_item_query(
+            request, request.meta, request.trace_filters, timer
+        )
+        additional_conditions.append(
+            in_cond(
+                snuba_column("trace_id"),
+                literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
+            )
+        )
+
     groupby = [attribute_key_to_expression(attr_key) for attr_key in request.group_by]
     res = Query(
         from_clause=entity,
@@ -365,6 +395,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
                 attribute_key_to_expression,
             ),
             *item_type_conds,
+            *additional_conditions,
         ),
         order_by=_convert_order_by(
             groupby,
@@ -399,7 +430,9 @@ def _get_page_token(
 
 
 def _build_snuba_request(
-    request: TraceItemTableRequest, query_settings: HTTPQuerySettings
+    request: TraceItemTableRequest,
+    query_settings: HTTPQuerySettings,
+    timer: Optional[Timer] = None,
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
         team = "ourlogs"
@@ -413,7 +446,7 @@ def _build_snuba_request(
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=build_query(request),
+        query=build_query(request, timer),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -450,7 +483,7 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
 
-        snuba_request = _build_snuba_request(in_msg, query_settings)
+        snuba_request = _build_snuba_request(in_msg, query_settings, self._timer)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
