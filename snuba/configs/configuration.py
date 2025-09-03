@@ -63,7 +63,7 @@ class Configuration:
     param_types: dict[str, type] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if type(self.default) != self.value_type:
+        if type(self.default) is not self.value_type:
             raise ValueError(
                 f"Config item `{self.name}` expects type {self.value_type} got value `{self.default}` of type {type(self.default)}"
             )
