@@ -106,15 +106,15 @@ class TestSnQLApi(BaseApiTest):
             "values": [{"flag": "flag-name", "result": True}]
         }
         self.skew = timedelta(minutes=180)
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) - timedelta(minutes=180)
+        self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
+            minutes=180
+        )
         events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
         assert events_storage is not None
         write_unprocessed_events(events_storage, [self.event])
-        self.next_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) + timedelta(minutes=180)
+        self.next_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) + timedelta(
+            minutes=180
+        )
         write_unprocessed_events(
             get_writable_storage(StorageKey.TRANSACTIONS),
             [get_raw_transaction()],
@@ -313,9 +313,7 @@ class TestSnQLApi(BaseApiTest):
             + get_storage(StorageKey("errors_ro")).get_allocation_policies()
         )
         concurrent_rate_limit_policies = [
-            p
-            for p in policies
-            if p.class_name() == "ConcurrentRateLimitAllocationPolicy"
+            p for p in policies if p.class_name() == "ConcurrentRateLimitAllocationPolicy"
         ]
         for p in concurrent_rate_limit_policies:
             p.set_config_value("project_override", 0, {"project_id": self.project_id})
@@ -784,9 +782,7 @@ class TestSnQLApi(BaseApiTest):
         "url, entity",
         [
             pytest.param("/transactions/snql", "transactions", id="transactions"),
-            pytest.param(
-                "/discover/snql", "discover_transactions", id="discover_transactions"
-            ),
+            pytest.param("/discover/snql", "discover_transactions", id="discover_transactions"),
         ],
     )
     def test_app_start_type(self, url: str, entity: str) -> None:
@@ -818,9 +814,7 @@ class TestSnQLApi(BaseApiTest):
         "url, entity",
         [
             pytest.param("/transactions/snql", "transactions", id="transactions"),
-            pytest.param(
-                "/discover/snql", "discover_transactions", id="discover_transactions"
-            ),
+            pytest.param("/discover/snql", "discover_transactions", id="discover_transactions"),
         ],
     )
     def test_profile_id(self, url: str, entity: str) -> None:
@@ -851,9 +845,7 @@ class TestSnQLApi(BaseApiTest):
         "url, entity",
         [
             pytest.param("/transactions/snql", "transactions", id="transactions"),
-            pytest.param(
-                "/discover/snql", "discover_transactions", id="discover_transactions"
-            ),
+            pytest.param("/discover/snql", "discover_transactions", id="discover_transactions"),
         ],
     )
     def test_profiler_id(self, url: str, entity: str) -> None:
@@ -1039,7 +1031,9 @@ class TestSnQLApi(BaseApiTest):
     MATCH = "MATCH (e: events) -[grouped]-> (gm: groupedmessage)"
     SELECT = "SELECT e.group_id, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status"
     WHERE = "WHERE e.project_id = 1 AND gm.project_id = 1"
-    TIMESTAMPS = "AND e.timestamp >= toDateTime('2021-01-01') AND e.timestamp < toDateTime('2021-01-02')"
+    TIMESTAMPS = (
+        "AND e.timestamp >= toDateTime('2021-01-01') AND e.timestamp < toDateTime('2021-01-02')"
+    )
 
     invalid_columns_composite_query_tests = [
         pytest.param(
@@ -1123,14 +1117,10 @@ class TestSnQLApi(BaseApiTest):
         self, query: str, response_code: int, error_message: str
     ) -> None:
         override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.ERROR)
-        override_entity_column_validator(
-            EntityKey.GROUPEDMESSAGE, ColumnValidationMode.ERROR
-        )
+        override_entity_column_validator(EntityKey.GROUPEDMESSAGE, ColumnValidationMode.ERROR)
         response = self.post("/events/snql", data=json.dumps({"query": query}))
         override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.WARN)
-        override_entity_column_validator(
-            EntityKey.GROUPEDMESSAGE, ColumnValidationMode.WARN
-        )
+        override_entity_column_validator(EntityKey.GROUPEDMESSAGE, ColumnValidationMode.WARN)
 
         assert response.status_code == response_code
         assert json.loads(response.data)["error"]["message"] == error_message
@@ -1561,9 +1551,7 @@ class TestSnQLApi(BaseApiTest):
 
         assert response.status_code == 200
         data = json.loads(response.data)
-        assert (
-            "cast(environment, 'Nullable(String)') AS _snuba_environment" in data["sql"]
-        )
+        assert "cast(environment, 'Nullable(String)') AS _snuba_environment" in data["sql"]
         # platform is not nullable but can be cast to nullable
         assert "cast(platform, 'Nullable(String)') AS _snuba_platform" in data["sql"]
 

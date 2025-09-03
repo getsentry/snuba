@@ -63,12 +63,8 @@ class RoutingDecision:
         assert self.routing_context is not None
         query_result: dict[str, Any] = {}
         if self.routing_context.query_result:
-            query_result["meta"] = self.routing_context.query_result.result.get(
-                "meta", {}
-            )
-            query_result["profile"] = self.routing_context.query_result.result.get(
-                "profile", {}
-            )
+            query_result["meta"] = self.routing_context.query_result.result.get("meta", {})
+            query_result["profile"] = self.routing_context.query_result.result.get("profile", {})
             query_result["stats"] = self.routing_context.query_result.extra.get("stats")
             query_result["sql"] = self.routing_context.query_result.extra.get("sql")
 
@@ -360,10 +356,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             extract_message_meta(routing_decision.routing_context.in_msg)
         ):
             return
-        profile = (
-            routing_decision.routing_context.query_result.result.get("profile", {})
-            or {}
-        )
+        profile = routing_decision.routing_context.query_result.result.get("profile", {}) or {}
         if elapsed := profile.get("elapsed"):
             elapsed_ms = elapsed * 1000
             time_budget = self._get_time_budget_ms()

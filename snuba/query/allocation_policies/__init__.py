@@ -127,9 +127,7 @@ class AllocationPolicyViolations(SerializableException):
 
     @property
     def quota_allowance(self) -> dict[str, dict[str, Any]]:
-        return cast(
-            dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {})
-        )
+        return cast(dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {}))
 
     @property
     def summary(self) -> dict[str, Any]:
@@ -394,10 +392,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
     @property
     def is_active(self) -> bool:
-        return (
-            bool(self.get_config_value(IS_ACTIVE))
-            and settings.ALLOCATION_POLICY_ENABLED
-        )
+        return bool(self.get_config_value(IS_ACTIVE)) and settings.ALLOCATION_POLICY_ENABLED
 
     @property
     def is_enforced(self) -> bool:

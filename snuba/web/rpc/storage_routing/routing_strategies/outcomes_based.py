@@ -163,9 +163,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         sentry_sdk.update_current_span(
             attributes={
                 "downsampling_mode": (
-                    "highest_accuracy"
-                    if self._is_highest_accuracy_mode(in_msg_meta)
-                    else "normal"
+                    "highest_accuracy" if self._is_highest_accuracy_mode(in_msg_meta) else "normal"
                 ),
             }
         )
@@ -184,24 +182,20 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         time_range_secs = end_ts - start_ts
         min_timerange_to_query_outcomes = self._get_min_timerange_to_query_outcomes()
         if time_range_secs < min_timerange_to_query_outcomes:
-            routing_decision.routing_context.extra_info[
-                "min_timerange_to_query_outcomes"
-            ] = min_timerange_to_query_outcomes
-            routing_decision.routing_context.extra_info[
-                "time_range_secs"
-            ] = time_range_secs
+            routing_decision.routing_context.extra_info["min_timerange_to_query_outcomes"] = (
+                min_timerange_to_query_outcomes
+            )
+            routing_decision.routing_context.extra_info["time_range_secs"] = time_range_secs
             return routing_decision
 
         # see how many items this combo of orgs/projects has actually ingested for the timerange,
         # downsample if it's too many
-        ingested_items = self.get_ingested_items_for_timerange(
-            routing_decision.routing_context
-        )
+        ingested_items = self.get_ingested_items_for_timerange(routing_decision.routing_context)
         routing_decision.routing_context.extra_info["ingested_items"] = ingested_items
         max_items_before_downsampling = self._get_max_items_before_downsampling()
-        routing_decision.routing_context.extra_info[
-            "max_items_before_downsampling"
-        ] = max_items_before_downsampling
+        routing_decision.routing_context.extra_info["max_items_before_downsampling"] = (
+            max_items_before_downsampling
+        )
         if (
             ingested_items > max_items_before_downsampling
             and ingested_items <= max_items_before_downsampling * 10

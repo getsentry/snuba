@@ -175,9 +175,7 @@ def settings_endpoint() -> Response:
 
 @application.route("/tools")
 def tools() -> Response:
-    return make_response(
-        jsonify({"tools": [t.value for t in get_user_allowed_tools(g.user)]}), 200
-    )
+    return make_response(jsonify({"tools": [t.value for t in get_user_allowed_tools(g.user)]}), 200)
 
 
 @application.route("/migrations/groups")
@@ -225,9 +223,7 @@ def migrations_groups_list(group: str) -> Response:
 )
 @check_tool_perms(tools=[AdminTools.MIGRATIONS])
 def run_migration(group: str, migration_id: str) -> Response:
-    return run_or_reverse_migration(
-        group=group, action="run", migration_id=migration_id
-    )
+    return run_or_reverse_migration(group=group, action="run", migration_id=migration_id)
 
 
 @application.route(
@@ -236,9 +232,7 @@ def run_migration(group: str, migration_id: str) -> Response:
 )
 @check_tool_perms(tools=[AdminTools.MIGRATIONS])
 def reverse_migration(group: str, migration_id: str) -> Response:
-    return run_or_reverse_migration(
-        group=group, action="reverse", migration_id=migration_id
-    )
+    return run_or_reverse_migration(group=group, action="reverse", migration_id=migration_id)
 
 
 @application.route(
@@ -246,9 +240,7 @@ def reverse_migration(group: str, migration_id: str) -> Response:
     methods=["POST"],
 )
 @check_tool_perms(tools=[AdminTools.MIGRATIONS])
-def force_overwrite_migration_status(
-    group: str, migration_id: str, new_status: str
-) -> Response:
+def force_overwrite_migration_status(group: str, migration_id: str, new_status: str) -> Response:
     try:
         migration_group = MigrationGroup(group)
     except ValueError as err:
@@ -302,9 +294,7 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
         if action == "run":
             runner.run_migration(migration_key, force=force, fake=fake, dry_run=dry_run)
         else:
-            runner.reverse_migration(
-                migration_key, force=force, fake=fake, dry_run=dry_run
-            )
+            runner.reverse_migration(migration_key, force=force, fake=fake, dry_run=dry_run)
 
         if not dry_run:
             audit_log.record(
@@ -356,15 +346,11 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
     except ClickhouseError as err:
         notify_error()
         logger.error(err, exc_info=True)
-        return make_response(
-            jsonify({"error": "clickhouse error: " + err.message}), 400
-        )
+        return make_response(jsonify({"error": "clickhouse error: " + err.message}), 400)
     except InactiveClickhouseReplica as err:
         notify_error()
         logger.error(err, exc_info=True)
-        return make_response(
-            jsonify({"error": "inactive replicas error: " + err.message}), 400
-        )
+        return make_response(jsonify({"error": "inactive replicas error: " + err.message}), 400)
 
 
 @application.route("/clickhouse_queries")
@@ -432,9 +418,7 @@ def clickhouse_system_query() -> Response:
         return make_response(jsonify({"error": "Invalid request"}), 400)
 
     try:
-        result = run_system_query_on_host_with_sql(
-            host, port, storage, raw_sql, sudo_mode, g.user
-        )
+        result = run_system_query_on_host_with_sql(host, port, storage, raw_sql, sudo_mode, g.user)
         rows = []
         rows, columns = cast(List[List[str]], result.results), result.meta
 
@@ -600,16 +584,12 @@ def summarize_trace_with_profile() -> Response:
     except ClickhouseError as err:
         logger.error(err, exc_info=True)
         return make_response(
-            jsonify(
-                {"error": {"type": "clickhouse", "message": str(err), "code": err.code}}
-            ),
+            jsonify({"error": {"type": "clickhouse", "message": str(err), "code": err.code}}),
             400,
         )
     except Exception as err:
         logger.error(err, exc_info=True)
-        return make_response(
-            jsonify({"error": {"type": "unknown", "message": str(err)}}), 500
-        )
+        return make_response(jsonify({"error": {"type": "unknown", "message": str(err)}}), 500)
 
 
 @application.route("/clickhouse_querylog_query", methods=["POST"])
@@ -910,18 +890,14 @@ def config_changes() -> Response:
 @application.route("/clickhouse_nodes")
 @check_tool_perms(tools=[AdminTools.SYSTEM_QUERIES, AdminTools.QUERY_TRACING])
 def clickhouse_nodes() -> Response:
-    return Response(
-        json.dumps(get_storage_info()), 200, {"Content-Type": "application/json"}
-    )
+    return Response(json.dumps(get_storage_info()), 200, {"Content-Type": "application/json"})
 
 
 @application.route("/snuba_datasets")
 @check_tool_perms(tools=[AdminTools.SNQL_TO_SQL])
 def snuba_datasets() -> Response:
     return Response(
-        json.dumps(
-            get_enabled_dataset_names(), 200, {"Content-Type": "application/json"}
-        )
+        json.dumps(get_enabled_dataset_names(), 200, {"Content-Type": "application/json"})
     )
 
 
@@ -972,9 +948,7 @@ def storages_with_allocation_policies() -> Response:
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def get_allocation_policy_configs(storage_key: str) -> Response:
     storage = get_storage(StorageKey(storage_key))
-    policies = (
-        storage.get_allocation_policies() + storage.get_delete_allocation_policies()
-    )
+    policies = storage.get_allocation_policies() + storage.get_delete_allocation_policies()
 
     return Response(
         json.dumps([convert(policy.to_dict()) for policy in policies]),
@@ -1030,9 +1004,7 @@ def set_allocation_policy_config() -> Response:
         try:
             value = data["value"]
             assert isinstance(value, str), "Invalid value"
-            policy.set_config_value(
-                config_key=key, value=value, params=params, user=user
-            )
+            policy.set_config_value(config_key=key, value=value, params=params, user=user)
             audit_log.record(
                 user or "",
                 AuditLogAction.ALLOCATION_POLICY_UPDATE,
@@ -1192,9 +1164,7 @@ def execute_rpc_endpoint(endpoint_name: str, version: str) -> Response:
         )
     except InvalidConfigKeyError:
         return Response(
-            json.dumps(
-                {"error": f"Unknown endpoint: {endpoint_name} or version: {version}"}
-            ),
+            json.dumps({"error": f"Unknown endpoint: {endpoint_name} or version: {version}"}),
             404,
             {"Content-Type": "application/json"},
         )
@@ -1204,9 +1174,7 @@ def execute_rpc_endpoint(endpoint_name: str, version: str) -> Response:
     try:
         request_proto = Parse(json.dumps(body), endpoint_class.request_class()())
         validate_request_meta(request_proto)
-        response = run_rpc_handler(
-            endpoint_name, version, request_proto.SerializeToString()
-        )
+        response = run_rpc_handler(endpoint_name, version, request_proto.SerializeToString())
         return Response(
             json.dumps(MessageToDict(response)),
             200,
@@ -1333,9 +1301,7 @@ def delete() -> Response:
             sentry_sdk.capture_exception(e)
             return make_response(jsonify({"error": "unexpected internal error"}), 500)
 
-    return Response(
-        json.dumps(delete_results), 200, {"Content-Type": "application/json"}
-    )
+    return Response(json.dumps(delete_results), 200, {"Content-Type": "application/json"})
 
 
 @application.route(
@@ -1396,9 +1362,7 @@ def clickhouse_system_settings() -> Response:
     port = request.args.get("port")
     storage = request.args.get("storage")
     if not all([host, port, storage]):
-        return make_response(
-            jsonify({"error": "Host, port, and storage are required"}), 400
-        )
+        return make_response(jsonify({"error": "Host, port, and storage are required"}), 400)
     try:
         # conversions for typing
         settings = get_system_settings(str(host), int(str(port)), str(storage))

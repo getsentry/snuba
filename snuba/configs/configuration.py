@@ -86,9 +86,7 @@ class Configuration:
             ],
         }
 
-    def to_config_dict(
-        self, value: Any = None, params: dict[str, Any] = {}
-    ) -> dict[str, Any]:
+    def to_config_dict(self, value: Any = None, params: dict[str, Any] = {}) -> dict[str, Any]:
         """Returns a dict representation of a live Config."""
         return {
             **self.__to_base_dict(),
@@ -195,9 +193,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
         # config doesn't exist
         if config_key not in definitions:
-            raise InvalidConfig(
-                f"'{config_key}' is not a valid config for {class_name}!"
-            )
+            raise InvalidConfig(f"'{config_key}' is not a valid config for {class_name}!")
 
         config = definitions[config_key]
 
@@ -339,9 +335,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         return [
             replace(
                 definition,
-                default=default_config_overrides.get(
-                    definition.name, definition.default
-                ),
+                default=default_config_overrides.get(definition.name, definition.default),
             )
             for definition in definitions
         ]
@@ -354,9 +348,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             escape_sequence,
         ) in self._KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
             if escape_sequence in str(key):
-                raise InvalidConfig(
-                    f"{escape_sequence} is not a valid string for a policy config"
-                )
+                raise InvalidConfig(f"{escape_sequence} is not a valid string for a policy config")
             key = key.replace(delimiter_char, escape_sequence)
         return key
 

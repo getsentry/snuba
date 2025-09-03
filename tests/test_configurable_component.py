@@ -110,21 +110,16 @@ class TestConfigurableComponentBasic:
 
     def test_component_name(self, test_component: SomeConfigurableComponent) -> None:
         assert (
-            test_component.component_name()
-            == "some_non_storage_resource.SomeConfigurableComponent"
+            test_component.component_name() == "some_non_storage_resource.SomeConfigurableComponent"
         )
 
-    def test_config_definitions(
-        self, test_component: SomeConfigurableComponent
-    ) -> None:
+    def test_config_definitions(self, test_component: SomeConfigurableComponent) -> None:
         """Test that config_definitions returns all configurations."""
         assert set(
             ["default_config_1", "additional_config_1", "override_config_for_org_id"]
         ) == set(test_component.config_definitions().keys())
 
-    def test_get_current_configs(
-        self, test_component: SomeConfigurableComponent
-    ) -> None:
+    def test_get_current_configs(self, test_component: SomeConfigurableComponent) -> None:
         """Test that get_current_configs returns the correct configs."""
         configs = test_component.get_current_configs()
         assert len(configs) == 2
@@ -244,17 +239,11 @@ class TestConfigurableComponentValidation:
 class TestConfigurableComponentConfigOperations:
     """Test config get/set/delete operations."""
 
-    def test_get_config_value_default(
-        self, test_component: SomeConfigurableComponent
-    ) -> None:
+    def test_get_config_value_default(self, test_component: SomeConfigurableComponent) -> None:
         """Test getting config value with default."""
-        assert (
-            test_component.get_config_value("default_config_1") == 100
-        )  # Default value
+        assert test_component.get_config_value("default_config_1") == 100  # Default value
 
-    def test_get_config_value_with_params(
-        self, test_component: SomeConfigurableComponent
-    ) -> None:
+    def test_get_config_value_with_params(self, test_component: SomeConfigurableComponent) -> None:
         """Test getting config value with parameters."""
         test_component.set_config_value(
             "override_config_for_org_id", 100, params={"organization_id": 10}
@@ -272,9 +261,7 @@ class TestConfigurableComponentConfigOperations:
         test_component.set_config_value("default_config_1", 200)
         assert test_component.get_config_value("default_config_1") == 200
 
-    def test_delete_config_value(
-        self, test_component: SomeConfigurableComponent
-    ) -> None:
+    def test_delete_config_value(self, test_component: SomeConfigurableComponent) -> None:
         """Test deleting config value."""
         config_key = "default_config_1"
 
@@ -292,15 +279,11 @@ class TestConfigurableComponentConfigOperations:
         params = {"organization_id": 10}
 
         test_component.set_config_value(config_key=config_key, value=100, params=params)
-        assert (
-            test_component.get_config_value(config_key=config_key, params=params) == 100
-        )
+        assert test_component.get_config_value(config_key=config_key, params=params) == 100
 
         test_component.delete_config_value(config_key=config_key, params=params)
         # back to default
-        assert (
-            test_component.get_config_value(config_key=config_key, params=params) == -1
-        )
+        assert test_component.get_config_value(config_key=config_key, params=params) == -1
 
     def test_get_config_value_invalid_config(
         self, test_component: SomeConfigurableComponent
