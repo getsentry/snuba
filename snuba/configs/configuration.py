@@ -149,7 +149,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         # what is this configurable component's class name?
         # bytes scanned policy? outcomes based routing strategy?
         # needs to uniquely identify the configurable component
-        return f"{self.resource_identifier.value}.{self.__class__.__name__}"
+        return f"{self.component_namespace()}.{self.class_name()}.{self.resource_identifier.value}"
 
     @classmethod
     def component_namespace(cls) -> str:
@@ -260,7 +260,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         """
 
         # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
-        _, _, config_key, *params = key.split(".")
+        _, _, _, config_key, *params = key.split(".")
         # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
         params_dict = dict()
         if params:

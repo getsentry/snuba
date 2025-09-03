@@ -129,7 +129,10 @@ delete_allocation_policies:
             passthru = next(
                 p for p in policies if p.class_name() == "PassthroughPolicy"
             )
-            assert passthru.component_name() == "test-storage.PassthroughPolicy"
+            assert (
+                passthru.component_name()
+                == "AllocationPolicy.PassthroughPolicy.test-storage"
+            )
             assert passthru._required_tenant_types == {"some_tenant"}
 
             assert storage.get_deletion_settings().is_enabled == 0
