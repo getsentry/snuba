@@ -459,8 +459,4 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
     @classmethod
     def get_from_name(cls: Type[T], name: str) -> Type[T]:
-        return cast(Type[T], cls._get_from_name(f"{cls.component_namespace()}.{name}"))
-
-    @classmethod
-    def _get_from_name(cls, name: str) -> Type["ConfigurableComponent"]:
-        raise NotImplementedError
+        return cast(Type[T], cls.class_from_name(f"{cls.component_namespace()}.{name}"))

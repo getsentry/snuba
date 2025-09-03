@@ -4,7 +4,7 @@ import os
 import uuid
 from abc import ABC
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, Type, TypeAlias, Union, cast, final
+from typing import Any, Callable, Dict, Optional, TypeAlias, Union, cast, final
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -211,10 +211,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             "routing_strategy",
             tags={"routing_strategy_name": self.__class__.__name__},
         )
-
-    @classmethod
-    def _get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
-        return cast("Type[BaseRoutingStrategy]", cls.class_from_name(name))
 
     def _is_highest_accuracy_mode(self, in_msg_meta: RequestMeta) -> bool:
         if in_msg_meta.HasField("downsampled_storage_config"):
