@@ -122,12 +122,12 @@ delete_allocation_policies:
             )
             assert storage.required_time_column == "timestamp"
             assert len(policies := storage.get_allocation_policies()) == 2
-            assert set([p.config_key() for p in policies]) == {
+            assert set([p.class_name() for p in policies]) == {
                 "BytesScannedWindowAllocationPolicy",
                 "PassthroughPolicy",
             }
             passthru = next(
-                p for p in policies if p.config_key() == "PassthroughPolicy"
+                p for p in policies if p.class_name() == "PassthroughPolicy"
             )
             assert passthru.component_name() == "test-storage.PassthroughPolicy"
             assert passthru._required_tenant_types == {"some_tenant"}
@@ -145,7 +145,7 @@ delete_allocation_policies:
             ) == {"some_column"}
 
             assert len(delete_policies := storage.get_delete_allocation_policies()) == 1
-            assert set([p.config_key() for p in delete_policies]) == {
+            assert set([p.class_name() for p in delete_policies]) == {
                 "DeleteConcurrentRateLimitAllocationPolicy",
             }
 

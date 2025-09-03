@@ -315,7 +315,7 @@ class TestSnQLApi(BaseApiTest):
         concurrent_rate_limit_policies = [
             p
             for p in policies
-            if p.config_key() == "ConcurrentRateLimitAllocationPolicy"
+            if p.class_name() == "ConcurrentRateLimitAllocationPolicy"
         ]
         for p in concurrent_rate_limit_policies:
             p.set_config_value("project_override", 0, {"project_id": self.project_id})

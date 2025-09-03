@@ -437,10 +437,14 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     def config_key(cls) -> str:
         return f"{cls.component_namespace()}.{cls.__name__}"
 
+    @classmethod
+    def class_name(cls) -> str:
+        return cls.__name__
+
     def to_dict(self) -> ConfigurableComponentData:
         return ConfigurableComponentData(
             configurable_component_namespace=self.component_namespace(),
-            configurable_component_config_key=self.config_key(),
+            configurable_component_config_key=self.class_name(),
             resource_identifier=self.resource_identifier.value,
             configurations=self.get_current_configs(),
             optional_config_definitions=self.get_optional_config_definitions_json(),

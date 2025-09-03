@@ -1005,7 +1005,7 @@ def set_allocation_policy_config() -> Response:
             + get_storage(StorageKey(storage)).get_delete_allocation_policies()
         )
         policy = next(
-            (p for p in policies if p.config_key() == policy_name),
+            (p for p in policies if p.class_name() == policy_name),
             None,
         )
         assert policy is not None, "Policy not found on storage"
@@ -1022,7 +1022,7 @@ def set_allocation_policy_config() -> Response:
         audit_log.record(
             user or "",
             AuditLogAction.ALLOCATION_POLICY_DELETE,
-            {"storage": storage, "policy": policy.config_key(), "key": key},
+            {"storage": storage, "policy": policy.class_name(), "key": key},
             notify=True,
         )
         return Response("", 200)
@@ -1038,7 +1038,7 @@ def set_allocation_policy_config() -> Response:
                 AuditLogAction.ALLOCATION_POLICY_UPDATE,
                 {
                     "storage": storage,
-                    "policy": policy.config_key(),
+                    "policy": policy.class_name(),
                     "key": key,
                     "value": value,
                     "params": str(params),

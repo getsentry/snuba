@@ -135,7 +135,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         default = 1_000_000_000
         return (
             state.get_int_config(
-                f"{self.config_key()}.max_items_before_downsampling",
+                f"{self.class_name()}.max_items_before_downsampling",
                 default,
             )
             or default
@@ -145,7 +145,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         default = 3600 * 4
         return (
             state.get_int_config(
-                f"{self.config_key()}.min_timerange_to_query_outcomes",
+                f"{self.class_name()}.min_timerange_to_query_outcomes",
                 default,
             )
             or default

@@ -755,7 +755,7 @@ def _add_quota_info(
     summary[action] = quota_info
 
     if quota_and_policy is not None:
-        quota_info["policy"] = quota_and_policy.policy.config_key()
+        quota_info["policy"] = quota_and_policy.policy.class_name()
         quota_allowance = quota_and_policy.quota_allowance
         quota_info["quota_used"] = quota_allowance.quota_used
         quota_info["quota_unit"] = quota_allowance.quota_unit
@@ -829,10 +829,10 @@ def _apply_allocation_policies_quota(
                     attribution_info.tenant_ids, query_id
                 )
                 can_run &= allowance.can_run
-                quota_allowances[allocation_policy.config_key()] = allowance
+                quota_allowances[allocation_policy.class_name()] = allowance
                 span.set_data(
                     "quota_allowance",
-                    quota_allowances[allocation_policy.config_key()],
+                    quota_allowances[allocation_policy.class_name()],
                 )
                 if (
                     allowance.is_throttled

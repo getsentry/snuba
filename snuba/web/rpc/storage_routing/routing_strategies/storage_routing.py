@@ -329,7 +329,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         default = 1000
         return (
             state.get_int_config(
-                f"{self.config_key()}.sampled_too_low_threshold",
+                f"{self.class_name()}.sampled_too_low_threshold",
                 state.get_int_config(
                     f"{DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX}.sampled_too_low_threshold",
                     default,
@@ -347,7 +347,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         default = 8000
         return (
             state.get_int_config(
-                f"{self.config_key()}.time_budget_ms",
+                f"{self.class_name()}.time_budget_ms",
                 state.get_int_config(
                     f"{DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX}.time_budget_ms",
                     default,
