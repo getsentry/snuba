@@ -4,7 +4,7 @@ from unittest import TestCase, mock
 
 import pytest
 
-from snuba.configs.configuration import Configuration, InvalidConfig, ResourceIdentifier
+from snuba.configs.configuration import Configuration, InvalidConfig
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     CAPMAN_HASH,
@@ -228,21 +228,19 @@ class SomeParametrizedConfigPolicy(AllocationPolicy):
 class TestAllocationPolicyLogs(TestCase):
     @pytest.mark.redis_db
     def test_bad_config_key_in_redis(self) -> None:
-        policy = SomeParametrizedConfigPolicy(
-            ResourceIdentifier(StorageKey("something")), [], {}
-        )
+        policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
         set_config(
-            key="AllocationPolicy.SomeParametrizedConfigPolicy.something.my_bad_config.org:10,ref:ref",
+            key="something.SomeParametrizedConfigPolicy.my_bad_config.org:10,ref:ref",
             value=10,
             config_key=CAPMAN_HASH,
         )
         set_config(
-            key="AllocationPolicy.SomeParametrizedConfigPolicy.something.my_param_config.org:10",
+            key="something.SomeParametrizedConfigPolicy.my_param_config.org:10",
             value=10,
             config_key=CAPMAN_HASH,
         )
         set_config(
-            key="AllocationPolicy.SomeParametrizedConfigPolicy.something.my_param_config.org:10,ref:ref,yeet:yeet",
+            key="something.SomeParametrizedConfigPolicy.my_param_config.org:10,ref:ref,yeet:yeet",
             value=10,
             config_key=CAPMAN_HASH,
         )
@@ -256,17 +254,15 @@ class TestAllocationPolicyLogs(TestCase):
         assert len(captured.records) == 3
         logs = set([record.getMessage() for record in captured.records])
         assert logs == {
-            "AllocationPolicy could not deserialize a key: AllocationPolicy.SomeParametrizedConfigPolicy.something.my_bad_config.org:10,ref:ref",
-            "AllocationPolicy could not deserialize a key: AllocationPolicy.SomeParametrizedConfigPolicy.something.my_param_config.org:10",
-            "AllocationPolicy could not deserialize a key: AllocationPolicy.SomeParametrizedConfigPolicy.something.my_param_config.org:10,ref:ref,yeet:yeet",
+            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_bad_config.org:10,ref:ref",
+            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10",
+            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10,ref:ref,yeet:yeet",
         }
 
 
 @pytest.fixture(scope="function")
 def policy() -> AllocationPolicy:
-    policy = SomeParametrizedConfigPolicy(
-        ResourceIdentifier(StorageKey("something")), [], {}
-    )
+    policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
     return policy
 
 
@@ -555,9 +551,7 @@ def test_is_not_enforced() -> None:
 @pytest.mark.redis_db
 def test_configs_with_delimiter_values() -> None:
     # test that configs with dots can be stored and read
-    policy = SomeParametrizedConfigPolicy(
-        ResourceIdentifier(StorageKey("something")), [], {}
-    )
+    policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
     policy.set_config_value("my_param_config", 5, {"ref": "a,::.b.c", "org": 1})
     configs = policy.get_current_configs()
     print(configs)
@@ -572,9 +566,7 @@ def test_configs_with_delimiter_values() -> None:
 
 
 def test_cannot_use_escape_sequences() -> None:
-    policy = SomeParametrizedConfigPolicy(
-        ResourceIdentifier(StorageKey("something")), [], {}
-    )
+    policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
     with pytest.raises(InvalidConfig):
         policy.set_config_value(
             "my_param_config", 5, {"ref": "a__dot_literal__.b.c", "org": 1}
@@ -617,16 +609,14 @@ class TestComponentNameBackwardsCompatibility:
         for policy_class in policy_classes:
             # Create an instance of the policy
             policy = policy_class(
-                storage_key=ResourceIdentifier(storage_key),
+                storage_key=storage_key,
                 required_tenant_types=["organization_id"],
                 default_config_overrides={},
             )
 
             # What the old runtime_config_prefix property would return
             # https://github.com/getsentry/snuba/blob/master/snuba/query/allocation_policies/__init__.py#L430-L432
-            expected_old_prefix = (
-                f"AllocationPolicy.{policy_class.__name__}.{storage_key.value}"
-            )
+            expected_old_prefix = f"{storage_key.value}.{policy_class.__name__}"
 
             # They should be the same
             assert policy.component_name() == expected_old_prefix
