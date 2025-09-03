@@ -1071,7 +1071,7 @@ wheels = [
 
 [[package]]
 name = "sentry-kafka-schemas"
-version = "2.0.2"
+version = "2.0.4"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "fastjsonschema", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1082,7 +1082,7 @@ dependencies = [
     { name = "typing-extensions", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_kafka_schemas-2.0.2-py2.py3-none-any.whl", hash = "sha256:560fd499277c0be0c1514150f74878706188025a607dcdbd31c545057e242789" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_kafka_schemas-2.0.4-py2.py3-none-any.whl", hash = "sha256:9857ce95ae6fd7c8b1ede108a7a1be098128a4bca43e8c8120532d4baf3c79b8" },
 ]
 
 [[package]]
@@ -1183,7 +1183,7 @@ wheels = [
 
 [[package]]
 name = "snuba"
-version = "25.8.0.dev0"
+version = "25.9.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "blinker", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1285,7 +1285,7 @@ requires-dist = [
     { name = "redis", specifier = ">=4.5.4" },
     { name = "rust-snuba", editable = "rust_snuba" },
     { name = "sentry-arroyo", specifier = ">=2.29.1" },
-    { name = "sentry-kafka-schemas", specifier = ">=2.0.2" },
+    { name = "sentry-kafka-schemas", specifier = ">=2.0.4" },
     { name = "sentry-protos", specifier = ">=0.3.3" },
     { name = "sentry-redis-tools", specifier = ">=0.5.0" },
     { name = "sentry-relay", specifier = ">=0.9.5" },

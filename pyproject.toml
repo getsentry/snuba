@@ -1,6 +1,6 @@
 [project]
 name = "snuba"
-version = "25.8.0.dev0"
+version = "25.9.0.dev0"
 dependencies = [
     "blinker>=1.5",
     "click>=8.1.7",
@@ -28,7 +28,7 @@ dependencies = [
     "pyyaml>=6.0",
     "redis>=4.5.4",
     "sentry-arroyo>=2.29.1",
-    "sentry-kafka-schemas>=2.0.2",
+    "sentry-kafka-schemas>=2.0.4",
     "sentry-protos>=0.3.3",
     "sentry-redis-tools>=0.5.0",
     "sentry-relay>=0.9.5",
