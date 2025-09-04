@@ -223,3 +223,87 @@ def or_filter(filters: list[TraceItemFilter]) -> TraceItemFilter:
             filters=filters,
         ),
     )
+
+
+def create_cross_item_test_data() -> tuple[list[str], list[bytes], datetime, datetime]:
+    """
+    Create test data with 6 traces. The first 3 traces have items with the following attributes:
+    - span.attr1 = val1
+    - log.attr2 = val2
+    - error.attr3 = val3
+    - error.attr4 = val4
+    The last 3 traces have items with the following attributes:
+    - span.attr1 = other_val1
+    - log.attr2 = other_val2
+    - error.attr3 = other_val3
+    - error.attr4 = other_val4
+    """
+    today = datetime.now(tz=UTC).date()
+    start_time = datetime.combine(today, datetime.min.time(), tzinfo=UTC)
+    end_time = start_time + timedelta(hours=1)
+
+    trace_ids = [uuid.uuid4().hex for _ in range(6)]
+    all_items = []
+
+    for i, trace_id in enumerate(trace_ids):
+        item_time = start_time + timedelta(minutes=i * 10)
+
+        if i < 3:
+            span_attrs = {"span.attr1": AnyValue(string_value="val1")}
+            log_attrs = {"log.attr2": AnyValue(string_value="val2")}
+            error_attrs = {
+                "error.attr3": AnyValue(string_value="val3"),
+                "error.attr4": AnyValue(string_value="val4"),
+            }
+        else:
+            span_attrs = {"span.attr1": AnyValue(string_value="other_val1")}
+            log_attrs = {"log.attr2": AnyValue(string_value="other_val2")}
+            error_attrs = {
+                "error.attr3": AnyValue(string_value="other_val3"),
+                "error.attr4": AnyValue(string_value="other_val4"),
+            }
+
+        # Create span item
+        all_items.append(
+            gen_item_message(
+                start_timestamp=item_time,
+                trace_id=trace_id,
+                type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                attributes=span_attrs,
+                remove_default_attributes=False,
+            )
+        )
+
+        # Create log item
+        all_items.append(
+            gen_item_message(
+                start_timestamp=item_time + timedelta(seconds=10),
+                trace_id=trace_id,
+                type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                attributes=log_attrs,
+                remove_default_attributes=False,
+            )
+        )
+
+        # Create error item
+        all_items.append(
+            gen_item_message(
+                start_timestamp=item_time + timedelta(seconds=20),
+                trace_id=trace_id,
+                type=TraceItemType.TRACE_ITEM_TYPE_ERROR,
+                attributes=error_attrs,
+                remove_default_attributes=False,
+            )
+        )
+
+    return trace_ids, all_items, start_time, end_time
+
+
+def write_cross_item_data_to_storage(items: list[bytes]) -> None:
+    """Write cross-item test data to storage."""
+    from snuba.datasets.storages.factory import get_storage
+    from snuba.datasets.storages.storage_key import StorageKey
+    from tests.helpers import write_raw_unprocessed_events
+
+    storage = get_storage(StorageKey("eap_items"))
+    write_raw_unprocessed_events(storage, items)  # type: ignore

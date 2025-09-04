@@ -34,9 +34,11 @@ from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (
     comparison_filter,
+    create_cross_item_test_data,
     create_request_meta,
     gen_item_message,
     or_filter,
+    write_cross_item_data_to_storage,
 )
 
 _TRACE_IDS = [uuid.uuid4().hex for _ in range(10)]
@@ -859,94 +861,6 @@ def generate_trace_id_timestamp_data(
     return start_timestamp_per_trace_id, trace_id_per_start_timestamp
 
 
-def create_cross_item_test_data() -> tuple[list[str], list[bytes], datetime, datetime]:
-    """
-    Create test data with 6 traces. The first 3 traces have items with the following attributes:
-    - span.attr1 = val1
-    - log.attr2 = val2
-    - error.attr3 = val3
-    - error.attr4 = val4
-    The last 3 traces have items with the following attributes:
-    - span.attr1 = other_val1
-    - log.attr2 = other_val2
-    - error.attr3 = other_val3
-    - error.attr4 = other_val4
-    """
-    # Use today's date with a fixed time range (12am to 1am)
-    today = datetime.now(tz=timezone.utc).date()
-    start_time = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc)
-    end_time = start_time + timedelta(hours=1)
-
-    # Create 6 traces - 3 should match all conditions, 3 should not
-    trace_ids = [uuid.uuid4().hex for _ in range(6)]
-    all_items = []
-
-    for i, trace_id in enumerate(trace_ids):
-        # Spread items evenly across the 1-hour window
-        item_time = start_time + timedelta(minutes=i * 10)
-
-        if i < 3:  # First 3 traces have matching log attributes
-            log_attrs = {
-                "log.attr2": AnyValue(string_value="val2"),
-            }
-        else:  # Last 3 traces have different log attributes
-            log_attrs = {
-                "log.attr2": AnyValue(string_value="other_val2"),
-            }
-
-        all_items.append(
-            gen_item_message(
-                start_timestamp=item_time,
-                trace_id=trace_id,
-                type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-                attributes=log_attrs,
-                remove_default_attributes=True,
-            )
-        )
-
-        if i < 3:  # First 3 traces have matching span attributes
-            span_attrs = {
-                "span.attr1": AnyValue(string_value="val1"),
-            }
-        else:  # Last 3 traces have different span attributes
-            span_attrs = {
-                "span.attr1": AnyValue(string_value="other_val1"),
-            }
-
-        all_items.append(
-            gen_item_message(
-                start_timestamp=item_time + timedelta(seconds=10),
-                trace_id=trace_id,
-                type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                attributes=span_attrs,
-                remove_default_attributes=True,
-            )
-        )
-
-        if i < 3:  # First 3 traces have matching error attributes
-            error_attrs = {
-                "error.attr3": AnyValue(string_value="val3"),
-                "error.attr4": AnyValue(string_value="val4"),
-            }
-        else:  # Last 3 traces have different error attributes
-            error_attrs = {
-                "error.attr3": AnyValue(string_value="other_val3"),
-                "error.attr4": AnyValue(string_value="other_val4"),
-            }
-
-        all_items.append(
-            gen_item_message(
-                start_timestamp=item_time + timedelta(seconds=20),
-                trace_id=trace_id,
-                type=TraceItemType.TRACE_ITEM_TYPE_ERROR,
-                attributes=error_attrs,
-                remove_default_attributes=True,
-            )
-        )
-
-    return trace_ids, all_items, start_time, end_time
-
-
 def trace_filter(
     filter: TraceItemFilter,
     item_type: TraceItemType.ValueType,
@@ -956,9 +870,3 @@ def trace_filter(
         item_type=item_type,
         filter=filter,
     )
-
-
-def write_cross_item_data_to_storage(items: list[bytes]) -> None:
-    """Write cross-item test data to storage."""
-    storage = get_storage(StorageKey("eap_items"))
-    write_raw_unprocessed_events(storage, items)  # type: ignore

@@ -335,18 +335,6 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
         )
 
 
-def _is_cross_item_query(request: TraceItemTableRequest) -> bool:
-    """
-    Determines if this is a cross item query by checking if trace_filters are present
-    and contain more than one item type.
-    """
-    if not request.trace_filters:
-        return False
-
-    # If we have trace_filters, it's a cross item query
-    return len(request.trace_filters) > 1
-
-
 def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
@@ -373,7 +361,7 @@ def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -
 
     # Handle cross item queries by first getting trace IDs
     additional_conditions = []
-    if _is_cross_item_query(request) and timer is not None:
+    if request.trace_filters and timer is not None:
         trace_ids = get_trace_ids_for_cross_item_query(
             request, request.meta, request.trace_filters, timer
         )
