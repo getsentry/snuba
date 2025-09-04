@@ -992,15 +992,18 @@ def set_configuration() -> Response:
     user = request.headers.get(USER_HEADER_KEY)
 
     try:
+        configurable_component_namespace = data["configurable_component_namespace"]
         configurable_component_config_key = data["configurable_component_config_key"]
         resource_name = data["resource_name"]
         assert isinstance(
             configurable_component_config_key, str
         ), f"Invalid configurable_component_config_key: {configurable_component_config_key}"
         assert isinstance(resource_name, str), f"Invalid resource_name {resource_name}"
-        configurable_component = ConfigurableComponent.get_from_name(
-            configurable_component_config_key
-        ).create_minimal_instance(resource_name)
+        configurable_component = (
+            ConfigurableComponent.get_component_class(configurable_component_namespace)
+            .get_from_name(configurable_component_config_key)
+            .create_minimal_instance(resource_name)
+        )
 
         key = data["key"]
         params = data.get("params", {})
@@ -1016,9 +1019,7 @@ def set_configuration() -> Response:
         )
 
     if request.method == "DELETE":
-        configurable_component.delete_config_value(
-            config_key=key, params=params, user=user
-        )
+        configurable_component.delete_config_value(config_key=key, params=params, user=user)
         audit_log.record(
             user or "",
             AuditLogAction.CONFIGURABLE_COMPONENT_DELETE,

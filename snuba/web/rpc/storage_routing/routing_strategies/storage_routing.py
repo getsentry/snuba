@@ -4,7 +4,7 @@ import os
 import uuid
 from abc import ABC
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, Type, TypeAlias, Union, cast, final
+from typing import Any, Callable, Dict, Optional, TypeAlias, Union, cast, final
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -194,10 +194,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
 
-    @classmethod
-    def component_namespace(cls) -> str:
-        return "RoutingStrategy"
-
     def _get_hash(self) -> str:
         return CBRS_HASH
 
@@ -222,13 +218,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         )
 
     @classmethod
-    def get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
-        return cast(Type["BaseRoutingStrategy"], cls.class_from_name(name))
-
-    @classmethod
-    def create_minimal_instance(
-        cls, resource_identifier: str
-    ) -> "ConfigurableComponent":
+    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
         return cls(
             default_config_overrides={},
         )
@@ -446,9 +436,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
     def to_dict(self) -> StrategyData:
         base_data = super().to_dict()
-        policies = (
-            self.get_allocation_policies() + self.get_delete_allocation_policies()
-        )
+        policies = self.get_allocation_policies() + self.get_delete_allocation_policies()
         return StrategyData(**base_data, policies_data=[policy.to_dict() for policy in policies])  # type: ignore
 
 

@@ -4,7 +4,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Type, cast
+from typing import Any, cast
 
 from snuba import environment, settings
 from snuba.configs.configuration import (
@@ -372,18 +372,12 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         )
 
     @classmethod
-    def create_minimal_instance(
-        cls, resource_identifier: str
-    ) -> "ConfigurableComponent":
+    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
         return cls(
             storage_key=ResourceIdentifier(resource_identifier),
             required_tenant_types=[],
             default_config_overrides={},
         )
-
-    @classmethod
-    def component_namespace(self) -> str:
-        return "AllocationPolicy"
 
     def _get_hash(self) -> str:
         return CAPMAN_HASH
@@ -412,10 +406,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     def max_threads(self) -> int:
         """Maximum number of threads run a single query on ClickHouse with."""
         return int(self.get_config_value(MAX_THREADS))
-
-    @classmethod
-    def get_from_name(cls, name: str) -> Type["AllocationPolicy"]:
-        return cast(Type["AllocationPolicy"], cls.class_from_name(name))
 
     def __eq__(self, other: Any) -> bool:
         """There should not be a need to compare these except that
