@@ -184,9 +184,7 @@ class TestTraceItemTableCrossItemQueries(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_COUNT,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_STRING, name="sentry.trace_id"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id"),
                         label="count",
                     )
                 )
@@ -234,7 +232,5 @@ class TestTraceItemTableCrossItemQueries(BaseApiTest):
 
         assert len(response.column_values[0].results) == 3
 
-        error_attr_values = [
-            result.val_str for result in response.column_values[1].results
-        ]
+        error_attr_values = [result.val_str for result in response.column_values[1].results]
         assert all(val == "val3" for val in error_attr_values)

@@ -58,17 +58,13 @@ def get_trace_ids_for_cross_item_query(
     This works by pruning out items that don't match any of the conditions in the where close. The HAVING
     clause is used to get trace ids that contains items matching all of the conditions.
     """
-    assert (
-        len(trace_filters) > 1
-    ), "At least two item types are required for a cross-event query"
+    assert len(trace_filters) > 1, "At least two item types are required for a cross-event query"
 
     # Hacky conversion due to protobuf ugliness
     converted_trace_filters = [trace_filter for trace_filter in trace_filters]
     if isinstance(trace_filters[0], GetTracesRequest.TraceFilter):
         converted_trace_filters = [
-            TraceItemFilterWithType(
-                item_type=trace_filter.item_type, filter=trace_filter.filter
-            )
+            TraceItemFilterWithType(item_type=trace_filter.item_type, filter=trace_filter.filter)
             for trace_filter in trace_filters
         ]
 
@@ -120,9 +116,7 @@ def get_trace_ids_for_cross_item_query(
         if k.startswith("cross_item_query_settings/")
     }
 
-    query_settings = (
-        setup_trace_query_settings() if request_meta.debug else HTTPQuerySettings()
-    )
+    query_settings = setup_trace_query_settings() if request_meta.debug else HTTPQuerySettings()
 
     for key, value in clickhouse_query_settings.items():
         query_settings.push_clickhouse_setting(key, value)

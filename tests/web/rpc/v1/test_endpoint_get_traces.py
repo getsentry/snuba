@@ -54,9 +54,7 @@ _SPANS = [
         start_timestamp=_BASE_TIME + timedelta(minutes=i),
         trace_id=_TRACE_IDS[i % len(_TRACE_IDS)],
         attributes={
-            "sentry.op": AnyValue(
-                string_value="navigation" if i < len(_TRACE_IDS) else "db"
-            ),
+            "sentry.op": AnyValue(string_value="navigation" if i < len(_TRACE_IDS) else "db"),
             "sentry.raw_description": AnyValue(
                 string_value=(
                     "root"
@@ -68,9 +66,7 @@ _SPANS = [
             "sentry.segment_id": AnyValue(
                 string_value=_TRACE_IDS[i % len(_TRACE_IDS)][:16],
             ),
-            "sentry.parent_span_id": AnyValue(
-                string_value="" if i < len(_TRACE_IDS) else "1" * 16
-            ),
+            "sentry.parent_span_id": AnyValue(string_value="" if i < len(_TRACE_IDS) else "1" * 16),
         },
     )
     for i in range(_SPAN_COUNT)
@@ -122,9 +118,7 @@ class TestGetTraces(BaseApiTest):
             ],
             limit=10,
         )
-        response = self.app.post(
-            "/rpc/EndpointGetTraces/v1", data=message.SerializeToString()
-        )
+        response = self.app.post("/rpc/EndpointGetTraces/v1", data=message.SerializeToString())
         error_proto = ErrorProto()
         if response.status_code != 200:
             error_proto.ParseFromString(response.data)
@@ -167,9 +161,7 @@ class TestGetTraces(BaseApiTest):
                         ),
                     ],
                 )
-                for start_timestamp in reversed(
-                    sorted(trace_id_per_start_timestamp.keys())
-                )
+                for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
             ],
             page_token=PageToken(offset=len(_TRACE_IDS + _ADDITIONAL_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
@@ -279,15 +271,9 @@ class TestGetTraces(BaseApiTest):
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
-    def test_with_data_and_aggregated_fields_all_keys(
-        self, setup_teardown: Any
-    ) -> None:
-        start_timestamp = Timestamp(
-            seconds=int((_BASE_TIME - timedelta(hours=10)).timestamp())
-        )
-        end_timestamp = Timestamp(
-            seconds=int((_BASE_TIME + timedelta(hours=10)).timestamp())
-        )
+    def test_with_data_and_aggregated_fields_all_keys(self, setup_teardown: Any) -> None:
+        start_timestamp = Timestamp(seconds=int((_BASE_TIME - timedelta(hours=10)).timestamp()))
+        end_timestamp = Timestamp(seconds=int((_BASE_TIME + timedelta(hours=10)).timestamp()))
         (
             start_timestamp_per_trace_id,
             trace_id_per_start_timestamp,
@@ -472,9 +458,7 @@ class TestGetTraces(BaseApiTest):
                         ),
                     ],
                 )
-                for start_timestamp in reversed(
-                    sorted(trace_id_per_start_timestamp.keys())
-                )
+                for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
@@ -536,18 +520,14 @@ class TestGetTraces(BaseApiTest):
                         ),
                     ],
                 )
-                for start_timestamp in reversed(
-                    sorted(trace_id_per_start_timestamp.keys())
-                )
+                for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
-    def test_with_data_and_aggregated_fields_ignore_case(
-        self, setup_teardown: Any
-    ) -> None:
+    def test_with_data_and_aggregated_fields_ignore_case(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         (
@@ -603,9 +583,7 @@ class TestGetTraces(BaseApiTest):
                         ),
                     ],
                 )
-                for start_timestamp in reversed(
-                    sorted(trace_id_per_start_timestamp.keys())
-                )
+                for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
@@ -717,9 +695,7 @@ class TestGetTraces(BaseApiTest):
         ]
 
         message = GetTracesRequest(
-            meta=create_request_meta(
-                start_time, end_time, TraceItemType.TRACE_ITEM_TYPE_SPAN
-            ),
+            meta=create_request_meta(start_time, end_time, TraceItemType.TRACE_ITEM_TYPE_SPAN),
             attributes=[
                 TraceAttribute(
                     key=TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT,
@@ -829,9 +805,7 @@ class TestGetTraces(BaseApiTest):
         response = EndpointGetTraces().execute(message)
 
         assert len(response.traces) == 1
-        assert (
-            response.traces[0].attributes[0].value.val_double == _BASE_TIME.timestamp()
-        )
+        assert response.traces[0].attributes[0].value.val_double == _BASE_TIME.timestamp()
 
 
 def generate_spans(spans_data: list[bytes]) -> list[TraceItem]:
@@ -855,8 +829,7 @@ def generate_trace_id_timestamp_data(
             s.attributes["sentry.start_timestamp_precise"].double_value,
         )
     trace_id_per_start_timestamp: dict[float, str] = {
-        timestamp: trace_id
-        for trace_id, timestamp in start_timestamp_per_trace_id.items()
+        timestamp: trace_id for trace_id, timestamp in start_timestamp_per_trace_id.items()
     }
     return start_timestamp_per_trace_id, trace_id_per_start_timestamp
 

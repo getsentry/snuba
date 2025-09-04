@@ -19,9 +19,7 @@ from tests.helpers import write_raw_unprocessed_events
 
 RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
 SERVER_NAME = "D23CXQ4GK2.local"
-BASE_TIME = datetime.now(tz=UTC).replace(minute=0, second=0, microsecond=0) - timedelta(
-    minutes=180
-)
+BASE_TIME = datetime.now(tz=UTC).replace(minute=0, second=0, microsecond=0) - timedelta(minutes=180)
 START_TIMESTAMP = Timestamp(seconds=int((BASE_TIME - timedelta(hours=3)).timestamp()))
 END_TIMESTAMP = Timestamp(seconds=int((BASE_TIME + timedelta(hours=3)).timestamp()))
 
@@ -137,16 +135,10 @@ def gen_item_message(
         attributes = _DEFAULT_ATTRIBUTES | attributes
     attributes.update(
         {
-            "sentry.end_timestamp_precise": AnyValue(
-                double_value=end_timestamp.timestamp()
-            ),
+            "sentry.end_timestamp_precise": AnyValue(double_value=end_timestamp.timestamp()),
             "sentry.received": AnyValue(double_value=received.seconds),
-            "sentry.start_timestamp_precise": AnyValue(
-                double_value=start_timestamp.timestamp()
-            ),
-            "start_timestamp_ms": AnyValue(
-                double_value=(int(start_timestamp.timestamp() * 1000))
-            ),
+            "sentry.start_timestamp_precise": AnyValue(double_value=start_timestamp.timestamp()),
+            "start_timestamp_ms": AnyValue(double_value=(int(start_timestamp.timestamp() * 1000))),
         }
     )
     if item_id is None:
