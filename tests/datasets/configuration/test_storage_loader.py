@@ -96,16 +96,9 @@ delete_allocation_policies:
                 mapping_optimizer_qp,
                 clickhouse_settings_override_qp,
             ) = storage.get_query_processors()
-            assert (
-                getattr(mapping_optimizer_qp, "_MappingOptimizer__column_name") == "a"
-            )
-            assert (
-                getattr(mapping_optimizer_qp, "_MappingOptimizer__hash_map_name")
-                == "hashmap"
-            )
-            assert (
-                getattr(mapping_optimizer_qp, "_MappingOptimizer__killswitch") == "kill"
-            )
+            assert getattr(mapping_optimizer_qp, "_MappingOptimizer__column_name") == "a"
+            assert getattr(mapping_optimizer_qp, "_MappingOptimizer__hash_map_name") == "hashmap"
+            assert getattr(mapping_optimizer_qp, "_MappingOptimizer__killswitch") == "kill"
             assert (
                 getattr(
                     clickhouse_settings_override_qp,
@@ -122,13 +115,11 @@ delete_allocation_policies:
             )
             assert storage.required_time_column == "timestamp"
             assert len(policies := storage.get_allocation_policies()) == 2
-            assert set([p.config_key() for p in policies]) == {
+            assert set([p.class_name() for p in policies]) == {
                 "BytesScannedWindowAllocationPolicy",
                 "PassthroughPolicy",
             }
-            passthru = next(
-                p for p in policies if p.config_key() == "PassthroughPolicy"
-            )
+            passthru = next(p for p in policies if p.class_name() == "PassthroughPolicy")
             assert passthru.component_name() == "test-storage.PassthroughPolicy"
             assert passthru._required_tenant_types == {"some_tenant"}
 
@@ -140,12 +131,12 @@ delete_allocation_policies:
 
             assert len(storage.get_deletion_processors()) == 1
             column_filter_processor = storage.get_deletion_processors()[0]
-            assert getattr(
-                column_filter_processor, "_ColumnFilterProcessor__column_filters"
-            ) == {"some_column"}
+            assert getattr(column_filter_processor, "_ColumnFilterProcessor__column_filters") == {
+                "some_column"
+            }
 
             assert len(delete_policies := storage.get_delete_allocation_policies()) == 1
-            assert set([p.config_key() for p in delete_policies]) == {
+            assert set([p.class_name() for p in delete_policies]) == {
                 "DeleteConcurrentRateLimitAllocationPolicy",
             }
 
