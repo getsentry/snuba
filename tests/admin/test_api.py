@@ -492,7 +492,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
     strategy_data = response.json
 
     # Check strategy-level data
-    assert strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
+    assert strategy_data["configurable_component_class_name"] == "FakeRoutingStrategy"
     assert len(strategy_data["configurations"]) == 2
     assert {
         "name": "some_default_config",
@@ -516,7 +516,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
     assert len(strategy_data["policies_data"]) == 2
 
     # First policy
-    assert strategy_data["policies_data"][0]["configurable_component_config_key"] == "FakePolicy"
+    assert strategy_data["policies_data"][0]["configurable_component_class_name"] == "FakePolicy"
     assert strategy_data["policies_data"][0]["query_type"] == "select"
     assert len(strategy_data["policies_data"][0]["configurations"]) == 4
     assert {
@@ -562,7 +562,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
 
     # Second policy
     assert (
-        strategy_data["policies_data"][1]["configurable_component_config_key"] == "FakeDeletePolicy"
+        strategy_data["policies_data"][1]["configurable_component_class_name"] == "FakeDeletePolicy"
     )
     assert strategy_data["policies_data"][1]["query_type"] == "delete"
     assert len(strategy_data["policies_data"][1]["configurations"]) == 4
@@ -721,7 +721,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             data=json.dumps(
                 {
                     "configurable_component_namespace": "AllocationPolicy",
-                    "configurable_component_config_key": "BytesScannedWindowAllocationPolicy",
+                    "configurable_component_class_name": "BytesScannedWindowAllocationPolicy",
                     "resource_name": "errors",
                     "key": "org_limit_bytes_scanned_override",
                     "params": {"org_id": 1},
@@ -763,7 +763,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
                 data=json.dumps(
                     {
                         "configurable_component_namespace": "AllocationPolicy",
-                        "configurable_component_config_key": "BytesScannedWindowAllocationPolicy",
+                        "configurable_component_class_name": "BytesScannedWindowAllocationPolicy",
                         "resource_name": "errors",
                         "key": "org_limit_bytes_scanned_override",
                         "params": {"org_id": 1},
@@ -811,7 +811,7 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
             data=json.dumps(
                 {
                     "configurable_component_namespace": "BaseRoutingStrategy",
-                    "configurable_component_config_key": "FakeRoutingStrategy",
+                    "configurable_component_class_name": "FakeRoutingStrategy",
                     "resource_name": "FakeRoutingStrategy",
                     "key": "fake_strategy_config",
                     "value": "75",
@@ -828,7 +828,7 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
 
         # Verify the config was set correctly
         strategy_data = response.json
-        assert strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
+        assert strategy_data["configurable_component_class_name"] == "FakeRoutingStrategy"
         assert {
             "name": "fake_strategy_config",
             "type": "int",
@@ -844,7 +844,7 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
             data=json.dumps(
                 {
                     "configurable_component_namespace": "BaseRoutingStrategy",
-                    "configurable_component_config_key": "FakeRoutingStrategy",
+                    "configurable_component_class_name": "FakeRoutingStrategy",
                     "resource_name": "FakeRoutingStrategy",
                     "key": "fake_strategy_config",
                 }
@@ -859,7 +859,7 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
 
         # The config should be back to its default value
         strategy_data = response.json
-        assert strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
+        assert strategy_data["configurable_component_class_name"] == "FakeRoutingStrategy"
         assert {
             "name": "fake_strategy_config",
             "type": "int",
@@ -898,7 +898,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
             data=json.dumps(
                 {
                     "configurable_component_namespace": "AllocationPolicy",
-                    "configurable_component_config_key": "FakePolicy",
+                    "configurable_component_class_name": "FakePolicy",
                     "resource_name": "FakeRoutingStrategy",
                     "key": "fake_optional_config",
                     "params": {"org_id": 1},
@@ -916,16 +916,16 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
         assert response.json is not None
 
         strategy_data = response.json
-        assert strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
+        assert strategy_data["configurable_component_class_name"] == "FakeRoutingStrategy"
         assert len(strategy_data["policies_data"]) == 2
 
         fake_policy = next(
             policy
             for policy in strategy_data["policies_data"]
-            if policy["configurable_component_config_key"] == "FakePolicy"
+            if policy["configurable_component_class_name"] == "FakePolicy"
         )
 
-        assert fake_policy["configurable_component_config_key"] == "FakePolicy"
+        assert fake_policy["configurable_component_class_name"] == "FakePolicy"
         assert {
             "default": -1,
             "description": "",
@@ -941,7 +941,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
             data=json.dumps(
                 {
                     "configurable_component_namespace": "AllocationPolicy",
-                    "configurable_component_config_key": "FakePolicy",
+                    "configurable_component_class_name": "FakePolicy",
                     "resource_name": "FakeRoutingStrategy",
                     "key": "fake_optional_config",
                     "params": {"org_id": 1},
@@ -959,7 +959,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
         fake_policy = next(
             policy
             for policy in strategy_data["policies_data"]
-            if policy["configurable_component_config_key"] == "FakePolicy"
+            if policy["configurable_component_class_name"] == "FakePolicy"
         )
 
         # The config should be back to its default value

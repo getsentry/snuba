@@ -21,7 +21,7 @@ class InvalidConfig(Exception):
 
 class ConfigurableComponentData(TypedDict):
     configurable_component_namespace: str
-    configurable_component_config_key: str
+    configurable_component_class_name: str
     resource_identifier: str
     configurations: list[dict[str, Any]]
     optional_config_definitions: list[dict[str, Any]]
@@ -454,7 +454,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     def to_dict(self) -> ConfigurableComponentData:
         return ConfigurableComponentData(
             configurable_component_namespace=self.component_namespace(),
-            configurable_component_config_key=self.class_name(),
+            configurable_component_class_name=self.class_name(),
             resource_identifier=self.resource_identifier.value,
             configurations=self.get_current_configs(),
             optional_config_definitions=self.get_optional_config_definitions_json(),

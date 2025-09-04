@@ -993,15 +993,15 @@ def set_configuration() -> Response:
 
     try:
         configurable_component_namespace = data["configurable_component_namespace"]
-        configurable_component_config_key = data["configurable_component_config_key"]
+        configurable_component_class_name = data["configurable_component_class_name"]
         resource_name = data["resource_name"]
         assert isinstance(
-            configurable_component_config_key, str
-        ), f"Invalid configurable_component_config_key: {configurable_component_config_key}"
+            configurable_component_class_name, str
+        ), f"Invalid configurable_component_class_name: {configurable_component_class_name}"
         assert isinstance(resource_name, str), f"Invalid resource_name {resource_name}"
         configurable_component = (
             ConfigurableComponent.get_component_class(configurable_component_namespace)
-            .get_from_name(configurable_component_config_key)
+            .get_from_name(configurable_component_class_name)
             .create_minimal_instance(resource_name)
         )
 
@@ -1025,7 +1025,7 @@ def set_configuration() -> Response:
             AuditLogAction.CONFIGURABLE_COMPONENT_DELETE,
             {
                 "resource_identifier": resource_name,
-                "configurable_component_config_key": configurable_component.config_key(),
+                "configurable_component_class_name": configurable_component.class_name(),
                 "key": key,
             },
             notify=True,
@@ -1043,7 +1043,7 @@ def set_configuration() -> Response:
                 AuditLogAction.CONFIGURABLE_COMPONENT_UPDATE,
                 {
                     "resource_identifier": resource_name,
-                    "configurable_component_config_key": configurable_component.config_key(),
+                    "configurable_component_class_name": configurable_component.class_name(),
                     "key": key,
                     "value": value,
                     "params": str(params),

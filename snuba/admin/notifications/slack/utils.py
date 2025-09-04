@@ -12,9 +12,7 @@ from snuba.admin.audit_log.action import (
 )
 
 
-def build_blocks(
-    data: Any, action: AuditLogAction, timestamp: str, user: str
-) -> List[Any]:
+def build_blocks(data: Any, action: AuditLogAction, timestamp: str, user: str) -> List[Any]:
     if action in RUNTIME_CONFIG_ACTIONS:
         text = build_runtime_config_text(data, action)
     elif action in MIGRATION_ACTIONS:
@@ -32,17 +30,15 @@ def build_blocks(
     return [section, build_context(user, timestamp, action)]
 
 
-def build_configurable_component_changed_text(
-    data: Any, action: AuditLogAction
-) -> Optional[str]:
+def build_configurable_component_changed_text(data: Any, action: AuditLogAction) -> Optional[str]:
 
-    base = f"*Resource {data['resource_identifier']} Configurable Component {data['configurable_component_config_key']} Changed:*"
+    base = f"*Resource {data['resource_identifier']} Configurable Component {data['configurable_component_class_name']} Changed:*"
 
     if action == AuditLogAction.CONFIGURABLE_COMPONENT_DELETE:
-        removed = f"~```'{data['configurable_component_config_key']}.{data['key']}({data.get('params', {})})'```~"
+        removed = f"~```'{data['configurable_component_class_name']}.{data['key']}({data.get('params', {})})'```~"
         return f"{base} :put_litter_in_its_place:\n\n{removed}"
     elif action == AuditLogAction.CONFIGURABLE_COMPONENT_UPDATE:
-        updated = f"```'{data['configurable_component_config_key']}.{data['key']}({data.get('params', {})})' = '{data['value']}'```"
+        updated = f"```'{data['configurable_component_class_name']}.{data['key']}({data.get('params', {})})' = '{data['value']}'```"
         return f"{base} :up: :date:\n\n{updated}"
     else:
         # todo: raise error, cause slack won't accept this
@@ -85,9 +81,7 @@ def build_migration_run_text(data: Any, action: AuditLogAction) -> Optional[str]
     else:
         return None
 
-    text = (
-        f"*Migration:* \n\n{action_text} (force={data['force']}, fake={data['fake']})"
-    )
+    text = f"*Migration:* \n\n{action_text} (force={data['force']}, fake={data['fake']})"
 
     if action in [
         AuditLogAction.REVERSED_MIGRATION_FAILED,

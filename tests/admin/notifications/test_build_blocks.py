@@ -15,7 +15,7 @@ from snuba.admin.notifications.slack.utils import build_blocks
         pytest.param(
             {
                 "resource_identifier": "errors",
-                "configurable_component_config_key": "BytesScannedWindowAllocationPolicy",
+                "configurable_component_class_name": "BytesScannedWindowAllocationPolicy",
                 "key": "org_limit_bytes_scanned_override",
                 "value": "420",
                 "params": "{'org_id': 1}",
@@ -27,7 +27,7 @@ from snuba.admin.notifications.slack.utils import build_blocks
         pytest.param(
             {
                 "resource_identifier": "errors",
-                "configurable_component_config_key": "BytesScannedWindowAllocationPolicy",
+                "configurable_component_class_name": "BytesScannedWindowAllocationPolicy",
                 "key": "org_limit_bytes_scanned_override",
                 "params": "{'org_id': 1}",
             },
@@ -37,9 +37,7 @@ from snuba.admin.notifications.slack.utils import build_blocks
         ),
     ],
 )
-def test_build_blocks(
-    data: dict[str, Any], action: AuditLogAction, expected: str
-) -> None:
+def test_build_blocks(data: dict[str, Any], action: AuditLogAction, expected: str) -> None:
 
     res = build_blocks(
         data,
