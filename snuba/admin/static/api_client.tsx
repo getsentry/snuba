@@ -87,7 +87,7 @@ interface Client {
   getAllocationPolicies: (storage: string) => Promise<AllocationPolicy[]>;
   setAllocationPolicyConfig: (
     configurable_component_namespace: string,
-    configurable_component_name: string,
+    configurable_component_class_name: string,
     resource_name: string,
     key: string,
     value: string,
@@ -95,7 +95,7 @@ interface Client {
   ) => Promise<void>;
   deleteAllocationPolicyConfig: (
     configurable_component_namespace: string,
-    configurable_component_name: string,
+    configurable_component_class_name: string,
     resource_name: string,
     key: string,
     params: object,
@@ -462,7 +462,7 @@ function Client(): Client {
     },
     setAllocationPolicyConfig: (
       configurable_component_namespace: string,
-      configurable_component_name: string,
+      configurable_component_class_name: string,
       resource_name: string,
       key: string,
       value: string,
@@ -472,7 +472,7 @@ function Client(): Client {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
-        body: JSON.stringify({ configurable_component_namespace, configurable_component_name, resource_name, key, value, params }),
+        body: JSON.stringify({ configurable_component_namespace, configurable_component_class_name, resource_name, key, value, params }),
       }).then((res) => {
         if (res.ok) {
           return;
@@ -486,7 +486,7 @@ function Client(): Client {
     },
     deleteAllocationPolicyConfig: (
       configurable_component_namespace: string,
-      config_key: string,
+      configurable_component_class_name: string,
       resource_name: string,
       key: string,
       params: object,
@@ -495,7 +495,7 @@ function Client(): Client {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "DELETE",
-        body: JSON.stringify({ configurable_component_namespace, config_key, resource_name, key, params }),
+        body: JSON.stringify({ configurable_component_namespace, configurable_component_class_name, resource_name, key, params }),
       }).then((res) => {
         if (res.ok) {
           return;
