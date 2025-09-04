@@ -153,9 +153,7 @@ def _get_attribute_expression(
     attribute_type: AttributeKey.Type.ValueType,
     request_meta: RequestMeta,
 ) -> Expression:
-    return attribute_key_to_expression(
-        AttributeKey(name=attribute_name, type=attribute_type)
-    )
+    return attribute_key_to_expression(AttributeKey(name=attribute_name, type=attribute_type))
 
 
 def _attribute_to_expression(
@@ -338,29 +336,19 @@ def _attribute_to_expression(
             else:
                 return f.count(alias=alias)
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
-            return _get_root_span_attribute(
-                "sentry.raw_description", AttributeKey.Type.TYPE_STRING
-            )
+            return _get_root_span_attribute("sentry.raw_description", AttributeKey.Type.TYPE_STRING)
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS:
-            return _get_root_span_attribute(
-                "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
-            )
+            return _get_root_span_attribute("sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE)
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_PROJECT_ID:
-            return _get_root_span_attribute(
-                "sentry.project_id", AttributeKey.Type.TYPE_INT
-            )
+            return _get_root_span_attribute("sentry.project_id", AttributeKey.Type.TYPE_INT)
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_NAME:
             return _get_earliest_span_attribute(
                 "sentry.raw_description", AttributeKey.Type.TYPE_STRING
             )
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_PROJECT_ID:
-            return _get_earliest_span_attribute(
-                "sentry.project_id", AttributeKey.Type.TYPE_INT
-            )
+            return _get_earliest_span_attribute("sentry.project_id", AttributeKey.Type.TYPE_INT)
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS:
-            return _get_earliest_span_attribute(
-                "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
-            )
+            return _get_earliest_span_attribute("sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE)
         elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN:
             return _get_earliest_frontend_span_attribute(
                 "sentry.raw_description", AttributeKey.Type.TYPE_STRING
@@ -378,9 +366,7 @@ def _attribute_to_expression(
         else:
             return f.cast(column(attribute_name), clickhouse_type, alias=alias)
 
-    raise BadSnubaRPCRequestException(
-        f"{key} had an unknown or unset type: {trace_attribute.type}"
-    )
+    raise BadSnubaRPCRequestException(f"{key} had an unknown or unset type: {trace_attribute.type}")
 
 
 def _build_snuba_request(
@@ -485,9 +471,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     def _execute(self, in_msg: GetTracesRequest) -> GetTracesResponse:
         _validate_order_by(in_msg)
 
-        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
-            uuid.uuid4()
-        )
+        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(uuid.uuid4())
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
@@ -525,9 +509,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         """
         Returns a dict mapping item types to a filter expression for that item type.
         """
-        filters_by_item_type: dict[
-            TraceItemType.ValueType, list[TraceItemFilter]
-        ] = defaultdict(list)
+        filters_by_item_type: dict[TraceItemType.ValueType, list[TraceItemFilter]] = defaultdict(
+            list
+        )
         filter_expressions_by_item_type: dict[TraceItemType.ValueType, Expression] = {}
         for trace_filter in filters:
             filters_by_item_type[trace_filter.item_type].append(trace_filter.filter)
@@ -610,9 +594,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         )
 
         treeify_or_and_conditions(query)
-        settings = (
-            setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
-        )
+        settings = setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
         if get_config("enable_trace_sampling", False):
             settings.set_sampling_tier(self.routing_decision.tier)
         results = run_query(
@@ -632,9 +614,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> list[GetTracesResponse.Trace]:
         # We use the item type specified in the request meta for the trace item filter conditions.
         # If no item type is specified, we use all the filters.
-        filter_expressions_by_item_type = self._get_trace_item_filter_expressions(
-            request.filters
-        )
+        filter_expressions_by_item_type = self._get_trace_item_filter_expressions(request.filters)
         trace_item_filters_expression = None
         item_type = None
         if request.meta.trace_item_type in filter_expressions_by_item_type:
@@ -643,9 +623,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             ]
             item_type = request.meta.trace_item_type
         elif len(filter_expressions_by_item_type) == 1:
-            trace_item_filters_expression = next(
-                iter(filter_expressions_by_item_type.values())
-            )
+            trace_item_filters_expression = next(iter(filter_expressions_by_item_type.values()))
             item_type = next(iter(filter_expressions_by_item_type.keys()))
         elif len(filter_expressions_by_item_type) > 1:
             trace_item_filters_expression = or_cond(
