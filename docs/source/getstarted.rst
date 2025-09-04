@@ -39,7 +39,7 @@ Add/change the following lines in ``~/.sentry/sentry.conf.py``::
 
 Run::
 
-    sentry devservices up
+    devservices up
 
 Access raw clickhouse client (similar to psql)::
 
