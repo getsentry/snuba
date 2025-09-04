@@ -151,8 +151,26 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
     @classmethod
     def component_namespace(cls) -> str:
-        # is it an allocation policy? a routing strategy? a strategy selector?
-        raise NotImplementedError
+        """
+        Let's say the inheritance chain is:
+        ConfigurableComponent
+            SomeBaseClass
+                SomeConcreteClass
+            SomeOtherBaseClass
+                SomeOtherConcreteClass
+                    SomeEvenMoreConcreteClass
+
+        The namespace for SomeBaseClass should be "SomeBaseClass"
+        The namespace for SomeConcreteClass should be "SomeBaseClass"
+        The namespace for SomeOtherBaseClass should be "SomeOtherBaseClass"
+        The namespace for SomeOtherConcreteClass should be "SomeOtherBaseClass"
+        The namespace for SomeEvenMoreConcreteClass should be "SomeOtherBaseClass"
+        """
+
+        for base in cls.__mro__:
+            if ConfigurableComponent in base.__bases__:
+                return base.__name__
+        raise RuntimeError(f"{cls.__name__} does not inherit from ConfigurableComponent")
 
     @abstractmethod
     def _get_default_config_definitions(self) -> list[Configuration]:
@@ -454,7 +472,5 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         return cast(Type[T], cls.class_from_name(f"{cls.component_namespace()}.{name}"))
 
     @classmethod
-    def create_minimal_instance(
-        cls, resource_identifier: str
-    ) -> "ConfigurableComponent":
+    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
         raise NotImplementedError

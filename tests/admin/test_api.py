@@ -117,9 +117,7 @@ def test_post_configs(admin_api: FlaskClient) -> None:
     # float
     response = admin_api.post(
         "/configs",
-        data=json.dumps(
-            {"key": "test_float", "value": "0.1", "description": "test float"}
-        ),
+        data=json.dumps({"key": "test_float", "value": "0.1", "description": "test float"}),
     )
     assert response.status_code == 200
     assert json.loads(response.data) == {
@@ -132,9 +130,7 @@ def test_post_configs(admin_api: FlaskClient) -> None:
     # string
     response = admin_api.post(
         "/configs",
-        data=json.dumps(
-            {"key": "test_string", "value": "foo", "description": "test string"}
-        ),
+        data=json.dumps({"key": "test_string", "value": "foo", "description": "test string"}),
     )
     assert response.status_code == 200
     assert json.loads(response.data) == {
@@ -147,9 +143,7 @@ def test_post_configs(admin_api: FlaskClient) -> None:
     # reject duplicate key
     response = admin_api.post(
         "/configs",
-        data=json.dumps(
-            {"key": "test_string", "value": "bar", "description": "test string 2"}
-        ),
+        data=json.dumps({"key": "test_string", "value": "bar", "description": "test string 2"}),
     )
     assert response.status_code == 400
 
@@ -170,9 +164,7 @@ def test_delete_configs(admin_api: FlaskClient) -> None:
 
     # delete a config with '/' in it and its description
     state.set_config("delete/with/slash", "1")
-    state.set_config_description(
-        "delete/with/slash", "description for delete with slash config"
-    )
+    state.set_config_description("delete/with/slash", "description for delete with slash config")
     assert state.get_uncached_config("delete/with/slash") == 1
     assert (
         state.get_config_description("delete/with/slash")
@@ -211,9 +203,7 @@ def test_config_descriptions(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-def get_node_for_table(
-    admin_api: FlaskClient, storage_name: str
-) -> tuple[str, str, int]:
+def get_node_for_table(admin_api: FlaskClient, storage_name: str) -> tuple[str, str, int]:
     response = admin_api.get("/clickhouse_nodes")
     assert response.status_code == 200, response
     nodes = json.loads(response.data)
@@ -292,9 +282,7 @@ def test_query_trace(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/clickhouse_trace_query",
         headers={"Content-Type": "application/json"},
-        data=json.dumps(
-            {"storage": "errors_ro", "sql": f"SELECT count() FROM {table}"}
-        ),
+        data=json.dumps({"storage": "errors_ro", "sql": f"SELECT count() FROM {table}"}),
     )
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -310,16 +298,13 @@ def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/clickhouse_trace_query",
         headers={"Content-Type": "application/json"},
-        data=json.dumps(
-            {"storage": "errors_ro", "sql": f"SELECT count(asdasds) FROM {table}"}
-        ),
+        data=json.dumps({"storage": "errors_ro", "sql": f"SELECT count(asdasds) FROM {table}"}),
     )
     assert response.status_code == 400
     data = json.loads(response.data)
     # error message is different in CH versions 23.8 and 24.3
     assert (
-        "Exception: Unknown expression or function identifier"
-        in data["error"]["message"]
+        "Exception: Unknown expression or function identifier" in data["error"]["message"]
         or "Exception: Missing columns" in data["error"]["message"]
     )
     assert "clickhouse" == data["error"]["type"]
@@ -332,9 +317,7 @@ def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/clickhouse_trace_query",
         headers={"Content-Type": "application/json"},
-        data=json.dumps(
-            {"storage": "errors_ro", "sql": f"SELECT count() FROM {table};"}
-        ),
+        data=json.dumps({"storage": "errors_ro", "sql": f"SELECT count() FROM {table};"}),
     )
     assert response.status_code == 400
     data = json.loads(response.data)
@@ -407,10 +390,7 @@ def test_snuba_debug_invalid_query(admin_api: FlaskClient) -> None:
     )
     assert response.status_code == 400
     data = json.loads(response.data)
-    assert (
-        data["error"]["message"]
-        == "Rule 'query_exp' didn't match at '' (line 1, column 1)."
-    )
+    assert data["error"]["message"] == "Rule 'query_exp' didn't match at '' (line 1, column 1)."
 
 
 @pytest.mark.redis_db
@@ -536,10 +516,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
     assert len(strategy_data["policies_data"]) == 2
 
     # First policy
-    assert (
-        strategy_data["policies_data"][0]["configurable_component_config_key"]
-        == "FakePolicy"
-    )
+    assert strategy_data["policies_data"][0]["configurable_component_config_key"] == "FakePolicy"
     assert strategy_data["policies_data"][0]["query_type"] == "select"
     assert len(strategy_data["policies_data"][0]["configurations"]) == 4
     assert {
@@ -585,8 +562,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
 
     # Second policy
     assert (
-        strategy_data["policies_data"][1]["configurable_component_config_key"]
-        == "FakeDeletePolicy"
+        strategy_data["policies_data"][1]["configurable_component_config_key"] == "FakeDeletePolicy"
     )
     assert strategy_data["policies_data"][1]["query_type"] == "delete"
     assert len(strategy_data["policies_data"][1]["configurations"]) == 4
@@ -634,11 +610,7 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
 
 class FakePolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[Configuration]:
-        return [
-            Configuration(
-                "fake_optional_config", "", int, -1, param_types={"org_id": int}
-            )
-        ]
+        return [Configuration("fake_optional_config", "", int, -1, param_types={"org_id": int})]
 
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
@@ -666,11 +638,7 @@ class FakePolicy(AllocationPolicy):
 
 class FakeDeletePolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[Configuration]:
-        return [
-            Configuration(
-                "fake_optional_config", "", int, -1, param_types={"org_id": int}
-            )
-        ]
+        return [Configuration("fake_optional_config", "", int, -1, param_types={"org_id": int})]
 
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
@@ -777,13 +745,10 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             if policy["policy_name"] == "BytesScannedWindowAllocationPolicy"
         ][0]
 
-        assert (
-            bytes_scanned_policy["policy_name"] == "BytesScannedWindowAllocationPolicy"
-        )
+        assert bytes_scanned_policy["policy_name"] == "BytesScannedWindowAllocationPolicy"
         assert {
             "default": -1,
-            "description": "Number of bytes a specific org can scan in a 10 minute "
-            "window.",
+            "description": "Number of bytes a specific org can scan in a 10 minute " "window.",
             "name": "org_limit_bytes_scanned_override",
             "params": {"org_id": 1},
             "type": "int",
@@ -813,8 +778,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         assert response.json is not None and len(response.json) == 5
         assert {
             "default": -1,
-            "description": "Number of bytes a specific org can scan in a 10 minute "
-            "window.",
+            "description": "Number of bytes a specific org can scan in a 10 minute " "window.",
             "name": "org_limit_bytes_scanned_override",
             "params": {"org_id": 1},
             "type": "int",
@@ -826,23 +790,27 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
+
     auditlog_records = []
 
     def mock_record(user: Any, action: Any, data: Any, notify: Any) -> None:
         nonlocal auditlog_records
         auditlog_records.append((user, action, data, notify))
 
-    with mock.patch(
-        "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.BaseRoutingStrategy.get_from_name",
-        side_effect=lambda strategy_name: FakeRoutingStrategy,
-    ), mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record):
+    with (
+        mock.patch(
+            "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.BaseRoutingStrategy.get_from_name",
+            side_effect=lambda strategy_name: FakeRoutingStrategy,
+        ),
+        mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record),
+    ):
 
         # Set a routing strategy config
         response = admin_api.post(
             "/allocation_policy_config",
             data=json.dumps(
                 {
-                    "configurable_component_namespace": "RoutingStrategy",
+                    "configurable_component_namespace": "BaseRoutingStrategy",
                     "configurable_component_config_key": "FakeRoutingStrategy",
                     "resource_name": "FakeRoutingStrategy",
                     "key": "fake_strategy_config",
@@ -860,9 +828,7 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
 
         # Verify the config was set correctly
         strategy_data = response.json
-        assert (
-            strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
-        )
+        assert strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
         assert {
             "name": "fake_strategy_config",
             "type": "int",
@@ -877,7 +843,7 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
             "/allocation_policy_config",
             data=json.dumps(
                 {
-                    "configurable_component_namespace": "RoutingStrategy",
+                    "configurable_component_namespace": "BaseRoutingStrategy",
                     "configurable_component_config_key": "FakeRoutingStrategy",
                     "resource_name": "FakeRoutingStrategy",
                     "key": "fake_strategy_config",
@@ -893,9 +859,7 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
 
         # The config should be back to its default value
         strategy_data = response.json
-        assert (
-            strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
-        )
+        assert strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
         assert {
             "name": "fake_strategy_config",
             "type": "int",
@@ -920,10 +884,13 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
     def mock_get_from_name(strategy_name: str) -> Type[BaseRoutingStrategy]:
         return FakeRoutingStrategy
 
-    with mock.patch(
-        "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.BaseRoutingStrategy.get_from_name",
-        side_effect=mock_get_from_name,
-    ), mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record):
+    with (
+        mock.patch(
+            "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.BaseRoutingStrategy.get_from_name",
+            side_effect=mock_get_from_name,
+        ),
+        mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record),
+    ):
 
         # Set an allocation policy config for the strategy
         response = admin_api.post(
@@ -949,9 +916,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
         assert response.json is not None
 
         strategy_data = response.json
-        assert (
-            strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
-        )
+        assert strategy_data["configurable_component_config_key"] == "FakeRoutingStrategy"
         assert len(strategy_data["policies_data"]) == 2
 
         fake_policy = next(
@@ -1028,10 +993,7 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
     )
     assert response.status_code == 400
     data = json.loads(response.data)
-    assert (
-        data["error"]["message"]
-        == "Rule 'query_exp' didn't match at '' (line 1, column 1)."
-    )
+    assert data["error"]["message"] == "Rule 'query_exp' didn't match at '' (line 1, column 1)."
 
 
 @pytest.mark.redis_db
@@ -1039,9 +1001,7 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
 def test_force_overwrite(admin_api: FlaskClient) -> None:
     migration_id = "0011_add_timestamp_ms"
     migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
-    downgraded_migration = [
-        m for m in migrations if m.get("migration_id") == migration_id
-    ][0]
+    downgraded_migration = [m for m in migrations if m.get("migration_id") == migration_id][0]
     assert downgraded_migration["status"] == "completed"
 
     response = admin_api.post(
@@ -1050,9 +1010,7 @@ def test_force_overwrite(admin_api: FlaskClient) -> None:
     )
     assert response.status_code == 200
     migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
-    downgraded_migration = [
-        m for m in migrations if m.get("migration_id") == migration_id
-    ][0]
+    downgraded_migration = [m for m in migrations if m.get("migration_id") == migration_id][0]
     assert downgraded_migration["status"] == "not_started"
 
 
@@ -1134,10 +1092,7 @@ def test_prod_mql_query_invalid_query(admin_api: FlaskClient) -> None:
     )
     assert response.status_code == 400
     data = json.loads(response.data)
-    assert (
-        data["error"]["message"]
-        == "Rule 'expression' didn't match at '' (line 1, column 1)."
-    )
+    assert data["error"]["message"] == "Rule 'expression' didn't match at '' (line 1, column 1)."
 
 
 @pytest.mark.redis_db
@@ -1361,9 +1316,7 @@ def test_clickhouse_system_settings(
     # Test error case when parameters are missing
     response = admin_api.get("/clickhouse_system_settings")
     assert response.status_code == 400
-    assert json.loads(response.data) == {
-        "error": "Host, port, and storage are required"
-    }
+    assert json.loads(response.data) == {"error": "Host, port, and storage are required"}
 
 
 @pytest.mark.redis_db
@@ -1420,9 +1373,7 @@ def test_execute_rpc_endpoint_unknown_endpoint(admin_api: FlaskClient) -> None:
         content_type="application/json",
     )
     assert response.status_code == 404
-    assert json.loads(response.data) == {
-        "error": "Unknown endpoint: UnknownRPC or version: v1"
-    }
+    assert json.loads(response.data) == {"error": "Unknown endpoint: UnknownRPC or version: v1"}
 
 
 @pytest.mark.redis_db
