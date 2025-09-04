@@ -61,9 +61,7 @@ def _initialize_redis_cluster(config: settings.RedisClusterConfig) -> RedisClien
         startup_nodes = config["cluster_startup_nodes"]
         if startup_nodes is None:
             startup_nodes = [{"host": config["host"], "port": config["port"]}]
-        startup_cluster_nodes = [
-            ClusterNode(n["host"], n["port"]) for n in startup_nodes
-        ]
+        startup_cluster_nodes = [ClusterNode(n["host"], n["port"]) for n in startup_nodes]
         return RetryingRedisCluster(
             startup_nodes=startup_cluster_nodes,
             socket_keepalive=True,
@@ -92,6 +90,7 @@ _default_redis_client: RedisClientType = _initialize_redis_cluster(
         "db": settings.REDIS_DB,
         "ssl": settings.REDIS_SSL,
         "reinitialize_steps": settings.REDIS_REINITIALIZE_STEPS,
+        "socket_timeout": settings.REDIS_SOCKET_TIMEOUT,
     }
 )
 
@@ -118,9 +117,7 @@ class RedisClientKey(Enum):
 
 
 _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
-    RedisClientKey.CACHE: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["cache"]
-    ),
+    RedisClientKey.CACHE: _initialize_specialized_redis_cluster(settings.REDIS_CLUSTERS["cache"]),
     RedisClientKey.RATE_LIMITER: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["rate_limiter"]
     ),
@@ -130,12 +127,8 @@ _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
     RedisClientKey.REPLACEMENTS_STORE: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["replacements_store"]
     ),
-    RedisClientKey.CONFIG: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["config"]
-    ),
-    RedisClientKey.DLQ: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["dlq"]
-    ),
+    RedisClientKey.CONFIG: _initialize_specialized_redis_cluster(settings.REDIS_CLUSTERS["config"]),
+    RedisClientKey.DLQ: _initialize_specialized_redis_cluster(settings.REDIS_CLUSTERS["dlq"]),
     RedisClientKey.OPTIMIZE: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["optimize"]
     ),
