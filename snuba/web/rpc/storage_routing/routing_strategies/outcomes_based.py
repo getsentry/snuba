@@ -76,9 +76,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         ]
 
     def _use_daily(self, in_msg_meta: RequestMeta) -> bool:
-        seconds_delta = (
-            in_msg_meta.end_timestamp.seconds - in_msg_meta.start_timestamp.seconds
-        )
+        seconds_delta = in_msg_meta.end_timestamp.seconds - in_msg_meta.start_timestamp.seconds
         duration = timedelta(seconds=seconds_delta)
         return duration.days > 90
 

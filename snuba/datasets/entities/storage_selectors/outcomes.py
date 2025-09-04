@@ -26,9 +26,7 @@ class OutcomesStorageSelector(QueryStorageSelector):
     ) -> EntityStorageConnection:
         if isinstance(query_settings, OutcomesQuerySettings):
             outcomes_key = (
-                self.daily_storage
-                if query_settings.get_use_daily()
-                else self.hourly_storage
+                self.daily_storage if query_settings.get_use_daily() else self.hourly_storage
             )
         else:
             outcomes_key = self.hourly_storage
