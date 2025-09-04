@@ -1,6 +1,6 @@
 export REPOROOT="$(git rev-parse --show-toplevel)"
 
-if [ ! -f "${REPOROOT}/.venv/bin/python" ]; then
+if [ -z "${CI:-}" ] && [ ! -f "${REPOROOT}/.venv/bin/python" ]; then
   echo "cannot source this file unless ${REPOROOT}/.venv/bin/python exists, please run devenv sync"
   exit 1
 fi
@@ -12,7 +12,11 @@ export SNUBA_TEST_PYTHONPATH="$(python -c 'import sys; print(":".join(sys.path))
 export SNUBA_TEST_PYTHONEXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
 
 # https://github.com/astral-sh/uv/issues/8821
-export PYTHONHOME="$(dirname $(dirname $(realpath "${REPOROOT}/.venv/bin/python")))"
+if [ -z "${CI:-}" ]; then
+  export PYTHONHOME="$(dirname $(dirname $(realpath "${REPOROOT}/.venv/bin/python")))"
+else
+  export PYTHONHOME="$(dirname $(dirname $(realpath "$(command -v python)")))"
+fi
 
 # load cargo envvars explicitly in case user forgot
 if [ -n "$FISH_VERSION" ]; then
