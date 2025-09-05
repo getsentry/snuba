@@ -4,7 +4,7 @@ import os
 import uuid
 from abc import ABC
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, Type, TypeAlias, Union, cast, final
+from typing import Any, Callable, Dict, Optional, TypeAlias, Union, cast, final
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -18,16 +18,25 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from snuba import environment, settings, state
 from snuba.configs.configuration import (
     ConfigurableComponent,
+    ConfigurableComponentData,
     Configuration,
     ResourceIdentifier,
 )
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
+from snuba.query.allocation_policies import AllocationPolicy, PolicyData
+from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
+    BytesScannedRejectingPolicy,
+)
+from snuba.query.allocation_policies.concurrent_rate_limit import (
+    ConcurrentRateLimitAllocationPolicy,
+)
+from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
+from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.web import QueryResult
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 
@@ -63,12 +72,8 @@ class RoutingDecision:
         assert self.routing_context is not None
         query_result: dict[str, Any] = {}
         if self.routing_context.query_result:
-            query_result["meta"] = self.routing_context.query_result.result.get(
-                "meta", {}
-            )
-            query_result["profile"] = self.routing_context.query_result.result.get(
-                "profile", {}
-            )
+            query_result["meta"] = self.routing_context.query_result.result.get("meta", {})
+            query_result["profile"] = self.routing_context.query_result.result.get("profile", {})
             query_result["stats"] = self.routing_context.query_result.extra.get("stats")
             query_result["sql"] = self.routing_context.query_result.extra.get("sql")
 
@@ -171,7 +176,11 @@ class RoutingStrategyConfig(Configuration):
     pass
 
 
-class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
+class StrategyData(ConfigurableComponentData):
+    policies_data: list[PolicyData]
+
+
+class BaseRoutingStrategy(ConfigurableComponent, ABC):
     def __init__(self, default_config_overrides: dict[str, Any] = {}) -> None:
         self._default_config_definitions = [
             RoutingStrategyConfig(
@@ -184,9 +193,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
         self._overridden_additional_config_definitions = (
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
-
-    def component_namespace(self) -> str:
-        return "RoutingStrategy"
 
     def _get_hash(self) -> str:
         return CBRS_HASH
@@ -212,8 +218,10 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
         )
 
     @classmethod
-    def get_from_name(cls, name: str) -> Type["BaseRoutingStrategy"]:
-        return cast("Type[BaseRoutingStrategy]", cls.class_from_name(name))
+    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
+        return cls(
+            default_config_overrides={},
+        )
 
     def _is_highest_accuracy_mode(self, in_msg_meta: RequestMeta) -> bool:
         if in_msg_meta.HasField("downsampled_storage_config"):
@@ -222,6 +230,28 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
                 == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
             )
         return False
+
+    def get_allocation_policies(self) -> list[AllocationPolicy]:
+        return [
+            ConcurrentRateLimitAllocationPolicy(
+                storage_key=ResourceIdentifier(self.__class__.__name__),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+            ReferrerGuardRailPolicy(
+                storage_key=ResourceIdentifier(self.__class__.__name__),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+            BytesScannedRejectingPolicy(
+                storage_key=ResourceIdentifier(self.__class__.__name__),
+                required_tenant_types=["organization_id", "referrer", "project_id"],
+                default_config_overrides={"is_enforced": 0},
+            ),
+        ]
+
+    def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
+        return []
 
     def merge_clickhouse_settings(
         self,
@@ -328,7 +358,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
         default = 1000
         return (
             state.get_int_config(
-                f"{self.config_key()}.sampled_too_low_threshold",
+                f"{self.class_name()}.sampled_too_low_threshold",
                 state.get_int_config(
                     f"{DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX}.sampled_too_low_threshold",
                     default,
@@ -346,7 +376,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
         default = 8000
         return (
             state.get_int_config(
-                f"{self.config_key()}.time_budget_ms",
+                f"{self.class_name()}.time_budget_ms",
                 state.get_int_config(
                     f"{DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX}.time_budget_ms",
                     default,
@@ -363,10 +393,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
             extract_message_meta(routing_decision.routing_context.in_msg)
         ):
             return
-        profile = (
-            routing_decision.routing_context.query_result.result.get("profile", {})
-            or {}
-        )
+        profile = routing_decision.routing_context.query_result.result.get("profile", {}) or {}
         if elapsed := profile.get("elapsed"):
             elapsed_ms = elapsed * 1000
             time_budget = self._get_time_budget_ms()
@@ -406,6 +433,11 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC, metaclass=RegisteredClass)
                         "tier": routing_decision.tier.name,
                     },
                 )
+
+    def to_dict(self) -> StrategyData:
+        base_data = super().to_dict()
+        policies = self.get_allocation_policies() + self.get_delete_allocation_policies()
+        return StrategyData(**base_data, policies_data=[policy.to_dict() for policy in policies])  # type: ignore
 
 
 import_submodules_in_directory(
