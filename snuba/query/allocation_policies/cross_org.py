@@ -101,13 +101,9 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
             concurrent_limit = limits.get("concurrent_limit", None)
             max_threads = limits.get("max_threads", None)
             if not isinstance(max_threads, int):
-                raise ValueError(
-                    f"max_threads is required for {referrer} and must be an int"
-                )
+                raise ValueError(f"max_threads is required for {referrer} and must be an int")
             if not isinstance(concurrent_limit, int):
-                raise ValueError(
-                    f"concurrent_limit is required for {referrer} and must be an int"
-                )
+                raise ValueError(f"concurrent_limit is required for {referrer} and must be an int")
 
     def __init__(
         self,
@@ -131,9 +127,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         if not self._referrer_is_registered(referrer):
             return _UNREGISTERED_REFERRER_MAX_THREADS
         thread_override = int(
-            self.get_config_value(
-                "referrer_max_threads_override", {"referrer": referrer}
-            )
+            self.get_config_value("referrer_max_threads_override", {"referrer": referrer})
         )
         return (
             thread_override
@@ -145,9 +139,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         if not self._referrer_is_registered(referrer):
             return _UNREGISTERED_REFERRER_CONCURRENT_QUERIES
         concurrent_override = int(
-            self.get_config_value(
-                "referrer_concurrent_override", {"referrer": referrer}
-            )
+            self.get_config_value("referrer_concurrent_override", {"referrer": referrer})
         )
         return (
             concurrent_override
@@ -162,9 +154,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
         referrer = str(tenant_ids.get("referrer", "no_referrer"))
-        if not self._referrer_is_registered(referrer) and not self.is_cross_org_query(
-            tenant_ids
-        ):
+        if not self._referrer_is_registered(referrer) and not self.is_cross_org_query(tenant_ids):
             # This is not a cross org query and the referrer is not registered. This is outside the responsibility of this policy
             return QuotaAllowance(
                 can_run=True,
@@ -188,9 +178,9 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         )
         decision_explanation: dict[str, JsonSerializable] = {"reason": explanation}
         if not self._referrer_is_registered(referrer):
-            decision_explanation[
-                "cross_org_query"
-            ] = f"This referrer is not registered for the current storage {self._resource_identifier.value}, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"
+            decision_explanation["cross_org_query"] = (
+                f"This referrer is not registered for the current storage {self._resource_identifier.value}, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"
+            )
 
         return QuotaAllowance(
             can_run=can_run,
@@ -211,9 +201,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         result_or_error: QueryResultOrError,
     ) -> None:
         referrer = str(tenant_ids.get("referrer", "no_referrer"))
-        if not self._referrer_is_registered(referrer) and not self.is_cross_org_query(
-            tenant_ids
-        ):
+        if not self._referrer_is_registered(referrer) and not self.is_cross_org_query(tenant_ids):
             return
         rate_limit_params = RateLimitParameters(
             self.rate_limit_name,
