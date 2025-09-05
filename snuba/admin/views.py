@@ -984,8 +984,7 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
     )
 
 
-# todo(rachel): change url name
-@application.route("/allocation_policy_config", methods=["POST", "DELETE"])
+@application.route("/set_configurable_component_configuration", methods=["POST", "DELETE"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def set_configuration() -> Response:
     data = json.loads(request.data)
@@ -995,6 +994,9 @@ def set_configuration() -> Response:
         configurable_component_namespace = data["configurable_component_namespace"]
         configurable_component_class_name = data["configurable_component_class_name"]
         resource_name = data["resource_name"]
+        assert isinstance(
+            configurable_component_namespace, str
+        ), f"Invalid configurable_component_namespace: {configurable_component_namespace}"
         assert isinstance(
             configurable_component_class_name, str
         ), f"Invalid configurable_component_class_name: {configurable_component_class_name}"
