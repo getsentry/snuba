@@ -717,7 +717,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
 
     with mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record):
         response = admin_api.post(
-            "/allocation_policy_config",
+            "/set_configurable_component_configuration",
             data=json.dumps(
                 {
                     "configurable_component_namespace": "AllocationPolicy",
@@ -759,7 +759,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         assert not auditlog_records
         assert (
             admin_api.delete(
-                "/allocation_policy_config",
+                "/set_configurable_component_configuration",
                 data=json.dumps(
                     {
                         "configurable_component_namespace": "AllocationPolicy",
@@ -807,7 +807,7 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
 
         # Set a routing strategy config
         response = admin_api.post(
-            "/allocation_policy_config",
+            "/set_configurable_component_configuration",
             data=json.dumps(
                 {
                     "configurable_component_namespace": "BaseRoutingStrategy",
@@ -840,7 +840,7 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
 
         # Delete the routing strategy config
         response = admin_api.delete(
-            "/allocation_policy_config",
+            "/set_configurable_component_configuration",
             data=json.dumps(
                 {
                     "configurable_component_namespace": "BaseRoutingStrategy",
@@ -894,7 +894,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
 
         # Set an allocation policy config for the strategy
         response = admin_api.post(
-            "/allocation_policy_config",
+            "/set_configurable_component_configuration",
             data=json.dumps(
                 {
                     "configurable_component_namespace": "AllocationPolicy",
@@ -937,7 +937,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
 
         # Delete the allocation policy config for the strategy
         response = admin_api.delete(
-            "/allocation_policy_config",
+            "/set_configurable_component_configuration",
             data=json.dumps(
                 {
                     "configurable_component_namespace": "AllocationPolicy",

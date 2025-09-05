@@ -468,7 +468,7 @@ function Client(): Client {
       value: string,
       params: object,
     ) => {
-      const url = baseUrl + "allocation_policy_config";
+      const url = baseUrl + "set_configurable_component_configuration";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
@@ -491,7 +491,7 @@ function Client(): Client {
       key: string,
       params: object,
     ) => {
-      const url = baseUrl + "allocation_policy_config";
+      const url = baseUrl + "set_configurable_component_configuration";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "DELETE",
