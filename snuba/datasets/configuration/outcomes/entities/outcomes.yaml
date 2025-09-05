@@ -19,12 +19,12 @@ required_time_column: timestamp
 storages:
   - storage: outcomes_hourly
     is_writable: false
+  - storage: outcomes_daily
+    is_writable: false
   - storage: outcomes_raw
     is_writable: true
 storage_selector:
-  selector: SimpleQueryStorageSelector
-  args:
-    storage: outcomes_hourly
+  selector: OutcomesStorageSelector
 query_processors:
   - processor: BasicFunctionsProcessor
   - processor: TimeSeriesProcessor
