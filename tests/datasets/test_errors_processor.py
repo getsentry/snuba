@@ -5,7 +5,7 @@ import random
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, MutableMapping, Never, Sequence
 from unittest.mock import ANY
 
 import pytest
@@ -43,7 +43,7 @@ class ErrorEvent:
     symbolicated_in_app: bool | None = None
     sample_rate: float | None = None
 
-    def serialize(self) -> tuple[int, str, Mapping[str, Any]]:
+    def serialize(self) -> tuple[int, str, Mapping[str, Any], dict[Never, Never]]:
         serialized_event: dict[str, Any] = {
             "organization_id": self.organization_id,
             "retention_days": 58,
@@ -262,7 +262,7 @@ class ErrorEvent:
             {},
         )
 
-    def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
+    def build_result(self, meta: KafkaMessageMetadata) -> MutableMapping[str, Any]:
         expected_result = {
             "project_id": self.project_id,
             "timestamp": int(self.timestamp.replace(tzinfo=timezone.utc).timestamp()),
@@ -382,9 +382,11 @@ class ErrorEvent:
         }
 
         if self.flags:
-            for flag in self.flags:
-                expected_result["flags.key"].append(flag["flag"])
-                expected_result["flags.value"].append(json.dumps(flag["result"]))
+            flags_key = [flag["flag"] for flag in self.flags]
+            flags_value = [json.dumps(flag["result"]) for flag in self.flags]
+
+            expected_result["flags.key"] = flags_key
+            expected_result["flags.value"] = flags_value
 
         if self.replay_id:
             expected_result["replay_id"] = str(self.replay_id)
@@ -439,10 +441,9 @@ class TestErrorsProcessor:
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
         processor = ErrorsProcessor()
-        assert (
-            processor.process_message(payload, meta).rows
-            == InsertBatch([message.build_result(meta)], ANY).rows
-        )
+        processed = processor.process_message(payload, meta)
+        assert isinstance(processed, InsertBatch)
+        assert processed.rows == InsertBatch([message.build_result(meta)], ANY).rows
 
     def test_errors_replayid_context(self) -> None:
         timestamp, recieved = self.__get_timestamps()
@@ -566,6 +567,7 @@ class TestErrorsProcessor:
 
         result = message.build_result(meta)
         result["tags.key"].insert(4, "replayId")
+        assert message.replay_id is not None
         result["tags.value"].insert(4, message.replay_id.hex)
         assert self.processor.process_message(payload, meta) == InsertBatch([result], ANY)
 
@@ -899,36 +901,42 @@ class TestErrorsProcessor:
         # Assert malformed context type is ignored.
         payload[2]["data"]["contexts"]["flags"] = {"key": "value"}
         result = self.processor.process_message(payload, meta)
+        assert isinstance(result, InsertBatch)
         assert result.rows[0]["flags.key"] == []
         assert result.rows[0]["flags.value"] == []
 
         # Assert malformed values type is ignored.
         payload[2]["data"]["contexts"]["flags"] = {"values": None}
         result = self.processor.process_message(payload, meta)
+        assert isinstance(result, InsertBatch)
         assert result.rows[0]["flags.key"] == []
         assert result.rows[0]["flags.value"] == []
 
         # Assert malformed item type is ignored.
         payload[2]["data"]["contexts"]["flags"] = {"values": [None]}
         result = self.processor.process_message(payload, meta)
+        assert isinstance(result, InsertBatch)
         assert result.rows[0]["flags.key"] == []
         assert result.rows[0]["flags.value"] == []
 
         # Assert incorrect item contents is ignored.
         payload[2]["data"]["contexts"]["flags"] = {"values": [{"key": "value"}]}
         result = self.processor.process_message(payload, meta)
+        assert isinstance(result, InsertBatch)
         assert result.rows[0]["flags.key"] == []
         assert result.rows[0]["flags.value"] == []
 
         # Assert missing "result" key means the whole item is ignored.
         payload[2]["data"]["contexts"]["flags"] = {"values": [{"flag": "value"}]}
         result = self.processor.process_message(payload, meta)
+        assert isinstance(result, InsertBatch)
         assert result.rows[0]["flags.key"] == []
         assert result.rows[0]["flags.value"] == []
 
         # Assert missing "flag" key means the whole item is ignored.
         payload[2]["data"]["contexts"]["flags"] = {"values": [{"result": "value"}]}
         result = self.processor.process_message(payload, meta)
+        assert isinstance(result, InsertBatch)
         assert result.rows[0]["flags.key"] == []
         assert result.rows[0]["flags.value"] == []
 
@@ -976,7 +984,7 @@ class TestErrorsProcessor:
             processed = self.processor.process_message(payload, meta)
 
             # Verify the result
-            assert processed is not None
+            assert isinstance(processed, InsertBatch)
             assert len(processed.rows) == 1
             assert processed.rows[0].get("symbolicated_in_app") == value
 
@@ -1023,7 +1031,7 @@ class TestErrorsProcessor:
 
         processed = self.processor.process_message(payload, meta)
 
-        assert processed is not None
+        assert isinstance(processed, InsertBatch)
         assert len(processed.rows) == 1
         assert processed.rows[0].get("sample_weight") == pytest.approx(1 / sample_rate)
 
@@ -1064,7 +1072,7 @@ class TestErrorsProcessor:
 
         processed = self.processor.process_message(payload, meta)
 
-        assert processed is not None
+        assert isinstance(processed, InsertBatch)
         assert processed.rows[0].get("sample_weight") is None
 
     def test_errors_sample_weight_with_zero_sample_rate(self) -> None:
@@ -1104,5 +1112,5 @@ class TestErrorsProcessor:
 
         processed = self.processor.process_message(payload, meta)
 
-        assert processed is not None
+        assert isinstance(processed, InsertBatch)
         assert processed.rows[0].get("sample_weight") is None
