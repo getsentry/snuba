@@ -18,6 +18,16 @@ class BadSnubaRPCRequestException(RPCRequestException):
         super().__init__(400, message)
 
 
+class HighAccuracyQueryTimeoutException(RPCRequestException):
+    def __init__(self, message: str):
+        super().__init__(408, message)
+
+
+class QueryTimeoutException(RPCRequestException):
+    def __init__(self, message: str):
+        super().__init__(408, message)
+
+
 def convert_rpc_exception_to_proto(
     exc: Union[RPCRequestException, QueryException]
 ) -> ErrorProto:
