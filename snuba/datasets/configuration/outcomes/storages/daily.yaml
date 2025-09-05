@@ -1,0 +1,56 @@
+version: v1
+kind: readable_storage
+name: outcomes_daily
+storage:
+  key: outcomes_daily
+  set_key: outcomes
+readiness_state: complete
+schema:
+  columns:
+    [
+      { name: org_id, type: UInt, args: { size: 64 } },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: key_id, type: UInt, args: { size: 64 } },
+      { name: timestamp, type: DateTime },
+      { name: outcome, type: UInt, args: { size: 8 } },
+      { name: reason, type: String },
+      { name: quantity, type: UInt, args: { size: 64 } },
+      { name: category, type: UInt, args: { size: 8 } },
+      { name: times_seen, type: UInt, args: { size: 64 } },
+    ]
+  # TO BE CHANGED TO _V2
+  local_table_name: outcomes_daily_local
+  dist_table_name: outcomes_daily_dist
+allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
+query_processors:
+  - processor: PrewhereProcessor
+    args:
+      prewhere_candidates:
+        - project_id
+        - org_id
+mandatory_condition_checkers:
+  - condition: OrgIdEnforcer

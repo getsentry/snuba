@@ -12,6 +12,7 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.timer import Timer
+from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     Outcome,
     OutcomeCategory,
@@ -22,9 +23,9 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
 )
 from tests.helpers import write_raw_unprocessed_events
 
-BASE_TIME = datetime.now(UTC).replace(
-    hour=0, minute=0, second=0, microsecond=0
-) - timedelta(hours=24)
+BASE_TIME = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
+    hours=24
+)
 _PROJECT_ID = 1
 _ORG_ID = 1
 
@@ -32,9 +33,11 @@ _ORG_ID = 1
 def _get_request_meta(
     start: datetime | None = None,
     end: datetime | None = None,
+    hour_interval: int | None = None,
     downsampled_storage_config: DownsampledStorageConfig | None = None,
 ) -> RequestMeta:
-    start = start or BASE_TIME - timedelta(hours=24)
+    hour_interval = hour_interval or 24
+    start = start or BASE_TIME - timedelta(hours=hour_interval)
     end = end or BASE_TIME
     return RequestMeta(
         project_ids=[_PROJECT_ID],
@@ -75,6 +78,28 @@ def store_outcomes_data() -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
+def test_outcomes_based_routing_queries_daily_table() -> None:
+    strategy = OutcomesBasedRoutingStrategy()
+
+    request = TraceItemTableRequest(meta=_get_request_meta(hour_interval=2400))  # 100 days
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+    )
+    in_msg_meta = extract_message_meta(context.in_msg)
+    assert strategy._use_daily(in_msg_meta=in_msg_meta)
+
+    routing_decision = strategy.get_routing_decision(context)
+
+    assert routing_decision.tier == Tier.TIER_1
+    assert routing_decision.clickhouse_settings == {}
+    assert routing_decision.can_run
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_outcomes_based_routing_normal_mode(store_outcomes_data: Any) -> None:
     strategy = OutcomesBasedRoutingStrategy()
 
@@ -95,9 +120,7 @@ def test_outcomes_based_routing_normal_mode(store_outcomes_data: Any) -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_outcomes_based_routing_downsample(store_outcomes_data: Any) -> None:
-    state.set_config(
-        "OutcomesBasedRoutingStrategy.max_items_before_downsampling", 5_000_000
-    )
+    state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 5_000_000)
     strategy = OutcomesBasedRoutingStrategy()
 
     request = TraceItemTableRequest(meta=_get_request_meta())
@@ -112,9 +135,7 @@ def test_outcomes_based_routing_downsample(store_outcomes_data: Any) -> None:
     assert routing_decision.tier == Tier.TIER_8
     assert routing_decision.clickhouse_settings == {}
     assert routing_decision.can_run
-    state.set_config(
-        "OutcomesBasedRoutingStrategy.max_items_before_downsampling", 500_000
-    )
+    state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 500_000)
     routing_decision = strategy.get_routing_decision(
         RoutingContext(
             in_msg=request,
@@ -125,9 +146,7 @@ def test_outcomes_based_routing_downsample(store_outcomes_data: Any) -> None:
     assert routing_decision.clickhouse_settings == {}
     assert routing_decision.can_run
 
-    state.set_config(
-        "OutcomesBasedRoutingStrategy.max_items_before_downsampling", 50_000
-    )
+    state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 50_000)
     routing_decision = strategy.get_routing_decision(
         RoutingContext(
             in_msg=request,
@@ -145,9 +164,7 @@ def test_outcomes_based_routing_highest_accuracy_mode(store_outcomes_data: Any) 
     strategy = OutcomesBasedRoutingStrategy()
 
     request = TraceItemTableRequest(meta=_get_request_meta())
-    request.meta.downsampled_storage_config.mode = (
-        DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
-    )
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
     routing_decision = strategy.get_routing_decision(
         RoutingContext(
             in_msg=request,
@@ -169,9 +186,7 @@ def test_outcomes_based_routing_defaults_to_spans_for_unspecified_item_type(
 
     request = TraceItemTableRequest(meta=_get_request_meta())
     request.meta.trace_item_type = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
-    state.set_config(
-        "OutcomesBasedRoutingStrategy.max_items_before_downsampling", 50_000
-    )
+    state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 50_000)
     routing_decision = strategy.get_routing_decision(
         RoutingContext(
             in_msg=request,
