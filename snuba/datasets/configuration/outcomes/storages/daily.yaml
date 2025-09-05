@@ -18,9 +18,8 @@ schema:
       { name: category, type: UInt, args: { size: 8 } },
       { name: times_seen, type: UInt, args: { size: 64 } },
     ]
-  # TO BE CHANGED TO _V2
-  local_table_name: outcomes_daily_local
-  dist_table_name: outcomes_daily_dist
+  local_table_name: outcomes_daily_local_v2
+  dist_table_name: outcomes_daily_dist_v2
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
     args:
