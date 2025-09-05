@@ -1,4 +1,5 @@
 import uuid
+from datetime import timedelta
 from typing import cast
 
 import sentry_sdk
@@ -19,7 +20,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array
 from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.query.query_settings import OutcomesQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -74,12 +75,24 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             ),
         ]
 
+    def _use_daily(self, in_msg_meta: RequestMeta) -> bool:
+        if in_msg_meta.end_timestamp.seconds < in_msg_meta.start_timestamp.seconds:
+            return False
+        seconds_delta = in_msg_meta.end_timestamp.seconds - in_msg_meta.start_timestamp.seconds
+        duration = timedelta(seconds=seconds_delta)
+        return duration.days > 90
+
     def get_ingested_items_for_timerange(self, routing_context: RoutingContext) -> int:
         in_msg_meta = extract_message_meta(routing_context.in_msg)
         entity = Entity(
             key=EntityKey("outcomes"),
             schema=get_entity(EntityKey("outcomes")).get_data_model(),
             sample=None,
+        )
+        query_settings = (
+            OutcomesQuerySettings(use_daily=True)
+            if self._use_daily(in_msg_meta)
+            else OutcomesQuerySettings()
         )
         query = Query(
             from_clause=entity,
@@ -109,7 +122,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             id=uuid.uuid4(),
             original_body=MessageToDict(routing_context.in_msg),
             query=query,
-            query_settings=HTTPQuerySettings(),
+            query_settings=query_settings,
             attribution_info=AttributionInfo(
                 referrer=in_msg_meta.referrer,
                 team="eap",
@@ -163,9 +176,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         sentry_sdk.update_current_span(
             attributes={
                 "downsampling_mode": (
-                    "highest_accuracy"
-                    if self._is_highest_accuracy_mode(in_msg_meta)
-                    else "normal"
+                    "highest_accuracy" if self._is_highest_accuracy_mode(in_msg_meta) else "normal"
                 ),
             }
         )
@@ -184,24 +195,20 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         time_range_secs = end_ts - start_ts
         min_timerange_to_query_outcomes = self._get_min_timerange_to_query_outcomes()
         if time_range_secs < min_timerange_to_query_outcomes:
-            routing_decision.routing_context.extra_info[
-                "min_timerange_to_query_outcomes"
-            ] = min_timerange_to_query_outcomes
-            routing_decision.routing_context.extra_info[
-                "time_range_secs"
-            ] = time_range_secs
+            routing_decision.routing_context.extra_info["min_timerange_to_query_outcomes"] = (
+                min_timerange_to_query_outcomes
+            )
+            routing_decision.routing_context.extra_info["time_range_secs"] = time_range_secs
             return routing_decision
 
         # see how many items this combo of orgs/projects has actually ingested for the timerange,
         # downsample if it's too many
-        ingested_items = self.get_ingested_items_for_timerange(
-            routing_decision.routing_context
-        )
+        ingested_items = self.get_ingested_items_for_timerange(routing_decision.routing_context)
         routing_decision.routing_context.extra_info["ingested_items"] = ingested_items
         max_items_before_downsampling = self._get_max_items_before_downsampling()
-        routing_decision.routing_context.extra_info[
-            "max_items_before_downsampling"
-        ] = max_items_before_downsampling
+        routing_decision.routing_context.extra_info["max_items_before_downsampling"] = (
+            max_items_before_downsampling
+        )
         if (
             ingested_items > max_items_before_downsampling
             and ingested_items <= max_items_before_downsampling * 10

@@ -184,9 +184,7 @@ def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> Non
 
 @pytest.mark.redis_db
 def test_target_tier_is_set_in_routing_context() -> None:
-    routing_decision = RoutingStrategySelectsTier8().get_routing_decision(
-        deepcopy(ROUTING_CONTEXT)
-    )
+    routing_decision = RoutingStrategySelectsTier8().get_routing_decision(deepcopy(ROUTING_CONTEXT))
     assert routing_decision.tier == Tier.TIER_8
 
 
@@ -220,17 +218,11 @@ def test_routing_strategy_selects_tier_1_if_highest_accuracy_mode() -> None:
     )
     routing_context = deepcopy(ROUTING_CONTEXT)
     routing_context.in_msg = in_msg
-    routing_decision = RoutingStrategyHighestAccuracy().get_routing_decision(
-        routing_context
-    )
+    routing_decision = RoutingStrategyHighestAccuracy().get_routing_decision(routing_context)
     assert routing_decision.tier == Tier.TIER_8
 
-    in_msg.meta.downsampled_storage_config.mode = (
-        DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
-    )
-    routing_decision = RoutingStrategyHighestAccuracy().get_routing_decision(
-        routing_context
-    )
+    in_msg.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+    routing_decision = RoutingStrategyHighestAccuracy().get_routing_decision(routing_context)
     assert routing_decision.tier == Tier.TIER_1
 
 
@@ -257,14 +249,18 @@ def test_metrics_output() -> None:
                 tags={"a": "b", "c": "d"},
             )
 
-    with mock.patch(
-        "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.record_query"
-    ) as record_query, mock.patch(
-        "snuba.web.rpc.storage_routing.routing_strategy_selector.RoutingStrategySelector.select_routing_strategy",
-        return_value=MetricsStrategy(),
-    ), mock.patch(
-        "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series.run_query",
-        return_value=get_query_result(),
+    with (
+        mock.patch(
+            "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.record_query"
+        ) as record_query,
+        mock.patch(
+            "snuba.web.rpc.storage_routing.routing_strategy_selector.RoutingStrategySelector.select_routing_strategy",
+            return_value=MetricsStrategy(),
+        ),
+        mock.patch(
+            "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series.run_query",
+            return_value=get_query_result(),
+        ),
     ):
         EndpointTimeSeries().execute(_get_in_msg())
         record_query.assert_called_once()
@@ -347,14 +343,18 @@ def test_strategy_exceeds_time_budget() -> None:
     class TooLongStrategy(RoutingStrategySelectsTier8):
         pass
 
-    with mock.patch(
-        "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.record_query"
-    ) as record_query, mock.patch(
-        "snuba.web.rpc.storage_routing.routing_strategy_selector.RoutingStrategySelector.select_routing_strategy",
-        return_value=TooLongStrategy(),
-    ), mock.patch(
-        "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series.run_query",
-        return_value=get_query_result(12000),
+    with (
+        mock.patch(
+            "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.record_query"
+        ) as record_query,
+        mock.patch(
+            "snuba.web.rpc.storage_routing.routing_strategy_selector.RoutingStrategySelector.select_routing_strategy",
+            return_value=TooLongStrategy(),
+        ),
+        mock.patch(
+            "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series.run_query",
+            return_value=get_query_result(12000),
+        ),
     ):
 
         state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
@@ -375,14 +375,18 @@ def test_outcomes_based_routing_metrics_sampled_too_low() -> None:
     class TooFastStrategy(RoutingStrategySelectsTier8):
         pass
 
-    with mock.patch(
-        "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.record_query"
-    ) as record_query, mock.patch(
-        "snuba.web.rpc.storage_routing.routing_strategy_selector.RoutingStrategySelector.select_routing_strategy",
-        return_value=TooFastStrategy(),
-    ), mock.patch(
-        "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series.run_query",
-        return_value=get_query_result(900),
+    with (
+        mock.patch(
+            "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.record_query"
+        ) as record_query,
+        mock.patch(
+            "snuba.web.rpc.storage_routing.routing_strategy_selector.RoutingStrategySelector.select_routing_strategy",
+            return_value=TooFastStrategy(),
+        ),
+        mock.patch(
+            "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series.run_query",
+            return_value=get_query_result(900),
+        ),
     ):
 
         state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
