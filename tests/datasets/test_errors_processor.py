@@ -108,11 +108,7 @@ class ErrorEvent:
                             "category": "snuba.utils.streams.batching",
                             "level": "info",
                             "timestamp": self.timestamp.timestamp(),
-                            "data": {
-                                "asctime": self.timestamp.strftime(
-                                    PAYLOAD_DATETIME_FORMAT
-                                )
-                            },
+                            "data": {"asctime": self.timestamp.strftime(PAYLOAD_DATETIME_FORMAT)},
                             "message": "New partitions assigned: {}",
                             "type": "default",
                         },
@@ -120,11 +116,7 @@ class ErrorEvent:
                             "category": "snuba.utils.streams.batching",
                             "level": "info",
                             "timestamp": self.timestamp.timestamp(),
-                            "data": {
-                                "asctime": self.timestamp.strftime(
-                                    PAYLOAD_DATETIME_FORMAT
-                                )
-                            },
+                            "data": {"asctime": self.timestamp.strftime(PAYLOAD_DATETIME_FORMAT)},
                             "message": "Flushing ",
                             "type": "default",
                         },
@@ -255,15 +247,11 @@ class ErrorEvent:
         }
 
         if self.replay_id:
-            serialized_event["data"]["contexts"]["replay"] = {
-                "replay_id": str(self.replay_id)
-            }
+            serialized_event["data"]["contexts"]["replay"] = {"replay_id": str(self.replay_id)}
         if self.threads:
             serialized_event["data"]["threads"] = self.threads
         if self.trace_sampled:
-            serialized_event["data"]["contexts"]["trace"][
-                "sampled"
-            ] = self.trace_sampled
+            serialized_event["data"]["contexts"]["trace"]["sampled"] = self.trace_sampled
         if self.errors:
             serialized_event["data"]["errors"] = self.errors
 
@@ -342,18 +330,12 @@ class ErrorEvent:
             ],
             "partition": meta.partition,
             "offset": meta.offset,
-            "message_timestamp": int(
-                self.timestamp.replace(tzinfo=timezone.utc).timestamp()
-            ),
-            "timestamp_ms": int(
-                self.timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000
-            ),
+            "message_timestamp": int(self.timestamp.replace(tzinfo=timezone.utc).timestamp()),
+            "timestamp_ms": int(self.timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000),
             "retention_days": 90,
             "deleted": 0,
             "group_id": self.group_id,
-            "group_first_seen": int(
-                (self.timestamp - timedelta(days=2)).timestamp() * 1000
-            ),
+            "group_first_seen": int((self.timestamp - timedelta(days=2)).timestamp() * 1000),
             "primary_hash": "04233d08-ac90-cf6f-c015-b1be5932e7e2",
             "received": int(
                 self.received_timestamp.replace(tzinfo=timezone.utc)
@@ -542,9 +524,7 @@ class TestErrorsProcessor:
         result["replay_id"] = str(replay_id)
         result["tags.key"].insert(4, "replayId")
         result["tags.value"].insert(4, replay_id.hex)
-        assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], ANY
-        )
+        assert self.processor.process_message(payload, meta) == InsertBatch([result], ANY)
 
     def test_errors_replayid_tag_and_context(self) -> None:
         timestamp, recieved = self.__get_timestamps()
@@ -587,9 +567,7 @@ class TestErrorsProcessor:
         result = message.build_result(meta)
         result["tags.key"].insert(4, "replayId")
         result["tags.value"].insert(4, message.replay_id.hex)
-        assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], ANY
-        )
+        assert self.processor.process_message(payload, meta) == InsertBatch([result], ANY)
 
     def test_errors_replayid_invalid_tag(self) -> None:
         timestamp, recieved = self.__get_timestamps()
@@ -632,9 +610,7 @@ class TestErrorsProcessor:
         result = message.build_result(meta)
         result["tags.key"].insert(4, "replayId")
         result["tags.value"].insert(4, invalid_replay_id)
-        assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], ANY
-        )
+        assert self.processor.process_message(payload, meta) == InsertBatch([result], ANY)
 
     def test_exception_main_thread_true(self) -> None:
         timestamp, recieved = self.__get_timestamps()
@@ -687,9 +663,7 @@ class TestErrorsProcessor:
         result = message.build_result(meta)
         result["exception_main_thread"] = True
 
-        assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], ANY
-        )
+        assert self.processor.process_message(payload, meta) == InsertBatch([result], ANY)
 
     def test_exception_main_thread_false(self) -> None:
         timestamp, recieved = self.__get_timestamps()
@@ -742,9 +716,7 @@ class TestErrorsProcessor:
         result = message.build_result(meta)
         result["exception_main_thread"] = False
 
-        assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], ANY
-        )
+        assert self.processor.process_message(payload, meta) == InsertBatch([result], ANY)
 
     def test_trace_sampled(self) -> None:
         timestamp, recieved = self.__get_timestamps()
@@ -783,9 +755,7 @@ class TestErrorsProcessor:
         result = message.build_result(meta)
         result["trace_sampled"] = 1
 
-        assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], ANY
-        )
+        assert self.processor.process_message(payload, meta) == InsertBatch([result], ANY)
 
         # verify processing trace.sampled=None works as it did before
         message.trace_sampled = None
@@ -794,9 +764,7 @@ class TestErrorsProcessor:
 
         result2 = message.build_result(meta)
 
-        assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result2], ANY
-        )
+        assert self.processor.process_message(payload, meta) == InsertBatch([result2], ANY)
 
     def test_errors_processed(self) -> None:
         timestamp, recieved = self.__get_timestamps()
@@ -835,9 +803,7 @@ class TestErrorsProcessor:
         result = message.build_result(meta)
         result["num_processing_errors"] = 3
 
-        assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], ANY
-        )
+        assert self.processor.process_message(payload, meta) == InsertBatch([result], ANY)
 
         # ensure old behavior where data.errors=None won't set 'num_processing_errors'
         message.errors = None
@@ -846,9 +812,7 @@ class TestErrorsProcessor:
 
         result = message.build_result(meta)
 
-        assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], ANY
-        )
+        assert self.processor.process_message(payload, meta) == InsertBatch([result], ANY)
 
     def test_errors_with_flags(self) -> None:
         timestamp, recieved = self.__get_timestamps()
@@ -887,9 +851,7 @@ class TestErrorsProcessor:
         result = message.build_result(meta)
         result["num_processing_errors"] = 3
 
-        assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], ANY
-        )
+        assert self.processor.process_message(payload, meta) == InsertBatch([result], ANY)
 
         # ensure old behavior where data.errors=None won't set 'num_processing_errors'
         message.errors = None
@@ -898,9 +860,7 @@ class TestErrorsProcessor:
 
         result = message.build_result(meta)
 
-        assert self.processor.process_message(payload, meta) == InsertBatch(
-            [result], ANY
-        )
+        assert self.processor.process_message(payload, meta) == InsertBatch([result], ANY)
 
     def test_errors_with_malformed_flags(self) -> None:
         timestamp, recieved = self.__get_timestamps()

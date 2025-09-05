@@ -151,9 +151,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             "sentry:release",
             event_data.get("release"),
         )
-        processed["environment"] = promoted_tags.get(
-            "environment", event_data.get("environment")
-        )
+        processed["environment"] = promoted_tags.get("environment", event_data.get("environment"))
         processed["user"] = promoted_tags.get("sentry:user")
         processed["dist"] = _unicodify(
             promoted_tags.get("sentry:dist", event_data.get("dist")),
@@ -180,9 +178,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
     ) -> None:
         contexts = event_data.get("contexts", {}) or {}
 
-        processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
-            contexts
-        )
+        processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(contexts)
 
         # promote fields within contexts to a top-level column
         trace = contexts.get("trace", {}) or {}
@@ -217,9 +213,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         if isinstance(event_data.get("start_timestamp"), numbers.Number) and isinstance(
             event_data.get("timestamp"), numbers.Number
         ):
-            start_ts = self.__extract_timestamp(
-                int(event_data.get("start_timestamp", 0))
-            )
+            start_ts = self.__extract_timestamp(int(event_data.get("start_timestamp", 0)))
             finish_ts = self.__extract_timestamp(int(event_data.get("timestamp", 0)))
             duration_secs = (finish_ts - start_ts).total_seconds()
             processed["transaction_duration"] = max(int(duration_secs * 1000), 0)
@@ -243,13 +237,9 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         event_occurrence_data = event["occurrence_data"]
 
         # required fields
-        detection_timestamp = datetime.utcfromtimestamp(
-            event_occurrence_data["detection_time"]
-        )
+        detection_timestamp = datetime.utcfromtimestamp(event_occurrence_data["detection_time"])
         receive_timestamp = datetime.utcfromtimestamp(event_data["received"])
-        retention_days = enforce_retention(
-            event.get("retention_days", 90), detection_timestamp
-        )
+        retention_days = enforce_retention(event.get("retention_days", 90), detection_timestamp)
 
         if event_data.get("client_timestamp", None):
             client_timestamp = datetime.utcfromtimestamp(event_data["client_timestamp"])
@@ -271,9 +261,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         group_first_seen = None
         if "group_first_seen" in event:
             group_first_seen = _ensure_valid_date(
-                datetime.strptime(
-                    event["group_first_seen"], settings.PAYLOAD_DATETIME_FORMAT
-                )
+                datetime.strptime(event["group_first_seen"], settings.PAYLOAD_DATETIME_FORMAT)
             )
 
         fingerprints = event_occurrence_data["fingerprint"]
