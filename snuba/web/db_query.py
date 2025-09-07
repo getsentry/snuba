@@ -480,6 +480,9 @@ def _raw_query(
                 calculated_cause = RateLimitExceeded(
                     "Query scanned more than the allocated amount of bytes"
                 )
+                # Since we overwrite the original cause with a new error, we need to
+                # manually add the quota_allowance attribute to the new exception
+                calculated_cause.quota_allowance = stats["quota_allowance"]
 
             with configure_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]

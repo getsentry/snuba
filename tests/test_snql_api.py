@@ -1360,6 +1360,45 @@ class TestSnQLApi(BaseApiTest):
                 == "Query scanned more than the allocated amount of bytes"
             )
 
+            expected_quota_allowance = {
+                "details": {
+                    "MaxBytesPolicy123": {
+                        "can_run": True,
+                        "max_threads": 0,
+                        "max_bytes_to_read": 1,
+                        "explanation": {
+                            "storage_key": "doesntmatter",
+                        },
+                        "is_throttled": True,
+                        "throttle_threshold": MAX_THRESHOLD,
+                        "rejection_threshold": MAX_THRESHOLD,
+                        "quota_used": 0,
+                        "quota_unit": NO_UNITS,
+                        "suggestion": NO_SUGGESTION,
+                    }
+                },
+                "summary": {
+                    "threads_used": 0,
+                    "max_bytes_to_read": 1,
+                    "is_successful": False,
+                    "is_rejected": False,
+                    "is_throttled": True,
+                    "rejection_storage_key": None,
+                    "throttle_storage_key": "doesntmatter",
+                    "rejected_by": {},
+                    "throttled_by": {
+                        "policy": "MaxBytesPolicy123",
+                        "quota_used": 0,
+                        "quota_unit": NO_UNITS,
+                        "suggestion": NO_SUGGESTION,
+                        "storage_key": "doesntmatter",
+                        "throttle_threshold": MAX_THRESHOLD,
+                    },
+                },
+            }
+
+            assert response.json["quota_allowance"] == expected_quota_allowance
+
     def test_allocation_policy_violation(self) -> None:
         with patch(
             "snuba.web.db_query._get_allocation_policies",
@@ -1426,6 +1465,8 @@ class TestSnQLApi(BaseApiTest):
                 response.json["error"]["message"]
                 == f"Query on could not be run due to allocation policies, info: {info}"
             )
+
+            assert response.json["quota_allowance"] == info
 
     def test_tags_key_column(self) -> None:
         response = self.post(
