@@ -59,6 +59,7 @@ from snuba.admin.tool_policies import (
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.configs.configuration import ConfigurableComponent
 from snuba.consumers.dlq import (
     DlqInstruction,
     DlqInstructionStatus,
@@ -96,6 +97,9 @@ from snuba.web.delete_query import (
     deletes_are_enabled,
 )
 from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names, run_rpc_handler
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    BaseRoutingStrategy,
+)
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -934,11 +938,34 @@ def snuba_debug() -> Response:
         explain_cleanup()
 
 
+@application.route("/routing_strategies")
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def routing_strategies() -> Response:
+    return Response(
+        json.dumps(BaseRoutingStrategy.all_names()),
+        200,
+        {"Content-Type": "application/json"},
+    )
+
+
 @application.route("/storages_with_allocation_policies")
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def storages_with_allocation_policies() -> Response:
     return Response(
         json.dumps(get_storages_with_allocation_policies()),
+        200,
+        {"Content-Type": "application/json"},
+    )
+
+
+@application.route("/routing_strategy_configs/<path:strategy_name>", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def get_routing_strategy_configs(strategy_name: str) -> Response:
+
+    strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
+
+    return Response(
+        json.dumps(strategy.to_dict()),
         200,
         {"Content-Type": "application/json"},
     )
@@ -957,34 +984,36 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
     )
 
 
-@application.route("/allocation_policy_config", methods=["POST", "DELETE"])
+@application.route("/set_configurable_component_configuration", methods=["POST", "DELETE"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def set_allocation_policy_config() -> Response:
+def set_configuration() -> Response:
     data = json.loads(request.data)
     user = request.headers.get(USER_HEADER_KEY)
 
     try:
-        storage, key, policy_name = (data["storage"], data["key"], data["policy"])
+        configurable_component_namespace = data["configurable_component_namespace"]
+        configurable_component_class_name = data["configurable_component_class_name"]
+        resource_name = data["resource_name"]
+        assert isinstance(
+            configurable_component_namespace, str
+        ), f"Invalid configurable_component_namespace: {configurable_component_namespace}"
+        assert isinstance(
+            configurable_component_class_name, str
+        ), f"Invalid configurable_component_class_name: {configurable_component_class_name}"
+        assert isinstance(resource_name, str), f"Invalid resource_name {resource_name}"
+        configurable_component = (
+            ConfigurableComponent.get_component_class(configurable_component_namespace)
+            .get_from_name(configurable_component_class_name)
+            .create_minimal_instance(resource_name)
+        )
 
+        key = data["key"]
         params = data.get("params", {})
-
-        assert isinstance(storage, str), "Invalid storage"
         assert isinstance(key, str), "Invalid key"
         assert isinstance(params, dict), "Invalid params"
         assert key != "", "Key cannot be empty string"
-        assert isinstance(policy_name, str), "Invalid policy name"
 
-        policies = (
-            get_storage(StorageKey(storage)).get_allocation_policies()
-            + get_storage(StorageKey(storage)).get_delete_allocation_policies()
-        )
-        policy = next(
-            (p for p in policies if p.class_name() == policy_name),
-            None,
-        )
-        assert policy is not None, "Policy not found on storage"
-
-    except (KeyError, AssertionError) as exc:
+    except Exception as exc:
         return Response(
             json.dumps({"error": f"Invalid config: {str(exc)}"}),
             400,
@@ -992,11 +1021,15 @@ def set_allocation_policy_config() -> Response:
         )
 
     if request.method == "DELETE":
-        policy.delete_config_value(config_key=key, params=params, user=user)
+        configurable_component.delete_config_value(config_key=key, params=params, user=user)
         audit_log.record(
             user or "",
-            AuditLogAction.ALLOCATION_POLICY_DELETE,
-            {"storage": storage, "policy": policy.class_name(), "key": key},
+            AuditLogAction.CONFIGURABLE_COMPONENT_DELETE,
+            {
+                "resource_identifier": resource_name,
+                "configurable_component_class_name": configurable_component.class_name(),
+                "key": key,
+            },
             notify=True,
         )
         return Response("", 200)
@@ -1004,13 +1037,15 @@ def set_allocation_policy_config() -> Response:
         try:
             value = data["value"]
             assert isinstance(value, str), "Invalid value"
-            policy.set_config_value(config_key=key, value=value, params=params, user=user)
+            configurable_component.set_config_value(
+                config_key=key, value=value, params=params, user=user
+            )
             audit_log.record(
                 user or "",
-                AuditLogAction.ALLOCATION_POLICY_UPDATE,
+                AuditLogAction.CONFIGURABLE_COMPONENT_UPDATE,
                 {
-                    "storage": storage,
-                    "policy": policy.class_name(),
+                    "resource_identifier": resource_name,
+                    "configurable_component_class_name": configurable_component.class_name(),
                     "key": key,
                     "value": value,
                     "params": str(params),

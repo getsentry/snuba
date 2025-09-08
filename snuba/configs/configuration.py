@@ -21,7 +21,7 @@ class InvalidConfig(Exception):
 
 class ConfigurableComponentData(TypedDict):
     configurable_component_namespace: str
-    configurable_component_config_key: str
+    configurable_component_class_name: str
     resource_identifier: str
     configurations: list[dict[str, Any]]
     optional_config_definitions: list[dict[str, Any]]
@@ -151,8 +151,26 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
     @classmethod
     def component_namespace(cls) -> str:
-        # is it an allocation policy? a routing strategy? a strategy selector?
-        raise NotImplementedError
+        """
+        Let's say the inheritance chain is:
+        ConfigurableComponent
+            SomeBaseClass
+                SomeConcreteClass
+            SomeOtherBaseClass
+                SomeOtherConcreteClass
+                    SomeEvenMoreConcreteClass
+
+        The namespace for SomeBaseClass should be "SomeBaseClass"
+        The namespace for SomeConcreteClass should be "SomeBaseClass"
+        The namespace for SomeOtherBaseClass should be "SomeOtherBaseClass"
+        The namespace for SomeOtherConcreteClass should be "SomeOtherBaseClass"
+        The namespace for SomeEvenMoreConcreteClass should be "SomeOtherBaseClass"
+        """
+
+        for base in cls.__mro__:
+            if ConfigurableComponent in base.__bases__:
+                return base.__name__
+        raise RuntimeError(f"{cls.__name__} does not inherit from ConfigurableComponent")
 
     @abstractmethod
     def _get_default_config_definitions(self) -> list[Configuration]:
@@ -436,7 +454,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     def to_dict(self) -> ConfigurableComponentData:
         return ConfigurableComponentData(
             configurable_component_namespace=self.component_namespace(),
-            configurable_component_config_key=self.class_name(),
+            configurable_component_class_name=self.class_name(),
             resource_identifier=self.resource_identifier.value,
             configurations=self.get_current_configs(),
             optional_config_definitions=self.get_optional_config_definitions_json(),
@@ -452,3 +470,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     @classmethod
     def get_from_name(cls: Type[T], name: str) -> Type[T]:
         return cast(Type[T], cls.class_from_name(f"{cls.component_namespace()}.{name}"))
+
+    @classmethod
+    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
+        raise NotImplementedError

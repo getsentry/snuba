@@ -372,8 +372,12 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         )
 
     @classmethod
-    def component_namespace(cls) -> str:
-        return "AllocationPolicy"
+    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
+        return cls(
+            storage_key=ResourceIdentifier(resource_identifier),
+            required_tenant_types=[],
+            default_config_overrides={},
+        )
 
     def _get_hash(self) -> str:
         return CAPMAN_HASH
