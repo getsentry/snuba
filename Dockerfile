@@ -32,8 +32,6 @@ RUN set -ex; \
         g++ \
         gnupg \
         protobuf-compiler \
-        iproute2 \
-        iputils-ping \
     '; \
     runtimeDeps=' \
         curl \
@@ -152,8 +150,8 @@ ENV LD_PRELOAD=/usr/src/snuba/libjemalloc.so.2 \
 
 USER snuba
 EXPOSE 1218 1219
-# ENTRYPOINT [ "./docker_entrypoint.sh" ]
-# CMD [ "api" ]
+ENTRYPOINT [ "./docker_entrypoint.sh" ]
+CMD [ "api" ]
 
 FROM application_base AS application
 USER 0
