@@ -1,19 +1,30 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
-from typing import Any, final
+from typing import Any, Type, TypedDict, TypeVar, cast, final
 
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import delete_config as delete_runtime_config
 from snuba.state import get_all_configs as get_all_runtime_configs
 from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
+from snuba.utils.registered_class import RegisteredClass
 
 logger = logging.getLogger("snuba.configurable_component")
+
+T = TypeVar("T", bound="ConfigurableComponent")
 
 
 class InvalidConfig(Exception):
     pass
+
+
+class ConfigurableComponentData(TypedDict):
+    configurable_component_namespace: str
+    configurable_component_config_key: str
+    resource_identifier: str
+    configurations: list[dict[str, Any]]
+    optional_config_definitions: list[dict[str, Any]]
 
 
 class ResourceIdentifier:
@@ -21,15 +32,21 @@ class ResourceIdentifier:
         self,
         resource_identifier_name: StorageKey | str,
     ):
-        self.resource_identifier_name = (
+        self._resource_identifier_name = (
             resource_identifier_name.value
             if isinstance(resource_identifier_name, StorageKey)
             else resource_identifier_name
         )
 
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, ResourceIdentifier) and other.value == self.value
+
+    def __repr__(self) -> str:
+        return self.value
+
     @property
     def value(self) -> str:
-        return self.resource_identifier_name
+        return self._resource_identifier_name
 
 
 @dataclass()
@@ -46,7 +63,7 @@ class Configuration:
     param_types: dict[str, type] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if type(self.default) != self.value_type:
+        if type(self.default) is not self.value_type:
             raise ValueError(
                 f"Config item `{self.name}` expects type {self.value_type} got value `{self.default}` of type {type(self.default)}"
             )
@@ -69,9 +86,7 @@ class Configuration:
             ],
         }
 
-    def to_config_dict(
-        self, value: Any = None, params: dict[str, Any] = {}
-    ) -> dict[str, Any]:
+    def to_config_dict(self, value: Any = None, params: dict[str, Any] = {}) -> dict[str, Any]:
         """Returns a dict representation of a live Config."""
         return {
             **self.__to_base_dict(),
@@ -80,8 +95,7 @@ class Configuration:
         }
 
 
-class ConfigurableComponent(ABC):
-
+class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     """
     A ConfigurableComponent is a component that can be configured via configurations.
     example: an allocation policy, a routing strategy, a strategy selector.
@@ -135,7 +149,8 @@ class ConfigurableComponent(ABC):
         # needs to uniquely identify the configurable component
         return f"{self.resource_identifier.value}.{self.__class__.__name__}"
 
-    def component_namespace(self) -> str:
+    @classmethod
+    def component_namespace(cls) -> str:
         # is it an allocation policy? a routing strategy? a strategy selector?
         raise NotImplementedError
 
@@ -178,9 +193,7 @@ class ConfigurableComponent(ABC):
 
         # config doesn't exist
         if config_key not in definitions:
-            raise InvalidConfig(
-                f"'{config_key}' is not a valid config for {class_name}!"
-            )
+            raise InvalidConfig(f"'{config_key}' is not a valid config for {class_name}!")
 
         config = definitions[config_key]
 
@@ -322,9 +335,7 @@ class ConfigurableComponent(ABC):
         return [
             replace(
                 definition,
-                default=default_config_overrides.get(
-                    definition.name, definition.default
-                ),
+                default=default_config_overrides.get(definition.name, definition.default),
             )
             for definition in definitions
         ]
@@ -337,9 +348,7 @@ class ConfigurableComponent(ABC):
             escape_sequence,
         ) in self._KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
             if escape_sequence in str(key):
-                raise InvalidConfig(
-                    f"{escape_sequence} is not a valid string for a policy config"
-                )
+                raise InvalidConfig(f"{escape_sequence} is not a valid string for a policy config")
             key = key.replace(delimiter_char, escape_sequence)
         return key
 
@@ -415,3 +424,31 @@ class ConfigurableComponent(ABC):
             user=user,
             config_key=self._get_hash(),
         )
+
+    @classmethod
+    def config_key(cls) -> str:
+        return f"{cls.component_namespace()}.{cls.__name__}"
+
+    @classmethod
+    def class_name(cls) -> str:
+        return cls.__name__
+
+    def to_dict(self) -> ConfigurableComponentData:
+        return ConfigurableComponentData(
+            configurable_component_namespace=self.component_namespace(),
+            configurable_component_config_key=self.class_name(),
+            resource_identifier=self.resource_identifier.value,
+            configurations=self.get_current_configs(),
+            optional_config_definitions=self.get_optional_config_definitions_json(),
+        )
+
+    @classmethod
+    def get_component_class(cls, namespace: str) -> Type["ConfigurableComponent"]:
+        return cast(
+            Type["ConfigurableComponent"],
+            cls.class_from_name(f"{namespace}.{namespace}"),
+        )
+
+    @classmethod
+    def get_from_name(cls: Type[T], name: str) -> Type[T]:
+        return cast(Type[T], cls.class_from_name(f"{cls.component_namespace()}.{name}"))
