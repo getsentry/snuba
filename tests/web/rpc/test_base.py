@@ -206,9 +206,7 @@ _REFERRER = "something"
 )
 def test_tagged_metrics(hours: int, expected_time_bucket: str) -> None:
     end_timestamp = Timestamp(seconds=int(BASE_TIME.timestamp()))
-    start_timestamp = Timestamp(
-        seconds=int((BASE_TIME - timedelta(hours=hours)).timestamp())
-    )
+    start_timestamp = Timestamp(seconds=int((BASE_TIME - timedelta(hours=hours)).timestamp()))
     message = TraceItemTableRequest(
         meta=RequestMeta(
             project_ids=[1],

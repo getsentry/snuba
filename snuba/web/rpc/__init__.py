@@ -81,9 +81,7 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
     ) -> "Type[TraceItemDataResolver[Tin, Tout]]":
         registry = getattr(cls, "_registry")
         try:
-            shape = registry.get_class_from_name(
-                f"{cls.endpoint_name()}__{trace_item_type}"
-            )
+            shape = registry.get_class_from_name(f"{cls.endpoint_name()}__{trace_item_type}")
         except InvalidConfigKeyError:
             shape = registry.get_class_from_name(
                 f"{cls.endpoint_name()}__{TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED}"
@@ -159,9 +157,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
-        self.routing_decision.routing_context = RoutingContext(
-            timer=self._timer, in_msg=in_msg
-        )
+        self.routing_decision.routing_context = RoutingContext(timer=self._timer, in_msg=in_msg)
 
         self.__before_execute(in_msg)
         error: Exception | None = None
@@ -186,23 +182,18 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                         tags["referrer"] = meta.referrer
                     if self._uses_storage_routing(in_msg):
                         sampling_mode = meta.downsampled_storage_config.mode
-                tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
-                    sampling_mode
-                )
+                tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(sampling_mode)
                 self.metrics.increment("timeout_query", 1, tags)
                 if sampling_mode == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY:
                     error = HighAccuracyQueryTimeoutException(
                         "High accuracy query timed out, you may be scanning too much data in one request. Try querying in normal mode to get results"
                     )
                 else:
-                    error = QueryTimeoutException(
-                        "Query timed out, this violates the EAP SLO"
-                    )
+                    error = QueryTimeoutException("Query timed out, this violates the EAP SLO")
             else:
                 if (
                     "error_code" in e.extra["stats"]
-                    and e.extra["stats"]["error_code"]
-                    == clickhouse_errors.MEMORY_LIMIT_EXCEEDED
+                    and e.extra["stats"]["error_code"] == clickhouse_errors.MEMORY_LIMIT_EXCEEDED
                 ):
                     self.metrics.increment("OOM_query")
                     sentry_sdk.capture_exception(e)
@@ -212,9 +203,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 ):
                     tags = {"endpoint": str(self.__class__.__name__)}
                     if self._uses_storage_routing(in_msg):
-                        tags[
-                            "storage_routing_mode"
-                        ] = DownsampledStorageConfig.Mode.Name(
+                        tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
                             meta.downsampled_storage_config.mode
                         )
                     self.metrics.increment("estimated_execution_timeout", 1, tags)
@@ -284,9 +273,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def _execute(self, in_msg: Tin) -> Tout:
         raise NotImplementedError
 
-    def __after_execute(
-        self, in_msg: Tin, out_msg: Tout, error: Exception | None
-    ) -> Tout:
+    def __after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
         res = self._after_execute(in_msg, out_msg, error)
         output_metrics_error = None
         try:
@@ -297,10 +284,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            if (
-                isinstance(error, RPCRequestException)
-                and 400 <= error.status_code < 500
-            ):
+            if isinstance(error, RPCRequestException) and 400 <= error.status_code < 500:
                 self.metrics.increment(
                     "request_invalid",
                     tags=self._timer.tags,
@@ -334,9 +318,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
         return res
 
-    def _after_execute(
-        self, in_msg: Tin, out_msg: Tout, error: Exception | None
-    ) -> Tout:
+    def _after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
         """Override this for any post-processing/logging after the _execute method"""
         return out_msg
 
@@ -350,18 +332,14 @@ def list_all_endpoint_names() -> List[Tuple[str, str]]:
 
 
 _VERSIONS = ["v1"]
-_TO_IMPORT = {
-    p: os.path.join(os.path.dirname(os.path.realpath(__file__)), p) for p in _VERSIONS
-}
+_TO_IMPORT = {p: os.path.join(os.path.dirname(os.path.realpath(__file__)), p) for p in _VERSIONS}
 
 
 for v, module_path in _TO_IMPORT.items():
     import_submodules_in_directory(module_path, f"snuba.web.rpc.{v}")
 
 
-def run_rpc_handler(
-    name: str, version: str, data: bytes
-) -> ProtobufMessage | ErrorProto:
+def run_rpc_handler(name: str, version: str, data: bytes) -> ProtobufMessage | ErrorProto:
     try:
         endpoint = RPCEndpoint.get_from_name(name, version)()  # type: ignore
     except (AttributeError, InvalidConfigKeyError) as e:

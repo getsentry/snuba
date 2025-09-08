@@ -28,9 +28,7 @@ class QueryTimeoutException(RPCRequestException):
         super().__init__(408, message)
 
 
-def convert_rpc_exception_to_proto(
-    exc: Union[RPCRequestException, QueryException]
-) -> ErrorProto:
+def convert_rpc_exception_to_proto(exc: Union[RPCRequestException, QueryException]) -> ErrorProto:
     if isinstance(exc, RPCRequestException):
         return ErrorProto(code=exc.status_code, message=str(exc))
 
