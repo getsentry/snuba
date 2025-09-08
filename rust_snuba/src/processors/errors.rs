@@ -372,7 +372,7 @@ struct ErrorRow {
     #[serde(rename = "exception_stacks.value")]
     exception_stacks_value: Vec<Option<String>>,
     group_id: u64,
-    group_first_seen: u64,
+    group_first_seen: u32,
     http_method: Option<String>,
     http_referer: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -722,7 +722,7 @@ impl ErrorRow {
             flags_key,
             flags_value,
             group_id: from.group_id,
-            group_first_seen: from.group_first_seen.0,
+            group_first_seen: (from.group_first_seen.0 / 1000) as u32,
             http_method: from_request.method.0,
             http_referer,
             ip_address_v4,

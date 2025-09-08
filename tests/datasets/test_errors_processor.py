@@ -335,7 +335,7 @@ class ErrorEvent:
             "retention_days": 90,
             "deleted": 0,
             "group_id": self.group_id,
-            "group_first_seen": int((self.timestamp - timedelta(days=2)).timestamp() * 1000),
+            "group_first_seen": int((self.timestamp - timedelta(days=2)).timestamp()),
             "primary_hash": "04233d08-ac90-cf6f-c015-b1be5932e7e2",
             "received": int(
                 self.received_timestamp.replace(tzinfo=timezone.utc)
