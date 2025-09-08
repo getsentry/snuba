@@ -771,9 +771,7 @@ class TestGetTraces(BaseApiTest):
         for i, trace in enumerate(response.traces):
             # Traces are returned in descending order of start timestamp
             trace_index = 5 - i
-            expected_timestamp = (
-                start_time + timedelta(minutes=trace_index * 10, seconds=10)
-            ).timestamp()
+            expected_timestamp = (start_time + timedelta(minutes=trace_index * 10)).timestamp()
             assert trace.attributes[0].value.val_double == expected_timestamp
 
     def test_default_start_timestamp(self) -> None:
