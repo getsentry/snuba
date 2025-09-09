@@ -1,6 +1,5 @@
 import uuid
 
-from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
 from google.protobuf.json_format import MessageToDict
 from proto import Message  # type: ignore
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
@@ -34,17 +33,20 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression,
 )
 
-# This is a hack to allow for the use of both TraceItemFilterWithType and GetTracesRequest.TraceFilter in the same function.
-JointTraceFilterType = (
-    RepeatedCompositeFieldContainer[TraceItemFilterWithType]
-    | RepeatedCompositeFieldContainer[GetTracesRequest.TraceFilter]
-)
+
+def convert_trace_filters_to_trace_item_filter_with_type(
+    trace_filters: list[GetTracesRequest.TraceFilter],
+) -> list[TraceItemFilterWithType]:
+    return [
+        TraceItemFilterWithType(item_type=trace_filter.item_type, filter=trace_filter.filter)
+        for trace_filter in trace_filters
+    ]
 
 
 def get_trace_ids_for_cross_item_query(
     original_request: Message,
     request_meta: RequestMeta,
-    trace_filters: JointTraceFilterType,
+    trace_filters: list[TraceItemFilterWithType],
     timer: Timer,
 ) -> list[str]:
     """

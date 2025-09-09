@@ -351,7 +351,7 @@ def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -
     additional_conditions = []
     if request.trace_filters and timer is not None:
         trace_ids = get_trace_ids_for_cross_item_query(
-            request, request.meta, request.trace_filters, timer
+            request, request.meta, list(request.trace_filters), timer
         )
         additional_conditions.append(
             in_cond(

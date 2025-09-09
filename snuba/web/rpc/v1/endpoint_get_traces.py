@@ -52,6 +52,7 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    convert_trace_filters_to_trace_item_filter_with_type,
     get_trace_ids_for_cross_item_query,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
@@ -482,7 +483,10 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         # Get a dict of trace IDs and timestamps.
         if self._is_cross_event_query(in_msg.filters):
             trace_ids = get_trace_ids_for_cross_item_query(
-                in_msg, in_msg.meta, in_msg.filters, self._timer
+                in_msg,
+                in_msg.meta,
+                convert_trace_filters_to_trace_item_filter_with_type(list(in_msg.filters)),
+                self._timer,
             )
         else:
             trace_ids = self._get_trace_ids_for_single_item_query(request=in_msg)
