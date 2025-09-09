@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import { Configurations } from "SnubaAdmin/capacity_management/allocation_policy";
-import { AllocationPolicy, Configuration, ConfigurableComponent, RoutingStrategy, StrategyData } from "SnubaAdmin/capacity_management/types";
+import { AllocationPolicy, Configuration, ConfigurableComponentData, StrategyData } from "SnubaAdmin/capacity_management/types";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { COLORS } from "SnubaAdmin/theme";
 
@@ -10,9 +10,6 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
 
   const [strategies, setStrategies] = useState<string[]>([]);
   const [selectedStrategy, setStrategy] = useState<string | undefined>();
-  const [allocationPolicies, setAllocationPolicies] = useState<
-    AllocationPolicy[]
-  >([]);
   const [strategyConfigs, setStrategyConfigs] = useState<StrategyData>();
 
   useEffect(() => {
@@ -27,19 +24,7 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
 
   function selectStrategy(strategy: string) {
     setStrategy(strategy);
-    loadAllocationPolicies(strategy);
     loadStrategyConfigs(strategy);
-  }
-
-  function loadAllocationPolicies(strategy: string) {
-    api
-      .getAllocationPolicies(strategy)
-      .then((res) => {
-        setAllocationPolicies(res);
-      })
-      .catch((err) => {
-        window.alert(err);
-      });
   }
 
   function loadStrategyConfigs(strategy: string) {
@@ -57,25 +42,24 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
     if (!selectedStrategy) {
       return <p>Strategy not selected.</p>;
     }
-    if (strategyConfigs.length === 0) {
+    if (strategyConfigs === undefined) {
       return <p>No strategy configurations found.</p>;
     }
-
-    const strategyComponent: RoutingStrategy = {
-      type: "routing_strategy",
-      name: selectedStrategy,
-      configs: strategyConfigs,
-      optional_config_definitions: [],
-    };
 
     return (
       <div>
         <p style={policyTypeStyle}>Strategy Configurations</p>
         <Configurations
           api={api}
-          entity={{ type: "strategy", name: selectedStrategy }}
-          configurable_component={strategyComponent}
+          configurableComponentData={strategyConfigs}
         />
+
+        {renderPolicies(
+          strategyConfigs.policies_data.filter((policy) => policy.query_type == "select")
+        )}
+        {renderPolicies(
+          strategyConfigs.policies_data.filter((policy) => policy.query_type == "delete")
+        )}
       </div>
     );
   }
@@ -95,9 +79,8 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
         {policies.map((policy: AllocationPolicy) => (
           <Configurations
             api={api}
-            entity={{ type: "strategy", name: selectedStrategy }}
-            configurable_component={policy}
-            key={selectedStrategy + policy.name}
+            configurableComponentData={policy}
+            key={selectedStrategy + policy.configurable_component_class_name}
           />
         ))}
       </div>
@@ -117,13 +100,6 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
       </p>
 
       {renderStrategy()}
-
-      {renderPolicies(
-        allocationPolicies.filter((policy) => policy.query_type == "select")
-      )}
-      {renderPolicies(
-        allocationPolicies.filter((policy) => policy.query_type == "delete")
-      )}
     </div>
   );
 }
