@@ -474,3 +474,16 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     @classmethod
     def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
         raise NotImplementedError
+
+    @classmethod
+    def all_names(cls) -> list[str]:
+        """Returns all registered class names that belong to this component's namespace."""
+        namespaced_classes = []
+        for registered_cls in getattr(cls, "_registry").all_classes():
+            if (
+                hasattr(registered_cls, "component_namespace")
+                and registered_cls.component_namespace() == cls.component_namespace()
+                and registered_cls.config_key() != cls.config_key()
+            ):
+                namespaced_classes.append(registered_cls.config_key())
+        return namespaced_classes

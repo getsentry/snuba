@@ -10,6 +10,7 @@ from snuba.configs.configuration import (
 )
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    BaseRoutingStrategy,
     RoutingStrategyConfig,
 )
 
@@ -318,3 +319,9 @@ class TestConfigurableComponentConfigRetrieval:
         assert len(optional_configs[0]["params"]) == 1
         assert optional_configs[0]["params"][0]["name"] == "organization_id"
         assert optional_configs[0]["params"][0]["type"] == "int"
+
+
+def test_namespaces() -> None:
+    print("jdkflakjdla", BaseRoutingStrategy.all_names())
+    # print(ConfigurableComponent.all_names())
+    assert False

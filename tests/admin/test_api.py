@@ -789,6 +789,12 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
+def test_namespaces(admin_api: FlaskClient) -> None:
+    print("jdkflakjdla", BaseRoutingStrategy.all_names())
+    assert False
+
+
+@pytest.mark.redis_db
 def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
 
     auditlog_records = []
