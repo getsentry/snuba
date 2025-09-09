@@ -24,7 +24,6 @@ class OutcomesStorageSelector(QueryStorageSelector):
         query_settings: QuerySettings,
         storage_connections: Sequence[EntityStorageConnection],
     ) -> EntityStorageConnection:
-        print("IHM HI")
         if isinstance(query_settings, OutcomesQuerySettings):
             outcomes_key = (
                 self.daily_storage if query_settings.get_use_daily() else self.hourly_storage
@@ -32,10 +31,8 @@ class OutcomesStorageSelector(QueryStorageSelector):
         else:
             outcomes_key = self.hourly_storage
 
-        print("SOMES KY", outcomes_key)
         for storage_connection in storage_connections:
             assert isinstance(storage_connection.storage, ReadableTableStorage)
-            print("they key", storage_connection.storage.get_storage_key())
             if storage_connection.storage.get_storage_key() == outcomes_key:
                 return storage_connection
 
