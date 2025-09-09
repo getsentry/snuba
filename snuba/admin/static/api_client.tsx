@@ -35,7 +35,7 @@ import {
   CardinalityQueryResult,
 } from "SnubaAdmin/cardinality_analyzer/types";
 
-import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
+import { AllocationPolicy, StrategyData } from "SnubaAdmin/capacity_management/types";
 
 import { ReplayInstruction, Topic } from "SnubaAdmin/dead_letter_queue/types";
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
@@ -84,8 +84,10 @@ interface Client {
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
   getStoragesWithAllocationPolicies: () => Promise<string[]>;
+  getRoutingStrategies: () => Promise<string[]>,
   getAllocationPolicies: (storage: string) => Promise<AllocationPolicy[]>;
-  setAllocationPolicyConfig: (
+  getRoutingStrategyConfigs: (strategy_name: string) => Promise<StrategyData>;
+  setConfigurableComponentConfiguration: (
     configurable_component_namespace: string,
     configurable_component_class_name: string,
     resource_name: string,
@@ -93,7 +95,7 @@ interface Client {
     value: string,
     params: object,
   ) => Promise<void>;
-  deleteAllocationPolicyConfig: (
+  deleteConfigurableComponentConfiguration: (
     configurable_component_namespace: string,
     configurable_component_class_name: string,
     resource_name: string,
@@ -453,6 +455,12 @@ function Client(): Client {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
     },
+    getRoutingStrategies: () => {
+      const url = baseUrl + "routing_strategies";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
     getAllocationPolicies: (storage: string) => {
       const url =
         baseUrl + "allocation_policy_configs/" + encodeURIComponent(storage);
@@ -460,7 +468,13 @@ function Client(): Client {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
     },
-    setAllocationPolicyConfig: (
+    getRoutingStrategyConfigs: (strategy_name: string) => {
+      const url = baseUrl + "routing_strategy_configs/" + strategy_name;
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
+    },
+    setConfigurableComponentConfiguration: (
       configurable_component_namespace: string,
       configurable_component_class_name: string,
       resource_name: string,
@@ -484,7 +498,7 @@ function Client(): Client {
         }
       });
     },
-    deleteAllocationPolicyConfig: (
+    deleteConfigurableComponentConfiguration: (
       configurable_component_namespace: string,
       configurable_component_class_name: string,
       resource_name: string,

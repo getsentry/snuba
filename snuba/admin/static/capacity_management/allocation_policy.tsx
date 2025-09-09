@@ -3,13 +3,13 @@ import React, { useEffect, useState } from "react";
 import { Table, createCustomTableStyles } from "../table";
 import { COLORS } from "SnubaAdmin/theme";
 import Client from "SnubaAdmin/api_client";
-import { AllocationPolicy, AllocationPolicyConfig } from "SnubaAdmin/capacity_management/types";
+import { ConfigurableComponentData, Configuration } from "SnubaAdmin/capacity_management/types";
 import { containerStyle, linkStyle, paragraphStyle } from "SnubaAdmin/capacity_management/styles";
 import { getReadonlyRow } from "SnubaAdmin/capacity_management/row_data";
 import EditConfigModal from "SnubaAdmin/capacity_management/edit_config_modal";
 import AddConfigModal from "SnubaAdmin/capacity_management/add_config_modal";
 
-function getTableColor(configs: AllocationPolicyConfig[]): string {
+function getTableColor(configs: Configuration[]): string {
   let policyIsActive = false;
   let policyIsEnforced = false;
   configs.forEach((config) => {
@@ -37,22 +37,21 @@ function getTableColor(configs: AllocationPolicyConfig[]): string {
   }
 }
 
-function AllocationPolicyConfigs(props: {
+function Configurations(props: {
   api: Client;
-  storage: string;
-  policy: AllocationPolicy;
+  configurableComponentData: ConfigurableComponentData;
 }) {
-  const { api, storage, policy } = props;
+  const { api, configurableComponentData } = props;
 
-  const [configs, setConfigs] = useState<AllocationPolicyConfig[]>([]);
+  const [configs, setConfigs] = useState<Configuration[]>([]);
 
   useEffect(() => {
-    policy.configs.sort();
-    setConfigs(policy.configs);
-  }, [policy]);
+    configurableComponentData.configurations.sort();
+    setConfigs(configurableComponentData.configurations);
+  }, [configurableComponentData]);
 
   const [currentlyEditing, setCurrentlyEditing] = useState(false);
-  const [currentConfig, setCurrentConfig] = useState<AllocationPolicyConfig>({
+  const [currentConfig, setCurrentConfig] = useState<Configuration>({
     name: "",
     value: "",
     description: "",
@@ -61,17 +60,17 @@ function AllocationPolicyConfigs(props: {
   });
   const [addingNew, setAddingNew] = useState(false);
 
-  function enterEditMode(config: AllocationPolicyConfig) {
+  function enterEditMode(config: Configuration) {
     setCurrentlyEditing(true);
     setCurrentConfig(config);
   }
 
-  function deleteConfig(toDelete: AllocationPolicyConfig) {
+  function deleteConfig(toDelete: Configuration) {
     api
-      .deleteAllocationPolicyConfig(
-        "AllocationPolicy",
-        policy.policy_name,
-        storage,
+      .deleteConfigurableComponentConfiguration(
+        configurableComponentData.configurable_component_namespace,
+        configurableComponentData.configurable_component_class_name,
+        configurableComponentData.resource_identifier,
         toDelete.name,
         toDelete.params
       )
@@ -87,12 +86,12 @@ function AllocationPolicyConfigs(props: {
       });
   }
 
-  function saveConfig(config: AllocationPolicyConfig) {
+  function saveConfig(config: Configuration) {
     api
-      .setAllocationPolicyConfig(
-        "AllocationPolicy",
-        policy.policy_name,
-        storage,
+      .setConfigurableComponentConfiguration(
+        configurableComponentData.configurable_component_namespace,
+        configurableComponentData.configurable_component_class_name,
+        configurableComponentData.resource_identifier,
         config.name,
         config.value,
         config.params
@@ -102,7 +101,7 @@ function AllocationPolicyConfigs(props: {
       });
   }
 
-  function addConfig(config: AllocationPolicyConfig) {
+  function addConfig(config: Configuration) {
     saveConfig(config);
     setConfigs((prev) => [...prev, config]);
   }
@@ -119,11 +118,11 @@ function AllocationPolicyConfigs(props: {
       <AddConfigModal
         currentlyAdding={addingNew}
         setCurrentlyAdding={setAddingNew}
-        optionalConfigDefinitions={policy.optional_config_definitions}
+        optionalConfigDefinitions={configurableComponentData.optional_config_definitions}
         saveConfig={addConfig}
       />
       <div style={containerStyle}>
-        <p>{policy.policy_name}</p>
+        <p>{configurableComponentData.configurable_component_class_name}</p>
         <p style={paragraphStyle}>These are the global configurations.</p>
         <Table
           headerData={["Key", "Value", "Description", "Type", "Actions"]}
@@ -141,7 +140,7 @@ function AllocationPolicyConfigs(props: {
             ])}
           columnWidths={[3, 2, 5, 1, 1]}
           customStyles={createCustomTableStyles({
-            headerStyle: { backgroundColor: getTableColor(policy.configs) },
+            headerStyle: { backgroundColor: getTableColor(configurableComponentData.configurations) },
           })}
         />
         <p style={paragraphStyle}>
@@ -171,10 +170,10 @@ function AllocationPolicyConfigs(props: {
             ])}
           columnWidths={[3, 3, 2, 5, 1, 1]}
           customStyles={createCustomTableStyles({
-            headerStyle: { backgroundColor: getTableColor(policy.configs) },
+            headerStyle: { backgroundColor: getTableColor(configurableComponentData.configurations) },
           })}
         />
-        {!addingNew && policy.optional_config_definitions.length != 0 && (
+        {!addingNew && configurableComponentData.optional_config_definitions.length != 0 && (
           <a onClick={() => setAddingNew(true)} style={linkStyle}>
             add new
           </a>
@@ -185,4 +184,4 @@ function AllocationPolicyConfigs(props: {
   );
 }
 
-export { AllocationPolicyConfigs, getTableColor };
+export { Configurations, getTableColor };

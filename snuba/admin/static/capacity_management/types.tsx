@@ -1,13 +1,13 @@
 import { ReactNode } from "react";
 
-type AllocationPolicy = {
-  policy_name: string;
-  configs: AllocationPolicyConfig[];
-  optional_config_definitions: AllocationPolicyOptionalConfigDefinition[];
-  query_type: string;
-};
+// type AllocationPolicy = {
+//   policy_name: string;
+//   configs: AllocationPolicyConfig[];
+//   optional_config_definitions: AllocationPolicyOptionalConfigDefinition[];
+//   query_type: string;
+// };
 
-type AllocationPolicyConfig = {
+type Configuration = {
   name: string;
   value: string;
   description: string;
@@ -15,17 +15,17 @@ type AllocationPolicyConfig = {
   params: object;
 };
 
-type AllocationPolicyConfigParams = {
+type ConfigurationParams = {
   name: string;
   type: string;
 };
 
-type AllocationPolicyOptionalConfigDefinition = {
+type OptionalConfigurationDefinition = {
   name: string;
   type: string;
   default: string;
   description: string;
-  params: AllocationPolicyConfigParams[];
+  params: ConfigurationParams[];
 };
 
 type RowData = {
@@ -37,10 +37,28 @@ type RowData = {
   edit: ReactNode;
 };
 
+type ConfigurableComponentData = {
+  configurable_component_namespace: string;
+  configurable_component_class_name: string;
+  resource_identifier: string;
+  configurations: Configuration[];
+  optional_config_definitions: OptionalConfigurationDefinition[];
+};
+
+type AllocationPolicy = ConfigurableComponentData & {
+  query_type: string;
+};
+
+type StrategyData = ConfigurableComponentData & {
+  policies_data: AllocationPolicy[];
+};
+
 export {
   AllocationPolicy,
-  AllocationPolicyConfig,
-  AllocationPolicyOptionalConfigDefinition,
-  AllocationPolicyConfigParams,
+  StrategyData,
+  Configuration,
+  OptionalConfigurationDefinition,
+  ConfigurationParams,
   RowData,
+  ConfigurableComponentData,
 };

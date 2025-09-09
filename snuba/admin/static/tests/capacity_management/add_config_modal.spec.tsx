@@ -4,8 +4,8 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import AddConfigModal from "SnubaAdmin/capacity_management/add_config_modal";
 import {
-  AllocationPolicyConfig,
-  AllocationPolicyOptionalConfigDefinition,
+  Configuration,
+  OptionalConfigurationDefinition,
 } from "SnubaAdmin/capacity_management/types";
 
 describe("Add Config Modal", () => {
@@ -23,13 +23,13 @@ describe("Add Config Modal", () => {
     description: "some config",
   };
 
-  let expectedConfig: AllocationPolicyConfig = {
+  let expectedConfig: Configuration = {
     ...mockedConfig,
     value: "20",
     params: { some_param: "30", some_other_param: "test" },
   };
 
-  let mockedDefs: AllocationPolicyOptionalConfigDefinition[] = [
+  let mockedDefs: OptionalConfigurationDefinition[] = [
     {
       ...mockedConfig,
       default: "10",
