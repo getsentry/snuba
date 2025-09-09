@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import replace
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -29,13 +29,14 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond
 from snuba.query.dsl import column as snuba_column
-from snuba.query.dsl import literal, or_cond
+from snuba.query.dsl import in_cond, literal, literals_array, or_cond
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
 from snuba.state import get_int_config
+from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
@@ -58,6 +59,9 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_average_sample_rate_column,
     get_confidence_interval_column,
     get_count_column,
+)
+from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    get_trace_ids_for_cross_item_query,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
@@ -102,9 +106,7 @@ def aggregation_filter_to_expression(
                 )
             elif agg_filter.comparison_filter.HasField("formula"):
                 return op_expr(
-                    _formula_to_expression(
-                        agg_filter.comparison_filter.formula, request_meta
-                    ),
+                    _formula_to_expression(agg_filter.comparison_filter.formula, request_meta),
                     agg_filter.comparison_filter.val,
                 )
             return op_expr(
@@ -138,9 +140,7 @@ def aggregation_filter_to_expression(
                 )
             )
         case default:
-            raise BadSnubaRPCRequestException(
-                f"Unsupported aggregation filter type: {default}"
-            )
+            raise BadSnubaRPCRequestException(f"Unsupported aggregation filter type: {default}")
 
 
 def _convert_order_by(
@@ -222,9 +222,7 @@ def _get_reliability_context_columns(
     """
 
     if column.HasField("formula"):
-        if not get_int_config(
-            "enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT
-        ):
+        if not get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
             return []
         # also query for the left and right parts of the formula separately
         # this will be used later to calculate the reliability of the formula
@@ -277,16 +275,12 @@ def _get_reliability_context_columns(
             column.conditional_aggregation,
             attribute_key_to_expression,
         )
-        context_columns.append(
-            SelectedExpression(name=count_column.alias, expression=count_column)
-        )
+        context_columns.append(SelectedExpression(name=count_column.alias, expression=count_column))
         return context_columns
     return []
 
 
-def _formula_to_expression(
-    formula: Column.BinaryFormula, request_meta: RequestMeta
-) -> Expression:
+def _formula_to_expression(formula: Column.BinaryFormula, request_meta: RequestMeta) -> Expression:
     formula_expr = OP_TO_EXPR[formula.op](
         _column_to_expression(formula.left, request_meta),
         _column_to_expression(formula.right, request_meta),
@@ -331,7 +325,7 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
         )
 
 
-def build_query(request: TraceItemTableRequest) -> Query:
+def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
@@ -351,9 +345,21 @@ def build_query(request: TraceItemTableRequest) -> Query:
         )
         selected_columns.extend(_get_reliability_context_columns(column, request.meta))
 
-    item_type_conds = [
-        f.equals(snuba_column("item_type"), request.meta.trace_item_type)
-    ]
+    item_type_conds = [f.equals(snuba_column("item_type"), request.meta.trace_item_type)]
+
+    # Handle cross item queries by first getting trace IDs
+    additional_conditions = []
+    if request.trace_filters and timer is not None:
+        trace_ids = get_trace_ids_for_cross_item_query(
+            request, request.meta, list(request.trace_filters), timer
+        )
+        additional_conditions.append(
+            in_cond(
+                snuba_column("trace_id"),
+                literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
+            )
+        )
+
     groupby = [attribute_key_to_expression(attr_key) for attr_key in request.group_by]
     res = Query(
         from_clause=entity,
@@ -365,6 +371,7 @@ def build_query(request: TraceItemTableRequest) -> Query:
                 attribute_key_to_expression,
             ),
             *item_type_conds,
+            *additional_conditions,
         ),
         order_by=_convert_order_by(
             groupby,
@@ -399,7 +406,9 @@ def _get_page_token(
 
 
 def _build_snuba_request(
-    request: TraceItemTableRequest, query_settings: HTTPQuerySettings
+    request: TraceItemTableRequest,
+    query_settings: HTTPQuerySettings,
+    timer: Optional[Timer] = None,
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
         team = "ourlogs"
@@ -413,7 +422,7 @@ def _build_snuba_request(
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=build_query(request),
+        query=build_query(request, timer),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -439,18 +448,14 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         in_msg: TraceItemTableRequest,
         routing_decision: RoutingDecision,
     ) -> TraceItemTableResponse:
-        query_settings = (
-            setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
-        )
+        query_settings = setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         try:
-            routing_decision.strategy.merge_clickhouse_settings(
-                routing_decision, query_settings
-            )
+            routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
             query_settings.set_sampling_tier(routing_decision.tier)
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
 
-        snuba_request = _build_snuba_request(in_msg, query_settings)
+        snuba_request = _build_snuba_request(in_msg, query_settings, self._timer)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

@@ -34,9 +34,11 @@ from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (
     comparison_filter,
+    create_cross_item_test_data,
     create_request_meta,
     gen_item_message,
     or_filter,
+    write_cross_item_data_to_storage,
 )
 
 _TRACE_IDS = [uuid.uuid4().hex for _ in range(10)]
@@ -52,9 +54,7 @@ _SPANS = [
         start_timestamp=_BASE_TIME + timedelta(minutes=i),
         trace_id=_TRACE_IDS[i % len(_TRACE_IDS)],
         attributes={
-            "sentry.op": AnyValue(
-                string_value="navigation" if i < len(_TRACE_IDS) else "db"
-            ),
+            "sentry.op": AnyValue(string_value="navigation" if i < len(_TRACE_IDS) else "db"),
             "sentry.raw_description": AnyValue(
                 string_value=(
                     "root"
@@ -66,9 +66,7 @@ _SPANS = [
             "sentry.segment_id": AnyValue(
                 string_value=_TRACE_IDS[i % len(_TRACE_IDS)][:16],
             ),
-            "sentry.parent_span_id": AnyValue(
-                string_value="" if i < len(_TRACE_IDS) else "1" * 16
-            ),
+            "sentry.parent_span_id": AnyValue(string_value="" if i < len(_TRACE_IDS) else "1" * 16),
         },
     )
     for i in range(_SPAN_COUNT)
@@ -120,9 +118,7 @@ class TestGetTraces(BaseApiTest):
             ],
             limit=10,
         )
-        response = self.app.post(
-            "/rpc/EndpointGetTraces/v1", data=message.SerializeToString()
-        )
+        response = self.app.post("/rpc/EndpointGetTraces/v1", data=message.SerializeToString())
         error_proto = ErrorProto()
         if response.status_code != 200:
             error_proto.ParseFromString(response.data)
@@ -165,9 +161,7 @@ class TestGetTraces(BaseApiTest):
                         ),
                     ],
                 )
-                for start_timestamp in reversed(
-                    sorted(trace_id_per_start_timestamp.keys())
-                )
+                for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
             ],
             page_token=PageToken(offset=len(_TRACE_IDS + _ADDITIONAL_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
@@ -277,15 +271,9 @@ class TestGetTraces(BaseApiTest):
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
-    def test_with_data_and_aggregated_fields_all_keys(
-        self, setup_teardown: Any
-    ) -> None:
-        start_timestamp = Timestamp(
-            seconds=int((_BASE_TIME - timedelta(hours=10)).timestamp())
-        )
-        end_timestamp = Timestamp(
-            seconds=int((_BASE_TIME + timedelta(hours=10)).timestamp())
-        )
+    def test_with_data_and_aggregated_fields_all_keys(self, setup_teardown: Any) -> None:
+        start_timestamp = Timestamp(seconds=int((_BASE_TIME - timedelta(hours=10)).timestamp()))
+        end_timestamp = Timestamp(seconds=int((_BASE_TIME + timedelta(hours=10)).timestamp()))
         (
             start_timestamp_per_trace_id,
             trace_id_per_start_timestamp,
@@ -470,9 +458,7 @@ class TestGetTraces(BaseApiTest):
                         ),
                     ],
                 )
-                for start_timestamp in reversed(
-                    sorted(trace_id_per_start_timestamp.keys())
-                )
+                for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
@@ -534,18 +520,14 @@ class TestGetTraces(BaseApiTest):
                         ),
                     ],
                 )
-                for start_timestamp in reversed(
-                    sorted(trace_id_per_start_timestamp.keys())
-                )
+                for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
-    def test_with_data_and_aggregated_fields_ignore_case(
-        self, setup_teardown: Any
-    ) -> None:
+    def test_with_data_and_aggregated_fields_ignore_case(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         (
@@ -601,9 +583,7 @@ class TestGetTraces(BaseApiTest):
                         ),
                     ],
                 )
-                for start_timestamp in reversed(
-                    sorted(trace_id_per_start_timestamp.keys())
-                )
+                for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
@@ -715,9 +695,7 @@ class TestGetTraces(BaseApiTest):
         ]
 
         message = GetTracesRequest(
-            meta=create_request_meta(
-                start_time, end_time, TraceItemType.TRACE_ITEM_TYPE_SPAN
-            ),
+            meta=create_request_meta(start_time, end_time, TraceItemType.TRACE_ITEM_TYPE_SPAN),
             attributes=[
                 TraceAttribute(
                     key=TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT,
@@ -793,9 +771,7 @@ class TestGetTraces(BaseApiTest):
         for i, trace in enumerate(response.traces):
             # Traces are returned in descending order of start timestamp
             trace_index = 5 - i
-            expected_timestamp = (
-                start_time + timedelta(minutes=trace_index * 10, seconds=10)
-            ).timestamp()
+            expected_timestamp = (start_time + timedelta(minutes=trace_index * 10)).timestamp()
             assert trace.attributes[0].value.val_double == expected_timestamp
 
     def test_default_start_timestamp(self) -> None:
@@ -827,9 +803,7 @@ class TestGetTraces(BaseApiTest):
         response = EndpointGetTraces().execute(message)
 
         assert len(response.traces) == 1
-        assert (
-            response.traces[0].attributes[0].value.val_double == _BASE_TIME.timestamp()
-        )
+        assert response.traces[0].attributes[0].value.val_double == _BASE_TIME.timestamp()
 
 
 def generate_spans(spans_data: list[bytes]) -> list[TraceItem]:
@@ -853,98 +827,9 @@ def generate_trace_id_timestamp_data(
             s.attributes["sentry.start_timestamp_precise"].double_value,
         )
     trace_id_per_start_timestamp: dict[float, str] = {
-        timestamp: trace_id
-        for trace_id, timestamp in start_timestamp_per_trace_id.items()
+        timestamp: trace_id for trace_id, timestamp in start_timestamp_per_trace_id.items()
     }
     return start_timestamp_per_trace_id, trace_id_per_start_timestamp
-
-
-def create_cross_item_test_data() -> tuple[list[str], list[bytes], datetime, datetime]:
-    """
-    Create test data with 6 traces. The first 3 traces have items with the following attributes:
-    - span.attr1 = val1
-    - log.attr2 = val2
-    - error.attr3 = val3
-    - error.attr4 = val4
-    The last 3 traces have items with the following attributes:
-    - span.attr1 = other_val1
-    - log.attr2 = other_val2
-    - error.attr3 = other_val3
-    - error.attr4 = other_val4
-    """
-    # Use today's date with a fixed time range (12am to 1am)
-    today = datetime.now(tz=timezone.utc).date()
-    start_time = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc)
-    end_time = start_time + timedelta(hours=1)
-
-    # Create 6 traces - 3 should match all conditions, 3 should not
-    trace_ids = [uuid.uuid4().hex for _ in range(6)]
-    all_items = []
-
-    for i, trace_id in enumerate(trace_ids):
-        # Spread items evenly across the 1-hour window
-        item_time = start_time + timedelta(minutes=i * 10)
-
-        if i < 3:  # First 3 traces have matching log attributes
-            log_attrs = {
-                "log.attr2": AnyValue(string_value="val2"),
-            }
-        else:  # Last 3 traces have different log attributes
-            log_attrs = {
-                "log.attr2": AnyValue(string_value="other_val2"),
-            }
-
-        all_items.append(
-            gen_item_message(
-                start_timestamp=item_time,
-                trace_id=trace_id,
-                type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-                attributes=log_attrs,
-                remove_default_attributes=True,
-            )
-        )
-
-        if i < 3:  # First 3 traces have matching span attributes
-            span_attrs = {
-                "span.attr1": AnyValue(string_value="val1"),
-            }
-        else:  # Last 3 traces have different span attributes
-            span_attrs = {
-                "span.attr1": AnyValue(string_value="other_val1"),
-            }
-
-        all_items.append(
-            gen_item_message(
-                start_timestamp=item_time + timedelta(seconds=10),
-                trace_id=trace_id,
-                type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                attributes=span_attrs,
-                remove_default_attributes=True,
-            )
-        )
-
-        if i < 3:  # First 3 traces have matching error attributes
-            error_attrs = {
-                "error.attr3": AnyValue(string_value="val3"),
-                "error.attr4": AnyValue(string_value="val4"),
-            }
-        else:  # Last 3 traces have different error attributes
-            error_attrs = {
-                "error.attr3": AnyValue(string_value="other_val3"),
-                "error.attr4": AnyValue(string_value="other_val4"),
-            }
-
-        all_items.append(
-            gen_item_message(
-                start_timestamp=item_time + timedelta(seconds=20),
-                trace_id=trace_id,
-                type=TraceItemType.TRACE_ITEM_TYPE_ERROR,
-                attributes=error_attrs,
-                remove_default_attributes=True,
-            )
-        )
-
-    return trace_ids, all_items, start_time, end_time
 
 
 def trace_filter(
@@ -956,9 +841,3 @@ def trace_filter(
         item_type=item_type,
         filter=filter,
     )
-
-
-def write_cross_item_data_to_storage(items: list[bytes]) -> None:
-    """Write cross-item test data to storage."""
-    storage = get_storage(StorageKey("eap_items"))
-    write_raw_unprocessed_events(storage, items)  # type: ignore
