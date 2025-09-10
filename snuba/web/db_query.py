@@ -703,6 +703,7 @@ def db_query(
                 "experiments": clickhouse_query.get_experiments(),
             },
         )
+        error.__cause__ = e
     finally:
         result_or_error = QueryResultOrError(query_result=result, error=error)
         _record_bytes_scanned(
