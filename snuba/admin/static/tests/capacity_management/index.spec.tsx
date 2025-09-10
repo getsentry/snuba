@@ -32,8 +32,10 @@ it("should display allocation policy configs once a storage is selected", async 
   let storages = ["storage1", "storage2"];
   let allocationPolicies: AllocationPolicy[] = [
     {
-      policy_name: "some_policy",
-      configs: [
+      configurable_component_namespace: "some_namespace",
+      resource_identifier: "some_resource",
+      configurable_component_class_name: "some_policy",
+      configurations: [
         {
           name: "key1",
           value: "10",
@@ -46,8 +48,10 @@ it("should display allocation policy configs once a storage is selected", async 
       query_type: "select",
     },
     {
-      policy_name: "some_other_policy",
-      configs: [
+      configurable_component_namespace: "some_namespace",
+      resource_identifier: "some_resource",
+      configurable_component_class_name: "some_other_policy",
+      configurations: [
         {
           name: "key2",
           value: "a_value",
