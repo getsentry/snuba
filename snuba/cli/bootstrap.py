@@ -23,6 +23,11 @@ from snuba.utils.streams.topics import Topic
 @click.option("--kafka/--no-kafka", default=True)
 @click.option("--migrate/--no-migrate", default=True)
 @click.option("--force", is_flag=True)
+@click.option(
+    "--migrate-eap/--no-migrate-eap",
+    default=False,
+    help="Migrate old metrics dataset into eap_items dataset.",
+)
 @click.option("--log-level", help="Logging level to use.")
 def bootstrap(
     *,
@@ -30,6 +35,7 @@ def bootstrap(
     kafka: bool,
     migrate: bool,
     force: bool,
+    migrate_eap: bool,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -87,3 +93,7 @@ def bootstrap(
     if migrate:
         check_clickhouse_connections(CLUSTERS)
         Runner().run_all(force=True)
+
+    if migrate_eap:
+        check_clickhouse_connections(CLUSTERS)
+        Runner().spans_to_eap_items()

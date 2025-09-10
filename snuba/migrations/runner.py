@@ -646,3 +646,99 @@ class Runner:
                 raise e
 
         return data
+
+    def spans_to_eap_items(self) -> None:
+        """
+        Migrate spans to eap_items. Although this is a one-off thing to do,
+        this should be safe to run multiple times.
+        """
+        try:
+            data = self.__connection.execute(
+                f"SELECT * FROM spans_local",
+            ).results
+
+            for row in data:
+                # TODO: Populate these attributes from the spans table
+                attributes_bool = {}
+                attributes_int = {}
+                # The content of `attributes_str` and `attributes_float` should be
+                # ```python
+                # attributes_str = {
+                #   "0": {},
+                #   "1": {},
+                #   # ... until 39
+                # }
+                # ```
+                attributes_str = {}
+                attributes_float = {}
+                for i in range(40):
+                    attributes_str[str(i)] = {}
+                    attributes_float[str(i)] = {}
+
+                flattened_attributes_str = {}
+                flattened_attributes_float = {}
+                for k, v in attributes_str.items():
+                    flattened_attributes_str[f"attributes_string_{k}"] = v
+                for k, v in attributes_float.items():
+                    flattened_attributes_float[f"attributes_float_{k}"] = v
+
+                self.__connection.execute(
+                    f"""
+                    INSERT INTO
+                        eap_items_1_local
+                        (
+                            organization_id,
+                            project_id,
+                            item_type,
+                            timestamp,
+                            trace_id,
+                            item_id,
+                            sampling_weight,
+                            sampling_factor,
+                            retention_days,
+                            downsampled_retention_days,
+                            attributes_bool,
+                            attributes_int,
+                            {",\n".join(f"attributes_string_{i}" for i in range(40))},
+                            {",\n".join(f"attributes_float_{i}" for i in range(40))}
+                        )
+                    VALUES
+                        (
+                            %(organization_id),
+                            %(project_id),
+                            1,
+                            %(timestamp),
+                            %(trace_id),
+                            %(item_id),
+                            %(sampling_weight),
+                            %(sampling_factor),
+                            %(retention_days),
+                            %(downsampled_retention_days),
+                            %(attributes_bool),
+                            %(attributes_int),
+                            {",\n".join(f"%(attributes_string_{i})" for i in range(40))},
+                            {",\n".join(f"%(attributes_float_{i})" for i in range(40))}
+                        )
+                """,
+                    {
+                        "organization_id": row[
+                            "organization_id"
+                        ],  # FIXME: organization_id does not exists on spans table
+                        "project_id": row["project_id"],
+                        "timestamp": row["start_timestamp"],
+                        "trace_id": row["trace_id"],
+                        "item_id": row["span_id"],
+                        "sampling_weight": row["sampling_weight"],
+                        "sampling_factor": row["sampling_factor"],
+                        "retention_days": row["retention_days"],
+                        "downsampled_retention_days": row["retention_days"],
+                        "attributes_bool": attributes_bool,
+                        "attributes_int": attributes_int,
+                        **flattened_attributes_str,
+                        **flattened_attributes_float,
+                    },
+                )
+        except ClickhouseError as e:
+            # If the table wasn't created yet, no migrations have started.
+            if e.code != errors.ErrorCodes.UNKNOWN_TABLE:
+                raise e
