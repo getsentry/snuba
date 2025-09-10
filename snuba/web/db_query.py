@@ -253,15 +253,12 @@ def execute_query_with_query_id(
             referrer,
         )
     except ClickhouseError as e:
-        if (
-            e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING
-            or not state.get_config("retry_duplicate_query_id", False)
+        if e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING or not state.get_config(
+            "retry_duplicate_query_id", False
         ):
             raise
 
-        logger.error(
-            "Query cache for query ID %s lost, retrying query with random ID", query_id
-        )
+        logger.error("Query cache for query ID %s lost, retrying query with random ID", query_id)
         metrics.increment("query_cache_lost")
 
         query_id = f"randomized-{uuid.uuid4().hex}"
@@ -371,9 +368,7 @@ def _get_query_settings_from_config(
 
     # Populate the query settings with the default values
     clickhouse_query_settings: MutableMapping[str, Any] = {
-        k.split("/", 1)[1]: v
-        for k, v in all_confs.items()
-        if k.startswith("query_settings/")
+        k.split("/", 1)[1]: v for k, v in all_confs.items() if k.startswith("query_settings/")
     }
 
     if async_override:
@@ -432,9 +427,7 @@ def _raw_query(
     consistent = query_settings.get_consistent()
     stats["consistent"] = consistent
     if consistent:
-        sample_rate = state.get_config(
-            f"{dataset_name}_ignore_consistent_queries_sample_rate", 0
-        )
+        sample_rate = state.get_config(f"{dataset_name}_ignore_consistent_queries_sample_rate", 0)
         assert sample_rate is not None
         ignore_consistent = random.random() < float(sample_rate)
         if not ignore_consistent:
@@ -701,6 +694,7 @@ def db_query(
     except Exception as e:
         # We count on _raw_query capturing all exceptions in a QueryException
         # if it didn't do that, something is very wrong so we just panic out here
+        error = e
         raise e
     finally:
         result_or_error = QueryResultOrError(query_result=result, error=error)
@@ -734,9 +728,7 @@ def db_query(
                 stats["sampling_tier"] = query_settings.get_sampling_tier()
                 result.extra["stats"] = stats
             return result
-        raise error or Exception(
-            "No error or result when running query, this should never happen"
-        )
+        raise error or Exception("No error or result when running query, this should never happen")
 
 
 @dataclass
@@ -788,16 +780,12 @@ def _populate_query_status(
     if rejection_quota_and_policy:
         summary[is_successful] = False
         summary[is_rejected] = True
-        summary[
-            rejection_storage_key
-        ] = rejection_quota_and_policy.policy.resource_identifier.value
+        summary[rejection_storage_key] = rejection_quota_and_policy.policy.resource_identifier.value
 
     if throttle_quota_and_policy:
         summary[is_successful] = False
         summary[is_throttled] = True
-        summary[
-            throttle_storage_key
-        ] = throttle_quota_and_policy.policy.resource_identifier.value
+        summary[throttle_storage_key] = throttle_quota_and_policy.policy.resource_identifier.value
 
 
 def _apply_allocation_policies_quota(
@@ -834,10 +822,7 @@ def _apply_allocation_policies_quota(
                     "quota_allowance",
                     quota_allowances[allocation_policy.config_key()],
                 )
-                if (
-                    allowance.is_throttled
-                    and allowance.max_threads < min_threads_across_policies
-                ):
+                if allowance.is_throttled and allowance.max_threads < min_threads_across_policies:
                     throttle_quota_and_policy = _QuotaAndPolicy(
                         quota_allowance=allowance,
                         policy=allocation_policy,
@@ -853,8 +838,7 @@ def _apply_allocation_policies_quota(
                     break
 
         allowance_dicts = {
-            key: quota_allowance.to_dict()
-            for key, quota_allowance in quota_allowances.items()
+            key: quota_allowance.to_dict() for key, quota_allowance in quota_allowances.items()
         }
 
         stats["quota_allowance"] = {}
@@ -868,14 +852,10 @@ def _apply_allocation_policies_quota(
             key=lambda mb: float("inf") if mb == 0 else mb,
         )
         if max_bytes_to_read != 0:
-            query_settings.push_clickhouse_setting(
-                "max_bytes_to_read", max_bytes_to_read
-            )
+            query_settings.push_clickhouse_setting("max_bytes_to_read", max_bytes_to_read)
             summary["max_bytes_to_read"] = max_bytes_to_read
 
-        _populate_query_status(
-            summary, rejection_quota_and_policy, throttle_quota_and_policy
-        )
+        _populate_query_status(summary, rejection_quota_and_policy, throttle_quota_and_policy)
         _add_quota_info(summary, _REJECTED_BY, rejection_quota_and_policy)
         _add_quota_info(summary, _THROTTLED_BY, throttle_quota_and_policy)
         stats["quota_allowance"]["summary"] = summary

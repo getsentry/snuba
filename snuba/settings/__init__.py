@@ -149,7 +149,7 @@ class RedisClusterConfig(TypedDict):
     db: int
     ssl: bool
     reinitialize_steps: int
-    socket_timeout: int
+    socket_timeout: float
 
 
 # The default cluster is configured using these global constants. If a config
@@ -165,8 +165,8 @@ REDIS_DB = int(os.environ.get("REDIS_DB", 1))
 REDIS_SSL = bool(os.environ.get("REDIS_SSL", False))
 REDIS_INIT_MAX_RETRIES = 3
 REDIS_REINITIALIZE_STEPS = 10
-# command timeout in seconds
-REDIS_SOCKET_TIMEOUT = 5
+# default redis command timeout in seconds for redis commands (e.g. configs, rate limits) which are meant to be quick and fail-open
+REDIS_SOCKET_TIMEOUT = 0.1
 
 
 class RedisClusters(TypedDict):

@@ -127,9 +127,7 @@ class AllocationPolicyViolations(SerializableException):
 
     @property
     def quota_allowance(self) -> dict[str, dict[str, Any]]:
-        return cast(
-            dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {})
-        )
+        return cast(dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {}))
 
     @property
     def summary(self) -> dict[str, Any]:
@@ -393,10 +391,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
 
     @property
     def is_active(self) -> bool:
-        return (
-            bool(self.get_config_value(IS_ACTIVE))
-            and settings.ALLOCATION_POLICY_ENABLED
-        )
+        return bool(self.get_config_value(IS_ACTIVE)) and settings.ALLOCATION_POLICY_ENABLED
 
     @property
     def is_enforced(self) -> bool:
@@ -480,6 +475,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
                 suggestion=NO_SUGGESTION,
             )
         except Exception:
+            self.metrics.increment("fail_open", 1, tags={"method": "get_quota_allowance"})
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
             )
@@ -537,6 +533,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             # the policy did not do anything because the tenants were invalid, updating is also not necessary
             pass
         except Exception:
+            self.metrics.increment("fail_open", 1, tags={"method": "update_quota_balance"})
             logger.exception(
                 "Allocation policy failed to update quota balance, this is a bug, fix it"
             )

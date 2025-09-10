@@ -3,7 +3,6 @@ from typing import Callable, Optional
 
 import sentry_sdk
 
-from redis import RedisError
 from redis.exceptions import ConnectionError, ReadOnlyError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from snuba import environment, settings
@@ -66,7 +65,12 @@ class RedisCache(Cache[TValue]):
         record_cache_hit_type(SIMPLE_READTHROUGH)
         result_key = self.__build_key(key)
 
-        cached_value = self.__client.get(result_key)
+        cached_value = None
+        try:
+            cached_value = self.__client.get(result_key)
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+
         if timer is not None:
             timer.mark("cache_get")
         metric_tags = timer.tags if timer is not None else {}
@@ -83,7 +87,7 @@ class RedisCache(Cache[TValue]):
                         self.__codec.encode(value),
                         ex=get_config("cache_expiry_sec", 1),
                     )
-                except RedisError as e:
+                except Exception as e:
                     metrics.increment("redis_cache_set_error", tags=metric_tags)
                     sentry_sdk.capture_exception(e)
                     return value
