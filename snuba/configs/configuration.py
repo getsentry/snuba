@@ -478,6 +478,11 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     @classmethod
     def all_names(cls) -> list[str]:
         """Returns all registered class names that belong to this component's namespace."""
+        # If called on ConfigurableComponent itself, return all registered classes
+        if cls is ConfigurableComponent:
+            return list(getattr(cls, "_registry").all_names())
+
+        # For subclasses, return only classes in the same namespace
         namespaced_classes = []
         for registered_cls in getattr(cls, "_registry").all_classes():
             if (

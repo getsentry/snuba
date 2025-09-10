@@ -9,8 +9,8 @@ from snuba.configs.configuration import (
     ResourceIdentifier,
 )
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.allocation_policies import AllocationPolicy
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    BaseRoutingStrategy,
     RoutingStrategyConfig,
 )
 
@@ -321,7 +321,25 @@ class TestConfigurableComponentConfigRetrieval:
         assert optional_configs[0]["params"][0]["type"] == "int"
 
 
-def test_namespaces() -> None:
-    print("jdkflakjdla", BaseRoutingStrategy.all_names())
-    # print(ConfigurableComponent.all_names())
-    assert False
+class TestConfigurableComponentNamespaces:
+    """Test namespace filtering in all_names() method."""
+
+    def test_configurable_component_all_names_returns_all_classes(self) -> None:
+        """Test that ConfigurableComponent.all_names() returns all registered classes from different namespaces."""
+        namespaces = set()
+        for name in ConfigurableComponent.all_names():
+            namespace = name.split(".")[0]
+            namespaces.add(namespace)
+
+        # Should have multiple namespaces because as of 9/9/25, we have 2 namespaces: BaseRoutingStrategy and AllocationPolicy
+        assert len(namespaces) > 1
+
+    def test_subclass_all_names_filters_by_namespace(self) -> None:
+        """Test that any subclass all_names() returns only classes in its namespace."""
+        for name in AllocationPolicy.all_names():
+            assert name.startswith(AllocationPolicy.component_namespace())
+            # Should not include the base class itself
+            assert (
+                name
+                != f"{AllocationPolicy.component_namespace()}.{AllocationPolicy.component_namespace()}"
+            )
