@@ -100,13 +100,12 @@ _default_redis_client: RedisClientType = _initialize_redis_cluster(
 
 
 def _initialize_specialized_redis_cluster(
-    config: settings.RedisClusterConfig | None, **additional_settings: str
+    config: settings.RedisClusterConfig | None, **overrides: float
 ) -> RedisClientType:
     if config is None:
         return _default_redis_client
-    for k, v in additional_settings.items():
-        if k not in config:
-            config[k] = v  # type: ignore
+    for k, v in overrides.items():
+        config[k] = v  # type: ignore
     return _initialize_redis_cluster(config)
 
 

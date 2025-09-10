@@ -692,10 +692,17 @@ def db_query(
     except QueryException as e:
         error = e
     except Exception as e:
-        # We count on _raw_query capturing all exceptions in a QueryException
-        # if it didn't do that, something is very wrong so we just panic out here
-        error = e
-        raise e
+        error = QueryException.from_args(
+            # This exception needs to have the message of the cause in it for sentry
+            # to pick it up properly
+            e.__class__.__name__,
+            str(e),
+            {
+                "stats": stats,
+                "sql": "",
+                "experiments": clickhouse_query.get_experiments(),
+            },
+        )
     finally:
         result_or_error = QueryResultOrError(query_result=result, error=error)
         _record_bytes_scanned(
