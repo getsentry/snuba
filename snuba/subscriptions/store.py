@@ -10,7 +10,7 @@ from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-metrics = MetricsWrapper(environment.metrics, "db_query")
+metrics = MetricsWrapper(environment.metrics, "subscription_store")
 
 
 class SubscriptionDataStore(abc.ABC):
