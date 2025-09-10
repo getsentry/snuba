@@ -1,4 +1,5 @@
 import uuid
+from datetime import timedelta
 from typing import cast
 
 import sentry_sdk
@@ -19,7 +20,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array
 from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.query.query_settings import OutcomesQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -74,12 +75,24 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             ),
         ]
 
+    def _use_daily(self, in_msg_meta: RequestMeta) -> bool:
+        if in_msg_meta.end_timestamp.seconds < in_msg_meta.start_timestamp.seconds:
+            return False
+        seconds_delta = in_msg_meta.end_timestamp.seconds - in_msg_meta.start_timestamp.seconds
+        duration = timedelta(seconds=seconds_delta)
+        return duration.days > 90
+
     def get_ingested_items_for_timerange(self, routing_context: RoutingContext) -> int:
         in_msg_meta = extract_message_meta(routing_context.in_msg)
         entity = Entity(
             key=EntityKey("outcomes"),
             schema=get_entity(EntityKey("outcomes")).get_data_model(),
             sample=None,
+        )
+        query_settings = (
+            OutcomesQuerySettings(use_daily=True)
+            if self._use_daily(in_msg_meta)
+            else OutcomesQuerySettings()
         )
         query = Query(
             from_clause=entity,
@@ -109,7 +122,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             id=uuid.uuid4(),
             original_body=MessageToDict(routing_context.in_msg),
             query=query,
-            query_settings=HTTPQuerySettings(),
+            query_settings=query_settings,
             attribution_info=AttributionInfo(
                 referrer=in_msg_meta.referrer,
                 team="eap",
