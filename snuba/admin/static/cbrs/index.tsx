@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import { Configurations } from "SnubaAdmin/capacity_management/allocation_policy";
 import { AllocationPolicy, Configuration, ConfigurableComponentData, StrategyData } from "SnubaAdmin/capacity_management/types";
+import { PolicyRenderer } from "SnubaAdmin/capacity_management/policy_renderer";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { COLORS } from "SnubaAdmin/theme";
 
@@ -54,35 +55,12 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
           configurableComponentData={strategyConfigs}
         />
 
-        {renderPolicies(
-          strategyConfigs.policies_data.filter((policy) => policy.query_type == "select")
-        )}
-        {renderPolicies(
-          strategyConfigs.policies_data.filter((policy) => policy.query_type == "delete")
-        )}
-      </div>
-    );
-  }
-
-  function renderPolicies(policies: AllocationPolicy[]) {
-    if (!selectedStrategy) {
-      return <p>Strategy not selected.</p>;
-    }
-    if (policies.length == 0) {
-      return null;
-    }
-    return (
-      <div>
-        <p style={policyTypeStyle}>
-          Policy Type: {policies[0].query_type.toUpperCase()}
-        </p>
-        {policies.map((policy: AllocationPolicy) => (
-          <Configurations
-            api={api}
-            configurableComponentData={policy}
-            key={selectedStrategy + policy.configurable_component_class_name}
-          />
-        ))}
+        <PolicyRenderer
+          api={api}
+          policies={strategyConfigs.policies_data}
+          selectedItem={selectedStrategy}
+          itemType="strategy"
+        />
       </div>
     );
   }
