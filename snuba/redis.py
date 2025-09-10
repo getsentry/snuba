@@ -124,7 +124,7 @@ class RedisClientKey(Enum):
 _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
     RedisClientKey.CACHE: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["cache"],
-        # cache lookups above 1 second are not worth it
+        # cache lookups above 1 second are not worth it to wait any longer
         socket_timeout=1,
     ),
     RedisClientKey.RATE_LIMITER: _initialize_specialized_redis_cluster(
