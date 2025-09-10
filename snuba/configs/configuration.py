@@ -490,5 +490,5 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
                 and registered_cls.component_namespace() == cls.component_namespace()
                 and registered_cls.config_key() != cls.config_key()
             ):
-                namespaced_classes.append(registered_cls.config_key())
+                namespaced_classes.append(registered_cls.class_name())
         return namespaced_classes
