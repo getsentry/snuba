@@ -72,7 +72,7 @@ def _initialize_redis_cluster(config: settings.RedisClusterConfig) -> RedisClien
         )
     else:
         return SingleNodeRedis(
-            _retries=1,
+            _retries=2,
             _backoff_max=3,
             host=config["host"],
             port=config["port"],

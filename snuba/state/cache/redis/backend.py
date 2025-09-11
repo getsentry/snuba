@@ -69,6 +69,8 @@ class RedisCache(Cache[TValue]):
         try:
             cached_value = self.__client.get(result_key)
         except Exception as e:
+            if settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES:
+                raise e
             sentry_sdk.capture_exception(e)
 
         if timer is not None:
