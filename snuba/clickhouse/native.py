@@ -85,7 +85,7 @@ class ClickhousePool(object):
         ca_certs: Optional[str] = None,
         verify: Optional[bool] = False,
         connect_timeout: int = 1,
-        send_receive_timeout: Optional[int] = 300,
+        send_receive_timeout: Optional[int] = 35,
         max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
         client_settings: Mapping[str, Any] = {},
     ) -> None:
