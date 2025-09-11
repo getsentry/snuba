@@ -56,6 +56,7 @@ def create_count_expression(label: str = "count") -> Expression:
     """Helper to create a count aggregation expression."""
     return Expression(
         aggregation=AttributeAggregation(
+            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id"),
             aggregate=Function.FUNCTION_COUNT,
             label=label,
         ),
@@ -63,19 +64,7 @@ def create_count_expression(label: str = "count") -> Expression:
     )
 
 
-def create_sum_expression(attribute_name: str, label: str) -> Expression:
-    """Helper to create a sum aggregation expression."""
-    return Expression(
-        aggregation=AttributeAggregation(
-            aggregate=Function.FUNCTION_SUM,
-            key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name=attribute_name),
-            label=label,
-        ),
-        label=label,
-    )
-
-
-@pytest.mark.clickhouse_db
+@pytest.mark.eap_clickhouse_db
 @pytest.mark.redis_db
 class TestTimeSeriesCrossItemQueries(BaseApiTest):
     def test_cross_item_filtering_reduces_time_series_data(self) -> None:
@@ -83,22 +72,6 @@ class TestTimeSeriesCrossItemQueries(BaseApiTest):
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
         write_cross_item_data_to_storage(all_items)
 
-        # First, get baseline count without cross-item filters
-        baseline_message = create_time_series_request(
-            start_time=start_time,
-            end_time=end_time,
-            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            expressions=[create_count_expression()],
-            trace_filters=[],  # No cross-item filters
-            granularity_secs=3600,
-        )
-
-        baseline_response = EndpointTimeSeries().execute(baseline_message)
-        baseline_count = sum(
-            dp.data for dp in baseline_response.result_timeseries[0].data_points if dp.data_present
-        )
-
-        # Now apply cross-item filters that should reduce the data
         trace_filters = [
             trace_filter(
                 comparison_filter("span.attr1", "val1"),
@@ -119,14 +92,10 @@ class TestTimeSeriesCrossItemQueries(BaseApiTest):
             granularity_secs=3600,
         )
 
-        filtered_response = EndpointTimeSeries().execute(filtered_message)
-        filtered_count = sum(
-            dp.data for dp in filtered_response.result_timeseries[0].data_points if dp.data_present
-        )
+        response = EndpointTimeSeries().execute(filtered_message)
 
-        # Cross-item filtering should reduce the count
-        assert filtered_count < baseline_count
-        assert filtered_count > 0  # But we should still have some data
+        assert len(response.result_timeseries) == 1
+        assert response.result_timeseries[0].data_points[0].data == 3
 
     def test_cross_item_query_returns_different_item_type(self) -> None:
         """Test cross-item filtering works when querying different item type than filters."""
