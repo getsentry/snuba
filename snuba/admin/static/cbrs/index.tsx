@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import { Configurations } from "SnubaAdmin/capacity_management/allocation_policy";
-import { AllocationPolicy, Configuration, ConfigurableComponentData, StrategyData } from "SnubaAdmin/capacity_management/types";
-import { PolicyRenderer } from "SnubaAdmin/capacity_management/policy_renderer";
+import { StrategyData } from "SnubaAdmin/capacity_management/types";
+import { PolicyRenderer, policyTypeStyle } from "SnubaAdmin/capacity_management/policy_renderer";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
-import { COLORS } from "SnubaAdmin/theme";
 
 function CapacityBasedRoutingSystem(props: { api: Client }) {
   const { api } = props;
@@ -58,8 +57,8 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
         <PolicyRenderer
           api={api}
           policies={strategyConfigs.policies_data}
-          selectedItem={selectedStrategy}
-          itemType="strategy"
+          resourceIdentifier={selectedStrategy}
+          resourceType="strategy"
         />
       </div>
     );
@@ -81,15 +80,5 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
     </div>
   );
 }
-
-const policyTypeStyle = {
-  fontSize: 18,
-  fontWeight: 600,
-  color: COLORS.HEADER_TEXT,
-  backgroundColor: COLORS.TEXT_LIGHTER,
-  maxWidth: "100%",
-  margin: "10px 0px",
-  padding: "5px",
-};
 
 export default CapacityBasedRoutingSystem;

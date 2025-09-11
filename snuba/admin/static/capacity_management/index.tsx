@@ -54,8 +54,8 @@ function CapacityManagement(props: { api: Client }) {
       <PolicyRenderer
         api={api}
         policies={allocationPolicies}
-        selectedItem={selectedStorage}
-        itemType="storage"
+        resourceIdentifier={selectedStorage}
+        resourceType="storage"
       />
     </div>
   );

@@ -7,8 +7,8 @@ import { COLORS } from "SnubaAdmin/theme";
 interface PolicyRendererProps {
   api: Client;
   policies: AllocationPolicy[];
-  selectedItem: string | undefined;
-  itemType: string; // "strategy" or "storage"
+  resourceIdentifier: string | undefined;
+  resourceType: string;
 }
 
 const policyTypeStyle = {
@@ -21,10 +21,11 @@ const policyTypeStyle = {
   padding: "5px",
 };
 
-export function PolicyRenderer({ api, policies, selectedItem, itemType }: PolicyRendererProps) {
+export { policyTypeStyle };
+export function PolicyRenderer({ api, policies, resourceIdentifier, resourceType }: PolicyRendererProps) {
   function renderPolicies(policies: AllocationPolicy[]) {
-    if (!selectedItem) {
-      return <p>{itemType.charAt(0).toUpperCase() + itemType.slice(1)} not selected.</p>;
+    if (!resourceIdentifier) {
+      return <p>{resourceType} not selected.</p>;
     }
     if (policies.length == 0) {
       return null;
@@ -38,7 +39,7 @@ export function PolicyRenderer({ api, policies, selectedItem, itemType }: Policy
           <Configurations
             api={api}
             configurableComponentData={policy}
-            key={selectedItem + policy.configurable_component_class_name}
+            key={resourceIdentifier + policy.configurable_component_class_name}
           />
         ))}
       </div>
