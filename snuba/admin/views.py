@@ -940,7 +940,6 @@ def snuba_debug() -> Response:
 @application.route("/routing_strategies")
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def routing_strategies() -> Response:
-    print("jdkflakjdla", BaseRoutingStrategy.all_names())
     return Response(
         json.dumps(BaseRoutingStrategy.all_names()),
         200,
