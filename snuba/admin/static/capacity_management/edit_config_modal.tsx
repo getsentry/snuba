@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
-import { Configuration } from "SnubaAdmin/shared/types";
+import { Configuration } from "SnubaAdmin/configurable_component/types";
 
 function EditConfigModal(props: {
   currentlyEditing: boolean;

@@ -6,7 +6,7 @@ import AddConfigModal from "SnubaAdmin/capacity_management/add_config_modal";
 import {
   Configuration,
   OptionalConfigurationDefinition,
-} from "SnubaAdmin/shared/types";
+} from "SnubaAdmin/configurable_component/types";
 
 describe("Add Config Modal", () => {
   afterAll(() => {

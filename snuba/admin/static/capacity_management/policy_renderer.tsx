@@ -1,7 +1,7 @@
 import React from "react";
 import Client from "SnubaAdmin/api_client";
 import { Configurations } from "SnubaAdmin/capacity_management/allocation_policy";
-import { AllocationPolicy } from "SnubaAdmin/shared/types";
+import { AllocationPolicy } from "SnubaAdmin/configurable_component/types";
 import { COLORS } from "SnubaAdmin/theme";
 
 interface PolicyRendererProps {

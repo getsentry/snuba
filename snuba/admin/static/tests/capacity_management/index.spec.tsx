@@ -2,7 +2,7 @@ import Client from "SnubaAdmin/api_client";
 
 import CapacityManagement from "SnubaAdmin/capacity_management/index";
 import { it, expect, jest } from "@jest/globals";
-import { AllocationPolicy } from "SnubaAdmin/shared/types";
+import { AllocationPolicy } from "SnubaAdmin/configurable_component/types";
 import {
   act,
   getByText,

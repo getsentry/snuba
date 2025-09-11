@@ -1,7 +1,7 @@
 import { getTableColor } from "SnubaAdmin/capacity_management/allocation_policy";
 import { COLORS } from "SnubaAdmin/theme";
 import { it, expect } from "@jest/globals";
-import { ConfigurableComponentData } from "SnubaAdmin/shared/types";
+import { ConfigurableComponentData } from "SnubaAdmin/configurable_component/types";
 
 let bonus_configs = [{
   name: "key1",

@@ -1,8 +1,8 @@
 import React from "react";
 import Client from "SnubaAdmin/api_client";
-import { AllocationPolicy } from "SnubaAdmin/shared/types";
+import { AllocationPolicy } from "SnubaAdmin/configurable_component/types";
 import { PolicyRenderer } from "SnubaAdmin/capacity_management/policy_renderer";
-import { ConfigurableComponentRenderer } from "SnubaAdmin/shared/render_configurable_component";
+import { ConfigurableComponentRenderer } from "SnubaAdmin/configurable_component/render_configurable_component";
 
 function CapacityManagement(props: { api: Client }) {
   return (
