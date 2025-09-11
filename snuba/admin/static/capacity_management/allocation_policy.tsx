@@ -9,10 +9,13 @@ import { getReadonlyRow } from "SnubaAdmin/capacity_management/row_data";
 import EditConfigModal from "SnubaAdmin/capacity_management/edit_config_modal";
 import AddConfigModal from "SnubaAdmin/capacity_management/add_config_modal";
 
-function getTableColor(configs: Configuration[]): string {
+function getTableColor(configurableComponentData: ConfigurableComponentData): string {
+  if (configurableComponentData.configurable_component_namespace === "BaseRoutingStrategy") {
+    return COLORS.SNUBA_BLUE;
+  }
   let policyIsActive = false;
   let policyIsEnforced = false;
-  configs.forEach((config) => {
+  configurableComponentData.configurations.forEach((config) => {
     if (config.name == "is_active") {
       if (parseInt(config.value) === 1) {
         policyIsActive = true;
@@ -140,7 +143,7 @@ function Configurations(props: {
             ])}
           columnWidths={[3, 2, 5, 1, 1]}
           customStyles={createCustomTableStyles({
-            headerStyle: { backgroundColor: getTableColor(configurableComponentData.configurations) },
+            headerStyle: { backgroundColor: getTableColor(configurableComponentData) },
           })}
         />
         <p style={paragraphStyle}>
@@ -170,7 +173,7 @@ function Configurations(props: {
             ])}
           columnWidths={[3, 3, 2, 5, 1, 1]}
           customStyles={createCustomTableStyles({
-            headerStyle: { backgroundColor: getTableColor(configurableComponentData.configurations) },
+            headerStyle: { backgroundColor: getTableColor(configurableComponentData) },
           })}
         />
         {!addingNew && configurableComponentData.optional_config_definitions.length != 0 && (
