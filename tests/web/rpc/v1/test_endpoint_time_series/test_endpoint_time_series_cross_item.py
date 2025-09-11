@@ -64,7 +64,7 @@ def create_count_expression(label: str = "count") -> Expression:
     )
 
 
-@pytest.mark.eap_clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestTimeSeriesCrossItemQueries(BaseApiTest):
     def test_cross_item_filtering_reduces_time_series_data(self) -> None:
