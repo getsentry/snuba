@@ -43,7 +43,7 @@ it("should be gray when the policy is inactive", () => {
     ].concat(bonus_configs),
     optional_config_definitions: [],
   };
-    expect(getTableColor(configurableComponentData)).toBe(COLORS.SNUBA_BLUE);
+    expect(getTableColor(configurableComponentData)).toBe("gray");
 })
 
 it("should be blue when the policy is active and enforced", () => {
@@ -96,5 +96,5 @@ it("should be orange when the policy is active and enforced", () => {
     ].concat(bonus_configs),
     optional_config_definitions: [],
   };
-    expect(getTableColor(configurableComponentData)).toBe(COLORS.SNUBA_BLUE);
+    expect(getTableColor(configurableComponentData)).toBe("orange");
 })
