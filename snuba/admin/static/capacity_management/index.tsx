@@ -1,63 +1,25 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import Client from "SnubaAdmin/api_client";
 import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
 import { PolicyRenderer } from "SnubaAdmin/capacity_management/policy_renderer";
-import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
+import { ConfigurableComponentRenderer } from "SnubaAdmin/shared/render_configurable_component";
 
 function CapacityManagement(props: { api: Client }) {
-  const { api } = props;
-
-  const [storages, setStorages] = useState<string[]>([]);
-  const [selectedStorage, setStorage] = useState<string | undefined>();
-  const [allocationPolicies, setAllocationPolicies] = useState<
-    AllocationPolicy[]
-  >([]);
-
-  useEffect(() => {
-    api.getStoragesWithAllocationPolicies().then((res) => {
-      setStorages(res);
-      const previousStorage = getParamFromStorage("storage");
-      if (previousStorage) {
-        selectStorage(previousStorage);
-      }
-    });
-  }, []);
-
-  function selectStorage(storage: string) {
-    setStorage(storage);
-    loadAllocationPolicies(storage);
-  }
-
-  function loadAllocationPolicies(storage: string) {
-    api
-      .getAllocationPolicies(storage)
-      .then((res) => {
-        setAllocationPolicies(res);
-      })
-      .catch((err) => {
-        window.alert(err);
-      });
-  }
-
   return (
-    <div>
-      <p>
-        Storage:
-        <CustomSelect
-          value={selectedStorage || ""}
-          onChange={selectStorage}
-          name="storage"
-          options={storages}
+    <ConfigurableComponentRenderer<AllocationPolicy[]>
+      api={props.api}
+      resourceType="storage"
+      getOptions={() => props.api.getStoragesWithAllocationPolicies()}
+      loadData={(storage) => props.api.getAllocationPolicies(storage)}
+      renderContent={(policies, selectedStorage) => (
+        <PolicyRenderer
+          api={props.api}
+          policies={policies || []}
+          resourceIdentifier={selectedStorage}
+          resourceType="storage"
         />
-      </p>
-
-      <PolicyRenderer
-        api={api}
-        policies={allocationPolicies}
-        resourceIdentifier={selectedStorage}
-        resourceType="storage"
-      />
-    </div>
+      )}
+    />
   );
 }
 
