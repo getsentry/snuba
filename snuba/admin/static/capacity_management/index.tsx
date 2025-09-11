@@ -1,6 +1,6 @@
 import React from "react";
 import Client from "SnubaAdmin/api_client";
-import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
+import { AllocationPolicy } from "SnubaAdmin/shared/types";
 import { PolicyRenderer } from "SnubaAdmin/capacity_management/policy_renderer";
 import { ConfigurableComponentRenderer } from "SnubaAdmin/shared/render_configurable_component";
 

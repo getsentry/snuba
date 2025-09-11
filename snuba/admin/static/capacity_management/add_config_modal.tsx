@@ -5,7 +5,7 @@ import Modal from "react-bootstrap/Modal";
 import {
   Configuration,
   OptionalConfigurationDefinition,
-} from "SnubaAdmin/capacity_management/types";
+} from "SnubaAdmin/shared/types";
 import FormGroup from "react-bootstrap/FormGroup";
 
 function AddConfigModal(props: {

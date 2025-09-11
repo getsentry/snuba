@@ -1,22 +1,22 @@
 import { getTableColor } from "SnubaAdmin/capacity_management/allocation_policy";
 import { COLORS } from "SnubaAdmin/theme";
 import { it, expect } from "@jest/globals";
-import { ConfigurableComponentData } from "SnubaAdmin/capacity_management/types";
+import { ConfigurableComponentData } from "SnubaAdmin/shared/types";
 
 let bonus_configs = [{
-      name: "key1",
-      value: "10",
-      description: "something",
-      type: "int",
-      params: {},
-    },
-    {
-      name: "key2",
-      value: "20",
-      description: "something params",
-      type: "int",
-      params: { a: "1", b: "2" },
-    },
+  name: "key1",
+  value: "10",
+  description: "something",
+  type: "int",
+  params: {},
+},
+{
+  name: "key2",
+  value: "20",
+  description: "something params",
+  type: "int",
+  params: { a: "1", b: "2" },
+},
 ]
 
 
@@ -43,7 +43,7 @@ it("should be gray when the policy is inactive", () => {
     ].concat(bonus_configs),
     optional_config_definitions: [],
   };
-    expect(getTableColor(configurableComponentData)).toBe("gray");
+  expect(getTableColor(configurableComponentData)).toBe("gray");
 })
 
 it("should be blue when the policy is active and enforced", () => {
@@ -69,7 +69,7 @@ it("should be blue when the policy is active and enforced", () => {
     ].concat(bonus_configs),
     optional_config_definitions: [],
   };
-    expect(getTableColor(configurableComponentData)).toBe(COLORS.SNUBA_BLUE);
+  expect(getTableColor(configurableComponentData)).toBe(COLORS.SNUBA_BLUE);
 })
 
 
@@ -96,5 +96,5 @@ it("should be orange when the policy is active and enforced", () => {
     ].concat(bonus_configs),
     optional_config_definitions: [],
   };
-    expect(getTableColor(configurableComponentData)).toBe("orange");
+  expect(getTableColor(configurableComponentData)).toBe("orange");
 })

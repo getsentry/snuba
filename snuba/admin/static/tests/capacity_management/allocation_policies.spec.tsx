@@ -2,7 +2,7 @@ import Client from "SnubaAdmin/api_client";
 
 import { Configurations } from "SnubaAdmin/capacity_management/allocation_policy";
 import { it, expect } from "@jest/globals";
-import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
+import { AllocationPolicy } from "SnubaAdmin/shared/types";
 import { act, fireEvent, render } from "@testing-library/react";
 import React from "react";
 

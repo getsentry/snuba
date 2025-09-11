@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
-import { Configuration } from "SnubaAdmin/capacity_management/types";
+import { Configuration } from "SnubaAdmin/shared/types";
 
 function EditConfigModal(props: {
   currentlyEditing: boolean;
@@ -31,8 +31,8 @@ function EditConfigModal(props: {
     if (
       window.confirm(
         "Are you sure you want to " +
-          deleteOrReset().toLowerCase() +
-          " this config?"
+        deleteOrReset().toLowerCase() +
+        " this config?"
       )
     ) {
       deleteConfig(currentConfig);

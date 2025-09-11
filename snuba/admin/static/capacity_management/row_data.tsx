@@ -1,5 +1,5 @@
 import React from "react";
-import { Configuration, RowData } from "SnubaAdmin/capacity_management/types";
+import { Configuration, RowData } from "SnubaAdmin/shared/types";
 import Button from "react-bootstrap/Button";
 
 function getReadonlyRow(

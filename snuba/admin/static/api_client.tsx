@@ -35,7 +35,7 @@ import {
   CardinalityQueryResult,
 } from "SnubaAdmin/cardinality_analyzer/types";
 
-import { AllocationPolicy, StrategyData } from "SnubaAdmin/capacity_management/types";
+import { AllocationPolicy, StrategyData } from "SnubaAdmin/shared/types";
 
 import { ReplayInstruction, Topic } from "SnubaAdmin/dead_letter_queue/types";
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";

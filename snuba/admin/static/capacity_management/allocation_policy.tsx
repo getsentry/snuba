@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { Table, createCustomTableStyles } from "../table";
 import { COLORS } from "SnubaAdmin/theme";
 import Client from "SnubaAdmin/api_client";
-import { ConfigurableComponentData, Configuration } from "SnubaAdmin/capacity_management/types";
+import { ConfigurableComponentData, Configuration } from "SnubaAdmin/shared/types";
 import { containerStyle, linkStyle, paragraphStyle } from "SnubaAdmin/capacity_management/styles";
 import { getReadonlyRow } from "SnubaAdmin/capacity_management/row_data";
 import EditConfigModal from "SnubaAdmin/capacity_management/edit_config_modal";
