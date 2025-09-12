@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, Optional, TypeAlias, Union, cast, final
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.message import Message as ProtobufMessage
+from google.protobuf.timestamp_pb2 import Timestamp as TimestampProto
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
@@ -61,12 +62,19 @@ class RoutingContext:
 
 
 @dataclass
+class TimeWindow:
+    start_timesstamp: TimestampProto
+    end_timestamp: TimestampProto
+
+
+@dataclass
 class RoutingDecision:
     routing_context: RoutingContext
     strategy: BaseRoutingStrategy
     tier: Tier = Tier.TIER_1
     clickhouse_settings: dict[str, str] = field(default_factory=dict)
     can_run: bool | None = None
+    time_window: TimeWindow | None = None
 
     def to_log_dict(self) -> dict[str, Any]:
         assert self.routing_context is not None
