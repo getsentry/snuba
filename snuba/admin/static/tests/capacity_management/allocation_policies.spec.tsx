@@ -1,15 +1,16 @@
 import Client from "SnubaAdmin/api_client";
 
-import { AllocationPolicyConfigs } from "SnubaAdmin/capacity_management/allocation_policy";
+import { ConfigurableComponentConfigurations } from "SnubaAdmin/configurable_component/configurable_component_configurations";
 import { it, expect } from "@jest/globals";
-import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
+import { AllocationPolicy } from "SnubaAdmin/configurable_component/types";
 import { act, fireEvent, render } from "@testing-library/react";
 import React from "react";
 
 it("should populate configs table upon render", async () => {
   let allocationPolicy: AllocationPolicy = {
-    policy_name: "some_policy",
-    configs: [
+    configurable_component_namespace: "some_namespace",
+    configurable_component_class_name: "some_policy",
+    configurations: [
       {
         name: "key1",
         value: "10",
@@ -38,20 +39,20 @@ it("should populate configs table upon render", async () => {
       },
     ],
     query_type: "select",
+    resource_identifier: "some_resource",
   };
 
   let { getByText, getByTestId } = render(
-    <AllocationPolicyConfigs
+    <ConfigurableComponentConfigurations
       api={Client()}
-      storage="storage1"
-      policy={allocationPolicy}
+      configurableComponentData={allocationPolicy}
     />
   );
 
   expect(getByText("key1")).toBeTruthy();
   expect(getByText("key2")).toBeTruthy();
   expect(
-    getByText(JSON.stringify(allocationPolicy.configs[1].params))
+    getByText(JSON.stringify(allocationPolicy.configurations[1].params))
   ).toBeTruthy();
 
   act(() => fireEvent.click(getByTestId("key1_edit")));

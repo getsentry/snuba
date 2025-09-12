@@ -2,14 +2,14 @@ import React, { useState } from "react";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
-import { AllocationPolicyConfig } from "SnubaAdmin/capacity_management/types";
+import { Configuration } from "SnubaAdmin/configurable_component/types";
 
 function EditConfigModal(props: {
   currentlyEditing: boolean;
-  currentConfig: AllocationPolicyConfig;
+  currentConfig: Configuration;
   setCurrentlyEditing: (currentlyEditing: boolean) => void;
-  deleteConfig: (config: AllocationPolicyConfig) => void;
-  saveConfig: (config: AllocationPolicyConfig) => void;
+  deleteConfig: (config: Configuration) => void;
+  saveConfig: (config: Configuration) => void;
 }) {
   const {
     currentlyEditing,
@@ -31,8 +31,8 @@ function EditConfigModal(props: {
     if (
       window.confirm(
         "Are you sure you want to " +
-          deleteOrReset().toLowerCase() +
-          " this config?"
+        deleteOrReset().toLowerCase() +
+        " this config?"
       )
     ) {
       deleteConfig(currentConfig);

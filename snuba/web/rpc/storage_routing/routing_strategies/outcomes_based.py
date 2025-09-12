@@ -71,6 +71,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                 description="Placeholder for now",
                 value_type=int,
                 default=50,
+                param_types={"organization_id": int},
             ),
         ]
 
