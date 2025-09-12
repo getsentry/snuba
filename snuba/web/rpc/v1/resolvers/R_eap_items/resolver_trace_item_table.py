@@ -454,7 +454,11 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             query_settings.set_sampling_tier(routing_decision.tier)
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
-
+        if routing_decision.time_window is not None:
+            in_msg.meta.start_timestamp.seconds = (
+                routing_decision.time_window.start_timesstamp.seconds
+            )
+            in_msg.meta.end_timestamp.seconds = routing_decision.time_window.end_timestamp.seconds
         snuba_request = _build_snuba_request(in_msg, query_settings, self._timer)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
