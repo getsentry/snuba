@@ -1,3 +1,4 @@
+import random
 import uuid
 from datetime import datetime
 from operator import attrgetter
@@ -11,6 +12,7 @@ from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 
+from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -54,9 +56,7 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
             name="id",
             expression=(
                 attribute_key_to_expression(
-                    AttributeKey(
-                        name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING
-                    )
+                    AttributeKey(name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING)
                 )
             ),
         ),
@@ -148,9 +148,22 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
         ],
     )
 
+    if random.random() < _get_apply_final_rollout_percentage():
+        query.set_final(True)
+
     treeify_or_and_conditions(query)
 
     return query
+
+
+def _get_apply_final_rollout_percentage() -> float:
+    return (
+        state.get_float_config(
+            "EndpointGetTrace.etapply_final_rollout_percentage",
+            0.0,
+        )
+        or 0.0
+    )
 
 
 def _build_snuba_request(
@@ -282,9 +295,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         return GetTraceResponse
 
     def _execute(self, in_msg: GetTraceRequest) -> GetTraceResponse:
-        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
-            uuid.uuid4()
-        )
+        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(uuid.uuid4())
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
