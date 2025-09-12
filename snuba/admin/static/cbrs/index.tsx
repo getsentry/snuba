@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
-import { Configurations } from "SnubaAdmin/capacity_management/allocation_policy";
+import { ConfigurableComponentConfigurations } from "SnubaAdmin/configurable_component/configurable_component_configurations";
 import { PolicyRenderer, policyTypeStyle } from "SnubaAdmin/capacity_management/policy_renderer";
 import { StrategyData } from "SnubaAdmin/configurable_component/types";
 import { ConfigurableComponentRenderer } from "SnubaAdmin/configurable_component/render_configurable_component";
@@ -19,7 +19,7 @@ function CapacityBasedRoutingSystem(props: { api: Client }) {
         return (
           <div>
             <p style={policyTypeStyle}>Strategy Configurations</p>
-            <Configurations
+            <ConfigurableComponentConfigurations
               api={props.api}
               configurableComponentData={strategyConfigs}
             />

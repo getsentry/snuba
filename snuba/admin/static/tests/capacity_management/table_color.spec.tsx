@@ -1,4 +1,4 @@
-import { getTableColor } from "SnubaAdmin/capacity_management/allocation_policy";
+import { getTableColor } from "SnubaAdmin/configurable_component/configurable_component_configurations";
 import { COLORS } from "SnubaAdmin/theme";
 import { it, expect } from "@jest/globals";
 import { ConfigurableComponentData } from "SnubaAdmin/configurable_component/types";

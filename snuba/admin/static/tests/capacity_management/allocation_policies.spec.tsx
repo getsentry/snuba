@@ -1,6 +1,6 @@
 import Client from "SnubaAdmin/api_client";
 
-import { Configurations } from "SnubaAdmin/capacity_management/allocation_policy";
+import { ConfigurableComponentConfigurations } from "SnubaAdmin/configurable_component/configurable_component_configurations";
 import { it, expect } from "@jest/globals";
 import { AllocationPolicy } from "SnubaAdmin/configurable_component/types";
 import { act, fireEvent, render } from "@testing-library/react";
@@ -43,7 +43,7 @@ it("should populate configs table upon render", async () => {
   };
 
   let { getByText, getByTestId } = render(
-    <Configurations
+    <ConfigurableComponentConfigurations
       api={Client()}
       configurableComponentData={allocationPolicy}
     />

@@ -40,7 +40,7 @@ function getTableColor(configurableComponentData: ConfigurableComponentData): st
   }
 }
 
-function Configurations(props: {
+function ConfigurableComponentConfigurations(props: {
   api: Client;
   configurableComponentData: ConfigurableComponentData;
 }) {
@@ -187,4 +187,4 @@ function Configurations(props: {
   );
 }
 
-export { Configurations, getTableColor };
+export { ConfigurableComponentConfigurations, getTableColor };

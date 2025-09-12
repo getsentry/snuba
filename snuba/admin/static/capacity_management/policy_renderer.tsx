@@ -1,6 +1,6 @@
 import React from "react";
 import Client from "SnubaAdmin/api_client";
-import { Configurations } from "SnubaAdmin/capacity_management/allocation_policy";
+import { ConfigurableComponentConfigurations } from "SnubaAdmin/configurable_component/configurable_component_configurations";
 import { AllocationPolicy } from "SnubaAdmin/configurable_component/types";
 import { COLORS } from "SnubaAdmin/theme";
 
@@ -36,7 +36,7 @@ export function PolicyRenderer({ api, policies, resourceIdentifier, resourceType
           Policy Type: {policies[0].query_type.toUpperCase()}
         </p>
         {policies.map((policy: AllocationPolicy) => (
-          <Configurations
+          <ConfigurableComponentConfigurations
             api={api}
             configurableComponentData={policy}
             key={resourceIdentifier + policy.configurable_component_class_name}
