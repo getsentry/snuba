@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
@@ -39,6 +40,8 @@ def _get_request_meta(
     )
 
 
+@pytest.mark.eap
+@pytest.mark.redis_db
 def test_outcomes_flex_time_routing_strategy_basic() -> None:
     """Basic test that just exercises the routing strategy without complex assertions."""
     strategy = OutcomesFlexTimeRoutingStrategy()
