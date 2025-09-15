@@ -2,11 +2,11 @@ import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 
-interface ConfigurableComponentRendererProps<T> {
+interface ConfigurableComponentDropdownRendererProps<T> {
   api: Client;
   /** All configurable components have a resource type. For example, an allocation policy can have a resource type of "storage". */
   resourceType: string;
-  /** Function that returns available resource options. For example, all existing Snuba storages (resources) that have allocation policies (configurable component) */
+  /** Function that returns available resource options. For example, all existing Snuba storages (resources) that have allocation policies (configurable component). This is used for the dropdown menu. */
   getOptions: () => Promise<string[]>;
   /** Function that loads the data for the selected resource. For example, all allocation policies for the selected storage. */
   loadData: (resource: string) => Promise<T>;
@@ -19,18 +19,18 @@ interface ConfigurableComponentRendererProps<T> {
  *
  * This component provides a common pattern for:
  * - Loading a list of available resources (e.g., storages, strategies) in a dropdown
- * - Allowing users to select a resource from a dropdown
+ * - Allowing users to select a resource from the dropdown
  * - Loading and displaying configurable component data associated with the selected resource
  * - Persisting the user's selection in browser storage
  * See CapacityManagement and CBRS for examples of how to use this component.
  */
 
-function ConfigurableComponentRenderer<T>({
+function ConfigurableComponentDropdownRenderer<T>({
   resourceType,
   getOptions,
   loadData,
   renderContent,
-}: ConfigurableComponentRendererProps<T>) {
+}: ConfigurableComponentDropdownRendererProps<T>) {
   const [options, setOptions] = useState<string[]>([]);
   const [selectedResource, setSelectedResource] = useState<string | undefined>();
   const [data, setData] = useState<T | undefined>();
@@ -70,4 +70,4 @@ function ConfigurableComponentRenderer<T>({
   );
 }
 
-export { ConfigurableComponentRenderer };
+export { ConfigurableComponentDropdownRenderer };

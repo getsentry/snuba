@@ -3,11 +3,11 @@ import Client from "SnubaAdmin/api_client";
 import { ConfigurableComponentConfigurations } from "SnubaAdmin/configurable_component/configurable_component_configurations";
 import { PolicyRenderer, policyTypeStyle } from "SnubaAdmin/capacity_management/policy_renderer";
 import { StrategyData } from "SnubaAdmin/configurable_component/types";
-import { ConfigurableComponentRenderer } from "SnubaAdmin/configurable_component/render_configurable_component";
+import { ConfigurableComponentDropdownRenderer } from "SnubaAdmin/configurable_component/render_configurable_component";
 
 function CapacityBasedRoutingSystem(props: { api: Client }) {
   return (
-    <ConfigurableComponentRenderer<StrategyData>
+    <ConfigurableComponentDropdownRenderer<StrategyData>
       api={props.api}
       resourceType="strategy"
       getOptions={() => props.api.getRoutingStrategies()}
