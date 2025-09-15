@@ -175,18 +175,6 @@ def _convert_result_timeseries(
                 int(datetime.fromisoformat(row["time"]).timestamp())
             ] = row
 
-    # If no data was found, create empty time series for each requested expression
-    # This ensures that even when cross-item queries match no traces, we still return
-    # time series with data_present=False for all buckets
-    if not data:
-        for col_name in aggregation_labels:
-            group_by_key = ""  # Empty group_by_key for no grouping
-            result_timeseries[(group_by_key, col_name)] = TimeSeries(
-                group_by_attributes={},
-                label=col_name,
-                buckets=time_buckets,
-            )
-
     # Go through every possible time bucket in the query, if there's row data for it, fill in its data
     # otherwise put a dummy datapoint in
     for bucket in time_buckets:

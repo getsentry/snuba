@@ -10,7 +10,7 @@ from snuba.migrations.runner import Runner
 @pytest.fixture
 def eap(request: pytest.FixtureRequest, create_databases: None) -> Generator[None, None, None]:
     """
-    A custom ClickHouse fixture that only runs EAP (Events Analytics Platform) migrations.
+    A custom ClickHouse fixture that only runs EAP (Events Analytics Platform) migrations and Outcomes migrations (for storage routing).
     This is much faster than running all migrations for tests that only need EAP tables.
 
     Use this with @pytest.mark.eap marker.
@@ -23,6 +23,7 @@ def eap(request: pytest.FixtureRequest, create_databases: None) -> Generator[Non
         # Run only SYSTEM migrations (required for migrations table) and EAP migrations
         runner = Runner()
         runner.run_all(group=MigrationGroup.EVENTS_ANALYTICS_PLATFORM, force=True)
+        runner.run_all(group=MigrationGroup.OUTCOMES, force=True)
         yield
     finally:
         # Import here to avoid circular imports

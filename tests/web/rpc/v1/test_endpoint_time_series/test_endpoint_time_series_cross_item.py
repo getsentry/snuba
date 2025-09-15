@@ -163,10 +163,4 @@ class TestTimeSeriesCrossItemQueries(BaseApiTest):
 
         response = EndpointTimeSeries().execute(message)
 
-        # Should return time series with zero data
-        assert len(response.result_timeseries) == 1
-        timeseries = response.result_timeseries[0]
-
-        # All data points should have zero data
-        total_count = sum(dp.data for dp in timeseries.data_points if dp.data_present)
-        assert total_count == 0
+        assert len(response.result_timeseries) == 0
