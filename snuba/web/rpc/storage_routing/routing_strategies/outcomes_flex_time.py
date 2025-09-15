@@ -132,9 +132,16 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
             from_clause=entity,
             selected_columns=[
                 SelectedExpression(
+                    name="time_bucket",
+                    expression=f.toStartOfHour(
+                        column("timestamp"),
+                        alias="time_bucket",
+                    ),
+                ),
+                SelectedExpression(
                     name="num_items",
                     expression=f.sum(column("quantity"), alias="num_items"),
-                )
+                ),
             ],
             condition=and_cond(
                 project_id_and_org_conditions(in_msg_meta),
@@ -148,6 +155,9 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
                     ),
                 ),
             ),
+            groupby=[
+                column("time_bucket"),
+            ],
         )
         snuba_request = SnubaRequest(
             id=uuid.uuid4(),
@@ -172,6 +182,7 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
             request=snuba_request,
             timer=routing_context.timer,
         )
+        breakpoint()
         routing_context.extra_info["estimation_sql"] = res.extra.get("sql", "")
         return cast(int, res.result.get("data", [{}])[0].get("num_items", 0))
 
