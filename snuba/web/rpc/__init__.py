@@ -3,11 +3,12 @@ from bisect import bisect_left
 from typing import Generic, List, Tuple, Type, cast, final
 
 import sentry_sdk
+from clickhouse_driver.errors import ErrorCodes as clickhouse_errors
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
-from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba import environment, settings, state
 from snuba.query.allocation_policies import AllocationPolicyViolations
@@ -22,6 +23,8 @@ from snuba.utils.registered_class import (
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import Tin, Tout
 from snuba.web.rpc.common.exceptions import (
+    HighAccuracyQueryTimeoutException,
+    QueryTimeoutException,
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
@@ -78,9 +81,7 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
     ) -> "Type[TraceItemDataResolver[Tin, Tout]]":
         registry = getattr(cls, "_registry")
         try:
-            shape = registry.get_class_from_name(
-                f"{cls.endpoint_name()}__{trace_item_type}"
-            )
+            shape = registry.get_class_from_name(f"{cls.endpoint_name()}__{trace_item_type}")
         except InvalidConfigKeyError:
             shape = registry.get_class_from_name(
                 f"{cls.endpoint_name()}__{TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED}"
@@ -156,12 +157,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
-        self.routing_decision.routing_context = RoutingContext(
-            timer=self._timer, in_msg=in_msg
-        )
+        self.routing_decision.routing_context = RoutingContext(timer=self._timer, in_msg=in_msg)
 
         self.__before_execute(in_msg)
-        error = None
+        error: Exception | None = None
+        meta = getattr(in_msg, "meta", RequestMeta())
         try:
             if self.routing_decision.can_run:
                 with sentry_sdk.start_span(op="execute") as span:
@@ -170,43 +170,48 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             else:
                 raise AllocationPolicyViolations
         except QueryException as e:
+            out = self.response_class()()
             if (
                 "error_code" in e.extra["stats"]
-                and e.extra["stats"]["error_code"] == 241
+                and e.extra["stats"]["error_code"] == clickhouse_errors.TIMEOUT_EXCEEDED
             ):
-                self.metrics.increment("OOM_query")
-                sentry_sdk.capture_exception(e)
-            if (
-                "error_code" in e.extra["stats"]
-                and e.extra["stats"]["error_code"] == 159
-            ):
+                sampling_mode = DownsampledStorageConfig.MODE_NORMAL
                 tags = {"endpoint": str(self.__class__.__name__)}
                 if hasattr(in_msg, "meta"):
-                    if hasattr(in_msg.meta, "referrer"):
-                        tags["referrer"] = in_msg.meta.referrer
+                    if hasattr(meta, "referrer"):
+                        tags["referrer"] = meta.referrer
                     if self._uses_storage_routing(in_msg):
-                        tags[
-                            "storage_routing_mode"
-                        ] = DownsampledStorageConfig.Mode.Name(
-                            in_msg.meta.downsampled_storage_config.mode
-                        )
+                        sampling_mode = meta.downsampled_storage_config.mode
+                tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(sampling_mode)
                 self.metrics.increment("timeout_query", 1, tags)
-            if (
-                "error_code" in e.extra["stats"]
-                and e.extra["stats"]["error_code"] == 160
-            ):
-                tags = {"endpoint": str(self.__class__.__name__)}
-                if self._uses_storage_routing(in_msg):
-                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
-                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
+                if sampling_mode == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY:
+                    error = HighAccuracyQueryTimeoutException(
+                        "High accuracy query timed out, you may be scanning too much data in one request. Try querying in normal mode to get results"
                     )
-                self.metrics.increment("estimated_execution_timeout", 1, tags)
-                sentry_sdk.capture_exception(e)
-            out = self.response_class()()
-            error = e
+                else:
+                    error = QueryTimeoutException("Query timed out, this violates the EAP SLO")
+            else:
+                if (
+                    "error_code" in e.extra["stats"]
+                    and e.extra["stats"]["error_code"] == clickhouse_errors.MEMORY_LIMIT_EXCEEDED
+                ):
+                    self.metrics.increment("OOM_query")
+                    sentry_sdk.capture_exception(e)
+                if (
+                    "error_code" in e.extra["stats"]
+                    and e.extra["stats"]["error_code"] == clickhouse_errors.TOO_SLOW
+                ):
+                    tags = {"endpoint": str(self.__class__.__name__)}
+                    if self._uses_storage_routing(in_msg):
+                        tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
+                            meta.downsampled_storage_config.mode
+                        )
+                    self.metrics.increment("estimated_execution_timeout", 1, tags)
+                    sentry_sdk.capture_exception(e)
+                error = e
         except Exception as e:
             out = self.response_class()()
-            error = e  # type: ignore
+            error = e
         return self.__after_execute(in_msg, out, error)
 
     def __before_execute(self, in_msg: Tin) -> None:
@@ -268,9 +273,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def _execute(self, in_msg: Tin) -> Tout:
         raise NotImplementedError
 
-    def __after_execute(
-        self, in_msg: Tin, out_msg: Tout, error: Exception | None
-    ) -> Tout:
+    def __after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
         res = self._after_execute(in_msg, out_msg, error)
         output_metrics_error = None
         try:
@@ -281,10 +284,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            if (
-                isinstance(error, RPCRequestException)
-                and 400 <= error.status_code < 500
-            ):
+            if isinstance(error, RPCRequestException) and 400 <= error.status_code < 500:
                 self.metrics.increment(
                     "request_invalid",
                     tags=self._timer.tags,
@@ -318,9 +318,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
         return res
 
-    def _after_execute(
-        self, in_msg: Tin, out_msg: Tout, error: Exception | None
-    ) -> Tout:
+    def _after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
         """Override this for any post-processing/logging after the _execute method"""
         return out_msg
 
@@ -334,18 +332,14 @@ def list_all_endpoint_names() -> List[Tuple[str, str]]:
 
 
 _VERSIONS = ["v1"]
-_TO_IMPORT = {
-    p: os.path.join(os.path.dirname(os.path.realpath(__file__)), p) for p in _VERSIONS
-}
+_TO_IMPORT = {p: os.path.join(os.path.dirname(os.path.realpath(__file__)), p) for p in _VERSIONS}
 
 
 for v, module_path in _TO_IMPORT.items():
     import_submodules_in_directory(module_path, f"snuba.web.rpc.{v}")
 
 
-def run_rpc_handler(
-    name: str, version: str, data: bytes
-) -> ProtobufMessage | ErrorProto:
+def run_rpc_handler(name: str, version: str, data: bytes) -> ProtobufMessage | ErrorProto:
     try:
         endpoint = RPCEndpoint.get_from_name(name, version)()  # type: ignore
     except (AttributeError, InvalidConfigKeyError) as e:
