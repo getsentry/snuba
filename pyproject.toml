@@ -42,7 +42,7 @@ dependencies = [
     "structlog-sentry>=2.0.0",
     "urllib3>=2.2.3",
     "werkzeug>=3.0.6",
-    "rust_snuba",
+    "rust_snuba>=0.0.0",
 ]
 
 [tool.uv.sources]
