@@ -10,9 +10,13 @@ import EditConfigModal from "SnubaAdmin/capacity_management/edit_config_modal";
 import AddConfigModal from "SnubaAdmin/capacity_management/add_config_modal";
 
 function getTableColor(configurableComponentData: ConfigurableComponentData): string {
-  if (configurableComponentData.configurable_component_namespace === "BaseRoutingStrategy") {
+  // Default to blue if no is_active or is_enforced configuration exist
+  if (!configurableComponentData.configurations.some(config =>
+    config.name === "is_active" || config.name === "is_enforced"
+  )) {
     return COLORS.SNUBA_BLUE;
   }
+
   let policyIsActive = false;
   let policyIsEnforced = false;
   configurableComponentData.configurations.forEach((config) => {
