@@ -147,7 +147,7 @@ jobs:
         # it can be used as a docker tag
         run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
 
-      - uses: getsentry/action-build-and-push-images@a53f146fc1ea3cb404f2dcf7378f5b60dd98d3ca
+      - uses: getsentry/action-build-and-push-images@0a2c1207d9c733c838e443c35a4174a738977bd1
         with:
           image_name: 'snuba-ci'
           platforms: 'linux/amd64'
