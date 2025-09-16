@@ -1,0 +1,25 @@
+--- a/src/sentry/integrations/services/integration/impl.py
++++ b/src/sentry/integrations/services/integration/impl.py
+@@ -1,4 +1,5 @@
+ from sentry.integrations.services.integration.service import IntegrationService
++from sentry.silo.base import SiloMode
+ from sentry.models.integrations import Integration
+ from sentry.types.integrations import ExternalProviders
+ 
+@@ -12,6 +13,15 @@ class DatabaseBackedIntegrationService(IntegrationService):
+         organization_id: int | None = None,
+         status: int | None = None,
+     ) -> Integration | None:
++        # Check if we're in a region silo - if so, use hybrid cloud service
++        if SiloMode.get_current_mode() == SiloMode.REGION:
++            from sentry.services.hybrid_cloud.integration import integration_service as hc_service
++            return hc_service.get_integration(
++                integration_id=integration_id,
++                provider=provider,
++                organization_id=organization_id,
++                status=status,
++            )
++        
+         integration_kwargs = {"id": integration_id}
+         if provider is not None:
+             integration_kwargs["provider"] = provider
