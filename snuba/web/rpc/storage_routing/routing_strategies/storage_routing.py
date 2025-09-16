@@ -63,7 +63,7 @@ class RoutingContext:
 
 @dataclass
 class TimeWindow:
-    start_timesstamp: TimestampProto
+    start_timestamp: TimestampProto
     end_timestamp: TimestampProto
 
 

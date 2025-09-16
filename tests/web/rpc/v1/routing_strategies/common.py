@@ -30,8 +30,8 @@ def gen_ingest_outcome(
         A dictionary representing an outcome record
     """
     return {
-        "org_id": project_id,
-        "project_id": org_id,
+        "org_id": org_id,
+        "project_id": project_id,
         "key_id": None,
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         "outcome": Outcome.ACCEPTED,
@@ -45,6 +45,8 @@ def gen_ingest_outcome(
 def store_outcomes_data(
     outcome_data: List[Tuple[datetime, int]],
     outcome_category: int = OutcomeCategory.SPAN_INDEXED,
+    org_id: int = 1,
+    project_id: int = 1,
 ) -> None:
     """Store outcomes data to the outcomes storage.
 
@@ -64,8 +66,11 @@ def store_outcomes_data(
         else:
             raise ValueError(f"Invalid tuple length: {len(item)}. Expected 2 or 3 elements.")
 
-        messages.append(gen_ingest_outcome(time, num_outcomes, outcome_category=category))
-
+        messages.append(
+            gen_ingest_outcome(
+                time, num_outcomes, outcome_category=category, org_id=org_id, project_id=project_id
+            )
+        )
     write_raw_unprocessed_events(outcomes_storage, messages)  # type: ignore
 
 
