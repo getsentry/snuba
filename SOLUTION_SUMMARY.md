@@ -4,7 +4,7 @@
 **InitializationError: Error getting github enterprise integration config** occurred because the `get_github_enterprise_integration_config` RPC endpoint was trying to access the `Integration` model directly from a REGION silo, violating Sentry's silo architecture boundaries.
 
 ## Root Cause
-1. **Silo Boundary Violation**: The RPC endpoint runs in REGION silo (`@region_silo_endpoint`) 
+1. **Silo Boundary Violation**: The RPC endpoint runs in REGION silo (`@region_silo_endpoint`)
 2. **Direct Database Access**: The integration service uses `Integration.objects.get()` directly
 3. **Control Model Access**: `Integration` is a CONTROL-plane model, inaccessible from REGION silo
 4. **Result**: `SiloLimit.AvailabilityError` → HTTP 400 → `InitializationError`
@@ -19,7 +19,7 @@ Update the `DatabaseBackedIntegrationService` to detect silo mode and route appr
 from sentry.silo.base import SiloMode
 
 class DatabaseBackedIntegrationService(IntegrationService):
-    def get_integration(self, integration_id: int, provider: str | None = None, 
+    def get_integration(self, integration_id: int, provider: str | None = None,
                        organization_id: int | None = None, status: int | None = None):
         # Check current silo mode
         if SiloMode.get_current_mode() == SiloMode.REGION:
@@ -40,7 +40,7 @@ class DatabaseBackedIntegrationService(IntegrationService):
                 integration_kwargs["organizations"] = organization_id
             if status is not None:
                 integration_kwargs["status"] = status
-            
+
             try:
                 return Integration.objects.get(**integration_kwargs)
             except Integration.DoesNotExist:
@@ -73,7 +73,7 @@ class SeerRpcServiceEndpoint(Endpoint):
 ## Expected Outcome
 
 After applying this fix:
-- ✅ No more `SiloLimit.AvailabilityError` 
+- ✅ No more `SiloLimit.AvailabilityError`
 - ✅ RPC calls return 200 instead of 400
 - ✅ GitHub Enterprise integrations work properly
 - ✅ Autofix process continues without `InitializationError`

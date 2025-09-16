@@ -51,7 +51,7 @@ def get_integration(
 ) -> Integration | None:
     from sentry.silo.base import SiloMode
     from sentry.services.hybrid_cloud.integration import integration_service
-    
+
     # Check if we're in a region silo
     if SiloMode.get_current_mode() == SiloMode.REGION:
         # Use the hybrid cloud service for cross-silo communication
@@ -116,7 +116,7 @@ class DatabaseBackedIntegrationService(IntegrationService):
     ) -> Integration | None:
         # Always use the hybrid cloud service for cross-silo safety
         from sentry.services.hybrid_cloud.integration import integration_service as hc_service
-        
+
         # Delegate to the hybrid cloud service which handles silo routing
         return hc_service.get_integration(
             integration_id=integration_id,
