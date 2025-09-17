@@ -23,7 +23,7 @@ from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_get_trace import (
-    APPLY_FINAL_ROLLOUT_PERCENTAGE,
+    APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
     EndpointGetTrace,
     _build_query,
     _value_to_attribute,
@@ -289,7 +289,7 @@ class TestGetTrace(BaseApiTest):
         )
 
         state.set_config(
-            APPLY_FINAL_ROLLOUT_PERCENTAGE,
+            APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
             1.0,
         )
 
@@ -298,7 +298,7 @@ class TestGetTrace(BaseApiTest):
         assert query.get_final() == True
 
         state.set_config(
-            APPLY_FINAL_ROLLOUT_PERCENTAGE,
+            APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
             0.0,
         )
 

@@ -49,7 +49,7 @@ NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
     "trace_id",
     "sampling_factor",
 ]
-APPLY_FINAL_ROLLOUT_PERCENTAGE = "EndpointGetTrace.apply_final_rollout_percentage"
+APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY = "EndpointGetTrace.apply_final_rollout_percentage"
 
 
 def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Query:
@@ -165,7 +165,7 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
 def _get_apply_final_rollout_percentage() -> float:
     return (
         state.get_float_config(
-            APPLY_FINAL_ROLLOUT_PERCENTAGE,
+            APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
             0.0,
         )
         or 0.0
