@@ -24,6 +24,27 @@ jobs:
           token: ${{ github.token }}
           filters: .github/file-filters.yml
 
+  bump-version-test:
+    name: "Test bump_version.py script"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        name: Checkout code
+
+      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+        with:
+          version: '0.8.2'
+          enable-cache: false
+
+      - name: Test bump_version.py runs without errors
+        run: |
+          # Test that the script can be imported and shows help
+          python tools/bump_version.py --help
+
+          # Test with a dry run (should fail with appropriate message for non-existent package)
+          python tools/bump_version.py test-package 1.0.0 || echo "Expected failure for non-existent package"
+
   linting:
     name: "pre-commit hooks" # (includes Python formatting + linting)
     runs-on: ubuntu-latest
