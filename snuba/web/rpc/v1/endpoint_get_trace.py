@@ -54,9 +54,7 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
             name="id",
             expression=(
                 attribute_key_to_expression(
-                    AttributeKey(
-                        name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING
-                    )
+                    AttributeKey(name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING)
                 )
             ),
         ),
@@ -282,9 +280,6 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         return GetTraceResponse
 
     def _execute(self, in_msg: GetTraceRequest) -> GetTraceResponse:
-        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
-            uuid.uuid4()
-        )
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,

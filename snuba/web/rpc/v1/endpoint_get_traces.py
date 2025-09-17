@@ -471,8 +471,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
     def _execute(self, in_msg: GetTracesRequest) -> GetTracesResponse:
         _validate_order_by(in_msg)
-
-        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(uuid.uuid4())
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,

@@ -1,4 +1,6 @@
+import logging
 import os
+import uuid
 from bisect import bisect_left
 from typing import Generic, List, Tuple, Type, cast, final
 
@@ -215,6 +217,14 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         return self.__after_execute(in_msg, out, error)
 
     def __before_execute(self, in_msg: Tin) -> None:
+        # Generate request_id if not already present
+        meta = getattr(in_msg, "meta", None)
+        if meta is not None:
+            if not hasattr(meta, "request_id") or not meta.request_id:
+                meta.request_id = str(uuid.uuid4())
+
+            setattr(in_msg, "meta", meta)
+
         self._timer.update_tags(self.__extract_request_tags(in_msg))
 
         # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
@@ -268,7 +278,18 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def _before_execute(self, in_msg: Tin) -> None:
         """Override this for any pre-processing/logging before the _execute method"""
-        pass
+        request_id = "unknown"
+        if (
+            hasattr(in_msg, "meta")
+            and hasattr(in_msg.meta, "request_id")
+            and in_msg.meta.request_id
+        ):
+            request_id = in_msg.meta.request_id
+
+        # Log RPC request start
+        logging.info(
+            f"RPC request started - endpoint: {self.__class__.__name__}, request_id: {request_id}"
+        )
 
     def _execute(self, in_msg: Tin) -> Tout:
         raise NotImplementedError
@@ -320,6 +341,16 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def _after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
         """Override this for any post-processing/logging after the _execute method"""
+        # Log RPC request completion
+        if hasattr(in_msg, "meta") and hasattr(in_msg.meta, "request_id"):
+            request_id = in_msg.meta.request_id
+        else:
+            request_id = "unknown"
+
+        status = "error" if error is not None else "success"
+        logging.info(
+            f"RPC request finished - endpoint: {self.__class__.__name__}, request_id: {request_id}, status: {status}"
+        )
         return out_msg
 
 
