@@ -1,4 +1,3 @@
-import uuid
 from typing import Type
 
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
@@ -54,9 +53,7 @@ def _apply_labels_to_columns(in_msg: TraceItemTableRequest) -> TraceItemTableReq
 
 
 def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
-    non_aggregted_columns = set(
-        [c.key.name for c in in_msg.columns if c.HasField("key")]
-    )
+    non_aggregted_columns = set([c.key.name for c in in_msg.columns if c.HasField("key")])
     grouped_by_columns = set([c.name for c in in_msg.group_by])
 
     vis = ContainsAggregateVisitor()
@@ -69,9 +66,7 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
         )
 
     if not aggregation_present and grouped_by_columns:
-        raise BadSnubaRPCRequestException(
-            "Aggregation is required when including group_by columns"
-        )
+        raise BadSnubaRPCRequestException("Aggregation is required when including group_by columns")
 
     disallowed_group_by_columns = [
         c.name for c in in_msg.group_by if c.name in _GROUP_BY_DISALLOWED_COLUMNS
@@ -108,9 +103,7 @@ def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
     return request
 
 
-class EndpointTraceItemTable(
-    RPCEndpoint[TraceItemTableRequest, TraceItemTableResponse]
-):
+class EndpointTraceItemTable(RPCEndpoint[TraceItemTableRequest, TraceItemTableResponse]):
     @classmethod
     def version(cls) -> str:
         return "v1"
@@ -143,9 +136,6 @@ class EndpointTraceItemTable(
         _validate_order_by(in_msg)
 
         RejectTimestampAsStringVisitor().visit(in_msg)
-        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
-            uuid.uuid4()
-        )
         if in_msg.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
             raise BadSnubaRPCRequestException(
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
