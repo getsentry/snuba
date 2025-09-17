@@ -257,8 +257,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             if not hasattr(meta, "request_id") or not meta.request_id:
                 meta.request_id = str(uuid.uuid4())
 
-            setattr(in_msg, "meta", meta)
-
         self._timer.update_tags(self.__extract_request_tags(in_msg))
 
         # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
