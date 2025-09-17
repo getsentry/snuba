@@ -4,6 +4,7 @@ from datetime import datetime
 from operator import attrgetter
 from typing import Any, Dict, Iterable, Type
 
+import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
@@ -151,6 +152,10 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
 
     if random.random() < _get_apply_final_rollout_percentage():
         query.set_final(True)
+
+    span = sentry_sdk.get_current_span()
+    if span:
+        span.set_data("is_final", query.get_final())
 
     treeify_or_and_conditions(query)
 
