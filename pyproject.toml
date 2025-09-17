@@ -1,6 +1,6 @@
 [project]
 name = "snuba"
-version = "25.9.0"
+version = "25.10.0.dev0"
 dependencies = [
     "blinker>=1.5",
     "click>=8.1.7",
