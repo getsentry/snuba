@@ -4,7 +4,6 @@ from typing import List, Optional, Sequence
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
-from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationComparisonFilter,
     AggregationFilter,
@@ -351,47 +350,17 @@ def _get_offset_from_page_token(page_token: PageToken | None) -> int:
                     and filter.comparison_filter.key.name == "offset"
                 ):
                     return filter.comparison_filter.value.val_int
-            raise BadSnubaRPCRequestException("offset filter not found in filter_offset")
+            return 0
+            # raise BadSnubaRPCRequestException("offset filter not found in filter_offset", page_token)
         else:
             raise BadSnubaRPCRequestException("filter_offset must be an and_filter")
     else:
         return 0
 
 
-def _get_time_window(
-    in_msg: TraceItemTableRequest, page_token: PageToken | None
-) -> TimeWindow | None:
-    if page_token is None:
-        return TimeWindow(
-            start_timestamp=in_msg.meta.start_timestamp, end_timestamp=in_msg.meta.end_timestamp
-        )
-    if page_token.HasField("filter_offset"):
-        time_window = TimeWindow(
-            start_timestamp=in_msg.meta.start_timestamp, end_timestamp=in_msg.meta.end_timestamp
-        )
-        if page_token.filter_offset.HasField("and_filter"):
-            for filter in page_token.filter_offset.and_filter.filters:
-                if (
-                    filter.HasField("comparison_filter")
-                    and filter.comparison_filter.key.name == "start_timestamp"
-                ):
-                    time_window.start_timestamp = Timestamp(
-                        seconds=filter.comparison_filter.value.val_int
-                    )
-                if (
-                    filter.HasField("comparison_filter")
-                    and filter.comparison_filter.key.name == "end_timestamp"
-                ):
-                    time_window.end_timestamp = Timestamp(
-                        seconds=filter.comparison_filter.value.val_int
-                    )
-        return time_window
-    return TimeWindow(
-        start_timestamp=in_msg.meta.start_timestamp, end_timestamp=in_msg.meta.end_timestamp
-    )
-
-
-def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -> Query:
+def build_query(
+    request: TraceItemTableRequest, time_window: TimeWindow | None, timer: Optional[Timer] = None
+) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
@@ -425,9 +394,6 @@ def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -
                 literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
             )
         )
-
-    groupby = [attribute_key_to_expression(attr_key) for attr_key in request.group_by]
-    time_window = _get_time_window(request, request.page_token)
     if time_window is not None:
         additional_conditions.append(
             timestamp_in_range_condition(
@@ -435,6 +401,8 @@ def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -
                 time_window.end_timestamp.seconds,
             )
         )
+    groupby = [attribute_key_to_expression(attr_key) for attr_key in request.group_by]
+
     res = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -457,7 +425,8 @@ def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -
         offset=_get_offset_from_page_token(request.page_token),
         # protobuf sets limit to 0 by default if it is not set,
         # give it a default value that will actually return data
-        limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
+        # we add 1 to the limit to know if there are more rows to fetch
+        limit=(request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT) + 1,
         having=(
             aggregation_filter_to_expression(request.aggregation_filter, request.meta)
             if request.HasField("aggregation_filter")
@@ -473,14 +442,15 @@ def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -
 def _get_page_token(
     request: TraceItemTableRequest,
     response: list[TraceItemColumnValues],
+    num_rows_returned: int,
     original_time_window: TimeWindow,
     time_window: TimeWindow | None,
 ) -> PageToken:
     if not response:
         return PageToken(offset=0)
-    num_rows = len(response[0].results)
+    current_offset = _get_offset_from_page_token(request.page_token)
     if time_window is not None:
-        if num_rows >= request.limit:
+        if num_rows_returned > request.limit:
             # there are more rows in this window so we maintain the same time window and advance the offset
             return PageToken(
                 filter_offset=TraceItemFilter(
@@ -506,7 +476,12 @@ def _get_page_token(
                                 comparison_filter=ComparisonFilter(
                                     key=AttributeKey(name="offset"),
                                     op=ComparisonFilter.OP_EQUALS,
-                                    value=AttributeValue(val_int=num_rows),
+                                    value=AttributeValue(
+                                        # we subtract 1 because we added 1 to the limit to know if there are more rows to fetch
+                                        val_int=current_offset
+                                        + num_rows_returned
+                                        - 1
+                                    ),
                                 )
                             ),
                         ]
@@ -544,12 +519,13 @@ def _get_page_token(
                 )
             )
     else:
-        return PageToken(offset=request.page_token.offset + num_rows)
+        return PageToken(offset=request.page_token.offset + num_rows_returned)
 
 
 def _build_snuba_request(
     request: TraceItemTableRequest,
     query_settings: HTTPQuerySettings,
+    time_window: TimeWindow | None,
     timer: Optional[Timer] = None,
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
@@ -564,7 +540,7 @@ def _build_snuba_request(
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=build_query(request, timer),
+        query=build_query(request, time_window, timer),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -599,21 +575,19 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         original_time_window = TimeWindow(
             start_timestamp=in_msg.meta.start_timestamp, end_timestamp=in_msg.meta.end_timestamp
         )
-        if routing_decision.time_window is not None:
-            in_msg.meta.start_timestamp.seconds = (
-                routing_decision.time_window.start_timestamp.seconds
-            )
-            in_msg.meta.end_timestamp.seconds = routing_decision.time_window.end_timestamp.seconds
-        snuba_request = _build_snuba_request(in_msg, query_settings, self._timer)
+        snuba_request = _build_snuba_request(
+            in_msg, query_settings, routing_decision.time_window, self._timer
+        )
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
             timer=self._timer,
         )
-        breakpoint()
-        print(res.extra.get("sql", []))
         routing_decision.routing_context.query_result = res
-        column_values = convert_results(in_msg, res.result.get("data", []))
+        # we added 1 to the limit to know if there are more rows to fetch
+        # so we need to remove the last row
+        # TODO maybe use islice instead
+        column_values = convert_results(in_msg, res.result.get("data", [])[:-1])
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
@@ -623,7 +597,11 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         return TraceItemTableResponse(
             column_values=column_values,
             page_token=_get_page_token(
-                in_msg, column_values, original_time_window, routing_decision.time_window
+                in_msg,
+                column_values,
+                len(res.result.get("data", [])),
+                original_time_window,
+                routing_decision.time_window,
             ),
             meta=response_meta,
         )

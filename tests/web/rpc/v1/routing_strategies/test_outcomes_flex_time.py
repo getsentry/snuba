@@ -4,7 +4,17 @@ import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
+    RequestMeta,
+    TraceItemType,
+)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    AndFilter,
+    ComparisonFilter,
+    TraceItemFilter,
+)
 
 from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
@@ -41,19 +51,6 @@ def _get_request_meta(
         trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
         downsampled_storage_config=downsampled_storage_config,
     )
-
-
-@pytest.fixture
-def store_outcomes_fixture() -> None:
-    # Generate outcomes data for testing time window adjustment
-    outcome_data = []
-    for hour in range(6):  # 6 hours of data
-        time = BASE_TIME - timedelta(hours=hour)
-        # Gradually increasing data load to test time window adjustment
-        num_outcomes = 50_000_000 + (hour * 10_000_000)  # 50M to 100M
-        outcome_data.append((time, num_outcomes))
-
-    store_outcomes_data(outcome_data)
 
 
 def store_outcomes() -> None:
@@ -94,3 +91,65 @@ def test_outcomes_flex_time_routing_strategy_with_data() -> None:
         == (BASE_TIME - timedelta(hours=12)).timestamp()
     )
     assert routing_decision.time_window.end_timestamp.seconds == BASE_TIME.timestamp()
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+def test_outcomes_flex_time_routing_strategy_with_data_and_page_token() -> None:
+    store_outcomes()
+    strategy = OutcomesFlexTimeRoutingStrategy()
+    strategy.set_config_value("max_items_to_query", 120_000_000)
+    # this is the case where the original request time range is being shortened by the page token
+    # so even though the original request is for the past 24 hours, the page token specifies the request from 12 hours ago to 24 hours ago
+
+    page_token_start_timestamp = BASE_TIME - timedelta(hours=24)
+    page_token_end_timestamp = BASE_TIME - timedelta(hours=12)
+    request = TraceItemTableRequest(
+        meta=_get_request_meta(BASE_TIME - timedelta(hours=24), BASE_TIME),
+        page_token=PageToken(
+            filter_offset=TraceItemFilter(
+                and_filter=AndFilter(
+                    filters=[
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(
+                                    name="start_timestamp", type=AttributeKey.TYPE_INT
+                                ),
+                                op=ComparisonFilter.OP_GREATER_THAN,
+                                value=AttributeValue(
+                                    val_int=int(page_token_start_timestamp.timestamp())
+                                ),
+                            )
+                        ),
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(name="end_timestamp", type=AttributeKey.TYPE_INT),
+                                op=ComparisonFilter.OP_LESS_THAN,
+                                value=AttributeValue(
+                                    val_int=int(page_token_end_timestamp.timestamp())
+                                ),
+                            )
+                        ),
+                    ]
+                )
+            )
+        ),
+    )
+    request.meta.trace_item_type = TraceItemType.TRACE_ITEM_TYPE_LOG
+    request.meta.downsampled_storage_config.mode = (
+        DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+    )
+    routing_decision = strategy.get_routing_decision(
+        RoutingContext(
+            in_msg=request,
+            timer=Timer("test"),
+        )
+    )
+    assert routing_decision.time_window is not None
+    assert (
+        routing_decision.time_window.start_timestamp.seconds
+        == page_token_start_timestamp.timestamp()
+    )
+    assert (
+        routing_decision.time_window.end_timestamp.seconds == page_token_end_timestamp.timestamp()
+    )

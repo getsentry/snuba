@@ -66,6 +66,9 @@ class TimeWindow:
     start_timestamp: TimestampProto
     end_timestamp: TimestampProto
 
+    def length_hours(self) -> float:
+        return (self.end_timestamp.seconds - self.start_timestamp.seconds) / 3600
+
 
 @dataclass
 class RoutingDecision:

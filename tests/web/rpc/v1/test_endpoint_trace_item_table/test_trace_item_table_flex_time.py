@@ -10,7 +10,11 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
+    RequestMeta,
+    TraceItemType,
+)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
@@ -25,7 +29,7 @@ from tests.web.rpc.v1.routing_strategies.common import (
 )
 from tests.web.rpc.v1.test_utils import BASE_TIME, gen_item_message
 
-_SPAN_COUNT = 120
+_LOG_COUNT = 120
 _ORG_ID = 1
 _PROJECT_ID = 1
 
@@ -39,7 +43,7 @@ def setup_teardown(eap: None, redis_db: None) -> None:
         messages.extend(
             [
                 gen_item_message(
-                    start_timestamp=BASE_TIME - timedelta(hours=i),
+                    start_timestamp=BASE_TIME - timedelta(hours=hour),
                     item_id=int("123456781234567d", 16).to_bytes(16, byteorder="little"),
                     type=TraceItemType.TRACE_ITEM_TYPE_LOG,
                     attributes={
@@ -76,7 +80,7 @@ def setup_teardown(eap: None, redis_db: None) -> None:
                     project_id=_PROJECT_ID,
                     organization_id=_ORG_ID,
                 )
-                for i in range(_SPAN_COUNT)
+                for i in range(_LOG_COUNT)
             ]
         )
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
@@ -92,36 +96,68 @@ def setup_teardown(eap: None, redis_db: None) -> None:
     )
 
 
-START_TIMESTAMP = Timestamp(seconds=int((BASE_TIME - timedelta(hours=24)).timestamp()))
-END_TIMESTAMP = Timestamp(seconds=int(BASE_TIME.timestamp()))
-
-
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestTraceItemTableFlexTime:
-    def test_highest_accuracy_flextime_mode(self, eap: Any, setup_teardown: Any) -> None:
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-                downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
-                ),
-            ),
-            filter=TraceItemFilter(
-                exists_filter=ExistsFilter(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
-                )
-            ),
-            columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))],
-            limit=10,
+    def test_paginate_within_time_window(self, eap: Any, setup_teardown: Any) -> None:
+        from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
+            OutcomesFlexTimeRoutingStrategy,
         )
-        response = EndpointTraceItemTable().execute(message)
-        assert isinstance(response, TraceItemTableResponse)
-        breakpoint()
-        print(response.page_token)
+
+        num_hours_to_query = 4
+        # every hour we store 120 items and in outcomes we pretend it's 10 million items stored
+        strategy = OutcomesFlexTimeRoutingStrategy()
+        # we tell the routing strategy that the most items we can query is 20_000_000
+        # this means that if we query a four hour time range, it will get split in two
+        strategy.set_config_value("max_items_to_query", 20_000_000)
+
+        start_timestamp = Timestamp(
+            seconds=int((BASE_TIME - timedelta(hours=num_hours_to_query)).timestamp())
+        )
+        end_timestamp = Timestamp(seconds=int(BASE_TIME.timestamp()))
+
+        limit_per_query = 120
+
+        # querying 4 hours of data, split into two windows,
+        # each window queries has 240 datapoints, 120 points at a time
+        # means that we will run the query  a total of 4 times
+
+        times_queried = 0
+        # TODO: back down to 4
+        expected_times_queried = 5
+        page_token = PageToken(offset=0)
+        result_size = 1
+        while result_size > 0:
+            times_queried += 1
+            message = TraceItemTableRequest(
+                meta=RequestMeta(
+                    project_ids=[1],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=start_timestamp,
+                    end_timestamp=end_timestamp,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                    downsampled_storage_config=DownsampledStorageConfig(
+                        mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+                    ),
+                ),
+                filter=TraceItemFilter(
+                    exists_filter=ExistsFilter(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
+                    )
+                ),
+                columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))],
+                limit=limit_per_query,
+                page_token=page_token,
+            )
+            response = EndpointTraceItemTable().execute(message)
+            assert isinstance(response, TraceItemTableResponse)
+            if not response.column_values:
+                break
+            result_size = len(response.column_values[0].results)
+            breakpoint()
+            page_token = response.page_token
+            print(response.page_token)
+
+        assert times_queried == expected_times_queried

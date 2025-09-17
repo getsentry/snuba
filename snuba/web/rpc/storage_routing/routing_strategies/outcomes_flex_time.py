@@ -4,8 +4,13 @@ from typing import cast
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
+from google.protobuf.timestamp_pb2 import Timestamp
 from google.protobuf.timestamp_pb2 import Timestamp as TimestampProto
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
+    RequestMeta,
+    TraceItemType,
+)
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -65,6 +70,37 @@ def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
     )
 
 
+def _get_request_time_window(routing_context: RoutingContext) -> TimeWindow:
+    """Gets the time window of the request, if there is a page token with a start and end timestamp,
+    it gets it from there, otherwise, it gets it from the message meta
+    """
+    meta = extract_message_meta(routing_context.in_msg)
+    if routing_context.in_msg.HasField("page_token"):
+        page_token: PageToken = getattr(routing_context.in_msg, "page_token")
+        if page_token.HasField("filter_offset"):
+            time_window = TimeWindow(
+                start_timestamp=meta.start_timestamp, end_timestamp=meta.end_timestamp
+            )
+            if page_token.filter_offset.HasField("and_filter"):
+                for filter in page_token.filter_offset.and_filter.filters:
+                    if (
+                        filter.HasField("comparison_filter")
+                        and filter.comparison_filter.key.name == "start_timestamp"
+                    ):
+                        time_window.start_timestamp = Timestamp(
+                            seconds=filter.comparison_filter.value.val_int
+                        )
+                    if (
+                        filter.HasField("comparison_filter")
+                        and filter.comparison_filter.key.name == "end_timestamp"
+                    ):
+                        time_window.end_timestamp = Timestamp(
+                            seconds=filter.comparison_filter.value.val_int
+                        )
+            return time_window
+    return TimeWindow(start_timestamp=meta.start_timestamp, end_timestamp=meta.end_timestamp)
+
+
 class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
     def _additional_config_definitions(self) -> list[Configuration]:
         return [
@@ -76,13 +112,15 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
             ),
         ]
 
-    def get_ingested_items_for_timerange(self, routing_context: RoutingContext) -> int:
-        in_msg_meta = extract_message_meta(routing_context.in_msg)
+    def get_ingested_items_for_timerange(
+        self, routing_context: RoutingContext, time_window: TimeWindow
+    ) -> int:
         entity = Entity(
             key=EntityKey("outcomes"),
             schema=get_entity(EntityKey("outcomes")).get_data_model(),
             sample=None,
         )
+        in_msg_meta = extract_message_meta(routing_context.in_msg)
         query = Query(
             from_clause=entity,
             selected_columns=[
@@ -94,8 +132,8 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
             condition=and_cond(
                 project_id_and_org_conditions(in_msg_meta),
                 timestamp_in_range_condition(
-                    in_msg_meta.start_timestamp.seconds,
-                    in_msg_meta.end_timestamp.seconds,
+                    time_window.start_timestamp.seconds,
+                    time_window.end_timestamp.seconds,
                 ),
                 f.equals(column("outcome"), Outcome.ACCEPTED),
                 f.equals(
@@ -135,13 +173,15 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
 
     def _adjust_time_window(self, routing_context: RoutingContext) -> TimeWindow | None:
         """Adjust the time window to ensure we don't exceed MAX_ITEMS_TO_QUERY."""
-        in_msg_meta = extract_message_meta(routing_context.in_msg)
-        original_start_ts = in_msg_meta.start_timestamp.seconds
-        original_end_ts = in_msg_meta.end_timestamp.seconds
+        original_time_window = _get_request_time_window(routing_context)
+        original_end_ts = original_time_window.end_timestamp.seconds
+        original_start_ts = original_time_window.start_timestamp.seconds
 
         max_items = self.get_config_value("max_items_to_query")
 
-        ingested_items = self.get_ingested_items_for_timerange(routing_context)
+        ingested_items = self.get_ingested_items_for_timerange(
+            routing_context, original_time_window
+        )
         factor = ingested_items / max_items
         if factor > 1:
             window_length = original_end_ts - original_start_ts
@@ -152,7 +192,7 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
             end_timestamp_proto = TimestampProto(seconds=original_end_ts)
             return TimeWindow(start_timestamp_proto, end_timestamp_proto)
 
-        return None
+        return original_time_window
 
     def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
         routing_decision = RoutingDecision(
@@ -164,10 +204,6 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
         )
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
-
-        if self._is_highest_accuracy_mode(in_msg_meta):
-            routing_decision.routing_context.extra_info["highest_accuracy_mode"] = True
-            return routing_decision
 
         # Check if we need to handle time window adjustment for unknown item types
         if (
