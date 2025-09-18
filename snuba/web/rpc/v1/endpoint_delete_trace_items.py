@@ -23,7 +23,7 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
         return DeleteTraceItemsResponse
 
     def _execute(self, request: DeleteTraceItemsRequest) -> DeleteTraceItemsResponse:
-        if not request.trace_id:
+        if len(request.trace_ids) < 1:
             raise BadSnubaRPCRequestException("trace_id is required for deleting a trace.")
 
         response = DeleteTraceItemsResponse()

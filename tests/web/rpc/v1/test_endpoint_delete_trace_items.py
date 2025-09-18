@@ -54,7 +54,7 @@ class TestEndpointDeleteTrace(BaseApiTest):
                 end_timestamp=ts,
                 request_id=_REQUEST_ID,
             ),
-            trace_id=trace_id,
+            trace_ids=[trace_id],
         )
 
         response = EndpointDeleteTraceItems().execute(message)
