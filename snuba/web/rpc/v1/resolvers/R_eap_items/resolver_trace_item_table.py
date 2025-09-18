@@ -587,7 +587,11 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         # we added 1 to the limit to know if there are more rows to fetch
         # so we need to remove the last row
         # TODO maybe use islice instead
-        column_values = convert_results(in_msg, res.result.get("data", [])[:-1])
+        breakpoint()
+        data = res.result.get("data", [])
+        if len(data) > in_msg.limit:
+            data = data[:-1]
+        column_values = convert_results(in_msg, data)
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,

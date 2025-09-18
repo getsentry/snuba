@@ -156,8 +156,7 @@ class TestTraceItemTableFlexTime:
             if not response.column_values:
                 break
             result_size = len(response.column_values[0].results)
-            breakpoint()
             page_token = response.page_token
-            print(response.page_token)
+            assert result_size == limit_per_query
 
         assert times_queried == expected_times_queried
