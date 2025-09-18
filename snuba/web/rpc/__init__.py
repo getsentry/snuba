@@ -31,7 +31,6 @@ from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
-from snuba.web.rpc.storage_routing.defaults import get_default_routing_decision
 from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
@@ -135,7 +134,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(self, metrics_backend: MetricsBackend | None = None) -> None:
         self._timer = Timer("endpoint_timing")
         self._metrics_backend = metrics_backend or environment.metrics
-        self.routing_decision = get_default_routing_decision(None)
 
     @classmethod
     def request_class(cls) -> Type[Tin]:
@@ -193,7 +191,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
-        self.routing_decision.routing_context = RoutingContext(timer=self._timer, in_msg=in_msg)
+        self.routing_context = RoutingContext(timer=self._timer, in_msg=in_msg)
 
         self.__before_execute(in_msg)
         error: Exception | None = None
@@ -265,13 +263,8 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         if state.get_config("storage_routing.enable_get_cluster_loadinfo", True):
             get_cluster_loadinfo()
 
-        selected_strategy = RoutingStrategySelector().select_routing_strategy(
-            self.routing_decision.routing_context
-        )
-        self.routing_decision.strategy = selected_strategy
-        self.routing_decision = selected_strategy.get_routing_decision(
-            self.routing_decision.routing_context
-        )
+        selected_strategy = RoutingStrategySelector().select_routing_strategy(self.routing_context)
+        self.routing_decision = selected_strategy.get_routing_decision(self.routing_context)
         self._timer.mark("rpc_start")
         self._before_execute(in_msg)
 
