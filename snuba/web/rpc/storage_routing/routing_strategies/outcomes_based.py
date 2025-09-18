@@ -27,27 +27,15 @@ from snuba.web.rpc.common.common import (
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.storage_routing.common import extract_message_meta
+from snuba.web.rpc.storage_routing.routing_strategies.common import (
+    ITEM_TYPE_TO_OUTCOME_CATEGORY,
+    Outcome,
+)
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
     RoutingContext,
     RoutingDecision,
 )
-
-
-# TODO import these from sentry-relay
-class OutcomeCategory:
-    SPAN_INDEXED = 16
-    LOG_ITEM = 23
-
-
-class Outcome:
-    ACCEPTED = 0
-
-
-_ITEM_TYPE_TO_OUTCOME = {
-    TraceItemType.TRACE_ITEM_TYPE_SPAN: OutcomeCategory.SPAN_INDEXED,
-    TraceItemType.TRACE_ITEM_TYPE_LOG: OutcomeCategory.LOG_ITEM,
-}
 
 
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
@@ -97,11 +85,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                 ),
                 f.equals(column("outcome"), Outcome.ACCEPTED),
                 f.equals(
-                    column("category"),
-                    _ITEM_TYPE_TO_OUTCOME.get(
-                        in_msg_meta.trace_item_type,
-                        OutcomeCategory.SPAN_INDEXED,
-                    ),
+                    column("category"), ITEM_TYPE_TO_OUTCOME_CATEGORY[in_msg_meta.trace_item_type]
                 ),
             ),
         )
@@ -173,7 +157,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             # that is necessary for traces anyways
             # if the type is specified and we don't know its outcome, route to Tier_1
             in_msg_meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
-            and in_msg_meta.trace_item_type not in _ITEM_TYPE_TO_OUTCOME
+            and in_msg_meta.trace_item_type not in ITEM_TYPE_TO_OUTCOME_CATEGORY
         ):
             return routing_decision
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
