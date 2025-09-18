@@ -156,6 +156,17 @@ query_processors:
         max_execution_time: 25
         timeout_before_checking_execution_speed: 0
 
+deletion_settings:
+  is_enabled: 1
+  max_rows_to_delete: 2000000
+  tables:
+    - eap_items_1_local
+  allowed_columns:
+    - project_id
+    - organization_id
+    - trace_id
+    - item_type
+
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
     args:
