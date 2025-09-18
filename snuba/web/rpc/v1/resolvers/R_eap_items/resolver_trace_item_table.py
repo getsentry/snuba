@@ -359,7 +359,9 @@ def _get_offset_from_page_token(page_token: PageToken | None) -> int:
 
 
 def build_query(
-    request: TraceItemTableRequest, time_window: TimeWindow | None, timer: Optional[Timer] = None
+    request: TraceItemTableRequest,
+    time_window: TimeWindow | None = None,
+    timer: Optional[Timer] = None,
 ) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
@@ -449,6 +451,7 @@ def _get_page_token(
     if not response:
         return PageToken(offset=0)
     current_offset = _get_offset_from_page_token(request.page_token)
+    num_rows_in_response = len(response[0].results)
     if time_window is not None:
         if num_rows_returned > request.limit:
             # there are more rows in this window so we maintain the same time window and advance the offset
@@ -479,7 +482,7 @@ def _get_page_token(
                                     value=AttributeValue(
                                         # we subtract 1 because we added 1 to the limit to know if there are more rows to fetch
                                         val_int=current_offset
-                                        + num_rows_returned
+                                        + num_rows_in_response
                                         - 1
                                     ),
                                 )
@@ -519,13 +522,13 @@ def _get_page_token(
                 )
             )
     else:
-        return PageToken(offset=request.page_token.offset + num_rows_returned)
+        return PageToken(offset=request.page_token.offset + num_rows_in_response)
 
 
 def _build_snuba_request(
     request: TraceItemTableRequest,
     query_settings: HTTPQuerySettings,
-    time_window: TimeWindow | None,
+    time_window: TimeWindow | None = None,
     timer: Optional[Timer] = None,
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
@@ -587,9 +590,8 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         # we added 1 to the limit to know if there are more rows to fetch
         # so we need to remove the last row
         # TODO maybe use islice instead
-        breakpoint()
         data = res.result.get("data", [])
-        if len(data) > in_msg.limit:
+        if in_msg.limit > 0 and len(data) > in_msg.limit:
             data = data[:-1]
         column_values = convert_results(in_msg, data)
         response_meta = extract_response_meta(
