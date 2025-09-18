@@ -135,7 +135,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(self, metrics_backend: MetricsBackend | None = None) -> None:
         self._timer = Timer("endpoint_timing")
         self._metrics_backend = metrics_backend or environment.metrics
-        self.routing_decision = get_default_routing_decision(None)
 
     @classmethod
     def request_class(cls) -> Type[Tin]:
@@ -193,7 +192,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
-        self.routing_decision.routing_context = RoutingContext(timer=self._timer, in_msg=in_msg)
+        self.routing_decision = get_default_routing_decision(
+            RoutingContext(timer=self._timer, in_msg=in_msg)
+        )
 
         self.__before_execute(in_msg)
         error: Exception | None = None
