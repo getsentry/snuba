@@ -340,13 +340,6 @@ def timestamp_in_range_condition(start_ts: int, end_ts: int) -> Expression:
             ),
         ),
     )
-    # return and_cond(
-    #     f.less(
-    #         column("timestamp"),
-    #         f.toDateTime(end_ts),
-    #     ),
-    #     f.greaterOrEquals(column("timestamp"), f.toDateTime(start_ts)),
-    # )
 
 
 def base_conditions_and(meta: RequestMeta, *other_exprs: Expression) -> Expression:
