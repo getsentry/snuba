@@ -80,7 +80,7 @@ def _flush_logs() -> None:
     This helps prevent data loss when containers are terminated.
     """
     try:
-        for handler in logger.handlers:
+        for handler in logging.getLogger().handlers:
             handler.flush()
     except Exception:
         # Silently ignore flush errors to avoid interfering with main logic
