@@ -48,7 +48,8 @@ class DeleteQueryMessage(TypedDict):
 
 PRODUCER_MAP: MutableMapping[str, Producer] = {}
 STORAGE_TOPIC: Mapping[str, Topic] = {
-    StorageKey.SEARCH_ISSUES.value: Topic.LW_DELETIONS_GENERIC_EVENTS
+    StorageKey.SEARCH_ISSUES.value: Topic.LW_DELETIONS_GENERIC_EVENTS,
+    StorageKey.EAP_ITEMS.value: Topic.LW_DELETIONS_EAP_ITEMS,
 }
 
 
@@ -80,17 +81,13 @@ def flush_producers() -> None:
             for storage, producer in PRODUCER_MAP.items():
                 messages_remaining = producer.flush(5.0)
                 if messages_remaining:
-                    logger.debug(
-                        f"{messages_remaining} {storage} messages pending delivery"
-                    )
+                    logger.debug(f"{messages_remaining} {storage} messages pending delivery")
             time.sleep(1)
 
     Thread(target=_flush_producers, name="flush_producers", daemon=True).start()
 
 
-def _delete_query_delivery_callback(
-    error: Optional[KafkaError], message: KafkaMessage
-) -> None:
+def _delete_query_delivery_callback(error: Optional[KafkaError], message: KafkaMessage) -> None:
     metrics.increment(
         "delete_query.delivery_callback",
         tags={"status": "failure" if error else "success"},
@@ -147,9 +144,7 @@ def delete_from_storage(
 
     delete_settings = storage.get_deletion_settings()
     if not delete_settings.is_enabled:
-        raise DeletesNotEnabledError(
-            f"Deletes not enabled for {storage.get_storage_key().value}"
-        )
+        raise DeletesNotEnabledError(f"Deletes not enabled for {storage.get_storage_key().value}")
 
     columns_diff = set(conditions.keys()) - set(delete_settings.allowed_columns)
     if columns_diff != set():
@@ -170,9 +165,7 @@ def delete_from_storage(
     return delete_from_tables(storage, delete_settings.tables, conditions, attr_info)
 
 
-def construct_query(
-    storage: WritableTableStorage, table: str, condition: Expression
-) -> Query:
+def construct_query(storage: WritableTableStorage, table: str, condition: Expression) -> Query:
     cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
     on_cluster = literal(cluster_name) if cluster_name else None
     return Query(
@@ -233,7 +226,5 @@ def construct_or_conditions(conditions: Sequence[ConditionsType]) -> Expression:
 
 
 def should_use_killswitch(storage_name: str, project_id: str) -> bool:
-    killswitch_config = get_str_config(
-        f"lw_deletes_killswitch_{storage_name}", default=""
-    )
+    killswitch_config = get_str_config(f"lw_deletes_killswitch_{storage_name}", default="")
     return project_id in killswitch_config if killswitch_config else False
