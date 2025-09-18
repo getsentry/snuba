@@ -1,4 +1,3 @@
-import uuid
 from typing import Type
 
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
@@ -24,9 +23,7 @@ def downgrade_tier(tier: Tier) -> Tier:
     return tier
 
 
-class EndpointTraceItemStats(
-    RPCEndpoint[TraceItemStatsRequest, TraceItemStatsResponse]
-):
+class EndpointTraceItemStats(RPCEndpoint[TraceItemStatsRequest, TraceItemStatsResponse]):
     @classmethod
     def version(cls) -> str:
         return "v1"
@@ -48,9 +45,6 @@ class EndpointTraceItemStats(
         )
 
     def _execute(self, in_msg: TraceItemStatsRequest) -> TraceItemStatsResponse:
-        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
-            uuid.uuid4()
-        )
 
         if not in_msg.stats_types:
             raise BadSnubaRPCRequestException("Please specify at least one stats type.")

@@ -685,7 +685,7 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
     assert response.json is not None and len(response.json) == 1
     [data] = response.json
     assert data["query_type"] == "select"
-    assert data["policy_name"] == "FakePolicy"
+    assert data["configurable_component_class_name"] == "FakePolicy"
     assert data["optional_config_definitions"] == [
         {
             "name": "fake_optional_config",
@@ -702,7 +702,7 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
         "description": "",
         "value": 10,
         "params": {"org_id": 10},
-    } in data["configs"]
+    } in data["configurations"]
 
 
 @pytest.mark.redis_db
@@ -742,10 +742,13 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         bytes_scanned_policy = [
             policy
             for policy in policy_configs
-            if policy["policy_name"] == "BytesScannedWindowAllocationPolicy"
+            if policy["configurable_component_class_name"] == "BytesScannedWindowAllocationPolicy"
         ][0]
 
-        assert bytes_scanned_policy["policy_name"] == "BytesScannedWindowAllocationPolicy"
+        assert (
+            bytes_scanned_policy["configurable_component_class_name"]
+            == "BytesScannedWindowAllocationPolicy"
+        )
         assert {
             "default": -1,
             "description": "Number of bytes a specific org can scan in a 10 minute " "window.",
@@ -753,7 +756,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             "params": {"org_id": 1},
             "type": "int",
             "value": 420,
-        } in bytes_scanned_policy["configs"]
+        } in bytes_scanned_policy["configurations"]
 
         # no need to record auditlog when nothing was updated
         assert not auditlog_records
@@ -783,7 +786,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             "params": {"org_id": 1},
             "type": "int",
             "value": 420,
-        } not in response.json[0]["configs"]
+        } not in response.json[0]["configurations"]
         # make sure an auditlog entry was recorded
         assert auditlog_records.pop()
 

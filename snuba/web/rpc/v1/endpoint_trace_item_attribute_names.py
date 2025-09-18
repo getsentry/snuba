@@ -77,9 +77,7 @@ def convert_to_attributes(
         vals = row.values()
         assert len(vals) == 1
         attr_name = list(vals)[0]
-        return TraceItemAttributeNamesResponse.Attribute(
-            name=attr_name, type=attribute_type
-        )
+        return TraceItemAttributeNamesResponse.Attribute(name=attr_name, type=attribute_type)
 
     return list(map(t, query_res.result["data"]))
 
@@ -88,15 +86,11 @@ def get_co_occurring_attributes_date_condition(
     request: TraceItemAttributeNamesRequest,
 ) -> Expression:
     # round the lower timestamp to the previous monday
-    lower_ts = request.meta.start_timestamp.ToDatetime().replace(
-        hour=0, minute=0, second=0
-    )
+    lower_ts = request.meta.start_timestamp.ToDatetime().replace(hour=0, minute=0, second=0)
     lower_ts = prev_monday(lower_ts)
 
     # round the upper timestamp to the next monday
-    upper_ts = request.meta.end_timestamp.ToDatetime().replace(
-        hour=0, minute=0, second=0
-    )
+    upper_ts = request.meta.end_timestamp.ToDatetime().replace(hour=0, minute=0, second=0)
     upper_ts = next_monday(upper_ts)
 
     return and_cond(
@@ -190,9 +184,7 @@ def get_co_occurring_attributes(
         )
 
     if request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
-        condition = and_cond(
-            f.equals(column("item_type"), request.meta.trace_item_type), condition
-        )
+        condition = and_cond(f.equals(column("item_type"), request.meta.trace_item_type), condition)
 
     string_array = f.arrayMap(
         Lambda(
@@ -268,9 +260,7 @@ def get_co_occurring_attributes(
         ],
         # chosen arbitrarily to be a high number
         limit=request.limit,
-        offset=request.page_token.offset
-        if request.page_token.HasField("offset")
-        else 0,
+        offset=request.page_token.offset if request.page_token.HasField("offset") else 0,
     )
 
     treeify_or_and_conditions(query)
@@ -351,9 +341,7 @@ class EndpointTraceItemAttributeNames(
             else PageToken(
                 filter_offset=TraceItemFilter(
                     comparison_filter=ComparisonFilter(
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_STRING, name="attr_key"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="attr_key"),
                         op=ComparisonFilter.OP_GREATER_THAN,
                         value=AttributeValue(val_str=attributes[-1].name),
                     )
@@ -363,16 +351,10 @@ class EndpointTraceItemAttributeNames(
         return TraceItemAttributeNamesResponse(
             attributes=attributes,
             page_token=page_token,
-            meta=extract_response_meta(
-                req.meta.request_id, req.meta.debug, [res], [self._timer]
-            ),
+            meta=extract_response_meta(req.meta.request_id, req.meta.debug, [res], [self._timer]),
         )
 
-    def _execute(
-        self, in_msg: TraceItemAttributeNamesRequest
-    ) -> TraceItemAttributeNamesResponse:
-        if not in_msg.meta.request_id:
-            in_msg.meta.request_id = str(uuid.uuid4())
+    def _execute(self, in_msg: TraceItemAttributeNamesRequest) -> TraceItemAttributeNamesResponse:
 
         snuba_request = get_co_occurring_attributes(in_msg)
         res = run_query(

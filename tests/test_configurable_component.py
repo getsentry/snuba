@@ -337,7 +337,8 @@ class TestConfigurableComponentNamespaces:
     def test_subclass_all_names_filters_by_namespace(self) -> None:
         """Test that any subclass all_names() returns only classes in its namespace."""
         for name in AllocationPolicy.all_names():
-            assert name.startswith(AllocationPolicy.component_namespace())
+            # ensures that the class name is valid within the AllocationPolicy namespace
+            AllocationPolicy.get_from_name(name)
             # Should not include the base class itself
             assert (
                 name

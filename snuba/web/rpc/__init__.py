@@ -1,4 +1,7 @@
+import logging
 import os
+import random
+import uuid
 from bisect import bisect_left
 from typing import Generic, List, Tuple, Type, cast, final
 
@@ -47,6 +50,39 @@ _TIME_PERIOD_HOURS_BUCKETS = [
     90 * 24,
 ]
 _BUCKETS_COUNT = len(_TIME_PERIOD_HOURS_BUCKETS)
+
+
+def _should_log_rpc_request() -> bool:
+    """
+    Determine if this RPC request should be logged based on runtime configuration.
+    """
+    sample_rate = state.get_float_config("rpc_logging_sample_rate", 0)
+    if sample_rate is None:
+        sample_rate = 0
+
+    # If sample rate is 0, never log
+    if sample_rate <= 0.0:
+        return False
+
+    # If sample rate is 1, always log
+    if sample_rate >= 1.0:
+        return True
+
+    # Otherwise, use random sampling
+    return random.random() < sample_rate
+
+
+def _flush_logs() -> None:
+    """
+    Force flush all log handlers to ensure logs are written immediately.
+    This helps prevent data loss when containers are terminated.
+    """
+    try:
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+    except Exception:
+        # Silently ignore flush errors to avoid interfering with main logic
+        pass
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -215,6 +251,12 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         return self.__after_execute(in_msg, out, error)
 
     def __before_execute(self, in_msg: Tin) -> None:
+        # Generate request_id if not already present
+        meta = getattr(in_msg, "meta", None)
+        if meta is not None:
+            if not hasattr(meta, "request_id") or not meta.request_id:
+                meta.request_id = str(uuid.uuid4())
+
         self._timer.update_tags(self.__extract_request_tags(in_msg))
 
         # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
@@ -268,7 +310,19 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def _before_execute(self, in_msg: Tin) -> None:
         """Override this for any pre-processing/logging before the _execute method"""
-        pass
+        if _should_log_rpc_request():
+            request_id = "unknown"
+            if hasattr(in_msg, "meta") and hasattr(in_msg.meta, "request_id"):
+                request_id = in_msg.meta.request_id
+
+            # Log RPC request start
+            logging.info(
+                f"RPC request started - endpoint: {self.__class__.__name__}, request_id: {request_id}"
+            )
+
+            flush_logs = state.get_float_config("rpc_logging_flush_logs", 0)
+            if flush_logs and flush_logs > 0:
+                _flush_logs()
 
     def _execute(self, in_msg: Tin) -> Tout:
         raise NotImplementedError
@@ -320,6 +374,19 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def _after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
         """Override this for any post-processing/logging after the _execute method"""
+        if _should_log_rpc_request():
+            request_id = "unknown"
+            if hasattr(in_msg, "meta") and hasattr(in_msg.meta, "request_id"):
+                request_id = in_msg.meta.request_id
+
+            status = "error" if error is not None else "success"
+            logging.info(
+                f"RPC request finished - endpoint: {self.__class__.__name__}, request_id: {request_id}, status: {status}"
+            )
+            flush_logs = state.get_float_config("rpc_logging_flush_logs", 0)
+            if flush_logs and flush_logs > 0:
+                _flush_logs()
+
         return out_msg
 
 

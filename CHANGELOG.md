@@ -1,5 +1,36 @@
 # Changelog
 
+## 25.9.0
+
+### Various fixes & improvements
+
+- ci: bump action-build-and-push-images to latest commit hash (#7412) by @Dav1dde
+- ref(outcomes): storage selecter, settings, daily storage (try 2) (#7398) by @MeredithAnya
+- feat(cbrs): Snuba Admin UI (webpage) (#7399) by @xurui-c
+- fix(ci): typo on craft's default release branch name (#7408) by @aldy505
+- ref(pyproject.toml): Un-break bump-version.yml workflow (#7403) by @untitaker
+- chore(api): Make socket timeout less aggressive in snuba api (#7405) by @volokluev
+- Reduce clickhouse send_receive_timeout from 300 to 35 seconds (#7404) by @volokluev
+- fix(inc-1340): Make snuba more resilient to redis failures (#7402) by @volokluev
+- fix(cbrs): divide subclasses according to their namespaces (#7401) by @xurui-c
+- feat(EAP): cross item queries for trace item table (#7385) by @davidtsuk
+- fix(issues): resolve u32/u64 group_first_seen bug (#7397) by @thetruecpaul
+- feat(cbrs): Snuba Admin endpoints (#7346) by @xurui-c
+- fix(observability): raise a specific error for query timeouts (#7364) by @volokluev
+- Redo: ref(outcomes): fix partitioning for daily table (#7396) by @xurui-c
+- Redo: fix(issues): Process new group_first_seen field on ingest (#7395) by @xurui-c
+- Redo: fix: scripts/rust-envvars needs .venv/bin/python (#7394) by @xurui-c
+- Stop deploying gauges infra (#7382) by @volokluev
+- ref(cbrs): introduce RegisteredClass into ConfigurableComponent (#7379) by @xurui-c
+- fix: rust envvars need to be set before devenv/uv sync (#7381) by @joshuarli
+- fix(ci): bump timeout for venv recreation (#7380) by @joshuarli
+- feat: uv (#7368) by @joshuarli
+- fix(search_issues): stop truncating timestamp_ms in search_issues (#7373) by @cvxluo
+- ref(cbrs): integrate resource identifier and policy type into AllocationPolicy (#7375) by @xurui-c
+- feat(ci): Part 2 Cutover to GHA for image build/push (#7371) by @hubertdeng123
+
+_Plus 10 more_
+
 ## 25.8.0
 
 ### Various fixes & improvements
