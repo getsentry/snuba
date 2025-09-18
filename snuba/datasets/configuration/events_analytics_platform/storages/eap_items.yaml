@@ -161,6 +161,9 @@ deletion_settings:
   max_rows_to_delete: 2000000
   tables:
     - eap_items_1_local
+    - eap_items_1_downsample_8_local
+    - eap_items_1_downsample_64_local
+    - eap_items_1_downsample_512_local
   allowed_columns:
     - project_id
     - organization_id
