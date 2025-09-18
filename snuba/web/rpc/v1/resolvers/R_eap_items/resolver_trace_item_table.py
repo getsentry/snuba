@@ -444,8 +444,11 @@ def build_query(
 def _get_page_token(
     request: TraceItemTableRequest,
     response: list[TraceItemColumnValues],
+    # amount of rows returned in the DB request (which can be one more than the limit)
     num_rows_returned: int,
+    # time window of the original request without any adjustments by routing strategies
     original_time_window: TimeWindow,
+    # time window of the current request after any adjustments by routing strategies
     time_window: TimeWindow | None,
 ) -> PageToken:
     if not response:
@@ -480,10 +483,7 @@ def _get_page_token(
                                     key=AttributeKey(name="offset"),
                                     op=ComparisonFilter.OP_EQUALS,
                                     value=AttributeValue(
-                                        # we subtract 1 because we added 1 to the limit to know if there are more rows to fetch
-                                        val_int=current_offset
-                                        + num_rows_in_response
-                                        - 1
+                                        val_int=current_offset + num_rows_in_response
                                     ),
                                 )
                             ),
