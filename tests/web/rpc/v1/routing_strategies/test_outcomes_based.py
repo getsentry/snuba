@@ -10,6 +10,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from snuba import state
 from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.timer import Timer
+from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
 )
@@ -28,9 +29,11 @@ _ORG_ID = 1
 def _get_request_meta(
     start: datetime | None = None,
     end: datetime | None = None,
+    hour_interval: int | None = None,
     downsampled_storage_config: DownsampledStorageConfig | None = None,
 ) -> RequestMeta:
-    start = start or BASE_TIME - timedelta(hours=24)
+    hour_interval = hour_interval or 24
+    start = start or BASE_TIME - timedelta(hours=hour_interval)
     end = end or BASE_TIME
     return RequestMeta(
         project_ids=[_PROJECT_ID],
@@ -53,6 +56,28 @@ def store_outcomes_fixture() -> None:
         outcome_data.append((time, 1_000_000))
 
     store_outcomes_data(outcome_data)
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_outcomes_based_routing_queries_daily_table() -> None:
+    strategy = OutcomesBasedRoutingStrategy()
+
+    request = TraceItemTableRequest(meta=_get_request_meta(hour_interval=2400))  # 100 days
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+    )
+    in_msg_meta = extract_message_meta(context.in_msg)
+    assert strategy._use_daily(in_msg_meta=in_msg_meta)
+
+    routing_decision = strategy.get_routing_decision(context)
+
+    assert routing_decision.tier == Tier.TIER_1
+    assert routing_decision.clickhouse_settings == {}
+    assert routing_decision.can_run
 
 
 @pytest.mark.clickhouse_db

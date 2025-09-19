@@ -1,5 +1,4 @@
 import math
-import uuid
 from typing import Type
 
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
@@ -62,9 +61,7 @@ def _validate_time_buckets(request: TimeSeriesRequest) -> None:
         raise BadSnubaRPCRequestException(
             f"Granularity of {request.granularity_secs} is not valid, valid granularity_secs: {sorted(_VALID_GRANULARITY_SECS)}"
         )
-    request_duration = (
-        request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
-    )
+    request_duration = request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
     num_buckets = request_duration / request.granularity_secs
     if num_buckets > _MAX_BUCKETS_IN_REQUEST:
         raise BadSnubaRPCRequestException(
@@ -118,10 +115,6 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         )
 
     def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
-        # TODO: Move this to base
-        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
-            uuid.uuid4()
-        )
         _enforce_no_duplicate_labels(in_msg)
         _validate_time_buckets(in_msg)
 

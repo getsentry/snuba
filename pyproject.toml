@@ -1,6 +1,6 @@
 [project]
 name = "snuba"
-version = "25.9.0.dev0"
+version = "25.10.0.dev0"
 dependencies = [
     "blinker>=1.5",
     "click>=8.1.7",
@@ -30,6 +30,7 @@ dependencies = [
     "sentry-arroyo>=2.29.1",
     "sentry-kafka-schemas>=2.0.4",
     "sentry-protos>=0.3.6",
+    "sentry-protos>=0.3.9",
     "sentry-redis-tools>=0.5.0",
     "sentry-relay>=0.9.5",
     "sentry-sdk>=2.35.0",
@@ -42,7 +43,7 @@ dependencies = [
     "structlog-sentry>=2.0.0",
     "urllib3>=2.2.3",
     "werkzeug>=3.0.6",
-    "rust_snuba",
+    "rust_snuba>=0.0.0",
 ]
 
 [tool.uv.sources]
@@ -77,7 +78,7 @@ dev = [
     "flake8>=7.0.0",
     "freezegun>=1.2.2",
     "honcho>=1.1.0",
-    "isort==5.12.0",
+    "isort>=5.12.0",
     "mypy>=1.1.1",
     # pip required for maturin develop
     # (can remove with maturin 1.6.0)
