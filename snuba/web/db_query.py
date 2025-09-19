@@ -32,6 +32,7 @@ from snuba.query.allocation_policies import (
     AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
+    get_max_bytes_to_read,
 )
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -808,7 +809,12 @@ def _apply_allocation_policies_quota(
     Sets the resource quota in the query_settings object to the minimum of all available
     quota allowances from the given allocation policies.
     """
-    quota_allowances: dict[str, Any] = {}
+
+    # if it's an EAP query, then allocation policies were already applied in the routing strategy layer, so we bypass it here
+    if attribution_info.app_id.key == "eap":
+        return
+
+    quota_allowances: dict[str, QuotaAllowance] = {}
     can_run = True
     rejection_quota_and_policy = None
     throttle_quota_and_policy = None
@@ -855,10 +861,7 @@ def _apply_allocation_policies_quota(
         summary: dict[str, Any] = {}
         summary["threads_used"] = min_threads_across_policies
 
-        max_bytes_to_read = min(
-            [qa.max_bytes_to_read for qa in quota_allowances.values()],
-            key=lambda mb: float("inf") if mb == 0 else mb,
-        )
+        max_bytes_to_read = get_max_bytes_to_read(quota_allowances)
         if max_bytes_to_read != 0:
             query_settings.push_clickhouse_setting("max_bytes_to_read", max_bytes_to_read)
             summary["max_bytes_to_read"] = max_bytes_to_read
