@@ -31,7 +31,6 @@ from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
-from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
@@ -192,7 +191,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
-        self.routing_context = RoutingContext(timer=self._timer, in_msg=in_msg, query_id=uuid.uuid4().hex)
+        self.routing_context = RoutingContext(
+            timer=self._timer, in_msg=in_msg, query_id=uuid.uuid4().hex
+        )
 
         self.__before_execute(in_msg)
         error: Exception | None = None
