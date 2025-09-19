@@ -30,6 +30,7 @@ from snuba.web.rpc.common.common import (
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
+    CombinedAllocationPoliciesRecommendations,
     RoutingContext,
     RoutingDecision,
 )
@@ -165,14 +166,55 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             or default
         )
 
-    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
+    def _get_combined_allocation_policies_recommendations(
+        self, routing_context: RoutingContext
+    ) -> CombinedAllocationPoliciesRecommendations:
+        settings = {}
+        max_bytes_to_read = min(
+            [
+                qa.max_bytes_to_read
+                for qa in routing_context.allocation_policies_recommendations.values()
+            ],
+            key=lambda mb: float("inf") if mb == 0 else mb,
+        )
+        if max_bytes_to_read != 0:
+            settings["max_bytes_to_read"] = max_bytes_to_read
+
+        settings["max_threads"] = min(
+            [qa.max_threads for qa in routing_context.allocation_policies_recommendations.values()],
+        )
+
+        return CombinedAllocationPoliciesRecommendations(
+            can_run=all(
+                qa.can_run for qa in routing_context.allocation_policies_recommendations.values()
+            ),
+            is_throttled=any(
+                qa.is_throttled
+                for qa in routing_context.allocation_policies_recommendations.values()
+            ),
+            settings=settings,
+        )
+
+    def _get_routing_decision(
+        self,
+        routing_context: RoutingContext,
+    ) -> RoutingDecision:
+        combined_allocation_policies_recommendations = (
+            self._get_combined_allocation_policies_recommendations(routing_context)
+        )
+
         routing_decision = RoutingDecision(
             routing_context=routing_context,
             strategy=self,
             tier=Tier.TIER_1,
-            clickhouse_settings={},
-            can_run=True,
+            clickhouse_settings=combined_allocation_policies_recommendations["settings"],
+            can_run=combined_allocation_policies_recommendations["can_run"],
+            is_throttled=combined_allocation_policies_recommendations["is_throttled"],
         )
+
+        if not routing_decision.can_run:
+            return routing_decision
+
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
         sentry_sdk.update_current_span(
             attributes={
