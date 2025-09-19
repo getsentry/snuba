@@ -155,7 +155,7 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
         routing_context.extra_info["estimation_sql"] = res.extra.get("sql", "")
         return cast(int, res.result.get("data", [{}])[0].get("num_items", 0))
 
-    def _adjust_time_window(self, routing_context: RoutingContext) -> TimeWindow | None:
+    def _adjust_time_window(self, routing_context: RoutingContext) -> TimeWindow:
         """Adjust the time window to ensure we don't exceed MAX_ITEMS_TO_QUERY."""
         original_time_window = _get_request_time_window(routing_context)
         original_end_ts = original_time_window.end_timestamp.seconds
@@ -189,7 +189,7 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
-        # Check if we need to handle time window adjustment for unknown item types
+        # if type is unknown, just route to tier 1, no adjustment
         if (
             in_msg_meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
             and in_msg_meta.trace_item_type not in ITEM_TYPE_TO_OUTCOME_CATEGORY

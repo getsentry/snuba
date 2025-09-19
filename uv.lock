@@ -1086,6 +1086,7 @@ wheels = [
 ]
 
 [[package]]
+name = "sentry-protos"
 version = "0.3.9"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
