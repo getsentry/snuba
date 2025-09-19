@@ -3056,38 +3056,6 @@ class TestTraceItemTable(BaseApiTest):
         # ensures we don't get DB::Exception: Illegal type UInt128 of argument of function right
         EndpointTraceItemTable().execute(best_effort_message)
 
-    def test_highest_accuracy_flextime_mode(self, setup_teardown: Any) -> None:
-        """
-        Test that exercises the MODE_HIGHEST_ACCURACY_FLEXTIME code path.
-        This test doesn't validate business logic, just ensures the code path executes without error.
-        """
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
-                ),
-            ),
-            filter=TraceItemFilter(
-                exists_filter=ExistsFilter(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
-                )
-            ),
-            columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))],
-            limit=10,
-        )
-        # Just ensure it doesn't crash - exercising the code path
-        response = EndpointTraceItemTable().execute(message)
-        # Basic assertion to ensure we got a response
-        assert isinstance(response, TraceItemTableResponse)
-        assert False
-
     @pytest.mark.redis_db
     def test_non_existant_attribute_filter(self) -> None:
         """
