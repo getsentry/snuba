@@ -3,7 +3,7 @@ from typing import Dict, List, Tuple
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
+from snuba.web.rpc.storage_routing.routing_strategies.common import (
     Outcome,
     OutcomeCategory,
 )
