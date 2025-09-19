@@ -11,6 +11,7 @@ class Outcome:
 
 
 ITEM_TYPE_TO_OUTCOME_CATEGORY = {
+    TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED: OutcomeCategory.SPAN_INDEXED,
     TraceItemType.TRACE_ITEM_TYPE_SPAN: OutcomeCategory.SPAN_INDEXED,
     TraceItemType.TRACE_ITEM_TYPE_LOG: OutcomeCategory.LOG_ITEM,
 }

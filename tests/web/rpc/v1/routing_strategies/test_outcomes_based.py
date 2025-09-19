@@ -48,7 +48,7 @@ def _get_request_meta(
 
 
 @pytest.fixture
-def store_outcomes_fixture() -> None:
+def store_outcomes_fixture(clickhouse_db: Any) -> None:
     # Generate 24 hours of outcomes data with 1M outcomes per hour
     outcome_data = []
     for hour in range(24):
