@@ -4,7 +4,17 @@ import os
 import uuid
 from abc import ABC
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, TypeAlias, Union, cast, final
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Optional,
+    TypeAlias,
+    TypedDict,
+    Union,
+    cast,
+    final,
+)
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -24,7 +34,12 @@ from snuba.configs.configuration import (
 )
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
-from snuba.query.allocation_policies import AllocationPolicy, PolicyData
+from snuba.query.allocation_policies import (
+    AllocationPolicy,
+    PolicyData,
+    QueryResultOrError,
+    QuotaAllowance,
+)
 from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
     BytesScannedRejectingPolicy,
 )
@@ -34,11 +49,13 @@ from snuba.query.allocation_policies.concurrent_rate_limit import (
 from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
+from snuba.state.quota import ResourceQuota
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
-from snuba.web import QueryResult
+from snuba.web import QueryException, QueryResult
 from snuba.web.rpc.storage_routing.common import extract_message_meta
+from snuba.web.rpc.storage_routing.load_retriever import LoadInfo, get_cluster_loadinfo
 
 _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
 _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
@@ -56,8 +73,11 @@ ClickhouseQuerySettings = Dict[str, Any]
 class RoutingContext:
     timer: Timer
     in_msg: ProtobufMessage
+    query_id: str
     query_result: Optional[QueryResult] = field(default=None)
     extra_info: dict[str, Any] = field(default_factory=dict)
+    allocation_policies_recommendations: dict[str, QuotaAllowance] = field(default_factory=dict)
+    cluster_load_info: LoadInfo | None = field(default=None)
 
 
 @dataclass
@@ -65,8 +85,9 @@ class RoutingDecision:
     routing_context: RoutingContext
     strategy: BaseRoutingStrategy
     tier: Tier = Tier.TIER_1
-    clickhouse_settings: dict[str, str] = field(default_factory=dict)
+    clickhouse_settings: dict[str, Any] = field(default_factory=dict)
     can_run: bool | None = None
+    is_throttled: bool | None = None
 
     def to_log_dict(self) -> dict[str, Any]:
         assert self.routing_context is not None
@@ -81,16 +102,24 @@ class RoutingDecision:
 
         return {
             "can_run": self.can_run,
+            "is_throttled": self.is_throttled,
             "strategy": self.strategy.__class__.__name__,
             "source_request_id": in_msg_meta.request_id,
             "extra_info": self.routing_context.extra_info,
             "clickhouse_settings": self.clickhouse_settings,
             "result_info": query_result,
             "routed_tier": self.tier.name,
+            "allocation_policies_recommendations": self.routing_context.allocation_policies_recommendations,
         }
 
 
-def _get_stats_dict(
+class CombinedAllocationPoliciesRecommendations(TypedDict):
+    can_run: bool
+    is_throttled: bool
+    settings: dict[str, Any]
+
+
+def get_stats_dict(
     routing_decision: RoutingDecision,
 ) -> snuba_queries_v1._QueryMetadataStats:
     return cast(
@@ -146,7 +175,7 @@ def _construct_hacky_querylog_payload(
                 "sql_anonymized": "",
                 "start_timestamp": in_message_meta.start_timestamp.seconds,
                 "end_timestamp": in_message_meta.end_timestamp.seconds,
-                "stats": _get_stats_dict(routing_decision),
+                "stats": get_stats_dict(routing_decision),
                 "status": "0",
                 "trace_id": cur_span.trace_id if cur_span else "",
                 "profile": {
@@ -240,13 +269,13 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             ),
             ReferrerGuardRailPolicy(
                 storage_key=ResourceIdentifier(self.__class__.__name__),
-                required_tenant_types=["organization_id", "referrer", "project_id"],
-                default_config_overrides={"is_enforced": 0},
+                required_tenant_types=["referrer"],
+                default_config_overrides={"is_enforced": 0, "is_active": 0},
             ),
             BytesScannedRejectingPolicy(
                 storage_key=ResourceIdentifier(self.__class__.__name__),
-                required_tenant_types=["organization_id", "referrer", "project_id"],
-                default_config_overrides={"is_enforced": 0},
+                required_tenant_types=["organization_id", "project_id", "referrer"],
+                default_config_overrides={"is_active": 0, "is_enforced": 0},
             ),
         ]
 
@@ -266,7 +295,10 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         """
 
         for k, v in routing_decision.clickhouse_settings.items():
-            query_settings.push_clickhouse_setting(k, v)
+            if k == "max_threads":
+                query_settings.set_resource_quota(ResourceQuota(max_threads=v))
+            else:
+                query_settings.push_clickhouse_setting(k, v)
 
     def _record_value_in_span_and_DD(
         self,
@@ -285,8 +317,43 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         }
         sentry_sdk.update_current_span(attributes={name: value})
 
-    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
+    def _get_routing_decision(
+        self,
+        routing_context: RoutingContext,
+    ) -> RoutingDecision:
         raise NotImplementedError
+
+    def _get_combined_allocation_policies_recommendations(
+        self,
+        routing_context: RoutingContext,
+    ) -> CombinedAllocationPoliciesRecommendations:
+        # decides how to combine the recommendations from the allocation policies with the cluster load
+        raise NotImplementedError
+
+    def _get_recommendations_from_allocation_policies(
+        self,
+        routing_context: RoutingContext,
+    ) -> dict[str, QuotaAllowance]:
+        recommendations: dict[str, QuotaAllowance] = {}
+        for allocation_policy in self.get_allocation_policies():
+            allocation_policy_name = allocation_policy.class_name()
+            with sentry_sdk.start_span(
+                op="allocation_policy.get_quota_allowance",
+                description=allocation_policy_name,
+            ) as span:
+                request_meta = extract_message_meta(routing_context.in_msg)
+                recommendations[allocation_policy_name] = allocation_policy.get_quota_allowance(
+                    {
+                        "organization_id": request_meta.organization_id,
+                        "referrer": request_meta.referrer,
+                    },
+                    routing_context.query_id,
+                )
+                span.set_data(
+                    f"{allocation_policy_name}_quota_allowance",
+                    recommendations[allocation_policy_name],
+                )
+        return recommendations
 
     @final
     def get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
@@ -297,7 +364,18 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         with sentry_sdk.start_span(op="decide_tier") as span:
             try:
                 routing_context.timer.mark(_START_ESTIMATION_MARK)
+
+                routing_context.allocation_policies_recommendations = (
+                    self._get_recommendations_from_allocation_policies(routing_context)
+                )
+                routing_context.cluster_load_info = (
+                    get_cluster_loadinfo()
+                    if state.get_config("storage_routing.enable_get_cluster_loadinfo", True)
+                    else None
+                )
+
                 routing_decision = self._get_routing_decision(routing_context)
+
                 routing_context.timer.mark(_END_ESTIMATION_MARK)
                 self._record_value_in_span_and_DD(
                     routing_decision.routing_context,
@@ -327,6 +405,14 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
     @final
     def output_metrics(self, routing_decision: RoutingDecision) -> None:
         assert routing_decision.routing_context is not None
+
+        if not routing_decision.can_run:
+            self.metrics.increment("rejected_query", tags={"strategy": self.class_name()})
+        elif routing_decision.is_throttled:
+            self.metrics.increment("throttled_query", tags={"strategy": self.class_name()})
+        else:
+            self.metrics.increment("successful_query", tags={"strategy": self.class_name()})
+
         self._emit_routing_mistake(routing_decision)
         self._output_metrics(routing_decision.routing_context)
         query_result = routing_decision.routing_context.query_result or QueryResult(
@@ -350,6 +436,24 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 tags={"tier": routing_decision.tier.name},
             )
         record_query(_construct_hacky_querylog_payload(self, routing_decision))
+
+    @final
+    def update_allocation_policies_balances(
+        self, routing_decision: RoutingDecision, error: QueryException | None
+    ) -> None:
+        query_result_or_error = QueryResultOrError(
+            query_result=routing_decision.routing_context.query_result, error=error
+        )
+        for allocation_policy in self.get_allocation_policies():
+            request_meta = extract_message_meta(routing_decision.routing_context.in_msg)
+            allocation_policy.update_quota_balance(
+                tenant_ids={
+                    "organization_id": request_meta.organization_id,
+                    "referrer": request_meta.referrer,
+                },
+                query_id=routing_decision.routing_context.query_id,
+                result_or_error=query_result_or_error,
+            )
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass

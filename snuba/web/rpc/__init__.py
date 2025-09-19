@@ -31,10 +31,10 @@ from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
-from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
+    get_stats_dict,
 )
 from snuba.web.rpc.storage_routing.routing_strategy_selector import (
     RoutingStrategySelector,
@@ -191,7 +191,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
-        self.routing_context = RoutingContext(timer=self._timer, in_msg=in_msg)
+        self.routing_context = RoutingContext(
+            timer=self._timer, in_msg=in_msg, query_id=uuid.uuid4().hex
+        )
 
         self.__before_execute(in_msg)
         error: Exception | None = None
@@ -202,7 +204,20 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     span.set_data("selected_tier", self.routing_decision.tier)
                     out = self._execute(in_msg)
             else:
-                raise AllocationPolicyViolations
+                self.metrics.increment(
+                    "request_rate_limited",
+                    tags=self._timer.tags,
+                )
+                # thoughts on making AlocationPolicyViolations a subclass of QueryException?
+                raise QueryException.from_args(
+                    AllocationPolicyViolations.__name__,
+                    "Query cannot be run due to routing strategy deciding it cannot run, most likely due to allocation policies",
+                    extra={
+                        "stats": get_stats_dict(self.routing_decision),
+                        "sql": "no sql run",
+                        "experiments": {},
+                    },
+                )
         except QueryException as e:
             out = self.response_class()()
             if (
@@ -256,12 +271,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 meta.request_id = str(uuid.uuid4())
 
         self._timer.update_tags(self.__extract_request_tags(in_msg))
-
-        # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
-        # the result is currently not used in storage routing
-        # can turn off on Snuba Admin
-        if state.get_config("storage_routing.enable_get_cluster_loadinfo", True):
-            get_cluster_loadinfo()
 
         selected_strategy = RoutingStrategySelector().select_routing_strategy(self.routing_context)
         self.routing_decision = selected_strategy.get_routing_decision(self.routing_context)
@@ -325,6 +334,10 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         output_metrics_error = None
         try:
             self.routing_decision.strategy.output_metrics(self.routing_decision)
+            if self.routing_decision.routing_context.query_result is not None or isinstance(
+                error, QueryException
+            ):
+                self.routing_decision.strategy.update_allocation_policies_balances(self.routing_decision, error)  # type: ignore
         except Exception as e:
             output_metrics_error = e
 
@@ -334,12 +347,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             if isinstance(error, RPCRequestException) and 400 <= error.status_code < 500:
                 self.metrics.increment(
                     "request_invalid",
-                    tags=self._timer.tags,
-                )
-            elif isinstance(error, AllocationPolicyViolations):
-                sentry_sdk.capture_exception(error)
-                self.metrics.increment(
-                    "request_rate_limited",
                     tags=self._timer.tags,
                 )
             else:

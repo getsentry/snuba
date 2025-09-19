@@ -808,6 +808,11 @@ def _apply_allocation_policies_quota(
     Sets the resource quota in the query_settings object to the minimum of all available
     quota allowances from the given allocation policies.
     """
+
+    # if it's an EAP query, then allocation policies were already applied in the routing strategy layer, so we bypass it here
+    if attribution_info.app_id.key == "eap":
+        return
+
     quota_allowances: dict[str, Any] = {}
     can_run = True
     rejection_quota_and_policy = None
