@@ -124,6 +124,8 @@ def gen_item_message(
     end_timestamp: Optional[datetime] = None,
     remove_default_attributes: bool = False,
     item_id: Optional[bytes] = None,
+    project_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
 ) -> bytes:
     item_timestamp = Timestamp()
     item_timestamp.FromDatetime(start_timestamp)
@@ -146,8 +148,8 @@ def gen_item_message(
     if trace_id is None:
         trace_id = uuid.uuid4().hex
     return TraceItem(
-        organization_id=1,
-        project_id=1,
+        organization_id=organization_id or 1,
+        project_id=project_id or 1,
         item_type=type,
         timestamp=item_timestamp,
         trace_id=trace_id,

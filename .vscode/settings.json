@@ -69,6 +69,7 @@
   "mypy-type-checker.args": [
     "--strict"
   ],
-  "makefile.configureOnOpen": false
+  "makefile.configureOnOpen": false,
+  "cursorpyright.analysis.autoImportCompletions": true
 
 }
