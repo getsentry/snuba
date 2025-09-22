@@ -6,11 +6,7 @@ import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from google.protobuf.timestamp_pb2 import Timestamp as TimestampProto
-from sentry_protos.snuba.v1.request_common_pb2 import (
-    PageToken,
-    RequestMeta,
-    TraceItemType,
-)
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -190,10 +186,7 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
         # if type is unknown, just route to tier 1, no adjustment
-        if (
-            in_msg_meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
-            and in_msg_meta.trace_item_type not in ITEM_TYPE_TO_OUTCOME_CATEGORY
-        ):
+        if in_msg_meta.trace_item_type not in ITEM_TYPE_TO_OUTCOME_CATEGORY:
             routing_decision.routing_context.extra_info["unknown_item_type"] = True
             sentry_sdk.capture_message(
                 f"Trace Item {in_msg_meta.trace_item_type} does not have an associated outcome"
