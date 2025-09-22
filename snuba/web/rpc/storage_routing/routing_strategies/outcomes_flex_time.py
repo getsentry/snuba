@@ -28,6 +28,7 @@ from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
     treeify_or_and_conditions,
 )
+from snuba.web.rpc.common.pagination import FlexibleTimeWindow
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.common import (
     ITEM_TYPE_TO_OUTCOME_CATEGORY,
@@ -69,14 +70,16 @@ def _get_request_time_window(routing_context: RoutingContext) -> TimeWindow:
                 for filter in page_token.filter_offset.and_filter.filters:
                     if (
                         filter.HasField("comparison_filter")
-                        and filter.comparison_filter.key.name == "start_timestamp"
+                        and filter.comparison_filter.key.name
+                        == FlexibleTimeWindow.START_TIMESTAMP_KEY
                     ):
                         time_window.start_timestamp = Timestamp(
                             seconds=filter.comparison_filter.value.val_int
                         )
                     if (
                         filter.HasField("comparison_filter")
-                        and filter.comparison_filter.key.name == "end_timestamp"
+                        and filter.comparison_filter.key.name
+                        == FlexibleTimeWindow.END_TIMESTAMP_KEY
                     ):
                         time_window.end_timestamp = Timestamp(
                             seconds=filter.comparison_filter.value.val_int

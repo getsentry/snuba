@@ -60,6 +60,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.pagination import FlexibleTimeWindow
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
     TimeWindow,
@@ -464,7 +465,7 @@ def _get_page_token(
                         filters=[
                             TraceItemFilter(
                                 comparison_filter=ComparisonFilter(
-                                    key=AttributeKey(name="start_timestamp"),
+                                    key=AttributeKey(name=FlexibleTimeWindow.START_TIMESTAMP_KEY),
                                     op=ComparisonFilter.OP_GREATER_THAN_OR_EQUALS,
                                     value=AttributeValue(
                                         val_int=time_window.start_timestamp.seconds
@@ -473,14 +474,14 @@ def _get_page_token(
                             ),
                             TraceItemFilter(
                                 comparison_filter=ComparisonFilter(
-                                    key=AttributeKey(name="end_timestamp"),
+                                    key=AttributeKey(name=FlexibleTimeWindow.END_TIMESTAMP_KEY),
                                     op=ComparisonFilter.OP_LESS_THAN,
                                     value=AttributeValue(val_int=time_window.end_timestamp.seconds),
                                 )
                             ),
                             TraceItemFilter(
                                 comparison_filter=ComparisonFilter(
-                                    key=AttributeKey(name="offset"),
+                                    key=AttributeKey(name=FlexibleTimeWindow.OFFSET_KEY),
                                     op=ComparisonFilter.OP_EQUALS,
                                     value=AttributeValue(
                                         val_int=current_offset + num_rows_in_response
@@ -501,7 +502,7 @@ def _get_page_token(
                         filters=[
                             TraceItemFilter(
                                 comparison_filter=ComparisonFilter(
-                                    key=AttributeKey(name="start_timestamp"),
+                                    key=AttributeKey(name=FlexibleTimeWindow.START_TIMESTAMP_KEY),
                                     op=ComparisonFilter.OP_GREATER_THAN_OR_EQUALS,
                                     value=AttributeValue(
                                         val_int=original_time_window.start_timestamp.seconds
@@ -510,7 +511,7 @@ def _get_page_token(
                             ),
                             TraceItemFilter(
                                 comparison_filter=ComparisonFilter(
-                                    key=AttributeKey(name="end_timestamp"),
+                                    key=AttributeKey(name=FlexibleTimeWindow.END_TIMESTAMP_KEY),
                                     op=ComparisonFilter.OP_LESS_THAN,
                                     value=AttributeValue(
                                         val_int=time_window.start_timestamp.seconds
