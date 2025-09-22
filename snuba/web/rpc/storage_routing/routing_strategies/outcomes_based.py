@@ -4,7 +4,7 @@ from typing import cast
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 
 from snuba import state
 from snuba.attribution.appid import AppID
@@ -170,8 +170,8 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             # for GetTraces, there is no type specified so we assume spans because
             # that is necessary for traces anyways
             # if the type is specified and we don't know its outcome, route to Tier_1
-            in_msg_meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
-            and in_msg_meta.trace_item_type not in ITEM_TYPE_TO_OUTCOME_CATEGORY
+            in_msg_meta.trace_item_type
+            not in ITEM_TYPE_TO_OUTCOME_CATEGORY
         ):
             return routing_decision
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
