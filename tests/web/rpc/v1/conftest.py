@@ -12,7 +12,7 @@ def eap(request: pytest.FixtureRequest, create_databases: None) -> Generator[Non
     """
     A custom ClickHouse fixture that only runs EAP (Events Analytics Platform) migrations and Outcomes migrations (for storage routing).
     This is much faster than running all migrations for tests that only need EAP tables.
-    
+
     Use this with @pytest.mark.eap marker.
     """
     if not request.node.get_closest_marker("eap"):
