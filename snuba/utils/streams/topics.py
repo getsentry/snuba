@@ -72,7 +72,7 @@ class Topic(Enum):
     DEAD_LETTER_ITEMS = "snuba-dead-letter-items"
 
     LW_DELETIONS_GENERIC_EVENTS = "snuba-lw-deletions-generic-events"
-    LW_DELETIONS_EAP_ITEMS = "snuba-lw-eap-items"
+    LW_DELETIONS_EAP_ITEMS = "snuba-lw-deletions-eap-items"
 
     COGS_SHARED_RESOURCES_USAGE = "shared-resources-usage"
 
