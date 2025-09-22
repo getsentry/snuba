@@ -17,6 +17,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba.utils.metrics.timer import Timer
+from snuba.web.rpc.common.pagination import FlexibleTimeWindow
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
     OutcomesFlexTimeRoutingStrategy,
 )
@@ -113,7 +114,8 @@ def test_outcomes_flex_time_routing_strategy_with_data_and_page_token() -> None:
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
                                 key=AttributeKey(
-                                    name="start_timestamp", type=AttributeKey.TYPE_INT
+                                    name=FlexibleTimeWindow.START_TIMESTAMP_KEY,
+                                    type=AttributeKey.TYPE_INT,
                                 ),
                                 op=ComparisonFilter.OP_GREATER_THAN,
                                 value=AttributeValue(
@@ -123,7 +125,10 @@ def test_outcomes_flex_time_routing_strategy_with_data_and_page_token() -> None:
                         ),
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
-                                key=AttributeKey(name="end_timestamp", type=AttributeKey.TYPE_INT),
+                                key=AttributeKey(
+                                    name=FlexibleTimeWindow.END_TIMESTAMP_KEY,
+                                    type=AttributeKey.TYPE_INT,
+                                ),
                                 op=ComparisonFilter.OP_LESS_THAN,
                                 value=AttributeValue(
                                     val_int=int(page_token_end_timestamp.timestamp())

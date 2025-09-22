@@ -348,7 +348,7 @@ def _get_offset_from_page_token(page_token: PageToken | None) -> int:
             for filter in page_token.filter_offset.and_filter.filters:
                 if (
                     filter.HasField("comparison_filter")
-                    and filter.comparison_filter.key.name == "offset"
+                    and filter.comparison_filter.key.name == FlexibleTimeWindow.OFFSET_KEY
                 ):
                     return filter.comparison_filter.value.val_int
             return 0
