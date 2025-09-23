@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -8,20 +8,16 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableR
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba import state
-from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
-    Outcome,
-    OutcomeCategory,
     OutcomesBasedRoutingStrategy,
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
 )
-from tests.helpers import write_raw_unprocessed_events
+from tests.web.rpc.v1.routing_strategies.common import store_outcomes_data
 
 BASE_TIME = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
     hours=24
@@ -51,29 +47,15 @@ def _get_request_meta(
     )
 
 
-def gen_span_ingest_outcome(time: datetime, num: int) -> Dict[str, int | str | None]:
-    return {
-        "org_id": _PROJECT_ID,
-        "project_id": _ORG_ID,
-        "key_id": None,
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-        "outcome": Outcome.ACCEPTED,
-        "reason": None,
-        "event_id": None,
-        "quantity": num,
-        "category": OutcomeCategory.SPAN_INDEXED,
-    }
-
-
 @pytest.fixture
-def store_outcomes_data() -> None:
-    outcomes_storage = get_storage(StorageKey("outcomes_raw"))
-    messages = []
+def store_outcomes_fixture(clickhouse_db: Any) -> None:
+    # Generate 24 hours of outcomes data with 1M outcomes per hour
+    outcome_data = []
     for hour in range(24):
         time = BASE_TIME - timedelta(hours=hour)
-        messages.append(gen_span_ingest_outcome(time, 1_000_000))
+        outcome_data.append((time, 1_000_000))
 
-    write_raw_unprocessed_events(outcomes_storage, messages)  # type: ignore
+    store_outcomes_data(outcome_data)
 
 
 @pytest.mark.clickhouse_db
@@ -100,7 +82,7 @@ def test_outcomes_based_routing_queries_daily_table() -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_outcomes_based_routing_normal_mode(store_outcomes_data: Any) -> None:
+def test_outcomes_based_routing_normal_mode(store_outcomes_fixture: Any) -> None:
     strategy = OutcomesBasedRoutingStrategy()
 
     request = TraceItemTableRequest(meta=_get_request_meta())
@@ -119,7 +101,7 @@ def test_outcomes_based_routing_normal_mode(store_outcomes_data: Any) -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_outcomes_based_routing_downsample(store_outcomes_data: Any) -> None:
+def test_outcomes_based_routing_downsample(store_outcomes_fixture: Any) -> None:
     state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 5_000_000)
     strategy = OutcomesBasedRoutingStrategy()
 
@@ -160,7 +142,7 @@ def test_outcomes_based_routing_downsample(store_outcomes_data: Any) -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_outcomes_based_routing_highest_accuracy_mode(store_outcomes_data: Any) -> None:
+def test_outcomes_based_routing_highest_accuracy_mode(store_outcomes_fixture: Any) -> None:
     strategy = OutcomesBasedRoutingStrategy()
 
     request = TraceItemTableRequest(meta=_get_request_meta())
@@ -180,7 +162,7 @@ def test_outcomes_based_routing_highest_accuracy_mode(store_outcomes_data: Any) 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_outcomes_based_routing_defaults_to_spans_for_unspecified_item_type(
-    store_outcomes_data: Any,
+    store_outcomes_fixture: Any,
 ) -> None:
     strategy = OutcomesBasedRoutingStrategy()
 
