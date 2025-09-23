@@ -7,11 +7,14 @@ from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     AttributeDistribution,
     AttributeDistributions,
     AttributeDistributionsRequest,
+    Heatmap,
     TraceItemStatsRequest,
     TraceItemStatsResponse,
     TraceItemStatsResult,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -20,7 +23,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
-from snuba.query.dsl import arrayJoin, column, count, tupleElement
+from snuba.query.dsl import NestedColumn, arrayJoin, column, count, tupleElement
 from snuba.query.expressions import FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -53,7 +56,7 @@ DEFAULT_BUCKETS = 10
 COUNT_LABEL = "count()"
 
 
-def _transform_results(
+def _transform_attr_distribution_results(
     results: Iterable[Dict[str, Any]],
     request_meta: RequestMeta,
 ) -> Iterable[AttributeDistribution]:
@@ -74,15 +77,11 @@ def _transform_results(
     return list(res.values())
 
 
-def _build_attr_distribution_snuba_request(
+def _build_snuba_request(
     request: TraceItemStatsRequest, query: Query, routing_decision: RoutingDecision
 ) -> SnubaRequest:
-    query_settings = (
-        setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
-    )
-    routing_decision.strategy.merge_clickhouse_settings(
-        routing_decision, query_settings
-    )
+    query_settings = setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
+    routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
     query_settings.set_sampling_tier(routing_decision.tier)
 
     return SnubaRequest(
@@ -191,6 +190,87 @@ def _build_attr_distribution_query(
     return query
 
 
+def _build_heatmap_query(
+    x_attribute: AttributeKey,
+    y_attribute: AttributeKey,
+    request_meta: RequestMeta,
+    filters: TraceItemFilter,
+) -> Query:
+    attr_type_to_column = {
+        AttributeKey.TYPE_INT: NestedColumn("attributes_int"),
+        AttributeKey.TYPE_STRING: NestedColumn("attributes_string"),
+        AttributeKey.TYPE_FLOAT: NestedColumn("attributes_float"),
+        AttributeKey.TYPE_DOUBLE: NestedColumn("attributes_float"),
+        AttributeKey.TYPE_BOOLEAN: NestedColumn("attributes_bool"),
+    }
+    x_attribute_val = attr_type_to_column[x_attribute.type][x_attribute.name]
+    y_attribute_val = attr_type_to_column[y_attribute.type][y_attribute.name]
+
+    selected_columns = [
+        SelectedExpression(name="x_attribute_val", expression=x_attribute_val),
+        SelectedExpression(name="y_attribute_val", expression=y_attribute_val),
+        SelectedExpression(
+            name=COUNT_LABEL,
+            expression=count(alias="_count"),
+        ),
+    ]
+
+    trace_item_filters_expression = trace_item_filters_to_expression(
+        filters,
+        (attribute_key_to_expression),
+    )
+    query = Query(
+        from_clause=None,
+        selected_columns=selected_columns,
+        condition=base_conditions_and(
+            request_meta,
+            trace_item_filters_expression,
+        ),
+        order_by=[
+            OrderBy(
+                direction=OrderByDirection.DESC,
+                expression=column("x_attribute_val"),
+            ),
+            OrderBy(
+                direction=OrderByDirection.DESC,
+                expression=column("y_attribute_val"),
+            ),
+        ],
+        groupby=[
+            column("x_attribute_val"),
+            column("y_attribute_val"),
+        ],
+    )
+    # this function call is needed for legacy reasons
+    treeify_or_and_conditions(query)
+    return query
+
+
+def _transform_heatmap_results(
+    x_attribute: AttributeKey,
+    y_attribute: AttributeKey,
+    results: Iterable[Dict[str, Any]],
+    request_meta: RequestMeta,
+) -> Heatmap:
+    heatmap = Heatmap(x_attribute=x_attribute, y_attribute=y_attribute, y_buckets=[])
+
+    # Maintain the order of keys, so it is in descending order
+    # of most prevelant key-value pair.
+    res: OrderedDict[Tuple[str, str], AttributeDistribution] = OrderedDict()
+
+    for row in results:
+        attr_key = row["attr_key"]
+        attr_value = row["attr_value"]
+        default = AttributeDistribution(
+            attribute_name=attr_key,
+        )
+        res.setdefault((attr_key, COUNT_LABEL), default).buckets.append(
+            AttributeDistribution.Bucket(label=attr_value, value=row[COUNT_LABEL])
+        )
+
+    return heatmap
+
+
 class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
     @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
@@ -204,32 +284,60 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
         results = []
         for requested_type in in_msg.stats_types:
             result = TraceItemStatsResult()
+            # build the query
             if requested_type.HasField("attribute_distributions"):
                 if requested_type.attribute_distributions.max_buckets > MAX_BUCKETS:
-                    raise BadSnubaRPCRequestException(
-                        f"Max allowed buckets is {MAX_BUCKETS}."
-                    )
+                    raise BadSnubaRPCRequestException(f"Max allowed buckets is {MAX_BUCKETS}.")
 
                 query = _build_attr_distribution_query(
                     in_msg, requested_type.attribute_distributions
                 )
                 treeify_or_and_conditions(query)
-                snuba_request = _build_attr_distribution_snuba_request(
-                    in_msg, query, routing_decision
+            elif requested_type.HasField("heatmap"):
+                heatmap = requested_type.heatmap
+                if (
+                    heatmap.x_attribute.type == AttributeKey.TYPE_INT
+                    and heatmap.num_x_buckets > MAX_BUCKETS
+                ) or (
+                    heatmap.y_attribute.type == AttributeKey.TYPE_INT
+                    and heatmap.num_y_buckets > MAX_BUCKETS
+                ):
+                    raise BadSnubaRPCRequestException(f"Max allowed buckets is {MAX_BUCKETS}.")
+
+                query = _build_heatmap_query(
+                    heatmap.x_attribute,
+                    heatmap.y_attribute,
+                    in_msg.meta,
+                    in_msg.filter,
+                )
+            else:
+                raise BadSnubaRPCRequestException(
+                    f'Invalid stats type {requested_type.WhichOneof("type")}'
                 )
 
-                query_res = run_query(
-                    dataset=PluggableDataset(name="eap", all_entities=[]),
-                    request=snuba_request,
-                    timer=self._timer,
-                )
-                routing_decision.routing_context.query_result = query_res
+            # run the query
+            snuba_request = _build_snuba_request(in_msg, query, routing_decision)
+            query_res = run_query(
+                dataset=PluggableDataset(name="eap", all_entities=[]),
+                request=snuba_request,
+                timer=self._timer,
+            )
+            routing_decision.routing_context.query_result = query_res
 
-                attributes = _transform_results(
+            # transform the results
+            if requested_type.HasField("attribute_distributions"):
+                attributes = _transform_attr_distribution_results(
                     query_res.result.get("data", []), in_msg.meta
                 )
                 result.attribute_distributions.CopyFrom(
                     AttributeDistributions(attributes=attributes)
+                )
+            elif requested_type.HasField("heatmap"):
+                pass
+                # _transform_heatmap_results(query_res.result.get("data", []), in_msg.meta)
+            else:
+                raise BadSnubaRPCRequestException(
+                    f'Invalid stats type {requested_type.WhichOneof("type")}'
                 )
 
             results.append(result)

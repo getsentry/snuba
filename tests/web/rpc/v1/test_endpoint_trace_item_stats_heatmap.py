@@ -201,7 +201,7 @@ class TestTraceItemStatsHeatmap(BaseApiTest):
         )
 
         response = EndpointTraceItemStats().execute(message)
-
+        assert len(response.results) == 1
         assert response.results[0].HasField("heatmap")
         heatmap = response.results[0].heatmap
 
@@ -242,6 +242,7 @@ class TestTraceItemStatsHeatmap(BaseApiTest):
         )
 
         response = EndpointTraceItemStats().execute(message)
+        assert len(response.results) == 1
         heatmap = response.results[0].heatmap
 
         # Verify heatmap structure for numeric bucketing
@@ -290,6 +291,7 @@ class TestTraceItemStatsHeatmap(BaseApiTest):
         )
 
         response = EndpointTraceItemStats().execute(message)
+        assert len(response.results) == 1
         heatmap = response.results[0].heatmap
 
         # Verify heatmap structure
@@ -343,6 +345,7 @@ class TestTraceItemStatsHeatmap(BaseApiTest):
         )
 
         response = EndpointTraceItemStats().execute(message)
+        assert len(response.results) == 1
         heatmap = response.results[0].heatmap
 
         # Should only have db.query column
