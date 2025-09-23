@@ -443,12 +443,16 @@ def _get_page_token(
                 current_offset + num_rows_in_response,
             ).encode()
         else:
-            # there are no more rows in this window so we return the next window
-            # return the next window where the end timestamp is the start timestamp and the start timestamp is the original start timestamp
-            # the routing strategy will properly truncate the time window of the next request
-            return FlexibleTimeWindowPage(
-                original_time_window.start_timestamp, time_window.start_timestamp, 0
-            ).encode()
+
+            if time_window.start_timestamp.seconds <= original_time_window.start_timestamp.seconds:
+                return PageToken(end_pagination=True)
+            else:
+                # there are no more rows in this window so we return the next window
+                # return the next window where the end timestamp is the start timestamp and the start timestamp is the original start timestamp
+                # the routing strategy will properly truncate the time window of the next request
+                return FlexibleTimeWindowPage(
+                    original_time_window.start_timestamp, time_window.start_timestamp, 0
+                ).encode()
     else:
         return PageToken(offset=request.page_token.offset + num_rows_in_response)
 
