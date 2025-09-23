@@ -156,6 +156,8 @@ query_processors:
         max_execution_time: 25
         timeout_before_checking_execution_speed: 0
 
+delete_allocation_policies: []
+
 deletion_settings:
   is_enabled: 0
   max_rows_to_delete: 2000000

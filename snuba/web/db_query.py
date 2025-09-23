@@ -808,6 +808,10 @@ def _apply_allocation_policies_quota(
     Sets the resource quota in the query_settings object to the minimum of all available
     quota allowances from the given allocation policies.
     """
+    if len(allocation_policies) == 0:
+        logger.info("No allocation policies to apply")
+        return
+
     quota_allowances: dict[str, Any] = {}
     can_run = True
     rejection_quota_and_policy = None
