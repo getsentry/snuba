@@ -464,7 +464,7 @@ def test_outcomes_based_routing_metrics_sampled_too_low() -> None:
 def test_routing_strategy_with_rejecting_allocation_policy() -> None:
     update_called = False
 
-    class RejectPolicy(AllocationPolicy):
+    class RejectionPolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
@@ -497,7 +497,7 @@ def test_routing_strategy_with_rejecting_allocation_policy() -> None:
         BaseRoutingStrategy,
         "get_allocation_policies",
         return_value=[
-            RejectPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {})
+            RejectionPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {})
         ],
     ):
         with pytest.raises(QueryException) as excinfo:
