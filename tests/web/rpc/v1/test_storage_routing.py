@@ -464,7 +464,7 @@ def test_outcomes_based_routing_metrics_sampled_too_low() -> None:
 def test_routing_strategy_with_rejecting_allocation_policy() -> None:
     update_called = False
 
-    class RejectAllocationPolicy(AllocationPolicy):
+    class RejectPolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
@@ -497,9 +497,7 @@ def test_routing_strategy_with_rejecting_allocation_policy() -> None:
         BaseRoutingStrategy,
         "get_allocation_policies",
         return_value=[
-            RejectAllocationPolicy(
-                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
-            )
+            RejectPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {})
         ],
     ):
         with pytest.raises(QueryException) as excinfo:
@@ -583,7 +581,7 @@ def test_allocation_policy_updates_quota() -> None:
 
     queries_run = 0
 
-    class CountQueryPolicy(AllocationPolicy):
+    class QueryCountPolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
@@ -618,7 +616,7 @@ def test_allocation_policy_updates_quota() -> None:
 
     queries_run_duplicate = 0
 
-    class CountQueryPolicyDuplicate(AllocationPolicy):
+    class QueryCountPolicyDuplicate(AllocationPolicy):
         def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
@@ -657,8 +655,8 @@ def test_allocation_policy_updates_quota() -> None:
         BaseRoutingStrategy,
         "get_allocation_policies",
         return_value=[
-            CountQueryPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
-            CountQueryPolicyDuplicate(
+            QueryCountPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
+            QueryCountPolicyDuplicate(
                 ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
             ),
         ],
@@ -670,14 +668,14 @@ def test_allocation_policy_updates_quota() -> None:
 
     cause = e.value.__cause__
     assert isinstance(cause, AllocationPolicyViolations)
-    assert "CountQueryPolicy" in cause.violations
-    assert "CountQueryPolicyDuplicate" in cause.violations
+    assert "QueryCountPolicy" in cause.violations
+    assert "QueryCountPolicyDuplicate" in cause.violations
 
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_policy_sets_max_bytes_to_read() -> None:
-    class MaxBytesPolicy(AllocationPolicy):
+    class MaximumBytesPolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
@@ -709,7 +707,7 @@ def test_policy_sets_max_bytes_to_read() -> None:
         BaseRoutingStrategy,
         "get_allocation_policies",
         return_value=[
-            MaxBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
+            MaximumBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
         ],
     ):
         routing_decision = OutcomesBasedRoutingStrategy().get_routing_decision(
