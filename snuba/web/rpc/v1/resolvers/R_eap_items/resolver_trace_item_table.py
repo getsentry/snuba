@@ -17,16 +17,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     RequestMeta,
     TraceItemType,
 )
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeKey,
-    AttributeValue,
-    ExtrapolationMode,
-)
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
-    AndFilter,
-    ComparisonFilter,
-    TraceItemFilter,
-)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -60,7 +51,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.common.pagination import FlexibleTimeWindow
+from snuba.web.rpc.common.pagination import FlexibleTimeWindowPage
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
     TimeWindow,
@@ -340,23 +331,10 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
 def _get_offset_from_page_token(page_token: PageToken | None) -> int:
     if page_token is None:
         return 0
-    if page_token.HasField("offset"):
-        return page_token.offset
-    elif page_token.HasField("filter_offset"):
-        # iterate through the and_filter filters and find the offset comparison filter
-        if page_token.filter_offset.HasField("and_filter"):
-            for filter in page_token.filter_offset.and_filter.filters:
-                if (
-                    filter.HasField("comparison_filter")
-                    and filter.comparison_filter.key.name == FlexibleTimeWindow.OFFSET_KEY
-                ):
-                    return filter.comparison_filter.value.val_int
-            return 0
-            # raise BadSnubaRPCRequestException("offset filter not found in filter_offset", page_token)
-        else:
-            raise BadSnubaRPCRequestException("filter_offset must be an and_filter")
-    else:
-        return 0
+    page = FlexibleTimeWindowPage.decode(page_token)
+    if page.offset is not None:
+        return page.offset
+    return 0
 
 
 def build_query(
@@ -459,69 +437,18 @@ def _get_page_token(
     if time_window is not None:
         if num_rows_returned > request.limit:
             # there are more rows in this window so we maintain the same time window and advance the offset
-            return PageToken(
-                filter_offset=TraceItemFilter(
-                    and_filter=AndFilter(
-                        filters=[
-                            TraceItemFilter(
-                                comparison_filter=ComparisonFilter(
-                                    key=AttributeKey(name=FlexibleTimeWindow.START_TIMESTAMP_KEY),
-                                    op=ComparisonFilter.OP_GREATER_THAN_OR_EQUALS,
-                                    value=AttributeValue(
-                                        val_int=time_window.start_timestamp.seconds
-                                    ),
-                                )
-                            ),
-                            TraceItemFilter(
-                                comparison_filter=ComparisonFilter(
-                                    key=AttributeKey(name=FlexibleTimeWindow.END_TIMESTAMP_KEY),
-                                    op=ComparisonFilter.OP_LESS_THAN,
-                                    value=AttributeValue(val_int=time_window.end_timestamp.seconds),
-                                )
-                            ),
-                            TraceItemFilter(
-                                comparison_filter=ComparisonFilter(
-                                    key=AttributeKey(name=FlexibleTimeWindow.OFFSET_KEY),
-                                    op=ComparisonFilter.OP_EQUALS,
-                                    value=AttributeValue(
-                                        val_int=current_offset + num_rows_in_response
-                                    ),
-                                )
-                            ),
-                        ]
-                    )
-                )
-            )
+            return FlexibleTimeWindowPage(
+                time_window.start_timestamp,
+                time_window.end_timestamp,
+                current_offset + num_rows_in_response,
+            ).encode()
         else:
             # there are no more rows in this window so we return the next window
             # return the next window where the end timestamp is the start timestamp and the start timestamp is the original start timestamp
             # the routing strategy will properly truncate the time window of the next request
-            return PageToken(
-                filter_offset=TraceItemFilter(
-                    and_filter=AndFilter(
-                        filters=[
-                            TraceItemFilter(
-                                comparison_filter=ComparisonFilter(
-                                    key=AttributeKey(name=FlexibleTimeWindow.START_TIMESTAMP_KEY),
-                                    op=ComparisonFilter.OP_GREATER_THAN_OR_EQUALS,
-                                    value=AttributeValue(
-                                        val_int=original_time_window.start_timestamp.seconds
-                                    ),
-                                )
-                            ),
-                            TraceItemFilter(
-                                comparison_filter=ComparisonFilter(
-                                    key=AttributeKey(name=FlexibleTimeWindow.END_TIMESTAMP_KEY),
-                                    op=ComparisonFilter.OP_LESS_THAN,
-                                    value=AttributeValue(
-                                        val_int=time_window.start_timestamp.seconds
-                                    ),
-                                )
-                            ),
-                        ]
-                    )
-                )
-            )
+            return FlexibleTimeWindowPage(
+                original_time_window.start_timestamp, time_window.start_timestamp, 0
+            ).encode()
     else:
         return PageToken(offset=request.page_token.offset + num_rows_in_response)
 

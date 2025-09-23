@@ -4,20 +4,10 @@ import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
-from sentry_protos.snuba.v1.request_common_pb2 import (
-    PageToken,
-    RequestMeta,
-    TraceItemType,
-)
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
-    AndFilter,
-    ComparisonFilter,
-    TraceItemFilter,
-)
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba.utils.metrics.timer import Timer
-from snuba.web.rpc.common.pagination import FlexibleTimeWindow
+from snuba.web.rpc.common.pagination import FlexibleTimeWindowPage
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
     OutcomesFlexTimeRoutingStrategy,
 )
@@ -105,40 +95,14 @@ def test_outcomes_flex_time_routing_strategy_with_data_and_page_token() -> None:
 
     page_token_start_timestamp = BASE_TIME - timedelta(hours=24)
     page_token_end_timestamp = BASE_TIME - timedelta(hours=12)
+    page_token = FlexibleTimeWindowPage(
+        start_timestamp=Timestamp(seconds=int(page_token_start_timestamp.timestamp())),
+        end_timestamp=Timestamp(seconds=int(page_token_end_timestamp.timestamp())),
+        offset=0,
+    )
     request = TraceItemTableRequest(
         meta=_get_request_meta(BASE_TIME - timedelta(hours=24), BASE_TIME),
-        page_token=PageToken(
-            filter_offset=TraceItemFilter(
-                and_filter=AndFilter(
-                    filters=[
-                        TraceItemFilter(
-                            comparison_filter=ComparisonFilter(
-                                key=AttributeKey(
-                                    name=FlexibleTimeWindow.START_TIMESTAMP_KEY,
-                                    type=AttributeKey.TYPE_INT,
-                                ),
-                                op=ComparisonFilter.OP_GREATER_THAN,
-                                value=AttributeValue(
-                                    val_int=int(page_token_start_timestamp.timestamp())
-                                ),
-                            )
-                        ),
-                        TraceItemFilter(
-                            comparison_filter=ComparisonFilter(
-                                key=AttributeKey(
-                                    name=FlexibleTimeWindow.END_TIMESTAMP_KEY,
-                                    type=AttributeKey.TYPE_INT,
-                                ),
-                                op=ComparisonFilter.OP_LESS_THAN,
-                                value=AttributeValue(
-                                    val_int=int(page_token_end_timestamp.timestamp())
-                                ),
-                            )
-                        ),
-                    ]
-                )
-            )
-        ),
+        page_token=page_token.encode(),
     )
     request.meta.trace_item_type = TraceItemType.TRACE_ITEM_TYPE_LOG
     request.meta.downsampled_storage_config.mode = (
