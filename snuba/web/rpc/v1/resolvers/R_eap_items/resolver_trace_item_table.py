@@ -445,6 +445,8 @@ def _get_page_token(
         else:
 
             if time_window.start_timestamp.seconds <= original_time_window.start_timestamp.seconds:
+                # this is the last window because our start timestamp is the same as the original start timestamp
+                # we tell the client that there is no more data to fetch
                 return PageToken(end_pagination=True)
             else:
                 # there are no more rows in this window so we return the next window
