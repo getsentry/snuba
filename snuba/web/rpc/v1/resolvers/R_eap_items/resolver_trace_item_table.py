@@ -518,7 +518,6 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         routing_decision.routing_context.query_result = res
         # we added 1 to the limit to know if there are more rows to fetch
         # so we need to remove the last row
-        # TODO maybe use islice instead
         total_rows = len(res.result.get("data", []))
         data = iter(res.result.get("data", []))
 
