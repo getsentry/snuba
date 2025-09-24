@@ -159,7 +159,7 @@ query_processors:
 delete_allocation_policies: []
 
 deletion_settings:
-  is_enabled: 0
+  is_enabled: 1
   max_rows_to_delete: 2000000
   tables:
     - eap_items_1_local
