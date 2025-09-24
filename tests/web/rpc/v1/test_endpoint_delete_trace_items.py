@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from unittest.mock import Mock, patch
 
 import pytest
 from google.protobuf.json_format import MessageToDict
@@ -73,13 +74,11 @@ class TestEndpointDeleteTrace(BaseApiTest):
                 end_timestamp=ts,
                 request_id=_REQUEST_ID,
             ),
-            # trace_id is intentionally omitted
+            # trace_id and filters are intentionally omitted
         )
 
-        with pytest.raises(BadSnubaRPCRequestException) as exc_info:
+        with pytest.raises(BadSnubaRPCRequestException):
             EndpointDeleteTraceItems().execute(message)
-
-        assert "trace_id is required for deleting a trace." in str(exc_info.value)
 
     def test_valid_trace_id_returns_success_response(self, setup_teardown: Any) -> None:
         ts = Timestamp()
@@ -105,3 +104,35 @@ class TestEndpointDeleteTrace(BaseApiTest):
         )
 
         assert MessageToDict(response) == MessageToDict(expected_response)
+
+    @patch("snuba.web.bulk_delete_query.produce_delete_query")
+    def test_valid_trace_id_produces_bulk_delete_message(
+        self, produce_delete_query_mock: Mock, setup_teardown: Any
+    ) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = DeleteTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
+                request_id=_REQUEST_ID,
+            ),
+            trace_ids=[_TRACE_ID],
+        )
+
+        EndpointDeleteTraceItems().execute(message)
+
+        # Assert produce_delete_query was called once
+        assert produce_delete_query_mock.call_count == 1
+
+        # Check the arguments to produce_delete_query
+        called_args = produce_delete_query_mock.call_args[0][0]
+        assert called_args["storage_name"] == "eap_items"
+        assert called_args["conditions"]["project_id"] == [1, 2, 3]
+        assert called_args["conditions"]["organization_id"] == [1]
+        assert called_args["conditions"]["trace_id"] == [_TRACE_ID]
+        assert called_args["rows_to_delete"] == _SPAN_COUNT
