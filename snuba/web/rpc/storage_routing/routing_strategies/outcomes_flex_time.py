@@ -139,7 +139,6 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
         original_time_window = _get_request_time_window(routing_context)
         original_end_ts = original_time_window.end_timestamp.seconds
         original_start_ts = original_time_window.start_timestamp.seconds
-
         max_items = self.get_config_value("max_items_to_query")
 
         ingested_items = self.get_ingested_items_for_timerange(
