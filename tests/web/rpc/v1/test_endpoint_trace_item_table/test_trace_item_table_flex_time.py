@@ -164,7 +164,7 @@ class TestTraceItemTableFlexTime:
             OutcomesFlexTimeRoutingStrategy,
         )
 
-        num_hours_to_query = 2
+        num_hours_to_query = 4
         # we store
         strategy = OutcomesFlexTimeRoutingStrategy()
         # we tell the routing strategy that the most items we can query is 20_000_000
@@ -214,7 +214,6 @@ class TestTraceItemTableFlexTime:
             response = EndpointTraceItemTable().execute(message)
             assert isinstance(response, TraceItemTableResponse)
             result_size = len(response.column_values[0].results)
-            breakpoint()
             page_token = response.page_token
             assert result_size == limit_per_query
 

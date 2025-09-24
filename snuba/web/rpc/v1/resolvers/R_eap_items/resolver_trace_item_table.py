@@ -430,7 +430,6 @@ def _get_page_token(
     # time window of the current request after any adjustments by routing strategies
     time_window: TimeWindow | None,
 ) -> PageToken:
-    breakpoint()
     current_offset = _get_offset_from_page_token(request.page_token)
     num_rows_in_response = len(response[0].results) if response else 0
     if time_window is not None:
