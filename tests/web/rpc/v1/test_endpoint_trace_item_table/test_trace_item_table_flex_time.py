@@ -123,11 +123,11 @@ class TestTraceItemTableFlexTime:
         # means that we will run the query  a total of 4 times
 
         times_queried = 0
-        # TODO: back down to 4
-        expected_times_queried = 5
+        expected_times_queried = 4
+        end_pagination = PageToken(end_pagination=True)
         page_token = PageToken(offset=0)
         result_size = 1
-        while result_size > 0:
+        while page_token != end_pagination:
             times_queried += 1
             message = TraceItemTableRequest(
                 meta=RequestMeta(
@@ -153,8 +153,6 @@ class TestTraceItemTableFlexTime:
             )
             response = EndpointTraceItemTable().execute(message)
             assert isinstance(response, TraceItemTableResponse)
-            if not response.column_values:
-                break
             result_size = len(response.column_values[0].results)
             page_token = response.page_token
             assert result_size == limit_per_query
