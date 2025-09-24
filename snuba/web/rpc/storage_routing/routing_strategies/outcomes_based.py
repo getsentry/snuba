@@ -1,5 +1,5 @@
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
 import sentry_sdk
@@ -158,6 +158,13 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             can_run=True,
         )
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
+
+        thirty_days_ago_ts = int((datetime.now(tz=UTC) - timedelta(days=30)).timestamp())
+        older_than_thirty_days = thirty_days_ago_ts > in_msg_meta.start_timestamp.seconds
+
+        if state.get_int_config("enforce_unsampled_retention", 0) and older_than_thirty_days:
+            routing_decision.tier = Tier.TIER_8
+
         sentry_sdk.update_current_span(
             attributes={
                 "downsampling_mode": (
@@ -174,6 +181,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             not in ITEM_TYPE_TO_OUTCOME_CATEGORY
         ):
             return routing_decision
+
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
         start_ts = in_msg_meta.start_timestamp.seconds
         end_ts = in_msg_meta.end_timestamp.seconds
