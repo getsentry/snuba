@@ -22,6 +22,9 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
+    OutcomesFlexTimeRoutingStrategy,
+)
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.routing_strategies.common import (
@@ -92,9 +95,6 @@ def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> None:
 @pytest.mark.redis_db
 class TestTraceItemTableFlexTime:
     def test_paginate_within_time_window(self, eap: Any) -> None:
-        from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
-            OutcomesFlexTimeRoutingStrategy,
-        )
 
         data_points = []
         for hour in range(25):
@@ -179,10 +179,6 @@ class TestTraceItemTableFlexTime:
         ]
 
         _store_logs_and_outcomes(data_points)
-
-        from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
-            OutcomesFlexTimeRoutingStrategy,
-        )
 
         num_hours_to_query = 4
         # every hour we store 120 items 2 hours ago, and none before that, prentending it's 10 million every hour
