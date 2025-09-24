@@ -5,6 +5,7 @@ from sentry_protos.snuba.v1.endpoint_delete_trace_items_pb2 import (
     DeleteTraceItemsResponse,
 )
 
+from snuba.attribution.appid import AppID
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.bulk_delete_query import delete_from_storage
@@ -38,6 +39,18 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
         if has_filters:
             raise NotImplementedError("Currently, only delete by trace_ids is supported")
 
+        attribution_info = {
+            "app_id": AppID("eap"),
+            "referrer": request.meta.referrer,
+            "tenant_ids": {
+                "organization_id": request.meta.organization_id,
+                "referrer": request.meta.referrer,
+            },
+            "team": "eap",
+            "feature": "eap",
+            "parent_api": "eap_delete_trace_items",
+        }
+
         delete_result = delete_from_storage(
             get_writable_storage(StorageKey.EAP_ITEMS),
             {
@@ -45,14 +58,7 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
                 "trace_id": list(request.trace_ids),
                 "project_id": list(request.meta.project_ids),
             },
-            {
-                "app_id": "who.cares",
-                "referrer": request.meta.referrer,
-                "tenant_ids": {"project_id": request.meta.project_ids[0]},
-                "team": "fake",
-                "feature": "fake",
-                "parent_api": "fake",
-            },
+            attribution_info,
         )
 
         response = DeleteTraceItemsResponse()
