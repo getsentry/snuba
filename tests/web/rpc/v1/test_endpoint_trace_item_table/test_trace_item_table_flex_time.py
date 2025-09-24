@@ -1,5 +1,6 @@
 import random
-from datetime import timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
@@ -34,76 +35,23 @@ _ORG_ID = 1
 _PROJECT_ID = 1
 
 
-def _store_logs_and_outcomes() -> None:
+@dataclass
+class LogOutcomeDataPoint:
+    time: datetime
+    num_outcomes: int
+    num_logs: int
+
+
+def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
 
     messages = []
-    messages.extend(
-        [
-            gen_item_message(
-                start_timestamp=BASE_TIME - timedelta(hours=3),
-                item_id=int("123456781234567d", 16).to_bytes(16, byteorder="little"),
-                type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-                attributes={
-                    "color": AnyValue(
-                        string_value=random.choice(
-                            [
-                                "red",
-                                "green",
-                                "blue",
-                            ]
-                        )
-                    ),
-                    "eap.measurement": AnyValue(
-                        int_value=random.choice(
-                            [
-                                1,
-                                100,
-                                1000,
-                            ]
-                        )
-                    ),
-                    "location": AnyValue(
-                        string_value=random.choice(
-                            [
-                                "mobile",
-                                "frontend",
-                                "backend",
-                            ]
-                        )
-                    ),
-                    "custom_measurement": AnyValue(double_value=420.0),
-                    "custom_tag": AnyValue(string_value="blah"),
-                },
-                project_id=_PROJECT_ID,
-                organization_id=_ORG_ID,
-            )
-            for i in range(_LOG_COUNT)
-        ]
-    )
-    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
-
-    # pretend we have 10 million log items every hour
     outcome_data = []
-    for hour in range(25):
-        time = BASE_TIME - timedelta(hours=hour)
-        outcome_data.append((time, 10_000_000))
-
-    store_outcomes_data(
-        outcome_data, OutcomeCategory.LOG_ITEM, org_id=_ORG_ID, project_id=_PROJECT_ID
-    )
-
-
-@pytest.fixture(autouse=False)
-def setup_teardown(eap: None, redis_db: None) -> None:
-    items_storage = get_storage(StorageKey("eap_items"))
-    # generate 120 items every hour
-    messages = []
-    for hour in range(25):
+    for data_point in data_points:
         messages.extend(
             [
                 gen_item_message(
-                    start_timestamp=BASE_TIME - timedelta(hours=hour),
+                    start_timestamp=data_point.time,
                     item_id=int("123456781234567d", 16).to_bytes(16, byteorder="little"),
                     type=TraceItemType.TRACE_ITEM_TYPE_LOG,
                     attributes={
@@ -116,15 +64,6 @@ def setup_teardown(eap: None, redis_db: None) -> None:
                                 ]
                             )
                         ),
-                        "eap.measurement": AnyValue(
-                            int_value=random.choice(
-                                [
-                                    1,
-                                    100,
-                                    1000,
-                                ]
-                            )
-                        ),
                         "location": AnyValue(
                             string_value=random.choice(
                                 [
@@ -134,22 +73,15 @@ def setup_teardown(eap: None, redis_db: None) -> None:
                                 ]
                             )
                         ),
-                        "custom_measurement": AnyValue(double_value=420.0),
-                        "custom_tag": AnyValue(string_value="blah"),
                     },
                     project_id=_PROJECT_ID,
                     organization_id=_ORG_ID,
                 )
-                for i in range(_LOG_COUNT)
+                for _ in range(data_point.num_logs)
             ]
         )
+        outcome_data.append((data_point.time, data_point.num_outcomes))
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
-
-    # pretend we have 10 million log items every hour
-    outcome_data = []
-    for hour in range(25):
-        time = BASE_TIME - timedelta(hours=hour)
-        outcome_data.append((time, 10_000_000))
 
     store_outcomes_data(
         outcome_data, OutcomeCategory.LOG_ITEM, org_id=_ORG_ID, project_id=_PROJECT_ID
@@ -159,10 +91,21 @@ def setup_teardown(eap: None, redis_db: None) -> None:
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestTraceItemTableFlexTime:
-    def test_paginate_within_time_window(self, eap: Any, setup_teardown: Any) -> None:
+    def test_paginate_within_time_window(self, eap: Any) -> None:
         from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
             OutcomesFlexTimeRoutingStrategy,
         )
+
+        data_points = []
+        for hour in range(25):
+            data_points.append(
+                LogOutcomeDataPoint(
+                    time=BASE_TIME - timedelta(hours=hour),
+                    num_outcomes=10_000_000,
+                    num_logs=_LOG_COUNT,
+                )
+            )
+        _store_logs_and_outcomes(data_points)
 
         num_hours_to_query = 4
         # we store
@@ -220,7 +163,22 @@ class TestTraceItemTableFlexTime:
         assert times_queried == expected_times_queried
 
     def test_paginate_first_page_empty(self, eap: Any) -> None:
-        _store_logs_and_outcomes()
+        data_points = [
+            LogOutcomeDataPoint(
+                time=BASE_TIME - timedelta(hours=0), num_outcomes=10_000_000, num_logs=0
+            ),
+            LogOutcomeDataPoint(
+                time=BASE_TIME - timedelta(hours=1), num_outcomes=10_000_000, num_logs=0
+            ),
+            LogOutcomeDataPoint(
+                time=BASE_TIME - timedelta(hours=2), num_outcomes=10_000_000, num_logs=0
+            ),
+            LogOutcomeDataPoint(
+                time=BASE_TIME - timedelta(hours=3), num_outcomes=10_000_000, num_logs=120
+            ),
+        ]
+
+        _store_logs_and_outcomes(data_points)
 
         from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
             OutcomesFlexTimeRoutingStrategy,
