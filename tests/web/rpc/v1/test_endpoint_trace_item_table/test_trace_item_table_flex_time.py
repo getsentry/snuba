@@ -181,7 +181,7 @@ class TestTraceItemTableFlexTime:
         _store_logs_and_outcomes(data_points)
 
         num_hours_to_query = 4
-        # every hour we store 120 items 2 hours ago, and none before that, prentending it's 10 million every hour
+        # every hour we store 120 items 3 hours ago, and none before that, prentending it's 10 million every hour
         strategy = OutcomesFlexTimeRoutingStrategy()
         # we tell the routing strategy that the most items we can query is 20_000_000
         # this means that if we query a four hour time range, it will get split in two
@@ -195,8 +195,8 @@ class TestTraceItemTableFlexTime:
         limit_per_query = 120
 
         # querying 4 hours of data, split into two windows,
-        # each window queries has 240 datapoints, 120 points at a time
-        # means that we will run the query  a total of 4 times
+        # only the second window will have data of 120 items
+        # so we will run the query 2 times
 
         times_queried = 0
         expected_times_queried = 2
