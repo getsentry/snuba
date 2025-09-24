@@ -1087,7 +1087,7 @@ wheels = [
 
 [[package]]
 name = "sentry-protos"
-version = "0.3.9"
+version = "0.4.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "grpc-stubs", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1095,7 +1095,7 @@ dependencies = [
     { name = "protobuf", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_protos-0.3.9-py3-none-any.whl", hash = "sha256:e7fca4ee92aa42f817f4447db257f50b3fde4a2e666b0f76f6f9ab75bb14a995" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_protos-0.4.0-py3-none-any.whl", hash = "sha256:b1c50620aeaf236b9be92a8fd74aafcac6915227805af47f3df9bb300022b62f" },
 ]
 
 [[package]]
@@ -1286,7 +1286,7 @@ requires-dist = [
     { name = "rust-snuba", editable = "rust_snuba" },
     { name = "sentry-arroyo", specifier = ">=2.29.1" },
     { name = "sentry-kafka-schemas", specifier = ">=2.1.2" },
-    { name = "sentry-protos", specifier = ">=0.3.9" },
+    { name = "sentry-protos", specifier = ">=0.4.0" },
     { name = "sentry-redis-tools", specifier = ">=0.5.0" },
     { name = "sentry-relay", specifier = ">=0.9.5" },
     { name = "sentry-sdk", specifier = ">=2.35.0" },
