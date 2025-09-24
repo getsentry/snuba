@@ -40,6 +40,8 @@ from snuba.web.rpc.storage_routing.routing_strategy_selector import (
     RoutingStrategySelector,
 )
 
+logger = logging.getLogger("snuba.rpc")
+
 _TIME_PERIOD_HOURS_BUCKETS = [
     1,
     24,
@@ -309,7 +311,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 request_id = in_msg.meta.request_id
 
             # Log RPC request start
-            logging.info(
+            logger.info(
                 f"RPC request started - endpoint: {self.__class__.__name__}, request_id: {request_id}"
             )
 
@@ -373,7 +375,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 request_id = in_msg.meta.request_id
 
             status = "error" if error is not None else "success"
-            logging.info(
+            logger.info(
                 f"RPC request finished - endpoint: {self.__class__.__name__}, request_id: {request_id}, status: {status}"
             )
             flush_logs = state.get_float_config("rpc_logging_flush_logs", 0)
