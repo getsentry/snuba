@@ -56,7 +56,7 @@ class SearchIssuesFormatter(Formatter):
 
 class EAPItemsFormatter(Formatter):
     def format(self, messages: Sequence[DeleteQueryMessage]) -> Sequence[ConditionsType]:
-        return []
+        return [msg["conditions"] for msg in messages]
 
 
 STORAGE_FORMATTER: Mapping[str, Type[Formatter]] = {

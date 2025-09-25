@@ -23,7 +23,7 @@ from tests.web.rpc.v1.test_utils import gen_item_message
 
 _REQUEST_ID = uuid.uuid4().hex
 
-_TRACE_ID = uuid.uuid4().hex
+_TRACE_ID = str(uuid.uuid4())
 _BASE_TIME = datetime.now(tz=timezone.utc).replace(
     minute=0,
     second=0,
