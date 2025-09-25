@@ -845,9 +845,9 @@ class JSON(ColumnType[TModifiers]):
         self,
         max_dynamic_paths: Optional[int] = None,
         max_dynamic_types: Optional[int] = None,
-        type_hints: Optional[dict[str, ColumnType[TModifiers]]] = None,
-        skip_paths: Optional[list[str]] = None,
-        skip_regexp: Optional[str] = None,
+        type_hints: dict[str, ColumnType[TModifiers]] = {},
+        skip_paths: list[str] = [],
+        skip_regexp: list[str] = [],
         modifiers: Optional[TModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
@@ -859,17 +859,13 @@ class JSON(ColumnType[TModifiers]):
 
     def _repr_content(self) -> str:
         parts = []
-        if self.max_dynamic_paths is not None:
+        if self.max_dynamic_paths:
             parts.append(f"max_dynamic_paths={self.max_dynamic_paths}")
-        if self.max_dynamic_types is not None:
+        if self.max_dynamic_types:
             parts.append(f"max_dynamic_types={self.max_dynamic_types}")
-        if self.type_hints:
-            hints_repr = ", ".join(f"'{k}': {repr(v)}" for k, v in self.type_hints.items())
-            parts.append(f"type_hints={{{hints_repr}}}")
-        if self.skip_paths:
-            parts.append(f"skip_paths={self.skip_paths}")
-        if self.skip_regexp:
-            parts.append(f"skip_regexp='{self.skip_regexp}'")
+        parts.append(f"type_hints={self.type_hints}")
+        parts.append(f"skip_paths={self.skip_paths}")
+        parts.append(f"skip_regexp='{self.skip_regexp}'")
         return ", ".join(parts)
 
     def __eq__(self, other: object) -> bool:
@@ -885,26 +881,25 @@ class JSON(ColumnType[TModifiers]):
 
     def _for_schema_impl(self) -> str:
         parts = []
-
-        # Add type hints first
-        for path, column_type in self.type_hints.items():
-            parts.append(f"{path} {column_type.for_schema()}")
-
         # Add max_dynamic_paths
-        if self.max_dynamic_paths is not None:
+        if self.max_dynamic_paths:
             parts.append(f"max_dynamic_paths={self.max_dynamic_paths}")
 
         # Add max_dynamic_types
-        if self.max_dynamic_types is not None:
+        if self.max_dynamic_types:
             parts.append(f"max_dynamic_types={self.max_dynamic_types}")
+
+        # Add type hints
+        for path, column_type in self.type_hints.items():
+            parts.append(f"{path} {column_type.for_schema()}")
 
         # Add skip paths
         for skip_path in self.skip_paths:
             parts.append(f"SKIP {skip_path}")
 
         # Add skip regexp
-        if self.skip_regexp:
-            parts.append(f"SKIP REGEXP '{self.skip_regexp}'")
+        for skip_regexp in self.skip_regexp:
+            parts.append(f"SKIP REGEXP '{skip_regexp}'")
 
         if parts:
             return f"JSON({', '.join(parts)})"
