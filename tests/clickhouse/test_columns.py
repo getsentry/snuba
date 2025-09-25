@@ -24,6 +24,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifier
 from snuba.clickhouse.columns import SimpleAggregateFunction, String, UInt
+from snuba.utils.schemas import JSON
 
 TEST_CASES = [
     pytest.param(
@@ -155,9 +156,7 @@ TEST_CASES = [
     pytest.param(
         cast(
             Column[Modifier],
-            SimpleAggregateFunction(
-                "sum", [UInt(8), UInt(32)], Modifier(nullable=True)
-            ),
+            SimpleAggregateFunction("sum", [UInt(8), UInt(32)], Modifier(nullable=True)),
         ),
         SimpleAggregateFunction("sum", [UInt(8), UInt(32)]),
         cast(
@@ -180,6 +179,31 @@ TEST_CASES = [
         Bool(),
         "Nullable(Bool)",
         id="bools",
+    ),
+    pytest.param(
+        JSON[Modifier](
+            max_dynamic_paths=10,
+            max_dynamic_types=10,
+            type_hints={"a.b": String()},
+            skip_paths=["a.c"],
+            skip_regexp=["b.*"],
+            modifiers=Modifier(nullable=True),
+        ),
+        JSON[Modifier](
+            max_dynamic_paths=10,
+            max_dynamic_types=10,
+            type_hints={"a.b": String()},
+            skip_paths=["a.c"],
+            skip_regexp=["b.*"],
+        ),
+        JSON[Modifier](
+            max_dynamic_paths=10,
+            max_dynamic_types=10,
+            type_hints={"a.b": String()},
+            skip_paths=["a.c"],
+            skip_regexp=["b.*", "c.*"],
+        ),
+        "Nullable(JSON(max_dynamic_paths=10, max_dynamic_types=10, a.b String, SKIP a.c, SKIP REGEXP 'b.*', SKIP REGEXP 'c.*'))",
     ),
 ]
 
