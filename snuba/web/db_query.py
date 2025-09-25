@@ -32,8 +32,8 @@ from snuba.query.allocation_policies import (
     AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
-    get_max_bytes_to_read,
 )
+from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
@@ -810,8 +810,7 @@ def _apply_allocation_policies_quota(
     quota allowances from the given allocation policies.
     """
 
-    # if it's an EAP query, then allocation policies were already applied in the routing strategy layer, so we bypass it here
-    if attribution_info.app_id.key == "eap":
+    if len(allocation_policies) == 0:
         return
 
     quota_allowances: dict[str, QuotaAllowance] = {}

@@ -39,7 +39,6 @@ from snuba.query.allocation_policies import (
     PolicyData,
     QueryResultOrError,
     QuotaAllowance,
-    get_max_bytes_to_read,
 )
 from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
     BytesScannedRejectingPolicy,
@@ -48,6 +47,7 @@ from snuba.query.allocation_policies.concurrent_rate_limit import (
     ConcurrentRateLimitAllocationPolicy,
 )
 from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
+from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
 from snuba.state.quota import ResourceQuota
@@ -75,6 +75,7 @@ class RoutingContext:
     timer: Timer
     in_msg: ProtobufMessage
     query_id: str
+    tenant_ids: dict[str, str | int]
     query_result: Optional[QueryResult] = field(default=None)
     extra_info: dict[str, Any] = field(default_factory=dict)
     allocation_policies_recommendations: dict[str, QuotaAllowance] = field(default_factory=dict)
@@ -376,12 +377,8 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 op="allocation_policy.get_quota_allowance",
                 description=allocation_policy_name,
             ) as span:
-                request_meta = extract_message_meta(routing_context.in_msg)
                 recommendations[allocation_policy_name] = allocation_policy.get_quota_allowance(
-                    {
-                        "organization_id": request_meta.organization_id,
-                        "referrer": request_meta.referrer,
-                    },
+                    routing_context.tenant_ids,
                     routing_context.query_id,
                 )
                 span.set_data(
@@ -438,8 +435,13 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             return routing_decision
 
     @final
-    def output_metrics(self, routing_decision: RoutingDecision) -> None:
+    def after_execute(self, routing_decision: RoutingDecision, error: Exception | None) -> None:
         assert routing_decision.routing_context is not None
+
+        if routing_decision.routing_context.query_result is not None or isinstance(
+            error, QueryException
+        ):
+            routing_decision.strategy.update_allocation_policies_balances(routing_decision, error)  # type: ignore
 
         # these metrics are meant to track reject/throttle/success decisions, so they get emitted even if the query did not run successfully after routing
         if not routing_decision.can_run:
@@ -481,12 +483,8 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             query_result=routing_decision.routing_context.query_result, error=error
         )
         for allocation_policy in self.get_allocation_policies():
-            request_meta = extract_message_meta(routing_decision.routing_context.in_msg)
             allocation_policy.update_quota_balance(
-                tenant_ids={
-                    "organization_id": request_meta.organization_id,
-                    "referrer": request_meta.referrer,
-                },
+                tenant_ids=routing_decision.routing_context.tenant_ids,
                 query_id=routing_decision.routing_context.query_id,
                 result_or_error=query_result_or_error,
             )

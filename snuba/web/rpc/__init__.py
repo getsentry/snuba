@@ -31,6 +31,7 @@ from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
+from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
@@ -191,8 +192,20 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
+        request_meta = extract_message_meta(in_msg)
         self.routing_context = RoutingContext(
-            timer=self._timer, in_msg=in_msg, query_id=uuid.uuid4().hex
+            timer=self._timer,
+            in_msg=in_msg,
+            query_id=uuid.uuid4().hex,
+            tenant_ids={
+                "organization_id": request_meta.organization_id,
+                "referrer": request_meta.referrer,
+                **(
+                    {"project_id": request_meta.project_ids[0]}
+                    if request_meta.project_ids and len(request_meta.project_ids) == 1
+                    else {}
+                ),
+            },
         )
 
         self.__before_execute(in_msg)
@@ -340,15 +353,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def __after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
         res = self._after_execute(in_msg, out_msg, error)
-        output_metrics_error = None
+        routing_strategy_after_execute_error = None
         try:
-            self.routing_decision.strategy.output_metrics(self.routing_decision)
-            if self.routing_decision.routing_context.query_result is not None or isinstance(
-                error, QueryException
-            ):
-                self.routing_decision.strategy.update_allocation_policies_balances(self.routing_decision, error)  # type: ignore
+            self.routing_decision.strategy.after_execute(self.routing_decision, error)
         except Exception as e:
-            output_metrics_error = e
+            routing_strategy_after_execute_error = e
 
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
@@ -375,13 +384,13 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 tags=self._timer.tags,
             )
 
-        if output_metrics_error is not None:
-            self.metrics.increment("metrics_failure")
+        if routing_strategy_after_execute_error is not None:
+            self.metrics.increment("after_execute_failure")
             sentry_sdk.capture_message(
-                f"Error in routing strategy output metrics: {output_metrics_error}"
+                f"Error in routing strategy after execute: {routing_strategy_after_execute_error}"
             )
             if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
-                raise output_metrics_error
+                raise routing_strategy_after_execute_error
 
         return res
 

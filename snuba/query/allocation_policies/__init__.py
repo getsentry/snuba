@@ -35,21 +35,6 @@ PASS_THROUGH_REFERRERS_SUGGESTION = (
 MAX_THRESHOLD = int(1e12)
 
 
-def get_max_bytes_to_read(quota_allowances: dict[str, QuotaAllowance]) -> int:
-    """
-    alternative implementation:
-    non_zero_max_bytes = [qa.max_bytes_to_read for qa in quota_allowances.values() if qa.max_bytes_to_read > 0]
-    return min(non_zero_max_bytes) if non_zero_max_bytes else 0
-    """
-    max_bytes_to_read = min(
-        [qa.max_bytes_to_read for qa in quota_allowances.values()],
-        key=lambda mb: float("inf") if mb == 0 else mb,
-    )
-    if max_bytes_to_read != 0:
-        return max_bytes_to_read
-    return 0
-
-
 @dataclass(frozen=True)
 class QueryResultOrError:
     """When a query executes, even if it errors, we still want the stats associated
