@@ -189,14 +189,14 @@ TEST_CASES = [
             skip_regexp=["b.*"],
             modifiers=Modifier(nullable=True),
         ),
-        JSON[Modifier](
+        JSON(
             max_dynamic_paths=10,
             max_dynamic_types=10,
             type_hints={"a.b": String()},
             skip_paths=["a.c"],
             skip_regexp=["b.*"],
         ),
-        JSON[Modifier](
+        JSON(
             max_dynamic_paths=10,
             max_dynamic_types=10,
             type_hints={"a.b": String()},
