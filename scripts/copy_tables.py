@@ -178,6 +178,10 @@ def copy_tables(
             print(
                 f"creating {table_name}... on replica: {target_replica}, shard: {target_shard}, database: {target_database}"
             )
+            statement = statement.replace(
+                f"CREATE TABLE",
+                f"CREATE TABLE IF NOT EXISTS",
+            )
             if execute:
                 target_client.execute(statement)
                 print(f"created {table_name} !")
