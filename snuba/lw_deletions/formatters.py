@@ -54,12 +54,14 @@ class SearchIssuesFormatter(Formatter):
         ]
 
 
-class EAPItemsFormatter(Formatter):
+class IdentityFormatter(Formatter):
     def format(self, messages: Sequence[DeleteQueryMessage]) -> Sequence[ConditionsType]:
         return [msg["conditions"] for msg in messages]
 
 
 STORAGE_FORMATTER: Mapping[str, Type[Formatter]] = {
     StorageKey.SEARCH_ISSUES.value: SearchIssuesFormatter,
-    StorageKey.EAP_ITEMS.value: EAPItemsFormatter,
+    # TODO: We will probably do something more sophisticated here in the future
+    # but it won't make much of a difference until we support delete by attribute
+    StorageKey.EAP_ITEMS.value: IdentityFormatter,
 }
