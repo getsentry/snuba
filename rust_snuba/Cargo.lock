@@ -1589,7 +1589,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.6",
  "tokio",
  "tower-service",
  "tracing",
@@ -2890,7 +2890,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "157c5a9d7ea5c2ed2d9fb8f495b64759f7816c7eaea54ba3978f0d63000162e3"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
@@ -3610,9 +3610,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_arroyo"
-version = "2.29.1"
+version = "2.29.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd11bd488b1e25398872d4882d1f38382651fe1af5020972a5e891c387bde991"
+checksum = "a80332c025a37626858fdc27bd8f9ac5f1fe07fdcd6dbd66e462f436f8d08140"
 dependencies = [
  "chrono",
  "coarsetime",
