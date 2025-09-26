@@ -78,6 +78,16 @@ def setup_heatmap_teardown(clickhouse_db: None, redis_db: None) -> None:
             )
         )
 
+    # unrelated messages to make sure the heatmap isnt affected by them
+    for i in range(10):
+        messages.append(
+            gen_item_message(
+                start_timestamp=BASE_TIME - timedelta(minutes=i),
+                attributes={"unrelated": AnyValue(string_value="unrelated")},
+                remove_default_attributes=True,
+            )
+        )
+
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
@@ -147,12 +157,16 @@ class TestTraceItemStatsHeatmap(BaseApiTest):
         assert heatmap.x_attribute == AttributeKey(type=AttributeKey.TYPE_STRING, name="span.op")
         assert heatmap.y_attribute == AttributeKey(type=AttributeKey.TYPE_INT, name="eap.duration")
         assert heatmap.y_buckets == [
-            AttributeValue(val_str="[25, 106.25)"),
+            AttributeValue(val_str="[25.0, 106.25)"),
             AttributeValue(val_str="[106.25, 187.5)"),
             AttributeValue(val_str="[187.5, 268.75)"),
-            AttributeValue(val_str="[268.75, 350]"),
+            AttributeValue(val_str="[268.75, 350.0]"),
         ]
         assert heatmap.data == [
+            MatrixColumn(
+                x_label=AttributeValue(val_str="cache.get"),
+                values=[15, 0, 15, 0],
+            ),
             MatrixColumn(
                 x_label=AttributeValue(val_str="db.query"),
                 values=[10, 10, 10, 10],
@@ -160,10 +174,6 @@ class TestTraceItemStatsHeatmap(BaseApiTest):
             MatrixColumn(
                 x_label=AttributeValue(val_str="http.server"),
                 values=[10, 10, 10, 0],
-            ),
-            MatrixColumn(
-                x_label=AttributeValue(val_str="cache.get"),
-                values=[15, 0, 15, 0],
             ),
         ]
 
