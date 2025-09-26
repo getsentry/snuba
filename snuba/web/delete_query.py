@@ -80,17 +80,18 @@ def delete_from_storage(
 
     delete_settings = storage.get_deletion_settings()
     if not delete_settings.is_enabled:
+        raise DeletesNotEnabledError(f"Deletes not enabled for {storage.get_storage_key().value}")
+
+    if delete_settings.bulk_delete_only:
         raise DeletesNotEnabledError(
-            f"Deletes not enabled for {storage.get_storage_key().value}"
+            f"Synchronous deletes not enabled for {storage.get_storage_key().value}"
         )
 
     results: dict[str, Result] = {}
     attr_info = _get_attribution_info(attribution_info)
 
     # fail if too many mutations ongoing
-    ongoing_mutations = _num_ongoing_mutations(
-        storage.get_cluster(), delete_settings.tables
-    )
+    ongoing_mutations = _num_ongoing_mutations(storage.get_cluster(), delete_settings.tables)
     max_ongoing_mutations = get_int_config(
         "MAX_ONGOING_MUTATIONS_FOR_DELETE",
         default=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE,
@@ -179,9 +180,7 @@ FROM (
     )
 """
     return int(
-        cluster.get_query_connection(ClickhouseClientSettings.QUERY)
-        .execute(query)
-        .results[0][0]
+        cluster.get_query_connection(ClickhouseClientSettings.QUERY).execute(query).results[0][0]
     )
 
 
@@ -189,9 +188,7 @@ def deletes_are_enabled() -> bool:
     return bool(get_config("storage_deletes_enabled", 1))
 
 
-def _get_rows_to_delete(
-    storage_key: StorageKey, select_query_to_count_rows: Query
-) -> int:
+def _get_rows_to_delete(storage_key: StorageKey, select_query_to_count_rows: Query) -> int:
     formatted_select_query_to_count_rows = format_query(select_query_to_count_rows)
     select_query_results = (
         get_storage(storage_key)
@@ -220,10 +217,7 @@ def _enforce_max_rows(delete_query: Query) -> int:
         updates the from_clause to have the correct table.
         """
         dist_table_name = (
-            get_writable_storage((storage_key))
-            .get_table_writer()
-            .get_schema()
-            .get_table_name()
+            get_writable_storage((storage_key)).get_table_writer().get_schema().get_table_name()
         )
         from_clause = delete_query.get_from_clause()
         return Table(
@@ -245,9 +239,7 @@ def _enforce_max_rows(delete_query: Query) -> int:
     )
     if rows_to_delete == 0:
         raise NoRowsToDeleteException
-    max_rows_allowed = (
-        get_storage(storage_key).get_deletion_settings().max_rows_to_delete
-    )
+    max_rows_allowed = get_storage(storage_key).get_deletion_settings().max_rows_to_delete
     if rows_to_delete > max_rows_allowed:
         raise TooManyDeleteRowsException(
             f"Too many rows to delete ({rows_to_delete}), maximum allowed is {max_rows_allowed}"
@@ -306,11 +298,7 @@ def _execute_query(
             allocation_policies,
             query_id,
         )
-        result = (
-            storage.get_cluster()
-            .get_deleter()
-            .execute(formatted_query, clickhouse_settings)
-        )
+        result = storage.get_cluster().get_deleter().execute(formatted_query, clickhouse_settings)
     except AllocationPolicyViolations as e:
         error = QueryException.from_args(
             AllocationPolicyViolations.__name__,
@@ -326,9 +314,7 @@ def _execute_query(
         query_result = (
             QueryResult(
                 result=result,
-                extra=QueryExtraData(
-                    stats=stats, sql=formatted_query.get_sql(), experiments={}
-                ),
+                extra=QueryExtraData(stats=stats, sql=formatted_query.get_sql(), experiments={}),
             )
             if result
             else None
@@ -342,9 +328,7 @@ def _execute_query(
             )
         if result:
             return result
-        raise error or Exception(
-            "No error or result when running query, this should never happen"
-        )
+        raise error or Exception("No error or result when running query, this should never happen")
 
 
 def _construct_condition(columns: ConditionsType) -> Expression:
@@ -354,9 +338,7 @@ def _construct_condition(columns: ConditionsType) -> Expression:
             exp = equals(column(col), literal(values[0]))
         else:
             literal_values = [literal(v) for v in values]
-            exp = in_cond(
-                column(col), literals_tuple(alias=None, literals=literal_values)
-            )
+            exp = in_cond(column(col), literals_tuple(alias=None, literals=literal_values))
 
         and_conditions.append(exp)
 
