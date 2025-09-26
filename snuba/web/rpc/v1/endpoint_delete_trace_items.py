@@ -67,7 +67,7 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
         response.matching_items_count = next(
             (
                 x["rows_to_delete"]
-                for x in delete_result["eap_items_1_local"]["data"]
+                for x in delete_result.get("eap_items_1_local", {}).get("data", [])
                 if "rows_to_delete" in x
             ),
             0,
