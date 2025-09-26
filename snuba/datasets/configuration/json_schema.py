@@ -90,9 +90,7 @@ STREAM_LOADER_SCHEMA = {
 
 ######
 # Column specific json schemas
-def make_column_schema(
-    column_type: dict[str, Any], args: dict[str, Any]
-) -> dict[str, Any]:
+def make_column_schema(column_type: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
     args["properties"]["schema_modifiers"] = TYPE_STRING_ARRAY
     return {
         "type": "object",
@@ -141,9 +139,7 @@ FIXED_STRING_SCHEMA = make_column_schema(
 
 
 NO_ARG_SCHEMA = make_column_schema(
-    column_type={
-        "enum": ["String", "DateTime", "UUID", "IPv4", "IPv6", "Bool", "Date"]
-    },
+    column_type={"enum": ["String", "DateTime", "UUID", "IPv4", "IPv6", "Bool", "Date"]},
     args={
         "type": "object",
         "properties": {},
@@ -164,14 +160,11 @@ DATETIME64_SCHEMA = make_column_schema(
 )
 
 # Get just the type
-_SIMPLE_COLUMN_TYPES = [
-    del_name_field(col_type) for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA]
-]
+_SIMPLE_COLUMN_TYPES = [del_name_field(col_type) for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA]]
 
 # Tuple inner types are the same as normal column types except they don't have a name
 _SIMPLE_TUPLE_INNER_TYPES = [
-    del_name_field(col_type)
-    for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA, DATETIME64_SCHEMA]
+    del_name_field(col_type) for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA, DATETIME64_SCHEMA]
 ]
 
 TUPLE_SCHEMA = make_column_schema(
@@ -249,9 +242,7 @@ SIMPLE_COLUMN_SCHEMAS = [
 ]
 
 # Array inner types are the same as normal column types except they don't have a name
-_SIMPLE_ARRAY_INNER_TYPES = [
-    del_name_field(col_type) for col_type in SIMPLE_COLUMN_SCHEMAS
-]
+_SIMPLE_ARRAY_INNER_TYPES = [del_name_field(col_type) for col_type in SIMPLE_COLUMN_SCHEMAS]
 
 # Up to one subarray is supported. Eg Array(Array(String())).
 _SUB_ARRAY_SCHEMA = make_column_schema(
@@ -267,9 +258,7 @@ ARRAY_SCHEMA = make_column_schema(
     column_type={"const": "Array"},
     args={
         "type": "object",
-        "properties": {
-            "inner_type": {"anyOf": [*_SIMPLE_ARRAY_INNER_TYPES, _SUB_ARRAY_SCHEMA]}
-        },
+        "properties": {"inner_type": {"anyOf": [*_SIMPLE_ARRAY_INNER_TYPES, _SUB_ARRAY_SCHEMA]}},
         "additionalProperties": False,
     },
 )
@@ -299,9 +288,7 @@ NESTED_SCHEMA = make_column_schema(
     column_type={"const": "Nested"},
     args={
         "type": "object",
-        "properties": {
-            "subcolumns": {"type": "array", "items": {"anyOf": COLUMN_SCHEMAS}}
-        },
+        "properties": {"subcolumns": {"type": "array", "items": {"anyOf": COLUMN_SCHEMAS}}},
         "additionalProperties": False,
     },
 )
@@ -611,6 +598,7 @@ DELETION_SETTINGS_SCHEMA = {
         "max_rows_to_delete": {
             "type": "integer",
         },
+        "bulk_delete_only": {"type": "boolean"},
     },
     "required": ["is_enabled", "tables"],
     "additionalProperties": False,
