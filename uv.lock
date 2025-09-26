@@ -454,6 +454,33 @@ wheels = [
 ]
 
 [[package]]
+name = "granian"
+version = "2.5.4"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+dependencies = [
+    { name = "click", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+]
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.5.4-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:a404bff75dc29c01566a4e896237f6cb8eda49a71b90770b8316ebe1b08a3d46" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.5.4-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:d91b4642283ea8169aad64b74b242c364a3ce24d6aeed9b5a4358f99a5ab4d84" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.5.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ce9ec6baebb83ba7d1ed507dc7d301f7f29725f9b7a8c9c974f96479dea3a090" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.5.4-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:8b3faa2eec6dbbb072aae575d6a6a5e5577aef13c93d38d454a6a9fffc954ce7" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.5.4-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:c4387cca4e38ec7579cac71a2da27fd177ced682b1de8bf917b9610f2ac0ba5e" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.5.4-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:a126b75927583292a9d2cfae627cd4b1da3e68d04dd87ba5a53b4860768d9e04" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.5.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f6c50539f654ce5f8fadd9b360fac0361d812c39c7a5f1e525889c51899a10f0" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.5.4-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:e52f65acd4da0a3af7a5d2d6a6445d530e84fe52057ee39f52ce92a6598fe37b" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.5.4-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:533bf842b56c8531705048211e3152fb1234d7611f83257a71cbf7e734c0f4a1" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.5.4-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:d1efb111f84236a72d5864d64a0198e04e699014119c33d957fac34a0efb2474" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.5.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9bb902636271f9e61f6653625670982f7a0e19cbc7ae56fc65cd26bf330c612f" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.5.4-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:23b2e86ea97320bbe80866a94e6855752f0c73c0ec07772e0241e8409384cde5" },
+]
+
+[package.optional-dependencies]
+pname = [
+    { name = "setproctitle", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+]
+
+[[package]]
 name = "grpc-stubs"
 version = "1.53.0.6"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -1147,6 +1174,25 @@ wheels = [
 ]
 
 [[package]]
+name = "setproctitle"
+version = "1.3.7"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:a600eeb4145fb0ee6c287cb82a2884bd4ec5bbb076921e287039dcc7b7cc6dd0" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:97a090fed480471bb175689859532709e28c085087e344bca45cf318034f70c4" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:1607b963e7b53e24ec8a2cb4e0ab3ae591d7c6bf0a160feef0551da63452b37f" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:a20fb1a3974e2dab857870cf874b325b8705605cb7e7e8bcbb915bca896f52a9" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:2dc99aec591ab6126e636b11035a70991bc1ab7a261da428491a40b84376654e" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:cdd8aa571b7aa39840fdbea620e308a19691ff595c3a10231e9ee830339dd798" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:2906b6c7959cdb75f46159bf0acd8cc9906cf1361c9e1ded0d065fe8f9039629" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:6915964a6dda07920a1159321dcd6d94fc7fc526f815ca08a8063aeca3c204f1" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:c3736b2a423146b5e62230502e47e08e68282ff3b69bcfe08a322bee73407922" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:3384e682b158d569e85a51cfbde2afd1ab57ecf93ea6651fe198d0ba451196ee" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:0564a936ea687cd24dffcea35903e2a20962aa6ac20e61dd3a207652401492dd" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:a5d1cb3f81531f0eb40e13246b679a1bdb58762b170303463cb06ecc296f26d0" },
+]
+
+[[package]]
 name = "setuptools"
 version = "78.1.1"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -1199,6 +1245,7 @@ dependencies = [
     { name = "google-api-python-client", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "google-cloud-storage", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "googleapis-common-protos", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "granian", extra = ["pname"], marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "jsonschema", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "packaging", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "parsimonious", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1271,6 +1318,7 @@ requires-dist = [
     { name = "google-api-python-client", specifier = ">=2.88.0" },
     { name = "google-cloud-storage", specifier = ">=2.18.0" },
     { name = "googleapis-common-protos", specifier = ">=1.63.2" },
+    { name = "granian", extras = ["pname"], specifier = "~=2.5" },
     { name = "jsonschema", specifier = ">=4.23.0" },
     { name = "packaging", specifier = ">=24.1" },
     { name = "parsimonious", specifier = ">=0.10.0" },
