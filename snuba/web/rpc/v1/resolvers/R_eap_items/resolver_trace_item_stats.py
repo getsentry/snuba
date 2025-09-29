@@ -201,7 +201,6 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
         results = []
         for requested_type in in_msg.stats_types:
             result = TraceItemStatsResult()
-            # build the query
             if requested_type.HasField("attribute_distributions"):
                 if requested_type.attribute_distributions.max_buckets > MAX_BUCKETS:
                     raise BadSnubaRPCRequestException(f"Max allowed buckets is {MAX_BUCKETS}.")
@@ -211,7 +210,6 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
                 )
                 treeify_or_and_conditions(query)
 
-                # run the query
                 snuba_request = _build_snuba_request(in_msg, query, routing_decision)
                 query_res = run_query(
                     dataset=PluggableDataset(name="eap", all_entities=[]),
@@ -220,7 +218,6 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
                 )
                 routing_decision.routing_context.query_result = query_res
 
-                # transform the results
                 attributes = _transform_attr_distribution_results(
                     query_res.result.get("data", []), in_msg.meta
                 )
