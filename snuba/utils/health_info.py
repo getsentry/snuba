@@ -7,6 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Set, Union, cast
 
+import sentry_sdk
 import simplejson as json
 
 from snuba import environment, settings
@@ -149,9 +150,7 @@ def sanity_check_clickhouse_connections() -> bool:
 
     for storage in storages:
         try:
-            unique_clusters[
-                storage.get_cluster().get_connection_id()
-            ] = storage.get_cluster()
+            unique_clusters[storage.get_cluster().get_connection_id()] = storage.get_cluster()
         except UndefinedClickhouseCluster as err:
             logger.error(err)
             continue
@@ -162,7 +161,9 @@ def sanity_check_clickhouse_connections() -> bool:
             clickhouse.execute("show tables").results
             return True
         except Exception as err:
-            logger.error(err)
+            with sentry_sdk.new_scope() as scope:
+                scope.set_tag("health_cluster_name", cluster.get_clickhouse_cluster_name())
+                logger.error(err)
             continue
     return False
 
@@ -179,9 +180,7 @@ def check_all_tables_present(metric_tags: dict[str, Any] | None = None) -> bool:
     try:
         storages: List[Storage] = []
         filter_checked_storages(storages)
-        connection_grouped_table_names: MutableMapping[
-            ConnectionId, Set[str]
-        ] = defaultdict(set)
+        connection_grouped_table_names: MutableMapping[ConnectionId, Set[str]] = defaultdict(set)
         for storage in storages:
             if isinstance(storage.get_schema(), TableSchema):
                 cluster = storage.get_cluster()
@@ -190,8 +189,7 @@ def check_all_tables_present(metric_tags: dict[str, Any] | None = None) -> bool:
                 )
         # De-dupe clusters by host:TCP port:HTTP port:database
         unique_clusters = {
-            storage.get_cluster().get_connection_id(): storage.get_cluster()
-            for storage in storages
+            storage.get_cluster().get_connection_id(): storage.get_cluster() for storage in storages
         }
 
         for cluster_key, cluster in unique_clusters.items():
