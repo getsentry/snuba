@@ -69,7 +69,7 @@ local s4s_health_check(region) =
 
 // Snuba deploy to ST is blocked till SaaS deploy is healthy
 local saas_health_check(region) =
-  if region == 'us' || region = 'de' then
+  if region == 'us' || region == 'de' then
     [
       {
         health_check: {
