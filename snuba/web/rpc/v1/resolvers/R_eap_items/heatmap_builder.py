@@ -101,7 +101,7 @@ class HeatmapBuilder:
         in_msg: TraceItemStatsRequest,
         routing_decision: RoutingDecision,
         timer: Timer,
-    ) -> tuple[float, float, float]:
+    ) -> tuple[float | None, float | None, float | None]:
         """
         Returns the min value, max value, and bucket size for the y attribute.
 
@@ -148,6 +148,8 @@ class HeatmapBuilder:
             .result["data"][0]
             .values()
         )
+        if list(min_max_res) == [None, None]:
+            return (None, None, None)
         min_val_y = min(min_max_res)
         max_val_y = max(min_max_res)
         group_size_y = (max_val_y - min_val_y) / heatmap.num_y_buckets
@@ -268,6 +270,13 @@ class HeatmapBuilder:
         min_y, max_y, group_size_y = self._get_min_max_bucketsize_y(
             heatmap, self.in_msg, self.routing_decision, self.timer
         )
+        if min_y is None or max_y is None or group_size_y is None:
+            return Heatmap(
+                x_attribute=heatmap.x_attribute,
+                y_attribute=heatmap.y_attribute,
+                y_buckets=[],
+                data=[],
+            )
         query = self._build_heatmap_query(min_y, max_y, group_size_y)
 
         # run the query

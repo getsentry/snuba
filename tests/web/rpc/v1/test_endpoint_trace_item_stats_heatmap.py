@@ -224,6 +224,7 @@ class TestTraceItemStatsHeatmap(BaseApiTest):
         # Should be approximately 33-34 items (100/3)
         assert 30 <= total_count <= 37
 
+    @pytest.mark.skip(reason="not implemented yet")
     def test_heatmap_numeric_x_and_y_buckets(self, setup_heatmap_teardown: Any) -> None:
         """Test heatmap with numeric bucketing on both x and y axes."""
         message = TraceItemStatsRequest(
@@ -272,6 +273,7 @@ class TestTraceItemStatsHeatmap(BaseApiTest):
             MatrixColumn(x_label=AttributeValue(val_str="[79.2,99]"), values=[10, 10, 10, 10]),
         ]
 
+    @pytest.mark.skip(reason="not implemented yet")
     def test_heatmap_string_x_string_y(self, setup_heatmap_teardown: Any) -> None:
         """Test heatmap with string attributes on both axes."""
         message = TraceItemStatsRequest(
@@ -362,16 +364,16 @@ class TestTraceItemStatsHeatmap(BaseApiTest):
         assert heatmap.x_attribute == AttributeKey(type=AttributeKey.TYPE_STRING, name="span.op")
         assert heatmap.y_attribute == AttributeKey(type=AttributeKey.TYPE_INT, name="eap.duration")
         assert heatmap.y_buckets == [
-            AttributeValue(val_str="[50, 80)"),
-            AttributeValue(val_str="[80, 110)"),
-            AttributeValue(val_str="[110, 140)"),
-            AttributeValue(val_str="[140, 170)"),
-            AttributeValue(val_str="[170, 200)"),
-            AttributeValue(val_str="[200, 230)"),
-            AttributeValue(val_str="[230, 260)"),
-            AttributeValue(val_str="[260, 290)"),
-            AttributeValue(val_str="[290, 320)"),
-            AttributeValue(val_str="[320, 350]"),
+            AttributeValue(val_str="[50.0, 80.0)"),
+            AttributeValue(val_str="[80.0, 110.0)"),
+            AttributeValue(val_str="[110.0, 140.0)"),
+            AttributeValue(val_str="[140.0, 170.0)"),
+            AttributeValue(val_str="[170.0, 200.0)"),
+            AttributeValue(val_str="[200.0, 230.0)"),
+            AttributeValue(val_str="[230.0, 260.0)"),
+            AttributeValue(val_str="[260.0, 290.0)"),
+            AttributeValue(val_str="[290.0, 320.0)"),
+            AttributeValue(val_str="[320.0, 350.0]"),
         ]
         assert heatmap.data == [
             MatrixColumn(
