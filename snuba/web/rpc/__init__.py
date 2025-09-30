@@ -31,10 +31,11 @@ from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
-from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
+from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
+    get_stats_dict,
 )
 from snuba.web.rpc.storage_routing.routing_strategy_selector import (
     RoutingStrategySelector,
@@ -191,7 +192,21 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
-        self.routing_context = RoutingContext(timer=self._timer, in_msg=in_msg)
+        request_meta = extract_message_meta(in_msg)
+        self.routing_context = RoutingContext(
+            timer=self._timer,
+            in_msg=in_msg,
+            query_id=uuid.uuid4().hex,
+            tenant_ids={
+                "organization_id": request_meta.organization_id,
+                "referrer": request_meta.referrer,
+                **(
+                    {"project_id": request_meta.project_ids[0]}
+                    if hasattr(request_meta, "project_ids") and len(request_meta.project_ids) == 1
+                    else {}
+                ),
+            },
+        )
 
         self.__before_execute(in_msg)
         error: Exception | None = None
@@ -202,7 +217,29 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     span.set_data("selected_tier", self.routing_decision.tier)
                     out = self._execute(in_msg)
             else:
-                raise AllocationPolicyViolations
+                self.metrics.increment(
+                    "request_rate_limited",
+                    tags=self._timer.tags,
+                )
+                error = QueryException.from_args(
+                    AllocationPolicyViolations.__name__,
+                    "Query cannot be run due to routing strategy deciding it cannot run, most likely due to allocation policies",
+                    extra={
+                        "stats": get_stats_dict(self.routing_decision),
+                        "sql": "no sql run",
+                        "experiments": {},
+                    },
+                )
+                error.__cause__ = AllocationPolicyViolations.from_args(
+                    {
+                        "summary": {},
+                        "details": {
+                            key: quota_allowance.to_dict()
+                            for key, quota_allowance in self.routing_decision.routing_context.allocation_policies_recommendations.items()
+                        },
+                    }
+                )
+                raise error
         except QueryException as e:
             out = self.response_class()()
             if (
@@ -253,15 +290,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         meta = getattr(in_msg, "meta", None)
         if meta is not None:
             if not hasattr(meta, "request_id") or not meta.request_id:
-                meta.request_id = str(uuid.uuid4())
+                meta.request_id = self.routing_context.query_id
 
         self._timer.update_tags(self.__extract_request_tags(in_msg))
-
-        # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
-        # the result is currently not used in storage routing
-        # can turn off on Snuba Admin
-        if state.get_config("storage_routing.enable_get_cluster_loadinfo", True):
-            get_cluster_loadinfo()
 
         selected_strategy = RoutingStrategySelector().select_routing_strategy(self.routing_context)
         self.routing_decision = selected_strategy.get_routing_decision(self.routing_context)
@@ -322,11 +353,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def __after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
         res = self._after_execute(in_msg, out_msg, error)
-        output_metrics_error = None
+        routing_strategy_after_execute_error = None
         try:
-            self.routing_decision.strategy.output_metrics(self.routing_decision)
+            self.routing_decision.strategy.after_execute(self.routing_decision, error)
         except Exception as e:
-            output_metrics_error = e
+            routing_strategy_after_execute_error = e
 
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
@@ -336,13 +367,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     "request_invalid",
                     tags=self._timer.tags,
                 )
-            elif isinstance(error, AllocationPolicyViolations):
-                sentry_sdk.capture_exception(error)
-                self.metrics.increment(
-                    "request_rate_limited",
-                    tags=self._timer.tags,
-                )
-            else:
+            # AllocationPolicyViolations is not a request_error
+            elif not (
+                isinstance(error, QueryException)
+                and error.exception_type == AllocationPolicyViolations.__name__
+            ):
                 sentry_sdk.capture_exception(error)
                 self.metrics.increment(
                     "request_error",
@@ -355,13 +384,13 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 tags=self._timer.tags,
             )
 
-        if output_metrics_error is not None:
-            self.metrics.increment("metrics_failure")
+        if routing_strategy_after_execute_error is not None:
+            self.metrics.increment("after_execute_failure")
             sentry_sdk.capture_message(
-                f"Error in routing strategy output metrics: {output_metrics_error}"
+                f"Error in routing strategy after execute: {routing_strategy_after_execute_error}"
             )
             if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
-                raise output_metrics_error
+                raise routing_strategy_after_execute_error
 
         return res
 
