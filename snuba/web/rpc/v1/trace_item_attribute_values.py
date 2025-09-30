@@ -111,7 +111,7 @@ def _build_query(
         selected_columns=[
             SelectedExpression(
                 name="attr_value",
-                expression=f.distinct(column(attr_value.alias, alias="attr_value")),
+                expression=f.distinct(column(attr_value.alias), alias="attr_value"),
             ),
         ],
         order_by=[
