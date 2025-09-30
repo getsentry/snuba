@@ -135,7 +135,7 @@ pub fn consumer_v2_impl(
 
     for storage in &consumer_config.storages {
         tracing::info!(
-            "Storage: {}, ClickHouse Table Name: {}, Message Processor: {:?}, ClickHouse host: {}, ClickHouse port: {}, ClickHouse HTTP port: {}, ClickHouse database: {}",
+            "Storage: {}, ClickHouse Table Name: {}, Message Processor: {:?}, ClickHouse host: {}, ClickHouse port: {}, ClickHouse HTTP port: {}, ClickHouse database: {}, ClickHouse writer options: {:?}",
             storage.name,
             storage.clickhouse_table_name,
             &storage.message_processor,
@@ -143,6 +143,7 @@ pub fn consumer_v2_impl(
             storage.clickhouse_cluster.port,
             storage.clickhouse_cluster.http_port,
             storage.clickhouse_cluster.database,
+            storage.writer_options,
         );
     }
 
