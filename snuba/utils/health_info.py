@@ -4,6 +4,7 @@ import logging
 import os
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Set, Union, cast
 
@@ -38,6 +39,9 @@ def shutdown_time() -> Optional[float]:
 
 _IS_SHUTTING_DOWN = False
 
+# Module-level ThreadPoolExecutor for health checks
+_health_check_executor: Optional[ThreadPoolExecutor] = None
+
 try:
     import uwsgi
 except ImportError:
@@ -67,6 +71,27 @@ def _set_shutdown(is_shutting_down: bool) -> None:
 
 def get_shutdown() -> bool:
     return _IS_SHUTTING_DOWN
+
+
+def _get_health_check_executor() -> ThreadPoolExecutor:
+    global _health_check_executor
+    if _health_check_executor is None:
+        _health_check_executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="health-check"
+        )
+    return _health_check_executor
+
+
+def _execute_show_tables(cluster: ClickhouseCluster) -> bool:
+    try:
+        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+        clickhouse.execute("show tables").results
+        return True
+    except Exception as err:
+        with sentry_sdk.new_scope() as scope:
+            scope.set_tag("health_cluster_name", cluster.get_clickhouse_cluster_name())
+            logger.error(err)
+        return False
 
 
 @dataclass
@@ -134,10 +159,13 @@ def filter_checked_storages(filtered_storages: List[Storage]) -> None:
             filtered_storages.append(storage)
 
 
-def sanity_check_clickhouse_connections() -> bool:
+def sanity_check_clickhouse_connections(timeout_seconds: float = 0.1) -> bool:
     """
     Check if at least a single clickhouse query node is operable,
     returns True if so, False otherwise.
+
+    Executes the "show tables" query in a background thread with a timeout_seconds timeout
+    (default 0.1 or 100ms).
     """
     storages: List[Storage] = []
 
@@ -155,16 +183,26 @@ def sanity_check_clickhouse_connections() -> bool:
             logger.error(err)
             continue
 
+    # Execute queries in background threads with 100ms timeout using shared executor
+    executor = _get_health_check_executor()
     for cluster in unique_clusters.values():
         try:
-            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
-            clickhouse.execute("show tables").results
-            return True
+            future = executor.submit(_execute_show_tables, cluster)
+            result = future.result(timeout=timeout_seconds)
+            if result:
+                return True
+        except TimeoutError:
+            logger.info(
+                f"ClickHouse health check timed out after {timeout_seconds}s for cluster %s",
+                cluster.get_clickhouse_cluster_name(),
+            )
+            continue
         except Exception as err:
             with sentry_sdk.new_scope() as scope:
                 scope.set_tag("health_cluster_name", cluster.get_clickhouse_cluster_name())
                 logger.error(err)
             continue
+
     return False
 
 
