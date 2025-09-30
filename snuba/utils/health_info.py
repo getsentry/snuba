@@ -77,7 +77,7 @@ def _get_health_check_executor() -> ThreadPoolExecutor:
     global _health_check_executor
     if _health_check_executor is None:
         _health_check_executor = ThreadPoolExecutor(
-            max_workers=1, thread_name_prefix="health-check"
+            max_workers=10, thread_name_prefix="health-check"
         )
     return _health_check_executor
 
@@ -164,7 +164,7 @@ def sanity_check_clickhouse_connections(timeout_seconds: float = 0.1) -> bool:
     Check if at least a single clickhouse query node is operable,
     returns True if so, False otherwise.
 
-    Executes the "show tables" query in a background thread with a timeout_seconds timeout
+    Every individual query node check is limited to a `timeout_seconds` timeout
     (default 0.1 or 100ms).
     """
     storages: List[Storage] = []
@@ -183,7 +183,6 @@ def sanity_check_clickhouse_connections(timeout_seconds: float = 0.1) -> bool:
             logger.error(err)
             continue
 
-    # Execute queries in background threads with 100ms timeout using shared executor
     executor = _get_health_check_executor()
     for cluster in unique_clusters.values():
         try:
@@ -193,8 +192,8 @@ def sanity_check_clickhouse_connections(timeout_seconds: float = 0.1) -> bool:
                 return True
         except TimeoutError:
             logger.info(
-                f"ClickHouse health check timed out after {timeout_seconds}s for cluster %s",
-                cluster.get_clickhouse_cluster_name(),
+                f"ClickHouse health check timed out after {timeout_seconds}s"
+                f" for cluster {cluster.get_clickhouse_cluster_name()}",
             )
             continue
         except Exception as err:
