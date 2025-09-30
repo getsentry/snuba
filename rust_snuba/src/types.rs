@@ -1,8 +1,6 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 
-use crate::strategies::clickhouse::batch::HttpBatch;
-
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::timer;
@@ -277,21 +275,6 @@ impl BytesInsertBatch<RowData> {
     pub fn merge(mut self, other: BytesInsertBatch<RowData>) -> Self {
         self.rows.encoded_rows.extend(other.rows.encoded_rows);
         self.rows.num_rows += other.rows.num_rows;
-        self.commit_log_offsets.merge(other.commit_log_offsets);
-        self.message_timestamp.merge(other.message_timestamp);
-        self.origin_timestamp.merge(other.origin_timestamp);
-        self.sentry_received_timestamp
-            .merge(other.sentry_received_timestamp);
-        self.cogs_data.merge(other.cogs_data);
-        self
-    }
-}
-
-impl BytesInsertBatch<HttpBatch> {
-    pub fn merge(mut self, other: BytesInsertBatch<RowData>) -> Self {
-        self.rows
-            .write_rows(&other.rows)
-            .expect("failed to write rows to channel");
         self.commit_log_offsets.merge(other.commit_log_offsets);
         self.message_timestamp.merge(other.message_timestamp);
         self.origin_timestamp.merge(other.origin_timestamp);
