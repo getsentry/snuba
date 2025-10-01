@@ -12,6 +12,7 @@ from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
     RequestMeta,
     ResponseMeta,
     TraceItemType,
@@ -256,6 +257,192 @@ class TestGetTrace(BaseApiTest):
             ],
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
+
+    def test_pagination(self, setup_teardown: Any) -> None:
+        """Test that pagination works correctly with limit and page_token parameters."""
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+
+        spans, timestamps = generate_spans_and_timestamps()
+        expected_items = [
+            GetTraceResponse.Item(
+                id=get_span_id(span),
+                timestamp=timestamp,
+                attributes=sorted(
+                    get_attributes(span),
+                    key=attrgetter("key.name"),
+                ),
+            )
+            for timestamp, span in zip(timestamps, spans)
+        ]
+
+        # First request with limit=10 and no page token (offset=0)
+        first_message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                )
+            ],
+            limit=10,
+            page_token=PageToken(offset=0),
+        )
+
+        first_response = EndpointGetTrace().execute(first_message)
+        first_end = min(10, len(expected_items))
+        expected_first_response = GetTraceResponse(
+            meta=ResponseMeta(request_id=_REQUEST_ID),
+            trace_id=_TRACE_ID,
+            item_groups=[
+                GetTraceResponse.ItemGroup(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    items=expected_items[:first_end],
+                ),
+            ],
+            page_token=PageToken(offset=10),
+        )
+        assert MessageToDict(first_response) == MessageToDict(expected_first_response)
+
+        # Second request with offset=10 to get next page
+        second_message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                )
+            ],
+            limit=10,
+            page_token=PageToken(offset=10),
+        )
+        second_response = EndpointGetTrace().execute(second_message)
+        second_end = min(first_end + 10, len(expected_items))
+        expected_second_response = GetTraceResponse(
+            meta=ResponseMeta(request_id=_REQUEST_ID),
+            trace_id=_TRACE_ID,
+            item_groups=[
+                GetTraceResponse.ItemGroup(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    items=expected_items[first_end:second_end],
+                ),
+            ],
+            page_token=PageToken(offset=20),
+        )
+        assert MessageToDict(second_response) == MessageToDict(expected_second_response)
+
+        # Third request with offset=20 to get next page
+        third_message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                )
+            ],
+            limit=10,
+            page_token=PageToken(offset=20),
+        )
+        third_response = EndpointGetTrace().execute(third_message)
+        third_end = min(second_end + 10, len(expected_items))
+        expected_third_response = GetTraceResponse(
+            meta=ResponseMeta(request_id=_REQUEST_ID),
+            trace_id=_TRACE_ID,
+            item_groups=[
+                GetTraceResponse.ItemGroup(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    items=expected_items[second_end:third_end],
+                ),
+            ],
+            page_token=PageToken(offset=30),
+        )
+        assert MessageToDict(third_response) == MessageToDict(expected_third_response)
+
+        # Test with larger limit to get all remaining items
+        final_message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                )
+            ],
+            limit=100,
+            page_token=PageToken(offset=30),
+        )
+        final_response = EndpointGetTrace().execute(final_message)
+        final_end = min(third_end + 100, len(expected_items))
+        expected_final_response = GetTraceResponse(
+            meta=ResponseMeta(request_id=_REQUEST_ID),
+            trace_id=_TRACE_ID,
+            item_groups=[
+                GetTraceResponse.ItemGroup(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    items=expected_items[third_end:final_end],
+                ),
+            ],
+            page_token=PageToken(offset=120),
+        )
+        assert MessageToDict(final_response) == MessageToDict(expected_final_response)
+
+        # Test requesting beyond available data
+        empty_message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                )
+            ],
+            limit=10,
+            page_token=PageToken(offset=120),
+        )
+        empty_response = EndpointGetTrace().execute(empty_message)
+
+        # Should return empty result
+        assert len(empty_response.item_groups) == 1
+        assert len(empty_response.item_groups[0].items) == 0
+        assert empty_response.page_token.offset == 120
 
     def test_build_query_with_final(store_outcomes_data: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
