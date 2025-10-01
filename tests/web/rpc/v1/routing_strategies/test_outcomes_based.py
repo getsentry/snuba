@@ -104,7 +104,7 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
 
     # request(s) that query window of 30 minutes, but with timestamps 40 days ago
     # one in MODE_NORMAL, one in MODE_HIGHEST_ACCURACY (which is ignored in favor of
-    # the enforce_unsampled_retention)
+    # the enable_long_term_retention_downsampling)
     start = datetime.now(tz=UTC) - timedelta(days=40, minutes=30)
     end = datetime.now(tz=UTC) - timedelta(days=40)
 
