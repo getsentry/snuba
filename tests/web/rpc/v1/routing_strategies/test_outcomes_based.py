@@ -84,7 +84,7 @@ def test_outcomes_based_routing_queries_daily_table() -> None:
 @pytest.mark.redis_db
 def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     state.set_config(
-        "enforce_unsampled_retention",
+        "enable_long_term_retention_downsampling",
         1,
     )
     strategy = OutcomesBasedRoutingStrategy()

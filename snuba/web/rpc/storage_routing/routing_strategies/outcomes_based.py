@@ -162,7 +162,10 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         thirty_days_ago_ts = int((datetime.now(tz=UTC) - timedelta(days=30)).timestamp())
         older_than_thirty_days = thirty_days_ago_ts > in_msg_meta.start_timestamp.seconds
 
-        if state.get_int_config("enforce_unsampled_retention", 0) and older_than_thirty_days:
+        if (
+            state.get_int_config("enable_long_term_retention_downsampling", 0)
+            and older_than_thirty_days
+        ):
             routing_decision.tier = Tier.TIER_8
 
         sentry_sdk.update_current_span(
