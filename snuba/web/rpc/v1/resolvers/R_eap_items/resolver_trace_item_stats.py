@@ -44,6 +44,7 @@ from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_items.heatmap_builder import HeatmapBuilder
 
 _DEFAULT_ROW_LIMIT = 10_000
 
@@ -52,8 +53,14 @@ DEFAULT_BUCKETS = 10
 
 COUNT_LABEL = "count()"
 
+EAP_ITEMS_ENTITY = Entity(
+    key=EntityKey("eap_items"),
+    schema=get_entity(EntityKey("eap_items")).get_data_model(),
+    sample=None,
+)
 
-def _transform_results(
+
+def _transform_attr_distribution_results(
     results: Iterable[Dict[str, Any]],
     request_meta: RequestMeta,
 ) -> Iterable[AttributeDistribution]:
@@ -74,15 +81,11 @@ def _transform_results(
     return list(res.values())
 
 
-def _build_attr_distribution_snuba_request(
+def _build_snuba_request(
     request: TraceItemStatsRequest, query: Query, routing_decision: RoutingDecision
 ) -> SnubaRequest:
-    query_settings = (
-        setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
-    )
-    routing_decision.strategy.merge_clickhouse_settings(
-        routing_decision, query_settings
-    )
+    query_settings = setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
+    routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
     query_settings.set_sampling_tier(routing_decision.tier)
 
     return SnubaRequest(
@@ -107,12 +110,6 @@ def _build_attr_distribution_snuba_request(
 def _build_attr_distribution_query(
     in_msg: TraceItemStatsRequest, distributions_params: AttributeDistributionsRequest
 ) -> Query:
-    entity = Entity(
-        key=EntityKey("eap_items"),
-        schema=get_entity(EntityKey("eap_items")).get_data_model(),
-        sample=None,
-    )
-
     concat_attr_maps = FunctionCall(
         alias="attr_str_concat",
         function_name="mapConcat",
@@ -157,7 +154,7 @@ def _build_attr_distribution_query(
         (attribute_key_to_expression),
     )
     query = Query(
-        from_clause=entity,
+        from_clause=EAP_ITEMS_ENTITY,
         selected_columns=selected_columns,
         condition=base_conditions_and(
             in_msg.meta,
@@ -206,18 +203,14 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
             result = TraceItemStatsResult()
             if requested_type.HasField("attribute_distributions"):
                 if requested_type.attribute_distributions.max_buckets > MAX_BUCKETS:
-                    raise BadSnubaRPCRequestException(
-                        f"Max allowed buckets is {MAX_BUCKETS}."
-                    )
+                    raise BadSnubaRPCRequestException(f"Max allowed buckets is {MAX_BUCKETS}.")
 
                 query = _build_attr_distribution_query(
                     in_msg, requested_type.attribute_distributions
                 )
                 treeify_or_and_conditions(query)
-                snuba_request = _build_attr_distribution_snuba_request(
-                    in_msg, query, routing_decision
-                )
 
+                snuba_request = _build_snuba_request(in_msg, query, routing_decision)
                 query_res = run_query(
                     dataset=PluggableDataset(name="eap", all_entities=[]),
                     request=snuba_request,
@@ -225,11 +218,24 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
                 )
                 routing_decision.routing_context.query_result = query_res
 
-                attributes = _transform_results(
+                attributes = _transform_attr_distribution_results(
                     query_res.result.get("data", []), in_msg.meta
                 )
                 result.attribute_distributions.CopyFrom(
                     AttributeDistributions(attributes=attributes)
+                )
+            elif requested_type.HasField("heatmap"):
+                res_heatmap = HeatmapBuilder(
+                    heatmap=requested_type.heatmap,
+                    in_msg=in_msg,
+                    routing_decision=routing_decision,
+                    timer=self._timer,
+                    max_buckets=MAX_BUCKETS,
+                ).build()
+                result.heatmap.CopyFrom(res_heatmap)
+            else:
+                raise BadSnubaRPCRequestException(
+                    f'Invalid stats type {requested_type.WhichOneof("type")}'
                 )
 
             results.append(result)
