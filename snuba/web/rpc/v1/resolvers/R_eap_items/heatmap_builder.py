@@ -97,10 +97,6 @@ class HeatmapBuilder:
 
     def _get_min_max_bucketsize_y(
         self,
-        heatmap: HeatmapRequest,
-        in_msg: TraceItemStatsRequest,
-        routing_decision: RoutingDecision,
-        timer: Timer,
     ) -> tuple[float | None, float | None, float | None]:
         """
         Returns the min value, max value, and bucket size for the y attribute.
@@ -112,6 +108,9 @@ class HeatmapBuilder:
         say min is 25, max is 350 and number_y_buckets is 4
         then we will return (25, 350, 81.25)
         """
+        heatmap = self.heatmap
+        in_msg = self.in_msg
+        timer = self.timer
         x_attribute = heatmap.x_attribute
         y_attribute = heatmap.y_attribute
         y_attribute_val = attribute_key_to_expression(y_attribute)
@@ -153,6 +152,9 @@ class HeatmapBuilder:
         min_val_y = min(min_max_res)
         max_val_y = max(min_max_res)
         group_size_y = (max_val_y - min_val_y) / heatmap.num_y_buckets
+        if group_size_y == 0:
+            # in the case that min = max group size is 0, so we set it to 1
+            group_size_y = 1
         return (min_val_y, max_val_y, group_size_y)
 
     def _get_y_buckets(
@@ -173,6 +175,31 @@ class HeatmapBuilder:
         max_val_y: float,
         group_size_y: float,
     ) -> Query:
+        """
+        this function builds a query to get the heatmap data.
+        it assumes that the y attribute is a number. it will be divided into num_buckets (specified in the heatmap request)
+        the x attribute is a string.
+
+        here is an example of data the query will return:
+        x_attribute_val | bucket_index_y | count()
+        "foo"           | 0              | 10
+        "foo"           | 1              | 20
+        "bar"           | 0              | 30
+        "bar"           | 1              | 40
+        "baz"           | 0              | 50
+        "baz"           | 1              | 60
+
+        in the above example, the heatmap has 2 buckets for the y attribute, and 3 unique values for the x attribute.
+        the count() is the number of items that fall into the bucket for the given x and y attribute values.
+        note that the data is grouped by x_attribute_val, bucket_index_y.
+
+        so what is bucket_index_y? it is the index of the bucket for the given y attribute value.
+        for example, if we assume that min_val_y is 0 and max_val_y is 100, and group_size_y is 25, then the y buckets will be:
+        [0, 25), [25, 50), [50, 75), [75, 100]
+        so bucket_index_y=0 would be the [0,25] bucket, meaning that the y attribute value is between 0 and 25.
+
+        and since theres no data for the buckets 2 or 3, the count() for those buckets is 0.
+        """
         x_attribute = self.heatmap.x_attribute
         y_attribute = self.heatmap.y_attribute
         x_attribute_val = attribute_key_to_expression(x_attribute)
@@ -199,7 +226,6 @@ class HeatmapBuilder:
         selected_columns = [
             SelectedExpression(name="bucket_index_y", expression=bucket_index_y),
             SelectedExpression(name="x_attribute_val", expression=x_attribute_val),
-            # SelectedExpression(name="y_attribute_val", expression=y_attribute_val),
             SelectedExpression(
                 name=COUNT_LABEL,
                 expression=count(alias="_count"),
@@ -223,8 +249,6 @@ class HeatmapBuilder:
             groupby=[
                 x_attribute_val,
                 column("bucket_index_y"),
-                # column("bucket_start_y"),
-                # column("bucket_end_y"),
             ],
         )
         # this function call is needed for legacy reasons
@@ -266,10 +290,10 @@ class HeatmapBuilder:
             and heatmap.num_y_buckets > self.MAX_BUCKETS
         ):
             raise BadSnubaRPCRequestException(f"Max allowed buckets is {self.MAX_BUCKETS}.")
+        if heatmap.num_y_buckets <= 0:
+            raise BadSnubaRPCRequestException("Number of y buckets must be greater than 0.")
 
-        min_y, max_y, group_size_y = self._get_min_max_bucketsize_y(
-            heatmap, self.in_msg, self.routing_decision, self.timer
-        )
+        min_y, max_y, group_size_y = self._get_min_max_bucketsize_y()
         if min_y is None or max_y is None or group_size_y is None:
             return Heatmap(
                 x_attribute=heatmap.x_attribute,
