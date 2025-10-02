@@ -63,6 +63,27 @@ pub fn deserialize_message(
                 ..Default::default()
             })
             .collect(),
+        ReplayPayload::TapEvent(event) => event
+            .taps
+            .into_iter()
+            .map(|tap| ReplayRow {
+                tap_message: tap.message,
+                tap_view_class: tap.view_class,
+                tap_view_id: tap.view_id,
+                environment: event.environment.clone().unwrap_or("".to_string()),
+                error_sample_rate: -1.0,
+                event_hash: tap.event_hash,
+                offset,
+                partition,
+                platform: "".to_string(),
+                project_id: replay_message.project_id,
+                replay_id: replay_message.replay_id,
+                retention_days: replay_message.retention_days,
+                session_sample_rate: -1.0,
+                timestamp: tap.timestamp as u32,
+                ..Default::default()
+            })
+            .collect(),
         ReplayPayload::Event(event) => {
             let event_hash = match (event.event_hash, event.segment_id) {
                 (None, None) => Uuid::new_v4(),
@@ -260,6 +281,8 @@ struct ReplayMessage {
 enum ReplayPayload {
     #[serde(rename = "replay_actions")]
     ClickEvent(ReplayClickEvent),
+    #[serde(rename = "replay_tap")]
+    TapEvent(ReplayTapEvent),
     #[serde(rename = "replay_event")]
     Event(Box<ReplayEvent>),
     #[serde(rename = "event_link")]
@@ -275,6 +298,15 @@ struct ReplayClickEvent {
     #[serde(default)]
     environment: Option<String>,
     clicks: Vec<ReplayClickEventClick>,
+}
+
+// Replay Tap Event
+
+#[derive(Debug, Deserialize)]
+struct ReplayTapEvent {
+    #[serde(default)]
+    environment: Option<String>,
+    taps: Vec<ReplayTapEventTap>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -295,6 +327,15 @@ struct ReplayClickEventClick {
     text: String,
     timestamp: f64,
     title: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReplayTapEventTap {
+    message: String,
+    view_class: String,
+    view_id: String,
+    event_hash: Uuid,
+    timestamp: f64,
 }
 
 // Replay Event
@@ -505,6 +546,9 @@ pub struct ReplayRow {
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
     tags_value: Vec<String>,
+    tap_message: String,
+    tap_view_class: String,
+    tap_view_id: String,
     timestamp: u32,
     title: Option<String>,
     trace_ids: Vec<Uuid>,
