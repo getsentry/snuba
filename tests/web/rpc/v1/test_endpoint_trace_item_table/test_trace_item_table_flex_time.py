@@ -341,3 +341,6 @@ class TestTraceItemTableFlexTime:
             assert result_size == limit_per_query
 
         assert times_queried == expected_times_queried
+
+    def test_order_by_aggregations(self, eap: Any) -> None:
+        raise NotImplementedError
