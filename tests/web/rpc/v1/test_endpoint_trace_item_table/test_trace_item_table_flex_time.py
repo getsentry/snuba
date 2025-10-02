@@ -55,7 +55,7 @@ def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> None:
             [
                 gen_item_message(
                     start_timestamp=data_point.time,
-                    item_id=int("123456781234567d", 16).to_bytes(16, byteorder="little"),
+                    item_id=random.randint(0, 2**128 - 1).to_bytes(16, byteorder="little"),
                     type=TraceItemType.TRACE_ITEM_TYPE_LOG,
                     attributes={
                         "color": AnyValue(
@@ -75,6 +75,9 @@ def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> None:
                                     "backend",
                                 ]
                             )
+                        ),
+                        "sentry.timestamp_precise": AnyValue(
+                            double_value=int(data_point.time.timestamp()) + random.random()
                         ),
                     },
                     project_id=_PROJECT_ID,
@@ -236,5 +239,105 @@ class TestTraceItemTableFlexTime:
                 assert result_size == 120
             else:
                 assert False
+
+        assert times_queried == expected_times_queried
+
+    def test_paginate_unique_item_id(self, eap: Any) -> None:
+        data_points = []
+        for hour in range(25):
+            data_points.append(
+                LogOutcomeDataPoint(
+                    time=BASE_TIME - timedelta(hours=hour),
+                    num_outcomes=10_000_000,
+                    num_logs=_LOG_COUNT,
+                )
+            )
+        _store_logs_and_outcomes(data_points)
+
+        num_hours_to_query = 4
+        # we store
+        strategy = OutcomesFlexTimeRoutingStrategy()
+        # we tell the routing strategy that the most items we can query is 20_000_000
+        # this means that if we query a four hour time range, it will get split in two
+        strategy.set_config_value("max_items_to_query", 20_000_000)
+
+        start_timestamp = Timestamp(
+            seconds=int((BASE_TIME - timedelta(hours=num_hours_to_query)).timestamp())
+        )
+        end_timestamp = Timestamp(seconds=int(BASE_TIME.timestamp()))
+
+        limit_per_query = 120
+
+        # querying 4 hours of data, split into two windows,
+        # each window queries has 240 datapoints, 120 points at a time
+        # means that we will run the query  a total of 4 times
+
+        times_queried = 0
+        expected_times_queried = 4
+        end_pagination = PageToken(end_pagination=True)
+        page_token = PageToken(offset=0)
+        result_size = 120
+        while page_token != end_pagination:
+            times_queried += 1
+            message = TraceItemTableRequest(
+                meta=RequestMeta(
+                    project_ids=[1],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=start_timestamp,
+                    end_timestamp=end_timestamp,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                    downsampled_storage_config=DownsampledStorageConfig(
+                        mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+                    ),
+                ),
+                filter=TraceItemFilter(
+                    exists_filter=ExistsFilter(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
+                    )
+                ),
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
+                    Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                    ),
+                    Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp_precise"
+                        )
+                    ),
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                ],
+                order_by=[
+                    TraceItemTableRequest.OrderBy(
+                        column=Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                        ),
+                        descending=True,
+                    ),
+                    TraceItemTableRequest.OrderBy(
+                        column=Column(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_STRING, name="sentry.timestamp_precise"
+                            )
+                        ),
+                        descending=True,
+                    ),
+                    TraceItemTableRequest.OrderBy(
+                        column=Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                        ),
+                    ),
+                ],
+                limit=limit_per_query,
+                page_token=page_token,
+            )
+            response = EndpointTraceItemTable().execute(message)
+            breakpoint()
+            assert isinstance(response, TraceItemTableResponse)
+            result_size = len(response.column_values[0].results)
+            page_token = response.page_token
+            assert result_size == limit_per_query
 
         assert times_queried == expected_times_queried
