@@ -72,15 +72,9 @@ def get_shutdown() -> bool:
 
 
 def _execute_show_tables(cluster: ClickhouseCluster) -> bool:
-    try:
-        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
-        clickhouse.execute("show tables").results
-        return True
-    except Exception as err:
-        with sentry_sdk.new_scope() as scope:
-            scope.set_tag("health_cluster_name", cluster.get_clickhouse_cluster_name())
-            logger.error(err)
-        return False
+    clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+    clickhouse.execute("show tables").results
+    return True
 
 
 @dataclass
