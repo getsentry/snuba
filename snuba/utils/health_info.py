@@ -4,7 +4,7 @@ import logging
 import os
 import time
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Set, Union, cast
 
@@ -173,28 +173,28 @@ def sanity_check_clickhouse_connections(timeout_seconds: float = 0.1) -> bool:
             logger.error(err)
             continue
 
-    # Execute queries in background threads with timeout using local executor
     with ThreadPoolExecutor(
         max_workers=len(unique_clusters), thread_name_prefix="health-check"
     ) as executor:
-        for cluster in unique_clusters.values():
-            future = executor.submit(_execute_show_tables, cluster)
-            try:
-                result = future.result(timeout=timeout_seconds)
-                if result:
-                    return True
-            except TimeoutError:
-                future.cancel()
-                logger.info(
-                    f"ClickHouse health check timed out after {timeout_seconds}s"
-                    f" for cluster {cluster.get_clickhouse_cluster_name()}",
-                )
-                continue
-            except Exception as err:
-                with sentry_sdk.new_scope() as scope:
-                    scope.set_tag("health_cluster_name", cluster.get_clickhouse_cluster_name())
-                    logger.error(err)
-                continue
+        future_to_cluster = {
+            executor.submit(_execute_show_tables, cluster): cluster
+            for cluster in unique_clusters.values()
+        }
+
+        try:
+            for future in as_completed(future_to_cluster, timeout=timeout_seconds):
+                cluster = future_to_cluster[future]
+                try:
+                    result = future.result()
+                    if result:
+                        return True
+                except Exception as err:
+                    with sentry_sdk.new_scope() as scope:
+                        scope.set_tag("health_cluster_name", cluster.get_clickhouse_cluster_name())
+                        logger.error(err)
+                    continue
+        except TimeoutError:
+            logger.info(f"No ClickHouse clusters responded within {timeout_seconds}s timeout")
 
     return False
 
