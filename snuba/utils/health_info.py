@@ -148,13 +148,13 @@ def filter_checked_storages(filtered_storages: List[Storage]) -> None:
             filtered_storages.append(storage)
 
 
-def sanity_check_clickhouse_connections(timeout_seconds: float = 0.1) -> bool:
+def sanity_check_clickhouse_connections(timeout_seconds: float = 0.5) -> bool:
     """
     Check if at least a single clickhouse query node is operable,
     returns True if so, False otherwise.
 
     Every individual query node check is limited to a `timeout_seconds` timeout
-    (default 0.1 or 100ms).
+    (default 0.5 or 500ms).
     """
     storages: List[Storage] = []
     timeout_seconds = get_float_config("health_check.timeout_override_seconds", timeout_seconds)  # type: ignore
