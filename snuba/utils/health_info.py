@@ -23,6 +23,7 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.environment import setup_logging
+from snuba.state import get_float_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "api")
@@ -77,7 +78,7 @@ def _get_health_check_executor() -> ThreadPoolExecutor:
     global _health_check_executor
     if _health_check_executor is None:
         _health_check_executor = ThreadPoolExecutor(
-            max_workers=10, thread_name_prefix="health-check"
+            max_workers=5, thread_name_prefix="health-check"
         )
     return _health_check_executor
 
@@ -168,6 +169,7 @@ def sanity_check_clickhouse_connections(timeout_seconds: float = 0.1) -> bool:
     (default 0.1 or 100ms).
     """
     storages: List[Storage] = []
+    timeout_seconds = get_float_config("health_check.timeout_override_seconds", timeout_seconds)  # type: ignore
 
     try:
         filter_checked_storages(storages)
@@ -185,12 +187,13 @@ def sanity_check_clickhouse_connections(timeout_seconds: float = 0.1) -> bool:
 
     executor = _get_health_check_executor()
     for cluster in unique_clusters.values():
+        future = executor.submit(_execute_show_tables, cluster)
         try:
-            future = executor.submit(_execute_show_tables, cluster)
             result = future.result(timeout=timeout_seconds)
             if result:
                 return True
         except TimeoutError:
+            future.cancel()
             logger.info(
                 f"ClickHouse health check timed out after {timeout_seconds}s"
                 f" for cluster {cluster.get_clickhouse_cluster_name()}",
