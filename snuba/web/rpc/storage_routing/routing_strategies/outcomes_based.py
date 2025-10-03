@@ -149,14 +149,26 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             or default
         )
 
-    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
+    def _get_routing_decision(
+        self,
+        routing_context: RoutingContext,
+    ) -> RoutingDecision:
+        combined_allocation_policies_recommendations = (
+            self._get_combined_allocation_policies_recommendations(routing_context)
+        )
+
         routing_decision = RoutingDecision(
             routing_context=routing_context,
             strategy=self,
             tier=Tier.TIER_1,
-            clickhouse_settings={},
-            can_run=True,
+            clickhouse_settings=combined_allocation_policies_recommendations["settings"],
+            can_run=combined_allocation_policies_recommendations["can_run"],
+            is_throttled=combined_allocation_policies_recommendations["is_throttled"],
         )
+
+        if not routing_decision.can_run:
+            return routing_decision
+
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
         thirty_days_ago_ts = int((datetime.now(tz=UTC) - timedelta(days=30)).timestamp())
