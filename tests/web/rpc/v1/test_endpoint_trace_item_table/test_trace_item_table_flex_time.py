@@ -22,6 +22,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
     OutcomesFlexTimeRoutingStrategy,
 )
@@ -97,6 +98,52 @@ def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> None:
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestTraceItemTableFlexTime:
+
+    def test_reject_request_without_order_by(self, eap: Any) -> None:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+                ),
+            ),
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
+
+    def test_reject_request_without_order_by_timestamp_and_item_id(self, eap: Any) -> None:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+                ),
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
+                    descending=True,
+                ),
+            ],
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
+
     def test_paginate_within_time_window(self, eap: Any) -> None:
 
         data_points = []
@@ -153,7 +200,27 @@ class TestTraceItemTableFlexTime:
                         key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
                     )
                 ),
-                columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))],
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
+                    Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                    ),
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                ],
+                order_by=[
+                    TraceItemTableRequest.OrderBy(
+                        column=Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                        ),
+                        descending=True,
+                    ),
+                    TraceItemTableRequest.OrderBy(
+                        column=Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                        ),
+                        descending=True,
+                    ),
+                ],
                 limit=limit_per_query,
                 page_token=page_token,
             )
@@ -225,7 +292,27 @@ class TestTraceItemTableFlexTime:
                         key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
                     )
                 ),
-                columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))],
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
+                    Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                    ),
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                ],
+                order_by=[
+                    TraceItemTableRequest.OrderBy(
+                        column=Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                        ),
+                        descending=True,
+                    ),
+                    TraceItemTableRequest.OrderBy(
+                        column=Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                        ),
+                        descending=True,
+                    ),
+                ],
                 limit=limit_per_query,
                 page_token=page_token,
             )
