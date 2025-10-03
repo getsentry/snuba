@@ -60,6 +60,9 @@ expression: snapshot_payload
     "tags.value": [
       "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
     ],
+    "tap_message": "",
+    "tap_view_class": "",
+    "tap_view_id": "",
     "timestamp": 1687904093,
     "title": null,
     "trace_ids": [],
