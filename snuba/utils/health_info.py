@@ -4,6 +4,7 @@ import logging
 import os
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Set, Union, cast
 
@@ -22,6 +23,7 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.environment import setup_logging
+from snuba.state import get_float_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "api")
@@ -67,6 +69,12 @@ def _set_shutdown(is_shutting_down: bool) -> None:
 
 def get_shutdown() -> bool:
     return _IS_SHUTTING_DOWN
+
+
+def _execute_show_tables(cluster: ClickhouseCluster) -> bool:
+    clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+    clickhouse.execute("show tables").results
+    return True
 
 
 @dataclass
@@ -134,12 +142,16 @@ def filter_checked_storages(filtered_storages: List[Storage]) -> None:
             filtered_storages.append(storage)
 
 
-def sanity_check_clickhouse_connections() -> bool:
+def sanity_check_clickhouse_connections(timeout_seconds: float = 0.5) -> bool:
     """
     Check if at least a single clickhouse query node is operable,
     returns True if so, False otherwise.
+
+    Every individual query node check is limited to a `timeout_seconds` timeout
+    (default 0.5 or 500ms).
     """
     storages: List[Storage] = []
+    timeout_seconds = get_float_config("health_check.timeout_override_seconds", timeout_seconds)  # type: ignore
 
     try:
         filter_checked_storages(storages)
@@ -155,16 +167,29 @@ def sanity_check_clickhouse_connections() -> bool:
             logger.error(err)
             continue
 
-    for cluster in unique_clusters.values():
+    with ThreadPoolExecutor(
+        max_workers=len(unique_clusters), thread_name_prefix="health-check"
+    ) as executor:
+        future_to_cluster = {
+            executor.submit(_execute_show_tables, cluster): cluster
+            for cluster in unique_clusters.values()
+        }
+
         try:
-            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
-            clickhouse.execute("show tables").results
-            return True
-        except Exception as err:
-            with sentry_sdk.new_scope() as scope:
-                scope.set_tag("health_cluster_name", cluster.get_clickhouse_cluster_name())
-                logger.error(err)
-            continue
+            for future in as_completed(future_to_cluster, timeout=timeout_seconds):
+                cluster = future_to_cluster[future]
+                try:
+                    result = future.result()
+                    if result:
+                        return True
+                except Exception as err:
+                    with sentry_sdk.new_scope() as scope:
+                        scope.set_tag("health_cluster_name", cluster.get_clickhouse_cluster_name())
+                        logger.error(err)
+                    continue
+        except TimeoutError:
+            logger.info(f"No ClickHouse clusters responded within {timeout_seconds}s timeout")
+
     return False
 
 
