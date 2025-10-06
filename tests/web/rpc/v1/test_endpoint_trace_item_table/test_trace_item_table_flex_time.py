@@ -406,7 +406,7 @@ class TestTraceItemTableFlexTime:
                     TraceItemTableRequest.OrderBy(
                         column=Column(
                             key=AttributeKey(
-                                type=AttributeKey.TYPE_STRING, name="sentry.timestamp_precise"
+                                type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp_precise"
                             )
                         ),
                         descending=True,
@@ -415,6 +415,7 @@ class TestTraceItemTableFlexTime:
                         column=Column(
                             key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
                         ),
+                        descending=True,
                     ),
                 ],
                 limit=limit_per_query,
@@ -429,5 +430,5 @@ class TestTraceItemTableFlexTime:
 
         assert times_queried == expected_times_queried
 
-    def test_order_by_aggregations(self, eap: Any) -> None:
-        raise NotImplementedError
+    # def test_order_by_aggregations(self, eap: Any) -> None:
+    #     raise NotImplementedError

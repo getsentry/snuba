@@ -454,7 +454,7 @@ def _get_page_token(
                 # there are no more rows in this window so we return the next window
                 # return the next window where the end timestamp is the start timestamp and the start timestamp is the original start timestamp
                 # the routing strategy will properly truncate the time window of the next request
-                breakpoint()
+                # breakpoint()
                 return FlexibleTimeWindowPageWithFilters.create(
                     request,
                     TimeWindow(original_time_window.start_timestamp, time_window.start_timestamp),
