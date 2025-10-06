@@ -2,8 +2,6 @@
 This file contains functionality to encode and decode custom page tokens
 """
 
-from datetime import datetime
-
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemColumnValues,
@@ -18,7 +16,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal, literals_tuple
+from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import TimeWindow
 
@@ -34,6 +32,7 @@ class FlexibleTimeWindowPageWithFilters:
         self._page_token = page_token
 
     def get_time_window(self) -> TimeWindow | None:
+        breakpoint()
         if not self.page_token.HasField("filter_offset"):
             return None
 
@@ -55,21 +54,24 @@ class FlexibleTimeWindowPageWithFilters:
         if not start_timestamp or not end_timestamp:
             raise ValueError("page token does not contain start and end timestamp")
 
-        return TimeWindow(
+        res = TimeWindow(
             start_timestamp=start_timestamp,
             end_timestamp=end_timestamp,
         )
+        breakpoint()
+        return res
 
     def get_filters(self) -> Expression | None:
         # iterate through the page token constructed in `create` and return a
         # TraceItemFilter (and_filter) of all the conditions with attributes starting with _FILTER_PREFIX
         # but strip the _FILTER_PREFIX from the attribute key(s)
-
+        if not self.page_token:
+            return None
         if not self.page_token.HasField("filter_offset"):
             return None
 
-        column_names = []
-        column_values = []
+        column_names: list[str] = []
+        column_values: list[Expression] = []
 
         for filter in self.page_token.filter_offset.and_filter.filters:
             if filter.HasField(
@@ -77,24 +79,22 @@ class FlexibleTimeWindowPageWithFilters:
             ) and filter.comparison_filter.key.name.startswith(self._FILTER_PREFIX):
                 if filter.comparison_filter.key.name == f"{self._FILTER_PREFIX}.timestamp":
                     column_names.append("timestamp")
-                    column_values.append(filter.comparison_filter.value.val_int)
+                    column_values.append(f.toDateTime(filter.comparison_filter.value.val_str))
                 else:
                     # strip the _FILTER_PREFIX from the attribute key and the dot
-                    # copy the entire filter and then modify just the key name
                     column_names.append(
                         filter.comparison_filter.key.name[len(self._FILTER_PREFIX) + 1 :]
                     )
                     column_values.append(
-                        getattr(
-                            filter.comparison_filter.value,
-                            str(filter.comparison_filter.value.WhichOneof("value")),
+                        literal(
+                            getattr(
+                                filter.comparison_filter.value,
+                                str(filter.comparison_filter.value.WhichOneof("value")),
+                            )
                         )
                     )
         # Assumes everything in the ORDER BY is ordered by DESC
-        res = f.less(
-            f.tuple(*(column(c_name) for c_name in column_names)),
-            literals_tuple(None, [literal(c) for c in column_values]),
-        )
+        res = f.less(f.tuple(*(column(c_name) for c_name in column_names)), f.tuple(*column_values))
         breakpoint()
         return res
 
@@ -142,71 +142,64 @@ class FlexibleTimeWindowPageWithFilters:
             attribute_key_to_expression,
         )
 
-        # encode the page token filter conditions
-        for order_by_clause in in_msg.order_by:
-            last_result_value = last_result_values.get(order_by_clause.column.label, None)
-            if last_result_value is not None:
-                # if the field name is `sentry.timestamp`, then handle it differently
-                if order_by_clause.column.label == "sentry.timestamp":
-                    # if it's a string, convert it to a datetime and store the integer timestamp in the filter
-                    # example format: 2025-10-06 14:00:00
-                    # if it's an integer, just store that integer value
-                    # otherwise raise a value error
-                    timestamp_value = last_result_value.WhichOneof("value")
-                    if timestamp_value == "val_int":
-                        filters.append(
-                            TraceItemFilter(
-                                comparison_filter=ComparisonFilter(
-                                    key=AttributeKey(name=f"{cls._FILTER_PREFIX}.timestamp"),
-                                    op=ComparisonFilter.OP_LESS_THAN,
-                                    value=AttributeValue(val_int=last_result_value.val_int),
+        if last_result_values:
+            # encode the page token filter conditions
+            for order_by_clause in in_msg.order_by:
+                last_result_value = last_result_values.get(order_by_clause.column.label, None)
+                if last_result_value is not None:
+                    # if the field name is `sentry.timestamp`, then handle it differently
+                    if order_by_clause.column.label == "sentry.timestamp":
+                        # if it's a string, convert it to a datetime and store the integer timestamp in the filter
+                        # example format: 2025-10-06 14:00:00
+                        # if it's an integer, just store that integer value
+                        # otherwise raise a value error
+                        timestamp_value = last_result_value.WhichOneof("value")
+                        if timestamp_value == "val_str":
+                            # parse the string to a datetime and then store the integer timestamp in the filter
+                            filters.append(
+                                TraceItemFilter(
+                                    comparison_filter=ComparisonFilter(
+                                        key=AttributeKey(name=f"{cls._FILTER_PREFIX}.timestamp"),
+                                        op=ComparisonFilter.OP_LESS_THAN,
+                                        value=last_result_value,
+                                    )
                                 )
                             )
-                        )
-                    elif timestamp_value == "val_str":
-                        # parse the string to a datetime and then store the integer timestamp in the filter
-                        timestamp = datetime.strptime(
-                            last_result_value.val_str, "%Y-%m-%d %H:%M:%S"
-                        )
-                        filters.append(
-                            TraceItemFilter(
-                                comparison_filter=ComparisonFilter(
-                                    key=AttributeKey(name=f"{cls._FILTER_PREFIX}.timestamp"),
-                                    op=ComparisonFilter.OP_LESS_THAN,
-                                    value=AttributeValue(val_int=int(timestamp.timestamp())),
-                                )
+                        else:
+                            raise ValueError(
+                                f"Timestamp value type {timestamp_value} not supported"
                             )
-                        )
                     else:
-                        raise ValueError(f"Timestamp value type {timestamp_value} not supported")
-                else:
-                    # find the attribute in the in_msg.columns attribute that has the same label as the `column` attribute in the order_by_clause
-                    # call `attribute_key_to_expression` on it and us its alias as the  name of the AttributeKey in the ComparisonFilter
-                    attribute_expression = None
-                    for selected_column in in_msg.columns:
-                        if selected_column.label == order_by_clause.column.label:
-                            attribute_expression = attribute_key_to_expression(selected_column.key)
-                            break
-                    if attribute_expression is None:
-                        raise ValueError(
-                            f"No attribute expression found for column: {order_by_clause.column.label}"
-                        )
+                        # find the attribute in the in_msg.columns attribute that has the same label as the `column` attribute in the order_by_clause
+                        # call `attribute_key_to_expression` on it and us its alias as the  name of the AttributeKey in the ComparisonFilter
+                        attribute_expression = None
+                        for selected_column in in_msg.columns:
+                            if selected_column.label == order_by_clause.column.label:
+                                attribute_expression = attribute_key_to_expression(
+                                    selected_column.key
+                                )
+                                break
+                        if attribute_expression is None:
+                            raise ValueError(
+                                f"No attribute expression found for column: {order_by_clause.column.label}"
+                            )
 
-                    filters.append(
-                        TraceItemFilter(
-                            comparison_filter=ComparisonFilter(
-                                key=AttributeKey(
-                                    name=f"{cls._FILTER_PREFIX}.{attribute_expression.alias}",
-                                ),
-                                op=ComparisonFilter.OP_LESS_THAN,
-                                value=last_result_value,
+                        filters.append(
+                            TraceItemFilter(
+                                comparison_filter=ComparisonFilter(
+                                    key=AttributeKey(
+                                        name=f"{cls._FILTER_PREFIX}.{attribute_expression.alias}",
+                                    ),
+                                    op=ComparisonFilter.OP_LESS_THAN,
+                                    value=last_result_value,
+                                )
                             )
                         )
+                else:
+                    raise ValueError(
+                        f"No last result value found for column: {order_by_clause.column.label}"
                     )
-            else:
-                raise ValueError(
-                    f"No last result value found for column: {order_by_clause.column.label}"
-                )
+        breakpoint()
         return cls(PageToken(filter_offset=TraceItemFilter(and_filter=AndFilter(filters=filters))))
 
 

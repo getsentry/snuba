@@ -69,6 +69,18 @@ class TimeWindow:
     def length_hours(self) -> float:
         return (self.end_timestamp.seconds - self.start_timestamp.seconds) / 3600
 
+    def __repr__(self) -> str:
+        from datetime import datetime, timezone
+
+        start = datetime.fromtimestamp(self.start_timestamp.seconds, tz=timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        end = datetime.fromtimestamp(self.end_timestamp.seconds, tz=timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+
+        return f"TimeWindow(start={start}, end={end})"
+
 
 @dataclass
 class RoutingDecision:

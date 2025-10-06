@@ -27,7 +27,7 @@ from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
     treeify_or_and_conditions,
 )
-from snuba.web.rpc.common.pagination import FlexibleTimeWindowPage
+from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.common import (
     ITEM_TYPE_TO_OUTCOME_CATEGORY,
@@ -60,11 +60,16 @@ def _get_request_time_window(routing_context: RoutingContext) -> TimeWindow:
     """
     meta = extract_message_meta(routing_context.in_msg)
     if routing_context.in_msg.HasField("page_token"):
-        page = FlexibleTimeWindowPage.decode(getattr(routing_context.in_msg, "page_token"))
-        if page.start_timestamp is not None and page.end_timestamp is not None:
-            return TimeWindow(
-                start_timestamp=page.start_timestamp, end_timestamp=page.end_timestamp
-            )
+        # page = FlexibleTimeWindowPage.decode(getattr(routing_context.in_msg, "page_token"))
+        time_window = FlexibleTimeWindowPageWithFilters(
+            getattr(routing_context.in_msg, "page_token")
+        ).get_time_window()
+        if time_window:
+            return time_window
+        # if page.start_timestamp is not None and page.end_timestamp is not None:
+        #     return TimeWindow(
+        #         start_timestamp=page.start_timestamp, end_timestamp=page.end_timestamp
+        #     )
     return TimeWindow(start_timestamp=meta.start_timestamp, end_timestamp=meta.end_timestamp)
 
 
