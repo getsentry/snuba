@@ -1050,6 +1050,91 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_replay_tap_event() {
+        let payload = r#"{
+            "type": "replay_tap",
+            "replay_id": "048aa04be40243948eb3b57089c519ee",
+            "environment": "prod",
+            "taps": [{
+                "message": "add_attachment",
+                "view_class": "androidx.appcompat.widget.AppCompatButton",
+                "view_id": "add_attachment",
+                "event_hash": "b4370ef8d1994e96b5bc719b72afbf49",
+                "timestamp": 1702659275
+            }]
+        }"#;
+
+        let payload_value = payload.as_bytes();
+
+        let data = format!(
+            r#"{{
+                "payload": {payload_value:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let replay_row = rows.first().unwrap();
+
+        // Columns in the critical path.
+        assert_eq!(&replay_row.tap_message, "add_attachment");
+        assert_eq!(
+            &replay_row.tap_view_class,
+            "androidx.appcompat.widget.AppCompatButton"
+        );
+        assert_eq!(&replay_row.tap_view_id, "add_attachment");
+
+        assert_eq!(
+            &replay_row.replay_id,
+            &Uuid::parse_str("048aa04be40243948eb3b57089c519ee").unwrap()
+        );
+        assert_eq!(replay_row.retention_days, 30);
+        assert_eq!(replay_row.segment_id, None);
+        assert_eq!(&replay_row.environment, "prod");
+
+        // Default columns - not providable on this event.
+        assert_eq!(&replay_row.browser_name, "");
+        assert_eq!(&replay_row.browser_version, "");
+        assert_eq!(&replay_row.device_brand, "");
+        assert_eq!(&replay_row.device_family, "");
+        assert_eq!(&replay_row.device_model, "");
+        assert_eq!(&replay_row.device_name, "");
+        assert_eq!(&replay_row.dist, "");
+        assert_eq!(&replay_row.os_name, "");
+        assert_eq!(&replay_row.os_version, "");
+        assert_eq!(&replay_row.release, "");
+        assert_eq!(&replay_row.replay_type, "");
+        assert_eq!(&replay_row.sdk_name, "");
+        assert_eq!(&replay_row.sdk_version, "");
+        assert_eq!(&replay_row.user_email, "");
+        assert_eq!(&replay_row.user_id, "");
+        assert_eq!(&replay_row.user_name, "");
+        assert_eq!(&replay_row.user, "");
+        assert_eq!(replay_row.debug_id, Uuid::nil());
+        assert_eq!(replay_row.error_id, Uuid::nil());
+        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_sample_rate, -1.0);
+        assert_eq!(replay_row.fatal_id, Uuid::nil());
+        assert_eq!(replay_row.info_id, Uuid::nil());
+        assert_eq!(replay_row.ip_address_v4, None);
+        assert_eq!(replay_row.ip_address_v6, None);
+        assert_eq!(replay_row.is_archived, 0);
+        assert_eq!(replay_row.platform, "".to_string());
+        assert_eq!(replay_row.replay_start_timestamp, None);
+        assert_eq!(replay_row.session_sample_rate, -1.0);
+        assert_eq!(replay_row.title, None);
+        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.viewed_by_id, 0);
+        assert_eq!(replay_row.warning_id, Uuid::nil());
+    }
+
+    #[test]
     fn test_parse_replay_event_link_event() {
         let payload = r#"{
             "debug_id": "5d51f0eb1d1244e7a8312d8a248cd987",
