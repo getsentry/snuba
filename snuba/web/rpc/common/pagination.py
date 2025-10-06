@@ -94,9 +94,13 @@ class FlexibleTimeWindowPageWithFilters:
                         )
                     )
         # Assumes everything in the ORDER BY is ordered by DESC
-        res = f.less(f.tuple(*(column(c_name) for c_name in column_names)), f.tuple(*column_values))
         breakpoint()
-        return res
+        if column_names:
+            res = f.less(
+                f.tuple(*(column(c_name) for c_name in column_names)), f.tuple(*column_values)
+            )
+            return res
+        return None
 
     @property
     def page_token(self) -> PageToken:

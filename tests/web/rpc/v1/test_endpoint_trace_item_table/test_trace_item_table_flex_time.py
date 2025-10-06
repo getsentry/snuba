@@ -226,7 +226,6 @@ class TestTraceItemTableFlexTime:
             )
             response = EndpointTraceItemTable().execute(message)
             assert isinstance(response, TraceItemTableResponse)
-            breakpoint()
             result_size = len(response.column_values[0].results)
             page_token = response.page_token
             assert result_size == limit_per_query
