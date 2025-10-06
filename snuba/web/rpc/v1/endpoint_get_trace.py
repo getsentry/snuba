@@ -11,6 +11,7 @@ from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
     GetTraceRequest,
     GetTraceResponse,
 )
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 
 from snuba import state
@@ -51,6 +52,10 @@ NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
 ]
 APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY = "EndpointGetTrace.apply_final_rollout_percentage"
 
+TIMESTAMP_FIELD_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
+    TraceItemType.TRACE_ITEM_TYPE_SPAN: "sentry.start_timestamp_precise",
+}
+
 
 def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Query:
     selected_columns: list[SelectedExpression] = [
@@ -68,7 +73,9 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
                 (
                     attribute_key_to_expression(
                         AttributeKey(
-                            name="sentry.start_timestamp_precise",
+                            name=TIMESTAMP_FIELD_BY_ITEM_TYPE.get(
+                                item.item_type, "sentry.timestamp"
+                            ),
                             type=AttributeKey.Type.TYPE_DOUBLE,
                         )
                     )
