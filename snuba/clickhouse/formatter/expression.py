@@ -38,9 +38,7 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
     """
 
     def __init__(self, parsing_context: Optional[ParsingContext] = None) -> None:
-        self._parsing_context = (
-            parsing_context if parsing_context is not None else ParsingContext()
-        )
+        self._parsing_context = parsing_context if parsing_context is not None else ParsingContext()
 
     def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
         if not alias:
@@ -105,7 +103,10 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             # to clearly demarcate the table and columns
             ret.append(escape_alias(exp.column_name) or "")
         else:
-            ret.append(escape_identifier(exp.column_name) or "")
+            if "." in exp.column_name:
+                ret.append(escape_alias(exp.column_name) or "")
+            else:
+                ret.append(escape_identifier(exp.column_name) or "")
         ret_unescaped.append(exp.column_name)
         # De-clutter the output query by not applying an alias to a
         # column if the column name is the same as the alias to make
@@ -198,9 +199,7 @@ class ClickhouseExpressionFormatter(ExpressionFormatterBase):
 
     def _format_datetime_literal(self, exp: Literal) -> str:
         value = cast(datetime, exp.value).replace(tzinfo=None, microsecond=0)
-        return self._alias(
-            "toDateTime('{}', 'Universal')".format(value.isoformat()), exp.alias
-        )
+        return self._alias("toDateTime('{}', 'Universal')".format(value.isoformat()), exp.alias)
 
     def _format_date_literal(self, exp: Literal) -> str:
         return self._alias(
