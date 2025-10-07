@@ -35,8 +35,6 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
-from snuba.state import get_int_config
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -199,14 +197,13 @@ def _convert_result_timeseries(
                 else:
                     timeseries.data_points.append(DataPoint(data=0, data_present=False))
 
-    if get_int_config("enable_formula_reliability_ts", ENABLE_FORMULA_RELIABILITY_DEFAULT):
-        frc = FormulaReliabilityCalculator(request, data, time_buckets)
-        for timeseries in result_timeseries.values():
-            if timeseries.label in frc:
-                reliabilities = frc.get(timeseries.label)
-                for i in range(len(timeseries.data_points)):
-                    timeseries.data_points[i].reliability = reliabilities[i]
-        _remove_non_requested_expressions(request.expressions, result_timeseries)
+    frc = FormulaReliabilityCalculator(request, data, time_buckets)
+    for timeseries in result_timeseries.values():
+        if timeseries.label in frc:
+            reliabilities = frc.get(timeseries.label)
+            for i in range(len(timeseries.data_points)):
+                timeseries.data_points[i].reliability = reliabilities[i]
+    _remove_non_requested_expressions(request.expressions, result_timeseries)
 
     return result_timeseries.values()
 
@@ -266,8 +263,6 @@ def _get_reliability_context_columns(
             SelectedExpression(name=count_column.alias, expression=count_column)
         )
     elif expr.WhichOneof("expression") == "formula":
-        if not get_int_config("enable_formula_reliability_ts", ENABLE_FORMULA_RELIABILITY_DEFAULT):
-            return []
         # also query for the left and right parts of the formula separately
         # this will be used later to calculate the reliability of the formula
         # ex: SELECT agg1/agg2 will become SELECT agg1/agg2, agg1, agg2
