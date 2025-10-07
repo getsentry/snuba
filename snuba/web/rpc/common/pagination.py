@@ -32,7 +32,6 @@ class FlexibleTimeWindowPageWithFilters:
         self._page_token = page_token
 
     def get_time_window(self) -> TimeWindow | None:
-        # breakpoint()
         if not self.page_token.HasField("filter_offset"):
             return None
 
@@ -58,7 +57,6 @@ class FlexibleTimeWindowPageWithFilters:
             start_timestamp=start_timestamp,
             end_timestamp=end_timestamp,
         )
-        # breakpoint()
         return res
 
     def get_filters(self) -> Expression | None:
@@ -94,7 +92,6 @@ class FlexibleTimeWindowPageWithFilters:
                         )
                     )
         # Assumes everything in the ORDER BY is ordered by DESC
-        # breakpoint()
         if column_names:
             res = f.less(
                 f.tuple(*(column(c_name) for c_name in column_names)), f.tuple(*column_values)
@@ -203,5 +200,4 @@ class FlexibleTimeWindowPageWithFilters:
                     raise ValueError(
                         f"No last result value found for column: {order_by_clause.column.label}"
                     )
-        # breakpoint()
         return cls(PageToken(filter_offset=TraceItemFilter(and_filter=AndFilter(filters=filters))))
