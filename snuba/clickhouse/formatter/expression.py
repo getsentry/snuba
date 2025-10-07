@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from datetime import date, datetime
 from typing import Optional, Sequence, cast
 
+from snuba import settings
 from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -21,6 +22,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.parsing import ParsingContext
+from snuba.state import get_config
 
 _BETWEEN_SQUARE_BRACKETS_REGEX = re.compile(r"(?<=\[)(.*?)(?=\])")
 
@@ -38,9 +40,7 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
     """
 
     def __init__(self, parsing_context: Optional[ParsingContext] = None) -> None:
-        self._parsing_context = (
-            parsing_context if parsing_context is not None else ParsingContext()
-        )
+        self._parsing_context = parsing_context if parsing_context is not None else ParsingContext()
 
     def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
         if not alias:
@@ -105,7 +105,15 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             # to clearly demarcate the table and columns
             ret.append(escape_alias(exp.column_name) or "")
         else:
-            ret.append(escape_identifier(exp.column_name) or "")
+            # If there is a table name and the column name contains a ".",
+            # then we need to escape the column name using alias regex rules
+            # otherwise clickhouse will think we are referring to a table
+            if "." in exp.column_name and get_config(
+                "escape_dots_in_columns", settings.ESCAPE_DOTS_IN_COLUMNS
+            ):
+                ret.append(escape_alias(exp.column_name) or "")
+            else:
+                ret.append(escape_identifier(exp.column_name) or "")
         ret_unescaped.append(exp.column_name)
         # De-clutter the output query by not applying an alias to a
         # column if the column name is the same as the alias to make
@@ -198,9 +206,7 @@ class ClickhouseExpressionFormatter(ExpressionFormatterBase):
 
     def _format_datetime_literal(self, exp: Literal) -> str:
         value = cast(datetime, exp.value).replace(tzinfo=None, microsecond=0)
-        return self._alias(
-            "toDateTime('{}', 'Universal')".format(value.isoformat()), exp.alias
-        )
+        return self._alias("toDateTime('{}', 'Universal')".format(value.isoformat()), exp.alias)
 
     def _format_date_literal(self, exp: Literal) -> str:
         return self._alias(
