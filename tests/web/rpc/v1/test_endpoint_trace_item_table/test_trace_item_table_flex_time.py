@@ -495,9 +495,12 @@ class TestTraceItemTableFlexTime:
             result_size = len(response.column_values[0].results)
             page_token = response.page_token
             assert result_size == limit_per_query
-            # insert new data
+            # insert new data so we make sure the the page token lets us resume where we left off
+            # event if new data comes in
             new_data_points = LogOutcomeDataPoint(
-                time=BASE_TIME - timedelta(minutes=1), num_outcomes=10, num_logs=1000
+                time=BASE_TIME - timedelta(minutes=1),
+                num_outcomes=1000,
+                num_logs=1000,
             )
             _store_logs_and_outcomes([new_data_points])
 
