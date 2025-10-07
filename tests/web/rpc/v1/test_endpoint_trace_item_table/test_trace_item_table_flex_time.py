@@ -144,6 +144,73 @@ class TestTraceItemTableFlexTime:
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
+    def test_reject_request_with_formula_column(self, eap: Any) -> None:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                        ),
+                        right=Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                        ),
+                    )
+                ),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                    ),
+                    descending=True,
+                ),
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                    ),
+                    descending=True,
+                ),
+            ],
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
+
+    def test_reject_request_with_bad_order_by_clause(self, eap: Any) -> None:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                    ),
+                    descending=False,
+                ),
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                    ),
+                    descending=True,
+                ),
+            ],
+        )
+
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
+
     def test_paginate_within_time_window(self, eap: Any) -> None:
 
         data_points = []
@@ -422,13 +489,9 @@ class TestTraceItemTableFlexTime:
                 page_token=page_token,
             )
             response = EndpointTraceItemTable().execute(message)
-            breakpoint()
             assert isinstance(response, TraceItemTableResponse)
             result_size = len(response.column_values[0].results)
             page_token = response.page_token
             assert result_size == limit_per_query
 
         assert times_queried == expected_times_queried
-
-    # def test_order_by_aggregations(self, eap: Any) -> None:
-    #     raise NotImplementedError

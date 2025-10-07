@@ -530,7 +530,6 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         # so we need to remove the last row
         # TODO maybe use islice instead
         data = res.result.get("data", [])
-        breakpoint()
         print(res.extra.get("sql"))
         if in_msg.limit > 0 and len(data) > in_msg.limit:
             data = data[:-1]

@@ -125,6 +125,19 @@ def _enforce_flextime_routing_orders_by_timestamp_and_item_id(
                 "The last order by clause must be `sentry.item_id` when using flextime routing"
             )
 
+        for order_by_clause in in_msg.order_by:
+            if not order_by_clause.descending:
+                raise BadSnubaRPCRequestException(
+                    "Order by clauses must be descending when using flextime routing"
+                )
+
+        for column in in_msg.columns:
+            column_type = column.WhichOneof("column")
+            if column_type != "key":
+                raise BadSnubaRPCRequestException(
+                    "only key columns are supported when using flextime routing"
+                )
+
 
 class EndpointTraceItemTable(RPCEndpoint[TraceItemTableRequest, TraceItemTableResponse]):
     @classmethod
