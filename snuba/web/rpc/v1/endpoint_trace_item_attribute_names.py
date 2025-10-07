@@ -229,7 +229,7 @@ def get_co_occurring_attributes(
 
     attr_filter = not_cond(
         in_cond(
-            f.tupleElement(column("attr"), 1),
+            f.tupleElement(column("attr"), 2),
             f.array(*UNSEARCHABLE_ATTRIBUTE_KEYS),
         )
     )
