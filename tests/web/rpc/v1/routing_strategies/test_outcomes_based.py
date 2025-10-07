@@ -82,6 +82,61 @@ def test_outcomes_based_routing_queries_daily_table() -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
+def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
+    state.set_config(
+        "enable_long_term_retention_downsampling",
+        1,
+    )
+    strategy = OutcomesBasedRoutingStrategy()
+
+    # request that queries last 50 days of data
+    request = TraceItemTableRequest(meta=_get_request_meta(hour_interval=1200))  # 50 days
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+    )
+
+    routing_decision = strategy.get_routing_decision(context)
+    assert routing_decision.tier == Tier.TIER_8
+    assert routing_decision.clickhouse_settings == {}
+    assert routing_decision.can_run
+
+    # request(s) that query window of 30 minutes, but with timestamps 40 days ago
+    # one in MODE_NORMAL, one in MODE_HIGHEST_ACCURACY (which is ignored in favor of
+    # the enable_long_term_retention_downsampling)
+    start = datetime.now(tz=UTC) - timedelta(days=40, minutes=30)
+    end = datetime.now(tz=UTC) - timedelta(days=40)
+
+    # normal
+    request = TraceItemTableRequest(meta=_get_request_meta(start=start, end=end))
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+    )
+
+    routing_decision = strategy.get_routing_decision(context)
+    assert routing_decision.tier == Tier.TIER_8
+    assert routing_decision.clickhouse_settings == {}
+    assert routing_decision.can_run
+
+    # highest accuracy
+    request = TraceItemTableRequest(meta=_get_request_meta(start=start, end=end))
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+    )
+
+    routing_decision = strategy.get_routing_decision(context)
+    assert routing_decision.tier == Tier.TIER_8
+    assert routing_decision.clickhouse_settings == {}
+    assert routing_decision.can_run
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_outcomes_based_routing_normal_mode(store_outcomes_fixture: Any) -> None:
     strategy = OutcomesBasedRoutingStrategy()
 

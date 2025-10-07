@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import Optional, Sequence
 
@@ -43,8 +44,7 @@ def build_query(
     return ClickhouseQuery(
         None,
         selected_columns=[
-            SelectedExpression(name=s.alias, expression=s)
-            for s in selected_columns or []
+            SelectedExpression(name=s.alias, expression=s) for s in selected_columns or []
         ],
         condition=condition,
         having=having,
@@ -193,9 +193,7 @@ def test_get_filtered_mapping_keys(
 
 
 def with_required(condition: Expression) -> Expression:
-    assert not (
-        isinstance(condition, FunctionCall) and condition.function_name in ["and", "or"]
-    )
+    assert not (isinstance(condition, FunctionCall) and condition.function_name in ["and", "or"])
     return binary_condition(
         BooleanFunctions.AND,
         binary_condition(
@@ -325,9 +323,7 @@ test_data = [
                     name="tags_key",
                     expression=arrayJoin(
                         "_snuba_tags_key",
-                        filter_keys(
-                            Column(None, None, "tags.key"), [Literal(None, "t1")]
-                        ),
+                        filter_keys(Column(None, None, "tags.key"), [Literal(None, "t1")]),
                     ),
                 )
             ],
@@ -335,9 +331,7 @@ test_data = [
                 in_condition(
                     arrayJoin(
                         "_snuba_tags_key",
-                        filter_keys(
-                            Column(None, None, "tags.key"), [Literal(None, "t1")]
-                        ),
+                        filter_keys(Column(None, None, "tags.key"), [Literal(None, "t1")]),
                     ),
                     [Literal(None, "t1")],
                 ),
@@ -422,7 +416,7 @@ def parse_and_process(snql_query: str) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
     query = parse_snql_query(str(snql_query), dataset)
     request = Request(
-        id="a",
+        id=uuid.uuid4(),
         original_body={"query": snql_query, "dataset": "transactions"},
         query=query,
         query_settings=HTTPQuerySettings(referrer="r"),
@@ -443,10 +437,8 @@ def parse_and_process(snql_query: str) -> ClickhouseQuery:
         )
         .data
     )
-    ArrayJoinKeyValueOptimizer("tags").process_query(
-        clickhouse_query, request.query_settings
-    )
-    return clickhouse_query
+    ArrayJoinKeyValueOptimizer("tags").process_query(clickhouse_query, request.query_settings)  # type: ignore
+    return clickhouse_query  # type: ignore
 
 
 @pytest.mark.redis_db
@@ -479,7 +471,7 @@ def test_formatting() -> None:
         Literal(None, 1),
     ).accept(ClickhouseExpressionFormatter()) == (
         "(tupleElement((arrayJoin(arrayMap(x, y -> (x, y), "
-        "tags.key, tags.value)) AS snuba_all_tags), 1) AS tags_key)"
+        "`tags.key`, `tags.value`)) AS snuba_all_tags), 1) AS tags_key)"
     )
 
     assert tupleElement(
@@ -498,7 +490,7 @@ def test_formatting() -> None:
     ).accept(ClickhouseExpressionFormatter()) == (
         "(tupleElement((arrayJoin(arrayFilter(pair -> in("
         "tupleElement(pair, 1), ('t1', 't2')), "
-        "arrayMap(x, y -> (x, y), tags.key, tags.value))) AS snuba_all_tags), 1) AS tags_key)"
+        "arrayMap(x, y -> (x, y), `tags.key`, `tags.value`))) AS snuba_all_tags), 1) AS tags_key)"
     )
 
 
@@ -528,7 +520,7 @@ def test_aliasing() -> None:
 
     assert sql == (
         "SELECT (tupleElement((arrayJoin(arrayMap(x, y -> (x, y), "
-        "tags.key, tags.value)) AS snuba_all_tags), 2) AS _snuba_tags_value) "
+        "`tags.key`, `tags.value`)) AS snuba_all_tags), 2) AS _snuba_tags_value) "
         f"FROM {transactions_table_name} "
         "WHERE in((tupleElement(snuba_all_tags, 1) AS _snuba_tags_key), ('t1', 't2')) "
         "AND equals((project_id AS _snuba_project_id), 1) "
