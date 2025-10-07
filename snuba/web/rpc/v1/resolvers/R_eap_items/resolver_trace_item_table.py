@@ -51,10 +51,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.common.pagination import (
-    FlexibleTimeWindowPage,
-    FlexibleTimeWindowPageWithFilters,
-)
+from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
     TimeWindow,
@@ -334,9 +331,8 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
 def _get_offset_from_page_token(page_token: PageToken | None) -> int:
     if page_token is None:
         return 0
-    page = FlexibleTimeWindowPage.decode(page_token)
-    if page.offset is not None:
-        return page.offset
+    if page_token.WhichOneof("value") == "offset":
+        return page_token.offset
     return 0
 
 
