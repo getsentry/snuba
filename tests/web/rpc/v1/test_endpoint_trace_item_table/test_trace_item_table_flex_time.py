@@ -396,12 +396,14 @@ class TestTraceItemTableFlexTime:
 
         assert times_queried == expected_times_queried
 
-    def test_paginate_unique_item_id(self, eap: Any) -> None:
+    def test_paginate_new_data_comes_in(self, eap: Any) -> None:
         data_points = []
         for hour in range(25):
             data_points.append(
                 LogOutcomeDataPoint(
-                    time=BASE_TIME - timedelta(hours=hour),
+                    time=BASE_TIME
+                    - timedelta(hours=hour)
+                    + timedelta(minutes=random.randint(0, 59)),
                     num_outcomes=10_000_000,
                     num_logs=_LOG_COUNT,
                 )
@@ -493,5 +495,10 @@ class TestTraceItemTableFlexTime:
             result_size = len(response.column_values[0].results)
             page_token = response.page_token
             assert result_size == limit_per_query
+            # insert new data
+            new_data_points = LogOutcomeDataPoint(
+                time=BASE_TIME - timedelta(minutes=1), num_outcomes=10, num_logs=1000
+            )
+            _store_logs_and_outcomes([new_data_points])
 
         assert times_queried == expected_times_queried
