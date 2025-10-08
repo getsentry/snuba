@@ -60,16 +60,11 @@ def _get_request_time_window(routing_context: RoutingContext) -> TimeWindow:
     """
     meta = extract_message_meta(routing_context.in_msg)
     if routing_context.in_msg.HasField("page_token"):
-        # page = FlexibleTimeWindowPage.decode(getattr(routing_context.in_msg, "page_token"))
         time_window = FlexibleTimeWindowPageWithFilters(
             getattr(routing_context.in_msg, "page_token")
         ).get_time_window()
         if time_window:
             return time_window
-        # if page.start_timestamp is not None and page.end_timestamp is not None:
-        #     return TimeWindow(
-        #         start_timestamp=page.start_timestamp, end_timestamp=page.end_timestamp
-        #     )
     return TimeWindow(start_timestamp=meta.start_timestamp, end_timestamp=meta.end_timestamp)
 
 
