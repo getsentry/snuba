@@ -81,7 +81,7 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
                     )
                 ),
                 "Float64",
-                alias="timestamp",
+                alias="item_timestamp",
             ),
         ),
     ]
@@ -152,7 +152,7 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=column("timestamp"),
+                expression=column("item_timestamp"),
             ),
         ],
     )
