@@ -46,53 +46,66 @@ class LogOutcomeDataPoint:
     num_logs: int
 
 
-def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> None:
+def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> list[str]:
+    item_ids = []
     items_storage = get_storage(StorageKey("eap_items"))
 
     messages = []
     outcome_data = []
+    item_id_num = 1
     for data_point in data_points:
-        messages.extend(
-            [
-                gen_item_message(
-                    start_timestamp=data_point.time,
-                    item_id=random.randint(0, 2**128 - 1).to_bytes(16, byteorder="little"),
-                    type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-                    attributes={
-                        "color": AnyValue(
-                            string_value=random.choice(
-                                [
-                                    "red",
-                                    "green",
-                                    "blue",
-                                ]
-                            )
-                        ),
-                        "location": AnyValue(
-                            string_value=random.choice(
-                                [
-                                    "mobile",
-                                    "frontend",
-                                    "backend",
-                                ]
-                            )
-                        ),
-                        "sentry.timestamp_precise": AnyValue(
-                            double_value=int(data_point.time.timestamp()) + random.random()
-                        ),
-                    },
-                    project_id=_PROJECT_ID,
-                    organization_id=_ORG_ID,
-                )
-                for _ in range(data_point.num_logs)
-            ]
-        )
+        for _ in range(data_point.num_logs):
+            # item_id = random.randint(0, 2**128 - 1).to_bytes(16, byteorder="big")
+            # clickhouse uses little endian to encode integers as bytes
+            item_id = item_id_num.to_bytes(16, byteorder="little")
+            # to convert the string to hex the way EAP would return it we need to convert to big endian
+            item_ids.append(item_id_num.to_bytes(16, byteorder="big").hex()[16:])
+            item_id_num += 1
+            message = gen_item_message(
+                start_timestamp=data_point.time,
+                item_id=item_id,
+                type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                attributes={
+                    "color": AnyValue(
+                        string_value=random.choice(
+                            [
+                                "red",
+                                "green",
+                                "blue",
+                            ]
+                        )
+                    ),
+                    "location": AnyValue(
+                        string_value=random.choice(
+                            [
+                                "mobile",
+                                "frontend",
+                                "backend",
+                            ]
+                        )
+                    ),
+                    "sentry.timestamp_precise": AnyValue(
+                        double_value=int(data_point.time.timestamp()) + random.random()
+                    ),
+                },
+                project_id=_PROJECT_ID,
+                organization_id=_ORG_ID,
+            )
+            messages.append(message)
         outcome_data.append((data_point.time, data_point.num_outcomes))
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
     store_outcomes_data(
         outcome_data, OutcomeCategory.LOG_ITEM, org_id=_ORG_ID, project_id=_PROJECT_ID
     )
+    return item_ids
+
+
+def get_item_ids_from_response(response: TraceItemTableResponse) -> list[str]:
+    for column_value in response.column_values:
+        if column_value.attribute_name == "sentry.item_id":
+            return [item_id.val_str for item_id in column_value.results]
+    return []
 
 
 @pytest.mark.eap
@@ -212,9 +225,10 @@ class TestTraceItemTableFlexTime:
             EndpointTraceItemTable().execute(message)
 
     def test_paginate_within_time_window(self, eap: Any) -> None:
+        num_hours_to_query = 4
 
         data_points = []
-        for hour in range(25):
+        for hour in range(num_hours_to_query + 1):
             data_points.append(
                 LogOutcomeDataPoint(
                     time=BASE_TIME - timedelta(hours=hour),
@@ -224,17 +238,57 @@ class TestTraceItemTableFlexTime:
             )
         _store_logs_and_outcomes(data_points)
 
-        num_hours_to_query = 4
+        start_timestamp = Timestamp(
+            seconds=int((BASE_TIME - timedelta(hours=num_hours_to_query)).timestamp())
+        )
+        end_timestamp = Timestamp(seconds=int(BASE_TIME.timestamp()))
+
+        all_ids_message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=start_timestamp,
+                end_timestamp=end_timestamp,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+                ),
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                    ),
+                    descending=True,
+                ),
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                    ),
+                    descending=True,
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(all_ids_message)
+        stored_item_ids = get_item_ids_from_response(response)
+
         # we store
         strategy = OutcomesFlexTimeRoutingStrategy()
         # we tell the routing strategy that the most items we can query is 20_000_000
         # this means that if we query a four hour time range, it will get split in two
         strategy.set_config_value("max_items_to_query", 20_000_000)
-
-        start_timestamp = Timestamp(
-            seconds=int((BASE_TIME - timedelta(hours=num_hours_to_query)).timestamp())
-        )
-        end_timestamp = Timestamp(seconds=int(BASE_TIME.timestamp()))
 
         limit_per_query = 120
 
@@ -247,6 +301,8 @@ class TestTraceItemTableFlexTime:
         end_pagination = PageToken(end_pagination=True)
         page_token = PageToken(offset=0)
         result_size = 120
+
+        queried_item_ids = []
         while page_token != end_pagination:
             times_queried += 1
             message = TraceItemTableRequest(
@@ -296,8 +352,13 @@ class TestTraceItemTableFlexTime:
             result_size = len(response.column_values[0].results)
             page_token = response.page_token
             assert result_size == limit_per_query
+            queried_item_ids.extend(get_item_ids_from_response(response))
 
         assert times_queried == expected_times_queried
+        assert len(set(queried_item_ids)) == len(queried_item_ids)
+        assert set(queried_item_ids) == set(stored_item_ids), set(stored_item_ids) - set(
+            queried_item_ids
+        )
 
     def test_paginate_first_page_empty(self, eap: Any) -> None:
         data_points = [
@@ -409,18 +470,69 @@ class TestTraceItemTableFlexTime:
                 )
             )
         _store_logs_and_outcomes(data_points)
-
         num_hours_to_query = 4
+        start_timestamp = Timestamp(
+            seconds=int((BASE_TIME - timedelta(hours=num_hours_to_query)).timestamp())
+        )
+        end_timestamp = Timestamp(seconds=int(BASE_TIME.timestamp()))
+
+        all_ids_message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=start_timestamp,
+                end_timestamp=end_timestamp,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+                ),
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")),
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp_precise")
+                ),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                    ),
+                    descending=True,
+                ),
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp_precise"
+                        )
+                    ),
+                    descending=True,
+                ),
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                    ),
+                    descending=True,
+                ),
+            ],
+        )
+        all_ids_response = EndpointTraceItemTable().execute(all_ids_message)
+        all_ids_item_ids = get_item_ids_from_response(all_ids_response)
+
         # we store
         strategy = OutcomesFlexTimeRoutingStrategy()
         # we tell the routing strategy that the most items we can query is 20_000_000
         # this means that if we query a four hour time range, it will get split in two
         strategy.set_config_value("max_items_to_query", 20_000_000)
-
-        start_timestamp = Timestamp(
-            seconds=int((BASE_TIME - timedelta(hours=num_hours_to_query)).timestamp())
-        )
-        end_timestamp = Timestamp(seconds=int(BASE_TIME.timestamp()))
 
         limit_per_query = 120
 
@@ -429,10 +541,9 @@ class TestTraceItemTableFlexTime:
         # means that we will run the query  a total of 4 times
 
         times_queried = 0
-        expected_times_queried = 4
         end_pagination = PageToken(end_pagination=True)
         page_token = PageToken(offset=0)
-        result_size = 120
+        queried_item_ids = []
         while page_token != end_pagination:
             times_queried += 1
             message = TraceItemTableRequest(
@@ -492,9 +603,6 @@ class TestTraceItemTableFlexTime:
             )
             response = EndpointTraceItemTable().execute(message)
             assert isinstance(response, TraceItemTableResponse)
-            result_size = len(response.column_values[0].results)
-            page_token = response.page_token
-            assert result_size == limit_per_query
             # insert new data so we make sure the the page token lets us resume where we left off
             # event if new data comes in
             new_data_points = LogOutcomeDataPoint(
@@ -502,6 +610,8 @@ class TestTraceItemTableFlexTime:
                 num_outcomes=1000,
                 num_logs=1000,
             )
+            queried_item_ids.extend(get_item_ids_from_response(response))
             _store_logs_and_outcomes([new_data_points])
+            page_token = response.page_token
 
-        assert times_queried == expected_times_queried
+        assert set(queried_item_ids) == set(all_ids_item_ids)
