@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 from datetime import date, datetime
 from typing import Optional, Sequence, cast
 
-from snuba import settings
 from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -22,7 +21,6 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.parsing import ParsingContext
-from snuba.state import get_config
 
 _BETWEEN_SQUARE_BRACKETS_REGEX = re.compile(r"(?<=\[)(.*?)(?=\])")
 
@@ -108,9 +106,7 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             # If there is a table name and the column name contains a ".",
             # then we need to escape the column name using alias regex rules
             # otherwise clickhouse will think we are referring to a table
-            if "." in exp.column_name and get_config(
-                "escape_dots_in_columns", settings.ESCAPE_DOTS_IN_COLUMNS
-            ):
+            if "." in exp.column_name:
                 ret.append(escape_alias(exp.column_name) or "")
             else:
                 ret.append(escape_identifier(exp.column_name) or "")

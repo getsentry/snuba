@@ -77,7 +77,13 @@ class FlexibleTimeWindowPageWithFilters:
             ) and filter.comparison_filter.key.name.startswith(self._FILTER_PREFIX):
                 if filter.comparison_filter.key.name == f"{self._FILTER_PREFIX}.timestamp":
                     column_names.append("timestamp")
-                    column_values.append(f.toDateTime(filter.comparison_filter.value.val_str))
+                    if filter.comparison_filter.value.HasField("val_str"):
+                        column_values.append(f.toDateTime(filter.comparison_filter.value.val_str))
+                    elif filter.comparison_filter.value.HasField("val_double"):
+                        column_values.append(literal(filter.comparison_filter.value.val_double))
+                    elif filter.comparison_filter.value.HasField("val_int"):
+                        column_values.append(literal(filter.comparison_filter.value.val_int))
+
                 else:
                     # strip the _FILTER_PREFIX from the attribute key and the dot
                     column_names.append(
@@ -155,7 +161,7 @@ class FlexibleTimeWindowPageWithFilters:
                         # if it's an integer, just store that integer value
                         # otherwise raise a value error
                         timestamp_value = last_result_value.WhichOneof("value")
-                        if timestamp_value == "val_str":
+                        if timestamp_value in ("val_str", "val_double", "val_int"):
                             # parse the string to a datetime and then store the integer timestamp in the filter
                             filters.append(
                                 TraceItemFilter(

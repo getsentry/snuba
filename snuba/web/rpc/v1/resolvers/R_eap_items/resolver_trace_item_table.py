@@ -503,6 +503,7 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         in_msg: TraceItemTableRequest,
         routing_decision: RoutingDecision,
     ) -> TraceItemTableResponse:
+        print("in_msg", in_msg)
         query_settings = setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         try:
             routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)

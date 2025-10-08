@@ -128,7 +128,7 @@ def _generate_table_request(
         columns=columns
         or [
             Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
-            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")),
+            Column(key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp")),
             Column(
                 key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp_precise")
             ),
@@ -138,7 +138,7 @@ def _generate_table_request(
         or [
             TraceItemTableRequest.OrderBy(
                 column=Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                    key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp")
                 ),
                 descending=True,
             ),
