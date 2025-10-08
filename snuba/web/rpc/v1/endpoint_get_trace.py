@@ -11,6 +11,7 @@ from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
     GetTraceRequest,
     GetTraceResponse,
 )
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 
 from snuba import state
@@ -148,6 +149,8 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
                 expression=column("timestamp"),
             ),
         ],
+        limit=request.limit if request.limit > 0 else None,
+        offset=request.page_token.offset,
     )
 
     if random.random() < _get_apply_final_rollout_percentage():
@@ -287,6 +290,20 @@ def _convert_results(
     return items
 
 
+def _get_page_token(
+    request: GetTraceRequest,
+    item_groups: list[GetTraceResponse.ItemGroup],
+) -> PageToken | None:
+    if request.limit == 0:
+        # theres no limit, so we don't need to return a page token
+        return None
+    if not item_groups:
+        total_items = 0
+    else:
+        total_items = sum(len(group.items) for group in item_groups)
+    return PageToken(offset=request.page_token.offset + total_items)
+
+
 class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
     @classmethod
     def version(cls) -> str:
@@ -312,6 +329,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             item_groups=item_groups,
             meta=response_meta,
             trace_id=in_msg.trace_id,
+            page_token=_get_page_token(in_msg, item_groups),
         )
 
     def _query_item_group(
