@@ -46,21 +46,14 @@ class LogOutcomeDataPoint:
     num_logs: int
 
 
-def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> list[str]:
-    item_ids = []
+def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
 
     messages = []
     outcome_data = []
-    item_id_num = 1
     for data_point in data_points:
         for _ in range(data_point.num_logs):
-            # item_id = random.randint(0, 2**128 - 1).to_bytes(16, byteorder="big")
-            # clickhouse uses little endian to encode integers as bytes
-            item_id = item_id_num.to_bytes(16, byteorder="little")
-            # to convert the string to hex the way EAP would return it we need to convert to big endian
-            item_ids.append(item_id_num.to_bytes(16, byteorder="big").hex()[16:])
-            item_id_num += 1
+            item_id = random.randint(0, 2**128 - 1).to_bytes(16, byteorder="big")
             message = gen_item_message(
                 start_timestamp=data_point.time,
                 item_id=item_id,
@@ -98,7 +91,6 @@ def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> list[str
     store_outcomes_data(
         outcome_data, OutcomeCategory.LOG_ITEM, org_id=_ORG_ID, project_id=_PROJECT_ID
     )
-    return item_ids
 
 
 def get_item_ids_from_response(response: TraceItemTableResponse) -> list[str]:
