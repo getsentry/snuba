@@ -100,6 +100,66 @@ def get_item_ids_from_response(response: TraceItemTableResponse) -> list[str]:
     return []
 
 
+def _generate_table_request(
+    start_timestamp: Timestamp,
+    end_timestamp: Timestamp,
+    page_token: PageToken | None = None,
+    accuracy: DownsampledStorageConfig.Mode.ValueType = DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME,
+    limit: int = 120,
+    order_by: list[TraceItemTableRequest.OrderBy] | None = None,
+    columns: list[Column] | None = None,
+) -> TraceItemTableRequest:
+    return TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            organization_id=1,
+            cogs_category="something",
+            referrer="something",
+            start_timestamp=start_timestamp,
+            end_timestamp=end_timestamp,
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            downsampled_storage_config=DownsampledStorageConfig(mode=accuracy),
+        ),
+        filter=TraceItemFilter(
+            exists_filter=ExistsFilter(
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
+            )
+        ),
+        columns=columns
+        or [
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")),
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp_precise")
+            ),
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+        ],
+        order_by=order_by
+        or [
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                ),
+                descending=True,
+            ),
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp_precise")
+                ),
+                descending=True,
+            ),
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                ),
+                descending=True,
+            ),
+        ],
+        limit=limit,
+        page_token=page_token,
+    )
+
+
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestTraceItemTableFlexTime:
@@ -115,7 +175,7 @@ class TestTraceItemTableFlexTime:
                 end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
                 downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+                    mode=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME
                 ),
             ),
         )
@@ -133,7 +193,7 @@ class TestTraceItemTableFlexTime:
                 end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
                 downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+                    mode=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME
                 ),
             ),
             columns=[
@@ -235,43 +295,11 @@ class TestTraceItemTableFlexTime:
         )
         end_timestamp = Timestamp(seconds=int(BASE_TIME.timestamp()))
 
-        all_ids_message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=start_timestamp,
-                end_timestamp=end_timestamp,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-                downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
-                ),
-            ),
-            filter=TraceItemFilter(
-                exists_filter=ExistsFilter(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
-                )
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-            ],
-            order_by=[
-                TraceItemTableRequest.OrderBy(
-                    column=Column(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
-                    ),
-                    descending=True,
-                ),
-                TraceItemTableRequest.OrderBy(
-                    column=Column(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
-                    ),
-                    descending=True,
-                ),
-            ],
+        all_ids_message = _generate_table_request(
+            start_timestamp,
+            end_timestamp,
+            accuracy=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY,
+            limit=3000,
         )
         response = EndpointTraceItemTable().execute(all_ids_message)
         stored_item_ids = get_item_ids_from_response(response)
@@ -297,45 +325,10 @@ class TestTraceItemTableFlexTime:
         queried_item_ids = []
         while page_token != end_pagination:
             times_queried += 1
-            message = TraceItemTableRequest(
-                meta=RequestMeta(
-                    project_ids=[1],
-                    organization_id=1,
-                    cogs_category="something",
-                    referrer="something",
-                    start_timestamp=start_timestamp,
-                    end_timestamp=end_timestamp,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-                    downsampled_storage_config=DownsampledStorageConfig(
-                        mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
-                    ),
-                ),
-                filter=TraceItemFilter(
-                    exists_filter=ExistsFilter(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
-                    )
-                ),
-                columns=[
-                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
-                    Column(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
-                    ),
-                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                ],
-                order_by=[
-                    TraceItemTableRequest.OrderBy(
-                        column=Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
-                        ),
-                        descending=True,
-                    ),
-                    TraceItemTableRequest.OrderBy(
-                        column=Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
-                        ),
-                        descending=True,
-                    ),
-                ],
+            message = _generate_table_request(
+                start_timestamp,
+                end_timestamp,
+                accuracy=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME,
                 limit=limit_per_query,
                 page_token=page_token,
             )
@@ -394,45 +387,10 @@ class TestTraceItemTableFlexTime:
         page_token = PageToken(offset=0)
         while page_token != end_pagination:
             times_queried += 1
-            message = TraceItemTableRequest(
-                meta=RequestMeta(
-                    project_ids=[1],
-                    organization_id=1,
-                    cogs_category="something",
-                    referrer="something",
-                    start_timestamp=start_timestamp,
-                    end_timestamp=end_timestamp,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-                    downsampled_storage_config=DownsampledStorageConfig(
-                        mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
-                    ),
-                ),
-                filter=TraceItemFilter(
-                    exists_filter=ExistsFilter(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
-                    )
-                ),
-                columns=[
-                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
-                    Column(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
-                    ),
-                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                ],
-                order_by=[
-                    TraceItemTableRequest.OrderBy(
-                        column=Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
-                        ),
-                        descending=True,
-                    ),
-                    TraceItemTableRequest.OrderBy(
-                        column=Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
-                        ),
-                        descending=True,
-                    ),
-                ],
+            message = _generate_table_request(
+                start_timestamp,
+                end_timestamp,
+                accuracy=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME,
                 limit=limit_per_query,
                 page_token=page_token,
             )
@@ -468,54 +426,11 @@ class TestTraceItemTableFlexTime:
         )
         end_timestamp = Timestamp(seconds=int(BASE_TIME.timestamp()))
 
-        all_ids_message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=start_timestamp,
-                end_timestamp=end_timestamp,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-                downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
-                ),
-            ),
-            filter=TraceItemFilter(
-                exists_filter=ExistsFilter(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
-                )
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")),
-                Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp_precise")
-                ),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-            ],
-            order_by=[
-                TraceItemTableRequest.OrderBy(
-                    column=Column(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
-                    ),
-                    descending=True,
-                ),
-                TraceItemTableRequest.OrderBy(
-                    column=Column(
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp_precise"
-                        )
-                    ),
-                    descending=True,
-                ),
-                TraceItemTableRequest.OrderBy(
-                    column=Column(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
-                    ),
-                    descending=True,
-                ),
-            ],
+        all_ids_message = _generate_table_request(
+            start_timestamp,
+            end_timestamp,
+            accuracy=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME,
+            limit=3000,
         )
         all_ids_response = EndpointTraceItemTable().execute(all_ids_message)
         all_ids_item_ids = get_item_ids_from_response(all_ids_response)
@@ -538,58 +453,10 @@ class TestTraceItemTableFlexTime:
         queried_item_ids = []
         while page_token != end_pagination:
             times_queried += 1
-            message = TraceItemTableRequest(
-                meta=RequestMeta(
-                    project_ids=[1],
-                    organization_id=1,
-                    cogs_category="something",
-                    referrer="something",
-                    start_timestamp=start_timestamp,
-                    end_timestamp=end_timestamp,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-                    downsampled_storage_config=DownsampledStorageConfig(
-                        mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
-                    ),
-                ),
-                filter=TraceItemFilter(
-                    exists_filter=ExistsFilter(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
-                    )
-                ),
-                columns=[
-                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
-                    Column(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
-                    ),
-                    Column(
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp_precise"
-                        )
-                    ),
-                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                ],
-                order_by=[
-                    TraceItemTableRequest.OrderBy(
-                        column=Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
-                        ),
-                        descending=True,
-                    ),
-                    TraceItemTableRequest.OrderBy(
-                        column=Column(
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp_precise"
-                            )
-                        ),
-                        descending=True,
-                    ),
-                    TraceItemTableRequest.OrderBy(
-                        column=Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
-                        ),
-                        descending=True,
-                    ),
-                ],
+            message = _generate_table_request(
+                start_timestamp,
+                end_timestamp,
+                accuracy=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME,
                 limit=limit_per_query,
                 page_token=page_token,
             )
@@ -606,4 +473,6 @@ class TestTraceItemTableFlexTime:
             _store_logs_and_outcomes([new_data_points])
             page_token = response.page_token
 
+        # make sure there are no duplicates and we got all the items from the time range (before we added new data)
+        assert len(set(queried_item_ids)) == len(queried_item_ids)
         assert set(queried_item_ids) == set(all_ids_item_ids)
