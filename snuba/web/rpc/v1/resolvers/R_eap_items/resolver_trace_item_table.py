@@ -51,7 +51,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.common.pagination import FlexibleTimeWindowPage
+from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
     TimeWindow,
@@ -331,9 +331,8 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
 def _get_offset_from_page_token(page_token: PageToken | None) -> int:
     if page_token is None:
         return 0
-    page = FlexibleTimeWindowPage.decode(page_token)
-    if page.offset is not None:
-        return page.offset
+    if page_token.WhichOneof("value") == "offset":
+        return page_token.offset
     return 0
 
 
@@ -382,6 +381,11 @@ def build_query(
                 time_window.end_timestamp.seconds,
             )
         )
+    page_token_filter = FlexibleTimeWindowPageWithFilters(request.page_token).get_filters()
+
+    if page_token_filter:
+        additional_conditions.append(page_token_filter)
+
     groupby = [attribute_key_to_expression(attr_key) for attr_key in request.group_by]
 
     res = Query(
@@ -430,16 +434,13 @@ def _get_page_token(
     # time window of the current request after any adjustments by routing strategies
     time_window: TimeWindow | None,
 ) -> PageToken:
-    current_offset = _get_offset_from_page_token(request.page_token)
     num_rows_in_response = len(response[0].results) if response else 0
     if time_window is not None:
         if num_rows_returned > request.limit:
             # there are more rows in this window so we maintain the same time window and advance the offset
-            return FlexibleTimeWindowPage(
-                time_window.start_timestamp,
-                time_window.end_timestamp,
-                current_offset + num_rows_in_response,
-            ).encode()
+            return FlexibleTimeWindowPageWithFilters.create(
+                request, time_window, response
+            ).page_token
         else:
             if time_window.start_timestamp.seconds <= original_time_window.start_timestamp.seconds:
                 # this is the last window because our start timestamp is the same as the original start timestamp
@@ -449,9 +450,11 @@ def _get_page_token(
                 # there are no more rows in this window so we return the next window
                 # return the next window where the end timestamp is the start timestamp and the start timestamp is the original start timestamp
                 # the routing strategy will properly truncate the time window of the next request
-                return FlexibleTimeWindowPage(
-                    original_time_window.start_timestamp, time_window.start_timestamp, 0
-                ).encode()
+                return FlexibleTimeWindowPageWithFilters.create(
+                    request,
+                    TimeWindow(original_time_window.start_timestamp, time_window.start_timestamp),
+                    response,
+                ).page_token
     else:
         return PageToken(offset=request.page_token.offset + num_rows_in_response)
 
