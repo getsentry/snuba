@@ -116,6 +116,10 @@ class FlexibleTimeWindowPageWithFilters:
         time_window: TimeWindow,
         query_results: list[TraceItemColumnValues],
     ) -> "FlexibleTimeWindowPageWithFilters":
+        from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
+            attribute_key_to_expression,
+        )
+
         filters = []
         # encode the window
         filters.append(
@@ -145,9 +149,6 @@ class FlexibleTimeWindowPageWithFilters:
             }
         else:
             last_result_values = {}
-        from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-            attribute_key_to_expression,
-        )
 
         if last_result_values:
             # encode the page token filter conditions
