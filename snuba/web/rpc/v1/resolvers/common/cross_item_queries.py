@@ -60,8 +60,6 @@ def get_trace_ids_for_cross_item_query(
     This works by pruning out items that don't match any of the conditions in the where close. The HAVING
     clause is used to get trace ids that contains items matching all of the conditions.
     """
-    assert len(trace_filters) > 1, "At least two item types are required for a cross-event query"
-
     # Hacky conversion due to protobuf ugliness
     converted_trace_filters = [trace_filter for trace_filter in trace_filters]
     if isinstance(trace_filters[0], GetTracesRequest.TraceFilter):
@@ -82,10 +80,14 @@ def get_trace_ids_for_cross_item_query(
             )
         )
 
-    trace_item_filters_and_expression = and_cond(
-        *[f.greater(f.countIf(expression), 0) for expression in filter_expressions]
-    )
-    trace_item_filters_or_expression = or_cond(*filter_expressions)
+    if len(filter_expressions) > 1:
+        trace_item_filters_and_expression = and_cond(
+            *[f.greater(f.countIf(expression), 0) for expression in filter_expressions]
+        )
+        trace_item_filters_or_expression = or_cond(*filter_expressions)
+    else:
+        trace_item_filters_and_expression = f.greater(f.countIf(filter_expressions[0]), 0)
+        trace_item_filters_or_expression = filter_expressions[0]
     entity = Entity(
         key=EntityKey("eap_items"),
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
