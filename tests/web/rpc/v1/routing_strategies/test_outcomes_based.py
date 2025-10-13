@@ -101,6 +101,11 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     context = RoutingContext(
         in_msg=request,
         timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+        tenant_ids={
+            "organization_id": _ORG_ID,
+            "referrer": "something",
+        },
     )
 
     routing_decision = strategy.get_routing_decision(context)
@@ -120,6 +125,11 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     context = RoutingContext(
         in_msg=request,
         timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+        tenant_ids={
+            "organization_id": _ORG_ID,
+            "referrer": "something",
+        },
     )
 
     routing_decision = strategy.get_routing_decision(context)
@@ -133,6 +143,11 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     context = RoutingContext(
         in_msg=request,
         timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+        tenant_ids={
+            "organization_id": _ORG_ID,
+            "referrer": "something",
+        },
     )
 
     routing_decision = strategy.get_routing_decision(context)
