@@ -448,41 +448,47 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
     @final
     def after_execute(self, routing_decision: RoutingDecision, error: Exception | None) -> None:
-        assert routing_decision.routing_context is not None
+        try:
+            assert routing_decision.routing_context is not None
 
-        routing_decision.strategy.update_allocation_policies_balances(routing_decision, error)
+            routing_decision.strategy.update_allocation_policies_balances(routing_decision, error)
 
-        # these metrics are meant to track reject/throttle/success decisions, so they get emitted even if the query did not run successfully after routing
-        if not routing_decision.can_run:
-            self.metrics.increment("rejected_query", tags={"strategy": self.class_name()})
-        elif routing_decision.is_throttled:
-            self.metrics.increment("throttled_query", tags={"strategy": self.class_name()})
-        else:
-            self.metrics.increment("successful_query", tags={"strategy": self.class_name()})
+            # these metrics are meant to track reject/throttle/success decisions, so they get emitted even if the query did not run successfully after routing
+            if not routing_decision.can_run:
+                self.metrics.increment("rejected_query", tags={"strategy": self.class_name()})
+            elif routing_decision.is_throttled:
+                self.metrics.increment("throttled_query", tags={"strategy": self.class_name()})
+            else:
+                self.metrics.increment("successful_query", tags={"strategy": self.class_name()})
 
-        self._emit_routing_mistake(routing_decision)
-        self._output_metrics(routing_decision.routing_context)
-        query_result = routing_decision.routing_context.query_result or QueryResult(
-            {}, {"stats": {}, "sql": "", "experiments": {}}
-        )
-        profile = query_result.result.get("profile", {}) or {}
-        if elapsed := profile.get("elapsed"):
-            self._record_value_in_span_and_DD(
-                routing_context=routing_decision.routing_context,
-                metrics_backend_func=self.metrics.timing,
-                name="query_timing",
-                value=elapsed,
-                tags={"tier": routing_decision.tier.name},
+            self._emit_routing_mistake(routing_decision)
+            self._output_metrics(routing_decision.routing_context)
+            query_result = routing_decision.routing_context.query_result or QueryResult(
+                {}, {"stats": {}, "sql": "", "experiments": {}}
             )
-        if bytes_scanned := profile.get("progress_bytes"):
-            self._record_value_in_span_and_DD(
-                routing_context=routing_decision.routing_context,
-                metrics_backend_func=self.metrics.timing,
-                name="query_bytes_scanned",
-                value=bytes_scanned,
-                tags={"tier": routing_decision.tier.name},
-            )
-        record_query(_construct_hacky_querylog_payload(self, routing_decision))
+            profile = query_result.result.get("profile", {}) or {}
+            if elapsed := profile.get("elapsed"):
+                self._record_value_in_span_and_DD(
+                    routing_context=routing_decision.routing_context,
+                    metrics_backend_func=self.metrics.timing,
+                    name="query_timing",
+                    value=elapsed,
+                    tags={"tier": routing_decision.tier.name},
+                )
+            if bytes_scanned := profile.get("progress_bytes"):
+                self._record_value_in_span_and_DD(
+                    routing_context=routing_decision.routing_context,
+                    metrics_backend_func=self.metrics.timing,
+                    name="query_bytes_scanned",
+                    value=bytes_scanned,
+                    tags={"tier": routing_decision.tier.name},
+                )
+            record_query(_construct_hacky_querylog_payload(self, routing_decision))
+        except Exception as e:
+            self.metrics.increment("after_execute_failure")
+            sentry_sdk.capture_message(f"Error in routing strategy after execute: {e}")
+            if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
+                raise e
 
     @final
     def update_allocation_policies_balances(

@@ -13,7 +13,7 @@ from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageCon
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
-from snuba import environment, settings, state
+from snuba import environment, state
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -353,11 +353,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def __after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
         res = self._after_execute(in_msg, out_msg, error)
-        routing_strategy_after_execute_error = None
-        try:
-            self.routing_decision.strategy.after_execute(self.routing_decision, error)
-        except Exception as e:
-            routing_strategy_after_execute_error = e
+        self.routing_decision.strategy.after_execute(self.routing_decision, error)
 
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
@@ -380,15 +376,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 "request_success",
                 tags=self._timer.tags,
             )
-
-        if routing_strategy_after_execute_error is not None:
-            self.metrics.increment("after_execute_failure")
-            sentry_sdk.capture_message(
-                f"Error in routing strategy after execute: {routing_strategy_after_execute_error}"
-            )
-            if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
-                raise routing_strategy_after_execute_error
-
         return res
 
     def _after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
