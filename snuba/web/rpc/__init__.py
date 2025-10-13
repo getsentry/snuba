@@ -368,10 +368,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     tags=self._timer.tags,
                 )
             # AllocationPolicyViolations is not a request_error
-            elif not (
-                isinstance(error, QueryException)
-                and error.exception_type == AllocationPolicyViolations.__name__
-            ):
+            elif not isinstance(error.__cause__, AllocationPolicyViolations):
                 sentry_sdk.capture_exception(error)
                 self.metrics.increment(
                     "request_error",
