@@ -110,7 +110,7 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
 
     routing_decision = strategy.get_routing_decision(context)
     assert routing_decision.tier == Tier.TIER_8
-    assert routing_decision.clickhouse_settings == {}
+    assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
     # request(s) that query window of 30 minutes, but with timestamps 40 days ago
