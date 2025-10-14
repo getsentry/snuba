@@ -243,13 +243,17 @@ def trace_item_filters_to_expression(
                 raise BadSnubaRPCRequestException(
                     "the LIKE comparison is only supported on string keys"
                 )
-            return f.like(k_expression, v_expression)
+            comparison_function = f.ilike if item_filter.comparison_filter.ignore_case else f.like
+            return comparison_function(k_expression, v_expression)
         if op == ComparisonFilter.OP_NOT_LIKE:
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
                     "the NOT LIKE comparison is only supported on string keys"
                 )
-            expr = f.notLike(k_expression, v_expression)
+            comparison_function = (
+                f.notILike if item_filter.comparison_filter.ignore_case else f.notLike
+            )
+            expr = comparison_function(k_expression, v_expression)
             # we redefine the way not like works for nulls
             # now null not like "%anything%" is true
             expr_with_null = or_cond(expr, f.isNull(k_expression))
