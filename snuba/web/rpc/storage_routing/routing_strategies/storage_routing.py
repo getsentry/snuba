@@ -425,9 +425,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     is_throttled=combined_allocation_policies_recommendations["is_throttled"],
                 )
 
-                if not routing_decision.can_run:
-                    return routing_decision
-
                 routing_context.cluster_load_info = (
                     get_cluster_loadinfo()
                     if state.get_config("storage_routing.enable_get_cluster_loadinfo", True)

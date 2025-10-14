@@ -153,6 +153,8 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         self,
         routing_decision: RoutingDecision,
     ) -> None:
+        if not routing_decision.can_run:
+            return
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
