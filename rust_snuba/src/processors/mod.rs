@@ -154,6 +154,13 @@ mod tests {
                     settings.add_redaction(".*.message_timestamp", "<event timestamp>");
                 }
 
+                if *topic_name == "snuba-items" {
+                    settings.add_redaction(
+                        ".*.*[\"sentry._internal.ingested_at\"]",
+                        "<ingestion timestamp>",
+                    );
+                }
+
                 // This payload is protobuf (so binary), not JSON (so text).
                 if *topic_name != "snuba-items" {
                     settings.set_description(std::str::from_utf8(example.payload()).unwrap());
