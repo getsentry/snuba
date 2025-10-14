@@ -251,7 +251,7 @@ def trace_item_filters_to_expression(
                     "the NOT LIKE comparison is only supported on string keys"
                 )
             comparison_function = (
-                f.notILike if item_filter.comparison_filter.ignore_case else f.notiLike
+                f.notILike if item_filter.comparison_filter.ignore_case else f.notLike
             )
             expr = comparison_function(k_expression, v_expression)
             # we redefine the way not like works for nulls
