@@ -78,7 +78,7 @@ class RoutingStrategyFailsToSelectTier(BaseRoutingStrategy):
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
-    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
+    def _update_routing_decision(self, routing_decision: RoutingDecision) -> None:
         raise Exception
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
@@ -89,15 +89,10 @@ class RoutingStrategySelectsTier8(BaseRoutingStrategy):
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
-    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
-        return RoutingDecision(
-            routing_context=routing_context,
-            strategy=self,
-            tier=Tier.TIER_8,
-            can_run=True,
-            is_throttled=False,
-            clickhouse_settings={},
-        )
+    def _update_routing_decision(self, routing_decision: RoutingDecision) -> None:
+        routing_decision.tier = Tier.TIER_8
+        routing_decision.can_run = True
+        routing_decision.is_throttled = False
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
@@ -108,37 +103,22 @@ class RoutingStrategyHighestAccuracy(BaseRoutingStrategy):
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
-    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
-        if self._is_highest_accuracy_mode(extract_message_meta(routing_context.in_msg)):
-            return RoutingDecision(
-                routing_context=routing_context,
-                strategy=self,
-                tier=Tier.TIER_1,
-                clickhouse_settings={},
-                can_run=True,
-            )
+    def _update_routing_decision(self, routing_decision: RoutingDecision) -> None:
+        if self._is_highest_accuracy_mode(
+            extract_message_meta(routing_decision.routing_context.in_msg)
+        ):
+            routing_decision.tier = Tier.TIER_1
         else:
-            return RoutingDecision(
-                routing_context=routing_context,
-                strategy=self,
-                tier=Tier.TIER_8,
-                clickhouse_settings={},
-                can_run=True,
-            )
+            routing_decision.tier = Tier.TIER_8
 
 
 class RoutingStrategyUpdatesQuerySettings(BaseRoutingStrategy):
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
-    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
-        return RoutingDecision(
-            routing_context=routing_context,
-            strategy=self,
-            tier=Tier.TIER_8,
-            clickhouse_settings={"some_setting": "some_value"},
-            can_run=True,
-        )
+    def _update_routing_decision(self, routing_decision: RoutingDecision) -> None:
+        routing_decision.tier = Tier.TIER_8
+        routing_decision.clickhouse_settings["some_setting"] = "some_value"
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
@@ -148,14 +128,9 @@ class RoutingStrategyBadMetrics(BaseRoutingStrategy):
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
-    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
-        return RoutingDecision(
-            routing_context=routing_context,
-            strategy=self,
-            tier=Tier.TIER_8,
-            clickhouse_settings={"some_setting": "some_value"},
-            can_run=True,
-        )
+    def _update_routing_decision(self, routing_decision: RoutingDecision) -> None:
+        routing_decision.tier = Tier.TIER_8
+        routing_decision.clickhouse_settings["some_setting"] = "some_value"
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         if 1 / 0 > 10:
@@ -166,17 +141,21 @@ class RoutingStrategyQueryFails(BaseRoutingStrategy):
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
-    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
-        return RoutingDecision(
-            routing_context=routing_context,
-            strategy=self,
-            tier=Tier.TIER_8,
-            clickhouse_settings={"some_setting": "some_value"},
-            can_run=True,
-        )
+    def _update_routing_decision(self, routing_decision: RoutingDecision) -> None:
+        routing_decision.tier = Tier.TIER_8
+        routing_decision.clickhouse_settings["some_setting"] = "some_value"
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         raise ValueError("should never get here")
+
+
+class TestRoutingStrategyWithCustomPolicies(OutcomesBasedRoutingStrategy):
+    def __init__(self, policies: list[AllocationPolicy]):
+        super().__init__()
+        self._test_policies = policies
+
+    def get_allocation_policies(self) -> list[AllocationPolicy]:
+        return self._test_policies
 
 
 ROUTING_CONTEXT = RoutingContext(
@@ -193,7 +172,7 @@ ROUTING_CONTEXT = RoutingContext(
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> None:
     with mock.patch("snuba.settings.RAISE_ON_ROUTING_STRATEGY_FAILURES", False):
         routing_decision = RoutingStrategyFailsToSelectTier().get_routing_decision(
@@ -203,14 +182,14 @@ def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> Non
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 def test_target_tier_is_set_in_routing_context() -> None:
     routing_decision = RoutingStrategySelectsTier8().get_routing_decision(deepcopy(ROUTING_CONTEXT))
     assert routing_decision.tier == Tier.TIER_8
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 def test_merge_query_settings() -> None:
     routing_decision = RoutingStrategyUpdatesQuerySettings().get_routing_decision(
         deepcopy(ROUTING_CONTEXT)
@@ -220,7 +199,7 @@ def test_merge_query_settings() -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 def test_routing_strategy_selects_tier_1_if_highest_accuracy_mode() -> None:
     ts = Timestamp()
     ts.GetCurrentTime()
@@ -250,7 +229,7 @@ def test_routing_strategy_selects_tier_1_if_highest_accuracy_mode() -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 def test_outputting_metrics_fails_open() -> None:
     with mock.patch("snuba.settings.RAISE_ON_ROUTING_STRATEGY_FAILURES", False):
         RoutingStrategyBadMetrics().get_routing_decision(deepcopy(ROUTING_CONTEXT))
@@ -464,7 +443,7 @@ def test_outcomes_based_routing_metrics_sampled_too_low() -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 def test_routing_strategy_with_rejecting_allocation_policy() -> None:
     update_called = False
 
@@ -512,7 +491,7 @@ def test_routing_strategy_with_rejecting_allocation_policy() -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 def test_routing_strategy_with_throttling_allocation_policy() -> None:
     POLICY_THREADS = 4
 
@@ -559,26 +538,22 @@ def test_routing_strategy_with_throttling_allocation_policy() -> None:
                 suggestion=NO_SUGGESTION,
             )
 
-    with mock.patch.object(
-        BaseRoutingStrategy,
-        "get_allocation_policies",
-        return_value=[
+    test_strategy = TestRoutingStrategyWithCustomPolicies(
+        policies=[
             ThrottleAllocationPolicy(
                 ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
             ),
             ThrottleAllocationPolicyDuplicate(
                 ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
             ),
-        ],
-    ):
-        routing_decision = OutcomesBasedRoutingStrategy().get_routing_decision(
-            deepcopy(ROUTING_CONTEXT)
-        )
-        assert routing_decision.clickhouse_settings["max_threads"] == POLICY_THREADS
-        assert routing_decision.is_throttled == True
+        ]
+    )
+    routing_decision = test_strategy.get_routing_decision(deepcopy(ROUTING_CONTEXT))
+    assert routing_decision.clickhouse_settings["max_threads"] == POLICY_THREADS
+    assert routing_decision.is_throttled == True
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 def test_allocation_policy_updates_quota() -> None:
     MAX_QUERIES_TO_RUN = 2
@@ -676,7 +651,7 @@ def test_allocation_policy_updates_quota() -> None:
     assert "QueryCountPolicyDuplicate" in cause.violations
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 def test_policy_sets_max_bytes_to_read() -> None:
     class MaximumBytesPolicy(AllocationPolicy):
@@ -707,14 +682,11 @@ def test_policy_sets_max_bytes_to_read() -> None:
         ) -> None:
             pass
 
-    with mock.patch.object(
-        BaseRoutingStrategy,
-        "get_allocation_policies",
-        return_value=[
+    test_strategy = TestRoutingStrategyWithCustomPolicies(
+        policies=[
             MaximumBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
-        ],
-    ):
-        routing_decision = OutcomesBasedRoutingStrategy().get_routing_decision(
-            deepcopy(ROUTING_CONTEXT)
-        )
-        assert routing_decision.clickhouse_settings["max_bytes_to_read"] == 1
+        ]
+    )
+
+    routing_decision = test_strategy.get_routing_decision(deepcopy(ROUTING_CONTEXT))
+    assert routing_decision.clickhouse_settings["max_bytes_to_read"] == 1

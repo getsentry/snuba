@@ -314,9 +314,9 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         routing_decision: RoutingDecision,
         query_settings: HTTPQuerySettings,
     ) -> None:
-        """merge query settings decided in _get_routing_decision with whatever was passed in (from the request) initially
+        """merge query settings decided in _update_routing_decision with whatever was passed in (from the request) initially
 
-        the settings in _get_routing_decision take priority
+        the settings in _update_routing_decision take priority
 
         note that for querylog, routing_decision.clickhouse_settings will not contain whatever was passed in
         """
@@ -344,10 +344,10 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         }
         sentry_sdk.update_current_span(attributes={name: value})
 
-    def _get_routing_decision(
+    def _update_routing_decision(
         self,
-        routing_context: RoutingContext,
-    ) -> RoutingDecision:
+        routing_decision: RoutingDecision,
+    ) -> None:
         raise NotImplementedError
 
     def _get_combined_allocation_policies_recommendations(
@@ -412,13 +412,29 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 routing_context.allocation_policies_recommendations = (
                     self._get_recommendations_from_allocation_policies(routing_context)
                 )
+                combined_allocation_policies_recommendations = (
+                    self._get_combined_allocation_policies_recommendations(routing_context)
+                )
+
+                routing_decision = RoutingDecision(
+                    routing_context=routing_context,
+                    strategy=self,
+                    tier=Tier.TIER_1,
+                    clickhouse_settings=combined_allocation_policies_recommendations["settings"],
+                    can_run=combined_allocation_policies_recommendations["can_run"],
+                    is_throttled=combined_allocation_policies_recommendations["is_throttled"],
+                )
+
+                if not routing_decision.can_run:
+                    return routing_decision
+
                 routing_context.cluster_load_info = (
                     get_cluster_loadinfo()
                     if state.get_config("storage_routing.enable_get_cluster_loadinfo", True)
                     else None
                 )
 
-                routing_decision = self._get_routing_decision(routing_context)
+                self._update_routing_decision(routing_decision)
 
                 routing_context.timer.mark(_END_ESTIMATION_MARK)
                 self._record_value_in_span_and_DD(

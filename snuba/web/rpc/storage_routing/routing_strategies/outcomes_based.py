@@ -149,25 +149,10 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             or default
         )
 
-    def _get_routing_decision(
+    def _update_routing_decision(
         self,
-        routing_context: RoutingContext,
-    ) -> RoutingDecision:
-        combined_allocation_policies_recommendations = (
-            self._get_combined_allocation_policies_recommendations(routing_context)
-        )
-
-        routing_decision = RoutingDecision(
-            routing_context=routing_context,
-            strategy=self,
-            tier=Tier.TIER_1,
-            clickhouse_settings=combined_allocation_policies_recommendations["settings"],
-            can_run=combined_allocation_policies_recommendations["can_run"],
-            is_throttled=combined_allocation_policies_recommendations["is_throttled"],
-        )
-
-        if not routing_decision.can_run:
-            return routing_decision
+        routing_decision: RoutingDecision,
+    ) -> None:
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
@@ -195,7 +180,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             in_msg_meta.trace_item_type
             not in ITEM_TYPE_TO_OUTCOME_CATEGORY
         ):
-            return routing_decision
+            return
 
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
         start_ts = in_msg_meta.start_timestamp.seconds
@@ -207,7 +192,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                 min_timerange_to_query_outcomes
             )
             routing_decision.routing_context.extra_info["time_range_secs"] = time_range_secs
-            return routing_decision
+            return
 
         # see how many items this combo of orgs/projects has actually ingested for the timerange,
         # downsample if it's too many
@@ -237,5 +222,3 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                 "tier": routing_decision.tier.name,
             }
         )
-
-        return routing_decision
