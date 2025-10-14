@@ -59,6 +59,20 @@ _SPANS = [
     )
     for i in range(_SPAN_COUNT)
 ]
+_LOGS = [
+    gen_item_message(
+        start_timestamp=_BASE_TIME + timedelta(minutes=i),
+        trace_id=_TRACE_ID,
+        type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+        item_id=int(uuid.uuid4().hex[:16], 16).to_bytes(
+            16,
+            byteorder="little",
+            signed=False,
+        ),
+    )
+    for i in range(10)
+]
+
 
 _PROTOBUF_TO_SENTRY_PROTOS = {
     "string_value": ("val_str", AttributeKey.Type.TYPE_STRING),
@@ -116,6 +130,7 @@ def get_attributes(
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
     write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
+    write_raw_unprocessed_events(items_storage, _LOGS)  # type: ignore
 
 
 @pytest.mark.clickhouse_db
@@ -306,20 +321,85 @@ class TestGetTrace(BaseApiTest):
 
         assert query.get_final() == False
 
+    def test_with_logs(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+        message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                    attributes=[
+                        AttributeKey(
+                            name="sentry.item_id",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
+                    ],
+                )
+            ],
+        )
+        response = EndpointGetTrace().execute(message)
+        logs, timestamps = generate_logs_and_timestamps()
+        expected_response = GetTraceResponse(
+            meta=ResponseMeta(request_id=_REQUEST_ID),
+            trace_id=_TRACE_ID,
+            item_groups=[
+                GetTraceResponse.ItemGroup(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                    items=[
+                        GetTraceResponse.Item(
+                            id=get_span_id(log),
+                            timestamp=timestamp,
+                            attributes=[
+                                GetTraceResponse.Item.Attribute(
+                                    key=AttributeKey(
+                                        name="sentry.item_id",
+                                        type=AttributeKey.Type.TYPE_STRING,
+                                    ),
+                                    value=AttributeValue(
+                                        val_str=get_span_id(log),
+                                    ),
+                                ),
+                            ],
+                        )
+                        for timestamp, log in zip(timestamps, logs)
+                    ],
+                ),
+            ],
+        )
+        assert MessageToDict(response) == MessageToDict(expected_response)
+
 
 def generate_spans_and_timestamps() -> tuple[list[TraceItem], list[Timestamp]]:
+    return generate_items_and_timestamps(_SPANS)
+
+
+def generate_logs_and_timestamps() -> tuple[list[TraceItem], list[Timestamp]]:
+    return generate_items_and_timestamps(_LOGS)
+
+
+def generate_items_and_timestamps(payloads: list[bytes]) -> tuple[list[TraceItem], list[Timestamp]]:
     timestamps: list[Timestamp] = []
-    spans: list[TraceItem] = []
-    for payload in _SPANS:
-        span = TraceItem()
-        span.ParseFromString(payload)
+    items: list[TraceItem] = []
+    for payload in payloads:
+        item = TraceItem()
+        item.ParseFromString(payload)
         timestamp = Timestamp()
         timestamp.FromNanoseconds(
-            int(span.attributes["sentry.start_timestamp_precise"].double_value * 1e6) * 1000
+            int(item.attributes["sentry.start_timestamp_precise"].double_value * 1e6) * 1000
         )
         timestamps.append(timestamp)
-        spans.append(span)
-    return spans, timestamps
+        items.append(item)
+    return items, timestamps
 
 
 def get_span_id(span: TraceItem) -> str:
