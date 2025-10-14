@@ -195,7 +195,7 @@ def test_merge_query_settings() -> None:
         deepcopy(ROUTING_CONTEXT)
     )
     assert routing_decision.tier == Tier.TIER_8
-    assert routing_decision.clickhouse_settings == {"some_setting": "some_value"}
+    assert routing_decision.clickhouse_settings == {"max_threads": 10, "some_setting": "some_value"}
 
 
 @pytest.mark.redis_db
@@ -336,7 +336,7 @@ def test_metrics_output() -> None:
                     "max_bytes_to_read": 0,
                 },
             },
-            "clickhouse_settings": {},
+            "clickhouse_settings": {"max_threads": 10},
             "source_request_id": RANDOM_REQUEST_ID,
             "result_info": {
                 "meta": {},
@@ -349,7 +349,7 @@ def test_metrics_output() -> None:
             "cache_hit": 0,
             "can_run": True,
             "is_throttled": False,
-            "max_threads": 0,
+            "max_threads": 10,
             "clickhouse_table": "na",
             "is_duplicate": 0,
             "consistent": False,
