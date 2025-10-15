@@ -7,6 +7,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    List,
     Optional,
     TypeAlias,
     TypedDict,
@@ -50,7 +51,6 @@ from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
-from snuba.state.quota import ResourceQuota
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
@@ -322,10 +322,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         """
 
         for k, v in routing_decision.clickhouse_settings.items():
-            if k == "max_threads":
-                query_settings.set_resource_quota(ResourceQuota(max_threads=v))
-            else:
-                query_settings.push_clickhouse_setting(k, v)
+            query_settings.push_clickhouse_setting(k, v)
 
     def _record_value_in_span_and_DD(
         self,
@@ -351,30 +348,22 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         raise NotImplementedError
 
     def _get_combined_allocation_policies_recommendations(
-        self,
-        routing_context: RoutingContext,
+        self, policy_recommendations: List[QuotaAllowance]
     ) -> CombinedAllocationPoliciesRecommendations:
-        # decides how to combine the recommendations from the allocation policies with the cluster load
+        # decides how to combine the recommendations from the allocation policies
         settings = {}
 
-        max_bytes_to_read = get_max_bytes_to_read(
-            routing_context.allocation_policies_recommendations
-        )
+        max_bytes_to_read = get_max_bytes_to_read(policy_recommendations)
         if max_bytes_to_read != 0:
             settings["max_bytes_to_read"] = max_bytes_to_read
 
         settings["max_threads"] = min(
-            [qa.max_threads for qa in routing_context.allocation_policies_recommendations.values()],
+            [qa.max_threads for qa in policy_recommendations],
         )
 
         return CombinedAllocationPoliciesRecommendations(
-            can_run=all(
-                qa.can_run for qa in routing_context.allocation_policies_recommendations.values()
-            ),
-            is_throttled=any(
-                qa.is_throttled
-                for qa in routing_context.allocation_policies_recommendations.values()
-            ),
+            can_run=all(qa.can_run for qa in policy_recommendations),
+            is_throttled=any(qa.is_throttled for qa in policy_recommendations),
             settings=settings,
         )
 
@@ -413,7 +402,9 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     self._get_recommendations_from_allocation_policies(routing_context)
                 )
                 combined_allocation_policies_recommendations = (
-                    self._get_combined_allocation_policies_recommendations(routing_context)
+                    self._get_combined_allocation_policies_recommendations(
+                        list(routing_context.allocation_policies_recommendations.values())
+                    )
                 )
 
                 routing_decision = RoutingDecision(

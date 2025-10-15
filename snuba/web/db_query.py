@@ -860,7 +860,7 @@ def _apply_allocation_policies_quota(
         summary: dict[str, Any] = {}
         summary["threads_used"] = min_threads_across_policies
 
-        max_bytes_to_read = get_max_bytes_to_read(quota_allowances)
+        max_bytes_to_read = get_max_bytes_to_read(list(quota_allowances.values()))
         if max_bytes_to_read != 0:
             query_settings.push_clickhouse_setting("max_bytes_to_read", max_bytes_to_read)
             summary["max_bytes_to_read"] = max_bytes_to_read
