@@ -84,6 +84,35 @@ def _flush_logs() -> None:
         pass
 
 
+def _create_rate_limited_exception(
+    routing_decision: RoutingDecision,
+) -> QueryException:
+    """
+    Create a QueryException for rate-limited queries with allocation policy details.
+
+    Returns a QueryException with AllocationPolicyViolations as the cause.
+    """
+    error = QueryException.from_args(
+        AllocationPolicyViolations.__name__,
+        "Query cannot be run due to routing strategy deciding it cannot run, most likely due to allocation policies",
+        extra={
+            "stats": get_stats_dict(routing_decision),
+            "sql": "no sql run",
+            "experiments": {},
+        },
+    )
+    error.__cause__ = AllocationPolicyViolations.from_args(
+        {
+            "summary": {},
+            "details": {
+                key: quota_allowance.to_dict()
+                for key, quota_allowance in routing_decision.routing_context.allocation_policies_recommendations.items()
+            },
+        }
+    )
+    return error
+
+
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(
         self, timer: Timer | None = None, metrics_backend: MetricsBackend | None = None
@@ -210,25 +239,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     "request_rate_limited",
                     tags=self._timer.tags,
                 )
-                error = QueryException.from_args(
-                    AllocationPolicyViolations.__name__,
-                    "Query cannot be run due to routing strategy deciding it cannot run, most likely due to allocation policies",
-                    extra={
-                        "stats": get_stats_dict(self.routing_decision),
-                        "sql": "no sql run",
-                        "experiments": {},
-                    },
-                )
-                error.__cause__ = AllocationPolicyViolations.from_args(
-                    {
-                        "summary": {},
-                        "details": {
-                            key: quota_allowance.to_dict()
-                            for key, quota_allowance in self.routing_decision.routing_context.allocation_policies_recommendations.items()
-                        },
-                    }
-                )
-                raise error
+                raise _create_rate_limited_exception(self.routing_decision)
         except QueryException as e:
             out = self.response_class()()
             if (
