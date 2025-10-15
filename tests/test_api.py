@@ -2377,6 +2377,78 @@ class TestDeleteSubscriptionApi(BaseApiTest):
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
+class TestGetSubscriptionApi(BaseApiTest):
+    dataset_name = "events"
+    dataset = get_dataset(dataset_name)
+
+    def test(self) -> None:
+        # First create a subscription
+        resp = self.app.post(
+            f"{self.dataset_name}/events/subscriptions",
+            data=json.dumps(
+                {
+                    "project_id": 1,
+                    "query": "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')",
+                    "time_window": int(timedelta(minutes=10).total_seconds()),
+                    "resolution": int(timedelta(minutes=1).total_seconds()),
+                }
+            ).encode("utf-8"),
+        )
+
+        assert resp.status_code == 202
+        data = json.loads(resp.data)
+        subscription_id = data["subscription_id"]
+
+        # Now get the subscription details
+        resp = self.app.get(
+            f"{self.dataset_name}/events/subscriptions/{subscription_id}"
+        )
+        assert resp.status_code == 200
+        data = json.loads(resp.data)
+
+        # Verify the subscription details
+        assert data["project_id"] == 1
+        assert data["query"] == "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')"
+        assert data["time_window"] == int(timedelta(minutes=10).total_seconds())
+        assert data["resolution"] == int(timedelta(minutes=1).total_seconds())
+
+    def test_not_found(self) -> None:
+        # Try to get a subscription that doesn't exist
+        resp = self.app.get(
+            f"{self.dataset_name}/events/subscriptions/0/00000000000000000000000000000000"
+        )
+        assert resp.status_code == 404
+
+    def test_invalid_uuid_format(self) -> None:
+        # Try to get a subscription with an invalid UUID format
+        resp = self.app.get(
+            f"{self.dataset_name}/events/subscriptions/0/not-a-valid-uuid"
+        )
+        assert resp.status_code == 400
+        data = json.loads(resp.data)
+        assert data == {
+            "error": {
+                "message": "Invalid subscription ID format",
+                "type": "subscription",
+            }
+        }
+
+    def test_invalid_dataset_and_entity_combination(self) -> None:
+        resp = self.app.get(
+            "events/metrics_counters/subscriptions/0/00000000000000000000000000000000"
+        )
+        assert resp.status_code == 400
+        data = json.loads(resp.data)
+        assert data == {
+            "error": {
+                "message": "Invalid subscription dataset and entity combination",
+                "type": "subscription",
+            }
+        }
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 class TestAPIErrorsRO(TestApi):
     """
     Run the tests again, but this time on the errors_ro table to ensure they are both

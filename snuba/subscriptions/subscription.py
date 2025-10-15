@@ -67,3 +67,18 @@ class SubscriptionDeleter:
         RedisSubscriptionDataStore(
             redis_client, self.entity_key, self.partition
         ).delete(subscription_id)
+
+
+class SubscriptionGetter:
+    """
+    Handles fetching a `Subscription`, based on its ID and partition.
+    """
+
+    def __init__(self, entity_key: EntityKey, partition: PartitionId):
+        self.entity_key = entity_key
+        self.partition = partition
+
+    def get(self, subscription_id: UUID) -> SubscriptionData | None:
+        return RedisSubscriptionDataStore(
+            redis_client, self.entity_key, self.partition
+        ).get(subscription_id)

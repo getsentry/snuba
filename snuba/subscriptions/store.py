@@ -30,6 +30,13 @@ class SubscriptionDataStore(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def get(self, key: UUID) -> SubscriptionData | None:
+        """
+        Fetches a `Subscription` from the store.
+        """
+        pass
+
+    @abc.abstractmethod
     def all(self) -> Iterable[Tuple[UUID, SubscriptionData]]:
         """
         Fetches all `Subscriptions` from the store
@@ -62,6 +69,12 @@ class RedisSubscriptionDataStore(SubscriptionDataStore):
         Removes a subscription from the Redis store.
         """
         self.client.hdel(self.__key, key.hex.encode("utf-8"))
+
+    def get(self, key: UUID) -> SubscriptionData | None:
+        """
+        Fetches a subscription from the store.
+        """
+        return self.codec.decode(self.client.hget(self.__key, key.hex.encode("utf-8")))
 
     def all(self) -> Iterable[Tuple[UUID, SubscriptionData]]:
         """

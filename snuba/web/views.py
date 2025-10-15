@@ -62,7 +62,11 @@ from snuba.state import get_int_config
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
-from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
+from snuba.subscriptions.subscription import (
+    SubscriptionCreator,
+    SubscriptionDeleter,
+    SubscriptionGetter,
+)
 from snuba.utils.health_info import (
     check_down_file_exists,
     get_health_info,
@@ -560,6 +564,33 @@ def create_subscription(*, dataset: Dataset, timer: Timer, entity: Entity) -> Re
 
 
 @application.route(
+    "/<dataset:dataset>/<entity:entity>/subscriptions/<int:partition>/<key>", methods=["GET"]
+)
+def get_subscription(*, dataset: Dataset, entity: Entity, partition: int, key: str) -> RespTuple:
+    if entity not in dataset.get_all_entities():
+        raise InvalidSubscriptionError(
+            "Invalid subscription dataset and entity combination"
+        )
+    entity_key = get_entity_name(entity)
+
+    try:
+        subscription_uuid = UUID(key)
+    except ValueError:
+        raise InvalidSubscriptionError("Invalid subscription ID format")
+
+    subscription = SubscriptionGetter(entity_key, PartitionId(partition)).get(subscription_uuid)
+
+    if subscription is None:
+        return "not found", 404, {"Content-Type": "text/plain"}
+
+    return (
+        json.dumps(subscription.to_dict()),
+        200,
+        {"Content-Type": "application/json"},
+    )
+
+
+@application.route(
     "/<dataset:dataset>/<entity:entity>/subscriptions/<int:partition>/<key>",
     methods=["DELETE"],
 )
@@ -571,7 +602,13 @@ def delete_subscription(
             "Invalid subscription dataset and entity combination"
         )
     entity_key = get_entity_name(entity)
-    SubscriptionDeleter(entity_key, PartitionId(partition)).delete(UUID(key))
+
+    try:
+        subscription_uuid = UUID(key)
+    except ValueError:
+        raise InvalidSubscriptionError("Invalid subscription ID format")
+
+    SubscriptionDeleter(entity_key, PartitionId(partition)).delete(subscription_uuid)
     metrics.increment("subscription_deleted", tags={"entity": entity_key.value})
 
     return "ok", 202, {"Content-Type": "text/plain"}
