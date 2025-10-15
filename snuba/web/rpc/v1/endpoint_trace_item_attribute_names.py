@@ -229,13 +229,14 @@ def get_co_occurring_attributes(
 
     attr_filter = not_cond(
         in_cond(
-            column("attr.2"),
+            f.tupleElement(column("attr"), 2),
             f.array(*UNSEARCHABLE_ATTRIBUTE_KEYS),
         )
     )
     if request.value_substring_match:
         attr_filter = and_cond(
-            attr_filter, f.like(column("attr.2"), f"%{request.value_substring_match}%")
+            attr_filter,
+            f.like(f.tupleElement(column("attr"), 2), f"%{request.value_substring_match}%"),
         )
 
     query = Query(

@@ -404,6 +404,8 @@ DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 # This is only for sliced storage sets
 SLICED_STORAGE_SETS: Mapping[str, int] = {}
 
+LOG_MIGRATIONS = True
+
 # Mapping storage set key to a mapping of logical partition
 # to slice id
 LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
