@@ -110,10 +110,6 @@ def test_selects_same_strategy_for_same_org_and_project_ids() -> None:
         ),
         timer=Timer(name="doesntmatter"),
         query_id=uuid.uuid4().hex,
-        tenant_ids={
-            "organization_id": 1,
-            "referrer": "something",
-        },
     )
 
     for _ in range(50):
@@ -147,10 +143,6 @@ def test_selects_strategy_based_on_non_uniform_distribution() -> None:
             ),
             timer=Timer(name="doesntmatter"),
             query_id=uuid.uuid4().hex,
-            tenant_ids={
-                "organization_id": 1,
-                "referrer": "something",
-            },
         )
         strategy = selector.select_routing_strategy(routing_context)
         strategy_counts[type(strategy)] += 1
@@ -177,10 +169,6 @@ def test_config_ordering_does_not_affect_routing_consistency() -> None:
         ),
         timer=Timer(name="doesntmatter"),
         query_id=uuid.uuid4().hex,
-        tenant_ids={
-            "organization_id": 1,
-            "referrer": "something",
-        },
     )
 
     assert isinstance(
@@ -220,10 +208,6 @@ def test_selects_override_if_it_exists() -> None:
         ),
         timer=Timer(name="doesntmatter"),
         query_id=uuid.uuid4().hex,
-        tenant_ids={
-            "organization_id": 1,
-            "referrer": "something",
-        },
     )
 
     assert RoutingStrategySelector().get_storage_routing_config(
@@ -255,10 +239,6 @@ def test_does_not_override_if_organization_id_is_different() -> None:
         ),
         timer=Timer(name="doesntmatter"),
         query_id=uuid.uuid4().hex,
-        tenant_ids={
-            "organization_id": 1,
-            "referrer": "something",
-        },
     )
 
     assert RoutingStrategySelector().get_storage_routing_config(

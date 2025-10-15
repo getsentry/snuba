@@ -75,11 +75,23 @@ class RoutingContext:
     timer: Timer
     in_msg: ProtobufMessage
     query_id: str
-    tenant_ids: dict[str, str | int]
     query_result: Optional[QueryResult] = field(default=None)
     extra_info: dict[str, Any] = field(default_factory=dict)
     allocation_policies_recommendations: dict[str, QuotaAllowance] = field(default_factory=dict)
     cluster_load_info: LoadInfo | None = field(default=None)
+
+    @property
+    def tenant_ids(self) -> dict[str, str | int]:
+        request_meta = extract_message_meta(self.in_msg)
+        return {
+            "organization_id": request_meta.organization_id,
+            "referrer": request_meta.referrer,
+            **(
+                {"project_id": request_meta.project_ids[0]}
+                if hasattr(request_meta, "project_ids") and len(request_meta.project_ids) == 1
+                else {}
+            ),
+        }
 
 
 @dataclass
@@ -455,7 +467,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         try:
             assert routing_decision.routing_context is not None
 
-            routing_decision.strategy.update_allocation_policies_balances(routing_decision, error)
+            self.update_allocation_policies_balances(routing_decision, error)
 
             # these metrics are meant to track reject/throttle/success decisions, so they get emitted even if the query did not run successfully after routing
             if not routing_decision.can_run:

@@ -164,10 +164,6 @@ ROUTING_CONTEXT = RoutingContext(
     query_result=MagicMock(spec=QueryResult),
     extra_info={},
     query_id=uuid.uuid4().hex,
-    tenant_ids={
-        "organization_id": 1,
-        "referrer": "something",
-    },
 )
 
 

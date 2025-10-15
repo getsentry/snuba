@@ -31,7 +31,6 @@ from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
-from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
@@ -192,20 +191,10 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
-        request_meta = extract_message_meta(in_msg)
         self.routing_context = RoutingContext(
             timer=self._timer,
             in_msg=in_msg,
             query_id=uuid.uuid4().hex,
-            tenant_ids={
-                "organization_id": request_meta.organization_id,
-                "referrer": request_meta.referrer,
-                **(
-                    {"project_id": request_meta.project_ids[0]}
-                    if hasattr(request_meta, "project_ids") and len(request_meta.project_ids) == 1
-                    else {}
-                ),
-            },
         )
 
         self.__before_execute(in_msg)
