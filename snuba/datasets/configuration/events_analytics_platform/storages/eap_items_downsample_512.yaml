@@ -108,6 +108,31 @@ schema:
   local_table_name: eap_items_1_downsample_512_local
   dist_table_name: eap_items_1_downsample_512_dist
   partition_format: [date]
+allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
+  - name: BytesScannedRejectingPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - project_id
+        - referrer
+      default_config_overrides:
+        is_active: 0
+        is_enforced: 0
 
 query_processors:
   - processor: UniqInSelectAndHavingProcessor

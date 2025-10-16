@@ -33,7 +33,6 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
@@ -860,7 +859,10 @@ def _apply_allocation_policies_quota(
         summary: dict[str, Any] = {}
         summary["threads_used"] = min_threads_across_policies
 
-        max_bytes_to_read = get_max_bytes_to_read(list(quota_allowances.values()))
+        max_bytes_to_read = min(
+            [qa.max_bytes_to_read for qa in quota_allowances.values()],
+            key=lambda mb: float("inf") if mb == 0 else mb,
+        )
         if max_bytes_to_read != 0:
             query_settings.push_clickhouse_setting("max_bytes_to_read", max_bytes_to_read)
             summary["max_bytes_to_read"] = max_bytes_to_read

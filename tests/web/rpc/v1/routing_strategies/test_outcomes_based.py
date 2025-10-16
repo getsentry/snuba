@@ -1,4 +1,3 @@
-import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -70,7 +69,6 @@ def test_outcomes_based_routing_queries_daily_table() -> None:
     context = RoutingContext(
         in_msg=request,
         timer=Timer("test"),
-        query_id=uuid.uuid4().hex,
     )
     in_msg_meta = extract_message_meta(context.in_msg)
     assert strategy._use_daily(in_msg_meta=in_msg_meta)
@@ -78,7 +76,7 @@ def test_outcomes_based_routing_queries_daily_table() -> None:
     routing_decision = strategy.get_routing_decision(context)
 
     assert routing_decision.tier == Tier.TIER_1
-    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.clickhouse_settings == {}
     assert routing_decision.can_run
 
 
@@ -97,12 +95,11 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     context = RoutingContext(
         in_msg=request,
         timer=Timer("test"),
-        query_id=uuid.uuid4().hex,
     )
 
     routing_decision = strategy.get_routing_decision(context)
     assert routing_decision.tier == Tier.TIER_8
-    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.clickhouse_settings == {}
     assert routing_decision.can_run
 
     # request(s) that query window of 30 minutes, but with timestamps 40 days ago
@@ -117,12 +114,11 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     context = RoutingContext(
         in_msg=request,
         timer=Timer("test"),
-        query_id=uuid.uuid4().hex,
     )
 
     routing_decision = strategy.get_routing_decision(context)
     assert routing_decision.tier == Tier.TIER_8
-    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.clickhouse_settings == {}
     assert routing_decision.can_run
 
     # highest accuracy
@@ -131,12 +127,11 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     context = RoutingContext(
         in_msg=request,
         timer=Timer("test"),
-        query_id=uuid.uuid4().hex,
     )
 
     routing_decision = strategy.get_routing_decision(context)
     assert routing_decision.tier == Tier.TIER_8
-    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.clickhouse_settings == {}
     assert routing_decision.can_run
 
 
@@ -152,11 +147,10 @@ def test_outcomes_based_routing_normal_mode(store_outcomes_fixture: Any) -> None
         RoutingContext(
             in_msg=request,
             timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
         )
     )
     assert routing_decision.tier == Tier.TIER_1
-    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.clickhouse_settings == {}
     assert routing_decision.can_run
 
 
@@ -173,22 +167,20 @@ def test_outcomes_based_routing_downsample(store_outcomes_fixture: Any) -> None:
         RoutingContext(
             in_msg=request,
             timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
         )
     )
     assert routing_decision.tier == Tier.TIER_8
-    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.clickhouse_settings == {}
     assert routing_decision.can_run
     state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 500_000)
     routing_decision = strategy.get_routing_decision(
         RoutingContext(
             in_msg=request,
             timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
         )
     )
     assert routing_decision.tier == Tier.TIER_64
-    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.clickhouse_settings == {}
     assert routing_decision.can_run
 
     state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 50_000)
@@ -196,11 +188,10 @@ def test_outcomes_based_routing_downsample(store_outcomes_fixture: Any) -> None:
         RoutingContext(
             in_msg=request,
             timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
         )
     )
     assert routing_decision.tier == Tier.TIER_512
-    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.clickhouse_settings == {}
     assert routing_decision.can_run
 
 
@@ -215,12 +206,11 @@ def test_outcomes_based_routing_highest_accuracy_mode(store_outcomes_fixture: An
         RoutingContext(
             in_msg=request,
             timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
         )
     )
 
     assert routing_decision.tier == Tier.TIER_1
-    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.clickhouse_settings == {}
     assert routing_decision.can_run
 
 
@@ -238,9 +228,8 @@ def test_outcomes_based_routing_defaults_to_spans_for_unspecified_item_type(
         RoutingContext(
             in_msg=request,
             timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
         )
     )
     assert routing_decision.tier == Tier.TIER_512
-    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.clickhouse_settings == {}
     assert routing_decision.can_run
