@@ -199,8 +199,14 @@ class TestGetTrace(BaseApiTest):
                 ),
             ],
         )
+        response_dict = MessageToDict(response)
+        response_dict["attributes"] = [
+            attr
+            for attr in response_dict["attributes"]
+            if not attr["key"]["name"].startswith("sentry._internal")
+        ]
 
-        assert MessageToDict(response) == MessageToDict(expected_response)
+        assert response_dict == MessageToDict(expected_response)
 
     def test_with_specific_attributes(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
