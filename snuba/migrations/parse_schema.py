@@ -8,6 +8,7 @@ from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
 from snuba.clickhouse.columns import (
+    JSON,
     UUID,
     AggregateFunction,
     Array,
@@ -34,7 +35,7 @@ grammar = Grammar(
     r"""
     type             = primitive / lowcardinality / agg / simple_agg / nullable / array / map / tuple
     # datetime64 needs to be before basic_type to not be parsed as DateTime
-    primitive        = datetime64 / basic_type / uint / int / float / fixedstring / enum
+    primitive        = datetime64 / basic_type / uint / int / float / fixedstring / enum / json
     # DateTime must come before Date
     basic_type       = "DateTime" / "Date" / "IPv4" / "IPv6" / "String" / "UUID" / "Bool"
     uint             = "UInt" uint_size
@@ -68,6 +69,16 @@ grammar = Grammar(
     datetime64_precision    = "3" / "6" / "9"
     datetime64_timezone     = ~r"[a-zA-Z0-9_/]+"
     tuple            = "Tuple" open_paren space* (primitive / lowcardinality / nullable) (comma space* (primitive / lowcardinality / nullable))* space* close_paren
+    json             = "JSON" (open_paren space* json_params space* close_paren)?
+    json_params      = json_param (comma space* json_param)*
+    json_param       = json_max_dynamic_paths / json_max_dynamic_types / json_type_hint / json_skip_path / json_skip_regexp
+    json_max_dynamic_paths = "max_dynamic_paths" space* equal space* ~r"\d+"
+    json_max_dynamic_types = "max_dynamic_types" space* equal space* ~r"\d+"
+    json_type_hint   = quote json_path quote space* type
+    json_skip_path   = "SKIP" space* quote json_path quote
+    json_skip_regexp = "SKIP" space* "REGEXP" space* quote json_regexp quote
+    json_path        = ~r"[a-zA-Z0-9_.\[\]]+"
+    json_regexp      = ~r"[^']+"
     """
 )
 
@@ -88,6 +99,7 @@ _TYPES: dict[str, type[ColumnType[MigrationModifiers]]] = {
     "DateTime": DateTime,
     "IPv4": IPv4,
     "IPv6": IPv6,
+    "JSON": JSON,
     "String": String,
     "UUID": UUID,
 }
@@ -134,9 +146,7 @@ class Visitor(NodeVisitor):  # type: ignore
     ) -> Sequence[tuple[str, int]]:
         return [c[0] for c in visited_children]
 
-    def visit_enum_pair(
-        self, node: Node, visited_children: Iterable[Any]
-    ) -> tuple[str, int]:
+    def visit_enum_pair(self, node: Node, visited_children: Iterable[Any]) -> tuple[str, int]:
         (_quot, enum_str, _quot, _sp, _eq, _sp, enum_val) = visited_children
         return (enum_str, enum_val)
 
@@ -191,9 +201,7 @@ class Visitor(NodeVisitor):  # type: ignore
     def visit_lowcardinality(
         self,
         node: Node,
-        visited_children: tuple[
-            Any, Any, Any, ColumnType[MigrationModifiers], Any, Any
-        ],
+        visited_children: tuple[Any, Any, Any, ColumnType[MigrationModifiers], Any, Any],
     ) -> ColumnType[MigrationModifiers]:
         (_lc, _paren, _sp, inner_type, _sp, _paren) = visited_children
         return merge_modifiers(inner_type, MigrationModifiers(low_cardinality=True))
@@ -201,9 +209,7 @@ class Visitor(NodeVisitor):  # type: ignore
     def visit_nullable(
         self,
         node: Node,
-        visited_children: tuple[
-            Any, Any, Any, ColumnType[MigrationModifiers], Any, Any
-        ],
+        visited_children: tuple[Any, Any, Any, ColumnType[MigrationModifiers], Any, Any],
     ) -> ColumnType[MigrationModifiers]:
         (_null, _paren, _sp, inner_type, _sp, _paren) = visited_children
         # TODO: Remove these assertions when ColumnType will be generic
@@ -299,25 +305,17 @@ def _get_column(
     column: ColumnType[MigrationModifiers] = Visitor().visit(grammar.parse(column_type))
 
     if default_type == "MATERIALIZED":
-        column = merge_modifiers(
-            column, MigrationModifiers(materialized=_strip_cast(default_expr))
-        )
+        column = merge_modifiers(column, MigrationModifiers(materialized=_strip_cast(default_expr)))
     elif default_type == "DEFAULT":
-        column = merge_modifiers(
-            column, MigrationModifiers(default=_strip_cast(default_expr))
-        )
+        column = merge_modifiers(column, MigrationModifiers(default=_strip_cast(default_expr)))
 
     if codec_expr:
-        column = merge_modifiers(
-            column, MigrationModifiers(codecs=codec_expr.split(", "))
-        )
+        column = merge_modifiers(column, MigrationModifiers(codecs=codec_expr.split(", ")))
 
     return column
 
 
-def get_local_schema(
-    conn: Client, table_name: str
-) -> Mapping[str, ColumnType[MigrationModifiers]]:
+def get_local_schema(conn: Client, table_name: str) -> Mapping[str, ColumnType[MigrationModifiers]]:
     return {
         column_name: _get_column(column_type, default_type, default_expr, codec_expr)
         for column_name, column_type, default_type, default_expr, _comment, codec_expr in [

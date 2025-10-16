@@ -3,6 +3,7 @@ from typing import Tuple
 import pytest
 
 from snuba.clickhouse.columns import (
+    JSON,
     UUID,
     AggregateFunction,
     Array,
@@ -128,6 +129,8 @@ test_data = [
             )
         ),
     ),
+    # JSON type
+    (("JSON", "", "", ""), JSON()),
 ]
 
 
@@ -137,6 +140,4 @@ def test_parse_column(
     expected_output: Tuple[Tuple[str, str, str, str, str], ColumnType[Modifiers]],
 ) -> None:
     (input_name, input_type, default_expr, codec_expr) = input
-    assert (
-        _get_column(input_name, input_type, default_expr, codec_expr) == expected_output
-    )
+    assert _get_column(input_name, input_type, default_expr, codec_expr) == expected_output
