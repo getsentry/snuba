@@ -200,11 +200,13 @@ class TestGetTrace(BaseApiTest):
             ],
         )
         response_dict = MessageToDict(response)
-        response_dict["attributes"] = [
-            attr
-            for attr in response_dict["attributes"]
-            if not attr["key"]["name"].startswith("sentry._internal")
-        ]
+        for item_group in response_dict["itemGroups"]:
+            for item in item_group["items"]:
+                item["attributes"] = [
+                    attr
+                    for attr in item["attributes"]
+                    if not attr["key"]["name"].startswith("sentry._internal")
+                ]
 
         assert response_dict == MessageToDict(expected_response)
 
