@@ -431,7 +431,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
 
         # The profile_id, profiler_id and replay_id are promoted as columns, so no need to store them
         # again in the context array
-        profile_ctx = sanitized_context.get("profile", {})
+        profile_ctx = sanitized_context.get("profile", {}) or {}
         if profile_ctx is not None:
             profile_ctx.pop("profile_id", None)
             profile_ctx.pop("profiler_id", None)
