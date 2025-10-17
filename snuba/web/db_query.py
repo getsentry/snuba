@@ -27,6 +27,7 @@ from snuba.configs.configuration import ResourceIdentifier
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
+    DEFAULT_PASSTHROUGH_POLICY,
     MAX_THRESHOLD,
     AllocationPolicy,
     AllocationPolicyViolations,
@@ -809,7 +810,7 @@ def _apply_allocation_policies_quota(
     Sets the resource quota in the query_settings object to the minimum of all available
     quota allowances from the given allocation policies.
     """
-    if len(allocation_policies) == 0:
+    if allocation_policies == [DEFAULT_PASSTHROUGH_POLICY]:
         logger.info("No allocation policies to apply")
         return
 
