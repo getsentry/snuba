@@ -1,6 +1,13 @@
+from functools import cached_property
 from typing import Any, Mapping, Optional, Sequence
 
 from arroyo.backends.kafka import KafkaPayload
+from confluent_kafka.admin import (
+    AdminClient,
+    ConfigResource,
+    ResourceType,
+    _TopicCollection,
+)
 
 from snuba import settings
 from snuba.clickhouse.http import InsertStatement, JSONRow
@@ -22,6 +29,7 @@ from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.schemas import ReadOnly
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic, get_topic_creation_config
 from snuba.writer import BatchWriter
 
@@ -57,13 +65,28 @@ class KafkaTopicSpec:
 
         return physical_topic
 
-    @property
+    @cached_property
     def partitions_number(self) -> int:
-        return settings.TOPIC_PARTITION_COUNTS.get(self.__topic.value, 1)
+        config = get_default_kafka_configuration(self.__topic, None)
+        client = AdminClient(config)
+        topic_name = self.get_physical_topic_name()
+        return len(
+            client.describe_topics(_TopicCollection([topic_name]))[topic_name]
+            .result()
+            .partitions
+        )
 
-    @property
-    def replication_factor(self) -> int:
-        return 1
+    @cached_property
+    def topic_current_config_values(self) -> dict[str, Any]:
+        config = get_default_kafka_configuration(self.__topic, None)
+        client = AdminClient(config)
+        topic_name = self.get_physical_topic_name()
+        config_resource = ConfigResource(restype=ResourceType.TOPIC, name=topic_name)
+        config = client.describe_configs(
+            resources=[config_resource],
+            request_timeout=30,
+        )[config_resource].result()
+        return {name: entry.value for name, entry in config.items()}
 
     @property
     def topic_creation_config(self) -> Mapping[str, str]:

@@ -24,8 +24,7 @@ use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
-use crate::strategies::clickhouse::batch::{BatchFactory, HttpBatch};
-use crate::strategies::clickhouse::ClickhouseWriterStep;
+use crate::strategies::clickhouse::writer_v2::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
@@ -58,13 +57,24 @@ pub struct ConsumerStrategyFactoryV2 {
     pub accountant_topic_config: config::TopicConfig,
     pub stop_at_timestamp: Option<i64>,
     pub batch_write_timeout: Option<Duration>,
-    pub custom_envoy_request_timeout: Option<u64>,
     pub join_timeout_ms: Option<u64>,
     pub health_check: String,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
     fn update_partitions(&self, partitions: &HashMap<Partition, u64>) {
+        let mut assigned_partitions = partitions
+            .keys()
+            .map(|partition| partition.index)
+            .collect::<Vec<_>>();
+        assigned_partitions.sort_unstable();
+        let assigned_partitions_string = assigned_partitions
+            .iter()
+            .map(|n| n.to_string())
+            .collect::<Vec<String>>()
+            .join("-");
+        set_global_tag("assigned_partitions".to_owned(), assigned_partitions_string);
+
         match partitions.keys().map(|partition| partition.index).min() {
             Some(min) => set_global_tag("min_partition".to_owned(), min.to_string()),
             None => set_global_tag("min_partition".to_owned(), "none".to_owned()),
@@ -75,7 +85,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         // Commit offsets
         let next_step = CommitOffsets::new(Duration::from_secs(1));
 
-        // Produce commit log if there is one
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
             if let Some((ref producer, destination)) = self.commit_log_producer {
                 Box::new(ProduceCommitLog::new(
@@ -102,35 +111,24 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     self.accountant_topic_config.broker_config.clone(),
                     &self.accountant_topic_config.physical_topic_name,
                 )),
-                _ => next_step,
+                _ => Box::new(next_step),
             };
-
-        // Write to clickhouse
-        let next_step = ClickhouseWriterStep::new(next_step, &self.clickhouse_concurrency);
 
         let next_step = SetJoinTimeout::new(
             next_step,
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
-        // Batch insert rows
-        let batch_factory = BatchFactory::new(
-            &self.storage_config.clickhouse_cluster.host,
-            self.storage_config.clickhouse_cluster.http_port,
-            &self.storage_config.clickhouse_table_name,
-            &self.storage_config.clickhouse_cluster.database,
+        let next_step = ClickhouseWriterStep::new(
+            next_step,
+            self.storage_config.clickhouse_cluster.clone(),
+            self.storage_config.clickhouse_table_name.clone(),
+            false,
             &self.clickhouse_concurrency,
-            &self.storage_config.clickhouse_cluster.user,
-            &self.storage_config.clickhouse_cluster.password,
-            self.storage_config.clickhouse_cluster.secure,
-            self.async_inserts,
-            self.batch_write_timeout,
-            self.custom_envoy_request_timeout,
         );
 
         let accumulator = Arc::new(
-            |batch: BytesInsertBatch<HttpBatch>,
-             small_batch: Message<BytesInsertBatch<RowData>>| {
+            |batch: BytesInsertBatch<RowData>, small_batch: Message<BytesInsertBatch<RowData>>| {
                 Ok(batch.merge(small_batch.into_payload()))
             },
         );
@@ -139,8 +137,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             next_step,
             accumulator,
             Arc::new(move || {
-                BytesInsertBatch::new(
-                    batch_factory.new_batch(),
+                BytesInsertBatch::<RowData>::new(
+                    RowData::default(),
                     None,
                     None,
                     None,

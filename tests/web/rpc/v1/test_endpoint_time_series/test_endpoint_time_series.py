@@ -1667,6 +1667,147 @@ class TestTimeSeriesApi(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTimeSeries().execute(message)
 
+    def test_coalesce_attributes(self) -> None:
+        granularity_secs = 300
+        query_duration = 60 * 30
+
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[
+                DummyMetric(
+                    "gen_ai.usage.total_tokens",
+                    get_value=lambda x: 1,
+                ),
+            ],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    label="label",
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_INT,
+                            name="gen_ai.usage.total_tokens",
+                        ),
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+
+        assert response.result_timeseries == [
+            TimeSeries(
+                label="label",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=300, data_present=True, sample_count=300)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
+
+    def test_filter_coalesce_attributes(self) -> None:
+        granularity_secs = 300
+        query_duration = 60 * 30
+
+        # does not match the `url.path = "a"` filter
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("gen_ai.usage.total_tokens", get_value=lambda x: 1)],
+        )
+
+        # matches the `url.path = "a"` filter
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("gen_ai.usage.total_tokens", get_value=lambda x: 1)],
+            attributes={"url.path": AnyValue(string_value="a")},
+        )
+
+        # matches the `url.path = "a"` filter because it's coalesced using `http.target`
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("gen_ai.usage.total_tokens", get_value=lambda x: 1)],
+            attributes={"http.target": AnyValue(string_value="a")},
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    label="label",
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_INT,
+                            name="gen_ai.usage.total_tokens",
+                        ),
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="url.path"),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="a"),
+                )
+            ),
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+
+        assert response.result_timeseries == [
+            TimeSeries(
+                label="label",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=600, data_present=True, sample_count=600)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
+
 
 class TestUtils:
     @pytest.mark.redis_db

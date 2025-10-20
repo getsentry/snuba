@@ -1,6 +1,7 @@
 import pytest
 
-from snuba.query.allocation_policies import InvalidPolicyConfig, QueryResultOrError
+from snuba.configs.configuration import InvalidConfig
+from snuba.query.allocation_policies import QueryResultOrError
 from snuba.query.allocation_policies.cross_org import CrossOrgQueryAllocationPolicy
 from snuba.web import QueryResult
 
@@ -35,7 +36,7 @@ class TestCrossOrgQueryAllocationPolicy:
         assert unimportant_allowance.max_threads == 10
         assert unimportant_allowance.explanation == {
             "reason": "pass_through",
-            "storage_key": "StorageKey.GENERIC_METRICS_DISTRIBUTIONS",
+            "storage_key": "generic_metrics_distributions",
         }
         cross_org_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
@@ -146,7 +147,7 @@ class TestCrossOrgQueryAllocationPolicy:
                 },
             }
         )
-        with pytest.raises(InvalidPolicyConfig):
+        with pytest.raises(InvalidConfig):
             policy.set_config_value(
                 "referrer_concurrent_override",
                 6,

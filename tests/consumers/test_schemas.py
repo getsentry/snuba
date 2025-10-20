@@ -81,6 +81,12 @@ def test_all_schemas(case: Case) -> None:
 # Topic that is deprecated but is still in snuba's codebase
 DEPRECATED_TOPICS = [
     "cdc",
+    "snuba-spans",
+    "snuba-eap-spans-commit-log",
+    "scheduled-subscriptions-eap-spans",
+    "eap-spans-subscription-results",
+    "snuba-eap-mutations",
+    "snuba-ourlogs",
 ]
 
 

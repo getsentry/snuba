@@ -4,14 +4,15 @@ import logging
 from typing import Callable, cast
 
 from snuba import state
+from snuba.configs.configuration import Configuration
 from snuba.query.allocation_policies import (
     CROSS_ORG_SUGGESTION,
     PASS_THROUGH_REFERRERS_SUGGESTION,
     AllocationPolicy,
-    AllocationPolicyConfig,
     AllocationPolicyViolations,
     InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
+    QueryType,
     QuotaAllowance,
 )
 from snuba.state.rate_limit import (
@@ -34,7 +35,7 @@ _PASS_THROUGH_REFERRERS = set(
         "tsdb-modelid:4.batch_alert_event_uniq_user_frequency",
         "tsdb-modelid:4.batch_alert_event_frequency_percent",
         "tsdb-modelid:4.wf_batch_alert_event_frequency",
-        "tsdb-modelid:4.wf_batch_alert_event_uniq_user_frequency",
+        "tsdb-modelid:300.wf_batch_alert_event_uniq_user_frequency",
         "tsdb-modelid:4.wf_batch_alert_event_frequency_percent",
     ]
 )
@@ -46,9 +47,9 @@ import typing
 
 
 class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         return [
-            AllocationPolicyConfig(
+            Configuration(
                 name="rate_limit_shard_factor",
                 description="""number of shards that each redis set is supposed to have.
                  increasing this value multiplies the number of redis keys by that
@@ -58,7 +59,7 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
                 value_type=int,
                 default=1,
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 name="max_query_duration_s",
                 description="""maximum duration of a query in seconds. Queries that exceed this duration  are considered finished by the rate limiter. This reduces memory usage. If you turn this down lower than the actual timeout period, the system can start undercounting concurrent queries""",
                 value_type=int,
@@ -73,7 +74,7 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def _is_within_rate_limit(
         self, query_id: str, rate_limit_params: RateLimitParameters
     ) -> tuple[RateLimitStats, bool, str]:
-        rate_limit_prefix = f"{self.runtime_config_prefix}.rate_limit"
+        rate_limit_prefix = f"{self.component_name()}.rate_limit"
         # HACK: this is a harcoded value because this rate_history_s is not a useful
         # configuration parameter. It's used for the per-second caclulation but that calculation
         # is fundamentally flawed
@@ -113,7 +114,7 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     ) -> None:
         # removes the current query from the rate limit bookkeeping so it is no longer counted
         # in rate limits
-        rate_limit_prefix = f"{self.runtime_config_prefix}.rate_limit"
+        rate_limit_prefix = f"{self.component_name()}.rate_limit"
         rate_limit_shard_factor = self.get_config_value("rate_limit_shard_factor")
 
         was_rate_limited = result_or_error.error is not None and isinstance(
@@ -131,36 +132,36 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
 
 
 class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         return super()._additional_config_definitions() + [
-            AllocationPolicyConfig(
+            Configuration(
                 name="concurrent_limit",
                 description="maximum amount of concurrent queries per tenant",
                 value_type=int,
                 default=DEFAULT_CONCURRENT_QUERIES_LIMIT,
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 name="referrer_project_override",
                 description="override concurrent limit for a specific project, referrer combo",
                 value_type=int,
                 default=-1,
                 param_types={"referrer": str, "project_id": int},
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 name="referrer_organization_override",
                 description="override concurrent limit for a specific organization_id, referrer combo",
                 value_type=int,
                 default=-1,
                 param_types={"referrer": str, "organization_id": int},
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 name="project_override",
                 description="override concurrent limit for a specific project_id",
                 value_type=int,
                 default=-1,
                 param_types={"project_id": int},
             ),
-            AllocationPolicyConfig(
+            Configuration(
                 name="organization_override",
                 description="override concurrent limit for a specific organization_id",
                 value_type=int,
@@ -291,3 +292,7 @@ class DeleteConcurrentRateLimitAllocationPolicy(ConcurrentRateLimitAllocationPol
     @property
     def rate_limit_name(self) -> str:
         return "delete_concurrent_rate_limit_policy"
+
+    @property
+    def query_type(self) -> QueryType:
+        return QueryType.DELETE

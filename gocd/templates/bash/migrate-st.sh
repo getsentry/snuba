@@ -6,10 +6,10 @@
 # This script should be merged with migrate.sh if we can figure
 # out a common migration script for all regions.
 
-eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
-/devinfra/scripts/k8s/k8stunnel
+eval $(regions-project-env-vars --region="${SENTRY_REGION}")
+/devinfra/scripts/get-cluster-credentials
 
-/devinfra/scripts/k8s/k8s-spawn-job.py \
+k8s-spawn-job \
   --label-selector="service=${SNUBA_SERVICE_NAME}" \
   --container-name="${SNUBA_SERVICE_NAME}" \
   "snuba-migrate" \

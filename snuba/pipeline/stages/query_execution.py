@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import textwrap
+from collections import defaultdict
 from dataclasses import replace
 from math import floor
 from typing import Any, MutableMapping, Optional
@@ -45,9 +46,7 @@ metrics = MetricsWrapper(environment.metrics, "api")
 logger = logging.getLogger("snuba.pipeline.stages.query_execution")
 
 
-class ExecutionStage(
-    QueryPipelineStage[ClickhouseQuery | CompositeQuery[Table], QueryResult]
-):
+class ExecutionStage(QueryPipelineStage[ClickhouseQuery | CompositeQuery[Table], QueryResult]):
     def __init__(
         self,
         attribution_info: AttributionInfo,
@@ -100,9 +99,7 @@ def _dry_run_query_runner(
     clickhouse_query: ClickhouseQuery | CompositeQuery[Table],
     cluster_name: str,
 ) -> QueryResult:
-    with sentry_sdk.start_span(
-        description="dryrun_create_query", op="function"
-    ) as span:
+    with sentry_sdk.start_span(description="dryrun_create_query", op="function") as span:
         formatted_query = format_query(clickhouse_query)
         span.set_data("query", formatted_query.structured())
 
@@ -148,23 +145,13 @@ def _run_and_apply_column_names(
         cluster_name,
     )
 
-    alias_name_mapping: MutableMapping[str, list[str]] = {}
+    alias_name_mapping: MutableMapping[str, list[str]] = defaultdict(list)
     for select_col in clickhouse_query.get_selected_columns():
         alias = select_col.expression.alias
         name = select_col.name
-        if alias is None or name is None:
-            logger.warning(
-                "Missing alias or name for selected expression",
-                extra={
-                    "selected_expression_name": name,
-                    "selected_expression_alias": alias,
-                },
-                exc_info=True,
-            )
-        elif alias in alias_name_mapping and name not in alias_name_mapping[alias]:
-            alias_name_mapping[alias].append(name)
-        else:
-            alias_name_mapping[alias] = [name]
+        if alias is None or name is None or name in alias_name_mapping[alias]:
+            continue
+        alias_name_mapping[alias].append(name)
 
     transform_column_names(result, alias_name_mapping)
     return result
@@ -298,10 +285,7 @@ def _apply_turbo_sampling_if_needed(
     into a query processor.
     """
     if isinstance(clickhouse_query, ClickhouseQuery):
-        if (
-            query_settings.get_turbo()
-            and not clickhouse_query.get_from_clause().sampling_rate
-        ):
+        if query_settings.get_turbo() and not clickhouse_query.get_from_clause().sampling_rate:
             clickhouse_query.set_from_clause(
                 replace(
                     clickhouse_query.get_from_clause(),

@@ -1,7 +1,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
-use sentry_arroyo::gauge;
 use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use sentry_arroyo::{counter, gauge};
 use std::mem;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::{channel, Sender};
@@ -45,7 +45,6 @@ impl BatchFactory {
         clickhouse_secure: bool,
         async_inserts: bool,
         batch_write_timeout: Option<Duration>,
-        custom_envoy_request_timeout: Option<u64>,
     ) -> Self {
         let mut headers = HeaderMap::with_capacity(6);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
@@ -62,12 +61,6 @@ impl BatchFactory {
             "X-ClickHouse-Database",
             HeaderValue::from_str(database).unwrap(),
         );
-        if let Some(custom_envoy_request_timeout) = custom_envoy_request_timeout {
-            headers.insert(
-                "x-envoy-upstream-rq-per-try-timeout-ms",
-                HeaderValue::from_str(&custom_envoy_request_timeout.to_string()).unwrap(),
-            );
-        }
 
         let mut query_params = String::new();
         query_params.push_str("load_balancing=in_order&insert_distributed_sync=1");
@@ -148,6 +141,7 @@ impl BatchFactory {
                 if !response.status().is_success() {
                     let status = response.status();
                     let body = response.text().await;
+                    counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status.to_string());
                     anyhow::bail!(
                         "bad response while inserting rows, status: {}, response body: {:?}",
                         status,
@@ -289,7 +283,6 @@ mod tests {
             false,
             false,
             None,
-            None,
         );
 
         let mut batch = factory.new_batch();
@@ -326,7 +319,6 @@ mod tests {
             false,
             true,
             None,
-            None,
         );
 
         let mut batch = factory.new_batch();
@@ -362,7 +354,6 @@ mod tests {
             false,
             false,
             None,
-            None,
         );
 
         let mut batch = factory.new_batch();
@@ -395,7 +386,6 @@ mod tests {
             "",
             false,
             false,
-            None,
             None,
         );
 
@@ -434,7 +424,6 @@ mod tests {
             // pass in an unreasonably short timeout
             // which prevents the client request from reaching Clickhouse
             Some(Duration::from_millis(0)),
-            None,
         );
 
         let mut batch = factory.new_batch();
@@ -470,7 +459,6 @@ mod tests {
             true,
             // pass in a reasonable timeout
             Some(Duration::from_millis(1000)),
-            None,
         );
 
         let mut batch = factory.new_batch();

@@ -20,16 +20,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
-from snuba.query.dsl import (
-    arrayJoin,
-    column,
-    count,
-    in_cond,
-    literal,
-    literals_array,
-    not_cond,
-    tupleElement,
-)
+from snuba.query.dsl import arrayJoin, column, count, tupleElement
 from snuba.query.expressions import FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -51,8 +42,9 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
 )
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression_eap_items,
+    attribute_key_to_expression,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_items.heatmap_builder import HeatmapBuilder
 
 _DEFAULT_ROW_LIMIT = 10_000
 
@@ -61,25 +53,14 @@ DEFAULT_BUCKETS = 10
 
 COUNT_LABEL = "count()"
 
-# These are attributes that were not stored in attr_str_ or attr_num_ in eap_spans because they were stored in columns.
-# Since we store these in the attribute columns in eap_items, we need to exclude them in endpoints that don't expect them to be in the attribute columns.
-ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS: set[str] = {
-    "sentry.raw_description",
-    "sentry.transaction",
-    "sentry.start_timestamp_precise",
-    "sentry.end_timestamp_precise",
-    "sentry.duration_ms",
-    "sentry.event_id",
-    "sentry.exclusive_time_ms",
-    "sentry.is_segment",
-    "sentry.parent_span_id",
-    "sentry.profile_id",
-    "sentry.received",
-    "sentry.segment_id",
-}
+EAP_ITEMS_ENTITY = Entity(
+    key=EntityKey("eap_items"),
+    schema=get_entity(EntityKey("eap_items")).get_data_model(),
+    sample=None,
+)
 
 
-def _transform_results(
+def _transform_attr_distribution_results(
     results: Iterable[Dict[str, Any]],
     request_meta: RequestMeta,
 ) -> Iterable[AttributeDistribution]:
@@ -100,15 +81,11 @@ def _transform_results(
     return list(res.values())
 
 
-def _build_attr_distribution_snuba_request(
+def _build_snuba_request(
     request: TraceItemStatsRequest, query: Query, routing_decision: RoutingDecision
 ) -> SnubaRequest:
-    query_settings = (
-        setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
-    )
-    routing_decision.strategy.merge_clickhouse_settings(
-        routing_decision, query_settings
-    )
+    query_settings = setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
+    routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
     query_settings.set_sampling_tier(routing_decision.tier)
 
     return SnubaRequest(
@@ -133,12 +110,6 @@ def _build_attr_distribution_snuba_request(
 def _build_attr_distribution_query(
     in_msg: TraceItemStatsRequest, distributions_params: AttributeDistributionsRequest
 ) -> Query:
-    entity = Entity(
-        key=EntityKey("eap_items"),
-        schema=get_entity(EntityKey("eap_items")).get_data_model(),
-        sample=None,
-    )
-
     concat_attr_maps = FunctionCall(
         alias="attr_str_concat",
         function_name="mapConcat",
@@ -180,23 +151,14 @@ def _build_attr_distribution_query(
 
     trace_item_filters_expression = trace_item_filters_to_expression(
         in_msg.filter,
-        (attribute_key_to_expression_eap_items),
+        (attribute_key_to_expression),
     )
-
     query = Query(
-        from_clause=entity,
+        from_clause=EAP_ITEMS_ENTITY,
         selected_columns=selected_columns,
         condition=base_conditions_and(
             in_msg.meta,
             trace_item_filters_expression,
-            not_cond(
-                in_cond(
-                    attrs_string_keys,
-                    literals_array(
-                        None, list(map(literal, ATTRIBUTES_TO_EXCLUDE_IN_EAP_ITEMS))
-                    ),
-                ),
-            ),
         ),
         order_by=[
             OrderBy(
@@ -205,8 +167,8 @@ def _build_attr_distribution_query(
             ),
         ],
         groupby=[
-            attrs_string_keys,
-            attrs_string_values,
+            column("attr_key"),
+            column("attr_value"),
         ],
         limitby=LimitBy(
             limit=(
@@ -214,7 +176,7 @@ def _build_attr_distribution_query(
                 if distributions_params.max_buckets > 0
                 else DEFAULT_BUCKETS
             ),
-            columns=[attrs_string_keys],
+            columns=[column("attr_key")],
         ),
         limit=(
             distributions_params.max_attributes
@@ -241,18 +203,14 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
             result = TraceItemStatsResult()
             if requested_type.HasField("attribute_distributions"):
                 if requested_type.attribute_distributions.max_buckets > MAX_BUCKETS:
-                    raise BadSnubaRPCRequestException(
-                        f"Max allowed buckets is {MAX_BUCKETS}."
-                    )
+                    raise BadSnubaRPCRequestException(f"Max allowed buckets is {MAX_BUCKETS}.")
 
                 query = _build_attr_distribution_query(
                     in_msg, requested_type.attribute_distributions
                 )
                 treeify_or_and_conditions(query)
-                snuba_request = _build_attr_distribution_snuba_request(
-                    in_msg, query, routing_decision
-                )
 
+                snuba_request = _build_snuba_request(in_msg, query, routing_decision)
                 query_res = run_query(
                     dataset=PluggableDataset(name="eap", all_entities=[]),
                     request=snuba_request,
@@ -260,11 +218,24 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
                 )
                 routing_decision.routing_context.query_result = query_res
 
-                attributes = _transform_results(
+                attributes = _transform_attr_distribution_results(
                     query_res.result.get("data", []), in_msg.meta
                 )
                 result.attribute_distributions.CopyFrom(
                     AttributeDistributions(attributes=attributes)
+                )
+            elif requested_type.HasField("heatmap"):
+                res_heatmap = HeatmapBuilder(
+                    heatmap=requested_type.heatmap,
+                    in_msg=in_msg,
+                    routing_decision=routing_decision,
+                    timer=self._timer,
+                    max_buckets=MAX_BUCKETS,
+                ).build()
+                result.heatmap.CopyFrom(res_heatmap)
+            else:
+                raise BadSnubaRPCRequestException(
+                    f'Invalid stats type {requested_type.WhichOneof("type")}'
                 )
 
             results.append(result)

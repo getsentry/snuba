@@ -5,10 +5,16 @@ from typing import Any, Iterable, Tuple
 
 import sentry_sdk
 from google.protobuf.message import Message as ProtobufMessage
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 
+from snuba import settings
 from snuba.state import get_config
+from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
+)
+from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
+    OutcomesFlexTimeRoutingStrategy,
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
@@ -34,13 +40,9 @@ class StorageRoutingConfig:
         if config_dict == {}:
             return _DEFAULT_STORAGE_ROUTING_CONFIG
         try:
-            if "version" not in config_dict or not isinstance(
-                config_dict["version"], int
-            ):
+            if "version" not in config_dict or not isinstance(config_dict["version"], int):
                 raise ValueError("please specify version as an integer")
-            if "config" not in config_dict or not isinstance(
-                config_dict["config"], dict
-            ):
+            if "config" not in config_dict or not isinstance(config_dict["config"], dict):
                 raise ValueError("please specify config as a dict")
 
             version = config_dict["version"]
@@ -57,9 +59,7 @@ class StorageRoutingConfig:
                 try:
                     BaseRoutingStrategy.get_from_name(strategy_name)()
                 except Exception:
-                    raise ValueError(
-                        f"{strategy_name} does not inherit from BaseRoutingStrategy"
-                    )
+                    raise ValueError(f"{strategy_name} does not inherit from BaseRoutingStrategy")
                 routing_strategy_and_percentage_routed[strategy_name] = percentage
 
                 total_percentage += percentage
@@ -85,14 +85,11 @@ _DEFAULT_STORAGE_ROUTING_CONFIG = StorageRoutingConfig(
 
 
 class RoutingStrategySelector:
-    def get_storage_routing_config(
-        self, in_msg: ProtobufMessage
-    ) -> StorageRoutingConfig:
-        organization_id = str(in_msg.meta.organization_id)  # type: ignore
+    def get_storage_routing_config(self, in_msg: ProtobufMessage) -> StorageRoutingConfig:
+        in_msg_meta = extract_message_meta(in_msg)
+        organization_id = str(in_msg_meta.organization_id)
         try:
-            overrides = json.loads(
-                str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}"))
-            )
+            overrides = json.loads(str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}")))
             if organization_id in overrides.keys():
                 return StorageRoutingConfig.from_json(overrides[organization_id])
 
@@ -102,11 +99,18 @@ class RoutingStrategySelector:
             sentry_sdk.capture_message(f"Error getting storage routing config: {e}")
             return _DEFAULT_STORAGE_ROUTING_CONFIG
 
-    def select_routing_strategy(
-        self, routing_context: RoutingContext
-    ) -> BaseRoutingStrategy:
+    def select_routing_strategy(self, routing_context: RoutingContext) -> BaseRoutingStrategy:
         try:
-            combined_org_and_project_ids = f"{routing_context.in_msg.meta.organization_id}:{'.'.join(str(pid) for pid in sorted(routing_context.in_msg.meta.project_ids))}"  # type: ignore
+            in_msg_meta = extract_message_meta(routing_context.in_msg)
+
+            if (
+                in_msg_meta.HasField("downsampled_storage_config")
+                and in_msg_meta.downsampled_storage_config.mode
+                == DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME
+            ):
+                return OutcomesFlexTimeRoutingStrategy()
+
+            combined_org_and_project_ids = f"{in_msg_meta.organization_id}:{'.'.join(str(pid) for pid in sorted(in_msg_meta.project_ids))}"
             bucket = (
                 int(hashlib.md5(combined_org_and_project_ids.encode()).hexdigest(), 16)
                 % _NUM_BUCKETS
@@ -121,6 +125,8 @@ class RoutingStrategySelector:
                 if bucket < cumulative_buckets:
                     return BaseRoutingStrategy.get_from_name(strategy_name)()
         except Exception as e:
+            if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
+                raise e
             sentry_sdk.capture_message(f"Error selecting routing strategy: {e}")
             return OutcomesBasedRoutingStrategy()
 

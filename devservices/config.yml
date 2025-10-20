@@ -44,9 +44,13 @@ x-sentry-service-config:
     containerized-uptime: [clickhouse, redis, kafka, snuba, uptime-consumer]
     containerized-metrics-dev: [clickhouse, redis, kafka, snuba, metrics-consumer, generic-metrics-distributions-consumer, generic-metrics-sets-consumer, generic-metrics-counters-consumer, generic-metrics-gauges-consumer]
 
+x-programs:
+  devserver:
+    command: snuba devserver
+
 services:
   clickhouse:
-    image: ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:23.8.11.29.altinitystable
+    image: ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable
     ulimits:
       nofile:
         soft: 262144
@@ -63,6 +67,8 @@ services:
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/sentry.xml
+      - ./clickhouse/users.xml:/etc/clickhouse-server/users.xml
+      - ./clickhouse/default-password.xml:/etc/clickhouse-server/users.d/default-password.xml
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
@@ -72,7 +78,7 @@ services:
     restart: unless-stopped
 
   snuba:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     ports:
       - 127.0.0.1:1218:1218
       - 127.0.0.1:1219:1219
@@ -112,7 +118,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   profiles-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=profiles,
@@ -142,7 +148,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   profile-chunks-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=profile_chunks,
@@ -172,7 +178,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   functions-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=functions_raw,
@@ -202,7 +208,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   uptime-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=uptime_monitor_checks,
@@ -232,7 +238,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   metrics-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=metrics_raw,
@@ -262,7 +268,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   generic-metrics-distributions-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=generic_metrics_distributions_raw,
@@ -292,7 +298,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   generic-metrics-sets-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=generic_metrics_sets_raw,
@@ -322,7 +328,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   generic-metrics-counters-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=generic_metrics_counters_raw,
@@ -352,7 +358,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   generic-metrics-gauges-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=generic_metrics_gauges_raw,
