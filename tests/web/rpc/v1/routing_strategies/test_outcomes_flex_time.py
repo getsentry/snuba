@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -74,6 +75,7 @@ def test_outcomes_flex_time_routing_strategy_with_data() -> None:
         RoutingContext(
             in_msg=request,
             timer=Timer("test"),
+            query_id=uuid.uuid4().hex,
         )
     )
     assert routing_decision.time_window is not None
@@ -119,6 +121,7 @@ def test_outcomes_flex_time_routing_strategy_with_data_and_page_token() -> None:
         RoutingContext(
             in_msg=request,
             timer=Timer("test"),
+            query_id=uuid.uuid4().hex,
         )
     )
     assert routing_decision.time_window is not None

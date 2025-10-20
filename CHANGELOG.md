@@ -1,5 +1,36 @@
 # Changelog
 
+## 25.10.0
+
+### Various fixes & improvements
+
+- fix(ignore_case): Handle ignoring casing for LIKE/NOT LIKE (#7452) by @wmak
+- fix(eap): Set a better default for timestamp field and customize for logs (#7441) by @phacops
+- chore(rust-consumer): add default dlq buffer length (#7429) by @davidtsuk
+- fix(cross-item-queries): Allow single filters (#7450) by @wmak
+- fix(traceitemstats): only downgrade traceitemstats for AI clients (#7449) by @volokluev
+- Modifying Replay Deserializer To Parse Tap Message (#7439) by @cliffordxing
+- feat(flextime_routing): Use order by in flextime pagination (#7445) by @volokluev
+- fix(ast): fix query formatter not handling dots in column names (#7440) by @volokluev
+- feat(replay): Adding Tap Columns (#7437) by @cliffordxing
+- ref: bump sentry-arroyo to 2.29.6 (#7444) by @getsentry-bot
+- fix tilde in pyproject (#7443) by @bmckerry
+- feat(health-check): add limit to individual health check cluster wait (#7436) by @onewland
+- feat: TraceItemStats heatmap, basic functionality (#7433) by @kylemumma
+- ref(outcomes-routing): always downsample data older than 30 days (#7424) by @MeredithAnya
+- for health check errors, enrich events with cluster_name (#7434) by @onewland
+- ref(gocd): add healthcheck to de (#7435) by @MeredithAnya
+- dep: add granian (#7431) by @gi0baro
+- feat(deletes): connect delete RPC endpoint to actual deletion (#7426) by @onewland
+- ref: bump sentry-arroyo to 2.29.5 (#7430) by @getsentry-bot
+- fix(TraceItemTable): Account for flexible time windows with no results (#7427) by @volokluev
+- chore(ci): Remove snuba cloudbuild (#7417) by @hubertdeng123
+- ref(devenv): allow more mem for CH (#7425) by @MeredithAnya
+- feat(eap): add deletion_settings to eap_items storage definition (#7420) by @onewland
+- feat(TracaITemTable): add end_pagination token (#7423) by @volokluev
+
+_Plus 8 more_
+
 ## 25.9.0
 
 ### Various fixes & improvements
