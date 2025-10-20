@@ -1,8 +1,29 @@
+export REPOROOT="$(git rev-parse --show-toplevel)"
+
+if [ -z "${CI:-}" ] && [ ! -f "${REPOROOT}/.venv/bin/python" ]; then
+  echo "cannot source this file unless ${REPOROOT}/.venv/bin/python exists, please run devenv sync"
+  exit 1
+fi
+
 # Related thread: https://github.com/PyO3/pyo3/issues/1741
 
 # This is required for the tests in python.rs
 export SNUBA_TEST_PYTHONPATH="$(python -c 'import sys; print(":".join(sys.path))')"
 export SNUBA_TEST_PYTHONEXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
 
+# https://github.com/astral-sh/uv/issues/8821
+if [ -z "${CI:-}" ]; then
+  export PYTHONHOME="$(dirname $(dirname $(realpath "${REPOROOT}/.venv/bin/python")))"
+else
+  export PYTHONHOME="$(dirname $(dirname $(realpath "$(command -v python)")))"
+fi
+
 # load cargo envvars explicitly in case user forgot
-. "${CARGO_HOME:-$HOME/.cargo}/env"
+if [ -n "$FISH_VERSION" ]; then
+  set CARGO_HOME $HOME/.cargo
+  touch $CARGO_HOME/env
+  source $CARGO_HOME/env
+else
+  touch "${CARGO_HOME:-$HOME/.cargo}/env"
+  . "${CARGO_HOME:-$HOME/.cargo}/env"
+fi

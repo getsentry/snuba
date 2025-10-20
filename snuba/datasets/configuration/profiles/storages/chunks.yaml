@@ -4,7 +4,7 @@ name: profile_chunks
 storage:
   key: profile_chunks
   set_key: profile_chunks
-readiness_state: partial
+readiness_state: complete
 schema:
   columns:
     [

@@ -1,6 +1,4 @@
-import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any, Mapping
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -8,8 +6,10 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
     TraceItemAttributeNamesResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -18,6 +18,7 @@ from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
+from tests.web.rpc.v1.test_utils import gen_item_message
 
 BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(
     hours=3
@@ -37,40 +38,26 @@ def populate_eap_spans_storage(num_rows: int) -> None:
     Each span will have at least 10 unique tags.
     """
 
-    def generate_span_event_message(id: int) -> Mapping[str, Any]:
-        res = {
-            "description": "/api/0/relays/projectconfigs/",
-            "duration_ms": 152,
-            "event_id": "d826225de75d42d6b2f01b957d51f18f",
-            "exclusive_time_ms": 0.228,
-            "is_segment": True,
-            "data": {},
-            "measurements": {},
-            "organization_id": 1,
-            "origin": "auto.http.django",
-            "project_id": 1,
-            "received": 1721319572.877828,
-            "retention_days": 90,
-            "segment_id": "8873a98879faf06d",
-            "sentry_tags": {
-                "category": "http",
-            },
-            "span_id": uuid.uuid4().hex,
-            "tags": {
-                "http.status_code": "200",
-            },
-            "trace_id": uuid.uuid4().hex,
-            "start_timestamp_ms": int(BASE_TIME.timestamp() * 1000),
-            "start_timestamp_precise": BASE_TIME.timestamp(),
-            "end_timestamp_precise": BASE_TIME.timestamp() + 1,
+    def generate_span_event_message(id: int) -> bytes:
+        attributes = {
+            "bar": AnyValue(string_value="some"),
+            "baz": AnyValue(string_value="some"),
+            "foo": AnyValue(string_value="some"),
+            "sentry.name": AnyValue(string_value="some"),
+            "sentry.segment_name": AnyValue(string_value="some"),
+            "sentry.service": AnyValue(string_value="some"),
         }
         for i in range(
             id * NUM_ATTR_PER_SPAN_PER_TYPE,
             id * NUM_ATTR_PER_SPAN_PER_TYPE + NUM_ATTR_PER_SPAN_PER_TYPE,
         ):
-            res["tags"][f"a_tag_{i:03}"] = "blah"  # type: ignore
-            res["measurements"][f"b_measurement_{i:03}"] = {"value": 10}  # type: ignore
-        return res
+            attributes[f"a_tag_{i:03}"] = AnyValue(string_value="blah")
+            attributes[f"c_tag_{i:03}"] = AnyValue(string_value="blah")
+            attributes[f"b_measurement_{i:03}"] = AnyValue(double_value=10)
+        return gen_item_message(
+            start_timestamp=BASE_TIME + timedelta(minutes=id),
+            attributes=attributes,
+        )
 
     items_storage = get_storage(StorageKey("eap_items"))
     messages = [generate_span_event_message(i) for i in range(num_rows)]
@@ -194,7 +181,10 @@ class TestTraceItemAttributeNames(BaseApiTest):
         expected = [
             TraceItemAttributeNamesResponse.Attribute(
                 name="a_tag_028", type=AttributeKey.Type.TYPE_STRING
-            )
+            ),
+            TraceItemAttributeNamesResponse.Attribute(
+                name="c_tag_028", type=AttributeKey.Type.TYPE_STRING
+            ),
         ]
         assert res.attributes == expected
 
@@ -241,82 +231,11 @@ class TestTraceItemAttributeNames(BaseApiTest):
         res = EndpointTraceItemAttributeNames().execute(req)
         assert res.meta.query_info != []
 
-    def test_backwards_compat_names(self) -> None:
-        PROJECT_ID = 4555754011230209
-        ORGANIZATION_ID = 4555754011164672
-        true = True
-        start = BASE_TIME.timestamp()
-        end = BASE_TIME.timestamp() + 1
-        items_storage = get_storage(StorageKey("eap_items"))
-        messages = [
-            {
-                "project_id": PROJECT_ID,
-                "organization_id": ORGANIZATION_ID,
-                "span_id": "9d1a44cc6388423d",
-                "trace_id": "4708357b20c041f39e40848e2980947b",
-                "description": "/api/0/relays/projectconfigs/",
-                "duration_ms": 100,
-                "start_timestamp_precise": start,
-                "end_timestamp_precise": end,
-                "exclusive_time_ms": 100,
-                "is_segment": True,
-                "received": 1742411142.980593,
-                "start_timestamp_ms": int(start * 1000),
-                "sentry_tags": {"transaction": "foo"},
-                "retention_days": 90,
-                "tags": {"foo": "foo"},
-                "event_id": "654cfc4376f84645a70d889fbe9284a0",
-                "segment_id": "654cfc4376f84645",
-                "ingest_in_eap": True,
-            },
-            {
-                "project_id": PROJECT_ID,
-                "organization_id": ORGANIZATION_ID,
-                "span_id": "b91705f800054f21",
-                "trace_id": "d3bf3091daf84eb395f704a47b11f83c",
-                "description": "/api/0/relays/projectconfigs/",
-                "duration_ms": 100,
-                "start_timestamp_precise": start,
-                "end_timestamp_precise": end,
-                "exclusive_time_ms": 100,
-                "is_segment": true,
-                "received": 1742411143.021623,
-                "start_timestamp_ms": int(start * 1000),
-                "sentry_tags": {"transaction": "foo"},
-                "retention_days": 90,
-                "tags": {"bar": "bar"},
-                "event_id": "8af9dc00313a45f4b0e09d755c56b353",
-                "segment_id": "8af9dc00313a45f4",
-                "ingest_in_eap": true,
-            },
-            {
-                "project_id": PROJECT_ID,
-                "organization_id": ORGANIZATION_ID,
-                "span_id": "b91705f800054f21",
-                "trace_id": "d3bf3091daf84eb395f704a47b11f83c",
-                "description": "/api/0/relays/projectconfigs/",
-                "duration_ms": 100,
-                "start_timestamp_precise": start,
-                "end_timestamp_precise": end,
-                "exclusive_time_ms": 100,
-                "is_segment": true,
-                "received": 1742411143.021623,
-                "start_timestamp_ms": int(start * 1000),
-                "sentry_tags": {"transaction": "foo"},
-                "retention_days": 90,
-                "tags": {"baz": "baz"},
-                "event_id": "8af9dc00313a45f4b0e09d755c56b353",
-                "segment_id": "8af9dc00313a45f4",
-                "ingest_in_eap": true,
-            },
-        ]
-
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
-
+    def test_basic_co_occurring_attrs(self) -> None:
         req = TraceItemAttributeNamesRequest(
             meta=RequestMeta(
-                project_ids=[PROJECT_ID],
-                organization_id=ORGANIZATION_ID,
+                project_ids=[1, 2, 3],
+                organization_id=1,
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(
@@ -325,23 +244,23 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 end_timestamp=Timestamp(
                     seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
                 ),
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
-            limit=1000,
+            limit=TOTAL_GENERATED_ATTR_PER_TYPE,
+            intersecting_attributes_filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="a_tag_000")
+                )
+            ),
+            value_substring_match="000",
             type=AttributeKey.Type.TYPE_STRING,
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         expected = [
             TraceItemAttributeNamesResponse.Attribute(
-                name=attr_name, type=AttributeKey.Type.TYPE_STRING
-            )
-            for attr_name in [
-                "bar",
-                "baz",
-                "foo",
-                "sentry.name",
-                "sentry.segment_name",
-                "sentry.service",
-            ]
+                name="a_tag_000", type=AttributeKey.Type.TYPE_STRING
+            ),
+            TraceItemAttributeNamesResponse.Attribute(
+                name="c_tag_000", type=AttributeKey.Type.TYPE_STRING
+            ),
         ]
         assert res.attributes == expected

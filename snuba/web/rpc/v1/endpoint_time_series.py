@@ -1,5 +1,4 @@
 import math
-import uuid
 from typing import Type
 
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
@@ -16,6 +15,9 @@ from snuba.web.rpc.proto_visitor import (
     TimeSeriesRequestWrapper,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
+from snuba.web.rpc.v1.visitors.time_series_request_visitor import (
+    preprocess_expression_labels,
+)
 
 _VALID_GRANULARITY_SECS = set(
     [
@@ -36,8 +38,8 @@ _VALID_GRANULARITY_SECS = set(
     ]
 )
 
-# MAX 15 minute granularity over 28 days
-_MAX_BUCKETS_IN_REQUEST = 2688
+# MAX 15 minute granularity over 28 days (2688 buckets) + 1 bucket to allow for partial time buckets on
+_MAX_BUCKETS_IN_REQUEST = 2689
 
 
 def _enforce_no_duplicate_labels(request: TimeSeriesRequest) -> None:
@@ -59,9 +61,7 @@ def _validate_time_buckets(request: TimeSeriesRequest) -> None:
         raise BadSnubaRPCRequestException(
             f"Granularity of {request.granularity_secs} is not valid, valid granularity_secs: {sorted(_VALID_GRANULARITY_SECS)}"
         )
-    request_duration = (
-        request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
-    )
+    request_duration = request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
     num_buckets = request_duration / request.granularity_secs
     if num_buckets > _MAX_BUCKETS_IN_REQUEST:
         raise BadSnubaRPCRequestException(
@@ -110,14 +110,11 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         self, trace_item_type: TraceItemType.ValueType
     ) -> TraceItemDataResolver[TimeSeriesRequest, TimeSeriesResponse]:
         return ResolverTimeSeries.get_from_trace_item_type(trace_item_type)(
-            timer=self._timer, metrics_backend=self._metrics_backend
+            timer=self._timer,
+            metrics_backend=self._metrics_backend,
         )
 
     def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
-        # TODO: Move this to base
-        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
-            uuid.uuid4()
-        )
         _enforce_no_duplicate_labels(in_msg)
         _validate_time_buckets(in_msg)
 
@@ -131,5 +128,6 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         )
         in_msg_wrapper = TimeSeriesRequestWrapper(in_msg)
         in_msg_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
+        preprocess_expression_labels(in_msg)
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
-        return resolver.resolve(in_msg)
+        return resolver.resolve(in_msg, self.routing_decision)

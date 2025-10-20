@@ -27,6 +27,7 @@ from snuba.query.matchers import Or, Param
 from snuba.query.matchers import String as StringMatch
 from snuba.query.subscripts import subscript_key_column_name
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.schemas import DateTime64
 
 """
 
@@ -92,6 +93,8 @@ EVENTS_COLUMNS = ColumnSet(
         ("trace_sampled", UInt(8, Modifiers(nullable=True))),
         ("num_processing_errors", UInt(64, Modifiers(nullable=True))),
         ("symbolicated_in_app", UInt(8, Modifiers(nullable=True))),
+        ("timestamp_ms", DateTime64(3, modifiers=Modifiers(nullable=True))),
+        ("sample_weight", Float(64, Modifiers(nullable=True))),
     ]
 )
 

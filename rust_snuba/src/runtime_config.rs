@@ -1,6 +1,7 @@
 use anyhow::Error;
 use parking_lot::RwLock;
 use pyo3::prelude::{PyModule, Python};
+use pyo3::types::PyAnyMethods;
 use std::collections::BTreeMap;
 use std::time::Duration;
 

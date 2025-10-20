@@ -146,11 +146,7 @@ class HashMapHasFunctionTransformer(LogicalQueryProcessor):
                         column_name=f"{param.column_name}_{bucket_idx}",
                         table_name=param.table_name,
                     ),
-                    FunctionCall(
-                        None,
-                        function_name="cityHash64",
-                        parameters=(key,),
-                    ),
+                    key,
                 ),
             )
 

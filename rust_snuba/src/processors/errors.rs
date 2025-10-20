@@ -112,6 +112,8 @@ struct ErrorMessage {
     datetime: StringToIntDatetime64,
     event_id: Uuid,
     group_id: u64,
+    #[serde(default)]
+    group_first_seen: StringToIntDatetime64,
     message: String,
     primary_hash: String,
     project_id: u64,
@@ -155,6 +157,8 @@ struct ErrorData {
     version: Option<String>,
     #[serde(default)]
     symbolicated_in_app: Option<bool>,
+    #[serde(default)]
+    sample_rate: Option<f64>,
 }
 
 // Contexts
@@ -368,6 +372,7 @@ struct ErrorRow {
     #[serde(rename = "exception_stacks.value")]
     exception_stacks_value: Vec<Option<String>>,
     group_id: u64,
+    group_first_seen: u32,
     http_method: Option<String>,
     http_referer: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -423,6 +428,7 @@ struct ErrorRow {
     version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     symbolicated_in_app: Option<bool>,
+    sample_weight: Option<f64>,
 }
 
 impl ErrorRow {
@@ -686,6 +692,11 @@ impl ErrorRow {
             }
         }
 
+        let sample_weight =
+            from.data
+                .sample_rate
+                .and_then(|rate| if rate == 0.0 { None } else { Some(1.0 / rate) });
+
         Ok(Self {
             contexts_key: contexts_keys,
             contexts_value: contexts_values,
@@ -711,6 +722,7 @@ impl ErrorRow {
             flags_key,
             flags_value,
             group_id: from.group_id,
+            group_first_seen: (from.group_first_seen.0 / 1000) as u32,
             http_method: from_request.method.0,
             http_referer,
             ip_address_v4,
@@ -747,6 +759,7 @@ impl ErrorRow {
             user: user.unwrap_or_default(),
             version: from.data.version,
             symbolicated_in_app: from.data.symbolicated_in_app,
+            sample_weight,
             ..Default::default()
         })
     }

@@ -33,9 +33,7 @@ def pytest_configure() -> None:
     Set up the Sentry SDK to avoid errors hidden by configuration.
     Ensure the snuba_test database exists
     """
-    assert (
-        settings.TESTING
-    ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
+    assert settings.TESTING, "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
     initialize_snuba()
     setup_sentry()
@@ -169,9 +167,7 @@ def _build_migrations_cache() -> None:
         nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
         for node in nodes:
             if (cluster, node) not in MIGRATIONS_CACHE:
-                connection = cluster.get_node_connection(
-                    ClickhouseClientSettings.MIGRATE, node
-                )
+                connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
                 rows = connection.execute(
                     f"SELECT name, create_table_query FROM system.tables WHERE database='{database}'"
                 )
@@ -203,14 +199,14 @@ def _clear_db() -> None:
             or storage_key == StorageKey.EAP_ITEMS_DOWNSAMPLE_8
             or storage_key == StorageKey.EAP_ITEMS_DOWNSAMPLE_64
             or storage_key == StorageKey.EAP_ITEMS_DOWNSAMPLE_512
+            or storage_key == StorageKey.OUTCOMES_HOURLY
+            or storage_key == StorageKey.OUTCOMES_DAILY
         ):
             table_name = schema.get_local_table_name()  # type: ignore
 
             nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
             for node in nodes:
-                connection = cluster.get_node_connection(
-                    ClickhouseClientSettings.MIGRATE, node
-                )
+                connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
                 connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
 
 
@@ -248,9 +244,7 @@ def clickhouse_db(
             # apply migrations from cache
             applied_nodes = set()
             for (cluster, node), tables in MIGRATIONS_CACHE.items():
-                connection = cluster.get_node_connection(
-                    ClickhouseClientSettings.MIGRATE, node
-                )
+                connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
                 for table_name, create_table_query in tables.items():
                     if (node.host_name, node.port, table_name) in applied_nodes:
                         continue

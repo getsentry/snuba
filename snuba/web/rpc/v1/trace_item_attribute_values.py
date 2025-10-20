@@ -31,17 +31,20 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import base_conditions_and, treeify_or_and_conditions
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
-    attribute_key_to_expression_eap_items,
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
+)
+from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
+    attribute_key_to_expression,
 )
 
 
 def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
-    attribute_key = attribute_key_to_expression_eap_items(request.key)
+    attribute_key = attribute_key_to_expression(request.key)
 
     conditions: list[Expression] = [
         f.has(
-            column("_hash_map_string"), getattr(attribute_key, "key", request.key.name)
+            column("attributes_string"), getattr(attribute_key, "key", request.key.name)
         ),
     ]
     if request.meta.trace_item_type:
@@ -69,7 +72,7 @@ def _build_query(
         SELECT attributes_string_38['sentry.description'] as attr_value
         FROM eap_items_1_dist
         WHERE
-        has(_hash_map_string_38, cityHash64('sentry.description'))
+        has(attributes_string_38, cityHash64('sentry.description'))
         AND attributes_string_38['sentry.description'] LIKE '%django.middleware%'
         AND project_id = 1 AND organization_id=1 AND item_type=1
         AND less(timestamp, toDateTime(1741910400))
@@ -82,8 +85,8 @@ def _build_query(
     This query will match the first 10000 occurrences of an attribute value and then deduplicate them,
     this gives a large speedup to the query at the cost of ordering and paginating all values
     """
-    if request.limit > 1000:
-        raise BadSnubaRPCRequestException("Limit can be at most 1000")
+    if request.limit > 10000:
+        raise BadSnubaRPCRequestException("Limit can be at most 10000")
 
     entity_key = EntityKey("eap_items")
     entity = Entity(
@@ -91,7 +94,7 @@ def _build_query(
         schema=get_entity(entity_key).get_data_model(),
         sample=None,
     )
-    attr_value = attribute_key_to_expression_eap_items(request.key)
+    attr_value = attribute_key_to_expression(request.key)
     assert attr_value.alias
     inner_query = Query(
         from_clause=entity,
@@ -115,18 +118,24 @@ def _build_query(
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
         ],
         limit=request.limit,
+        offset=(
+            request.page_token.offset if request.page_token.HasField("offset") else 0
+        ),
     )
     return res
 
 
 def _build_snuba_request(
     request: TraceItemAttributeValuesRequest,
+    routing_decision: RoutingDecision,
 ) -> SnubaRequest:
+    settings = HTTPQuerySettings()
+    settings.set_sampling_tier(routing_decision.tier)
     return SnubaRequest(
         id=uuid.uuid4(),
         original_body=MessageToDict(request),
         query=_build_query(request),
-        query_settings=HTTPQuerySettings(),
+        query_settings=settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
             team="eap",
@@ -159,14 +168,15 @@ class AttributeValuesRequest(
     def _execute(
         self, in_msg: TraceItemAttributeValuesRequest
     ) -> TraceItemAttributeValuesResponse:
-        in_msg.limit = in_msg.limit or 1000
-        # HACK (Volo): for backwards compatibility. eap_spans used to store this value,
-        # eap_items does not
-        if in_msg.key == "sentry.service":
+        # if for some reason the item_id is the key, we can just return the value
+        # item ids are unique
+        if in_msg.key.name == "sentry.item_id" and in_msg.value_substring_match:
             return TraceItemAttributeValuesResponse(
-                values=[str(p) for p in in_msg.meta.project_ids],
+                values=[in_msg.value_substring_match],
+                page_token=None,
             )
-        snuba_request = _build_snuba_request(in_msg)
+        in_msg.limit = in_msg.limit or 1000
+        snuba_request = _build_snuba_request(in_msg, self.routing_decision)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

@@ -184,6 +184,7 @@ def get_raw_event() -> InsertEvent:
             "type": "error",
             "version": "6",
             "symbolicated_in_app": True,
+            "sample_rate": 0.5,
         },
     }
 

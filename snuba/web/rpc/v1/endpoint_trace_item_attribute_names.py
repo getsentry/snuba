@@ -21,7 +21,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Storage
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, if_cond, in_cond, not_cond
+from snuba.query.dsl import and_cond, column, in_cond, not_cond
 from snuba.query.expressions import Expression, Lambda
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -38,7 +38,6 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import ATTRIBUTE_MAPPINGS
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
@@ -69,17 +68,6 @@ class AttributeKeyCollector(ProtoVisitor):
             self.keys.add(trace_item_filter.comparison_filter.key.name)
 
 
-def _backwards_compatible_mapping_expr() -> Expression:
-    backwards_keys = f.array(*list(ATTRIBUTE_MAPPINGS.keys()))
-    backwards_vals = f.array(*list(ATTRIBUTE_MAPPINGS.values()))
-
-    return if_cond(
-        in_cond(column("x"), backwards_vals),
-        f.arrayElement(backwards_keys, f.indexOf(backwards_vals, column("x"))),
-        column("x"),
-    )
-
-
 def convert_to_attributes(
     query_res: QueryResult, attribute_type: AttributeKey.Type.ValueType
 ) -> list[TraceItemAttributeNamesResponse.Attribute]:
@@ -89,9 +77,7 @@ def convert_to_attributes(
         vals = row.values()
         assert len(vals) == 1
         attr_name = list(vals)[0]
-        return TraceItemAttributeNamesResponse.Attribute(
-            name=attr_name, type=attribute_type
-        )
+        return TraceItemAttributeNamesResponse.Attribute(name=attr_name, type=attribute_type)
 
     return list(map(t, query_res.result["data"]))
 
@@ -100,15 +86,11 @@ def get_co_occurring_attributes_date_condition(
     request: TraceItemAttributeNamesRequest,
 ) -> Expression:
     # round the lower timestamp to the previous monday
-    lower_ts = request.meta.start_timestamp.ToDatetime().replace(
-        hour=0, minute=0, second=0
-    )
+    lower_ts = request.meta.start_timestamp.ToDatetime().replace(hour=0, minute=0, second=0)
     lower_ts = prev_monday(lower_ts)
 
     # round the upper timestamp to the next monday
-    upper_ts = request.meta.end_timestamp.ToDatetime().replace(
-        hour=0, minute=0, second=0
-    )
+    upper_ts = request.meta.end_timestamp.ToDatetime().replace(hour=0, minute=0, second=0)
     upper_ts = next_monday(upper_ts)
 
     return and_cond(
@@ -197,23 +179,21 @@ def get_co_occurring_attributes(
             condition,
             f.hasAll(
                 column("attribute_keys_hash"),
-                f.array(
-                    *[
-                        f.cityHash64(ATTRIBUTE_MAPPINGS.get(k, k))
-                        for k in attribute_keys_to_search
-                    ]
-                ),
+                f.array(*[f.cityHash64(k) for k in attribute_keys_to_search]),
             ),
         )
 
     if request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
-        condition = and_cond(
-            f.equals(column("item_type"), request.meta.trace_item_type), condition
-        )
+        condition = and_cond(f.equals(column("item_type"), request.meta.trace_item_type), condition)
 
     string_array = f.arrayMap(
         Lambda(
-            None, ("x",), f.tuple("TYPE_STRING", _backwards_compatible_mapping_expr())
+            None,
+            ("x",),
+            f.tuple(
+                "TYPE_STRING",
+                column("x"),
+            ),
         ),
         column("attributes_string"),
     )
@@ -224,7 +204,14 @@ def get_co_occurring_attributes(
     )
 
     double_array = f.arrayMap(
-        Lambda(None, ("x",), f.tuple(floating_point_type, column("x"))),
+        Lambda(
+            None,
+            ("x",),
+            f.tuple(
+                floating_point_type,
+                column("x"),
+            ),
+        ),
         column("attributes_float"),
     )
     array_func = None
@@ -242,13 +229,14 @@ def get_co_occurring_attributes(
 
     attr_filter = not_cond(
         in_cond(
-            column("attr.2"),
-            f.array(*attribute_keys_to_search, *UNSEARCHABLE_ATTRIBUTE_KEYS),
+            f.tupleElement(column("attr"), 2),
+            f.array(*UNSEARCHABLE_ATTRIBUTE_KEYS),
         )
     )
     if request.value_substring_match:
         attr_filter = and_cond(
-            attr_filter, f.like(column("attr.2"), f"%{request.value_substring_match}%")
+            attr_filter,
+            f.like(f.tupleElement(column("attr"), 2), f"%{request.value_substring_match}%"),
         )
 
     query = Query(
@@ -273,12 +261,11 @@ def get_co_occurring_attributes(
         ],
         # chosen arbitrarily to be a high number
         limit=request.limit,
+        offset=request.page_token.offset if request.page_token.HasField("offset") else 0,
     )
 
     treeify_or_and_conditions(query)
     settings = HTTPQuerySettings()
-    settings.push_clickhouse_setting("max_execution_time", 1)
-    settings.push_clickhouse_setting("timeout_overflow_mode", "break")
     snuba_request = SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
@@ -355,9 +342,7 @@ class EndpointTraceItemAttributeNames(
             else PageToken(
                 filter_offset=TraceItemFilter(
                     comparison_filter=ComparisonFilter(
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_STRING, name="attr_key"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="attr_key"),
                         op=ComparisonFilter.OP_GREATER_THAN,
                         value=AttributeValue(val_str=attributes[-1].name),
                     )
@@ -367,16 +352,10 @@ class EndpointTraceItemAttributeNames(
         return TraceItemAttributeNamesResponse(
             attributes=attributes,
             page_token=page_token,
-            meta=extract_response_meta(
-                req.meta.request_id, req.meta.debug, [res], [self._timer]
-            ),
+            meta=extract_response_meta(req.meta.request_id, req.meta.debug, [res], [self._timer]),
         )
 
-    def _execute(
-        self, in_msg: TraceItemAttributeNamesRequest
-    ) -> TraceItemAttributeNamesResponse:
-        if not in_msg.meta.request_id:
-            in_msg.meta.request_id = str(uuid.uuid4())
+    def _execute(self, in_msg: TraceItemAttributeNamesRequest) -> TraceItemAttributeNamesResponse:
 
         snuba_request = get_co_occurring_attributes(in_msg)
         res = run_query(

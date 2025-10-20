@@ -2,7 +2,11 @@ from typing import Sequence, Type
 
 import pytest
 
-from snuba.lw_deletions.formatters import Formatter, SearchIssuesFormatter
+from snuba.lw_deletions.formatters import (
+    Formatter,
+    IdentityFormatter,
+    SearchIssuesFormatter,
+)
 from snuba.web.bulk_delete_query import DeleteQueryMessage
 from snuba.web.delete_query import ConditionsType
 
@@ -59,6 +63,32 @@ SEARCH_ISSUES_FORMATTER = SearchIssuesFormatter
     ],
 )
 def test_search_issues_formatter(
+    messages: Sequence[DeleteQueryMessage],
+    expected_formatted: Sequence[ConditionsType],
+    formatter: Type[Formatter],
+) -> None:
+    formatted = formatter().format(messages)
+    assert formatted == expected_formatted
+
+
+@pytest.mark.parametrize(
+    "messages, expected_formatted, formatter",
+    [
+        pytest.param(
+            [
+                create_delete_query_message({"project_id": [1], "trace_id": [1, 2, 3]}),
+                create_delete_query_message({"project_id": [1], "trace_id": [4, 5, 6]}),
+            ],
+            [
+                {"project_id": [1], "trace_id": [1, 2, 3]},
+                {"project_id": [1], "trace_id": [4, 5, 6]},
+            ],
+            IdentityFormatter,
+            id="identity does basically nothing",
+        ),
+    ],
+)
+def test_identity_formatter(
     messages: Sequence[DeleteQueryMessage],
     expected_formatted: Sequence[ConditionsType],
     formatter: Type[Formatter],

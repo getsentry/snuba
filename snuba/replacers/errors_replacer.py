@@ -626,6 +626,7 @@ class MergeReplacement(Replacement):
     project_id: int
     previous_group_ids: Sequence[int]
     new_group_id: int
+    new_group_first_seen: datetime | None
     timestamp: datetime
 
     all_columns: Sequence[FlattenedColumn]
@@ -660,11 +661,22 @@ class MergeReplacement(Replacement):
             else:
                 SEEN_MERGE_TXN_CACHE.append(txn)
 
+        # new_group_first_seen was added to the message schema; keep this check
+        # for backwards compatibility.
+        raw_new_group_first_seen = message.data.get("new_group_first_seen")
+        if raw_new_group_first_seen:
+            new_group_first_seen = datetime.strptime(
+                raw_new_group_first_seen, settings.PAYLOAD_DATETIME_FORMAT
+            )
+        else:
+            new_group_first_seen = None
+
         return cls(
             project_id=project_id,
             previous_group_ids=previous_group_ids,
             new_group_id=message.data["new_group_id"],
             timestamp=timestamp,
+            new_group_first_seen=new_group_first_seen,
             all_columns=context.all_columns,
         )
 
@@ -690,9 +702,18 @@ class MergeReplacement(Replacement):
     def get_insert_query(self, table_name: str) -> Optional[str]:
         all_column_names = [c.escaped for c in self.all_columns]
         all_columns = ", ".join(all_column_names)
+        replacement_columns = {"group_id": str(self.new_group_id)}
+
+        if self.new_group_first_seen is not None:
+            group_first_seen_str = self.new_group_first_seen.strftime(DATETIME_FORMAT)
+            replacement_columns[
+                "group_first_seen"
+            ] = f"CAST('{group_first_seen_str}' AS DateTime)"
+
         select_columns = ", ".join(
             map(
-                lambda i: i if i != "group_id" else str(self.new_group_id),
+                # Get i from replacement_columns; default to i if no replacement.
+                lambda i: replacement_columns.get(i, i),
                 all_column_names,
             )
         )

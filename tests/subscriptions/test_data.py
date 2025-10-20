@@ -36,10 +36,7 @@ TESTS = [
         SnQLSubscriptionData(
             project_id=1,
             query=(
-                "MATCH (events) "
-                "SELECT count() AS count "
-                "WHERE "
-                "platform IN tuple('a') "
+                "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a') "
             ),
             time_window_sec=500 * 60,
             resolution_sec=60,
@@ -133,7 +130,7 @@ TESTS = [
                 time_window_secs=10800,
                 resolution_secs=60,
             ),
-            EntityKey.EAP_SPANS,
+            EntityKey.EAP_ITEMS,
         ),
         20.0,
         None,
@@ -173,7 +170,7 @@ TESTS = [
                 time_window_secs=3600,
                 resolution_secs=60,
             ),
-            EntityKey.EAP_SPANS,
+            EntityKey.EAP_ITEMS,
         ),
         None,
         None,
