@@ -1,5 +1,6 @@
 import uuid
 from dataclasses import replace
+from itertools import islice
 from typing import List, Optional, Sequence
 
 import sentry_sdk
@@ -523,10 +524,11 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         routing_decision.routing_context.query_result = res
         # we added 1 to the limit to know if there are more rows to fetch
         # so we need to remove the last row
-        # TODO maybe use islice instead
-        data = res.result.get("data", [])
-        if in_msg.limit > 0 and len(data) > in_msg.limit:
-            data = data[:-1]
+        total_rows = len(res.result.get("data", []))
+        data = iter(res.result.get("data", []))
+
+        if in_msg.limit > 0 and total_rows > in_msg.limit:
+            data = islice(data, in_msg.limit)
         column_values = convert_results(in_msg, data)
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
@@ -539,7 +541,7 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             page_token=_get_page_token(
                 in_msg,
                 column_values,
-                len(res.result.get("data", [])),
+                total_rows,
                 original_time_window,
                 routing_decision.time_window,
             ),
