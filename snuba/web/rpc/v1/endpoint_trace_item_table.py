@@ -8,8 +8,6 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
-from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
-from snuba.state import get_int_config
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.proto_visitor import (
@@ -93,14 +91,13 @@ def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
     It is similar to the query processor step of the snql pipeline.
     """
     request = SparseAggregateAttributeTransformer(request).transform()
-    if get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
-        # TODO: replace SetColumnLabelsVisitor with ValidateColumnLabelsVisitor currently blocked
-        # by sentry integration tests
-        SetColumnLabelsVisitor().visit(request)
-        # SetAggregateLabelsVisitor should come after ValidateColumnLabelsVisitor because it
-        # relies on the labels in the columns being set.
-        SetAggregateLabelsVisitor().visit(request)
-        NormalizeFormulaLabelsVisitor().visit(request)
+    # TODO: replace SetColumnLabelsVisitor with ValidateColumnLabelsVisitor currently blocked
+    # by sentry integration tests
+    SetColumnLabelsVisitor().visit(request)
+    # SetAggregateLabelsVisitor should come after ValidateColumnLabelsVisitor because it
+    # relies on the labels in the columns being set.
+    SetAggregateLabelsVisitor().visit(request)
+    NormalizeFormulaLabelsVisitor().visit(request)
     return request
 
 
