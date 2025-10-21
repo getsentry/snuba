@@ -131,6 +131,22 @@ test_data = [
     ),
     # JSON type
     (("JSON", "", "", ""), JSON()),
+    (("JSON('a.b' String)", "", "", ""), JSON(type_hints={"a.b": String()})),
+    (
+        (
+            "JSON(max_dynamic_paths=10, max_dynamic_types=10, 'a.b' String, 'c.d' DateTime, SKIP 'a.c', SKIP REGEXP 'b.*')",
+            "",
+            "",
+            "",
+        ),
+        JSON(
+            max_dynamic_paths=10,
+            max_dynamic_types=10,
+            type_hints={"a.b": String(), "c.d": DateTime()},
+            skip_paths=["a.c"],
+            skip_regexp=["b.*"],
+        ),
+    ),
 ]
 
 

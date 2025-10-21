@@ -260,6 +260,107 @@ class Visitor(NodeVisitor):  # type: ignore
             timezone = None
         return DateTime64(precision=int(precision.text), timezone=timezone)
 
+    def visit_json(self, node: Node, visited_children: Iterable[Any]) -> JSON[MigrationModifiers]:
+        (_json, params_group) = visited_children
+
+        # Initialize default values
+        max_dynamic_paths = None
+        max_dynamic_types = None
+        type_hints = {}
+        skip_paths = []
+        skip_regexp = []
+
+        # If there are parameters, parse them
+        if isinstance(params_group, list) and len(params_group) > 0:
+            (_paren, _sp, params, _sp, _paren) = params_group
+            # params is a list of tuples (param_type, param_value)
+            for param in params:
+                if isinstance(param, tuple) and len(param) == 2:
+                    param_type, param_value = param
+                    if param_type == "max_dynamic_paths":
+                        max_dynamic_paths = param_value
+                    elif param_type == "max_dynamic_types":
+                        max_dynamic_types = param_value
+                    elif param_type == "type_hint":
+                        path, column_type = param_value
+                        type_hints[path] = column_type
+                    elif param_type == "skip_path":
+                        skip_paths.append(param_value)
+                    elif param_type == "skip_regexp":
+                        skip_regexp.append(param_value)
+
+        return JSON(
+            max_dynamic_paths=max_dynamic_paths,
+            max_dynamic_types=max_dynamic_types,
+            type_hints=type_hints,
+            skip_paths=skip_paths,
+            skip_regexp=skip_regexp,
+        )
+
+    def visit_json_params(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> Sequence[tuple[str, Any]]:
+        """
+        Handle the grammar: json_param (comma space* json_param)*
+
+        This produces: [first_param_tuple, remaining_params_structure]
+        where remaining_params_structure varies by number of parameters:
+        - 2 params: [comma_node, space_node, second_param_tuple]
+        - 3+ params: [[comma, space, param2], [comma, space, param3], ...]
+        """
+        visited_list = list(visited_children)
+        result = []
+
+        # First parameter is always at index 0
+        if len(visited_list) > 0:
+            result.append(visited_list[0])
+
+        # Handle remaining parameters
+        if len(visited_list) > 1 and isinstance(visited_list[1], list):
+            remaining = visited_list[1]
+
+            if len(remaining) > 0 and isinstance(remaining[0], list):
+                # 3+ parameters: list of [comma, space, param] groups
+                for group in remaining:
+                    if isinstance(group, list) and len(group) >= 3:
+                        (_comma, _space, param) = group
+                        result.append(param)
+            else:
+                # 2 parameters: flat [comma, space, param] structure
+                if len(remaining) >= 3:
+                    (_comma, _space, param) = remaining
+                    result.append(param)
+
+        return result
+
+    def visit_json_max_dynamic_paths(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> tuple[str, int]:
+        (_name, _sp, _eq, _sp, value) = visited_children
+        return ("max_dynamic_paths", int(value.text))
+
+    def visit_json_max_dynamic_types(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> tuple[str, int]:
+        (_name, _sp, _eq, _sp, value) = visited_children
+        return ("max_dynamic_types", int(value.text))
+
+    def visit_json_type_hint(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> tuple[str, tuple[str, ColumnType[MigrationModifiers]]]:
+        (_quote, path, _quote, _sp, column_type) = visited_children
+        return ("type_hint", (path.text, column_type))
+
+    def visit_json_skip_path(self, node: Node, visited_children: Iterable[Any]) -> tuple[str, str]:
+        (_skip, _sp, _quote, path, _quote) = visited_children
+        return ("skip_path", path.text)
+
+    def visit_json_skip_regexp(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> tuple[str, str]:
+        (_skip, _sp, _regexp, _sp, _quote, pattern, _quote) = visited_children
+        return ("skip_regexp", pattern.text)
+
     def visit_tuple(
         self, node: Node, visited_children: Iterable[Any]
     ) -> TupleCol[MigrationModifiers]:
