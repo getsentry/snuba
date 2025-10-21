@@ -186,15 +186,8 @@ TEST_CASES = [
             max_dynamic_types=10,
             type_hints={"a.b": String()},
             skip_paths=["a.c"],
-            skip_regexp=["b.*"],
+            skip_regexp=["b.*", "c.*"],
             modifiers=Modifier(nullable=True),
-        ),
-        JSON(
-            max_dynamic_paths=10,
-            max_dynamic_types=10,
-            type_hints={"a.b": String()},
-            skip_paths=["a.c"],
-            skip_regexp=["b.*"],
         ),
         JSON(
             max_dynamic_paths=10,
@@ -203,7 +196,15 @@ TEST_CASES = [
             skip_paths=["a.c"],
             skip_regexp=["b.*", "c.*"],
         ),
+        JSON(
+            max_dynamic_paths=10,
+            max_dynamic_types=10,
+            type_hints={"a.b": String()},
+            skip_paths=["a.c"],
+            skip_regexp=["b.*"],
+        ),
         "Nullable(JSON(max_dynamic_paths=10, max_dynamic_types=10, a.b String, SKIP a.c, SKIP REGEXP 'b.*', SKIP REGEXP 'c.*'))",
+        id="json",
     ),
 ]
 
