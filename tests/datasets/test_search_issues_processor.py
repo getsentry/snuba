@@ -1,7 +1,7 @@
 import copy
 import uuid
 from collections import OrderedDict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, MutableMapping, Union
 
 import pytest
@@ -123,6 +123,17 @@ class TestSearchIssuesMessageProcessor:
 
         self.process_message(with_data_client_timestamp)
         self.process_message(with_event_datetime)
+
+    def test_extract_timestamp_ms(self, message_base):
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        client_timestamp_utc = insert_row["client_timestamp"].replace(
+            tzinfo=timezone.utc
+        )
+        assert insert_row["timestamp_ms"] == int(
+            client_timestamp_utc.timestamp() * 1000
+        )
 
     def test_extract_user(self, message_base):
         message_with_user = message_base

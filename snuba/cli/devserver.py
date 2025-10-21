@@ -3,7 +3,6 @@ import sys
 from subprocess import call, list2cmdline
 
 import click
-from honcho.manager import Manager
 
 from snuba import settings
 
@@ -18,11 +17,11 @@ COMMON_RUST_CONSUMER_DEV_OPTIONS = [
 @click.command()
 @click.option("--bootstrap/--no-bootstrap", default=True)
 @click.option("--workers/--no-workers", default=True)
-@click.option(
-    "--log-level", default="info", help="Logging level to use for all processes"
-)
+@click.option("--log-level", default="info", help="Logging level to use for all processes")
 def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
     "Starts all Snuba processes for local development."
+
+    from honcho.manager import Manager
 
     os.environ["PYTHONUNBUFFERED"] = "1"
 

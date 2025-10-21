@@ -1,4 +1,3 @@
-import uuid
 from typing import Type
 
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
@@ -24,9 +23,7 @@ def downgrade_tier(tier: Tier) -> Tier:
     return tier
 
 
-class EndpointTraceItemStats(
-    RPCEndpoint[TraceItemStatsRequest, TraceItemStatsResponse]
-):
+class EndpointTraceItemStats(RPCEndpoint[TraceItemStatsRequest, TraceItemStatsResponse]):
     @classmethod
     def version(cls) -> str:
         return "v1"
@@ -48,9 +45,6 @@ class EndpointTraceItemStats(
         )
 
     def _execute(self, in_msg: TraceItemStatsRequest) -> TraceItemStatsResponse:
-        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
-            uuid.uuid4()
-        )
 
         if not in_msg.stats_types:
             raise BadSnubaRPCRequestException("Please specify at least one stats type.")
@@ -61,10 +55,11 @@ class EndpointTraceItemStats(
             )
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         # the stats endpoint is quite costly to run so we use one tier lower than the
-        # routing system recommends
+        # routing system recommends for AI endpoints
         if (
             in_msg.meta.downsampled_storage_config.mode
             != DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+            and in_msg.meta.referrer == "seer.rpc"
         ):
             self.routing_decision.tier = downgrade_tier(self.routing_decision.tier)
         return resolver.resolve(in_msg, self.routing_decision)

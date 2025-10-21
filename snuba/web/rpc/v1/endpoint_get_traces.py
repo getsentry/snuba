@@ -17,7 +17,6 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import AndFilter, TraceItemFilter
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -52,6 +51,10 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    convert_trace_filters_to_trace_item_filter_with_type,
+    get_trace_ids_for_cross_item_query,
+)
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression,
 )
@@ -151,9 +154,7 @@ def _get_attribute_expression(
     attribute_type: AttributeKey.Type.ValueType,
     request_meta: RequestMeta,
 ) -> Expression:
-    return attribute_key_to_expression(
-        AttributeKey(name=attribute_name, type=attribute_type)
-    )
+    return attribute_key_to_expression(AttributeKey(name=attribute_name, type=attribute_type))
 
 
 def _attribute_to_expression(
@@ -336,29 +337,19 @@ def _attribute_to_expression(
             else:
                 return f.count(alias=alias)
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
-            return _get_root_span_attribute(
-                "sentry.raw_description", AttributeKey.Type.TYPE_STRING
-            )
+            return _get_root_span_attribute("sentry.raw_description", AttributeKey.Type.TYPE_STRING)
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS:
-            return _get_root_span_attribute(
-                "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
-            )
+            return _get_root_span_attribute("sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE)
         elif key == TraceAttribute.Key.KEY_ROOT_SPAN_PROJECT_ID:
-            return _get_root_span_attribute(
-                "sentry.project_id", AttributeKey.Type.TYPE_INT
-            )
+            return _get_root_span_attribute("sentry.project_id", AttributeKey.Type.TYPE_INT)
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_NAME:
             return _get_earliest_span_attribute(
                 "sentry.raw_description", AttributeKey.Type.TYPE_STRING
             )
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_PROJECT_ID:
-            return _get_earliest_span_attribute(
-                "sentry.project_id", AttributeKey.Type.TYPE_INT
-            )
+            return _get_earliest_span_attribute("sentry.project_id", AttributeKey.Type.TYPE_INT)
         elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS:
-            return _get_earliest_span_attribute(
-                "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
-            )
+            return _get_earliest_span_attribute("sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE)
         elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN:
             return _get_earliest_frontend_span_attribute(
                 "sentry.raw_description", AttributeKey.Type.TYPE_STRING
@@ -376,9 +367,7 @@ def _attribute_to_expression(
         else:
             return f.cast(column(attribute_name), clickhouse_type, alias=alias)
 
-    raise BadSnubaRPCRequestException(
-        f"{key} had an unknown or unset type: {trace_attribute.type}"
-    )
+    raise BadSnubaRPCRequestException(f"{key} had an unknown or unset type: {trace_attribute.type}")
 
 
 def _build_snuba_request(
@@ -482,10 +471,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
     def _execute(self, in_msg: GetTracesRequest) -> GetTracesResponse:
         _validate_order_by(in_msg)
-
-        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
-            uuid.uuid4()
-        )
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
@@ -495,7 +480,12 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
         # Get a dict of trace IDs and timestamps.
         if self._is_cross_event_query(in_msg.filters):
-            trace_ids = self._get_trace_ids_for_cross_event_query(request=in_msg)
+            trace_ids = get_trace_ids_for_cross_item_query(
+                in_msg,
+                in_msg.meta,
+                convert_trace_filters_to_trace_item_filter_with_type(list(in_msg.filters)),
+                self._timer,
+            )
         else:
             trace_ids = self._get_trace_ids_for_single_item_query(request=in_msg)
 
@@ -521,9 +511,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         """
         Returns a dict mapping item types to a filter expression for that item type.
         """
-        filters_by_item_type: dict[
-            TraceItemType.ValueType, list[TraceItemFilter]
-        ] = defaultdict(list)
+        filters_by_item_type: dict[TraceItemType.ValueType, list[TraceItemFilter]] = defaultdict(
+            list
+        )
         filter_expressions_by_item_type: dict[TraceItemType.ValueType, Expression] = {}
         for trace_filter in filters:
             filters_by_item_type[trace_filter.item_type].append(trace_filter.filter)
@@ -542,72 +532,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             )
 
         return filter_expressions_by_item_type
-
-    def _get_trace_ids_for_cross_event_query(
-        self, request: GetTracesRequest
-    ) -> list[str]:
-        filter_expressions_by_item_type = self._get_trace_item_filter_expressions(
-            request.filters
-        )
-        assert (
-            len(filter_expressions_by_item_type) > 1
-        ), "At least two item types are required for a cross-event query"
-
-        trace_item_filters_and_expression = and_cond(
-            *[
-                f.greater(f.countIf(expression), 0)
-                for expression in filter_expressions_by_item_type.values()
-            ]
-        )
-        trace_item_filters_or_expression = or_cond(
-            *[expression for expression in filter_expressions_by_item_type.values()]
-        )
-        entity = Entity(
-            key=EntityKey("eap_items"),
-            schema=get_entity(EntityKey("eap_items")).get_data_model(),
-            sample=None,
-        )
-        query = Query(
-            from_clause=entity,
-            selected_columns=[
-                SelectedExpression(
-                    name="trace_id",
-                    expression=column("trace_id"),
-                )
-            ],
-            condition=base_conditions_and(
-                request.meta,
-                trace_item_filters_or_expression,
-            ),
-            groupby=[
-                column("trace_id"),
-            ],
-            having=trace_item_filters_and_expression,
-            limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
-            offset=request.page_token.offset,
-        )
-
-        treeify_or_and_conditions(query)
-
-        all_confs = state.get_all_configs()
-        clickhouse_query_settings = {
-            k.split("/", 1)[1]: v
-            for k, v in all_confs.items()
-            if k.startswith("cross_event_query_settings/")
-        }
-
-        results = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=_build_snuba_request(
-                request, query, clickhouse_settings=clickhouse_query_settings
-            ),
-            timer=self._timer,
-        )
-        trace_ids: list[str] = []
-        for row in results.result.get("data", []):
-            trace_ids.append(list(row.values())[0])
-
-        return trace_ids
 
     def _get_trace_ids_for_single_item_query(
         self,
@@ -672,9 +596,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         )
 
         treeify_or_and_conditions(query)
-        settings = (
-            setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
-        )
+        settings = setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
         if get_config("enable_trace_sampling", False):
             settings.set_sampling_tier(self.routing_decision.tier)
         results = run_query(
@@ -694,9 +616,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> list[GetTracesResponse.Trace]:
         # We use the item type specified in the request meta for the trace item filter conditions.
         # If no item type is specified, we use all the filters.
-        filter_expressions_by_item_type = self._get_trace_item_filter_expressions(
-            request.filters
-        )
+        filter_expressions_by_item_type = self._get_trace_item_filter_expressions(request.filters)
         trace_item_filters_expression = None
         item_type = None
         if request.meta.trace_item_type in filter_expressions_by_item_type:
@@ -705,9 +625,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             ]
             item_type = request.meta.trace_item_type
         elif len(filter_expressions_by_item_type) == 1:
-            trace_item_filters_expression = next(
-                iter(filter_expressions_by_item_type.values())
-            )
+            trace_item_filters_expression = next(iter(filter_expressions_by_item_type.values()))
             item_type = next(iter(filter_expressions_by_item_type.keys()))
         elif len(filter_expressions_by_item_type) > 1:
             trace_item_filters_expression = or_cond(

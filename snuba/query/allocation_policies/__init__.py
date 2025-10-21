@@ -3,18 +3,20 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
+from enum import Enum
 from typing import Any, cast
 
 from snuba import environment, settings
 from snuba.configs.configuration import (
     ConfigurableComponent,
+    ConfigurableComponentData,
     Configuration,
     ResourceIdentifier,
     logger,
 )
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
+from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryException, QueryResult
 
@@ -125,9 +127,7 @@ class AllocationPolicyViolations(SerializableException):
 
     @property
     def quota_allowance(self) -> dict[str, dict[str, Any]]:
-        return cast(
-            dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {})
-        )
+        return cast(dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {}))
 
     @property
     def summary(self) -> dict[str, Any]:
@@ -144,7 +144,16 @@ class AllocationPolicyViolations(SerializableException):
         )
 
 
-class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
+class PolicyData(ConfigurableComponentData):
+    query_type: str
+
+
+class QueryType(Enum):
+    SELECT = "select"
+    DELETE = "delete"
+
+
+class AllocationPolicy(ConfigurableComponent, ABC):
     """This class should be the centralized place for policy decisions regarding
     resource usage of a clickhouse cluster. It is meant to live as a configurable item
     on a storage.
@@ -331,13 +340,13 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
 
     def __init__(
         self,
-        storage_key: StorageKey,
+        storage_key: ResourceIdentifier,
         required_tenant_types: list[str],
         default_config_overrides: dict[str, Any],
         **kwargs: str,
     ) -> None:
         self._required_tenant_types = set(required_tenant_types)
-        self._storage_key = storage_key
+        self._resource_identifier = storage_key
         self._default_config_definitions = [
             AllocationPolicyConfig(
                 name=IS_ACTIVE,
@@ -362,8 +371,13 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
 
-    def component_namespace(self) -> str:
-        return "AllocationPolicy"
+    @classmethod
+    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
+        return cls(
+            storage_key=ResourceIdentifier(resource_identifier),
+            required_tenant_types=[],
+            default_config_overrides={},
+        )
 
     def _get_hash(self) -> str:
         return CAPMAN_HASH
@@ -374,7 +388,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             environment.metrics,
             "allocation_policy",
             tags={
-                "storage_key": self._storage_key.value,
+                "storage_key": self._resource_identifier.value,
                 "is_enforced": str(self.is_enforced),
                 "policy_class": self.__class__.__name__,
             },
@@ -382,10 +396,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
 
     @property
     def is_active(self) -> bool:
-        return (
-            bool(self.get_config_value(IS_ACTIVE))
-            and settings.ALLOCATION_POLICY_ENABLED
-        )
+        return bool(self.get_config_value(IS_ACTIVE)) and settings.ALLOCATION_POLICY_ENABLED
 
     @property
     def is_enforced(self) -> bool:
@@ -396,14 +407,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         """Maximum number of threads run a single query on ClickHouse with."""
         return int(self.get_config_value(MAX_THREADS))
 
-    @classmethod
-    def config_key(cls) -> str:
-        return cls.__name__
-
-    @classmethod
-    def get_from_name(cls, name: str) -> "AllocationPolicy":
-        return cast("AllocationPolicy", cls.class_from_name(name))
-
     def __eq__(self, other: Any) -> bool:
         """There should not be a need to compare these except that
         AllocationPolicies are attached to the Table a query is executed against.
@@ -411,7 +414,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         """
         return (
             bool(self.__class__ == other.__class__)
-            and self._storage_key == other._storage_key
+            and self._resource_identifier == other._resource_identifier
             and self._required_tenant_types == other._required_tenant_types
         )
 
@@ -431,7 +434,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         assert isinstance(storage_key, str)
         return cls(
             required_tenant_types=required_tenant_types,
-            storage_key=StorageKey(storage_key),
+            storage_key=ResourceIdentifier(StorageKey(storage_key)),
             default_config_overrides=default_config_overrides,
             **kwargs,
         )
@@ -473,6 +476,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
                 suggestion=NO_SUGGESTION,
             )
         except Exception:
+            self.metrics.increment("fail_open", 1, tags={"method": "get_quota_allowance"})
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
             )
@@ -507,7 +511,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
                 suggestion=allowance.suggestion,
             )
         # make sure we always know which storage key we rejected a query from
-        allowance.explanation["storage_key"] = str(self._storage_key)
+        allowance.explanation["storage_key"] = self._resource_identifier.value
         return allowance
 
     @abstractmethod
@@ -530,6 +534,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             # the policy did not do anything because the tenants were invalid, updating is also not necessary
             pass
         except Exception:
+            self.metrics.increment("fail_open", 1, tags={"method": "update_quota_balance"})
             logger.exception(
                 "Allocation policy failed to update quota balance, this is a bug, fix it"
             )
@@ -546,12 +551,16 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
         pass
 
     @property
-    def storage_key(self) -> StorageKey:
-        return self._storage_key
+    def resource_identifier(self) -> ResourceIdentifier:
+        return self._resource_identifier
 
     @property
-    def resource_identifier(self) -> ResourceIdentifier:
-        return ResourceIdentifier(self._storage_key)
+    def query_type(self) -> QueryType:
+        return QueryType.SELECT
+
+    def to_dict(self) -> PolicyData:
+        base_data = super().to_dict()
+        return PolicyData(**base_data, query_type=self.query_type.value)  # type: ignore
 
 
 class PassthroughPolicy(AllocationPolicy):
@@ -583,7 +592,7 @@ class PassthroughPolicy(AllocationPolicy):
 
 
 DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
-    StorageKey("default.no_storage_key"),
+    ResourceIdentifier(StorageKey("default.no_storage_key")),
     required_tenant_types=[],
     default_config_overrides={},
 )

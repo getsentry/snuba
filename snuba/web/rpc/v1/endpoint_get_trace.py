@@ -1,16 +1,20 @@
+import random
 import uuid
 from datetime import datetime
 from operator import attrgetter
 from typing import Any, Dict, Iterable, Type
 
+import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
     GetTraceRequest,
     GetTraceResponse,
 )
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 
+from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -46,6 +50,11 @@ NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
     "trace_id",
     "sampling_factor",
 ]
+APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY = "EndpointGetTrace.apply_final_rollout_percentage"
+
+TIMESTAMP_FIELD_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
+    TraceItemType.TRACE_ITEM_TYPE_SPAN: "sentry.start_timestamp_precise",
+}
 
 
 def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Query:
@@ -54,9 +63,7 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
             name="id",
             expression=(
                 attribute_key_to_expression(
-                    AttributeKey(
-                        name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING
-                    )
+                    AttributeKey(name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING)
                 )
             ),
         ),
@@ -66,13 +73,15 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
                 (
                     attribute_key_to_expression(
                         AttributeKey(
-                            name="sentry.start_timestamp_precise",
+                            name=TIMESTAMP_FIELD_BY_ITEM_TYPE.get(
+                                item.item_type, "sentry.timestamp"
+                            ),
                             type=AttributeKey.Type.TYPE_DOUBLE,
                         )
                     )
                 ),
                 "Float64",
-                alias="timestamp",
+                alias="item_timestamp",
             ),
         ),
     ]
@@ -143,14 +152,31 @@ def _build_query(request: GetTraceRequest, item: GetTraceRequest.TraceItem) -> Q
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=column("timestamp"),
+                expression=column("item_timestamp"),
             ),
         ],
     )
 
+    if random.random() < _get_apply_final_rollout_percentage():
+        query.set_final(True)
+
+    span = sentry_sdk.get_current_span()
+    if span:
+        span.set_data("is_final", query.get_final())
+
     treeify_or_and_conditions(query)
 
     return query
+
+
+def _get_apply_final_rollout_percentage() -> float:
+    return (
+        state.get_float_config(
+            APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
+            0.0,
+        )
+        or 0.0
+    )
 
 
 def _build_snuba_request(
@@ -282,9 +308,6 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         return GetTraceResponse
 
     def _execute(self, in_msg: GetTraceRequest) -> GetTraceResponse:
-        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
-            uuid.uuid4()
-        )
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
