@@ -101,11 +101,23 @@ class SerializableException(Exception):
         should_report: bool = True,
         **extra_data: JsonSerializable,
     ) -> None:
-        self.message = message or ""
         self.extra_data = extra_data or {}
+        self.message = self._format_message(message)
         # whether or not the error should be reported to sentry
         self.should_report = should_report
         super().__init__(message)
+
+    def format_message(self, message: str) -> str:
+        """
+        Can be overridden to handle custom formatting
+        """
+        return message
+
+    def _format_message(self, message: Optional[str]) -> str:
+        if not message:
+            return ""
+
+        return self.format_message(message)
 
     def to_dict(self) -> SerializableExceptionDict:
         return {

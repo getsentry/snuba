@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timedelta
 
 import pytest
+from confluent_kafka.admin import AdminClient
 
 from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
@@ -12,6 +13,9 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertEvent
+from snuba.utils.manage_topics import create_topics
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.helpers import write_raw_unprocessed_events, write_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
 
@@ -19,6 +23,12 @@ from tests.web.rpc.v1.test_utils import gen_item_message
 class BaseSubscriptionTest:
     @pytest.fixture(autouse=True)
     def setup_teardown(self, clickhouse_db: None) -> None:
+        settings.KAFKA_TOPIC_MAP = {
+            "events": "events-test-base-subscription",
+        }
+        admin_client = AdminClient(get_default_kafka_configuration())
+        create_topics(admin_client, [SnubaTopic.EVENTS])
+
         self.project_id = 1
         self.platforms = ["a", "b"]
         self.minutes = 20

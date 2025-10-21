@@ -93,7 +93,7 @@ def test_consume_quota(
     assert {
         "granted_quota": 0,
         "limit": limit,
-        "storage_key": "StorageKey.ERRORS",
+        "storage_key": "errors",
     }.items() <= allowance.explanation.items()
 
     assert reason in str(allowance.explanation["reason"])

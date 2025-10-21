@@ -86,9 +86,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "host": os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "max_connections": int(os.environ.get("CLICKHOUSE_MAX_CONNECTIONS", 1)),
-        "block_connections": bool(
-            os.environ.get("CLICKHOUSE_BLOCK_CONNECTIONS", False)
-        ),
+        "block_connections": bool(os.environ.get("CLICKHOUSE_BLOCK_CONNECTIONS", False)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
@@ -151,6 +149,7 @@ class RedisClusterConfig(TypedDict):
     db: int
     ssl: bool
     reinitialize_steps: int
+    socket_timeout: float
 
 
 # The default cluster is configured using these global constants. If a config
@@ -166,6 +165,8 @@ REDIS_DB = int(os.environ.get("REDIS_DB", 1))
 REDIS_SSL = bool(os.environ.get("REDIS_SSL", False))
 REDIS_INIT_MAX_RETRIES = 3
 REDIS_REINITIALIZE_STEPS = 10
+# default redis command timeout in seconds for redis commands (e.g. configs, rate limits) which are meant to be quick and fail-open
+REDIS_SOCKET_TIMEOUT = 0.1
 
 
 class RedisClusters(TypedDict):
@@ -305,9 +306,6 @@ RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = False
 # require live and up to date data, so caching should be avoided entirely.
 BYPASS_CACHE_REFERRERS = ["subscriptions_executor"]
 
-# (logical topic name, # of partitions)
-TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}
-
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
@@ -360,14 +358,10 @@ ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
 
 # Enable issue occurrence ingestion
-ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
-    "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
-)
+ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get("ENABLE_ISSUE_OCCURRENCE_CONSUMER", False)
 
 # Enable group attributes consumer
-ENABLE_GROUP_ATTRIBUTES_CONSUMER = os.environ.get(
-    "ENABLE_GROUP_ATTRIBUTES_CONSUMER", False
-)
+ENABLE_GROUP_ATTRIBUTES_CONSUMER = os.environ.get("ENABLE_GROUP_ATTRIBUTES_CONSUMER", False)
 
 # Enable lw deletions consumer (search issues only for now)
 ENABLE_LW_DELETIONS_CONSUMER = os.environ.get("ENABLE_LW_DELETIONS_CONSUMER", False)
@@ -409,6 +403,8 @@ DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 # Mapping of storage set key to slice count
 # This is only for sliced storage sets
 SLICED_STORAGE_SETS: Mapping[str, int] = {}
+
+LOG_MIGRATIONS = True
 
 # Mapping storage set key to a mapping of logical partition
 # to slice id
@@ -490,12 +486,8 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
             assert isinstance(settings_spec.loader, importlib.abc.Loader)
             settings_spec.loader.exec_module(settings_module)
         else:
-            module_format = (
-                ".%s" if settings.startswith("settings_") else ".settings_%s"
-            )
-            settings_module = importlib.import_module(
-                module_format % settings, "snuba.settings"
-            )
+            module_format = ".%s" if settings.startswith("settings_") else ".settings_%s"
+            settings_module = importlib.import_module(module_format % settings, "snuba.settings")
 
         for attr in dir(settings_module):
             if attr.isupper():

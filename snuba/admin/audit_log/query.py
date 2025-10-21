@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from functools import partial
 from typing import Callable, MutableMapping, TypeVar, Union
 
-DATETIME_FORMAT = "%B %d, %Y %H:%M:%S %p"
+DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
@@ -42,11 +42,11 @@ def audit_log(fn: Callable[[str, str], Return]) -> Callable[[str, str], Return]:
             result = fn(query, user)
         except Exception:
             data["status"] = QueryExecutionStatus.FAILED.value
-            data["end_timestamp"] = datetime.now().strftime(DATETIME_FORMAT)
+            data["end_timestamp"] = datetime.now(timezone.utc).strftime(DATETIME_FORMAT)
             audit_log_notify(data=data)
             raise
         data["status"] = QueryExecutionStatus.SUCCEEDED.value
-        data["end_timestamp"] = datetime.now().strftime(DATETIME_FORMAT)
+        data["end_timestamp"] = datetime.now(timezone.utc).strftime(DATETIME_FORMAT)
         audit_log_notify(data=data)
         return result
 

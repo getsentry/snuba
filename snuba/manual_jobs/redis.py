@@ -31,9 +31,7 @@ def _build_job_type_key(job_id: str) -> str:
 
 def _acquire_job_lock(job_id: str) -> bool:
     return bool(
-        _redis_client.set(
-            name=_build_job_lock_key(job_id), value=1, nx=True, ex=(24 * 60 * 60)
-        )
+        _redis_client.set(name=_build_job_lock_key(job_id), value=1, nx=True, ex=(24 * 60 * 60))
     )
 
 
@@ -46,9 +44,7 @@ def _release_job_lock(job_id: str) -> None:
 
 
 def _record_start_time(job_id: str) -> None:
-    _redis_client.set(
-        name=_build_start_time_key(job_id), value=datetime.utcnow().isoformat()
-    )
+    _redis_client.set(name=_build_start_time_key(job_id), value=datetime.utcnow().isoformat())
 
 
 def _set_job_status(job_id: str, status: JobStatus) -> JobStatus:
@@ -62,20 +58,28 @@ def _set_job_type(job_id: str, job_type: str) -> None:
 
 
 def _get_job_type(job_id: str) -> str:
-    return typing.cast(
-        str, _redis_client.get(name=_build_job_type_key(job_id)).decode()
-    )
+    return typing.cast(str, _redis_client.get(name=_build_job_type_key(job_id)).decode())
 
 
 def _get_job_types_multi(job_ids_keys: Sequence[str]) -> List[str]:
-    return [job_type.decode() for job_type in _redis_client.mget(job_ids_keys)]
+    with _redis_client.pipeline(transaction=False) as pipeline:
+        for job_id_key in job_ids_keys:
+            pipeline.get(job_id_key)
+        redis_statuses = pipeline.execute()
+
+    return [job_type.decode() for job_type in redis_statuses]
 
 
 def _get_job_status_multi(job_ids_keys: Sequence[str]) -> List[JobStatus]:
     if len(job_ids_keys) == 0:
         return []
 
+    with _redis_client.pipeline(transaction=False) as pipeline:
+        for job_id_key in job_ids_keys:
+            pipeline.get(job_id_key)
+        redis_statuses = pipeline.execute()
+
     return [
         redis_status.decode() if redis_status is not None else JobStatus.NOT_STARTED
-        for redis_status in _redis_client.mget(job_ids_keys)
+        for redis_status in redis_statuses
     ]

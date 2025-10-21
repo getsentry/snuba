@@ -16,12 +16,17 @@ expression: snapshot_payload
     "attributes_float_8": {
       "with a float": 123.123
     },
+    "attributes_float_9": {
+      "sentry._internal.ingested_at": "<ingestion timestamp>"
+    },
     "attributes_int": {
-      "another_attribute": 1238
+      "another_attribute": 1238,
+      "sentry._internal.ingested_at": "<ingestion timestamp>"
     },
     "attributes_string_32": {
       "one_attribute": "blah"
     },
+    "downsampled_retention_days": 90,
     "item_id": 140754042156678400000000000000000000000.0,
     "item_type": 1,
     "organization_id": 1,

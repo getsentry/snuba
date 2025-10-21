@@ -1,7 +1,9 @@
 import base64
 from datetime import UTC, datetime, timedelta
+from typing import Any, Callable
 
 import pytest
+from confluent_kafka.admin import AdminClient
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest,
     CreateSubscriptionResponse,
@@ -21,7 +23,9 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, RPCSubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
-from snuba.web.rpc.v1.create_subscription import subscription_entity_name
+from snuba.utils.manage_topics import create_topics
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_endpoint_time_series.test_endpoint_time_series import (
     DummyMetric,
@@ -185,6 +189,11 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestCreateSubscriptionApi(BaseApiTest):
+    def setup_method(self, test_method: Callable[..., Any]) -> None:
+        super().setup_method(test_method)
+        admin_client = AdminClient(get_default_kafka_configuration())
+        create_topics(admin_client, [SnubaTopic.ITEMS])
+
     def test_create_valid_subscription(self) -> None:
         store_spans_timeseries(
             START_TIME,
@@ -234,7 +243,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         rpc_subscription_data = list(
             RedisSubscriptionDataStore(
                 get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-                EntityKey(subscription_entity_name()),
+                EntityKey("eap_items"),
                 PartitionId(partition),
             ).all()
         )[0][1]

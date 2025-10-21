@@ -1,12 +1,13 @@
 #!/bin/bash
 
-/devinfra/scripts/checks/githubactions/checkruns.py \
+checks-githubactions-checkruns \
   --timeout-mins 60 \
   getsentry/snuba \
   ${GO_REVISION_SNUBA_REPO} \
   "Tests and code coverage (test)" \
   "Tests and code coverage (test_distributed)" \
   "Tests and code coverage (test_distributed_migrations)" \
+  "Build and push production image" \
   "Dataset Config Validation" \
   "sentry (0)" \
   "sentry (1)" \
