@@ -6,12 +6,6 @@ import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 
 import { SelectItem, Switch, Alert } from "@mantine/core";
-import { Prism } from "@mantine/prism";
-import { RichTextEditor } from "@mantine/tiptap";
-import { useEditor } from "@tiptap/react";
-import HardBreak from "@tiptap/extension-hard-break";
-import Placeholder from "@tiptap/extension-placeholder";
-import StarterKit from "@tiptap/starter-kit";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { Collapse as MantineCollapse, Group, Text } from '@mantine/core';
@@ -286,49 +280,6 @@ const executeButtonStyle = {
 const selectStyle = {
   marginRight: 8,
   height: 30,
-};
-
-function TextArea(props: {
-  value: string;
-  onChange: (nextValue: string) => void;
-}) {
-  const { value, onChange } = props;
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Placeholder.configure({
-        placeholder: "Write your query here.",
-      }),
-      HardBreak.extend({
-        addKeyboardShortcuts() {
-          return {
-            Enter: () => this.editor.commands.setHardBreak(),
-          };
-        },
-      }),
-    ],
-    content: `${value}`,
-    onUpdate({ editor }) {
-      onChange(editor.getText());
-    },
-  });
-  return (
-    <div>
-      <RichTextEditor editor={editor}>
-        <RichTextEditor.Content />
-      </RichTextEditor>
-      <Prism withLineNumbers language="sql">
-        {value || ""}
-      </Prism>
-    </div>
-  );
-}
-
-const queryDescription = {
-  minHeight: 10,
-  width: "auto",
-  fontSize: 16,
-  padding: "10px 5px",
 };
 
 export default QueryDisplay;
