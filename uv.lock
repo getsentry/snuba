@@ -265,17 +265,6 @@ wheels = [
 ]
 
 [[package]]
-name = "ecdsa"
-version = "0.18.0"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-dependencies = [
-    { name = "six", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-]
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/ecdsa-0.18.0-py2.py3-none-any.whl", hash = "sha256:80600258e7ed2f16b9aa1d7c295bd70194109ad5a30fdee0eaeefef1d4c559dd" },
-]
-
-[[package]]
 name = "fastjsonschema"
 version = "2.16.2"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -832,6 +821,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pyjwt"
+version = "2.10.1"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/PyJWT-2.10.1-py3-none-any.whl", hash = "sha256:dcdd193e30abefd5debf142f9adfcdd2b58004e644f25406ffaebd50bd98dacb" },
+]
+
+[package.optional-dependencies]
+crypto = [
+    { name = "cryptography", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+]
+
+[[package]]
 name = "pyparsing"
 version = "3.1.4"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -887,24 +889,6 @@ dependencies = [
 ]
 wheels = [
     { url = "https://pypi.devinfra.sentry.io/wheels/python_dateutil-2.8.2-py2.py3-none-any.whl", hash = "sha256:961d03dc3453ebbc59dbdea9e4e11c5651520a876d0f4db161e8674aae935da9" },
-]
-
-[[package]]
-name = "python-jose"
-version = "3.3.0"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-dependencies = [
-    { name = "ecdsa", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-    { name = "pyasn1", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-    { name = "rsa", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-]
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/python_jose-3.3.0-py2.py3-none-any.whl", hash = "sha256:9b1376b023f8b298536eedd47ae1089bcdb848f1535ab30555cd92002d78923a" },
-]
-
-[package.optional-dependencies]
-cryptography = [
-    { name = "cryptography", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 
 [[package]]
@@ -1229,7 +1213,7 @@ wheels = [
 
 [[package]]
 name = "snuba"
-version = "25.10.0.dev0"
+version = "25.11.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "blinker", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1252,8 +1236,8 @@ dependencies = [
     { name = "progressbar2", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "proto-plus", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "protobuf", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "pyjwt", extra = ["crypto"], marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "python-dateutil", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-    { name = "python-jose", extra = ["cryptography"], marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "python-rapidjson", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pyuwsgi", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pyyaml", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1295,7 +1279,6 @@ dev = [
     { name = "types-google-cloud-ndb", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "types-protobuf", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "types-python-dateutil", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-    { name = "types-python-jose", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "types-pyyaml", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "types-requests", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "types-setuptools", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1325,8 +1308,8 @@ requires-dist = [
     { name = "progressbar2", specifier = ">=4.2.0" },
     { name = "proto-plus", specifier = ">=1.24.0" },
     { name = "protobuf", specifier = ">=5.29.5" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10.1" },
     { name = "python-dateutil", specifier = ">=2.8.2" },
-    { name = "python-jose", extras = ["cryptography"], specifier = ">=3.3.0" },
     { name = "python-rapidjson", specifier = ">=1.8" },
     { name = "pyuwsgi", specifier = ">=2.0.23" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -1368,7 +1351,6 @@ dev = [
     { name = "types-google-cloud-ndb", specifier = ">=2.2.0" },
     { name = "types-protobuf", specifier = ">=5.27.0.20240626" },
     { name = "types-python-dateutil", specifier = ">=2.8.19.14" },
-    { name = "types-python-jose", specifier = ">=3.3.0" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20240808" },
     { name = "types-requests", specifier = ">=2.32.0.20240907" },
     { name = "types-setuptools", specifier = ">=74.1.0.20240907" },
@@ -1496,14 +1478,6 @@ version = "2.8.19.14"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
     { url = "https://pypi.devinfra.sentry.io/wheels/types_python_dateutil-2.8.19.14-py3-none-any.whl", hash = "sha256:f977b8de27787639986b4e28963263fd0e5158942b3ecef91b9335c130cb1ce9" },
-]
-
-[[package]]
-name = "types-python-jose"
-version = "3.3.0"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/types_python_jose-3.3.0-py3-none-any.whl", hash = "sha256:2b8b62cff9303658c7dd07d314ca731b2b184e083190d9f622fa1cc1e6dba9b9" },
 ]
 
 [[package]]
