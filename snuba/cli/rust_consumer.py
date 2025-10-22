@@ -14,9 +14,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--storage",
     "storage_names",
-    type=click.Choice(
-        [storage_key.value for storage_key in get_writable_storage_keys()]
-    ),
+    type=click.Choice([storage_key.value for storage_key in get_writable_storage_keys()]),
     help="The storage to target",
     multiple=True,
     required=True,
@@ -275,7 +273,6 @@ def rust_consumer(
         batch_write_timeout_ms,
         max_dlq_buffer_length,
         join_timeout_ms,
-        consumer_version,
     )
 
     sys.exit(exitcode)
