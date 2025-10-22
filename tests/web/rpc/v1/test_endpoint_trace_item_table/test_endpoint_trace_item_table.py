@@ -29,6 +29,9 @@ from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.formula_pb2 import Literal
 from sentry_protos.snuba.v1.request_common_pb2 import (
     PageToken,
+    QueryInfo,
+    QueryMetadata,
+    QueryStats,
     RequestMeta,
     ResponseMeta,
     TraceItemType,
@@ -356,6 +359,15 @@ class TestTraceItemTable(BaseApiTest):
                 downsampled_storage_meta=DownsampledStorageMeta(
                     can_go_to_higher_accuracy_tier=False,
                 ),
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
             ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
