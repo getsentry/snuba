@@ -184,7 +184,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--consumer-version",
     default="v2",
     type=click.Choice(["v1", "v2"]),
-    help="Specify which consumer version to use, v1 is stable, v2 is experimental",
+    help="DEPRECATED: value is ignored.",
 )
 def rust_consumer(
     *,
@@ -273,7 +273,6 @@ def rust_consumer(
         batch_write_timeout_ms,
         max_dlq_buffer_length,
         join_timeout_ms,
-        consumer_version,
     )
 
     sys.exit(exitcode)
