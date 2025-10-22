@@ -67,6 +67,9 @@ class TestDebugInfo:
         for query_info in non_debug_response.meta.query_info:
             assert query_info.stats is not None
             assert query_info.stats.progress_bytes >= 0
+            assert query_info.metadata is not None
+            assert query_info.metadata.sql == ""
+            assert query_info.trace_logs == ""
 
     def test_trace_query_settings(self) -> None:
         settings = setup_trace_query_settings()
