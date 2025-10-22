@@ -412,6 +412,15 @@ class TestTraceItemTable(BaseApiTest):
                 downsampled_storage_meta=DownsampledStorageMeta(
                     can_go_to_higher_accuracy_tier=False,
                 ),
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
             ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
@@ -485,6 +494,15 @@ class TestTraceItemTable(BaseApiTest):
                 downsampled_storage_meta=DownsampledStorageMeta(
                     can_go_to_higher_accuracy_tier=False,
                 ),
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
             ),
         )
         assert response == expected_response
@@ -563,6 +581,15 @@ class TestTraceItemTable(BaseApiTest):
                 downsampled_storage_meta=DownsampledStorageMeta(
                     can_go_to_higher_accuracy_tier=False,
                 ),
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
             ),
         )
         assert response.page_token == expected_response.page_token

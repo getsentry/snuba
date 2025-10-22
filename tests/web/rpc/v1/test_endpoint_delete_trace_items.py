@@ -10,7 +10,13 @@ from sentry_protos.snuba.v1.endpoint_delete_trace_items_pb2 import (
     DeleteTraceItemsRequest,
     DeleteTraceItemsResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, ResponseMeta
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    QueryInfo,
+    QueryMetadata,
+    QueryStats,
+    RequestMeta,
+    ResponseMeta,
+)
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
@@ -99,7 +105,18 @@ class TestEndpointDeleteTrace(BaseApiTest):
         response = EndpointDeleteTraceItems().execute(message)
 
         expected_response = DeleteTraceItemsResponse(
-            meta=ResponseMeta(request_id=_REQUEST_ID),
+            meta=ResponseMeta(
+                request_id=_REQUEST_ID,
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
+            ),
             matching_items_count=_SPAN_COUNT,
         )
 

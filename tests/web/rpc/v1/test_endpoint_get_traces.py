@@ -14,6 +14,9 @@ from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import (
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import (
     PageToken,
+    QueryInfo,
+    QueryMetadata,
+    QueryStats,
     RequestMeta,
     ResponseMeta,
     TraceItemType,
@@ -164,7 +167,18 @@ class TestGetTraces(BaseApiTest):
                 for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
             ],
             page_token=PageToken(offset=len(_TRACE_IDS + _ADDITIONAL_TRACE_IDS)),
-            meta=ResponseMeta(request_id=_REQUEST_ID),
+            meta=ResponseMeta(
+                request_id=_REQUEST_ID,
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -211,7 +225,18 @@ class TestGetTraces(BaseApiTest):
                 )
             ],
             page_token=PageToken(offset=1),
-            meta=ResponseMeta(request_id=_REQUEST_ID),
+            meta=ResponseMeta(
+                request_id=_REQUEST_ID,
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -267,7 +292,18 @@ class TestGetTraces(BaseApiTest):
                 )
             ],
             page_token=PageToken(offset=1),
-            meta=ResponseMeta(request_id=_REQUEST_ID),
+            meta=ResponseMeta(
+                request_id=_REQUEST_ID,
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -461,7 +497,18 @@ class TestGetTraces(BaseApiTest):
                 for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
-            meta=ResponseMeta(request_id=_REQUEST_ID),
+            meta=ResponseMeta(
+                request_id=_REQUEST_ID,
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -523,7 +570,18 @@ class TestGetTraces(BaseApiTest):
                 for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
-            meta=ResponseMeta(request_id=_REQUEST_ID),
+            meta=ResponseMeta(
+                request_id=_REQUEST_ID,
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -586,7 +644,18 @@ class TestGetTraces(BaseApiTest):
                 for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
-            meta=ResponseMeta(request_id=_REQUEST_ID),
+            meta=ResponseMeta(
+                request_id=_REQUEST_ID,
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
