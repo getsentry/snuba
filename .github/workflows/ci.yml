@@ -445,3 +445,16 @@ jobs:
       name: Validate devservices config
       with:
         devservices-version: ${{ steps.get-devservices-version.outputs.version }}
+
+  self-hosted-end-to-end:
+    needs: [snuba-image, files-changed]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Run Sentry self-hosted e2e CI
+        uses: getsentry/self-hosted@master
+        with:
+          project_name: snuba
+          image_url: ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
