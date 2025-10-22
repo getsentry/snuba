@@ -366,8 +366,6 @@ ENABLE_GROUP_ATTRIBUTES_CONSUMER = os.environ.get("ENABLE_GROUP_ATTRIBUTES_CONSU
 # Enable lw deletions consumer (search issues only for now)
 ENABLE_LW_DELETIONS_CONSUMER = os.environ.get("ENABLE_LW_DELETIONS_CONSUMER", False)
 
-ESCAPE_DOTS_IN_COLUMNS = False
-
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs to
 # avoid spilling over to the next day.
 OPTIMIZE_JOB_CUTOFF_TIME = 23
@@ -405,6 +403,8 @@ DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 # Mapping of storage set key to slice count
 # This is only for sliced storage sets
 SLICED_STORAGE_SETS: Mapping[str, int] = {}
+
+LOG_MIGRATIONS = True
 
 # Mapping storage set key to a mapping of logical partition
 # to slice id
@@ -453,10 +453,6 @@ VALIDATE_DATASET_YAMLS_ON_STARTUP = False
 
 MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
 SNQL_DISABLED_DATASETS: set[str] = set([])
-
-# this is the fallback default for enable_formula_reliability
-# will be overwritten by get_config i.e. snuba admin runtime config
-ENABLE_FORMULA_RELIABILITY_DEFAULT = 0
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

@@ -46,9 +46,7 @@ metrics = MetricsWrapper(environment.metrics, "api")
 logger = logging.getLogger("snuba.pipeline.stages.query_execution")
 
 
-class ExecutionStage(
-    QueryPipelineStage[ClickhouseQuery | CompositeQuery[Table], QueryResult]
-):
+class ExecutionStage(QueryPipelineStage[ClickhouseQuery | CompositeQuery[Table], QueryResult]):
     def __init__(
         self,
         attribution_info: AttributionInfo,
@@ -101,9 +99,7 @@ def _dry_run_query_runner(
     clickhouse_query: ClickhouseQuery | CompositeQuery[Table],
     cluster_name: str,
 ) -> QueryResult:
-    with sentry_sdk.start_span(
-        description="dryrun_create_query", op="function"
-    ) as span:
+    with sentry_sdk.start_span(description="dryrun_create_query", op="function") as span:
         formatted_query = format_query(clickhouse_query)
         span.set_data("query", formatted_query.structured())
 
@@ -289,10 +285,7 @@ def _apply_turbo_sampling_if_needed(
     into a query processor.
     """
     if isinstance(clickhouse_query, ClickhouseQuery):
-        if (
-            query_settings.get_turbo()
-            and not clickhouse_query.get_from_clause().sampling_rate
-        ):
+        if query_settings.get_turbo() and not clickhouse_query.get_from_clause().sampling_rate:
             clickhouse_query.set_from_clause(
                 replace(
                     clickhouse_query.get_from_clause(),

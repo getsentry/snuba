@@ -55,10 +55,11 @@ class EndpointTraceItemStats(RPCEndpoint[TraceItemStatsRequest, TraceItemStatsRe
             )
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         # the stats endpoint is quite costly to run so we use one tier lower than the
-        # routing system recommends
+        # routing system recommends for AI endpoints
         if (
             in_msg.meta.downsampled_storage_config.mode
             != DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+            and in_msg.meta.referrer == "seer.rpc"
         ):
             self.routing_decision.tier = downgrade_tier(self.routing_decision.tier)
         return resolver.resolve(in_msg, self.routing_decision)

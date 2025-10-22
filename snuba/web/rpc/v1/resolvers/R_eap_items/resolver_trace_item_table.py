@@ -1,5 +1,6 @@
 import uuid
 from dataclasses import replace
+from itertools import islice
 from typing import List, Optional, Sequence
 
 import sentry_sdk
@@ -34,8 +35,6 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
-from snuba.state import get_int_config
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -51,7 +50,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.common.pagination import FlexibleTimeWindowPage
+from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
     TimeWindow,
@@ -225,8 +224,6 @@ def _get_reliability_context_columns(
     """
 
     if column.HasField("formula"):
-        if not get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
-            return []
         # also query for the left and right parts of the formula separately
         # this will be used later to calculate the reliability of the formula
         # ex: SELECT agg1/agg2 will become SELECT agg1/agg2, agg1, agg2
@@ -331,9 +328,8 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
 def _get_offset_from_page_token(page_token: PageToken | None) -> int:
     if page_token is None:
         return 0
-    page = FlexibleTimeWindowPage.decode(page_token)
-    if page.offset is not None:
-        return page.offset
+    if page_token.WhichOneof("value") == "offset":
+        return page_token.offset
     return 0
 
 
@@ -382,6 +378,11 @@ def build_query(
                 time_window.end_timestamp.seconds,
             )
         )
+    page_token_filter = FlexibleTimeWindowPageWithFilters(request.page_token).get_filters()
+
+    if page_token_filter:
+        additional_conditions.append(page_token_filter)
+
     groupby = [attribute_key_to_expression(attr_key) for attr_key in request.group_by]
 
     res = Query(
@@ -430,16 +431,13 @@ def _get_page_token(
     # time window of the current request after any adjustments by routing strategies
     time_window: TimeWindow | None,
 ) -> PageToken:
-    current_offset = _get_offset_from_page_token(request.page_token)
     num_rows_in_response = len(response[0].results) if response else 0
     if time_window is not None:
         if num_rows_returned > request.limit:
             # there are more rows in this window so we maintain the same time window and advance the offset
-            return FlexibleTimeWindowPage(
-                time_window.start_timestamp,
-                time_window.end_timestamp,
-                current_offset + num_rows_in_response,
-            ).encode()
+            return FlexibleTimeWindowPageWithFilters.create(
+                request, time_window, response
+            ).page_token
         else:
             if time_window.start_timestamp.seconds <= original_time_window.start_timestamp.seconds:
                 # this is the last window because our start timestamp is the same as the original start timestamp
@@ -449,9 +447,11 @@ def _get_page_token(
                 # there are no more rows in this window so we return the next window
                 # return the next window where the end timestamp is the start timestamp and the start timestamp is the original start timestamp
                 # the routing strategy will properly truncate the time window of the next request
-                return FlexibleTimeWindowPage(
-                    original_time_window.start_timestamp, time_window.start_timestamp, 0
-                ).encode()
+                return FlexibleTimeWindowPageWithFilters.create(
+                    request,
+                    TimeWindow(original_time_window.start_timestamp, time_window.start_timestamp),
+                    response,
+                ).page_token
     else:
         return PageToken(offset=request.page_token.offset + num_rows_in_response)
 
@@ -520,10 +520,11 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         routing_decision.routing_context.query_result = res
         # we added 1 to the limit to know if there are more rows to fetch
         # so we need to remove the last row
-        # TODO maybe use islice instead
-        data = res.result.get("data", [])
-        if in_msg.limit > 0 and len(data) > in_msg.limit:
-            data = data[:-1]
+        total_rows = len(res.result.get("data", []))
+        data = iter(res.result.get("data", []))
+
+        if in_msg.limit > 0 and total_rows > in_msg.limit:
+            data = islice(data, in_msg.limit)
         column_values = convert_results(in_msg, data)
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
@@ -536,7 +537,7 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             page_token=_get_page_token(
                 in_msg,
                 column_values,
-                len(res.result.get("data", [])),
+                total_rows,
                 original_time_window,
                 routing_decision.time_window,
             ),

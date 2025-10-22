@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -7,12 +8,13 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableR
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba.utils.metrics.timer import Timer
-from snuba.web.rpc.common.pagination import FlexibleTimeWindowPage
+from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
     OutcomesFlexTimeRoutingStrategy,
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
+    TimeWindow,
 )
 from tests.web.rpc.v1.routing_strategies.common import (
     OutcomeCategory,
@@ -73,6 +75,7 @@ def test_outcomes_flex_time_routing_strategy_with_data() -> None:
         RoutingContext(
             in_msg=request,
             timer=Timer("test"),
+            query_id=uuid.uuid4().hex,
         )
     )
     assert routing_decision.time_window is not None
@@ -95,15 +98,21 @@ def test_outcomes_flex_time_routing_strategy_with_data_and_page_token() -> None:
 
     page_token_start_timestamp = BASE_TIME - timedelta(hours=24)
     page_token_end_timestamp = BASE_TIME - timedelta(hours=12)
-    page_token = FlexibleTimeWindowPage(
-        start_timestamp=Timestamp(seconds=int(page_token_start_timestamp.timestamp())),
-        end_timestamp=Timestamp(seconds=int(page_token_end_timestamp.timestamp())),
-        offset=0,
+    start_timestamp = Timestamp(seconds=int(page_token_start_timestamp.timestamp()))
+    end_timestamp = Timestamp(seconds=int(page_token_end_timestamp.timestamp()))
+
+    page_token = FlexibleTimeWindowPageWithFilters.create(
+        TraceItemTableRequest(
+            meta=_get_request_meta(BASE_TIME - timedelta(hours=24), BASE_TIME),
+        ),
+        TimeWindow(start_timestamp, end_timestamp),
+        [],
     )
     request = TraceItemTableRequest(
         meta=_get_request_meta(BASE_TIME - timedelta(hours=24), BASE_TIME),
-        page_token=page_token.encode(),
+        page_token=page_token.page_token,
     )
+
     request.meta.trace_item_type = TraceItemType.TRACE_ITEM_TYPE_LOG
     request.meta.downsampled_storage_config.mode = (
         DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
@@ -112,6 +121,7 @@ def test_outcomes_flex_time_routing_strategy_with_data_and_page_token() -> None:
         RoutingContext(
             in_msg=request,
             timer=Timer("test"),
+            query_id=uuid.uuid4().hex,
         )
     )
     assert routing_decision.time_window is not None

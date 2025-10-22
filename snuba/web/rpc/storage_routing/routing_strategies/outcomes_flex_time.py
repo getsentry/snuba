@@ -14,7 +14,6 @@ from snuba.configs.configuration import Configuration
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.downsampled_storage_tiers import Tier
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -27,7 +26,7 @@ from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
     treeify_or_and_conditions,
 )
-from snuba.web.rpc.common.pagination import FlexibleTimeWindowPage
+from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.common import (
     ITEM_TYPE_TO_OUTCOME_CATEGORY,
@@ -60,11 +59,11 @@ def _get_request_time_window(routing_context: RoutingContext) -> TimeWindow:
     """
     meta = extract_message_meta(routing_context.in_msg)
     if routing_context.in_msg.HasField("page_token"):
-        page = FlexibleTimeWindowPage.decode(getattr(routing_context.in_msg, "page_token"))
-        if page.start_timestamp is not None and page.end_timestamp is not None:
-            return TimeWindow(
-                start_timestamp=page.start_timestamp, end_timestamp=page.end_timestamp
-            )
+        time_window = FlexibleTimeWindowPageWithFilters(
+            getattr(routing_context.in_msg, "page_token")
+        ).get_time_window()
+        if time_window:
+            return time_window
     return TimeWindow(start_timestamp=meta.start_timestamp, end_timestamp=meta.end_timestamp)
 
 
@@ -156,14 +155,7 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
 
         return original_time_window
 
-    def _get_routing_decision(self, routing_context: RoutingContext) -> RoutingDecision:
-        routing_decision = RoutingDecision(
-            routing_context=routing_context,
-            strategy=self,
-            tier=Tier.TIER_1,  # Always TIER_1
-            clickhouse_settings={},
-            can_run=True,
-        )
+    def _update_routing_decision(self, routing_decision: RoutingDecision) -> None:
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
@@ -173,12 +165,10 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
             sentry_sdk.capture_message(
                 f"Trace Item {in_msg_meta.trace_item_type} does not have an associated outcome"
             )
-            return routing_decision
+            return
 
         # Adjust time window based on outcomes
-        adjusted_time_window = self._adjust_time_window(routing_context)
+        adjusted_time_window = self._adjust_time_window(routing_decision.routing_context)
         if adjusted_time_window:
             routing_decision.time_window = adjusted_time_window
             routing_decision.routing_context.extra_info["time_window_adjusted"] = True
-
-        return routing_decision

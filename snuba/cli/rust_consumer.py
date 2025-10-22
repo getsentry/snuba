@@ -14,9 +14,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--storage",
     "storage_names",
-    type=click.Choice(
-        [storage_key.value for storage_key in get_writable_storage_keys()]
-    ),
+    type=click.Choice([storage_key.value for storage_key in get_writable_storage_keys()]),
     help="The storage to target",
     multiple=True,
     required=True,
@@ -137,7 +135,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--max-dlq-buffer-length",
     type=int,
-    default=None,
+    default=25000,
     help="Set a per-partition limit to the length of the DLQ buffer",
 )
 @click.option(
