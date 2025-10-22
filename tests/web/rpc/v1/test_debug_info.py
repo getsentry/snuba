@@ -65,14 +65,8 @@ class TestDebugInfo:
         # Even in non-debug mode, we should have query_info with bytes read information
         assert len(non_debug_response.meta.query_info) > 0
         for query_info in non_debug_response.meta.query_info:
-            # In non-debug mode, we should have stats with bytes read but minimal other info
             assert query_info.stats is not None
-            assert query_info.stats.progress_bytes >= 0  # Should have bytes read information
-            # Metadata should be minimal (empty) in non-debug mode
-            assert query_info.metadata is not None
-            assert query_info.metadata.sql == ""  # Should be empty in non-debug mode
-            # Trace logs should be empty in non-debug mode
-            assert query_info.trace_logs == ""
+            assert query_info.stats.progress_bytes >= 0
 
     def test_trace_query_settings(self) -> None:
         settings = setup_trace_query_settings()

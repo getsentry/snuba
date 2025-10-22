@@ -52,11 +52,9 @@ def extract_response_meta(
             result = getattr(query_result, "result", None) or {}
             profile = result.get("profile", {}) if isinstance(result, dict) else {}
 
-            # Create minimal QueryStats with only bytes read information
             query_stats = QueryStats(
                 progress_bytes=profile.get("progress_bytes", 0),
             )
-            # Create minimal QueryInfo with only stats
             query_info.append(QueryInfo(stats=query_stats, metadata=QueryMetadata(), trace_logs=""))
 
         return (
