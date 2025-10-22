@@ -182,12 +182,6 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     type=click.Choice(["snuba", "arroyo"]),
     help="Specify which health check to use for the consumer. If not specified, the default Arroyo health check is used.",
 )
-@click.option(
-    "--consumer-version",
-    default="v2",
-    type=click.Choice(["v1", "v2"]),
-    help="Specify which consumer version to use, v1 is stable, v2 is experimental",
-)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -220,7 +214,6 @@ def rust_consumer(
     max_dlq_buffer_length: Optional[int],
     quantized_rebalance_consumer_group_delay_secs: Optional[int],
     join_timeout_ms: Optional[int],
-    consumer_version: Optional[str],
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -275,7 +268,6 @@ def rust_consumer(
         batch_write_timeout_ms,
         max_dlq_buffer_length,
         join_timeout_ms,
-        consumer_version,
     )
 
     sys.exit(exitcode)
