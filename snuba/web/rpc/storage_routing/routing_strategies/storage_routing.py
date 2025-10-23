@@ -196,7 +196,7 @@ def _construct_hacky_querylog_payload(
                 if routing_decision.routing_context.in_msg
                 else {}
             ),
-            "referrer": strategy.__class__.__name__,
+            "referrer": cast(str, routing_decision.routing_context.tenant_ids["referrer"]),
         },
         "dataset": "storage_routing",
         "entity": "eap",
