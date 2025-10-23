@@ -171,13 +171,13 @@ class TestGetTraces(BaseApiTest):
                 request_id=_REQUEST_ID,
                 query_info=[
                     QueryInfo(
-                        stats=QueryStats(
-                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
-                        ),
+                        stats=QueryStats(progress_bytes=query_info.stats.progress_bytes),
                         metadata=QueryMetadata(),
                         trace_logs="",
                     )
+                    for query_info in response.meta.query_info
                 ],
+                downsampled_storage_meta=response.meta.downsampled_storage_meta,
             ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
@@ -229,13 +229,13 @@ class TestGetTraces(BaseApiTest):
                 request_id=_REQUEST_ID,
                 query_info=[
                     QueryInfo(
-                        stats=QueryStats(
-                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
-                        ),
+                        stats=QueryStats(progress_bytes=query_info.stats.progress_bytes),
                         metadata=QueryMetadata(),
                         trace_logs="",
                     )
+                    for query_info in response.meta.query_info
                 ],
+                downsampled_storage_meta=response.meta.downsampled_storage_meta,
             ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
@@ -296,13 +296,13 @@ class TestGetTraces(BaseApiTest):
                 request_id=_REQUEST_ID,
                 query_info=[
                     QueryInfo(
-                        stats=QueryStats(
-                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
-                        ),
+                        stats=QueryStats(progress_bytes=query_info.stats.progress_bytes),
                         metadata=QueryMetadata(),
                         trace_logs="",
                     )
+                    for query_info in response.meta.query_info
                 ],
+                downsampled_storage_meta=response.meta.downsampled_storage_meta,
             ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
@@ -501,13 +501,13 @@ class TestGetTraces(BaseApiTest):
                 request_id=_REQUEST_ID,
                 query_info=[
                     QueryInfo(
-                        stats=QueryStats(
-                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
-                        ),
+                        stats=QueryStats(progress_bytes=query_info.stats.progress_bytes),
                         metadata=QueryMetadata(),
                         trace_logs="",
                     )
+                    for query_info in response.meta.query_info
                 ],
+                downsampled_storage_meta=response.meta.downsampled_storage_meta,
             ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
@@ -574,13 +574,13 @@ class TestGetTraces(BaseApiTest):
                 request_id=_REQUEST_ID,
                 query_info=[
                     QueryInfo(
-                        stats=QueryStats(
-                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
-                        ),
+                        stats=QueryStats(progress_bytes=query_info.stats.progress_bytes),
                         metadata=QueryMetadata(),
                         trace_logs="",
                     )
+                    for query_info in response.meta.query_info
                 ],
+                downsampled_storage_meta=response.meta.downsampled_storage_meta,
             ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
@@ -648,13 +648,13 @@ class TestGetTraces(BaseApiTest):
                 request_id=_REQUEST_ID,
                 query_info=[
                     QueryInfo(
-                        stats=QueryStats(
-                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
-                        ),
+                        stats=QueryStats(progress_bytes=query_info.stats.progress_bytes),
                         metadata=QueryMetadata(),
                         trace_logs="",
                     )
+                    for query_info in response.meta.query_info
                 ],
+                downsampled_storage_meta=response.meta.downsampled_storage_meta,
             ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
