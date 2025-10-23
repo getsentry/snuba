@@ -1,4 +1,5 @@
 import uuid
+from typing import Any, Literal, overload
 
 from google.protobuf.json_format import MessageToDict
 from proto import Message  # type: ignore
@@ -43,12 +44,33 @@ def convert_trace_filters_to_trace_item_filter_with_type(
     ]
 
 
+@overload
 def get_trace_ids_for_cross_item_query(
     original_request: Message,
     request_meta: RequestMeta,
     trace_filters: list[TraceItemFilterWithType],
     timer: Timer,
-) -> list[str]:
+    return_query_results: Literal[False] = False,
+) -> list[str]: ...
+
+
+@overload
+def get_trace_ids_for_cross_item_query(
+    original_request: Message,
+    request_meta: RequestMeta,
+    trace_filters: list[TraceItemFilterWithType],
+    timer: Timer,
+    return_query_results: Literal[True],
+) -> tuple[list[str], list[Any]]: ...
+
+
+def get_trace_ids_for_cross_item_query(
+    original_request: Message,
+    request_meta: RequestMeta,
+    trace_filters: list[TraceItemFilterWithType],
+    timer: Timer,
+    return_query_results: bool = False,
+) -> list[str] | tuple[list[str], list[Any]]:
     """
     This function is used to get the trace ids that match the given trace filters.
     It does this by creating a query that looks like this:
@@ -152,4 +174,6 @@ def get_trace_ids_for_cross_item_query(
     for row in results.result.get("data", []):
         trace_ids.append(list(row.values())[0])
 
+    if return_query_results:
+        return trace_ids, [results]
     return trace_ids

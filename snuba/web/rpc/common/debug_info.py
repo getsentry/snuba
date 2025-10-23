@@ -46,6 +46,17 @@ def extract_response_meta(
     downsampled_storage_meta = _construct_meta_if_downsampled(query_results)
 
     if not debug:
+        # Even in non-debug mode, include bytes read information
+        for query_result in query_results:
+            extra = getattr(query_result, "extra", None) or {}
+            result = getattr(query_result, "result", None) or {}
+            profile = result.get("profile", {}) if isinstance(result, dict) else {}
+
+            query_stats = QueryStats(
+                progress_bytes=profile.get("progress_bytes", 0),
+            )
+            query_info.append(QueryInfo(stats=query_stats, metadata=QueryMetadata(), trace_logs=""))
+
         return (
             ResponseMeta(
                 request_id=request_id,
@@ -73,18 +84,14 @@ def extract_response_meta(
             columns_read=stats.get("result_cols", 0),
             blocks=profile.get("blocks", 0),
             progress_bytes=profile.get("progress_bytes", 0),
-            max_threads=stats.get("quota_allowance", {})
-            .get("summary", {})
-            .get("threads_used"),
+            max_threads=stats.get("quota_allowance", {}).get("summary", {}).get("threads_used"),
             timing_marks=timing_marks,
         )
         query_metadata = QueryMetadata(
             sql=extra.get("sql", ""),
             status=(
                 "success"
-                if stats.get("quota_allowance", {})
-                .get("summary", {})
-                .get("is_successful")
+                if stats.get("quota_allowance", {}).get("summary", {}).get("is_successful")
                 else "failure"
             ),
             clickhouse_table=stats.get("clickhouse_table", ""),
@@ -112,7 +119,5 @@ def extract_response_meta(
 
 def setup_trace_query_settings() -> HTTPQuerySettings:
     query_settings = HTTPQuerySettings()
-    query_settings.set_clickhouse_settings(
-        {"send_logs_level": "trace", "log_profile_events": 1}
-    )
+    query_settings.set_clickhouse_settings({"send_logs_level": "trace", "log_profile_events": 1})
     return query_settings
