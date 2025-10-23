@@ -15,10 +15,14 @@ class SentryDatadogMetricsBackend(MetricsBackend):
     """
 
     def __init__(
-        self, datadog: DatadogMetricsBackend, sentry: SentryMetricsBackend
+        self,
+        datadog: DatadogMetricsBackend,
+        sentry: SentryMetricsBackend,
+        new_datadog: DatadogMetricsBackend | None = None,
     ) -> None:
         self.datadog = datadog
         self.sentry = sentry
+        self.new_datadog = new_datadog
 
     def _use_sentry(self) -> bool:
         from snuba import state
@@ -26,6 +30,11 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         if str(state.get_config("use_sentry_metrics", "0")) == "1":
             return bool(random.random() < settings.DDM_METRICS_SAMPLE_RATE)
         return False
+
+    def _use_new_datadog(self) -> bool:
+        from snuba import state
+
+        return str(state.get_config("use_new_datadog_metrics", "0")) == "1"
 
     def increment(
         self,
@@ -37,6 +46,8 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         self.datadog.increment(name, value, tags, unit)
         if self._use_sentry():
             self.sentry.increment(name, value, tags, unit)
+        if self._use_new_datadog() and self.new_datadog is not None:
+            self.new_datadog.increment(name, value, tags, unit)
 
     def gauge(
         self,
@@ -48,6 +59,8 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         self.datadog.gauge(name, value, tags, unit)
         if self._use_sentry():
             self.sentry.gauge(name, value, tags, unit)
+        if self._use_new_datadog() and self.new_datadog is not None:
+            self.new_datadog.gauge(name, value, tags, unit)
 
     def timing(
         self,
@@ -59,6 +72,8 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         self.datadog.timing(name, value, tags, unit)
         if self._use_sentry():
             self.sentry.timing(name, value, tags, unit)
+        if self._use_new_datadog() and self.new_datadog is not None:
+            self.new_datadog.timing(name, value, tags, unit)
 
     def distribution(
         self,
@@ -70,6 +85,8 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         self.datadog.distribution(name, value, tags, unit)
         if self._use_sentry():
             self.sentry.distribution(name, value, tags, unit)
+        if self._use_new_datadog() and self.new_datadog is not None:
+            self.new_datadog.distribution(name, value, tags, unit)
 
     def events(
         self,
@@ -80,3 +97,5 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         tags: Tags | None = None,
     ) -> None:
         self.datadog.events(title, text, alert_type, priority, tags)
+        if self._use_new_datadog() and self.new_datadog is not None:
+            self.new_datadog.events(title, text, alert_type, priority, tags)
