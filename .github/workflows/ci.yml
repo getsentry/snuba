@@ -183,6 +183,7 @@ jobs:
           outputs: 'type=docker,dest=/tmp/snuba-ci.tar'
 
       - name: Push snuba-ci image to GHCR
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
           docker load --input /tmp/snuba-ci.tar
