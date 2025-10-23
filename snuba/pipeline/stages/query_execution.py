@@ -251,7 +251,7 @@ def _format_storage_query_and_run(
                     robust=robust,
                 )
             except Exception as e:
-                sentry_sdk.set_context("snuba_request_id", {"uuid": query_metadata.request.id})
+                sentry_sdk.set_context("snuba", {"request_id": query_metadata.request.id})
                 raise e
 
         if concurrent_queries_gauge is not None:
