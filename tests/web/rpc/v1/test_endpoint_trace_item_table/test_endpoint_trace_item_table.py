@@ -1632,12 +1632,12 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_weight"
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_factor"
                         ),
-                        label="avg_sample(sampling_weight)",
+                        label="avg_sample(sampling_factor)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
-                    label="avg_sample(sampling_weight)",
+                    label="avg_sample(sampling_factor)",
                 ),
                 Column(
                     aggregation=AttributeAggregation(
@@ -1652,12 +1652,12 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_MIN,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_weight"
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.sampling_factor"
                         ),
-                        label="min(sampling_weight)",
+                        label="min(sampling_factor)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
-                    label="min(sampling_weight)",
+                    label="min(sampling_factor)",
                 ),
                 Column(
                     aggregation=AttributeAggregation(
@@ -1673,9 +1673,9 @@ class TestTraceItemTable(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         assert response.column_values == [
             TraceItemColumnValues(
-                attribute_name="avg_sample(sampling_weight)",
+                attribute_name="avg_sample(sampling_factor)",
                 results=[
-                    AttributeValue(val_double=5.5),
+                    AttributeValue(val_double=0.475),
                 ],
             ),
             TraceItemColumnValues(
@@ -1686,9 +1686,9 @@ class TestTraceItemTable(BaseApiTest):
                 reliabilities=[Reliability.RELIABILITY_LOW],
             ),
             TraceItemColumnValues(
-                attribute_name="min(sampling_weight)",
+                attribute_name="min(sampling_factor)",
                 results=[
-                    AttributeValue(val_double=1),
+                    AttributeValue(val_double=0.1),
                 ],
             ),
             TraceItemColumnValues(
