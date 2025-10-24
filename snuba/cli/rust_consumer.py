@@ -186,6 +186,12 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     type=click.Choice(["v1", "v2"]),
     help="DEPRECATED: value is ignored.",
 )
+@click.option(
+    "--raw-events-topic",
+    default=None,
+    type=str,
+    help="override the raw events topic ",
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -220,10 +226,7 @@ def rust_consumer(
     join_timeout_ms: Optional[int],
     consumer_version: Optional[str],
 ) -> None:
-    """
-    Experimental alternative to `snuba consumer`
-    """
-
+    breakpoint()
     consumer_config = resolve_consumer_config(
         storage_names=storage_names,
         raw_topic=raw_events_topic,
