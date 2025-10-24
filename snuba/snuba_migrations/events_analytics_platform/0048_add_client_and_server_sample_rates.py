@@ -44,21 +44,35 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
         for sampling_weight in sampling_weights:
-            downsampled_local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
+            downsampled_table_prefix = f"eap_items_1_downsample_{sampling_weight}"
 
-            for new_column_name in new_column_names:
-                ops.append(
+            ops.extend(
+                [
                     operations.AddColumn(
                         storage_set=storage_set,
-                        table_name=downsampled_local_table_name,
+                        table_name=f"{downsampled_table_prefix}_{suffix}",
                         column=Column(
                             new_column_name,
-                            Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"])),
+                            Float(
+                                64,
+                                modifiers=Modifiers(
+                                    codecs=[
+                                        "ZSTD(1)",
+                                    ]
+                                ),
+                            ),
                         ),
                         after=after,
-                        target=OperationTarget.LOCAL,
+                        target=target,
                     )
-                )
+                    for suffix, target in [
+                        ("local", OperationTarget.LOCAL),
+                        ("dist", OperationTarget.DISTRIBUTED),
+                    ]
+                    for new_column_name in new_column_names
+                ]
+            )
+
         return ops
 
     def backwards_ops(self) -> list[operations.SqlOperation]:
@@ -77,16 +91,22 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
         for sampling_weight in sampling_weights:
-            downsampled_local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
+            downsampled_table_prefix = f"eap_items_1_downsample_{sampling_weight}"
 
-            for new_column_name in new_column_names:
-                ops.append(
+            ops.extend(
+                [
                     operations.DropColumn(
                         storage_set=storage_set,
-                        table_name=downsampled_local_table_name,
+                        table_name=f"{downsampled_table_prefix}_{suffix}",
                         column_name=new_column_name,
-                        target=OperationTarget.LOCAL,
+                        target=target,
                     )
-                )
+                    for suffix, target in [
+                        ("local", OperationTarget.LOCAL),
+                        ("dist", OperationTarget.DISTRIBUTED),
+                    ]
+                    for new_column_name in new_column_names
+                ]
+            )
 
         return ops
