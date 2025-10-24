@@ -21,7 +21,7 @@ class Migration(migration.ClickhouseNodeMigration):
         ops: list[operations.SqlOperation] = [
             operations.AddColumn(
                 storage_set=storage_set,
-                table_name=f"{table_name_prefix}_{target}",
+                table_name=f"{table_name_prefix}_{suffix}",
                 column=Column(
                     new_column_name,
                     Float(
@@ -34,9 +34,9 @@ class Migration(migration.ClickhouseNodeMigration):
                     ),
                 ),
                 after=after,
-                target=OperationTarget.DISTRIBUTED,
+                target=target,
             )
-            for target in [
+            for suffix, target in [
                 ("local", OperationTarget.LOCAL),
                 ("dist", OperationTarget.DISTRIBUTED),
             ]
@@ -65,11 +65,11 @@ class Migration(migration.ClickhouseNodeMigration):
         ops: list[operations.SqlOperation] = [
             operations.DropColumn(
                 storage_set=storage_set,
-                table_name=f"{table_name_prefix}_{target[0]}",
+                table_name=f"{table_name_prefix}_{suffix}",
                 column_name=new_column_name,
-                target=target[1],
+                target=target,
             )
-            for target in [
+            for suffix, target in [
                 ("dist", OperationTarget.DISTRIBUTED),
                 ("local", OperationTarget.LOCAL),
             ]
