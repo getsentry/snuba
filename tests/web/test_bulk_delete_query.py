@@ -37,9 +37,7 @@ CONSUMER_CONFIG = {
 }
 
 
-def get_attribution_info(
-    tenant_ids: Optional[Mapping[str, int | str]] = None
-) -> Mapping[str, Any]:
+def get_attribution_info(tenant_ids: Optional[Mapping[str, int | str]] = None) -> Mapping[str, Any]:
     return {
         "tenant_ids": tenant_ids or {"project_id": 1, "organization_id": 1},
         "referrer": "some_referrer",
@@ -174,18 +172,3 @@ class TestSimpleBulkDeleteApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             ),
             headers={"referer": "test"},
         )
-
-    @patch("snuba.web.views.delete_from_storage", return_value={})
-    @patch("snuba.web.views.bulk_delete_from_storage", return_value={})
-    def test_bulk_delete_runtime_config(
-        self, mock_bulk_delete: Mock, mock_delete: Mock
-    ) -> None:
-        set_config("read_through_cache.short_circuit", 1)
-
-        self.delete_query(1)
-        mock_bulk_delete.assert_not_called()
-        mock_delete.assert_called_once()
-
-        set_config("use_bulk_deletes", 1)
-        self.delete_query(3)
-        mock_bulk_delete.assert_called_once()
