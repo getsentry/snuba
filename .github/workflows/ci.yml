@@ -194,7 +194,7 @@ jobs:
       # otherwise third-party contributors would have to provide a working,
       # authenticated GHCR, which seems impossible to ensure in the general
       # case.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: snuba-ci
           path: /tmp/snuba-ci.tar
