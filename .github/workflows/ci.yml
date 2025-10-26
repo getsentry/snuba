@@ -219,7 +219,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: snuba-ci
           path: /tmp
@@ -296,7 +296,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: snuba-ci
           path: /tmp
@@ -402,7 +402,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: snuba-ci
           path: /tmp
