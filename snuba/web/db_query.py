@@ -690,6 +690,15 @@ def db_query(
             },
         )
         error.__cause__ = e
+
+        metrics.increment(
+            "allocation_policy_violations",
+            tags={
+                "dataset": dataset_name,
+                "resource_identifier": allocation_policies[0].resource_identifier.value,
+                "referrer": attribution_info.referrer,
+            },
+        )
     except QueryException as e:
         error = e
     except Exception as e:
