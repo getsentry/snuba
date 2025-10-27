@@ -102,8 +102,8 @@ class Migration(migration.ClickhouseNodeMigration):
                         target=target,
                     )
                     for suffix, target in [
-                        ("local", OperationTarget.LOCAL),
                         ("dist", OperationTarget.DISTRIBUTED),
+                        ("local", OperationTarget.LOCAL),
                     ]
                     for new_column_name in new_column_names
                 ]
