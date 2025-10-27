@@ -28,9 +28,9 @@ def truncate_request_meta_to_day(meta: RequestMeta) -> None:
     start_timestamp = start_timestamp.replace(
         hour=0, minute=0, second=0, microsecond=0
     ) - timedelta(days=1)
-    end_timestamp = end_timestamp.replace(
-        hour=0, minute=0, second=0, microsecond=0
-    ) + timedelta(days=1)
+    end_timestamp = end_timestamp.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+        days=1
+    )
 
     meta.start_timestamp.seconds = int(start_timestamp.timestamp())
     meta.end_timestamp.seconds = int(end_timestamp.timestamp())
@@ -89,7 +89,8 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     def _build_label_mapping_key(attr_key: AttributeKey) -> str:
-        return attr_key.name + "_" + AttributeKey.Type.Name(attr_key.type)
+        sanitized_name = attr_key.name.replace(".", "_")
+        return sanitized_name + "_" + AttributeKey.Type.Name(attr_key.type)
 
     if attr_key.type == AttributeKey.Type.TYPE_UNSPECIFIED:
         raise BadSnubaRPCRequestException(
@@ -176,18 +177,14 @@ def apply_virtual_columns(
             attribute_expression = attribute_key_to_expression(
                 AttributeKey(
                     name=context.from_column_name,
-                    type=NORMALIZED_COLUMNS.get(
-                        context.from_column_name, AttributeKey.TYPE_STRING
-                    ),
+                    type=NORMALIZED_COLUMNS.get(context.from_column_name, AttributeKey.TYPE_STRING),
                 )
             )
             return f.transform(
                 f.CAST(attribute_expression, "String"),
                 literals_array(None, [literal(k) for k in context.value_map.keys()]),
                 literals_array(None, [literal(v) for v in context.value_map.values()]),
-                literal(
-                    context.default_value if context.default_value != "" else "unknown"
-                ),
+                literal(context.default_value if context.default_value != "" else "unknown"),
                 alias=context.to_column_name,
             )
 
@@ -231,9 +228,7 @@ def base_conditions_and(meta: RequestMeta, *other_exprs: Expression) -> Expressi
     """
     return and_cond(
         project_id_and_org_conditions(meta),
-        timestamp_in_range_condition(
-            meta.start_timestamp.seconds, meta.end_timestamp.seconds
-        ),
+        timestamp_in_range_condition(meta.start_timestamp.seconds, meta.end_timestamp.seconds),
         *other_exprs,
     )
 

@@ -13,9 +13,7 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 COLUMN_PREFIX: str = "sentry."
 
-NORMALIZED_COLUMNS_EAP_ITEMS: Final[
-    Mapping[str, Sequence[AttributeKey.Type.ValueType]]
-] = {
+NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, Sequence[AttributeKey.Type.ValueType]]] = {
     f"{COLUMN_PREFIX}organization_id": [AttributeKey.Type.TYPE_INT],
     f"{COLUMN_PREFIX}project_id": [AttributeKey.Type.TYPE_INT],
     f"{COLUMN_PREFIX}timestamp": [
@@ -105,7 +103,8 @@ ATTRIBUTES_TO_COALESCE: dict[str, list[str]] = {
 
 
 def _build_label_mapping_key(attribute_key: AttributeKey) -> str:
-    return f"{attribute_key.name}_{AttributeKey.Type.Name(attribute_key.type)}"
+    sanitized_name = attribute_key.name.replace(".", "_")
+    return sanitized_name + "_" + AttributeKey.Type.Name(attribute_key.type)
 
 
 def _generate_subscriptable_reference(
@@ -249,9 +248,7 @@ def apply_virtual_columns(
                 f.CAST(f.ifNull(attribute_expression, literal("")), "String"),
                 literals_array(None, [literal(k) for k in context.value_map.keys()]),
                 literals_array(None, [literal(v) for v in context.value_map.values()]),
-                literal(
-                    context.default_value if context.default_value != "" else "unknown"
-                ),
+                literal(context.default_value if context.default_value != "" else "unknown"),
                 alias=context.to_column_name,
             )
 
