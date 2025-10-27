@@ -1730,7 +1730,7 @@ class TestUtils:
         ("start_ts", "end_ts", "granularity"),
         [
             (BASE_TIME, BASE_TIME + timedelta(hours=1), 1),
-            (BASE_TIME, BASE_TIME + timedelta(hours=24), 10),
+            (BASE_TIME, BASE_TIME + timedelta(hours=24 * 3), 15),
             (BASE_TIME, BASE_TIME + timedelta(hours=1), 0),
             (BASE_TIME + timedelta(hours=1), BASE_TIME, 0),
             (BASE_TIME, BASE_TIME + timedelta(hours=1), 3 * 3600),
