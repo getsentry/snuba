@@ -193,7 +193,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{CogsData, CommitLogEntry, CommitLogOffsets};
+    use crate::types::{CommitLogEntry, CommitLogOffsets};
 
     use super::*;
     use crate::testutils::TestStrategy;
