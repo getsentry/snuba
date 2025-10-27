@@ -200,6 +200,8 @@ pub struct BytesInsertBatch<R> {
 }
 
 impl<R> BytesInsertBatch<R> {
+    /// Create a new BytesInsertBatch with all fields specified.
+    /// For most use cases, prefer `from_rows()` which uses sensible defaults.
     pub fn new(
         rows: R,
         message_timestamp: Option<DateTime<Utc>>,
@@ -222,6 +224,56 @@ impl<R> BytesInsertBatch<R> {
             commit_log_offsets,
             cogs_data,
         }
+    }
+
+    /// Create a BytesInsertBatch with just rows, using defaults for all other fields.
+    /// Use builder methods to set optional fields as needed.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let batch = BytesInsertBatch::from_rows(rows)
+    ///     .with_message_timestamp(timestamp)
+    ///     .with_cogs_data(cogs_data);
+    /// ```
+    pub fn from_rows(rows: R) -> Self {
+        Self {
+            rows,
+            message_timestamp: Default::default(),
+            origin_timestamp: Default::default(),
+            sentry_received_timestamp: Default::default(),
+            commit_log_offsets: Default::default(),
+            cogs_data: Default::default(),
+        }
+    }
+
+    /// Set the message timestamp (when the message was inserted into the Kafka topic)
+    pub fn with_message_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.message_timestamp = LatencyRecorder::from(timestamp);
+        self
+    }
+
+    /// Set the origin timestamp (when the event was received by Relay)
+    pub fn with_origin_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.origin_timestamp = LatencyRecorder::from(timestamp);
+        self
+    }
+
+    /// Set the sentry received timestamp (when received by ingest consumer in Sentry)
+    pub fn with_sentry_received_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.sentry_received_timestamp = LatencyRecorder::from(timestamp);
+        self
+    }
+
+    /// Set the commit log offsets
+    pub fn with_commit_log_offsets(mut self, offsets: CommitLogOffsets) -> Self {
+        self.commit_log_offsets = offsets;
+        self
+    }
+
+    /// Set the COGS data
+    pub fn with_cogs_data(mut self, cogs_data: CogsData) -> Self {
+        self.cogs_data = cogs_data;
+        self
     }
 
     pub fn commit_log_offsets(&self) -> &CommitLogOffsets {

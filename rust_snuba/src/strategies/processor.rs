@@ -49,21 +49,24 @@ pub fn make_rust_processor(
             }
         }
 
-        let payload = BytesInsertBatch::new(
-            transformed.rows,
-            Some(timestamp),
-            transformed.origin_timestamp,
-            transformed.sentry_received_timestamp,
-            CommitLogOffsets(BTreeMap::from([(
+        let mut payload = BytesInsertBatch::from_rows(transformed.rows)
+            .with_message_timestamp(timestamp)
+            .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                 partition.index,
                 CommitLogEntry {
                     offset,
                     orig_message_ts: timestamp,
                     received_p99: transformed.origin_timestamp.into_iter().collect(),
                 },
-            )])),
-            transformed.cogs_data.unwrap_or_default(),
-        );
+            )])))
+            .with_cogs_data(transformed.cogs_data.unwrap_or_default());
+
+        if let Some(ts) = transformed.origin_timestamp {
+            payload = payload.with_origin_timestamp(ts);
+        }
+        if let Some(ts) = transformed.sentry_received_timestamp {
+            payload = payload.with_sentry_received_timestamp(ts);
+        }
 
         Ok(Message::new_broker_message(
             payload, partition, offset, timestamp,
@@ -120,21 +123,26 @@ pub fn make_rust_processor_with_replacements(
 
         let payload = match transformed {
             InsertOrReplacement::Insert(transformed) => {
-                InsertOrReplacement::Insert(BytesInsertBatch::new(
-                    transformed.rows,
-                    Some(timestamp),
-                    transformed.origin_timestamp,
-                    transformed.sentry_received_timestamp,
-                    CommitLogOffsets(BTreeMap::from([(
+                let mut batch = BytesInsertBatch::from_rows(transformed.rows)
+                    .with_message_timestamp(timestamp)
+                    .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                         partition.index,
                         CommitLogEntry {
                             offset,
                             orig_message_ts: timestamp,
                             received_p99: transformed.origin_timestamp.into_iter().collect(),
                         },
-                    )])),
-                    transformed.cogs_data.unwrap_or_default(),
-                ))
+                    )])))
+                    .with_cogs_data(transformed.cogs_data.unwrap_or_default());
+
+                if let Some(ts) = transformed.origin_timestamp {
+                    batch = batch.with_origin_timestamp(ts);
+                }
+                if let Some(ts) = transformed.sentry_received_timestamp {
+                    batch = batch.with_sentry_received_timestamp(ts);
+                }
+
+                InsertOrReplacement::Insert(batch)
             }
             InsertOrReplacement::Replacement(r) => InsertOrReplacement::Replacement(r),
         };

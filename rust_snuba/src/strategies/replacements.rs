@@ -149,14 +149,10 @@ mod tests {
 
         strategy
             .submit(Message::new_any_message(
-                InsertOrReplacement::Insert(BytesInsertBatch::new(
-                    RowData::from_rows(row_data).unwrap(),
-                    Some(Utc::now()),
-                    None,
-                    None,
-                    CommitLogOffsets::default(),
-                    CogsData::default(),
-                )),
+                InsertOrReplacement::Insert(
+                    BytesInsertBatch::from_rows(RowData::from_rows(row_data).unwrap())
+                        .with_message_timestamp(Utc::now()),
+                ),
                 BTreeMap::new(),
             ))
             .unwrap();
