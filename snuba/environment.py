@@ -91,6 +91,7 @@ def setup_sentry() -> None:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
         spotlight=None if settings.DEBUG else False,
+        before_send=before_send,
         integrations=[
             FlaskIntegration(),
             GnuBacktraceIntegration(),
