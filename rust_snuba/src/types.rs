@@ -66,7 +66,7 @@ impl ItemTypeMetrics {
             .or_insert(1);
     }
 
-    fn merge(&mut self, other: ItemTypeMetrics) {
+    pub fn merge(&mut self, other: ItemTypeMetrics) {
         for (item_type, count) in other.counts {
             self.counts
                 .entry(item_type)
