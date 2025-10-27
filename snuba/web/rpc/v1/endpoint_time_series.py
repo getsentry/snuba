@@ -38,8 +38,8 @@ _VALID_GRANULARITY_SECS = set(
     ]
 )
 
-# MAX 15 minute granularity over 28 days (2688 buckets) + 1 bucket to allow for partial time buckets on
-_MAX_BUCKETS_IN_REQUEST = 2689
+# MAX 1 minute granularity over 7 days (10080 buckets) + 1 bucket to allow for partial time buckets on
+_MAX_BUCKETS_IN_REQUEST = 10081
 
 
 def _enforce_no_duplicate_labels(request: TimeSeriesRequest) -> None:

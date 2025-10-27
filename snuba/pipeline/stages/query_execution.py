@@ -181,6 +181,8 @@ def _format_storage_query_and_run(
         formatted_query = format_query(clickhouse_query)
 
         formatted_sql = formatted_query.get_sql()
+        print("\n\n\n\n")
+        print(formatted_sql)
         query_size_bytes = len(formatted_sql.encode("utf-8"))
         span.set_data(
             "query", textwrap.wrap(formatted_sql, 100, break_long_words=False)
