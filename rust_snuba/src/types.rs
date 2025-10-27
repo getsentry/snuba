@@ -47,6 +47,35 @@ impl CogsData {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct ItemTypeMetrics {
+    pub counts: BTreeMap<u8, u64>, // item_type: count
+}
+
+impl ItemTypeMetrics {
+    pub fn new() -> Self {
+        Self {
+            counts: BTreeMap::new(),
+        }
+    }
+
+    pub fn record_item(&mut self, item_type: u8) {
+        self.counts
+            .entry(item_type)
+            .and_modify(|count| *count += 1)
+            .or_insert(1);
+    }
+
+    fn merge(&mut self, other: ItemTypeMetrics) {
+        for (item_type, count) in other.counts {
+            self.counts
+                .entry(item_type)
+                .and_modify(|curr| *curr += count)
+                .or_insert(count);
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct LatencyRecorder {
     sum_timestamps: f64,
@@ -144,6 +173,7 @@ pub struct InsertBatch {
     pub origin_timestamp: Option<DateTime<Utc>>,
     pub sentry_received_timestamp: Option<DateTime<Utc>>,
     pub cogs_data: Option<CogsData>,
+    pub item_type_metrics: Option<ItemTypeMetrics>,
 }
 
 impl InsertBatch {
@@ -160,6 +190,7 @@ impl InsertBatch {
             origin_timestamp,
             sentry_received_timestamp: None,
             cogs_data: None,
+            item_type_metrics: None,
         })
     }
 
@@ -197,6 +228,8 @@ pub struct BytesInsertBatch<R> {
     commit_log_offsets: CommitLogOffsets,
 
     cogs_data: CogsData,
+
+    item_type_metrics: ItemTypeMetrics,
 }
 
 impl<R> BytesInsertBatch<R> {
@@ -223,6 +256,7 @@ impl<R> BytesInsertBatch<R> {
                 .unwrap_or_default(),
             commit_log_offsets,
             cogs_data,
+            item_type_metrics: Default::default(),
         }
     }
 
@@ -243,6 +277,7 @@ impl<R> BytesInsertBatch<R> {
             sentry_received_timestamp: Default::default(),
             commit_log_offsets: Default::default(),
             cogs_data: Default::default(),
+            item_type_metrics: Default::default(),
         }
     }
 
@@ -276,6 +311,12 @@ impl<R> BytesInsertBatch<R> {
         self
     }
 
+    /// Set the item type metrics
+    pub fn with_item_type_metrics(mut self, item_type_metrics: ItemTypeMetrics) -> Self {
+        self.item_type_metrics = item_type_metrics;
+        self
+    }
+
     pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
         &self.commit_log_offsets
     }
@@ -292,6 +333,7 @@ impl<R> BytesInsertBatch<R> {
             sentry_received_timestamp: self.sentry_received_timestamp.clone(),
             commit_log_offsets: self.commit_log_offsets.clone(),
             cogs_data: self.cogs_data.clone(),
+            item_type_metrics: self.item_type_metrics.clone(),
         }
     }
 
@@ -303,6 +345,7 @@ impl<R> BytesInsertBatch<R> {
             sentry_received_timestamp: self.sentry_received_timestamp,
             commit_log_offsets: self.commit_log_offsets,
             cogs_data: self.cogs_data,
+            item_type_metrics: self.item_type_metrics,
         };
 
         (self.rows, new)
@@ -333,6 +376,7 @@ impl BytesInsertBatch<RowData> {
         self.sentry_received_timestamp
             .merge(other.sentry_received_timestamp);
         self.cogs_data.merge(other.cogs_data);
+        self.item_type_metrics.merge(other.item_type_metrics);
         self
     }
 }

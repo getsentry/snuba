@@ -1,6 +1,6 @@
 use adler::Adler32;
 use anyhow::{anyhow, Context, Error};
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use serde::{
     de::value::{MapAccessDeserializer, SeqAccessDeserializer},
     Deserialize, Deserializer, Serialize,
@@ -391,6 +391,7 @@ where
                             payload_bytes.len() as u64,
                         )]),
                     }),
+                    item_type_metrics: None,
                 })
             } else {
                 Ok(InsertBatch::skip())
@@ -738,7 +739,7 @@ mod tests {
     use crate::processors::ProcessingFunction;
 
     use super::*;
-    use chrono::DateTime;
+    use chrono::{DateTime, Utc};
     use std::time::SystemTime;
 
     const DUMMY_COUNTER_MESSAGE: &str = r#"{
@@ -987,6 +988,23 @@ mod tests {
         "sampling_weight": 100
     }"#;
 
+    /// Helper function for tests to create expected InsertBatch.
+    /// Since generic_metrics never populates item_type_metrics, this helper
+    /// always sets it to None.
+    fn expected_insert_batch<T: serde::Serialize>(
+        row: T,
+        sentry_received_timestamp: DateTime<Utc>,
+        cogs_data: CogsData,
+    ) -> InsertBatch {
+        InsertBatch {
+            rows: RowData::from_rows([row]).unwrap(),
+            origin_timestamp: None,
+            sentry_received_timestamp: Some(sentry_received_timestamp),
+            cogs_data: Some(cogs_data),
+            item_type_metrics: None,
+        }
+    }
+
     #[test]
     fn test_base64_decode_f64() {
         assert!(
@@ -1061,14 +1079,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 675)])
-                })
-            }
+                }
+            )
         );
     }
 
@@ -1120,14 +1137,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 681)])
-                })
-            }
+                }
+            )
         );
     }
 
@@ -1179,14 +1195,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 713)])
-                })
-            }
+                }
+            )
         );
     }
 
@@ -1271,14 +1286,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 653)])
-                })
-            }
+                }
+            )
         );
     }
 
@@ -1328,14 +1342,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 663)])
-                })
-            }
+                }
+            )
         );
     }
 
@@ -1487,14 +1500,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 615)])
-                }),
-            }
+                }
+            )
         );
     }
 
@@ -1544,14 +1556,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 649)])
-                }),
-            }
+                }
+            )
         );
     }
 
@@ -1616,14 +1627,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 622)])
-                }),
-            }
+                }
+            )
         );
     }
 
@@ -1690,14 +1700,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 629)])
-                })
-            }
+                }
+            )
         );
     }
 
@@ -1749,14 +1758,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 658)])
-                })
-            }
+                }
+            )
         );
     }
 
@@ -1808,14 +1816,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 667)])
-                })
-            }
+                }
+            )
         );
     }
 
@@ -1867,14 +1874,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 682)])
-                })
-            }
+                }
+            )
         );
     }
 
@@ -1943,14 +1949,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 679)])
-                })
-            }
+                }
+            )
         );
     }
 
@@ -2004,14 +2009,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 711)])
-                })
-            }
+                }
+            )
         );
     }
 
@@ -2066,14 +2070,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 719)])
-                })
-            }
+                }
+            )
         );
     }
 
@@ -2138,14 +2141,13 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertBatch {
-                rows: RowData::from_rows([expected_row]).unwrap(),
-                origin_timestamp: None,
-                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                cogs_data: Some(CogsData {
+            expected_insert_batch(
+                expected_row,
+                DateTime::from_timestamp(1704614940, 0).unwrap(),
+                CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 651)])
-                })
-            }
+                }
+            )
         );
     }
 

@@ -13,7 +13,7 @@ use sentry_protos::snuba::v1::TraceItem;
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
 
 pub fn process_message(
     msg: KafkaPayload,
@@ -32,6 +32,10 @@ pub fn process_message(
     } else {
         retention_days
     };
+
+    // Capture the item_type before consuming trace_item
+    let item_type = trace_item.item_type as u8;
+
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
     eap_item.retention_days = retention_days;
@@ -41,7 +45,12 @@ pub fn process_message(
         Utc::now().timestamp_millis(),
     );
 
-    InsertBatch::from_rows([eap_item], origin_timestamp)
+    let mut item_type_metrics = ItemTypeMetrics::new();
+    item_type_metrics.record_item(item_type);
+
+    let mut batch = InsertBatch::from_rows([eap_item], origin_timestamp)?;
+    batch.item_type_metrics = Some(item_type_metrics);
+    Ok(batch)
 }
 
 #[derive(Debug, Default, Serialize)]
