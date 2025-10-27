@@ -1,6 +1,6 @@
 use adler::Adler32;
 use anyhow::{anyhow, Context, Error};
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use serde::{
     de::value::{MapAccessDeserializer, SeqAccessDeserializer},
     Deserialize, Deserializer, Serialize,
