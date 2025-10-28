@@ -15,6 +15,7 @@ from arroyo.types import BaseValue, Commit, Message, Partition
 from snuba import settings
 from snuba.attribution import AppID
 from snuba.attribution.attribution_info import AttributionInfo
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storage import WritableTableStorage
 from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
 from snuba.lw_deletions.formatters import Formatter
@@ -24,6 +25,7 @@ from snuba.state import get_int_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.web import QueryException
 from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
+from snuba.web.constants import LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
 from snuba.web.delete_query import (
     ConditionsType,
     TooManyOngoingMutationsError,
@@ -36,6 +38,10 @@ TPayload = TypeVar("TPayload")
 import logging
 
 logger = logging.Logger(__name__)
+
+
+class LWDeleteQueryException(Exception):
+    pass
 
 
 class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
@@ -108,9 +114,14 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                     (time.time() - start) * 1000,
                     tags={"table": table},
                 )
-            except Exception:
+            except QueryException as exc:
                 self.__metrics.increment("execute_delete_query_failed", tags={"table": table})
-                raise
+                cause = exc.__cause__
+                if isinstance(cause, ClickhouseError):
+                    if cause.code in LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
+                        logger.exception("Error running delete query %r", exc)
+                    else:
+                        raise LWDeleteQueryException(exc.message)
 
     def _check_ongoing_mutations(self) -> None:
         start = time.time()
