@@ -16,7 +16,7 @@ class TestCommon:
                 type=AttributeKey.TYPE_STRING,
                 name="sentry.trace_id",
             ),
-        ) == f.cast(column("trace_id"), "String", alias="sentry.trace_id_TYPE_STRING")
+        ) == f.cast(column("trace_id"), "String", alias="sentry_trace_id_TYPE_STRING")
 
     def test_attributes(self) -> None:
         assert attribute_key_to_expression(
@@ -87,5 +87,5 @@ class TestCommon:
                 column=column("attributes_string"),
                 key=literal(old_attribute),
             ),
-            alias=f"{new_attribute}_TYPE_STRING",
+            alias=f"{new_attribute.replace('.', '_')}_TYPE_STRING",
         )
