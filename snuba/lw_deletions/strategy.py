@@ -58,9 +58,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__next_step.poll()
 
     def submit(self, message: Message[ValuesBatch[KafkaPayload]]) -> None:
-        decode_messages = [
-            rapidjson.loads(m.payload.value) for m in message.value.payload
-        ]
+        decode_messages = [rapidjson.loads(m.payload.value) for m in message.value.payload]
         conditions = self.__formatter.format(decode_messages)
 
         try:
@@ -94,29 +92,29 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self._check_ongoing_mutations()
         query_settings = HTTPQuerySettings()
         for table in self.__tables:
-            query = construct_query(
-                self.__storage, table, construct_or_conditions(conditions)
-            )
+            query = construct_query(self.__storage, table, construct_or_conditions(conditions))
             start = time.time()
-            _execute_query(
-                query=query,
-                storage=self.__storage,
-                cluster_name=self.__cluster_name,
-                table=table,
-                attribution_info=self._get_attribute_info(),
-                query_settings=query_settings,
-            )
-            self.__metrics.timing(
-                "execute_delete_query_ms",
-                (time.time() - start) * 1000,
-                tags={"table": table},
-            )
+            try:
+                _execute_query(
+                    query=query,
+                    storage=self.__storage,
+                    cluster_name=self.__cluster_name,
+                    table=table,
+                    attribution_info=self._get_attribute_info(),
+                    query_settings=query_settings,
+                )
+                self.__metrics.timing(
+                    "execute_delete_query_ms",
+                    (time.time() - start) * 1000,
+                    tags={"table": table},
+                )
+            except Exception:
+                self.__metrics.increment("execute_delete_query_failed", tags={"table": table})
+                raise
 
     def _check_ongoing_mutations(self) -> None:
         start = time.time()
-        ongoing_mutations = _num_ongoing_mutations(
-            self.__storage.get_cluster(), self.__tables
-        )
+        ongoing_mutations = _num_ongoing_mutations(self.__storage.get_cluster(), self.__tables)
         max_ongoing_mutations = typing.cast(
             int,
             get_int_config(
@@ -124,9 +122,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 default=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE,
             ),
         )
-        self.__metrics.timing(
-            "ongoing_mutations_query_ms", (time.time() - start) * 1000
-        )
+        self.__metrics.timing("ongoing_mutations_query_ms", (time.time() - start) * 1000)
         max_ongoing_mutations = int(settings.MAX_ONGOING_MUTATIONS_FOR_DELETE)
         if ongoing_mutations > max_ongoing_mutations:
 
