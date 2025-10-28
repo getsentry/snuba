@@ -91,10 +91,10 @@ def generate_old_materialized_view_expression(sampling_weight: int) -> str:
     return " ".join(
         [
             "SELECT",
-            column_names_str,
-            "downsampled_retention_days AS retention_days",
+            f"{column_names_str},",
+            "downsampled_retention_days AS retention_days,",
             f"sampling_weight * {sampling_weight} AS sampling_weight,",
-            f"sampling_factor / {sampling_weight} AS sampling_factor,",
+            f"sampling_factor / {sampling_weight} AS sampling_factor",
             "FROM eap_items_1_local",
             f"WHERE (cityHash64(item_id + {sampling_weight})  % {sampling_weight}) = 0",
         ]
@@ -106,8 +106,8 @@ def generate_new_materialized_view_expression(sampling_weight: int) -> str:
     return " ".join(
         [
             "SELECT",
-            column_names_str,
-            "downsampled_retention_days AS retention_days",
+            f"{column_names_str},",
+            "downsampled_retention_days AS retention_days,",
             f"sampling_weight * {sampling_weight} AS sampling_weight,",
             f"sampling_factor / {sampling_weight} AS sampling_factor,",
             f"client_sample_rate / {sampling_weight} AS client_sample_rate,",
