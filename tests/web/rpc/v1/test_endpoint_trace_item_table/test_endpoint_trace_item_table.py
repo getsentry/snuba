@@ -3421,7 +3421,7 @@ def test_build_query_with_order_by_optimization_multiple_orderby() -> None:
             expression=f.cast(
                 snuba_column("item_id"),
                 "String",
-                alias="sentry.item_id_TYPE_STRING",
+                alias="sentry_item_id_TYPE_STRING",
             ),
         ),
     ]
@@ -3463,7 +3463,7 @@ def test_build_query_with_order_by_optimization_disabled_because_multiproject() 
             expression=f.cast(
                 snuba_column("timestamp"),
                 "String",
-                alias="sentry.timestamp_TYPE_STRING",
+                alias="sentry_timestamp_TYPE_STRING",
             ),
         ),
     ]
@@ -3506,7 +3506,7 @@ def test_build_query_with_order_by_optimization_disabled_because_groupby() -> No
             expression=f.cast(
                 snuba_column("timestamp"),
                 "String",
-                alias="sentry.timestamp_TYPE_STRING",
+                alias="sentry_timestamp_TYPE_STRING",
             ),
         ),
     ]
