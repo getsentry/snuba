@@ -471,29 +471,47 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
     def _execute(self, in_msg: GetTracesRequest) -> GetTracesResponse:
         _validate_order_by(in_msg)
-        response_meta = extract_response_meta(
-            in_msg.meta.request_id,
-            in_msg.meta.debug,
-            [],
-            [self._timer],
-        )
+        query_results: list[Any] = []
 
         # Get a dict of trace IDs and timestamps.
         if self._is_cross_event_query(in_msg.filters):
-            trace_ids = get_trace_ids_for_cross_item_query(
+            trace_ids, trace_ids_query_results = get_trace_ids_for_cross_item_query(
                 in_msg,
                 in_msg.meta,
                 convert_trace_filters_to_trace_item_filter_with_type(list(in_msg.filters)),
                 self._timer,
+                return_query_results=True,
             )
+            query_results.extend(trace_ids_query_results)
         else:
-            trace_ids = self._get_trace_ids_for_single_item_query(request=in_msg)
+            trace_ids, trace_ids_query_result = self._get_trace_ids_for_single_item_query(
+                request=in_msg
+            )
+            query_results.append(trace_ids_query_result)
 
         if len(trace_ids) == 0:
+            response_meta = extract_response_meta(
+                in_msg.meta.request_id,
+                in_msg.meta.debug,
+                query_results,
+                [self._timer] * len(query_results),
+            )
             return GetTracesResponse(meta=response_meta)
 
         # Get metadata for those traces.
-        traces = self._get_metadata_for_traces(request=in_msg, trace_ids=trace_ids)
+        assert isinstance(trace_ids, list), "trace_ids should be a list at this point"
+        traces, metadata_query_result = self._get_metadata_for_traces(
+            request=in_msg, trace_ids=trace_ids
+        )
+        query_results.append(metadata_query_result)
+
+        response_meta = extract_response_meta(
+            in_msg.meta.request_id,
+            in_msg.meta.debug,
+            query_results,
+            [self._timer] * len(query_results),
+        )
+
         return GetTracesResponse(
             traces=traces,
             page_token=_get_page_token(in_msg, traces),
@@ -536,7 +554,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     def _get_trace_ids_for_single_item_query(
         self,
         request: GetTracesRequest,
-    ) -> list[str]:
+    ) -> tuple[list[str], Any]:
         if request.filters:
             item_type = request.filters[0].item_type
         elif request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
@@ -607,13 +625,13 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         trace_ids: list[str] = []
         for row in results.result.get("data", []):
             trace_ids.append(list(row.values())[0])
-        return trace_ids
+        return trace_ids, results
 
     def _get_metadata_for_traces(
         self,
         request: GetTracesRequest,
         trace_ids: list[str],
-    ) -> list[GetTracesResponse.Trace]:
+    ) -> tuple[list[GetTracesResponse.Trace], Any]:
         # We use the item type specified in the request meta for the trace item filter conditions.
         # If no item type is specified, we use all the filters.
         filter_expressions_by_item_type = self._get_trace_item_filter_expressions(request.filters)
@@ -718,4 +736,4 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             timer=self._timer,
         )
 
-        return _convert_results(request, results.result.get("data", []))
+        return _convert_results(request, results.result.get("data", [])), results
