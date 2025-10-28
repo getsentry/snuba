@@ -108,6 +108,12 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> Generator[List[bytes]
                 "sentry.transaction": AnyValue(string_value="*foo"),
             },
         ),
+        gen_item_message(
+            start_timestamp=start_timestamp,
+            attributes={
+                "metric.questions.6._id": AnyValue(string_value="jlfsj"),
+            },
+        ),
     ]
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
     yield messages
@@ -182,79 +188,17 @@ class TestTraceItemAttributes(BaseApiTest):
         res = AttributeValuesRequest().execute(req)
         assert res.values == [item_id]
 
-    def test_attribute_names_with_dots_no_clickhouse_error(self, setup_teardown: Any) -> None:
-        """
-        Test that attribute names with dots don't cause ClickHouse to interpret them as tuple access.
+    def test_attribute_names_with_dots(self, setup_teardown: Any) -> None:
 
-        This is a regression test for the issue where attribute names like "metric.questions.6._id"
-        would cause ClickHouse to error with:
-        "Missing columns: 'metric.questions' while processing... tupleElement(metric.questions.6, '_id_TYPE_STRING')"
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=10,
+            key=AttributeKey(name="metric.questions.6._id", type=AttributeKey.TYPE_STRING),
+        )
 
-        The fix sanitizes dots in alias names to prevent ClickHouse from parsing them as nested column access.
-        """
+        # This should NOT raise a ClickHouse error about missing columns or tupleElement
+        response = AttributeValuesRequest().execute(message)
 
-    # Create test data with attributes that have dots in their names
-    items_storage = get_storage(StorageKey("eap_items"))
-    start_timestamp = BASE_TIME
-
-    messages = [
-        gen_item_message(
-            start_timestamp=start_timestamp,
-            attributes={
-                # Test various attribute names with dots
-                "metric.questions.6._id": AnyValue(string_value="question_123"),
-                "metric.questions.6.text": AnyValue(string_value="What is your name?"),
-            },
-        ),
-        gen_item_message(
-            start_timestamp=start_timestamp,
-            attributes={
-                "metric.questions.6._id": AnyValue(string_value="question_456"),
-                "metric.questions.6.text": AnyValue(string_value="What is your age?"),
-            },
-        ),
-        gen_item_message(
-            start_timestamp=start_timestamp,
-            attributes={
-                "metric.questions.6._id": AnyValue(string_value="question_789"),
-                "http.response.status_code": AnyValue(double_value=200.0),
-            },
-        ),
-    ]
-    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
-
-    # Make request for attribute with dots in the name
-    message = TraceItemAttributeValuesRequest(
-        meta=COMMON_META,
-        limit=10,
-        key=AttributeKey(name="metric.questions.6._id", type=AttributeKey.TYPE_STRING),
-    )
-
-    # This should NOT raise a ClickHouse error about missing columns or tupleElement
-    response = AttributeValuesRequest().execute(message)
-
-    # Verify we got the expected values back
-    assert len(response.values) == 3
-    assert set(response.values) == {"question_123", "question_456", "question_789"}
-
-    # Test another attribute with dots
-    message2 = TraceItemAttributeValuesRequest(
-        meta=COMMON_META,
-        limit=10,
-        key=AttributeKey(name="metric.questions.6.text", type=AttributeKey.TYPE_STRING),
-    )
-
-    response2 = AttributeValuesRequest().execute(message2)
-    assert len(response2.values) == 2
-    assert set(response2.values) == {"What is your name?", "What is your age?"}
-
-    # Test with numeric attributes that have dots
-    message3 = TraceItemAttributeValuesRequest(
-        meta=COMMON_META,
-        limit=10,
-        key=AttributeKey(name="http.response.status_code", type=AttributeKey.TYPE_FLOAT),
-    )
-
-    response3 = AttributeValuesRequest().execute(message3)
-    assert len(response3.values) == 1
-    assert response3.values[0] == "200.0"
+        # Verify we got the expected values back
+        assert len(response.values) == 1
+        assert set(response.values) == {"jlfsj"}
