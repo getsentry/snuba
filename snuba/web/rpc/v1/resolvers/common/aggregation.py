@@ -29,6 +29,9 @@ from snuba.web.rpc.common.common import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 sampling_factor_column = column("sampling_factor")
+client_sample_rate_column = column("client_sample_rate")
+server_sample_rate_column = column("server_sample_rate")
+
 
 Z_VALUE_P95 = 1.96  # Z value for 95% confidence interval is 1.96 which comes from the normal distribution z score.
 Z_VALUE_P975 = 2.24  # Z value for 97.5% confidence interval used for the avg() CI
@@ -47,8 +50,8 @@ CUSTOM_COLUMN_PREFIX = "__snuba_custom_column__"
 _FLOATING_POINT_PRECISION = 9
 
 # Attribute names for sample rates
-CLIENT_SAMPLE_RATE_ATTRIBUTE = "sentry.client_sample_rate"
-SERVER_SAMPLE_RATE_ATTRIBUTE = "sentry.server_sample_rate"
+CLIENT_SAMPLE_RATE_ATTRIBUTE = "client_sample_rate"
+SERVER_SAMPLE_RATE_ATTRIBUTE = "server_sample_rate"
 
 
 def _get_condition_in_aggregation(
@@ -251,22 +254,13 @@ class CustomColumnInformation:
 def _get_sampling_weight_expression(
     use_sampling_factor: bool,
     extrapolation_mode: ExtrapolationMode.ValueType,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> Expression:
     if extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY:
         # Use client sample rate attribute, convert to weight (1/rate)
-        client_rate_key = AttributeKey(
-            type=AttributeKey.TYPE_DOUBLE, name=CLIENT_SAMPLE_RATE_ATTRIBUTE
-        )
-        client_rate = attribute_key_to_expression(client_rate_key)
-        return f.divide(1, client_rate)
+        return f.divide(1, client_sample_rate_column)
     elif extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY:
         # Use server sample rate attribute, convert to weight (1/rate)
-        server_rate_key = AttributeKey(
-            type=AttributeKey.TYPE_DOUBLE, name=SERVER_SAMPLE_RATE_ATTRIBUTE
-        )
-        server_rate = attribute_key_to_expression(server_rate_key)
-        return f.divide(1, server_rate)
+        return f.divide(1, server_sample_rate_column)
     else:
         # Default behavior for existing modes - always use sampling_factor now
         return f.divide(1, sampling_factor_column)
@@ -312,7 +306,8 @@ def get_average_sample_rate_column(
         metadata={},
     ).to_alias()
     sampling_weight = _get_sampling_weight_expression(
-        use_sampling_factor, aggregation.extrapolation_mode, attribute_key_to_expression
+        use_sampling_factor,
+        aggregation.extrapolation_mode,
     )
     field = attribute_key_to_expression(aggregation.key)
     condition_in_aggregation = _get_condition_in_aggregation(
@@ -397,7 +392,8 @@ def _get_possible_percentiles_expression(
     )
     alias_dict = {"alias": alias} if alias else {}
     sampling_weight = _get_sampling_weight_expression(
-        use_sampling_factor, aggregation.extrapolation_mode, attribute_key_to_expression
+        use_sampling_factor,
+        aggregation.extrapolation_mode,
     )
     return cf.quantilesTDigestWeighted(*possible_percentiles)(
         field,
@@ -419,7 +415,8 @@ def get_extrapolated_function(
     )
 
     sampling_weight = _get_sampling_weight_expression(
-        use_sampling_factor, aggregation.extrapolation_mode, attribute_key_to_expression
+        use_sampling_factor,
+        aggregation.extrapolation_mode,
     )
     function_map_sample_weighted: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
         Function.FUNCTION_SUM: f.sumIfOrNull(
@@ -554,7 +551,8 @@ def _get_ci_count(
     )
     alias_dict = {"alias": alias} if alias else {}
     sampling_weight = _get_sampling_weight_expression(
-        use_sampling_factor, aggregation.extrapolation_mode, attribute_key_to_expression
+        use_sampling_factor,
+        aggregation.extrapolation_mode,
     )
     variance = f.sumIf(
         f.minus(
@@ -597,7 +595,8 @@ def _get_ci_sum(
     )
     alias_dict = {"alias": alias} if alias else {}
     sampling_weight = _get_sampling_weight_expression(
-        use_sampling_factor, aggregation.extrapolation_mode, attribute_key_to_expression
+        use_sampling_factor,
+        aggregation.extrapolation_mode,
     )
     variance = f.sumIf(
         f.multiply(
@@ -651,7 +650,8 @@ def _get_ci_avg(
     )
     alias_dict = {"alias": alias} if alias else {}
     sampling_weight = _get_sampling_weight_expression(
-        use_sampling_factor, aggregation.extrapolation_mode, attribute_key_to_expression
+        use_sampling_factor,
+        aggregation.extrapolation_mode,
     )
 
     expr_sum = f.sumIfOrNull(
