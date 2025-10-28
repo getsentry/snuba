@@ -18,9 +18,9 @@ from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
 
-BASE_TIME = datetime.now(timezone.utc).replace(
-    minute=0, second=0, microsecond=0
-) - timedelta(minutes=180)
+BASE_TIME = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0) - timedelta(
+    minutes=180
+)
 COMMON_META = RequestMeta(
     project_ids=[1, 2, 3],
     organization_id=1,
@@ -53,9 +53,7 @@ COMMON_META = RequestMeta(
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown(
-    clickhouse_db: None, redis_db: None
-) -> Generator[List[bytes], None, None]:
+def setup_teardown(clickhouse_db: None, redis_db: None) -> Generator[List[bytes], None, None]:
     items_storage = get_storage(StorageKey("eap_items"))
     start_timestamp = BASE_TIME
     messages = [
@@ -110,6 +108,12 @@ def setup_teardown(
                 "sentry.transaction": AnyValue(string_value="*foo"),
             },
         ),
+        gen_item_message(
+            start_timestamp=start_timestamp,
+            attributes={
+                "metric.questions.6._id": AnyValue(string_value="jlfsj"),
+            },
+        ),
     ]
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
     yield messages
@@ -126,9 +130,7 @@ class TestTraceItemAttributes(BaseApiTest):
             key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
             limit=10,
         )
-        response = self.app.post(
-            "/rpc/AttributeValuesRequest/v1", data=message.SerializeToString()
-        )
+        response = self.app.post("/rpc/AttributeValuesRequest/v1", data=message.SerializeToString())
         assert response.status_code == 200
 
     def test_simple_case(self, setup_teardown: Any) -> None:
@@ -157,12 +159,8 @@ class TestTraceItemAttributes(BaseApiTest):
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
             ),
             key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
             value_substring_match="this_definitely_doesnt_exist_93710",
@@ -181,15 +179,21 @@ class TestTraceItemAttributes(BaseApiTest):
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
             ),
             key=AttributeKey(name="sentry.item_id", type=AttributeKey.TYPE_STRING),
             value_substring_match=item_id,
         )
         res = AttributeValuesRequest().execute(req)
         assert res.values == [item_id]
+
+    def test_attribute_names_with_dots(self, setup_teardown: Any) -> None:
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=10,
+            key=AttributeKey(name="metric.questions.6._id", type=AttributeKey.TYPE_STRING),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert len(response.values) == 1
+        assert set(response.values) == {"jlfsj"}
