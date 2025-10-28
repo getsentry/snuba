@@ -26,6 +26,6 @@ k8s-spawn-job \
   --container-name="${SNUBA_COMPONENT_NAME}" \
   --try-deployments-and-statefulsets \
   "snuba-query-${SNUBA_CMD_TYPE}" \
-  "us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
+  "us-docker.pkg.dev/sentryio/snuba-mr/image:${GO_REVISION_SNUBA_REPO}" \
   -- \
   snuba $SNUBA_CMD
