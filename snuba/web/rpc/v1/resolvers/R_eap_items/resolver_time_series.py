@@ -2,7 +2,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime
-from typing import Any, Callable, Dict, Iterable
+from typing import Any, Callable, Dict, Iterable, Optional
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -30,13 +30,12 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal
+from snuba.query.dsl import column, in_cond, literal, literals_array
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
-from snuba.state import get_int_config
+from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
@@ -60,6 +59,9 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_average_sample_rate_column,
     get_confidence_interval_column,
     get_count_column,
+)
+from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    get_trace_ids_for_cross_item_query,
 )
 from snuba.web.rpc.v1.resolvers.common.formula_reliability import (
     FormulaReliabilityCalculator,
@@ -141,13 +143,11 @@ def _convert_result_timeseries(
     #       time_converted_to_integer_timestamp: row_data_for_that_time_bucket
     #   }
     # }
-    result_timeseries_timestamp_to_row: defaultdict[
-        tuple[str, str], dict[int, Dict[str, Any]]
-    ] = defaultdict(dict)
-
-    query_duration = (
-        request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
+    result_timeseries_timestamp_to_row: defaultdict[tuple[str, str], dict[int, Dict[str, Any]]] = (
+        defaultdict(dict)
     )
+
+    query_duration = request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
     time_buckets = [
         Timestamp(seconds=(request.meta.start_timestamp.seconds) + secs)
         for secs in range(0, query_duration, request.granularity_secs)
@@ -183,9 +183,7 @@ def _convert_result_timeseries(
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
-                extrapolation_context = ExtrapolationContext.from_row(
-                    timeseries.label, row_data
-                )
+                extrapolation_context = ExtrapolationContext.from_row(timeseries.label, row_data)
                 if row_data.get(timeseries.label, None) is not None:
                     timeseries.data_points.append(
                         DataPoint(
@@ -199,16 +197,13 @@ def _convert_result_timeseries(
                 else:
                     timeseries.data_points.append(DataPoint(data=0, data_present=False))
 
-    if get_int_config(
-        "enable_formula_reliability_ts", ENABLE_FORMULA_RELIABILITY_DEFAULT
-    ):
-        frc = FormulaReliabilityCalculator(request, data, time_buckets)
-        for timeseries in result_timeseries.values():
-            if timeseries.label in frc:
-                reliabilities = frc.get(timeseries.label)
-                for i in range(len(timeseries.data_points)):
-                    timeseries.data_points[i].reliability = reliabilities[i]
-        _remove_non_requested_expressions(request.expressions, result_timeseries)
+    frc = FormulaReliabilityCalculator(request, data, time_buckets)
+    for timeseries in result_timeseries.values():
+        if timeseries.label in frc:
+            reliabilities = frc.get(timeseries.label)
+            for i in range(len(timeseries.data_points)):
+                timeseries.data_points[i].reliability = reliabilities[i]
+    _remove_non_requested_expressions(request.expressions, result_timeseries)
 
     return result_timeseries.values()
 
@@ -240,10 +235,11 @@ def _get_reliability_context_columns(
         which_oneof = expr.WhichOneof("expression")
         assert which_oneof in ["conditional_aggregation", "aggregation"]
         aggregation = getattr(expr, which_oneof)
-        if (
-            aggregation.extrapolation_mode
-            == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
-        ):
+        if aggregation.extrapolation_mode in [
+            ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+            ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+        ]:
             confidence_interval_column = get_confidence_interval_column(
                 aggregation, _get_attribute_key_to_expression_function(request_meta)
             )
@@ -271,10 +267,6 @@ def _get_reliability_context_columns(
             SelectedExpression(name=count_column.alias, expression=count_column)
         )
     elif expr.WhichOneof("expression") == "formula":
-        if not get_int_config(
-            "enable_formula_reliability_ts", ENABLE_FORMULA_RELIABILITY_DEFAULT
-        ):
-            return []
         # also query for the left and right parts of the formula separately
         # this will be used later to calculate the reliability of the formula
         # ex: SELECT agg1/agg2 will become SELECT agg1/agg2, agg1, agg2
@@ -286,9 +278,7 @@ def _get_reliability_context_columns(
                         expression=_proto_expression_to_ast_expression(e, request_meta),
                     )
                 )
-            additional_context_columns.extend(
-                _get_reliability_context_columns(e, request_meta)
-            )
+            additional_context_columns.extend(_get_reliability_context_columns(e, request_meta))
     return additional_context_columns
 
 
@@ -311,13 +301,9 @@ def _proto_expression_to_ast_expression(
                 case None:
                     pass
                 case "default_value_double":
-                    formula_expr = f.coalesce(
-                        formula_expr, expr.formula.default_value_double
-                    )
+                    formula_expr = f.coalesce(formula_expr, expr.formula.default_value_double)
                 case "default_value_int64":
-                    formula_expr = f.coalesce(
-                        formula_expr, expr.formula.default_value_int64
-                    )
+                    formula_expr = f.coalesce(formula_expr, expr.formula.default_value_int64)
                 case default:
                     raise BadSnubaRPCRequestException(
                         f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
@@ -329,7 +315,7 @@ def _proto_expression_to_ast_expression(
             raise ValueError(f"Unknown expression type: {default}")
 
 
-def build_query(request: TimeSeriesRequest) -> Query:
+def build_query(request: TimeSeriesRequest, timer: Optional[Timer] = None) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
@@ -346,20 +332,29 @@ def build_query(request: TimeSeriesRequest) -> Query:
 
     additional_context_columns = []
     for expr in request.expressions:
-        additional_context_columns.extend(
-            _get_reliability_context_columns(expr, request.meta)
-        )
+        additional_context_columns.extend(_get_reliability_context_columns(expr, request.meta))
 
     groupby_columns = [
         SelectedExpression(
             name=attr_key.name,
-            expression=_get_attribute_key_to_expression_function(request.meta)(
-                attr_key
-            ),
+            expression=_get_attribute_key_to_expression_function(request.meta)(attr_key),
         )
         for attr_key in request.group_by
     ]
     item_type_conds = [f.equals(column("item_type"), request.meta.trace_item_type)]
+
+    # Handle cross item queries by first getting trace IDs
+    additional_conditions = []
+    if request.trace_filters and timer is not None:
+        trace_ids = get_trace_ids_for_cross_item_query(
+            request, request.meta, list(request.trace_filters), timer
+        )
+        additional_conditions.append(
+            in_cond(
+                column("trace_id"),
+                literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
+            )
+        )
 
     res = Query(
         from_clause=entity,
@@ -402,6 +397,7 @@ def build_query(request: TimeSeriesRequest) -> Query:
                 request.filter, _get_attribute_key_to_expression_function(request.meta)
             ),
             *item_type_conds,
+            *additional_conditions,
         ),
         groupby=[
             column("time_slot"),
@@ -410,9 +406,7 @@ def build_query(request: TimeSeriesRequest) -> Query:
                 for attr_key in request.group_by
             ],
         ],
-        order_by=[
-            OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)
-        ],
+        order_by=[OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)],
     )
     treeify_or_and_conditions(res)
     add_existence_check_to_subscriptable_references(res)
@@ -420,7 +414,7 @@ def build_query(request: TimeSeriesRequest) -> Query:
 
 
 def _build_snuba_request(
-    request: TimeSeriesRequest, query_settings: HTTPQuerySettings
+    request: TimeSeriesRequest, query_settings: HTTPQuerySettings, timer: Optional[Timer] = None
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
         team = "ourlogs"
@@ -434,7 +428,7 @@ def _build_snuba_request(
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=build_query(request),
+        query=build_query(request, timer),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -464,18 +458,14 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
         # if the user passes it in
         assert len(in_msg.aggregations) == 0
 
-        query_settings = (
-            setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
-        )
+        query_settings = setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         try:
-            routing_decision.strategy.merge_clickhouse_settings(
-                routing_decision, query_settings
-            )
+            routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
             query_settings.set_sampling_tier(routing_decision.tier)
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
 
-        snuba_request = _build_snuba_request(in_msg, query_settings)
+        snuba_request = _build_snuba_request(in_msg, query_settings, self._timer)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
