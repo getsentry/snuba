@@ -51,7 +51,7 @@ jobs:
           tag_nightly: false
           tag_latest: false
           google_ar: true
-          google_ar_image_name: us-central1-docker.pkg.dev/sentryio/snuba/image
+          google_ar_image_name: us-docker.pkg.dev/sentryio/snuba-mr/image
           google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
           google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
 
