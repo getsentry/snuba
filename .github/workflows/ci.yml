@@ -212,7 +212,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0  # v5.0.0
         with:
           name: snuba-ci
           path: /tmp
@@ -289,7 +289,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0  # v5.0.0
         with:
           name: snuba-ci
           path: /tmp
@@ -395,7 +395,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0  # v5.0.0
         with:
           name: snuba-ci
           path: /tmp
@@ -438,3 +438,27 @@ jobs:
       name: Validate devservices config
       with:
         devservices-version: ${{ steps.get-devservices-version.outputs.version }}
+
+  self-hosted-end-to-end:
+    needs: [snuba-image, files-changed]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Download snuba-ci image from artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0  # v5.0.0
+        with:
+          name: snuba-ci
+          path: /tmp
+
+      - name: Load snuba-ci image
+        run: |
+          docker load --input /tmp/snuba-ci.tar
+          docker image ls -a
+
+      - name: Run Sentry self-hosted e2e CI
+        uses: getsentry/self-hosted@master
+        with:
+          project_name: snuba
+          image_url: ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
