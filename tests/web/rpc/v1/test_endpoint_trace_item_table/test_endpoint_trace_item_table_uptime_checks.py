@@ -15,6 +15,9 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import (
     PageToken,
+    QueryInfo,
+    QueryMetadata,
+    QueryStats,
     RequestMeta,
     ResponseMeta,
     TraceItemType,
@@ -89,14 +92,10 @@ class TestTraceItemTable(BaseApiTest):
                 end_timestamp=ts,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_UPTIME_CHECK,
             ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="region"))
-            ],
+            columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="region"))],
             limit=10,
         )
-        response = self.app.post(
-            "/rpc/EndpointTraceItemTable/v1", data=message.SerializeToString()
-        )
+        response = self.app.post("/rpc/EndpointTraceItemTable/v1", data=message.SerializeToString())
         error_proto = ErrorProto()
         if response.status_code != 200:
             error_proto.ParseFromString(response.data)
@@ -104,9 +103,7 @@ class TestTraceItemTable(BaseApiTest):
 
     def test_with_data(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = Timestamp(
-            seconds=int((BASE_TIME - timedelta(hours=10000)).timestamp())
-        )
+        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=10000)).timestamp()))
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -151,9 +148,7 @@ class TestTraceItemTable(BaseApiTest):
             limit=10,
         )
         response = EndpointTraceItemTable().execute(message)
-        checks = list(
-            sorted(_UPTIME_CHECKS, key=itemgetter("scheduled_check_time_ms"))
-        )[:10]
+        checks = list(sorted(_UPTIME_CHECKS, key=itemgetter("scheduled_check_time_ms")))[:10]
 
         expected_response = TraceItemTableResponse(
             column_values=[
@@ -176,15 +171,22 @@ class TestTraceItemTable(BaseApiTest):
             page_token=PageToken(offset=10),
             meta=ResponseMeta(
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
             ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_offset(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
-        hour_ago = Timestamp(
-            seconds=int((BASE_TIME - timedelta(hours=10000)).timestamp())
-        )
+        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=10000)).timestamp()))
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -230,9 +232,7 @@ class TestTraceItemTable(BaseApiTest):
             page_token=PageToken(offset=5),  # Start from the 6th item
         )
         response = EndpointTraceItemTable().execute(message)
-        checks = list(
-            sorted(_UPTIME_CHECKS, key=itemgetter("scheduled_check_time_ms"))
-        )[
+        checks = list(sorted(_UPTIME_CHECKS, key=itemgetter("scheduled_check_time_ms")))[
             5:10
         ]  # Get items 6-10
 
@@ -257,6 +257,15 @@ class TestTraceItemTable(BaseApiTest):
             page_token=PageToken(offset=10),
             meta=ResponseMeta(
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
             ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)

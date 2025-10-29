@@ -78,7 +78,7 @@ services:
     restart: unless-stopped
 
   snuba:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     ports:
       - 127.0.0.1:1218:1218
       - 127.0.0.1:1219:1219
@@ -109,7 +109,6 @@ services:
       ENABLE_GROUP_ATTRIBUTES_CONSUMER: ${ENABLE_GROUP_ATTRIBUTES_CONSUMER:-}
       ENABLE_LW_DELETIONS_CONSUMER: ${ENABLE_LW_DELETIONS_CONSUMER:-}
       SENTRY_SPOTLIGHT: 'http://host.docker.internal:8969/stream'
-    platform: linux/amd64
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
@@ -118,7 +117,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   profiles-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=profiles,
@@ -139,7 +138,6 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 1
-    platform: linux/amd64
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
@@ -148,7 +146,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   profile-chunks-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=profile_chunks,
@@ -169,7 +167,6 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 1
-    platform: linux/amd64
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
@@ -178,7 +175,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   functions-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=functions_raw,
@@ -199,7 +196,6 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 1
-    platform: linux/amd64
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
@@ -208,7 +204,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   uptime-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=uptime_monitor_checks,
@@ -229,7 +225,6 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 1
-    platform: linux/amd64
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
@@ -238,7 +233,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   metrics-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=metrics_raw,
@@ -259,7 +254,6 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 1
-    platform: linux/amd64
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
@@ -268,7 +262,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   generic-metrics-distributions-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=generic_metrics_distributions_raw,
@@ -289,7 +283,6 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 1
-    platform: linux/amd64
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
@@ -298,7 +291,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   generic-metrics-sets-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=generic_metrics_sets_raw,
@@ -319,7 +312,6 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 1
-    platform: linux/amd64
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
@@ -328,7 +320,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   generic-metrics-counters-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=generic_metrics_counters_raw,
@@ -349,7 +341,6 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 1
-    platform: linux/amd64
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
@@ -358,7 +349,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   generic-metrics-gauges-consumer:
-    image: ghcr.io/getsentry/snuba:latest
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=generic_metrics_gauges_raw,
@@ -379,7 +370,6 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 1
-    platform: linux/amd64
     extra_hosts:
       host.docker.internal: host-gateway
     networks:

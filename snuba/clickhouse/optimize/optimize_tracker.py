@@ -69,16 +69,14 @@ class OptimizedPartitionTracker:
         """
         return self.__get_partitions(self.__completed_bucket)
 
-    def __update_partitions(
-        self, bucket: str, encoded_part_names: Sequence[bytes]
-    ) -> None:
+    def __update_partitions(self, bucket: str, encoded_part_names: Sequence[bytes]) -> None:
         """
         Update the partitions in the bucket.
         """
-        pipe = self.__redis_client.pipeline()
-        pipe.sadd(bucket, *encoded_part_names)
-        pipe.expireat(bucket, self.__key_expire_time)
-        pipe.execute()
+        with self.__redis_client.pipeline() as pipe:
+            pipe.sadd(bucket, *encoded_part_names)
+            pipe.expireat(bucket, self.__key_expire_time)
+            pipe.execute()
 
     def update_all_partitions(self, part_names: Sequence[str]) -> None:
         """
@@ -123,7 +121,7 @@ class OptimizedPartitionTracker:
         Delete the sets of partitions which had to be optimized and
         which have already been optimized.
         """
-        pipe = self.__redis_client.pipeline()
-        pipe.delete(self.__all_bucket)
-        pipe.delete(self.__completed_bucket)
-        pipe.execute()
+        with self.__redis_client.pipeline() as pipe:
+            pipe.delete(self.__all_bucket)
+            pipe.delete(self.__completed_bucket)
+            pipe.execute()

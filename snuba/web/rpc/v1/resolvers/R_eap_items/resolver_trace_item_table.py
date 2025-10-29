@@ -1,5 +1,6 @@
 import uuid
 from dataclasses import replace
+from itertools import islice
 from typing import List, Optional, Sequence
 
 import sentry_sdk
@@ -34,8 +35,6 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
-from snuba.state import get_int_config
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -225,8 +224,6 @@ def _get_reliability_context_columns(
     """
 
     if column.HasField("formula"):
-        if not get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
-            return []
         # also query for the left and right parts of the formula separately
         # this will be used later to calculate the reliability of the formula
         # ex: SELECT agg1/agg2 will become SELECT agg1/agg2, agg1, agg2
@@ -246,10 +243,11 @@ def _get_reliability_context_columns(
     if not (column.HasField("conditional_aggregation")):
         return []
 
-    if (
-        column.conditional_aggregation.extrapolation_mode
-        == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
-    ):
+    if column.conditional_aggregation.extrapolation_mode in [
+        ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+        ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+        ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+    ]:
         context_columns = []
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
@@ -523,10 +521,11 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         routing_decision.routing_context.query_result = res
         # we added 1 to the limit to know if there are more rows to fetch
         # so we need to remove the last row
-        # TODO maybe use islice instead
-        data = res.result.get("data", [])
-        if in_msg.limit > 0 and len(data) > in_msg.limit:
-            data = data[:-1]
+        total_rows = len(res.result.get("data", []))
+        data = iter(res.result.get("data", []))
+
+        if in_msg.limit > 0 and total_rows > in_msg.limit:
+            data = islice(data, in_msg.limit)
         column_values = convert_results(in_msg, data)
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
@@ -539,7 +538,7 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             page_token=_get_page_token(
                 in_msg,
                 column_values,
-                len(res.result.get("data", [])),
+                total_rows,
                 original_time_window,
                 routing_decision.time_window,
             ),

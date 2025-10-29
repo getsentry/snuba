@@ -33,17 +33,17 @@ def set_config_auto_replacements_bypass_projects(
         expiry_window = typing.cast(
             int, get_int_config(key=REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, default=5)
         )
-        pipeline = redis_client.pipeline()
-        for project_id in new_project_ids:
-            if project_id not in projects_within_expiry:
-                expiry = curr_time + timedelta(minutes=expiry_window)
-                pipeline.hset(
-                    config_auto_replacements_bypass_projects_hash,
-                    project_id,
-                    expiry.isoformat(),
-                )
-                metrics.increment("added_project_to_auto_skip")
-        pipeline.execute()
+        with redis_client.pipeline() as pipeline:
+            for project_id in new_project_ids:
+                if project_id not in projects_within_expiry:
+                    expiry = curr_time + timedelta(minutes=expiry_window)
+                    pipeline.hset(
+                        config_auto_replacements_bypass_projects_hash,
+                        project_id,
+                        expiry.isoformat(),
+                    )
+                    metrics.increment("added_project_to_auto_skip")
+            pipeline.execute()
 
         metrics.timing(
             "set_config_auto_replacements_bypass_projects_duration",
@@ -60,9 +60,7 @@ def _retrieve_projects_from_redis() -> Mapping[int, datetime]:
         start = time.time()
         projects = {
             int(k.decode("utf-8")): datetime.fromisoformat(v.decode("utf-8"))
-            for k, v in redis_client.hgetall(
-                config_auto_replacements_bypass_projects_hash
-            ).items()
+            for k, v in redis_client.hgetall(config_auto_replacements_bypass_projects_hash).items()
         }
         metrics.timing(
             "retrieve_projects_from_redis_duration",
@@ -82,14 +80,14 @@ def get_config_auto_replacements_bypass_projects(
     curr_projects = _retrieve_projects_from_redis()
     start = time.time()
     valid_projects = {}
-    pipeline = redis_client.pipeline()
-    for project_id in curr_projects:
-        if curr_projects[project_id] < curr_time:
-            pipeline.hdel(config_auto_replacements_bypass_projects_hash, project_id)
-            metrics.increment("deleted_project_from_auto_skip")
-        else:
-            valid_projects[project_id] = curr_projects[project_id]
-    pipeline.execute()
+    with redis_client.pipeline() as pipeline:
+        for project_id in curr_projects:
+            if curr_projects[project_id] < curr_time:
+                pipeline.hdel(config_auto_replacements_bypass_projects_hash, project_id)
+                metrics.increment("deleted_project_from_auto_skip")
+            else:
+                valid_projects[project_id] = curr_projects[project_id]
+        pipeline.execute()
     metrics.timing(
         "deleting_expired_projects_duration",
         time.time() - start,

@@ -20,3 +20,8 @@ jobs:
           docker buildx imagetools create --tag \
            ghcr.io/getsentry/snuba:${{ github.ref_name }} \
            ghcr.io/getsentry/snuba:${{ github.sha }}
+      - name: Tag latest version
+        run: |
+          docker buildx imagetools create --tag \
+          ghcr.io/getsentry/snuba:latest \
+          ghcr.io/getsentry/snuba:${{ github.sha }}
