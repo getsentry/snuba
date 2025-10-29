@@ -121,18 +121,12 @@ class _SubscriptionData(ABC, Generic[TRequest]):
 
     def validate(self) -> None:
         if self.time_window_sec < 60:
-            raise InvalidSubscriptionError(
-                "Time window must be greater than or equal to 1 minute"
-            )
+            raise InvalidSubscriptionError("Time window must be greater than or equal to 1 minute")
         elif self.time_window_sec > 60 * 60 * 24:
-            raise InvalidSubscriptionError(
-                "Time window must be less than or equal to 24 hours"
-            )
+            raise InvalidSubscriptionError("Time window must be less than or equal to 24 hours")
 
         if self.resolution_sec < 60:
-            raise InvalidSubscriptionError(
-                "Resolution must be greater than or equal to 1 minute"
-            )
+            raise InvalidSubscriptionError("Resolution must be greater than or equal to 1 minute")
 
     @abstractmethod
     def build_request(
@@ -216,12 +210,14 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         expression = request.expressions[0]
         vis = GetExpressionAggregationsVisitor()
         TimeSeriesExpressionWrapper(expression).accept(vis)
-        if any(
-            e.extrapolation_mode != ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
-            for e in vis.aggregations
-        ):
+        allowed_modes = [
+            ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+            ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+        ]
+        if any(e.extrapolation_mode not in allowed_modes for e in vis.aggregations):
             raise InvalidSubscriptionError(
-                f"Invalid extrapolation mode. Allowed extrapolation modes: {ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED}"
+                f"Invalid extrapolation mode. Allowed extrapolation modes: {', '.join([ExtrapolationMode.Name(mode) for mode in allowed_modes])}"
             )
 
     def build_request(
@@ -238,9 +234,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         request_class.ParseFromString(base64.b64decode(self.time_series_request))
 
         start_time_proto = Timestamp()
-        start_time_proto.FromDatetime(
-            timestamp - timedelta(seconds=self.time_window_sec)
-        )
+        start_time_proto.FromDatetime(timestamp - timedelta(seconds=self.time_window_sec))
         end_time_proto = Timestamp()
         end_time_proto.FromDatetime(timestamp)
         request_class.meta.start_timestamp.CopyFrom(start_time_proto)
@@ -261,28 +255,24 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         concurrent_queries_gauge: Optional[Gauge] = None,
     ) -> QueryResult:
         response = EndpointTimeSeries().execute(request)
-        if not response.result_timeseries:
+        if not response.result_timeseries or not any(
+            dp.data_present for dp in response.result_timeseries[0].data_points
+        ):
             result: Result = {
                 "meta": [],
                 "data": [{request.expressions[0].label: None}],
                 "trace_output": "",
             }
-            return QueryResult(
-                result=result, extra={"stats": {}, "sql": "", "experiments": {}}
-            )
+            return QueryResult(result=result, extra={"stats": {}, "sql": "", "experiments": {}})
 
         timeseries = response.result_timeseries[0]
         data = [{timeseries.label: timeseries.data_points[0].data}]
 
         result = {"meta": [], "data": data, "trace_output": ""}
-        return QueryResult(
-            result=result, extra={"stats": {}, "sql": "", "experiments": {}}
-        )
+        return QueryResult(result=result, extra={"stats": {}, "sql": "", "experiments": {}})
 
     @classmethod
-    def from_dict(
-        cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> RPCSubscriptionData:
+    def from_dict(cls, data: Mapping[str, Any], entity_key: EntityKey) -> RPCSubscriptionData:
         entity: Entity = get_entity(entity_key)
         metadata = {}
         for key in data.keys():
@@ -370,9 +360,7 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
         elif isinstance(from_clause, EntityDS):
             entities = [(None, get_entity(from_clause.key))]
         else:
-            raise InvalidSubscriptionError(
-                "Only simple queries and join queries are supported"
-            )
+            raise InvalidSubscriptionError("Only simple queries and join queries are supported")
         for entity_alias, entity in entities:
             conditions_to_add: List[Expression] = [
                 binary_condition(
@@ -406,9 +394,7 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
             new_condition = combine_and_conditions(conditions_to_add)
             condition = query.get_condition()
             if condition:
-                new_condition = binary_condition(
-                    BooleanFunctions.AND, condition, new_condition
-                )
+                new_condition = binary_condition(BooleanFunctions.AND, condition, new_condition)
 
             query.set_ast_condition(new_condition)
 
@@ -480,9 +466,7 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
         )
 
     @classmethod
-    def from_dict(
-        cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SnQLSubscriptionData:
+    def from_dict(cls, data: Mapping[str, Any], entity_key: EntityKey) -> SnQLSubscriptionData:
         entity: Entity = get_entity(entity_key)
 
         metadata = {}

@@ -8,6 +8,7 @@ import SnQLToSQL from "SnubaAdmin/snql_to_sql";
 import Kafka from "SnubaAdmin/kafka";
 import QuerylogQueries from "SnubaAdmin/querylog";
 import CapacityManagement from "SnubaAdmin/capacity_management";
+import CapacityBasedRoutingSystem from "SnubaAdmin/cbrs";
 import DeadLetterQueue from "SnubaAdmin/dead_letter_queue";
 import CardinalityAnalyzer from "SnubaAdmin/cardinality_analyzer";
 import ProductionQueries from "SnubaAdmin/production_queries";
@@ -31,6 +32,11 @@ const NAV_ITEMS = [
     id: "capacity-management",
     display: "🪫 Capacity Management",
     component: CapacityManagement,
+  },
+  {
+    id: "capacity-based-routing-system",
+    display: "🔄 Capacity Based Routing System",
+    component: CapacityBasedRoutingSystem,
   },
   {
     id: "snql-to-sql",
