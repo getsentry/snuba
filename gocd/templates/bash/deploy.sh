@@ -43,7 +43,6 @@ eval $(regions-project-env-vars --region="${SENTRY_REGION}")
   --container-name="transactions-consumer-new" \
   --container-name="transactions-subscriptions-executor" \
   --container-name="transactions-subscriptions-scheduler" \
-  --container-name="uptime-results-consumer" \
   --container-name="snuba" \
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
