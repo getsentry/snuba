@@ -7,7 +7,7 @@ use criterion::{black_box, BenchmarkGroup, BenchmarkId, Criterion, Throughput};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use rust_snuba::{
-    BrokerConfig, ClickhouseConfig, ConsumerStrategyFactory, EnvConfig, KafkaMessageMetadata,
+    BrokerConfig, ClickhouseConfig, ConsumerStrategyFactoryV2, EnvConfig, KafkaMessageMetadata,
     MessageProcessorConfig, ProcessingFunction, ProcessingFunctionType, ProcessorConfig,
     StatsDBackend, StorageConfig, TopicConfig, PROCESSORS,
 };
@@ -73,7 +73,7 @@ fn create_factory(
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let replacements_concurrency =
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
-    let factory = ConsumerStrategyFactory {
+    let factory = ConsumerStrategyFactoryV2 {
         storage_config: storage,
         env_config: EnvConfig::default(),
         logical_topic_name: schema.into(),
@@ -100,7 +100,6 @@ fn create_factory(
         },
         stop_at_timestamp: None,
         batch_write_timeout: None,
-        custom_envoy_request_timeout: None,
         join_timeout_ms: None,
         health_check: "arroyo".to_string(),
     };

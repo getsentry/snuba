@@ -1,5 +1,98 @@
 # Changelog
 
+## 25.10.0
+
+### Various fixes & improvements
+
+- fix(ignore_case): Handle ignoring casing for LIKE/NOT LIKE (#7452) by @wmak
+- fix(eap): Set a better default for timestamp field and customize for logs (#7441) by @phacops
+- chore(rust-consumer): add default dlq buffer length (#7429) by @davidtsuk
+- fix(cross-item-queries): Allow single filters (#7450) by @wmak
+- fix(traceitemstats): only downgrade traceitemstats for AI clients (#7449) by @volokluev
+- Modifying Replay Deserializer To Parse Tap Message (#7439) by @cliffordxing
+- feat(flextime_routing): Use order by in flextime pagination (#7445) by @volokluev
+- fix(ast): fix query formatter not handling dots in column names (#7440) by @volokluev
+- feat(replay): Adding Tap Columns (#7437) by @cliffordxing
+- ref: bump sentry-arroyo to 2.29.6 (#7444) by @getsentry-bot
+- fix tilde in pyproject (#7443) by @bmckerry
+- feat(health-check): add limit to individual health check cluster wait (#7436) by @onewland
+- feat: TraceItemStats heatmap, basic functionality (#7433) by @kylemumma
+- ref(outcomes-routing): always downsample data older than 30 days (#7424) by @MeredithAnya
+- for health check errors, enrich events with cluster_name (#7434) by @onewland
+- ref(gocd): add healthcheck to de (#7435) by @MeredithAnya
+- dep: add granian (#7431) by @gi0baro
+- feat(deletes): connect delete RPC endpoint to actual deletion (#7426) by @onewland
+- ref: bump sentry-arroyo to 2.29.5 (#7430) by @getsentry-bot
+- fix(TraceItemTable): Account for flexible time windows with no results (#7427) by @volokluev
+- chore(ci): Remove snuba cloudbuild (#7417) by @hubertdeng123
+- ref(devenv): allow more mem for CH (#7425) by @MeredithAnya
+- feat(eap): add deletion_settings to eap_items storage definition (#7420) by @onewland
+- feat(TracaITemTable): add end_pagination token (#7423) by @volokluev
+
+_Plus 8 more_
+
+## 25.9.0
+
+### Various fixes & improvements
+
+- ci: bump action-build-and-push-images to latest commit hash (#7412) by @Dav1dde
+- ref(outcomes): storage selecter, settings, daily storage (try 2) (#7398) by @MeredithAnya
+- feat(cbrs): Snuba Admin UI (webpage) (#7399) by @xurui-c
+- fix(ci): typo on craft's default release branch name (#7408) by @aldy505
+- ref(pyproject.toml): Un-break bump-version.yml workflow (#7403) by @untitaker
+- chore(api): Make socket timeout less aggressive in snuba api (#7405) by @volokluev
+- Reduce clickhouse send_receive_timeout from 300 to 35 seconds (#7404) by @volokluev
+- fix(inc-1340): Make snuba more resilient to redis failures (#7402) by @volokluev
+- fix(cbrs): divide subclasses according to their namespaces (#7401) by @xurui-c
+- feat(EAP): cross item queries for trace item table (#7385) by @davidtsuk
+- fix(issues): resolve u32/u64 group_first_seen bug (#7397) by @thetruecpaul
+- feat(cbrs): Snuba Admin endpoints (#7346) by @xurui-c
+- fix(observability): raise a specific error for query timeouts (#7364) by @volokluev
+- Redo: ref(outcomes): fix partitioning for daily table (#7396) by @xurui-c
+- Redo: fix(issues): Process new group_first_seen field on ingest (#7395) by @xurui-c
+- Redo: fix: scripts/rust-envvars needs .venv/bin/python (#7394) by @xurui-c
+- Stop deploying gauges infra (#7382) by @volokluev
+- ref(cbrs): introduce RegisteredClass into ConfigurableComponent (#7379) by @xurui-c
+- fix: rust envvars need to be set before devenv/uv sync (#7381) by @joshuarli
+- fix(ci): bump timeout for venv recreation (#7380) by @joshuarli
+- feat: uv (#7368) by @joshuarli
+- fix(search_issues): stop truncating timestamp_ms in search_issues (#7373) by @cvxluo
+- ref(cbrs): integrate resource identifier and policy type into AllocationPolicy (#7375) by @xurui-c
+- feat(ci): Part 2 Cutover to GHA for image build/push (#7371) by @hubertdeng123
+
+_Plus 10 more_
+
+## 25.8.0
+
+### Various fixes & improvements
+
+- ref: consolidate all dev requirements (#7352) by @joshuarli
+- fix: fix broken ci (#7354) by @kylemumma
+- fix(gocd): Do not ignore errors from EAP consumers (#7353) by @phacops
+- fix(issues): Start processing new_group_first_seen in merge case (#7351) by @thetruecpaul
+- chore: Test ClickHouse 25.3 (#7339) by @phacops
+- fix(storage-routing): If item type is unspecified, default to spans (#7350) by @volokluev
+- ref(eap): Remove more references to spans, eap-spans and eap-items-span (#7301) by @phacops
+- fix(storage_routing): fix routing strategy assuming highest accuracy by default (#7347) by @volokluev
+- chore: bump sentry-sdk to 2.33.2 again (#7344) by @MeredithAnya
+- feat(eap): enable sampling for GetTraces single item queries (#7345) by @volokluev
+- ref: bump sentry-arroyo to 2.29.1 (#7343) by @getsentry-bot
+- feat: Add Rust support to bump-version workflow (#7342) by @davidtsuk
+- feat(errors): Add group_first_seen column to issues platform entity (#7335) by @thetruecpaul
+- feat(errors): Add group_first_seen column to issues platform storage (#7336) by @thetruecpaul
+- feat(errors): Add group_first_seen column on issues platform (#7334) by @thetruecpaul
+- feat(cbrs): unify allocation policy and routing strategy (#7337) by @xurui-c
+- feat(eap): add BinaryFormula to AggregationComparisonFilter (#7314) by @onewland
+- Revert "chore: Test ClickHouse 25.3 (#7338)" (7e32590f) by @getsentry-bot
+- chore: Test ClickHouse 25.3 (#7338) by @phacops
+- Revert "chore: Test ClickHouse 25.3 (#7332)" (4854e6cb) by @getsentry-bot
+- chore: Test ClickHouse 25.3 (#7332) by @phacops
+- ref(subscriptions): crash schedulers that dont have LogAppendTime on default topic (#7325) by @MeredithAnya
+- feat(clickhouse): Add missing user config for ClickHouse in dev (#6868) by @hubertdeng123
+- cleanup(consumers): remove slice and custom envoy request timeout (#7328) by @volokluev
+
+_Plus 45 more_
+
 ## 25.7.0
 
 ### Various fixes & improvements

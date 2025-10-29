@@ -24,10 +24,31 @@ jobs:
           token: ${{ github.token }}
           filters: .github/file-filters.yml
 
+  bump-version-test:
+    name: "Test bump_version.py script"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        name: Checkout code
+
+      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+        with:
+          version: '0.8.2'
+          enable-cache: false
+
+      - name: Test bump_version.py runs without errors
+        run: |
+          # Test that the script can be imported and shows help
+          python tools/bump_version.py --help
+
+          # Test with a dry run (should fail with appropriate message for non-existent package)
+          python tools/bump_version.py test-package 1.0.0 || echo "Expected failure for non-existent package"
+
   linting:
     name: "pre-commit hooks" # (includes Python formatting + linting)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         name: Checkout code
@@ -38,19 +59,28 @@ jobs:
         with:
           app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
-      - uses: actions/setup-python@v5
+
+      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
         with:
-          python-version: '3.11'
-      - uses: actions/cache@v4
+          version: '0.8.2'
+          # we just cache the venv-dir directly in action-setup-venv
+          enable-cache: false
+
+      - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
+        with:
+          python-version: 3.11.11
+          cache-dependency-path: uv.lock
+          # NOTE: can't pass --only-dev yet since we're missing some mypy stub packages
+          install-cmd: uv sync --frozen --active
+
+      - uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
         with:
           path: ~/.cache/pre-commit
-          key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
+          key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml', 'uv.lock') }}
+
       - name: Setup pre-commit
-        run: make setup-git
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          make install-python-dependencies
+        run: pre-commit install-hooks
+
       - uses: getsentry/paths-filter@v2
         id: files
         with:
@@ -65,6 +95,7 @@ jobs:
           filters: |
             all:
               - added|modified: '**/*'
+
       - name: Run pre-commit checks
         # Run pre-commit to lint and format check files that were changed (but not deleted) compared to master.
         # XXX: there is a very small chance that it'll expand to exceed Linux's limits
@@ -92,42 +123,33 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
       - name: Run linter
         run: |
           make lint-rust format-rust-ci
 
-  typing:
-    name: "mypy typing"
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        name: Checkout code
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          make install-python-dependencies
-      - name: Run mypy
-        run: |
-          make backend-typing
-
   config-validation:
     name: "Dataset Config Validation"
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         name: Checkout code
-      - uses: actions/setup-python@v5
+
+      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
         with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          make install-python-dependencies
+          version: '0.8.2'
+          # we just cache the venv-dir directly in action-setup-venv
+          enable-cache: false
+
+      - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
+        with:
+          python-version: 3.11.11
+          cache-dependency-path: uv.lock
+          install-cmd: uv sync --frozen --active
+
       - name: Validate configs
         run: |
           make validate-configs
@@ -138,13 +160,9 @@ jobs:
     timeout-minutes: 20
     outputs:
       branch: ${{ steps.branch.outputs.branch }}
-      image_tag: ${{ steps.publish.outputs.image_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
       - name: Get branch name
         id: branch
@@ -152,45 +170,16 @@ jobs:
         # it can be used as a docker tag
         run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
 
-      # We are only using ghcr here for CI as `setup-gcloud` is a bit slow
-      # Should revisit this when we move off of google cloud build (we may want to move these to GCR)
-      - name: Registry login
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
-
-      - run: docker buildx create --driver docker-container --use
-
-      - name: Build snuba docker image for CI
-        run: |
-          set -euxo pipefail
-
-          args=()
-
-          if [ ${{ github.event_name }} = 'push' ]; then
-            args+=(
-              --tag ghcr.io/getsentry/snuba-ci:latest
-              --cache-to type=registry,ref=ghcr.io/getsentry/snuba-ci:latest,mode=max
-              --push
-            )
-          fi
-
-          if [ ${{ github.event.pull_request.head.repo.full_name }} = ${{ github.repository }} ]; then
-            args+=(
-              --cache-to type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }},mode=max
-            )
-          fi
-
-          docker buildx build \
-            --pull \
-            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} \
-            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
-            --cache-from type=registry,ref=ghcr.io/getsentry/snuba-ci:latest \
-            --tag ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} \
-            --tag ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
-            --target testing \
-            "${args[@]}" \
-            -o type=docker,dest=/tmp/snuba-ci.tar \
-            .
+      - uses: getsentry/action-build-and-push-images@f6e4a98f7ed028edcfb1159f3a2905b30e51f1fd
+        with:
+          image_name: 'snuba-ci'
+          platforms: 'linux/amd64'
+          dockerfile_path: 'Dockerfile'
+          ghcr: false
+          tag_nightly: false
+          tag_latest: false
+          tags: 'ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}'
+          outputs: 'type=docker,dest=/tmp/snuba-ci.tar'
 
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
@@ -319,7 +308,6 @@ jobs:
       - name: Setup steps
         id: setup
         run: |
-          pip install --upgrade pip wheel
           # We cannot execute actions that are not placed under .github of the main repo
           mkdir -p .github/actions
           cp -r sentry/.github/actions/* .github/actions
@@ -362,7 +350,6 @@ jobs:
             -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run full tests
-        # TODO: Adjust which changed files we care about
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
@@ -371,7 +358,7 @@ jobs:
               tests/sentry/snuba \
               tests/sentry/eventstream/kafka \
               tests/sentry/post_process_forwarder \
-              tests/sentry/eventstore/snuba \
+              tests/sentry/services/eventstore/snuba \
               tests/sentry/search/events \
               tests/sentry/event_manager \
               tests/sentry/api/endpoints/test_organization_profiling_functions.py \
@@ -399,8 +386,8 @@ jobs:
       matrix:
         version:
           [
-            "24.3.5.47.altinitystable",
             "24.8.11.51285.altinitystable",
+            "25.3.6.10034.altinitystable",
           ]
 
     steps:
@@ -431,7 +418,6 @@ jobs:
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
-
   validate-devservices-config:
     runs-on: ubuntu-24.04
     needs: files-changed
@@ -439,7 +425,16 @@ jobs:
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       name: Checkout repository
-    - uses: getsentry/action-validate-devservices-config@02a078d1280293e6598cabfbd318a01609c12c83
+
+    - name: Get devservices version
+      id: get-devservices-version
+      run: |
+        awk -F'"' '
+          /name/ { pkg = $2 }
+          /version/ { if (pkg == "devservices") print "version="$2 }
+        ' uv.lock >> $GITHUB_OUTPUT
+
+    - uses: getsentry/action-validate-devservices-config@711ae7221998ddf81211f25f5e3873ecffd22387
       name: Validate devservices config
       with:
-        requirements-file-path: requirements.txt
+        devservices-version: ${{ steps.get-devservices-version.outputs.version }}

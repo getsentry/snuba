@@ -34,3 +34,13 @@ def test_partitions_number() -> None:
 
     topic_spec = KafkaTopicSpec(Topic.REPLAYEVENTS)
     assert topic_spec.partitions_number == 1
+
+
+def test_topic_current_config_values() -> None:
+    admin_client = AdminClient(get_default_kafka_configuration())
+    create_topics(admin_client, [SnubaTopic.REPLAYEVENTS])
+
+    topic_spec = KafkaTopicSpec(Topic.REPLAYEVENTS)
+    config = topic_spec.topic_current_config_values
+
+    assert config["message.timestamp.type"] in ("CreateTime", "LogAppendTime")

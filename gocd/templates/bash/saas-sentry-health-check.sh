@@ -5,7 +5,7 @@ checks-sentry-release-new-issues \
   --project-slug=snuba \
   --release="${GO_REVISION_SNUBA_REPO}" \
   --new-issues-limit=0 \
-  --additional-query="issue.type:error !level:info !server_name:*eap*" \
+  --additional-query="issue.type:error !level:info" \
 
 
 # --skip-check=${SKIP_CANARY_CHECKS}

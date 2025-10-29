@@ -85,7 +85,7 @@ class ClickhousePool(object):
         ca_certs: Optional[str] = None,
         verify: Optional[bool] = False,
         connect_timeout: int = 1,
-        send_receive_timeout: Optional[int] = 300,
+        send_receive_timeout: Optional[int] = 35,
         max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
         client_settings: Mapping[str, Any] = {},
     ) -> None:
@@ -118,9 +118,7 @@ class ClickhousePool(object):
         return state.get_config("use_fallback_host_in_native_connection_pool", 0) == 1
 
     def get_fallback_host(self) -> Tuple[str, int]:
-        config_hosts_str = state.get_config(
-            f"fallback_hosts:{self.host}:{self.port}", None
-        )
+        config_hosts_str = state.get_config(f"fallback_hosts:{self.host}:{self.port}", None)
         assert config_hosts_str, f"no fallback hosts found for {self.host}:{self.port}"
 
         config_hosts = cast(str, config_hosts_str).split(",")
@@ -180,12 +178,8 @@ class ClickhousePool(object):
                         )
 
                     def query_execute() -> Any:
-                        with sentry_sdk.start_span(
-                            description=query, op="db.clickhouse"
-                        ) as span:
-                            span.set_data(
-                                sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse"
-                            )
+                        with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
+                            span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
                             span.set_data("query_id", query_id)
                             span.set_data("settings", settings)
                             return conn.execute(  # type: ignore
@@ -233,11 +227,7 @@ class ClickhousePool(object):
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                     metrics.increment(
-                        (
-                            "connection_error"
-                            if not fallback_mode
-                            else "fallback_connection_error"
-                        ),
+                        ("connection_error" if not fallback_mode else "fallback_connection_error"),
                         tags={
                             "host": self.host,
                             "port": str(self.port),
@@ -281,9 +271,7 @@ class ClickhousePool(object):
                         if not sleep_interval_seconds:
                             raise ClickhouseError(e.message, code=e.code) from e
 
-                        attempts_remaining = min(
-                            attempts_remaining, 1
-                        )  # only retry once
+                        attempts_remaining = min(attempts_remaining, 1)  # only retry once
 
                         assert sleep_interval_seconds is not None
                         # Linear backoff. Adds one second at each iteration.
@@ -367,10 +355,7 @@ class ClickhousePool(object):
                     assert sleep_interval_seconds is not None
                     # Linear backoff. Adds one second at each iteration.
                     time.sleep(
-                        float(
-                            (total_attempts - attempts_remaining)
-                            * sleep_interval_seconds
-                        )
+                        float((total_attempts - attempts_remaining) * sleep_interval_seconds)
                     )
                     continue
                 else:
@@ -473,13 +458,9 @@ class NativeDriverReader(Reader):
         # duplicated names are discarded at this stage.
         columns = {c[0]: i for i, c in enumerate(meta)}
 
-        data = [
-            {column: row[index] for column, index in columns.items()} for row in data
-        ]
+        data = [{column: row[index] for column, index in columns.items()} for row in data]
 
-        meta = [
-            {"name": m[0], "type": m[1]} for m in [meta[i] for i in columns.values()]
-        ]
+        meta = [{"name": m[0], "type": m[1]} for m in [meta[i] for i in columns.values()]]
 
         new_result: Result = {}
         if with_totals:
@@ -519,9 +500,7 @@ class NativeDriverReader(Reader):
         if "query_id" in settings:
             query_id = settings.pop("query_id")
 
-        execute_func = (
-            self.__client.execute_robust if robust is True else self.__client.execute
-        )
+        execute_func = self.__client.execute_robust if robust is True else self.__client.execute
 
         return self.__transform_result(
             execute_func(
