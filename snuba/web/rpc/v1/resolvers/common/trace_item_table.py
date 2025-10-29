@@ -13,15 +13,11 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
-from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
-from snuba.state import get_int_config
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
 
 
-def _add_converter(
-    column: Column, converters: Dict[str, Callable[[Any], AttributeValue]]
-) -> None:
+def _add_converter(column: Column, converters: Dict[str, Callable[[Any], AttributeValue]]) -> None:
     if column.HasField("key"):
         if column.key.type == AttributeKey.TYPE_BOOLEAN:
             converters[column.label] = lambda x: AttributeValue(val_bool=bool(x))
@@ -41,11 +37,8 @@ def _add_converter(
         converters[column.label] = lambda x: AttributeValue(val_double=float(x))
     elif column.HasField("formula"):
         converters[column.label] = lambda x: AttributeValue(val_double=float(x))
-        if get_int_config(
-            "enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT
-        ):
-            _add_converter(column.formula.left, converters)
-            _add_converter(column.formula.right, converters)
+        _add_converter(column.formula.left, converters)
+        _add_converter(column.formula.right, converters)
     elif column.HasField("literal"):
         converters[column.label] = lambda x: AttributeValue(val_double=float(x))
     else:
@@ -73,9 +66,7 @@ def _is_sub_column(result_column_name: str, column: Column) -> bool:
     """
     # this logic could theoretically cause issue if the user passes in such a column label to a non-subcolumn.
     # for now, we assume that the user will not do this.
-    return bool(
-        re.fullmatch(rf"{re.escape(column.label)}(\.left|\.right)+", result_column_name)
-    )
+    return bool(re.fullmatch(rf"{re.escape(column.label)}(\.left|\.right)+", result_column_name))
 
 
 def _get_reliabilities_for_formula(
@@ -142,34 +133,29 @@ def convert_results(
                     res[column_name].results.append(converters[column_name](value))
 
                 if extrapolation_context.is_extrapolated:
-                    res[column_name].reliabilities.append(
-                        extrapolation_context.reliability
-                    )
+                    res[column_name].reliabilities.append(extrapolation_context.reliability)
 
-    if get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
-        # add formula reliabilities, remove the left and right parts
-        for column in request.columns:
-            if column.HasField("formula") and column.label in res:
-                # compute the reliabilities for the formula
-                reliabilities = _get_reliabilities_for_formula(column, res)
-                # set the reliabilities of the formula to be the ones we calculated
-                while len(res[column.label].reliabilities) > 0:
-                    res[column.label].reliabilities.pop()
-                for e in reliabilities:
-                    assert e is not None
-                    res[column.label].reliabilities.append(e)
+    # add formula reliabilities, remove the left and right parts
+    for column in request.columns:
+        if column.HasField("formula") and column.label in res:
+            # compute the reliabilities for the formula
+            reliabilities = _get_reliabilities_for_formula(column, res)
+            # set the reliabilities of the formula to be the ones we calculated
+            while len(res[column.label].reliabilities) > 0:
+                res[column.label].reliabilities.pop()
+            for e in reliabilities:
+                assert e is not None
+                res[column.label].reliabilities.append(e)
 
-        # remove any columns that were not explicitly requested by the user in the request
-        requested_column_labels = set(e.label for e in request.columns)
-        to_delete = list(filter(lambda k: k not in requested_column_labels, res.keys()))
-        for name in to_delete:
-            del res[name]
+    # remove any columns that were not explicitly requested by the user in the request
+    requested_column_labels = set(e.label for e in request.columns)
+    to_delete = list(filter(lambda k: k not in requested_column_labels, res.keys()))
+    for name in to_delete:
+        del res[name]
 
     column_ordering = {column.label: i for i, column in enumerate(request.columns)}
 
     return list(
         # we return the columns in the order they were requested
-        sorted(
-            res.values(), key=lambda c: column_ordering.__getitem__(c.attribute_name)
-        )
+        sorted(res.values(), key=lambda c: column_ordering.__getitem__(c.attribute_name))
     )

@@ -49,17 +49,36 @@ pub fn deserialize_message(
                 click_testid: click.testid,
                 click_text: click.text,
                 click_title: click.title,
-                environment: event.environment.clone().unwrap_or("".to_string()),
+                environment: event.environment.clone().unwrap_or_default(),
                 error_sample_rate: -1.0,
                 event_hash: click.event_hash,
                 offset,
                 partition,
-                platform: "".to_string(),
                 project_id: replay_message.project_id,
                 replay_id: replay_message.replay_id,
                 retention_days: replay_message.retention_days,
                 session_sample_rate: -1.0,
                 timestamp: click.timestamp as u32,
+                ..Default::default()
+            })
+            .collect(),
+        ReplayPayload::TapEvent(event) => event
+            .taps
+            .into_iter()
+            .map(|tap| ReplayRow {
+                tap_message: tap.message,
+                tap_view_class: tap.view_class,
+                tap_view_id: tap.view_id,
+                environment: event.environment.clone().unwrap_or_default(),
+                error_sample_rate: -1.0,
+                event_hash: tap.event_hash,
+                offset,
+                partition,
+                project_id: replay_message.project_id,
+                replay_id: replay_message.replay_id,
+                retention_days: replay_message.retention_days,
+                session_sample_rate: -1.0,
+                timestamp: tap.timestamp as u32,
                 ..Default::default()
             })
             .collect(),
@@ -260,6 +279,8 @@ struct ReplayMessage {
 enum ReplayPayload {
     #[serde(rename = "replay_actions")]
     ClickEvent(ReplayClickEvent),
+    #[serde(rename = "replay_tap")]
+    TapEvent(ReplayTapEvent),
     #[serde(rename = "replay_event")]
     Event(Box<ReplayEvent>),
     #[serde(rename = "event_link")]
@@ -275,6 +296,15 @@ struct ReplayClickEvent {
     #[serde(default)]
     environment: Option<String>,
     clicks: Vec<ReplayClickEventClick>,
+}
+
+// Replay Tap Event
+
+#[derive(Debug, Deserialize)]
+struct ReplayTapEvent {
+    #[serde(default)]
+    environment: Option<String>,
+    taps: Vec<ReplayTapEventTap>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -295,6 +325,15 @@ struct ReplayClickEventClick {
     text: String,
     timestamp: f64,
     title: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReplayTapEventTap {
+    message: String,
+    view_class: String,
+    view_id: String,
+    event_hash: Uuid,
+    timestamp: f64,
 }
 
 // Replay Event
@@ -505,6 +544,9 @@ pub struct ReplayRow {
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
     tags_value: Vec<String>,
+    tap_message: String,
+    tap_view_class: String,
+    tap_view_id: String,
     timestamp: u32,
     title: Option<String>,
     trace_ids: Vec<Uuid>,
@@ -960,6 +1002,91 @@ mod tests {
         assert_eq!(replay_row.click_is_rage, 1);
         assert_eq!(replay_row.click_node_id, 320);
         assert_eq!(replay_row.project_id, 1);
+        assert_eq!(
+            &replay_row.replay_id,
+            &Uuid::parse_str("048aa04be40243948eb3b57089c519ee").unwrap()
+        );
+        assert_eq!(replay_row.retention_days, 30);
+        assert_eq!(replay_row.segment_id, None);
+        assert_eq!(&replay_row.environment, "prod");
+
+        // Default columns - not providable on this event.
+        assert_eq!(&replay_row.browser_name, "");
+        assert_eq!(&replay_row.browser_version, "");
+        assert_eq!(&replay_row.device_brand, "");
+        assert_eq!(&replay_row.device_family, "");
+        assert_eq!(&replay_row.device_model, "");
+        assert_eq!(&replay_row.device_name, "");
+        assert_eq!(&replay_row.dist, "");
+        assert_eq!(&replay_row.os_name, "");
+        assert_eq!(&replay_row.os_version, "");
+        assert_eq!(&replay_row.release, "");
+        assert_eq!(&replay_row.replay_type, "");
+        assert_eq!(&replay_row.sdk_name, "");
+        assert_eq!(&replay_row.sdk_version, "");
+        assert_eq!(&replay_row.user_email, "");
+        assert_eq!(&replay_row.user_id, "");
+        assert_eq!(&replay_row.user_name, "");
+        assert_eq!(&replay_row.user, "");
+        assert_eq!(replay_row.debug_id, Uuid::nil());
+        assert_eq!(replay_row.error_id, Uuid::nil());
+        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_sample_rate, -1.0);
+        assert_eq!(replay_row.fatal_id, Uuid::nil());
+        assert_eq!(replay_row.info_id, Uuid::nil());
+        assert_eq!(replay_row.ip_address_v4, None);
+        assert_eq!(replay_row.ip_address_v6, None);
+        assert_eq!(replay_row.is_archived, 0);
+        assert_eq!(replay_row.platform, "".to_string());
+        assert_eq!(replay_row.replay_start_timestamp, None);
+        assert_eq!(replay_row.session_sample_rate, -1.0);
+        assert_eq!(replay_row.title, None);
+        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.viewed_by_id, 0);
+        assert_eq!(replay_row.warning_id, Uuid::nil());
+    }
+
+    #[test]
+    fn test_parse_replay_tap_event() {
+        let payload = r#"{
+            "type": "replay_tap",
+            "replay_id": "048aa04be40243948eb3b57089c519ee",
+            "environment": "prod",
+            "taps": [{
+                "message": "add_attachment",
+                "view_class": "androidx.appcompat.widget.AppCompatButton",
+                "view_id": "add_attachment",
+                "event_hash": "b4370ef8d1994e96b5bc719b72afbf49",
+                "timestamp": 1702659275
+            }]
+        }"#;
+
+        let payload_value = payload.as_bytes();
+
+        let data = format!(
+            r#"{{
+                "payload": {payload_value:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let replay_row = rows.first().unwrap();
+
+        // Columns in the critical path.
+        assert_eq!(&replay_row.tap_message, "add_attachment");
+        assert_eq!(
+            &replay_row.tap_view_class,
+            "androidx.appcompat.widget.AppCompatButton"
+        );
+        assert_eq!(&replay_row.tap_view_id, "add_attachment");
+
         assert_eq!(
             &replay_row.replay_id,
             &Uuid::parse_str("048aa04be40243948eb3b57089c519ee").unwrap()

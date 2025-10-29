@@ -17,16 +17,12 @@ class Formatter(ABC):
     """
 
     @abstractmethod
-    def format(
-        self, messages: Sequence[DeleteQueryMessage]
-    ) -> Sequence[ConditionsType]:
+    def format(self, messages: Sequence[DeleteQueryMessage]) -> Sequence[ConditionsType]:
         raise NotImplementedError
 
 
 class SearchIssuesFormatter(Formatter):
-    def format(
-        self, messages: Sequence[DeleteQueryMessage]
-    ) -> Sequence[ConditionsType]:
+    def format(self, messages: Sequence[DeleteQueryMessage]) -> Sequence[ConditionsType]:
         """
         For the search issues storage we want the additional
         formatting step of combining group ids for messages
@@ -58,6 +54,14 @@ class SearchIssuesFormatter(Formatter):
         ]
 
 
+class IdentityFormatter(Formatter):
+    def format(self, messages: Sequence[DeleteQueryMessage]) -> Sequence[ConditionsType]:
+        return [msg["conditions"] for msg in messages]
+
+
 STORAGE_FORMATTER: Mapping[str, Type[Formatter]] = {
-    StorageKey.SEARCH_ISSUES.value: SearchIssuesFormatter
+    StorageKey.SEARCH_ISSUES.value: SearchIssuesFormatter,
+    # TODO: We will probably do something more sophisticated here in the future
+    # but it won't make much of a difference until we support delete by attribute
+    StorageKey.EAP_ITEMS.value: IdentityFormatter,
 }

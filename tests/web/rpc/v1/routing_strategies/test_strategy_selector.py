@@ -1,4 +1,5 @@
 import random
+import uuid
 from unittest.mock import patch
 
 import pytest
@@ -6,6 +7,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 
 from snuba import state
+from snuba.configs.configuration import Configuration
 from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
@@ -23,15 +25,18 @@ from snuba.web.rpc.storage_routing.routing_strategy_selector import (
 
 
 class ToyRoutingStrategy1(BaseRoutingStrategy):
-    pass
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
 
 
 class ToyRoutingStrategy2(BaseRoutingStrategy):
-    pass
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
 
 
 class ToyRoutingStrategy3(BaseRoutingStrategy):
-    pass
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
 
 
 @pytest.mark.redis_db
@@ -80,6 +85,7 @@ def test_valid_config_is_parsed_correctly() -> None:
     storage_routing_config = RoutingStrategySelector().get_storage_routing_config(
         TimeSeriesRequest(meta=RequestMeta(organization_id=1))
     )
+
     assert storage_routing_config.version == 1
     assert storage_routing_config.get_routing_strategy_and_percentage_routed() == [
         ("OutcomesBasedRoutingStrategy", 0.1),
@@ -103,6 +109,7 @@ def test_selects_same_strategy_for_same_org_and_project_ids() -> None:
             ),
         ),
         timer=Timer(name="doesntmatter"),
+        query_id=uuid.uuid4().hex,
     )
 
     for _ in range(50):
@@ -135,6 +142,7 @@ def test_selects_strategy_based_on_non_uniform_distribution() -> None:
                 ),
             ),
             timer=Timer(name="doesntmatter"),
+            query_id=uuid.uuid4().hex,
         )
         strategy = selector.select_routing_strategy(routing_context)
         strategy_counts[type(strategy)] += 1
@@ -160,6 +168,7 @@ def test_config_ordering_does_not_affect_routing_consistency() -> None:
             ),
         ),
         timer=Timer(name="doesntmatter"),
+        query_id=uuid.uuid4().hex,
     )
 
     assert isinstance(
@@ -198,6 +207,7 @@ def test_selects_override_if_it_exists() -> None:
             ),
         ),
         timer=Timer(name="doesntmatter"),
+        query_id=uuid.uuid4().hex,
     )
 
     assert RoutingStrategySelector().get_storage_routing_config(
@@ -228,6 +238,7 @@ def test_does_not_override_if_organization_id_is_different() -> None:
             ),
         ),
         timer=Timer(name="doesntmatter"),
+        query_id=uuid.uuid4().hex,
     )
 
     assert RoutingStrategySelector().get_storage_routing_config(

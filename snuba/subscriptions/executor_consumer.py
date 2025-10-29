@@ -50,6 +50,10 @@ from snuba.web.constants import NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
 logger = logging.getLogger(__name__)
 
 
+class SubscriptionQueryException(Exception):
+    pass
+
+
 def calculate_max_concurrent_queries(
     assigned_partition_count: int,
     total_partition_count: int,
@@ -290,13 +294,21 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
             message, result_future = self.__queue.popleft()
 
-            transformed_message = message.replace(
-                self.__result_encoder.encode(
-                    SubscriptionTaskResult(
-                        result_future.task, result_future.future.result()
+            try:
+                transformed_message = message.replace(
+                    self.__result_encoder.encode(
+                        SubscriptionTaskResult(
+                            result_future.task, result_future.future.result()
+                        )
                     )
                 )
-            )
+            except QueryException as exc:
+                cause = exc.__cause__
+                if isinstance(cause, ClickhouseError):
+                    if cause.code in NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
+                        logger.exception("Error running subscription query %r", exc)
+                    else:
+                        raise SubscriptionQueryException(exc.message)
 
             self.__next_step.submit(transformed_message)
 
@@ -337,25 +349,17 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             should_execute = False
 
         if should_execute:
-            try:
-                self.__queue.append(
-                    (
-                        message,
-                        SubscriptionTaskResultFuture(
-                            task,
-                            self.__executor.submit(
-                                self.__execute_query, task, tick_upper_offset
-                            ),
+            self.__queue.append(
+                (
+                    message,
+                    SubscriptionTaskResultFuture(
+                        task,
+                        self.__executor.submit(
+                            self.__execute_query, task, tick_upper_offset
                         ),
-                    )
+                    ),
                 )
-            except QueryException as exc:
-                cause = exc.__cause__
-                if isinstance(cause, ClickhouseError):
-                    if cause.code in NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
-                        logger.exception("Error running subscription query %r", exc)
-                    else:
-                        raise exc
+            )
         else:
             self.__metrics.increment("skipped_execution", tags={"entity": entity_name})
 

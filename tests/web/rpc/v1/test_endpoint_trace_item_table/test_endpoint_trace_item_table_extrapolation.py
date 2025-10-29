@@ -28,7 +28,6 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state import set_config
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -98,9 +97,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="custom_measurement"),
                         label="sum(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -108,9 +105,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="custom_measurement"),
                         label="avg(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -118,9 +113,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_COUNT,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_INT, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_INT, name="custom_measurement"),
                         label="count(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
@@ -128,9 +121,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_COUNT,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="sentry.duration_ms"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="sentry.duration_ms"),
                         label="count(sentry.duration_ms)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
@@ -138,9 +129,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_P90,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="custom_measurement"),
                         label="p90(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
@@ -155,17 +144,13 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         measurement_count_custom_measurement = [
             v.val_double for v in response.column_values[2].results
         ][0]
-        measurement_count_duration = [
-            v.val_double for v in response.column_values[3].results
-        ][0]
+        measurement_count_duration = [v.val_double for v in response.column_values[3].results][0]
         measurement_p90 = [v.val_double for v in response.column_values[4].results][0]
         assert measurement_sum == 98  # weighted sum - 0*1 + 1*2 + 2*4 + 3*8 + 4*16
         assert (
             abs(measurement_avg - 3.16129032) < 0.000001
         )  # weighted average - (0*1 + 1*2 + 2*4 + 3*8 + 4*16) / (1+2+4+8+16)
-        assert (
-            measurement_count_custom_measurement == 31
-        )  # weighted count - 1 + 2 + 4 + 8 + 16
+        assert measurement_count_custom_measurement == 31  # weighted count - 1 + 2 + 4 + 8 + 16
         assert (
             measurement_count_duration == 36
         )  # weighted count (all events have duration) - 5*1 + 1 + 2 + 4 + 8 + 16
@@ -224,9 +209,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
                         label="sum(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -234,9 +217,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
                         label="avg(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -244,9 +225,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_COUNT,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_INT, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_INT, name="custom_measurement"),
                         label="count(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
@@ -254,9 +233,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_COUNT,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="sentry.duration_ms"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.duration_ms"),
                         label="count(sentry.duration_ms)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
@@ -264,9 +241,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_P90,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
                         label="p90(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
@@ -281,17 +256,13 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         measurement_count_custom_measurement = [
             v.val_double for v in response.column_values[2].results
         ][0]
-        measurement_count_duration = [
-            v.val_double for v in response.column_values[3].results
-        ][0]
+        measurement_count_duration = [v.val_double for v in response.column_values[3].results][0]
         measurement_p90 = [v.val_double for v in response.column_values[4].results][0]
         assert measurement_sum == 98  # weighted sum - 0*1 + 1*2 + 2*4 + 3*8 + 4*16
         assert (
             abs(measurement_avg - 3.16129032) < 0.000001
         )  # weighted average - (0*1 + 1*2 + 2*4 + 3*8 + 4*16) / (1+2+4+8+16)
-        assert (
-            measurement_count_custom_measurement == 31
-        )  # weighted count - 1 + 2 + 4 + 8 + 16
+        assert measurement_count_custom_measurement == 31  # weighted count - 1 + 2 + 4 + 8 + 16
         assert (
             measurement_count_duration == 36
         )  # weighted count (all events have duration) - 5*1 + 1 + 2 + 4 + 8 + 16
@@ -347,9 +318,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     conditional_aggregation=AttributeConditionalAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
                         label="sum(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         filter=TraceItemFilter(
@@ -367,9 +336,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     conditional_aggregation=AttributeConditionalAggregation(
                         aggregate=Function.FUNCTION_AVG,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
                         label="avg(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         filter=TraceItemFilter(
@@ -395,9 +362,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         ]  # weighted sum - 0*1 + 1*2 + 2*4 + 3*8 + 4*16
 
         assert measurement_sum == 72  # weighted sum - 0*1 + 2*4 + 4*16
-        assert (
-            abs(measurement_avg - 2.6) < 0.000001
-        )  # weighted average - (1*2 + 3*8) / (2+8)
+        assert abs(measurement_avg - 2.6) < 0.000001  # weighted average - (1*2 + 3*8) / (2+8)
 
     def test_count_reliability_backward_compat(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
@@ -465,9 +430,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         measurement_count = [v.val_double for v in response.column_values[0].results][0]
         print(measurement_count)
-        measurement_reliability = [v for v in response.column_values[0].reliabilities][
-            0
-        ]
+        measurement_reliability = [v for v in response.column_values[0].reliabilities][0]
         assert measurement_count == 5
         assert measurement_reliability == Reliability.RELIABILITY_HIGH
 
@@ -521,9 +484,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_COUNT,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
                         label="count(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -534,9 +495,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         )
         response = EndpointTraceItemTable().execute(message)
         measurement_count = [v.val_double for v in response.column_values[0].results][0]
-        measurement_reliability = [v for v in response.column_values[0].reliabilities][
-            0
-        ]
+        measurement_reliability = [v for v in response.column_values[0].reliabilities][0]
         assert measurement_count == 5
         assert measurement_reliability == Reliability.RELIABILITY_HIGH
 
@@ -590,9 +549,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="custom_measurement"),
                         label="sum(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -600,9 +557,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="custom_measurement"),
                         label="avg(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -610,9 +565,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_COUNT,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="custom_measurement"),
                         label="count(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -620,9 +573,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_P90,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="custom_measurement"),
                         label="p90(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -630,9 +581,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             ],
             order_by=[
                 TraceItemTableRequest.OrderBy(
-                    column=Column(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="key")
-                    ),
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="key")),
                     descending=True,
                 ),
             ],
@@ -718,9 +667,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
                         label="sum(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -728,9 +675,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
                         label="avg(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -738,9 +683,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_COUNT,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
                         label="count(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -748,9 +691,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_P90,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
                         label="p90(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -758,9 +699,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             ],
             order_by=[
                 TraceItemTableRequest.OrderBy(
-                    column=Column(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="key")
-                    ),
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="key")),
                     descending=True,
                 ),
             ],
@@ -805,7 +744,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
 
         this tests low and high reliability for a formula
         """
-        set_config("enable_formula_reliability", 1)
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_item(span_ts, {"kyles_measurement": 6}, 10, server_sample_rate=0.6)
         write_eap_item(span_ts, {"kyles_measurement": 7}, 2, server_sample_rate=0.7)
@@ -920,7 +858,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         """
         ensures reliability is calculated correctly for nested formulas
         """
-        set_config("enable_formula_reliability", 1)
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_item(span_ts, {"kyles_measurement": 6}, 10, server_sample_rate=0.6)
         write_eap_item(span_ts, {"kyles_measurement": 7}, 2, server_sample_rate=0.7)
@@ -1030,7 +967,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         """
         ensures formula reliability is calculated correctly for formulas with group by
         """
-        set_config("enable_formula_reliability", 1)
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_item(
             span_ts,
@@ -1198,15 +1134,11 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
-                Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="custom_tag")
-                ),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="custom_tag")),
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
                         label="sum(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -1214,9 +1146,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement2"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement2"),
                         label="sum(custom_measurement2)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
@@ -1228,9 +1158,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             order_by=[
                 TraceItemTableRequest.OrderBy(
                     column=Column(
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_STRING, name="custom_tag"
-                        )
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="custom_tag")
                     ),
                 ),
             ],
