@@ -243,10 +243,11 @@ def _get_reliability_context_columns(
     if not (column.HasField("conditional_aggregation")):
         return []
 
-    if (
-        column.conditional_aggregation.extrapolation_mode
-        == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
-    ):
+    if column.conditional_aggregation.extrapolation_mode in [
+        ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+        ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+        ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+    ]:
         context_columns = []
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
