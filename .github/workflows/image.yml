@@ -33,31 +33,9 @@ jobs:
         tag_nightly: false
         tag_latest: false
 
-  build-production-single-region:
+  build-production:
     runs-on: ubuntu-24.04
-    name: Build and push production image to a single region repo
-    permissions:
-      contents: read
-      id-token: write
-    if: ${{ github.ref_name == 'master' }}
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: getsentry/action-build-and-push-images@f6e4a98f7ed028edcfb1159f3a2905b30e51f1fd
-        with:
-          image_name: 'snuba'
-          platforms: linux/amd64
-          dockerfile_path: './Dockerfile'
-          ghcr: false
-          tag_nightly: false
-          tag_latest: false
-          google_ar: true
-          google_ar_image_name: us-central1-docker.pkg.dev/sentryio/snuba/image
-          google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
-          google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
-
-  build-production-multi-region:
-    runs-on: ubuntu-24.04
-    name: Build and push production image to a multi-region repo
+    name: Build and push production image
     permissions:
       contents: read
       id-token: write
