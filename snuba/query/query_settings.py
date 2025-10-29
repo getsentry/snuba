@@ -148,6 +148,15 @@ class HTTPQuerySettings(QuerySettings):
         return self.__tier
 
 
+class OutcomesQuerySettings(HTTPQuerySettings):
+    def __init__(self, use_daily: bool = False):
+        super().__init__()
+        self.__use_daily = use_daily
+
+    def get_use_daily(self) -> bool:
+        return self.__use_daily
+
+
 class SubscriptionQuerySettings(QuerySettings):
     """
     Settings that are applied to Requests initiated via Subscriptions. Hard code most

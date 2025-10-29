@@ -36,7 +36,7 @@ class TestCrossOrgQueryAllocationPolicy:
         assert unimportant_allowance.max_threads == 10
         assert unimportant_allowance.explanation == {
             "reason": "pass_through",
-            "storage_key": "StorageKey.GENERIC_METRICS_DISTRIBUTIONS",
+            "storage_key": "generic_metrics_distributions",
         }
         cross_org_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="2"

@@ -2,6 +2,7 @@ import warnings
 from abc import ABC, abstractmethod, abstractproperty
 from typing import Optional, Sequence
 
+from snuba import settings
 from snuba.clusters.cluster import get_cluster
 from snuba.migrations.check_dangerous import check_dangerous_operation
 from snuba.migrations.context import Context
@@ -88,13 +89,15 @@ class CodeMigration(Migration, ABC):
             return
 
         migration_id, logger, update_status = context
-        logger.info(f"Running migration: {migration_id}")
+        if settings.LOG_MIGRATIONS:
+            logger.info(f"Running migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
 
         for op in self.forwards_global():
             op.execute(logger)
 
-        logger.info(f"Finished: {migration_id}")
+        if settings.LOG_MIGRATIONS:
+            logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
 
     def backwards(self, context: Context, dry_run: bool) -> None:
@@ -159,7 +162,8 @@ class ClickhouseNodeMigration(Migration, ABC):
             return
 
         migration_id, logger, update_status = context
-        logger.info(f"Running migration: {migration_id}")
+        if settings.LOG_MIGRATIONS:
+            logger.info(f"Running migration: {migration_id}")
 
         # The table does not exist before the first migration is run
         # so do not update status yet
@@ -169,7 +173,8 @@ class ClickhouseNodeMigration(Migration, ABC):
         for op in ops:
             op.execute()
 
-        logger.info(f"Finished: {migration_id}")
+        if settings.LOG_MIGRATIONS:
+            logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
 
     def backwards(
@@ -243,9 +248,7 @@ class ClickhouseNodeMigrationLegacy(ClickhouseNodeMigration, ABC):
     def backwards_dist(self) -> Sequence[SqlOperation]:
         raise NotImplementedError
 
-    def _set_targets(
-        self, ops: Sequence[SqlOperation], target: OperationTarget
-    ) -> None:
+    def _set_targets(self, ops: Sequence[SqlOperation], target: OperationTarget) -> None:
         """For old migrations using the old methods, set the target appropriately."""
         for op in ops:
             op.target = target
