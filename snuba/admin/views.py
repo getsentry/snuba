@@ -18,7 +18,6 @@ from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
-from snuba.admin.capacity_management_utils import convert
 from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
 from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
@@ -961,7 +960,6 @@ def storages_with_allocation_policies() -> Response:
 @application.route("/routing_strategy_configs/<path:strategy_name>", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def get_routing_strategy_configs(strategy_name: str) -> Response:
-
     strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
 
     return Response(
@@ -978,7 +976,7 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
     policies = storage.get_allocation_policies() + storage.get_delete_allocation_policies()
 
     return Response(
-        json.dumps([convert(policy.to_dict()) for policy in policies]),
+        json.dumps([policy.to_dict() for policy in policies]),
         200,
         {"Content-Type": "application/json"},
     )

@@ -48,10 +48,10 @@ class ProjectsQueryFlags:
         key, type_key = ProjectsQueryFlags._build_project_needs_final_key_and_type_key(
             project_id, state_name
         )
-        p = redis_client.pipeline()
-        p.set(key, time.time(), ex=settings.REPLACER_KEY_TTL)
-        p.set(type_key, replacement_type, ex=settings.REPLACER_KEY_TTL)
-        p.execute()
+        with redis_client.pipeline() as p:
+            p.set(key, time.time(), ex=settings.REPLACER_KEY_TTL)
+            p.set(type_key, replacement_type, ex=settings.REPLACER_KEY_TTL)
+            p.execute()
 
     @staticmethod
     def set_project_exclude_groups(
@@ -78,38 +78,40 @@ class ProjectsQueryFlags:
         ) = ProjectsQueryFlags._build_project_exclude_groups_key_and_type_key(
             project_id, state_name
         )
-        p = redis_client.pipeline()
+        with redis_client.pipeline() as p:
 
-        # the redis key size limit is defined as 2 times the clickhouse query size
-        # limit. there is an explicit check in the query processor for the same
-        # limit
-        max_group_ids_exclude = get_config(
-            "max_group_ids_exclude",
-            settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
-        )
-        assert isinstance(max_group_ids_exclude, int)
+            # the redis key size limit is defined as 2 times the clickhouse query size
+            # limit. there is an explicit check in the query processor for the same
+            # limit
+            max_group_ids_exclude = get_config(
+                "max_group_ids_exclude",
+                settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
+            )
+            assert isinstance(max_group_ids_exclude, int)
 
-        group_id_data: MutableMapping[str | bytes, bytes | float | int | str] = {}
-        for group_id in group_ids:
-            group_id_data[str(group_id)] = now
-            if len(group_id_data) > 2 * max_group_ids_exclude:
-                break
+            group_id_data: MutableMapping[str | bytes, bytes | float | int | str] = {}
+            for group_id in group_ids:
+                group_id_data[str(group_id)] = now
+                if len(group_id_data) > 2 * max_group_ids_exclude:
+                    break
 
-        p.zadd(key, group_id_data)
-        ProjectsQueryFlags._truncate_group_id_replacement_set(p, key, now, max_group_ids_exclude)
-        p.expire(key, int(settings.REPLACER_KEY_TTL))
+            p.zadd(key, group_id_data)
+            ProjectsQueryFlags._truncate_group_id_replacement_set(
+                p, key, now, max_group_ids_exclude
+            )
+            p.expire(key, int(settings.REPLACER_KEY_TTL))
 
-        # store the replacement type data
-        replacement_type_data: Mapping[str | bytes, bytes | float | int | str] = {
-            replacement_type: now
-        }
-        p.zadd(type_key, replacement_type_data)
-        ProjectsQueryFlags._truncate_group_id_replacement_set(
-            p, type_key, now, max_group_ids_exclude
-        )
-        p.expire(type_key, int(settings.REPLACER_KEY_TTL))
+            # store the replacement type data
+            replacement_type_data: Mapping[str | bytes, bytes | float | int | str] = {
+                replacement_type: now
+            }
+            p.zadd(type_key, replacement_type_data)
+            ProjectsQueryFlags._truncate_group_id_replacement_set(
+                p, type_key, now, max_group_ids_exclude
+            )
+            p.expire(type_key, int(settings.REPLACER_KEY_TTL))
 
-        p.execute()
+            p.execute()
 
     @classmethod
     def load_from_redis(
@@ -126,15 +128,16 @@ class ProjectsQueryFlags:
         s_project_ids = set(project_ids)
 
         try:
-            p = redis_client.pipeline()
+            with redis_client.pipeline() as p:
+                with sentry_sdk.start_span(op="function", description="build_redis_pipeline"):
+                    cls._query_redis(s_project_ids, state_name, p)
 
-            with sentry_sdk.start_span(op="function", description="build_redis_pipeline"):
-                cls._query_redis(s_project_ids, state_name, p)
-
-            with sentry_sdk.start_span(op="function", description="execute_redis_pipeline") as span:
-                results = p.execute()
-                # getting size of str(results) since sys.getsizeof() doesn't count recursively
-                span.set_tag("results_size", sys.getsizeof(str(results)))
+                with sentry_sdk.start_span(
+                    op="function", description="execute_redis_pipeline"
+                ) as span:
+                    results = p.execute()
+                    # getting size of str(results) since sys.getsizeof() doesn't count recursively
+                    span.set_tag("results_size", sys.getsizeof(str(results)))
 
             with sentry_sdk.start_span(op="function", description="process_redis_results") as span:
                 flags = cls._process_redis_results(results, len(s_project_ids))

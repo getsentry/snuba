@@ -1589,7 +1589,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.6",
  "tokio",
  "tower-service",
  "tracing",
@@ -2890,7 +2890,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "157c5a9d7ea5c2ed2d9fb8f495b64759f7816c7eaea54ba3978f0d63000162e3"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
@@ -3610,9 +3610,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_arroyo"
-version = "2.29.1"
+version = "2.29.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd11bd488b1e25398872d4882d1f38382651fe1af5020972a5e891c387bde991"
+checksum = "c3d39c05e1c205b2ae2d547414ac7fff8802cbe924912597331598d0a923105c"
 dependencies = [
  "chrono",
  "coarsetime",
@@ -3631,9 +3631,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_protos"
-version = "0.3.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0ddd4d0bee156b176c1bfed0d8e85deebdaa56862aa2d252d71ca8bc7eefbcc"
+checksum = "96ba53dc1b350b10ce6a0397bda5a18a6a753f7775394cd5f9212691adb5d5e5"
 dependencies = [
  "prost",
  "prost-types",

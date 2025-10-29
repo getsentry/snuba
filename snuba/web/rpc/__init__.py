@@ -1,4 +1,7 @@
+import logging
 import os
+import random
+import uuid
 from bisect import bisect_left
 from typing import Generic, List, Tuple, Type, cast, final
 
@@ -10,7 +13,7 @@ from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageCon
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
-from snuba import environment, settings, state
+from snuba import environment, state
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -28,11 +31,10 @@ from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
-from snuba.web.rpc.storage_routing.defaults import get_default_routing_decision
-from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
+    get_stats_dict,
 )
 from snuba.web.rpc.storage_routing.routing_strategy_selector import (
     RoutingStrategySelector,
@@ -47,6 +49,68 @@ _TIME_PERIOD_HOURS_BUCKETS = [
     90 * 24,
 ]
 _BUCKETS_COUNT = len(_TIME_PERIOD_HOURS_BUCKETS)
+
+
+def _should_log_rpc_request() -> bool:
+    """
+    Determine if this RPC request should be logged based on runtime configuration.
+    """
+    sample_rate = state.get_float_config("rpc_logging_sample_rate", 0)
+    if sample_rate is None:
+        sample_rate = 0
+
+    # If sample rate is 0, never log
+    if sample_rate <= 0.0:
+        return False
+
+    # If sample rate is 1, always log
+    if sample_rate >= 1.0:
+        return True
+
+    # Otherwise, use random sampling
+    return random.random() < sample_rate
+
+
+def _flush_logs() -> None:
+    """
+    Force flush all log handlers to ensure logs are written immediately.
+    This helps prevent data loss when containers are terminated.
+    """
+    try:
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+    except Exception:
+        # Silently ignore flush errors to avoid interfering with main logic
+        pass
+
+
+def _create_rate_limited_exception(
+    routing_decision: RoutingDecision,
+) -> QueryException:
+    """
+    Create a QueryException for rate-limited queries with allocation policy details.
+
+    Returns a QueryException with AllocationPolicyViolations as the cause.
+    """
+    error = QueryException.from_args(
+        AllocationPolicyViolations.__name__,
+        "Query cannot be run due to routing strategy deciding it cannot run, most likely due to allocation policies",
+        extra={
+            "stats": get_stats_dict(routing_decision),
+            "sql": "no sql run",
+            "experiments": {},
+        },
+    )
+    error.__cause__ = AllocationPolicyViolations.from_args(
+        {
+            "summary": {},
+            "details": {
+                key: quota_allowance.to_dict()
+                for key, quota_allowance in routing_decision.routing_context.allocation_policies_recommendations.items()
+            },
+        }
+    )
+    return error
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -99,7 +163,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(self, metrics_backend: MetricsBackend | None = None) -> None:
         self._timer = Timer("endpoint_timing")
         self._metrics_backend = metrics_backend or environment.metrics
-        self.routing_decision = get_default_routing_decision(None)
 
     @classmethod
     def request_class(cls) -> Type[Tin]:
@@ -157,7 +220,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
-        self.routing_decision.routing_context = RoutingContext(timer=self._timer, in_msg=in_msg)
+        self.routing_context = RoutingContext(
+            timer=self._timer,
+            in_msg=in_msg,
+            query_id=uuid.uuid4().hex,
+        )
 
         self.__before_execute(in_msg)
         error: Exception | None = None
@@ -168,7 +235,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     span.set_data("selected_tier", self.routing_decision.tier)
                     out = self._execute(in_msg)
             else:
-                raise AllocationPolicyViolations
+                self.metrics.increment(
+                    "request_rate_limited",
+                    tags=self._timer.tags,
+                )
+                raise _create_rate_limited_exception(self.routing_decision)
         except QueryException as e:
             out = self.response_class()()
             if (
@@ -215,21 +286,16 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         return self.__after_execute(in_msg, out, error)
 
     def __before_execute(self, in_msg: Tin) -> None:
+        # Generate request_id if not already present
+        meta = getattr(in_msg, "meta", None)
+        if meta is not None:
+            if not hasattr(meta, "request_id") or not meta.request_id:
+                meta.request_id = self.routing_context.query_id
+
         self._timer.update_tags(self.__extract_request_tags(in_msg))
 
-        # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
-        # the result is currently not used in storage routing
-        # can turn off on Snuba Admin
-        if state.get_config("storage_routing.enable_get_cluster_loadinfo", True):
-            get_cluster_loadinfo()
-
-        selected_strategy = RoutingStrategySelector().select_routing_strategy(
-            self.routing_decision.routing_context
-        )
-        self.routing_decision.strategy = selected_strategy
-        self.routing_decision = selected_strategy.get_routing_decision(
-            self.routing_decision.routing_context
-        )
+        selected_strategy = RoutingStrategySelector().select_routing_strategy(self.routing_context)
+        self.routing_decision = selected_strategy.get_routing_decision(self.routing_context)
         self._timer.mark("rpc_start")
         self._before_execute(in_msg)
 
@@ -268,18 +334,26 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def _before_execute(self, in_msg: Tin) -> None:
         """Override this for any pre-processing/logging before the _execute method"""
-        pass
+        if _should_log_rpc_request():
+            request_id = "unknown"
+            if hasattr(in_msg, "meta") and hasattr(in_msg.meta, "request_id"):
+                request_id = in_msg.meta.request_id
+
+            # Log RPC request start
+            logging.info(
+                f"RPC request started - endpoint: {self.__class__.__name__}, request_id: {request_id}"
+            )
+
+            flush_logs = state.get_float_config("rpc_logging_flush_logs", 0)
+            if flush_logs and flush_logs > 0:
+                _flush_logs()
 
     def _execute(self, in_msg: Tin) -> Tout:
         raise NotImplementedError
 
     def __after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
         res = self._after_execute(in_msg, out_msg, error)
-        output_metrics_error = None
-        try:
-            self.routing_decision.strategy.output_metrics(self.routing_decision)
-        except Exception as e:
-            output_metrics_error = e
+        self.routing_decision.strategy.after_execute(self.routing_decision, error)
 
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
@@ -289,13 +363,8 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     "request_invalid",
                     tags=self._timer.tags,
                 )
-            elif isinstance(error, AllocationPolicyViolations):
-                sentry_sdk.capture_exception(error)
-                self.metrics.increment(
-                    "request_rate_limited",
-                    tags=self._timer.tags,
-                )
-            else:
+            # AllocationPolicyViolations is not a request_error
+            elif not isinstance(error.__cause__, AllocationPolicyViolations):
                 sentry_sdk.capture_exception(error)
                 self.metrics.increment(
                     "request_error",
@@ -307,19 +376,23 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 "request_success",
                 tags=self._timer.tags,
             )
-
-        if output_metrics_error is not None:
-            self.metrics.increment("metrics_failure")
-            sentry_sdk.capture_message(
-                f"Error in routing strategy output metrics: {output_metrics_error}"
-            )
-            if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
-                raise output_metrics_error
-
         return res
 
     def _after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
         """Override this for any post-processing/logging after the _execute method"""
+        if _should_log_rpc_request():
+            request_id = "unknown"
+            if hasattr(in_msg, "meta") and hasattr(in_msg.meta, "request_id"):
+                request_id = in_msg.meta.request_id
+
+            status = "error" if error is not None else "success"
+            logging.info(
+                f"RPC request finished - endpoint: {self.__class__.__name__}, request_id: {request_id}, status: {status}"
+            )
+            flush_logs = state.get_float_config("rpc_logging_flush_logs", 0)
+            if flush_logs and flush_logs > 0:
+                _flush_logs()
+
         return out_msg
 
 

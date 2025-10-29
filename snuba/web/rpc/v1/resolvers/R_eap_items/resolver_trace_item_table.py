@@ -1,5 +1,6 @@
 import uuid
 from dataclasses import replace
+from itertools import islice
 from typing import List, Optional, Sequence
 
 import sentry_sdk
@@ -34,13 +35,12 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
-from snuba.state import get_int_config
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     base_conditions_and,
+    timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     use_sampling_factor,
@@ -50,8 +50,10 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
+    TimeWindow,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
@@ -222,8 +224,6 @@ def _get_reliability_context_columns(
     """
 
     if column.HasField("formula"):
-        if not get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
-            return []
         # also query for the left and right parts of the formula separately
         # this will be used later to calculate the reliability of the formula
         # ex: SELECT agg1/agg2 will become SELECT agg1/agg2, agg1, agg2
@@ -243,10 +243,11 @@ def _get_reliability_context_columns(
     if not (column.HasField("conditional_aggregation")):
         return []
 
-    if (
-        column.conditional_aggregation.extrapolation_mode
-        == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
-    ):
+    if column.conditional_aggregation.extrapolation_mode in [
+        ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+        ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+        ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+    ]:
         context_columns = []
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
@@ -325,7 +326,19 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
         )
 
 
-def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -> Query:
+def _get_offset_from_page_token(page_token: PageToken | None) -> int:
+    if page_token is None:
+        return 0
+    if page_token.WhichOneof("value") == "offset":
+        return page_token.offset
+    return 0
+
+
+def build_query(
+    request: TraceItemTableRequest,
+    time_window: TimeWindow | None = None,
+    timer: Optional[Timer] = None,
+) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
@@ -348,7 +361,7 @@ def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -
     item_type_conds = [f.equals(snuba_column("item_type"), request.meta.trace_item_type)]
 
     # Handle cross item queries by first getting trace IDs
-    additional_conditions = []
+    additional_conditions: List[Expression] = []
     if request.trace_filters and timer is not None:
         trace_ids = get_trace_ids_for_cross_item_query(
             request, request.meta, list(request.trace_filters), timer
@@ -359,8 +372,20 @@ def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -
                 literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
             )
         )
+    if time_window is not None:
+        additional_conditions.append(
+            timestamp_in_range_condition(
+                time_window.start_timestamp.seconds,
+                time_window.end_timestamp.seconds,
+            )
+        )
+    page_token_filter = FlexibleTimeWindowPageWithFilters(request.page_token).get_filters()
+
+    if page_token_filter:
+        additional_conditions.append(page_token_filter)
 
     groupby = [attribute_key_to_expression(attr_key) for attr_key in request.group_by]
+
     res = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -380,10 +405,11 @@ def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -
         ),
         groupby=groupby,
         # Only support offset page tokens for now
-        offset=request.page_token.offset,
+        offset=_get_offset_from_page_token(request.page_token),
         # protobuf sets limit to 0 by default if it is not set,
         # give it a default value that will actually return data
-        limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
+        # we add 1 to the limit to know if there are more rows to fetch
+        limit=(request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT) + 1,
         having=(
             aggregation_filter_to_expression(request.aggregation_filter, request.meta)
             if request.HasField("aggregation_filter")
@@ -397,17 +423,44 @@ def build_query(request: TraceItemTableRequest, timer: Optional[Timer] = None) -
 
 
 def _get_page_token(
-    request: TraceItemTableRequest, response: list[TraceItemColumnValues]
+    request: TraceItemTableRequest,
+    response: list[TraceItemColumnValues],
+    # amount of rows returned in the DB request (which can be one more than the limit)
+    num_rows_returned: int,
+    # time window of the original request without any adjustments by routing strategies
+    original_time_window: TimeWindow,
+    # time window of the current request after any adjustments by routing strategies
+    time_window: TimeWindow | None,
 ) -> PageToken:
-    if not response:
-        return PageToken(offset=0)
-    num_rows = len(response[0].results)
-    return PageToken(offset=request.page_token.offset + num_rows)
+    num_rows_in_response = len(response[0].results) if response else 0
+    if time_window is not None:
+        if num_rows_returned > request.limit:
+            # there are more rows in this window so we maintain the same time window and advance the offset
+            return FlexibleTimeWindowPageWithFilters.create(
+                request, time_window, response
+            ).page_token
+        else:
+            if time_window.start_timestamp.seconds <= original_time_window.start_timestamp.seconds:
+                # this is the last window because our start timestamp is the same as the original start timestamp
+                # we tell the client that there is no more data to fetch
+                return PageToken(end_pagination=True)
+            else:
+                # there are no more rows in this window so we return the next window
+                # return the next window where the end timestamp is the start timestamp and the start timestamp is the original start timestamp
+                # the routing strategy will properly truncate the time window of the next request
+                return FlexibleTimeWindowPageWithFilters.create(
+                    request,
+                    TimeWindow(original_time_window.start_timestamp, time_window.start_timestamp),
+                    response,
+                ).page_token
+    else:
+        return PageToken(offset=request.page_token.offset + num_rows_in_response)
 
 
 def _build_snuba_request(
     request: TraceItemTableRequest,
     query_settings: HTTPQuerySettings,
+    time_window: TimeWindow | None = None,
     timer: Optional[Timer] = None,
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
@@ -422,7 +475,7 @@ def _build_snuba_request(
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=build_query(request, timer),
+        query=build_query(request, time_window, timer),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -454,15 +507,26 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             query_settings.set_sampling_tier(routing_decision.tier)
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
-
-        snuba_request = _build_snuba_request(in_msg, query_settings, self._timer)
+        original_time_window = TimeWindow(
+            start_timestamp=in_msg.meta.start_timestamp, end_timestamp=in_msg.meta.end_timestamp
+        )
+        snuba_request = _build_snuba_request(
+            in_msg, query_settings, routing_decision.time_window, self._timer
+        )
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
             timer=self._timer,
         )
         routing_decision.routing_context.query_result = res
-        column_values = convert_results(in_msg, res.result.get("data", []))
+        # we added 1 to the limit to know if there are more rows to fetch
+        # so we need to remove the last row
+        total_rows = len(res.result.get("data", []))
+        data = iter(res.result.get("data", []))
+
+        if in_msg.limit > 0 and total_rows > in_msg.limit:
+            data = islice(data, in_msg.limit)
+        column_values = convert_results(in_msg, data)
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
@@ -471,6 +535,12 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         )
         return TraceItemTableResponse(
             column_values=column_values,
-            page_token=_get_page_token(in_msg, column_values),
+            page_token=_get_page_token(
+                in_msg,
+                column_values,
+                total_rows,
+                original_time_window,
+                routing_decision.time_window,
+            ),
             meta=response_meta,
         )

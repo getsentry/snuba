@@ -404,6 +404,8 @@ DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 # This is only for sliced storage sets
 SLICED_STORAGE_SETS: Mapping[str, int] = {}
 
+LOG_MIGRATIONS = True
+
 # Mapping storage set key to a mapping of logical partition
 # to slice id
 LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
@@ -451,10 +453,6 @@ VALIDATE_DATASET_YAMLS_ON_STARTUP = False
 
 MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
 SNQL_DISABLED_DATASETS: set[str] = set([])
-
-# this is the fallback default for enable_formula_reliability
-# will be overwritten by get_config i.e. snuba admin runtime config
-ENABLE_FORMULA_RELIABILITY_DEFAULT = 0
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

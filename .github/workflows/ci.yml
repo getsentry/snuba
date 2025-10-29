@@ -24,6 +24,27 @@ jobs:
           token: ${{ github.token }}
           filters: .github/file-filters.yml
 
+  bump-version-test:
+    name: "Test bump_version.py script"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        name: Checkout code
+
+      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+        with:
+          version: '0.8.2'
+          enable-cache: false
+
+      - name: Test bump_version.py runs without errors
+        run: |
+          # Test that the script can be imported and shows help
+          python tools/bump_version.py --help
+
+          # Test with a dry run (should fail with appropriate message for non-existent package)
+          python tools/bump_version.py test-package 1.0.0 || echo "Expected failure for non-existent package"
+
   linting:
     name: "pre-commit hooks" # (includes Python formatting + linting)
     runs-on: ubuntu-latest
@@ -102,6 +123,9 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
       - name: Run linter
         run: |
           make lint-rust format-rust-ci
@@ -136,7 +160,6 @@ jobs:
     timeout-minutes: 20
     outputs:
       branch: ${{ steps.branch.outputs.branch }}
-      image_tag: ${{ steps.publish.outputs.image_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -147,7 +170,7 @@ jobs:
         # it can be used as a docker tag
         run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
 
-      - uses: getsentry/action-build-and-push-images@a53f146fc1ea3cb404f2dcf7378f5b60dd98d3ca
+      - uses: getsentry/action-build-and-push-images@f6e4a98f7ed028edcfb1159f3a2905b30e51f1fd
         with:
           image_name: 'snuba-ci'
           platforms: 'linux/amd64'
@@ -157,12 +180,6 @@ jobs:
           tag_latest: false
           tags: 'ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}'
           outputs: 'type=docker,dest=/tmp/snuba-ci.tar'
-
-      - name: Push snuba-ci image to GHCR
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
-          docker load --input /tmp/snuba-ci.tar
-          docker push ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party

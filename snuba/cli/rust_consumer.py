@@ -14,9 +14,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--storage",
     "storage_names",
-    type=click.Choice(
-        [storage_key.value for storage_key in get_writable_storage_keys()]
-    ),
+    type=click.Choice([storage_key.value for storage_key in get_writable_storage_keys()]),
     help="The storage to target",
     multiple=True,
     required=True,
@@ -137,7 +135,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--max-dlq-buffer-length",
     type=int,
-    default=None,
+    default=25000,
     help="Set a per-partition limit to the length of the DLQ buffer",
 )
 @click.option(
@@ -186,7 +184,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--consumer-version",
     default="v2",
     type=click.Choice(["v1", "v2"]),
-    help="Specify which consumer version to use, v1 is stable, v2 is experimental",
+    help="DEPRECATED: value is ignored.",
 )
 def rust_consumer(
     *,
@@ -275,7 +273,6 @@ def rust_consumer(
         batch_write_timeout_ms,
         max_dlq_buffer_length,
         join_timeout_ms,
-        consumer_version,
     )
 
     sys.exit(exitcode)

@@ -3,16 +3,16 @@ import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
 import {
-  AllocationPolicyConfig,
-  AllocationPolicyOptionalConfigDefinition,
-} from "SnubaAdmin/capacity_management/types";
+  Configuration,
+  OptionalConfigurationDefinition,
+} from "SnubaAdmin/configurable_component/types";
 import FormGroup from "react-bootstrap/FormGroup";
 
 function AddConfigModal(props: {
   currentlyAdding: boolean;
   setCurrentlyAdding: (currentlyAdding: boolean) => void;
-  optionalConfigDefinitions: AllocationPolicyOptionalConfigDefinition[];
-  saveConfig: (config: AllocationPolicyConfig) => void;
+  optionalConfigDefinitions: OptionalConfigurationDefinition[];
+  saveConfig: (config: Configuration) => void;
 }) {
   const {
     currentlyAdding,
@@ -22,9 +22,9 @@ function AddConfigModal(props: {
   } = props;
 
   const [selectedDefinition, selectDefinition] =
-    useState<AllocationPolicyOptionalConfigDefinition>();
+    useState<OptionalConfigurationDefinition>();
 
-  const [config, buildConfig] = useState<AllocationPolicyConfig>({
+  const [config, buildConfig] = useState<Configuration>({
     name: "",
     value: "",
     description: "",

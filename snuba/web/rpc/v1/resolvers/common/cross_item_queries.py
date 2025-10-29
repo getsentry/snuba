@@ -1,4 +1,5 @@
 import uuid
+from typing import Any, Literal, overload
 
 from google.protobuf.json_format import MessageToDict
 from proto import Message  # type: ignore
@@ -43,12 +44,33 @@ def convert_trace_filters_to_trace_item_filter_with_type(
     ]
 
 
+@overload
 def get_trace_ids_for_cross_item_query(
     original_request: Message,
     request_meta: RequestMeta,
     trace_filters: list[TraceItemFilterWithType],
     timer: Timer,
-) -> list[str]:
+    return_query_results: Literal[False] = False,
+) -> list[str]: ...
+
+
+@overload
+def get_trace_ids_for_cross_item_query(
+    original_request: Message,
+    request_meta: RequestMeta,
+    trace_filters: list[TraceItemFilterWithType],
+    timer: Timer,
+    return_query_results: Literal[True],
+) -> tuple[list[str], list[Any]]: ...
+
+
+def get_trace_ids_for_cross_item_query(
+    original_request: Message,
+    request_meta: RequestMeta,
+    trace_filters: list[TraceItemFilterWithType],
+    timer: Timer,
+    return_query_results: bool = False,
+) -> list[str] | tuple[list[str], list[Any]]:
     """
     This function is used to get the trace ids that match the given trace filters.
     It does this by creating a query that looks like this:
@@ -60,8 +82,6 @@ def get_trace_ids_for_cross_item_query(
     This works by pruning out items that don't match any of the conditions in the where close. The HAVING
     clause is used to get trace ids that contains items matching all of the conditions.
     """
-    assert len(trace_filters) > 1, "At least two item types are required for a cross-event query"
-
     # Hacky conversion due to protobuf ugliness
     converted_trace_filters = [trace_filter for trace_filter in trace_filters]
     if isinstance(trace_filters[0], GetTracesRequest.TraceFilter):
@@ -82,10 +102,14 @@ def get_trace_ids_for_cross_item_query(
             )
         )
 
-    trace_item_filters_and_expression = and_cond(
-        *[f.greater(f.countIf(expression), 0) for expression in filter_expressions]
-    )
-    trace_item_filters_or_expression = or_cond(*filter_expressions)
+    if len(filter_expressions) > 1:
+        trace_item_filters_and_expression = and_cond(
+            *[f.greater(f.countIf(expression), 0) for expression in filter_expressions]
+        )
+        trace_item_filters_or_expression = or_cond(*filter_expressions)
+    else:
+        trace_item_filters_and_expression = f.greater(f.countIf(filter_expressions[0]), 0)
+        trace_item_filters_or_expression = filter_expressions[0]
     entity = Entity(
         key=EntityKey("eap_items"),
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
@@ -150,4 +174,6 @@ def get_trace_ids_for_cross_item_query(
     for row in results.result.get("data", []):
         trace_ids.append(list(row.values())[0])
 
+    if return_query_results:
+        return trace_ids, [results]
     return trace_ids
