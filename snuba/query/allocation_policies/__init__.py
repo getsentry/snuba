@@ -372,8 +372,12 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         )
 
     @classmethod
-    def component_namespace(cls) -> str:
-        return "AllocationPolicy"
+    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
+        return cls(
+            storage_key=ResourceIdentifier(resource_identifier),
+            required_tenant_types=[],
+            default_config_overrides={},
+        )
 
     def _get_hash(self) -> str:
         return CAPMAN_HASH
@@ -472,6 +476,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 suggestion=NO_SUGGESTION,
             )
         except Exception:
+            self.metrics.increment("fail_open", 1, tags={"method": "get_quota_allowance"})
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
             )
@@ -529,6 +534,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             # the policy did not do anything because the tenants were invalid, updating is also not necessary
             pass
         except Exception:
+            self.metrics.increment("fail_open", 1, tags={"method": "update_quota_balance"})
             logger.exception(
                 "Allocation policy failed to update quota balance, this is a bug, fix it"
             )

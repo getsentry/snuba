@@ -1,5 +1,6 @@
 use anyhow::Context;
 use chrono::DateTime;
+use chrono::Utc;
 use prost::Message;
 use seq_macro::seq;
 use serde::Serialize;
@@ -35,6 +36,10 @@ pub fn process_message(
 
     eap_item.retention_days = retention_days;
     eap_item.downsampled_retention_days = downsampled_retention_days;
+    eap_item.attributes.insert_int(
+        "sentry._internal.ingested_at".into(),
+        Utc::now().timestamp_millis(),
+    );
 
     InsertBatch::from_rows([eap_item], origin_timestamp)
 }

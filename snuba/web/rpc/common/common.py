@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Callable, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
@@ -56,9 +56,9 @@ def truncate_request_meta_to_day(meta: RequestMeta) -> None:
     start_timestamp = start_timestamp.replace(
         hour=0, minute=0, second=0, microsecond=0
     ) - timedelta(days=1)
-    end_timestamp = end_timestamp.replace(
-        hour=0, minute=0, second=0, microsecond=0
-    ) + timedelta(days=1)
+    end_timestamp = end_timestamp.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+        days=1
+    )
 
     meta.start_timestamp.seconds = int(start_timestamp.timestamp())
     meta.end_timestamp.seconds = int(end_timestamp.timestamp())
@@ -142,51 +142,32 @@ def trace_item_filters_to_expression(
         if len(filters) == 0:
             return literal(True)
         elif len(filters) == 1:
-            return trace_item_filters_to_expression(
-                filters[0], attribute_key_to_expression
-            )
+            return trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
         return and_cond(
-            *(
-                trace_item_filters_to_expression(x, attribute_key_to_expression)
-                for x in filters
-            )
+            *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
         )
 
     if item_filter.HasField("or_filter"):
         filters = item_filter.or_filter.filters
         if len(filters) == 0:
-            raise BadSnubaRPCRequestException(
-                "Invalid trace item filter, empty 'or' clause"
-            )
+            raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'or' clause")
         elif len(filters) == 1:
-            return trace_item_filters_to_expression(
-                filters[0], attribute_key_to_expression
-            )
+            return trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
         return or_cond(
-            *(
-                trace_item_filters_to_expression(x, attribute_key_to_expression)
-                for x in filters
-            )
+            *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
         )
 
     if item_filter.HasField("not_filter"):
         filters = item_filter.not_filter.filters
         if len(filters) == 0:
-            raise BadSnubaRPCRequestException(
-                "Invalid trace item filter, empty 'not' clause"
-            )
+            raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'not' clause")
         elif len(filters) == 1:
             return not_cond(
-                trace_item_filters_to_expression(
-                    filters[0], attribute_key_to_expression
-                )
+                trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
             )
         return not_cond(
             and_cond(
-                *(
-                    trace_item_filters_to_expression(x, attribute_key_to_expression)
-                    for x in filters
-                )
+                *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
             )
         )
 
@@ -198,9 +179,7 @@ def trace_item_filters_to_expression(
 
         value_type = v.WhichOneof("value")
         if value_type is None:
-            raise BadSnubaRPCRequestException(
-                "comparison does not have a right hand side"
-            )
+            raise BadSnubaRPCRequestException("comparison does not have a right hand side")
 
         if v.is_null:
             v_expression: Expression = literal(None)
@@ -246,9 +225,7 @@ def trace_item_filters_to_expression(
             )
             # we redefine the way equals works for nulls
             # now null=null is true
-            expr_with_null = or_cond(
-                expr, and_cond(f.isNull(k_expression), f.isNull(v_expression))
-            )
+            expr_with_null = or_cond(expr, and_cond(f.isNull(k_expression), f.isNull(v_expression)))
             return expr_with_null
         if op == ComparisonFilter.OP_NOT_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
@@ -259,22 +236,24 @@ def trace_item_filters_to_expression(
             )
             # we redefine the way not equals works for nulls
             # now null!=null is true
-            expr_with_null = or_cond(
-                expr, f.xor(f.isNull(k_expression), f.isNull(v_expression))
-            )
+            expr_with_null = or_cond(expr, f.xor(f.isNull(k_expression), f.isNull(v_expression)))
             return expr_with_null
         if op == ComparisonFilter.OP_LIKE:
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
                     "the LIKE comparison is only supported on string keys"
                 )
-            return f.like(k_expression, v_expression)
+            comparison_function = f.ilike if item_filter.comparison_filter.ignore_case else f.like
+            return comparison_function(k_expression, v_expression)
         if op == ComparisonFilter.OP_NOT_LIKE:
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
                     "the NOT LIKE comparison is only supported on string keys"
                 )
-            expr = f.notLike(k_expression, v_expression)
+            comparison_function = (
+                f.notILike if item_filter.comparison_filter.ignore_case else f.notLike
+            )
+            expr = comparison_function(k_expression, v_expression)
             # we redefine the way not like works for nulls
             # now null not like "%anything%" is true
             expr_with_null = or_cond(expr, f.isNull(k_expression))
@@ -354,11 +333,15 @@ def timestamp_in_range_condition(start_ts: int, end_ts: int) -> Expression:
     return and_cond(
         f.less(
             column("timestamp"),
-            f.toDateTime(end_ts),
+            f.toDateTime(
+                datetime.fromtimestamp(end_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            ),
         ),
         f.greaterOrEquals(
             column("timestamp"),
-            f.toDateTime(start_ts),
+            f.toDateTime(
+                datetime.fromtimestamp(start_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            ),
         ),
     )
 
@@ -372,9 +355,7 @@ def base_conditions_and(meta: RequestMeta, *other_exprs: Expression) -> Expressi
     """
     return and_cond(
         project_id_and_org_conditions(meta),
-        timestamp_in_range_condition(
-            meta.start_timestamp.seconds, meta.end_timestamp.seconds
-        ),
+        timestamp_in_range_condition(meta.start_timestamp.seconds, meta.end_timestamp.seconds),
         *other_exprs,
     )
 
