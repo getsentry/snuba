@@ -23,6 +23,13 @@ NON_RETRYABLE_CLICKHOUSE_ERROR_CODES = {
     ErrorCodes.TOO_SLOW,
 }
 
+LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES = {
+    # Code: 159. DB::Exception: Distributed DDL task <task> is not finished
+    ErrorCodes.TIMEOUT_EXCEEDED,
+    ErrorCodes.MEMORY_LIMIT_EXCEEDED,
+    ErrorCodes.TOO_SLOW,
+}
+
 
 def get_http_status_for_clickhouse_error(cause: ClickhouseError) -> int:
     """

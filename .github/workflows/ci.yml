@@ -160,7 +160,6 @@ jobs:
     timeout-minutes: 20
     outputs:
       branch: ${{ steps.branch.outputs.branch }}
-      image_tag: ${{ steps.publish.outputs.image_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -181,12 +180,6 @@ jobs:
           tag_latest: false
           tags: 'ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}'
           outputs: 'type=docker,dest=/tmp/snuba-ci.tar'
-
-      - name: Push snuba-ci image to GHCR
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
-          docker load --input /tmp/snuba-ci.tar
-          docker push ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
