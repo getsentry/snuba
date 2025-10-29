@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Mapping, Optional, Tuple, Union
+from typing import Any, Mapping, Optional
 from unittest.mock import Mock, patch
 
 import pytest
@@ -10,9 +10,6 @@ from confluent_kafka import Consumer
 from confluent_kafka.admin import AdminClient
 
 from snuba import settings
-from snuba.core.initialize import initialize_snuba
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.exceptions import InvalidQueryException
@@ -22,9 +19,6 @@ from snuba.utils.streams.configuration_builder import get_default_kafka_configur
 from snuba.utils.streams.topics import Topic
 from snuba.web.bulk_delete_query import delete_from_storage
 from snuba.web.delete_query import DeletesNotEnabledError
-from tests.base import BaseApiTest
-from tests.datasets.configuration.utils import ConfigurationTest
-from tests.test_api import SimpleAPITest
 
 CONSUMER_CONFIG = {
     "bootstrap.servers": settings.BROKER_CONFIG["bootstrap.servers"],
@@ -140,35 +134,3 @@ def test_delete_invalid_column_name() -> None:
 
     with pytest.raises(InvalidQueryException):
         delete_from_storage(storage, conditions, attr_info)
-
-
-class TestSimpleBulkDeleteApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
-    @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
-        return "search_issues"
-
-    @pytest.fixture
-    def test_app(self) -> Any:
-        return self.app
-
-    def setup_method(self, test_method: Callable[..., Any]) -> None:
-        super().setup_method(test_method)
-        initialize_snuba()
-        self.events_storage = get_entity(EntityKey.SEARCH_ISSUES).get_writable_storage()
-        assert self.events_storage is not None
-
-    def delete_query(
-        self,
-        group_id: int,
-    ) -> Any:
-        return self.app.delete(
-            "/search_issues",
-            data=rapidjson.dumps(
-                {
-                    "query": {"columns": {"group_id": [group_id], "project_id": [3]}},
-                    "debug": True,
-                    "tenant_ids": {"referrer": "test", "organization_id": 1},
-                }
-            ),
-            headers={"referer": "test"},
-        )
