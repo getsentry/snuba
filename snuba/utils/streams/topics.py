@@ -19,18 +19,14 @@ class Topic(Enum):
     SUBSCRIPTION_SCHEDULED_EVENTS = "scheduled-subscriptions-events"
     SUBSCRIPTION_SCHEDULED_TRANSACTIONS = "scheduled-subscriptions-transactions"
     SUBSCRIPTION_SCHEDULED_METRICS = "scheduled-subscriptions-metrics"
-    SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS = (
-        "scheduled-subscriptions-generic-metrics-sets"
-    )
+    SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS = "scheduled-subscriptions-generic-metrics-sets"
     SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_DISTRIBUTIONS = (
         "scheduled-subscriptions-generic-metrics-distributions"
     )
     SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_COUNTERS = (
         "scheduled-subscriptions-generic-metrics-counters"
     )
-    SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_GAUGES = (
-        "scheduled-subscriptions-generic-metrics-gauges"
-    )
+    SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_GAUGES = "scheduled-subscriptions-generic-metrics-gauges"
 
     SUBSCRIPTION_RESULTS_EVENTS = "events-subscription-results"
     SUBSCRIPTION_RESULTS_TRANSACTIONS = "transactions-subscription-results"
@@ -45,12 +41,9 @@ class Topic(Enum):
     PROFILE_CHUNKS = "snuba-profile-chunks"
 
     REPLAYEVENTS = "ingest-replay-events"
-    UPTIME_RESULTS = "snuba-uptime-results"
     GENERIC_METRICS = "snuba-generic-metrics"
     GENERIC_METRICS_SETS_COMMIT_LOG = "snuba-generic-metrics-sets-commit-log"
-    GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG = (
-        "snuba-generic-metrics-distributions-commit-log"
-    )
+    GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG = "snuba-generic-metrics-distributions-commit-log"
     GENERIC_METRICS_COUNTERS_COMMIT_LOG = "snuba-generic-metrics-counters-commit-log"
     GENERIC_METRICS_GAUGES_COMMIT_LOG = "snuba-generic-metrics-gauges-commit-log"
     GENERIC_EVENTS = "generic-events"
@@ -78,6 +71,7 @@ class Topic(Enum):
     DEAD_LETTER_ITEMS = "snuba-dead-letter-items"
 
     LW_DELETIONS_GENERIC_EVENTS = "snuba-lw-deletions-generic-events"
+    LW_DELETIONS_EAP_ITEMS = "snuba-lw-deletions-eap-items"
 
     COGS_SHARED_RESOURCES_USAGE = "shared-resources-usage"
 

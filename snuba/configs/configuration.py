@@ -1,15 +1,18 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
-from typing import Any, TypedDict, final
+from typing import Any, Type, TypedDict, TypeVar, cast, final
 
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import delete_config as delete_runtime_config
 from snuba.state import get_all_configs as get_all_runtime_configs
 from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
+from snuba.utils.registered_class import RegisteredClass
 
 logger = logging.getLogger("snuba.configurable_component")
+
+T = TypeVar("T", bound="ConfigurableComponent")
 
 
 class InvalidConfig(Exception):
@@ -18,7 +21,7 @@ class InvalidConfig(Exception):
 
 class ConfigurableComponentData(TypedDict):
     configurable_component_namespace: str
-    configurable_component_config_key: str
+    configurable_component_class_name: str
     resource_identifier: str
     configurations: list[dict[str, Any]]
     optional_config_definitions: list[dict[str, Any]]
@@ -60,7 +63,7 @@ class Configuration:
     param_types: dict[str, type] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if type(self.default) != self.value_type:
+        if type(self.default) is not self.value_type:
             raise ValueError(
                 f"Config item `{self.name}` expects type {self.value_type} got value `{self.default}` of type {type(self.default)}"
             )
@@ -83,9 +86,7 @@ class Configuration:
             ],
         }
 
-    def to_config_dict(
-        self, value: Any = None, params: dict[str, Any] = {}
-    ) -> dict[str, Any]:
+    def to_config_dict(self, value: Any = None, params: dict[str, Any] = {}) -> dict[str, Any]:
         """Returns a dict representation of a live Config."""
         return {
             **self.__to_base_dict(),
@@ -94,7 +95,7 @@ class Configuration:
         }
 
 
-class ConfigurableComponent(ABC):
+class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     """
     A ConfigurableComponent is a component that can be configured via configurations.
     example: an allocation policy, a routing strategy, a strategy selector.
@@ -148,9 +149,28 @@ class ConfigurableComponent(ABC):
         # needs to uniquely identify the configurable component
         return f"{self.resource_identifier.value}.{self.__class__.__name__}"
 
-    def component_namespace(self) -> str:
-        # is it an allocation policy? a routing strategy? a strategy selector?
-        raise NotImplementedError
+    @classmethod
+    def component_namespace(cls) -> str:
+        """
+        Let's say the inheritance chain is:
+        ConfigurableComponent
+            SomeBaseClass
+                SomeConcreteClass
+            SomeOtherBaseClass
+                SomeOtherConcreteClass
+                    SomeEvenMoreConcreteClass
+
+        The namespace for SomeBaseClass should be "SomeBaseClass"
+        The namespace for SomeConcreteClass should be "SomeBaseClass"
+        The namespace for SomeOtherBaseClass should be "SomeOtherBaseClass"
+        The namespace for SomeOtherConcreteClass should be "SomeOtherBaseClass"
+        The namespace for SomeEvenMoreConcreteClass should be "SomeOtherBaseClass"
+        """
+
+        for base in cls.__mro__:
+            if ConfigurableComponent in base.__bases__:
+                return base.__name__
+        raise RuntimeError(f"{cls.__name__} does not inherit from ConfigurableComponent")
 
     @abstractmethod
     def _get_default_config_definitions(self) -> list[Configuration]:
@@ -191,9 +211,7 @@ class ConfigurableComponent(ABC):
 
         # config doesn't exist
         if config_key not in definitions:
-            raise InvalidConfig(
-                f"'{config_key}' is not a valid config for {class_name}!"
-            )
+            raise InvalidConfig(f"'{config_key}' is not a valid config for {class_name}!")
 
         config = definitions[config_key]
 
@@ -335,9 +353,7 @@ class ConfigurableComponent(ABC):
         return [
             replace(
                 definition,
-                default=default_config_overrides.get(
-                    definition.name, definition.default
-                ),
+                default=default_config_overrides.get(definition.name, definition.default),
             )
             for definition in definitions
         ]
@@ -350,9 +366,7 @@ class ConfigurableComponent(ABC):
             escape_sequence,
         ) in self._KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
             if escape_sequence in str(key):
-                raise InvalidConfig(
-                    f"{escape_sequence} is not a valid string for a policy config"
-                )
+                raise InvalidConfig(f"{escape_sequence} is not a valid string for a policy config")
             key = key.replace(delimiter_char, escape_sequence)
         return key
 
@@ -431,13 +445,50 @@ class ConfigurableComponent(ABC):
 
     @classmethod
     def config_key(cls) -> str:
+        return f"{cls.component_namespace()}.{cls.__name__}"
+
+    @classmethod
+    def class_name(cls) -> str:
         return cls.__name__
 
     def to_dict(self) -> ConfigurableComponentData:
         return ConfigurableComponentData(
             configurable_component_namespace=self.component_namespace(),
-            configurable_component_config_key=self.config_key(),
+            configurable_component_class_name=self.class_name(),
             resource_identifier=self.resource_identifier.value,
             configurations=self.get_current_configs(),
             optional_config_definitions=self.get_optional_config_definitions_json(),
         )
+
+    @classmethod
+    def get_component_class(cls, namespace: str) -> Type["ConfigurableComponent"]:
+        return cast(
+            Type["ConfigurableComponent"],
+            cls.class_from_name(f"{namespace}.{namespace}"),
+        )
+
+    @classmethod
+    def get_from_name(cls: Type[T], name: str) -> Type[T]:
+        return cast(Type[T], cls.class_from_name(f"{cls.component_namespace()}.{name}"))
+
+    @classmethod
+    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
+        raise NotImplementedError
+
+    @classmethod
+    def all_names(cls) -> list[str]:
+        """Returns all registered class names that belong to this component's namespace."""
+        # If called on ConfigurableComponent itself, return all registered classes
+        if cls is ConfigurableComponent:
+            return list(getattr(cls, "_registry").all_names())
+
+        # For subclasses, return only classes in the same namespace
+        namespaced_classes = []
+        for registered_cls in getattr(cls, "_registry").all_classes():
+            if (
+                hasattr(registered_cls, "component_namespace")
+                and registered_cls.component_namespace() == cls.component_namespace()
+                and registered_cls.config_key() != cls.config_key()
+            ):
+                namespaced_classes.append(registered_cls.class_name())
+        return namespaced_classes

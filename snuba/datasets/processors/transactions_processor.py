@@ -108,9 +108,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         processed["trace_id"] = str(uuid.UUID(trace_id))
         processed["span_id"] = int(transaction_ctx["span_id"], 16)
         processed["transaction_op"] = _unicodify(transaction_ctx.get("op") or "")
-        processed["transaction_name"] = _unicodify(
-            event_dict["data"].get("transaction") or ""
-        )
+        processed["transaction_name"] = _unicodify(event_dict["data"].get("transaction") or "")
         processed["transaction_source"] = _unicodify(
             (event_dict["data"].get("transaction_info") or {}).get("source") or ""
         )
@@ -187,12 +185,11 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
                     processed["measurements.value"],
                 ) = extract_nested(
                     measurements,
-                    lambda value: float(value["value"])
-                    if (
-                        value is not None
-                        and isinstance(value.get("value"), numbers.Number)
-                    )
-                    else None,
+                    lambda value: (
+                        float(value["value"])
+                        if (value is not None and isinstance(value.get("value"), numbers.Number))
+                        else None
+                    ),
                 )
             except Exception:
                 # Not failing the event in this case just yet, because we are still
@@ -218,12 +215,13 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
                         processed["span_op_breakdowns.value"],
                     ) = extract_nested(
                         span_op_breakdowns,
-                        lambda value: float(value["value"])
-                        if (
-                            value is not None
-                            and isinstance(value.get("value"), numbers.Number)
-                        )
-                        else None,
+                        lambda value: (
+                            float(value["value"])
+                            if (
+                                value is not None and isinstance(value.get("value"), numbers.Number)
+                            )
+                            else None
+                        ),
                     )
                 except Exception:
                     # Not failing the event in this case just yet, because we are still
@@ -239,13 +237,9 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         processed: MutableMapping[str, Any],
         event_dict: EventDict,
     ) -> None:
-        contexts: MutableMapping[str, Any] = _as_dict_safe(
-            event_dict["data"].get("contexts", None)
-        )
+        contexts: MutableMapping[str, Any] = _as_dict_safe(event_dict["data"].get("contexts", None))
         user_dict = (
-            event_dict["data"].get(
-                "user", event_dict["data"].get("sentry.interfaces.User", None)
-            )
+            event_dict["data"].get("user", event_dict["data"].get("sentry.interfaces.User", None))
             or {}
         )
         geo = user_dict.get("geo", None) or {}
@@ -253,9 +247,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         if "geo" not in contexts and isinstance(geo, dict):
             contexts["geo"] = geo
 
-        skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(
-            processed["project_id"], set()
-        )
+        skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(processed["project_id"], set())
         for context in skipped_contexts:
             if context in contexts:
                 del contexts[context]
@@ -407,9 +399,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         mutated. It returns the new modified context object which can be used to fill
         in the processed object.
         """
-        contexts: MutableMapping[str, Any] = _as_dict_safe(
-            event_dict["data"].get("contexts", None)
-        )
+        contexts: MutableMapping[str, Any] = _as_dict_safe(event_dict["data"].get("contexts", None))
         if not contexts:
             return {}
 
@@ -442,14 +432,14 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         # The profile_id, profiler_id and replay_id are promoted as columns, so no need to store them
         # again in the context array
         profile_ctx = sanitized_context.get("profile", {})
-        profile_ctx.pop("profile_id", None)
-        profile_ctx.pop("profiler_id", None)
+        if profile_ctx is not None:
+            profile_ctx.pop("profile_id", None)
+            profile_ctx.pop("profiler_id", None)
         replay_ctx = sanitized_context.get("replay", {})
-        replay_ctx.pop("replay_id", None)
+        if replay_ctx is not None:
+            replay_ctx.pop("replay_id", None)
 
-        skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(
-            processed["project_id"], set()
-        )
+        skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(processed["project_id"], set())
         for context in skipped_contexts:
             if context in sanitized_context:
                 del sanitized_context[context]

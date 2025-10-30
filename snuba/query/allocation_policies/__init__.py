@@ -16,7 +16,7 @@ from snuba.configs.configuration import (
 )
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
+from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryException, QueryResult
 
@@ -127,9 +127,7 @@ class AllocationPolicyViolations(SerializableException):
 
     @property
     def quota_allowance(self) -> dict[str, dict[str, Any]]:
-        return cast(
-            dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {})
-        )
+        return cast(dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {}))
 
     @property
     def summary(self) -> dict[str, Any]:
@@ -155,7 +153,7 @@ class QueryType(Enum):
     DELETE = "delete"
 
 
-class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
+class AllocationPolicy(ConfigurableComponent, ABC):
     """This class should be the centralized place for policy decisions regarding
     resource usage of a clickhouse cluster. It is meant to live as a configurable item
     on a storage.
@@ -373,8 +371,13 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
 
-    def component_namespace(self) -> str:
-        return "AllocationPolicy"
+    @classmethod
+    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
+        return cls(
+            storage_key=ResourceIdentifier(resource_identifier),
+            required_tenant_types=[],
+            default_config_overrides={},
+        )
 
     def _get_hash(self) -> str:
         return CAPMAN_HASH
@@ -393,10 +396,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
 
     @property
     def is_active(self) -> bool:
-        return (
-            bool(self.get_config_value(IS_ACTIVE))
-            and settings.ALLOCATION_POLICY_ENABLED
-        )
+        return bool(self.get_config_value(IS_ACTIVE)) and settings.ALLOCATION_POLICY_ENABLED
 
     @property
     def is_enforced(self) -> bool:
@@ -406,10 +406,6 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
     def max_threads(self) -> int:
         """Maximum number of threads run a single query on ClickHouse with."""
         return int(self.get_config_value(MAX_THREADS))
-
-    @classmethod
-    def get_from_name(cls, name: str) -> "AllocationPolicy":
-        return cast("AllocationPolicy", cls.class_from_name(name))
 
     def __eq__(self, other: Any) -> bool:
         """There should not be a need to compare these except that
@@ -480,6 +476,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
                 suggestion=NO_SUGGESTION,
             )
         except Exception:
+            self.metrics.increment("fail_open", 1, tags={"method": "get_quota_allowance"})
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
             )
@@ -537,6 +534,7 @@ class AllocationPolicy(ConfigurableComponent, ABC, metaclass=RegisteredClass):
             # the policy did not do anything because the tenants were invalid, updating is also not necessary
             pass
         except Exception:
+            self.metrics.increment("fail_open", 1, tags={"method": "update_quota_balance"})
             logger.exception(
                 "Allocation policy failed to update quota balance, this is a bug, fix it"
             )
