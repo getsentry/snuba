@@ -15,7 +15,7 @@ jobs:
       api_changes: ${{ steps.changes.outputs.api_changes }}
       devservices_changes: ${{ steps.changes.outputs.devservices_changes }}
     steps:
-      - uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v2
+      - uses: actions/checkout@v5
 
       - name: Check for backend file changes
         uses: getsentry/paths-filter@66f7f1844185eb7fb6738ea4ea59d74bb99199e5 # v2
@@ -423,7 +423,7 @@ jobs:
     needs: files-changed
     if: ${{ needs.files-changed.outputs.devservices_changes == 'true' }}
     steps:
-    - uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v4.1.7
+    - uses: actions/checkout@v5
       name: Checkout repository
 
     - name: Get devservices version
