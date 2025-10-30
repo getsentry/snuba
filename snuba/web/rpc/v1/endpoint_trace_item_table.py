@@ -77,11 +77,13 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
 
 
 def _validate_order_by(in_msg: TraceItemTableRequest) -> None:
-    order_by_cols = {ob.column.label for ob in in_msg.order_by}
-    selected_columns = {c.label for c in in_msg.columns}
+    order_by_cols = {
+        ob.column.label if ob.column.label else str(ob.column) for ob in in_msg.order_by
+    }
+    selected_columns = {c.label if c.label else str(c) for c in in_msg.columns}
     if not order_by_cols.issubset(selected_columns):
         raise BadSnubaRPCRequestException(
-            f"Ordered by columns {order_by_cols} not selected: {selected_columns}"
+            f"Ordered by columns {sorted(order_by_cols)} not selected: {sorted(selected_columns)}"
         )
 
 

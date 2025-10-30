@@ -1,4 +1,5 @@
 import random
+import re
 from datetime import datetime, timedelta
 from math import inf
 from typing import Any
@@ -3502,6 +3503,8 @@ def test_order_by_bug() -> None:
             )
         ],
     )
-    with pytest.raises(BadSnubaRPCRequestException) as excinfo:
+    error_message = re.escape(
+        "Ordered by columns ['key {\\n  type: TYPE_STRING\\n}\\n'] not selected: ['count()', 'release']"
+    )
+    with pytest.raises(BadSnubaRPCRequestException, match=error_message):
         _validate_order_by(message)
-        assert str(excinfo.value) == "Ordered by columns {''} not selected: {'release', 'count()'}"
