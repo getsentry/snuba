@@ -70,6 +70,7 @@ from snuba.web.rpc.proto_visitor import (
 from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
     _apply_labels_to_columns,
+    _validate_order_by,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from tests.base import BaseApiTest
@@ -3471,3 +3472,36 @@ def test_build_query_with_order_by_optimization_disabled_because_groupby() -> No
             ),
         ),
     ]
+
+
+def test_order_by_bug() -> None:
+    start_ts = Timestamp()
+    start_ts.FromDatetime(datetime.fromisoformat("2025-10-22T17:55:24Z"))
+    end_ts = Timestamp()
+    end_ts.FromDatetime(datetime.fromisoformat("2025-10-29T17:56:24Z"))
+
+    message = TraceItemTableRequest(
+        columns=[
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.release"),
+                label="release",
+            ),
+            Column(
+                conditional_aggregation=AttributeConditionalAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
+                    label="count()",
+                ),
+                label="count()",
+            ),
+        ],
+        order_by=[
+            TraceItemTableRequest.OrderBy(
+                column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name=""))
+            )
+        ],
+    )
+    with pytest.raises(BadSnubaRPCRequestException) as excinfo:
+        _validate_order_by(message)
+        assert str(excinfo.value) == "Ordered by columns {''} not selected: {'release', 'count()'}"
