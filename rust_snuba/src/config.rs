@@ -108,7 +108,6 @@ pub struct EnvConfig {
     pub lower_retention_days: u16,
     pub valid_retention_days: HashSet<u16>,
     pub record_cogs: bool,
-    pub ddm_metrics_sample_rate: f64,
     pub project_stacktrace_blacklist: Vec<u64>,
 }
 
@@ -122,7 +121,6 @@ impl Default for EnvConfig {
             lower_retention_days: 30,
             valid_retention_days: [30, 60, 90].iter().cloned().collect(),
             record_cogs: false,
-            ddm_metrics_sample_rate: 0.0,
             project_stacktrace_blacklist: Vec::new(),
         }
     }

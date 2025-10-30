@@ -1,5 +1,4 @@
 mod eap_items;
-pub(crate) mod eap_items_span;
 mod errors;
 mod functions;
 mod generic_metrics;
@@ -9,7 +8,6 @@ mod profiles;
 mod querylog;
 mod release_health_metrics;
 mod replays;
-mod spans;
 mod uptime_monitor_checks;
 mod utils;
 
@@ -57,7 +55,6 @@ define_processing_functions! {
     ("QuerylogProcessor", "snuba-queries", ProcessingFunctionType::ProcessingFunction(querylog::process_message)),
     ("ReplaysProcessor", "ingest-replay-events", ProcessingFunctionType::ProcessingFunction(replays::process_message)),
     ("UptimeMonitorChecksProcessor", "snuba-uptime-results", ProcessingFunctionType::ProcessingFunction(uptime_monitor_checks::process_message)),
-    ("SpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(spans::process_message)),
     ("OutcomesProcessor", "outcomes", ProcessingFunctionType::ProcessingFunction(outcomes::process_message)),
     ("GenericCountersMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_counter_message)),
     ("GenericSetsMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_set_message)),
@@ -67,7 +64,6 @@ define_processing_functions! {
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
     ("ProfileChunksProcessor", "snuba-profile-chunks", ProcessingFunctionType::ProcessingFunction(profile_chunks::process_message)),
     ("EAPItemsProcessor", "snuba-items", ProcessingFunctionType::ProcessingFunction(eap_items::process_message)),
-    ("EAPItemsSpanProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(eap_items_span::process_message)),
 }
 
 // COGS is recorded for these processors
@@ -156,6 +152,13 @@ mod tests {
 
                 if *topic_name == "events" {
                     settings.add_redaction(".*.message_timestamp", "<event timestamp>");
+                }
+
+                if *topic_name == "snuba-items" {
+                    settings.add_redaction(
+                        ".*.*[\"sentry._internal.ingested_at\"]",
+                        "<ingestion timestamp>",
+                    );
                 }
 
                 // This payload is protobuf (so binary), not JSON (so text).

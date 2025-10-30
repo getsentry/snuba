@@ -71,9 +71,7 @@ class TestReplacer:
         run_optimize(clickhouse, self.storage, cluster.get_database())
 
     def _issue_count(self, project_id: int) -> Sequence[Mapping[str, Any]]:
-        clickhouse = self.storage.get_cluster().get_query_connection(
-            ClickhouseClientSettings.QUERY
-        )
+        clickhouse = self.storage.get_cluster().get_query_connection(ClickhouseClientSettings.QUERY)
 
         data = clickhouse.execute(
             f"""
@@ -103,9 +101,7 @@ class TestReplacer:
             )
 
             total_cond = (
-                "AND has(_tags_hash_map, cityHash64('browser.name=foo'))"
-                if not total
-                else ""
+                "AND has(_tags_hash_map, cityHash64('browser.name=foo'))" if not total else ""
             )
 
             data = clickhouse.execute(

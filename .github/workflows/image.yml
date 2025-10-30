@@ -1,104 +1,86 @@
 on:
   pull_request:
   push:
-    branches: [master]
+    branches:
+      - master
+      - release/**
+
 jobs:
-  build:
-    outputs:
-      image_tag: ${{ steps.get_image_tag.outputs.image_tag }}
-    runs-on: ubuntu-latest
+  build-multiplatform:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: amd64
+          - os: ubuntu-24.04-arm
+            platform: arm64
+    runs-on: ${{ matrix.os }}
+    name: build-${{ matrix.platform }}
+    permissions:
+      contents: read
+      packages: write
+    if: github.repository_owner == 'getsentry'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-    - run: docker login --username '${{ github.actor }}' --password-stdin ghcr.io <<< "$GHCR_TOKEN"
-      env:
-        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - uses: getsentry/action-build-and-push-images@f6e4a98f7ed028edcfb1159f3a2905b30e51f1fd
+      with:
+        image_name: 'snuba'
+        platforms: linux/${{ matrix.platform }}
+        dockerfile_path: 'Dockerfile'
+        tag_suffix: -${{ matrix.platform }}
+        ghcr: true
+        tag_nightly: false
+        tag_latest: false
 
-    - run: docker buildx create --driver docker-container --use
-
-    - name: build
-      run: |
-        set -euxo pipefail
-
-        args=()
-
-        if [ ${{ github.event_name }} = 'push' ]; then
-          args+=(
-            --tag ghcr.io/getsentry/snuba:latest
-            --tag ghcr.io/getsentry/snuba:nightly
-            --tag ghcr.io/getsentry/snuba:amd64-latest
-            --cache-to type=registry,ref=ghcr.io/getsentry/snuba:buildcache,mode=max
-            --push
-          )
-        fi
-
-        if [ ${{ github.event.pull_request.head.repo.full_name }} = ${{ github.repository }} ]; then
-          # TODO: we should use github artifacts to send images between jobs, like in ci.yml
-          # otherwise third-party PRs will break
-          args+=(
-            --push
-          )
-        fi
-
-        docker buildx build \
-          --pull \
-          --platform linux/amd64 \
-          --cache-from type=registry,ref=ghcr.io/getsentry/snuba:buildcache \
-          --cache-from type=registry,ref=ghcr.io/getsentry/snuba:latest \
-          --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
-          --target application \
-          "${args[@]}" \
-          .
-
-    - id: get_image_tag
-      run: echo 'image_tag=ghcr.io/getsentry/snuba:${{ github.sha }}' >> "$GITHUB_OUTPUT"
-
-  publish-to-dockerhub:
-    needs: build
-    name: Publish Snuba to DockerHub
-    runs-on: ubuntu-latest
+  build-production:
+    runs-on: ubuntu-24.04
+    name: Build and push production image
+    permissions:
+      contents: read
+      id-token: write
+    if: ${{ github.ref_name == 'master' }}
     steps:
-      - uses: actions/checkout@v4 # v3.1.0
-      - name: Pull the test image
-        id: image_pull
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: getsentry/action-build-and-push-images@f6e4a98f7ed028edcfb1159f3a2905b30e51f1fd
+        with:
+          image_name: 'snuba'
+          platforms: linux/amd64
+          dockerfile_path: './Dockerfile'
+          ghcr: false
+          tag_nightly: false
+          tag_latest: false
+          google_ar: true
+          google_ar_image_name: us-docker.pkg.dev/sentryio/snuba-mr/image
+          google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
+          google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
+
+  assemble:
+    needs: [build-multiplatform]
+    if: ${{ (github.ref_name == 'master' || startsWith(github.ref_name, 'release/')) && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Docker Login
+        run: docker login --username '${{ github.actor }}' --password-stdin ghcr.io <<< "$GHCR_TOKEN"
         env:
-          IMAGE_URL: ${{ needs.build.outputs.image_tag }}
-        shell: bash
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Create multiplatform manifests
         run: |
-          docker pull "$IMAGE_URL"
-      - name: Get short SHA for docker tag
-        id: short_sha
-        shell: bash
-        run: |
-          SHORT_SHA=$(git rev-parse --short "$GITHUB_SHA")
-          if [[ -z "$SHORT_SHA" ]]; then
-            echo "Short SHA empty? Re-running rev-parse."
-            git rev-parse --short "$GITHUB_SHA"
-          else
-            echo "sha=$SHORT_SHA" >> $GITHUB_OUTPUT
-          fi
-      - name: Push built docker image
-        if: ${{ (github.ref_name == 'master') }}
-        shell: bash
-        env:
-          SHORT_SHA: ${{ steps.short_sha.outputs.sha }}
-          IMAGE_URL: ${{ needs.build.outputs.image_tag }}
-        run: |
-          # only login if the password is set
-          if [[ "${{ secrets.DOCKER_HUB_RW_TOKEN }}" ]]; then echo "${{ secrets.DOCKER_HUB_RW_TOKEN }}" | docker login --username=sentrybuilder --password-stdin; fi
-          # We push 3 tags to Dockerhub:
-          # first, the full sha of the commit
-          docker tag ${IMAGE_URL} getsentry/snuba:${GITHUB_SHA}
-          docker push getsentry/snuba:${GITHUB_SHA}
-          # second, the short sha of the commit
-          docker tag ${IMAGE_URL} getsentry/snuba:${SHORT_SHA}
-          docker push getsentry/snuba:${SHORT_SHA}
-          # finally, nightly
-          docker tag ${IMAGE_URL} getsentry/snuba:nightly
-          docker push getsentry/snuba:nightly
+          docker buildx imagetools create \
+            --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
+            --tag ghcr.io/getsentry/snuba:nightly \
+            ghcr.io/getsentry/snuba:${{ github.sha }}-amd64 \
+            ghcr.io/getsentry/snuba:${{ github.sha }}-arm64
 
   self-hosted-end-to-end:
-    needs: build
+    needs: [build-multiplatform, assemble]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -107,5 +89,5 @@ jobs:
         uses: getsentry/self-hosted@master
         with:
           project_name: snuba
-          image_url: ${{ needs.build.outputs.image_tag }}
+          image_url: ghcr.io/getsentry/snuba:${{ github.sha }}
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

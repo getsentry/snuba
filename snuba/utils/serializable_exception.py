@@ -41,6 +41,7 @@ Usage:
 >>> recvd_exception_dict = rapidjson.loads(recv())
 >>> raise SerializableException.from_dict(recvd_exception_dict) # this will be an instance of MyException
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Type, TypedDict, Union, cast
@@ -70,9 +71,7 @@ class _ExceptionRegistry:
         if not existing_class:
             self.__mapping[cls.__name__] = cls
 
-    def get_class_by_name(
-        self, cls_name: str
-    ) -> Optional[Type["SerializableException"]]:
+    def get_class_by_name(self, cls_name: str) -> Optional[Type["SerializableException"]]:
         return self.__mapping.get(cls_name)
 
 
@@ -101,11 +100,23 @@ class SerializableException(Exception):
         should_report: bool = True,
         **extra_data: JsonSerializable,
     ) -> None:
-        self.message = message or ""
         self.extra_data = extra_data or {}
+        self.message = self._format_message(message)
         # whether or not the error should be reported to sentry
         self.should_report = should_report
         super().__init__(message)
+
+    def format_message(self, message: str) -> str:
+        """
+        Can be overridden to handle custom formatting
+        """
+        return message
+
+    def _format_message(self, message: Optional[str]) -> str:
+        if not message:
+            return ""
+
+        return self.format_message(message)
 
     def to_dict(self) -> SerializableExceptionDict:
         return {
@@ -149,9 +160,7 @@ class SerializableException(Exception):
         return super().__init_subclass__()
 
     @classmethod
-    def from_standard_exception_instance(
-        cls, exc: Exception
-    ) -> "SerializableException":
+    def from_standard_exception_instance(cls, exc: Exception) -> "SerializableException":
         if isinstance(exc, cls):
             return exc
         return cls.from_dict(
@@ -165,4 +174,5 @@ class SerializableException(Exception):
         )
 
     def __repr__(self) -> str:
-        return cast(str, rapidjson.dumps(self.to_dict(), indent=2))
+        result: str = rapidjson.dumps(self.to_dict(), indent=2)
+        return result

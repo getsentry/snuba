@@ -58,7 +58,6 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
-from snuba.state import get_int_config
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -76,11 +75,7 @@ from snuba.web import QueryException, QueryTooLongException
 from snuba.web.bulk_delete_query import delete_from_storage as bulk_delete_from_storage
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
-from snuba.web.delete_query import (
-    DeletesNotEnabledError,
-    TooManyOngoingMutationsError,
-    delete_from_storage,
-)
+from snuba.web.delete_query import DeletesNotEnabledError, TooManyOngoingMutationsError
 from snuba.web.query import parse_and_run_query
 from snuba.web.rpc import run_rpc_handler
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
@@ -97,9 +92,7 @@ def truncate_dataset(dataset: Dataset) -> None:
             cluster = storage.get_cluster()
             nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
             for node in nodes:
-                clickhouse = cluster.get_node_connection(
-                    ClickhouseClientSettings.MIGRATE, node
-                )
+                clickhouse = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
 
                 database = cluster.get_database()
 
@@ -177,9 +170,7 @@ def handle_invalid_query(exception: InvalidQueryException) -> Response:
     # TODO: Add special cases with more structure for specific exceptions
     # if needed.
     return Response(
-        json.dumps(
-            {"error": {"type": "invalid_query", "message": str(exception)}}, indent=4
-        ),
+        json.dumps({"error": {"type": "invalid_query", "message": str(exception)}}, indent=4),
         400,
         {"Content-Type": "application/json"},
     )
@@ -321,9 +312,7 @@ def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response,
 
 @application.route("/<storage:storage>", methods=["DELETE"])
 @util.time_request("delete_query")
-def storage_delete(
-    *, storage: WritableTableStorage, timer: Timer
-) -> Union[Response, str]:
+def storage_delete(*, storage: WritableTableStorage, timer: Timer) -> Union[Response, str]:
     if http_request.method == "DELETE":
         check_shutdown({"storage": storage.get_storage_key()})
         body = parse_request_body(http_request)
@@ -331,18 +320,11 @@ def storage_delete(
         try:
             schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
             request_parts = schema.validate(body)
-            if get_int_config("use_bulk_deletes"):
-                payload = bulk_delete_from_storage(
-                    storage,
-                    request_parts.query["query"]["columns"],
-                    request_parts.attribution_info,
-                )
-            else:
-                payload = delete_from_storage(
-                    storage,
-                    request_parts.query["query"]["columns"],
-                    request_parts.attribution_info,
-                )
+            payload = bulk_delete_from_storage(
+                storage,
+                request_parts.query["query"]["columns"],
+                request_parts.attribution_info,
+            )
         except (
             InvalidJsonRequestException,
             DeletesNotEnabledError,
@@ -374,17 +356,13 @@ def storage_delete(
             return make_response(jsonify({"error": details}), 500)
 
         # i put the result inside "data" bc thats how sentry utils/snuba.py expects the result
-        return Response(
-            dump_payload({"data": payload}), 200, {"Content-Type": "application/json"}
-        )
+        return Response(dump_payload({"data": payload}), 200, {"Content-Type": "application/json"})
 
     else:
         assert False, "unexpected fallthrough"
 
 
-def _sanitize_payload(
-    payload: MutableMapping[str, Any], res: MutableMapping[str, Any]
-) -> None:
+def _sanitize_payload(payload: MutableMapping[str, Any], res: MutableMapping[str, Any]) -> None:
     def hex_encode_if_bytes(value: Any) -> Any:
         if isinstance(value, bytes):
             try:
@@ -448,9 +426,7 @@ def dataset_query(
     check_shutdown({"dataset": dataset_name})
 
     try:
-        request, result = parse_and_run_query(
-            body, timer, is_mql, dataset_name, referrer
-        )
+        request, result = parse_and_run_query(body, timer, is_mql, dataset_name, referrer)
         assert result.extra["stats"]
     except InvalidQueryException as exception:
         details: Mapping[str, Any]
@@ -544,9 +520,7 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer, entity: Entity) -> RespTuple:
     if entity not in dataset.get_all_entities():
-        raise InvalidSubscriptionError(
-            "Invalid subscription dataset and entity combination"
-        )
+        raise InvalidSubscriptionError("Invalid subscription dataset and entity combination")
     entity_key = get_entity_name(entity)
     subscription = SubscriptionDataCodec(entity_key).decode(http_request.data)
     identifier = SubscriptionCreator(dataset, entity_key).create(subscription, timer)
@@ -563,13 +537,9 @@ def create_subscription(*, dataset: Dataset, timer: Timer, entity: Entity) -> Re
     "/<dataset:dataset>/<entity:entity>/subscriptions/<int:partition>/<key>",
     methods=["DELETE"],
 )
-def delete_subscription(
-    *, dataset: Dataset, partition: int, key: str, entity: Entity
-) -> RespTuple:
+def delete_subscription(*, dataset: Dataset, partition: int, key: str, entity: Entity) -> RespTuple:
     if entity not in dataset.get_all_entities():
-        raise InvalidSubscriptionError(
-            "Invalid subscription dataset and entity combination"
-        )
+        raise InvalidSubscriptionError("Invalid subscription dataset and entity combination")
     entity_key = get_entity_name(entity)
     SubscriptionDeleter(entity_key, PartitionId(partition)).delete(UUID(key))
     metrics.increment("subscription_deleted", tags={"entity": entity_key.value})
@@ -610,9 +580,7 @@ if application.debug or application.testing:
                 .get_processor()
                 .process_message(
                     message,
-                    KafkaMessageMetadata(
-                        offset=offset, partition=0, timestamp=datetime.utcnow()
-                    ),
+                    KafkaMessageMetadata(offset=offset, partition=0, timestamp=datetime.utcnow()),
                 )
             )
             if processed_message:
@@ -670,9 +638,7 @@ if application.debug or application.testing:
                 table_writer = storage.get_table_writer()
                 stream_loader = table_writer.get_stream_loader()
 
-                def commit(
-                    offsets: Mapping[Partition, int], force: bool = False
-                ) -> None:
+                def commit(offsets: Mapping[Partition, int], force: bool = False) -> None:
                     pass
 
                 strategy = KafkaConsumerStrategyFactory(

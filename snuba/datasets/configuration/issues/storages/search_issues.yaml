@@ -59,6 +59,12 @@ schema:
       { name: partition, type: UInt, args: { size: 16 } },
       { name: offset, type: UInt, args: { size: 64 } },
       { name: retention_days, type: UInt, args: { size: 16 } },
+      {
+        name: group_first_seen,
+        type: DateTime,
+        args: { schema_modifiers: [nullable] },
+      },
+      { name: timestamp_ms, type: DateTime64, args: { precision: 3, schema_modifiers: [nullable] } },
     ]
   local_table_name: search_issues_local_v2
   dist_table_name: search_issues_dist_v2

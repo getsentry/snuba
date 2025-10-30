@@ -9,6 +9,7 @@ from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 
 import structlog
 
+from snuba import settings
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.native import ClickhousePool
 
@@ -77,9 +78,7 @@ class SqlOperation(ABC):
         )
 
         if nodes or (
-            not nodes
-            and self.target == OperationTarget.DISTRIBUTED
-            and cluster.is_single_node()
+            not nodes and self.target == OperationTarget.DISTRIBUTED and cluster.is_single_node()
         ):
             return nodes
 
@@ -91,12 +90,12 @@ class SqlOperation(ABC):
         nodes = self.get_nodes()
         cluster = get_cluster(self._storage_set)
         if nodes:
-            logger.info(f"Executing op: {self.format_sql()[:32]}...")
+            if settings.LOG_MIGRATIONS:
+                logger.info(f"Executing op: {self.format_sql()[:32]}...")
         for node in nodes:
-            connection = cluster.get_node_connection(
-                ClickhouseClientSettings.MIGRATE, node
-            )
-            logger.info(f"Executing on {self.target.value} node: {node}")
+            connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+            if settings.LOG_MIGRATIONS:
+                logger.info(f"Executing on {self.target.value} node: {node}")
             try:
                 connection.execute(self.format_sql(), settings=self._settings)
                 self._block_on_mutations(connection)
@@ -153,6 +152,20 @@ class RunSql(SqlOperation):
         return self.__statement
 
 
+class RetryOnSyncError:
+    def execute(self) -> None:
+        for i in range(30, -1, -1):  # wait at most ~30 seconds
+            try:
+                super().execute()  # type: ignore
+                break
+            except Exception as e:
+                # Metadata on replica is not up to date with common metadata in Zookeeper (status code = 517)
+                if i and e.code == 517:  # type: ignore
+                    time.sleep(1)
+                else:
+                    raise
+
+
 class CreateTable(SqlOperation):
     """
     The create table operation takes a table name, column list and table engine.
@@ -178,9 +191,7 @@ class CreateTable(SqlOperation):
         columns = ", ".join([col.for_schema() for col in self.__columns])
         cluster = get_cluster(self._storage_set)
         engine = self.engine.get_sql(cluster, self.table_name)
-        return (
-            f"CREATE TABLE IF NOT EXISTS {self.table_name} ({columns}) ENGINE {engine};"
-        )
+        return f"CREATE TABLE IF NOT EXISTS {self.table_name} ({columns}) ENGINE {engine};"
 
 
 class CreateMaterializedView(SqlOperation):
@@ -232,7 +243,7 @@ class DropTable(SqlOperation):
         self.table_name = table_name
 
     def format_sql(self) -> str:
-        return f"DROP TABLE IF EXISTS {self.table_name};"
+        return f"DROP TABLE IF EXISTS {self.table_name} SYNC;"
 
 
 class TruncateTable(SqlOperation):
@@ -302,7 +313,7 @@ class RemoveTableTTL(SqlOperation):
         return f"ALTER TABLE {self.__table_name} REMOVE TTL;"
 
 
-class AddColumn(SqlOperation):
+class AddColumn(RetryOnSyncError, SqlOperation):
     """
     Adds a column to a table.
 
@@ -341,7 +352,7 @@ class AddColumn(SqlOperation):
         return f"AddColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column={repr(self.column)}, after={repr(self.__after)}, target={repr(self.target)})"
 
 
-class DropColumn(SqlOperation):
+class DropColumn(RetryOnSyncError, SqlOperation):
     """
     Drops a column from a table.
 
@@ -364,15 +375,13 @@ class DropColumn(SqlOperation):
         self.column_name = column_name
 
     def format_sql(self) -> str:
-        return (
-            f"ALTER TABLE {self.table_name} DROP COLUMN IF EXISTS {self.column_name};"
-        )
+        return f"ALTER TABLE {self.table_name} DROP COLUMN IF EXISTS {self.column_name};"
 
     def __repr__(self) -> str:
         return f"DropColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column_name={repr(self.column_name)}, target={repr(self.target)})"
 
 
-class ModifyColumn(SqlOperation):
+class ModifyColumn(RetryOnSyncError, SqlOperation):
     """
     Modify a column in a table.
 
@@ -527,7 +536,7 @@ class AddIndices(SqlOperation):
         return f"ALTER TABLE {self.__table_name} {', '.join(statements)};"
 
 
-class DropIndex(SqlOperation):
+class DropIndex(RetryOnSyncError, SqlOperation):
     """
     Drops an index.
     """
@@ -549,7 +558,9 @@ class DropIndex(SqlOperation):
         settings = ""
         if self.__run_async:
             settings = " SETTINGS mutations_sync=0"
-        return f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name}{settings};"
+        return (
+            f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name}{settings};"
+        )
 
     def _block_on_mutations(
         self, conn: ClickhousePool, poll_seconds: int = 5, timeout_seconds: int = 300
@@ -560,7 +571,7 @@ class DropIndex(SqlOperation):
             super()._block_on_mutations(conn, poll_seconds, timeout_seconds)
 
 
-class DropIndices(SqlOperation):
+class DropIndices(RetryOnSyncError, SqlOperation):
     """
     Drops many indices.
     Only works with the MergeTree family of tables.
@@ -709,9 +720,7 @@ class RunSqlAsCode(GenericOperation):
 
     def __init__(
         self,
-        operation_function: Union[
-            SqlOperation, Callable[[Optional[ClickhousePool]], SqlOperation]
-        ],
+        operation_function: Union[SqlOperation, Callable[[Optional[ClickhousePool]], SqlOperation]],
     ) -> None:
         self.__operation_function = operation_function
 

@@ -1,8 +1,6 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 
-use crate::strategies::clickhouse::batch::HttpBatch;
-
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::timer;
@@ -176,7 +174,7 @@ impl InsertBatch {
 
 #[derive(Clone, Debug, Default)]
 pub struct BytesInsertBatch<R> {
-    rows: R,
+    pub rows: R,
 
     /// when the message was inserted into the snuba topic
     ///
@@ -234,6 +232,17 @@ impl<R> BytesInsertBatch<R> {
         &self.cogs_data
     }
 
+    pub fn clone_meta(&self) -> BytesInsertBatch<()> {
+        BytesInsertBatch {
+            rows: (),
+            message_timestamp: self.message_timestamp.clone(),
+            origin_timestamp: self.origin_timestamp.clone(),
+            sentry_received_timestamp: self.sentry_received_timestamp.clone(),
+            commit_log_offsets: self.commit_log_offsets.clone(),
+            cogs_data: self.cogs_data.clone(),
+        }
+    }
+
     pub fn take(self) -> (R, BytesInsertBatch<()>) {
         let new = BytesInsertBatch {
             rows: (),
@@ -262,13 +271,10 @@ impl BytesInsertBatch<RowData> {
     pub fn len(&self) -> usize {
         self.rows.num_rows
     }
-}
 
-impl BytesInsertBatch<HttpBatch> {
     pub fn merge(mut self, other: BytesInsertBatch<RowData>) -> Self {
-        self.rows
-            .write_rows(&other.rows)
-            .expect("failed to write rows to channel");
+        self.rows.encoded_rows.extend(other.rows.encoded_rows);
+        self.rows.num_rows += other.rows.num_rows;
         self.commit_log_offsets.merge(other.commit_log_offsets);
         self.message_timestamp.merge(other.message_timestamp);
         self.origin_timestamp.merge(other.origin_timestamp);
