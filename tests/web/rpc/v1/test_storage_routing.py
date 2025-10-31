@@ -266,7 +266,7 @@ def test_metrics_output() -> None:
         recorded_payload = record_query.mock_calls[0].args[0]
         assert recorded_payload["dataset"] == "storage_routing"
         assert recorded_payload["status"] == "TIER_8"
-        assert recorded_payload["request"]["referrer"] == "MetricsStrategy"
+        assert recorded_payload["request"]["referrer"] == "something"
 
         # query_id is a uuid, so we don't need to assert it
         recorded_payload["query_list"][0]["stats"].pop("query_id")
