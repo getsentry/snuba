@@ -139,9 +139,7 @@ def test_cache_partition() -> None:
         StorageKey("transactions")
     ).get_cluster().get_reader().cache_partition_id == "host_2_cache"
 
-    get_storage(
-        StorageKey("errors")
-    ).get_cluster().get_reader().cache_partition_id is None
+    get_storage(StorageKey("errors")).get_cluster().get_reader().cache_partition_id is None
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
@@ -151,9 +149,7 @@ def test_query_settings_prefix() -> None:
         StorageKey("transactions")
     ).get_cluster().get_reader().get_query_settings_prefix() == "transactions"
 
-    get_storage(
-        StorageKey("errors")
-    ).get_cluster().get_reader().get_query_settings_prefix() is None
+    get_storage(StorageKey("errors")).get_cluster().get_reader().get_query_settings_prefix() is None
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
@@ -182,9 +178,7 @@ def test_disabled_cluster() -> None:
 def test_get_local_nodes() -> None:
     importlib.reload(cluster)
     with patch.object(ClickhousePool, "execute") as execute:
-        execute.return_value = ClickhouseResult(
-            [("host_1", 9000, 1, 1), ("host_2", 9000, 2, 1)]
-        )
+        execute.return_value = ClickhouseResult([("host_1", 9000, 1, 1), ("host_2", 9000, 2, 1)])
 
         local_cluster = get_storage(StorageKey("errors")).get_cluster()
         assert len(local_cluster.get_local_nodes()) == 1
@@ -278,9 +272,7 @@ def test_sliced_cluster() -> None:
     assert res_cluster.get_host() == "host_slice"
     assert res_cluster.get_port() == 9001
 
-    res_cluster_default = cluster.get_cluster(
-        StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS, 0
-    )
+    res_cluster_default = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS, 0)
 
     assert res_cluster_default.is_single_node() == True
     assert res_cluster_default.get_database() == "default"
