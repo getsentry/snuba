@@ -5,7 +5,7 @@ eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 /devinfra/scripts/get-cluster-credentials \
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
+  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${GO_REVISION_SNUBA_REPO}" \
   --container-name="api" \
   --container-name="consumer" \
   --container-name="dlq-consumer" \
@@ -43,11 +43,10 @@ eval $(regions-project-env-vars --region="${SENTRY_REGION}")
   --container-name="transactions-consumer-new" \
   --container-name="transactions-subscriptions-executor" \
   --container-name="transactions-subscriptions-scheduler" \
-  --container-name="uptime-results-consumer" \
   --container-name="snuba" \
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
+  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${GO_REVISION_SNUBA_REPO}" \
   --type="cronjob" \
   --container-name="cleanup" \
   --container-name="optimize" \
