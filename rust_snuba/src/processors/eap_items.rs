@@ -85,7 +85,14 @@ impl TryFrom<TraceItem> for EAPItem {
         for (key, value) in from.attributes {
             match value.value {
                 Some(Value::StringValue(string)) => eap_item.attributes.insert_string(key, string),
-                Some(Value::DoubleValue(double)) => eap_item.attributes.insert_float(key, double),
+                Some(Value::DoubleValue(double)) => {
+                    if key == "sentry.timestamp" || key == "sentry.start_timestamp_precise" {
+                        if (double as u32) != eap_item.timestamp {
+                            sentry_arroyo::counter!("eap_items.timestamp_mismatch", 1);
+                        }
+                    }
+                    eap_item.attributes.insert_float(key, double)
+                }
                 Some(Value::IntValue(int)) => eap_item.attributes.insert_int(key, int),
                 Some(Value::BoolValue(bool)) => eap_item.attributes.insert_bool(key, bool),
                 Some(Value::BytesValue(_)) => (),
