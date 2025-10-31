@@ -67,6 +67,9 @@ pub fn make_rust_processor(
         if let Some(ts) = transformed.sentry_received_timestamp {
             payload = payload.with_sentry_received_timestamp(ts);
         }
+        if let Some(metrics) = transformed.item_type_metrics {
+            payload = payload.with_item_type_metrics(metrics);
+        }
 
         Ok(Message::new_broker_message(
             payload, partition, offset, timestamp,
@@ -140,6 +143,9 @@ pub fn make_rust_processor_with_replacements(
                 }
                 if let Some(ts) = transformed.sentry_received_timestamp {
                     batch = batch.with_sentry_received_timestamp(ts);
+                }
+                if let Some(metrics) = transformed.item_type_metrics {
+                    batch = batch.with_item_type_metrics(metrics);
                 }
 
                 InsertOrReplacement::Insert(batch)

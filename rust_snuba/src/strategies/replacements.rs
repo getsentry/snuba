@@ -126,7 +126,7 @@ impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch<RowData>>> for Prod
 mod tests {
     use super::*;
     use crate::testutils::{MockProducer, TestStrategy};
-    use crate::types::{CogsData, CommitLogOffsets, RowData};
+    use crate::types::RowData;
     use crate::types::{InsertOrReplacement, ReplacementData};
     use chrono::Utc;
     use std::collections::BTreeMap;
