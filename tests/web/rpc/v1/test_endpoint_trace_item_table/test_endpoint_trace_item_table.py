@@ -321,7 +321,7 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException) as excinfo:
             EndpointTraceItemTable().execute(message)
         assert (
-            str(excinfo.value) == "Ordered by columns {'some_label'} not selected: {'server_name'}"
+            str(excinfo.value) == "Ordered by columns ['some_label'] not selected: ['server_name']"
         )
 
     def test_with_orderby_label(self, setup_teardown: Any) -> None:
