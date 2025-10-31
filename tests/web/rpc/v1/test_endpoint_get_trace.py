@@ -457,3 +457,173 @@ def get_span_id(span: TraceItem) -> str:
     )[
         2:
     ].rjust(16, "0")
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestGetTracePagination(BaseApiTest):
+    def test_pagination_with_user_limit(self, setup_teardown: Any) -> None:
+        """Test that pagination respects user-provided limit"""
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+
+        # Request with a limit of 10 spans (less than the 120 available)
+        message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            limit=10,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    attributes=[
+                        AttributeKey(
+                            name="sentry.item_id",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
+                    ],
+                )
+            ],
+        )
+        items_received = set[str]()
+        while True:
+            response = EndpointGetTrace().execute(message)
+            assert len(response.item_groups) == 1
+            items_received.update(e.id for e in response.item_groups[0].items)
+            if response.page_token.end_pagination:
+                break
+            message.page_token.CopyFrom(response.page_token)
+        assert len(items_received) == len(_SPANS)
+
+    def test_pagination_with_multiple_item_types(self, setup_teardown: Any) -> None:
+        """Test that pagination works across multiple item types"""
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+
+        # Request both spans and logs with a limit of 15
+        # Should get 15 total items across both types
+        message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            limit=15,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    attributes=[
+                        AttributeKey(
+                            name="sentry.item_id",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
+                    ],
+                ),
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                    attributes=[
+                        AttributeKey(
+                            name="sentry.item_id",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
+                    ],
+                ),
+            ],
+        )
+        response = EndpointGetTrace().execute(message)
+
+        # Should get item groups, but total items should be at most 15
+        total_items = sum(len(group.items) for group in response.item_groups)
+        assert total_items <= 15
+
+    def test_pagination_without_user_limit(self, setup_teardown: Any) -> None:
+        """Test that pagination uses default limit when user doesn't provide one"""
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+
+        # Request without limit (limit=0 means no user-provided limit)
+        message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            limit=0,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                )
+            ],
+        )
+        response = EndpointGetTrace().execute(message)
+
+        # Should return all spans (120) if no max items config is set
+        # or be limited by PAGINATION_MAX_ITEMS if it's configured
+        assert len(response.item_groups) == 1
+        # We expect at least some results
+        assert len(response.item_groups[0].items) > 0
+
+    def test_pagination_limit_exhausted_mid_query(self, setup_teardown: Any) -> None:
+        """Test that pagination stops when limit is exhausted between item types"""
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+
+        # Request both spans and logs with a limit that will be exhausted on spans
+        message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            limit=5,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    attributes=[
+                        AttributeKey(
+                            name="sentry.item_id",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
+                    ],
+                ),
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                    attributes=[
+                        AttributeKey(
+                            name="sentry.item_id",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
+                    ],
+                ),
+            ],
+        )
+        response = EndpointGetTrace().execute(message)
+
+        # Should only process the first item type since limit is exhausted
+        total_items = sum(len(group.items) for group in response.item_groups)
+        assert total_items == 5
+        # Should only have one item group (spans), not logs
+        assert len(response.item_groups) == 1
+        assert response.item_groups[0].item_type == TraceItemType.TRACE_ITEM_TYPE_SPAN
