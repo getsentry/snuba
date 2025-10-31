@@ -29,6 +29,7 @@ from snuba.web.rpc.common.exceptions import (
     HighAccuracyQueryTimeoutException,
     QueryTimeoutException,
     RPCRequestException,
+    TooManyRPCRequests,
     convert_rpc_exception_to_proto,
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
@@ -235,14 +236,12 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     span.set_data("selected_tier", self.routing_decision.tier)
                     out = self._execute(in_msg)
             else:
-                self.metrics.increment(
-                    "request_rate_limited",
-                    tags=self._timer.tags,
-                )
                 raise _create_rate_limited_exception(self.routing_decision)
         except QueryException as e:
             out = self.response_class()()
-            if (
+            if isinstance(e.__cause__, AllocationPolicyViolations):
+                error = TooManyRPCRequests(e.message)
+            elif (
                 "error_code" in e.extra["stats"]
                 and e.extra["stats"]["error_code"] == clickhouse_errors.TIMEOUT_EXCEEDED
             ):
@@ -358,11 +357,17 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            if isinstance(error, RPCRequestException) and 400 <= error.status_code < 500:
-                self.metrics.increment(
-                    "request_invalid",
-                    tags=self._timer.tags,
-                )
+            if isinstance(error, RPCRequestException):
+                if error.status_code == 429:
+                    self.metrics.increment(
+                        "request_rate_limited",
+                        tags=self._timer.tags,
+                    )
+                elif 400 <= error.status_code < 500:
+                    self.metrics.increment(
+                        "request_invalid",
+                        tags=self._timer.tags,
+                    )
             # AllocationPolicyViolations is not a request_error
             elif not isinstance(error.__cause__, AllocationPolicyViolations):
                 sentry_sdk.capture_exception(error)

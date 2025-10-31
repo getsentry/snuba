@@ -28,6 +28,11 @@ class QueryTimeoutException(RPCRequestException):
         super().__init__(408, message)
 
 
+class TooManyRPCRequests(RPCRequestException):
+    def __init__(self, message: str):
+        super().__init__(429, f"Request rate limited by allocation policy: {message}")
+
+
 def convert_rpc_exception_to_proto(exc: Union[RPCRequestException, QueryException]) -> ErrorProto:
     if isinstance(exc, RPCRequestException):
         return ErrorProto(code=exc.status_code, message=str(exc))
