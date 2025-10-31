@@ -1,12 +1,14 @@
 use crate::types::BytesInsertBatch;
 use pyo3::prelude::*;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::Producer;
-use rust_arroyo::backends::ProducerError;
-use rust_arroyo::processing::strategies::{
+use pyo3::types::PyAnyMethods;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::Producer;
+use sentry_arroyo::backends::ProducerError;
+use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
-use rust_arroyo::types::{Message, TopicOrPartition};
+use sentry_arroyo::types::{Message, TopicOrPartition};
+use std::ffi::CString;
 use std::str;
 use std::sync::{Arc, Mutex};
 
@@ -23,34 +25,35 @@ pub fn initialize_python() {
 
         // monkeypatch signal handlers in Python to noop, because otherwise python multiprocessing
         // strategies cannot be tested
-        let noop_fn = py.eval("lambda *a, **kw: None", None, None).unwrap();
+        let noop_fn = py
+            .eval(&CString::new("lambda *a, **kw: None").unwrap(), None, None)
+            .unwrap();
         PyModule::import(py, "signal")?.setattr("signal", noop_fn)?;
         Ok(())
     })
     .unwrap();
 }
 
-pub struct TestStrategy {
-    pub payloads: Vec<BytesInsertBatch>,
+pub struct TestStrategy<R> {
+    pub payloads: Vec<BytesInsertBatch<R>>,
 }
 
-impl TestStrategy {
+impl<R: Send + Sync> TestStrategy<R> {
     pub fn new() -> Self {
         Self { payloads: vec![] }
     }
 }
-impl ProcessingStrategy<BytesInsertBatch> for TestStrategy {
+impl<R: Send + Sync> ProcessingStrategy<BytesInsertBatch<R>> for TestStrategy<R> {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         Ok(None)
     }
     fn submit(
         &mut self,
-        message: Message<BytesInsertBatch>,
-    ) -> Result<(), SubmitError<BytesInsertBatch>> {
-        self.payloads.push(message.payload().clone());
+        message: Message<BytesInsertBatch<R>>,
+    ) -> Result<(), SubmitError<BytesInsertBatch<R>>> {
+        self.payloads.push(message.into_payload());
         Ok(())
     }
-    fn close(&mut self) {}
     fn terminate(&mut self) {}
     fn join(&mut self, _timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         Ok(None)

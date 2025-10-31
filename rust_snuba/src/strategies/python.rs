@@ -1,17 +1,18 @@
 use crate::config::MessageProcessorConfig;
 
-use crate::types::{BytesInsertBatch, RowData};
+use crate::types::{BytesInsertBatch, CogsData, CommitLogEntry, CommitLogOffsets, RowData};
 use anyhow::Error;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use pyo3::prelude::*;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::{
+use pyo3::types::PyAnyMethods;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
     StrategyError, SubmitError,
 };
-use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
-use rust_arroyo::utils::timing::Deadline;
+use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
+use sentry_arroyo::utils::timing::Deadline;
 use std::collections::{BTreeMap, VecDeque};
 use std::env;
 use std::sync::Arc;
@@ -23,9 +24,9 @@ type Committable = BTreeMap<(String, u16), u64>;
 type PyReturnValue = (ReturnValue, MessageTimestamp, Committable);
 
 pub struct PythonTransformStep {
-    next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
+    next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<RowData>>>,
     python_strategy: Arc<Mutex<Py<PyAny>>>,
-    transformed_messages: VecDeque<Message<BytesInsertBatch>>,
+    transformed_messages: VecDeque<Message<BytesInsertBatch<RowData>>>,
     commit_request_carried_over: Option<CommitRequest>,
 }
 
@@ -37,7 +38,7 @@ impl PythonTransformStep {
         max_queue_depth: Option<usize>,
     ) -> Result<Self, Error>
     where
-        N: ProcessingStrategy<BytesInsertBatch> + 'static,
+        N: ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
     {
         env::set_var(
             "RUST_SNUBA_PROCESSOR_MODULE",
@@ -72,16 +73,25 @@ impl PythonTransformStep {
 
             let commit_log_offsets = offsets
                 .iter()
-                .map(|((_t, p), o)| (*p, (*o, message_timestamp)))
+                .map(|((_t, p), o)| {
+                    (
+                        *p,
+                        CommitLogEntry {
+                            offset: *o,
+                            orig_message_ts: message_timestamp,
+                            received_p99: Vec::new(),
+                        },
+                    )
+                })
                 .collect();
 
             let payload = BytesInsertBatch::new(
                 RowData::from_encoded_rows(payload),
-                message_timestamp,
+                Some(message_timestamp),
                 origin_timestamp,
                 sentry_received_timestamp,
-                commit_log_offsets,
-                None,
+                CommitLogOffsets(commit_log_offsets),
+                CogsData::default(),
             );
 
             let mut committable: BTreeMap<Partition, u64> = BTreeMap::new();
@@ -206,8 +216,6 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         Ok(())
     }
 
-    fn close(&mut self) {}
-
     fn terminate(&mut self) {
         self.next_step.terminate()
     }
@@ -239,7 +247,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     message: transformed_message,
                 })) => {
                     self.transformed_messages.push_front(transformed_message);
-                    if deadline.map_or(false, |d| d.has_elapsed()) {
+                    if deadline.is_some_and(|d| d.has_elapsed()) {
                         tracing::warn!("Timeout reached");
                         break;
                     }
@@ -251,8 +259,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
             }
         }
 
-        self.next_step.close();
         let next_commit = self.next_step.join(timeout)?;
+
         Ok(merge_commit_request(
             self.commit_request_carried_over.take(),
             next_commit,
@@ -268,7 +276,7 @@ struct InvalidMessageMetadata {
 }
 
 impl FromPyObject<'_> for InvalidMessageMetadata {
-    fn extract(dict: &'_ PyAny) -> PyResult<Self> {
+    fn extract_bound(dict: &Bound<'_, PyAny>) -> PyResult<Self> {
         Ok(InvalidMessageMetadata {
             topic: dict.get_item("topic")?.extract()?,
             partition: dict.get_item("partition")?.extract()?,
@@ -280,7 +288,7 @@ impl FromPyObject<'_> for InvalidMessageMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rust_arroyo::testutils::TestStrategy;
+    use sentry_arroyo::testutils::TestStrategy;
 
     #[test]
     fn test_python() {

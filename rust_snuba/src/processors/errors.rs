@@ -1,45 +1,55 @@
+use std::borrow::Cow;
+
 use anyhow::Context;
 use chrono::DateTime;
+use schemars::{gen::SchemaGenerator, schema::Schema, JsonSchema};
 use serde::de;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_with::serde_as;
+use serde_with::DefaultOnError;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{enforce_retention, ensure_valid_datetime};
+use crate::processors::utils::{enforce_retention, StringToIntDatetime64};
 use crate::types::{
     InsertBatch, InsertOrReplacement, KafkaMessageMetadata, ReplacementData, RowData,
 };
 use crate::EnvConfig;
+
+/// A version of serde_json::from_slice that also prints the JSON path at which the error occurred
+fn from_slice<'a, T: Deserialize<'a>>(
+    payload: &'a [u8],
+) -> Result<T, serde_path_to_error::Error<serde_json::Error>> {
+    let jd = &mut serde_json::Deserializer::from_slice(payload);
+    serde_path_to_error::deserialize(jd)
+}
 
 pub fn process_message_with_replacement(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
-    // DEBUG DESERIALIZER. Uncomment this if you're getting Rust errors.
-    //
-    //let payload_bytes = payload.payload().context("Expected payload")?;
-    //let msg: Vec<Value> = serde_json::from_slice(payload_bytes)?;
-    //if msg.len() == 4 {
-    //let x = msg.get(2).unwrap();
-    //let y = x.to_string();
-    //let msg: ErrorMessage = serde_json::from_str(&y)?;
-    //}
-
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: Message = serde_json::from_slice(payload_bytes)?;
+    let msg: Message = from_slice(payload_bytes)
+        .with_context(|| {
+            let four = from_slice(payload_bytes).map(|_: FourTrain| ());
+            let three = from_slice(payload_bytes).map(|_: ThreeTrain| ());
+
+            format!("payload start: {}\n\nerror trying to deserialize as event: {:?}\n\nerror trying to deserialize as replacement: {:?}", String::from_utf8_lossy(&payload_bytes[..50]), four, three)
+        })?;
 
     let (version, msg_type, error_event, replacement_event) = match msg {
-        Message::FourTrain(version, msg_type, event, _state) => {
+        Message::FourTrain(FourTrain(version, msg_type, event, _state)) => {
             (version, msg_type, Some(event), None)
         }
-        Message::ThreeTrain(version, msg_type, event) => (version, msg_type, None, Some(event)),
+        Message::ThreeTrain(ThreeTrain(version, msg_type, event)) => {
+            (version, msg_type, None, Some(event))
+        }
     };
 
     if version != 2 {
@@ -48,7 +58,8 @@ pub fn process_message_with_replacement(
 
     match (msg_type.as_str(), error_event, replacement_event) {
         ("insert", Some(error), _) => {
-            let origin_timestamp = DateTime::from_timestamp(error.data.received as i64, 0);
+            let origin_timestamp =
+                DateTime::from_timestamp(error.data.received.unwrap_or_default() as i64, 0);
 
             let mut row = ErrorRow::parse(error, &config.env_config)?;
             row.partition = metadata.partition;
@@ -76,57 +87,64 @@ pub fn process_message_with_replacement(
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 #[serde(untagged)]
 enum Message {
-    FourTrain(u8, String, ErrorMessage, Value),
-    ThreeTrain(u8, String, ReplacementEvent),
+    FourTrain(FourTrain),
+    ThreeTrain(ThreeTrain),
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Deserialize, JsonSchema)]
+struct FourTrain(u8, String, ErrorMessage, Value);
+
+#[derive(Debug, Deserialize, JsonSchema)]
+struct ThreeTrain(u8, String, ReplacementEvent);
+
+#[derive(Deserialize, Debug, JsonSchema)]
 struct ReplacementEvent {
     project_id: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct ErrorMessage {
     data: ErrorData,
-    #[serde(default, deserialize_with = "ensure_valid_datetime")]
-    datetime: u32,
+    #[serde(default)]
+    datetime: StringToIntDatetime64,
     event_id: Uuid,
     group_id: u64,
+    #[serde(default)]
+    group_first_seen: StringToIntDatetime64,
     message: String,
     primary_hash: String,
     project_id: u64,
     #[serde(default)]
     retention_days: Option<u16>,
-    platform: String,
+    #[serde(default)]
+    platform: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct ErrorData {
     #[serde(default)]
-    contexts: Contexts,
+    contexts: Option<Contexts>,
     #[serde(default)]
     culprit: Unicodify,
     #[serde(default)]
     errors: Option<Vec<Value>>,
     #[serde(default, alias = "sentry.interfaces.Exception")]
-    exception: Exception,
-    #[serde(default)]
-    hierarchical_hashes: Vec<String>,
+    exception: Option<Exception>,
     #[serde(default)]
     location: Option<String>,
     #[serde(default)]
-    modules: HashMap<String, Option<String>>,
+    modules: Option<BTreeMap<String, Option<String>>>,
     #[serde(default)]
-    received: f64,
+    received: Option<f64>,
     #[serde(default)]
-    request: Request,
+    request: Option<Request>,
     #[serde(default)]
-    sdk: Sdk,
+    sdk: Option<Sdk>,
     #[serde(default)]
-    tags: Vec<Option<(Unicodify, Unicodify)>>,
+    tags: Option<Vec<Option<(Unicodify, Unicodify)>>>,
     #[serde(default, alias = "sentry.interfaces.Threads")]
     threads: Option<Thread>,
     #[serde(default)]
@@ -134,26 +152,32 @@ struct ErrorData {
     #[serde(default, rename = "type")]
     ty: Unicodify,
     #[serde(default, alias = "sentry.interfaces.User")]
-    user: User,
+    user: Option<User>,
     #[serde(default)]
     version: Option<String>,
+    #[serde(default)]
+    symbolicated_in_app: Option<bool>,
+    #[serde(default)]
+    sample_rate: Option<f64>,
 }
 
 // Contexts
 
 type GenericContext = BTreeMap<String, ContextStringify>;
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Contexts {
     #[serde(default)]
-    replay: ReplayContext,
+    flags: Option<FlagContext>,
     #[serde(default)]
-    trace: TraceContext,
+    replay: Option<ReplayContext>,
+    #[serde(default)]
+    trace: Option<TraceContext>,
     #[serde(flatten)]
-    other: BTreeMap<String, GenericContext>,
+    other: BTreeMap<String, Option<GenericContext>>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct TraceContext {
     #[serde(default)]
     sampled: Option<bool>,
@@ -161,11 +185,27 @@ struct TraceContext {
     span_id: Option<String>,
     #[serde(default)]
     trace_id: Option<Uuid>,
+    #[serde(default)]
+    parent_span_id: Option<String>,
     #[serde(flatten)]
     other: GenericContext,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+struct FlagContext {
+    #[serde(default)]
+    values: Option<Vec<Option<FlagContextItem>>>,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+struct FlagContextItem {
+    #[serde(default)]
+    flag: Unicodify,
+    #[serde(default)]
+    result: Unicodify,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct ReplayContext {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     replay_id: Option<Uuid>,
@@ -173,26 +213,27 @@ struct ReplayContext {
 
 // Stacktraces
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Exception {
     #[serde(default)]
     values: Option<Vec<Option<ExceptionValue>>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct ExceptionValue {
-    stacktrace: StackTrace,
     #[serde(default)]
-    mechanism: ExceptionMechanism,
+    stacktrace: Option<StackTrace>,
+    #[serde(default)]
+    mechanism: Option<ExceptionMechanism>,
     #[serde(default, rename = "type")]
     ty: Unicodify,
     #[serde(default)]
     value: Unicodify,
     #[serde(default)]
-    thread_id: Option<u64>,
+    thread_id: Option<ThreadId>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct ExceptionMechanism {
     #[serde(default, rename = "type")]
     ty: Unicodify,
@@ -200,13 +241,14 @@ struct ExceptionMechanism {
     handled: Boolify,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema, Default)]
 struct StackTrace {
     #[serde(default)]
-    frames: Vec<StackFrame>,
+    frames: Option<Vec<Option<StackFrame>>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[serde_as]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct StackFrame {
     #[serde(default)]
     abs_path: Unicodify,
@@ -222,29 +264,37 @@ struct StackFrame {
     in_app: Option<bool>,
     #[serde(default)]
     colno: Option<u32>,
+    #[serde_as(deserialize_as = "DefaultOnError")]
     #[serde(default)]
     lineno: Option<u32>,
 }
 
 // Threads
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Thread {
     #[serde(default)]
     values: Option<Vec<Option<ThreadValue>>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct ThreadValue {
     #[serde(default)]
-    id: Option<u64>,
+    id: Option<ThreadId>,
     #[serde(default)]
     main: Option<bool>,
 }
 
+#[derive(Debug, Deserialize, JsonSchema, Eq, PartialEq)]
+#[serde(untagged)]
+enum ThreadId {
+    Int(u64),
+    String(String),
+}
+
 // SDK
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Sdk {
     #[serde(default)]
     name: Unicodify,
@@ -256,17 +306,17 @@ struct Sdk {
 
 // Request
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Request {
     #[serde(default)]
     method: Unicodify,
     #[serde(default)]
-    headers: Vec<(String, Unicodify)>,
+    headers: Option<Vec<Option<(String, Unicodify)>>>,
 }
 
 // User
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct User {
     #[serde(default)]
     email: Unicodify,
@@ -277,12 +327,12 @@ struct User {
     #[serde(default)]
     username: Unicodify,
     #[serde(default)]
-    geo: GenericContext,
+    geo: Option<GenericContext>,
 }
 
 // Row
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, JsonSchema)]
 struct ErrorRow {
     #[serde(rename = "contexts.key")]
     contexts_key: Vec<String>,
@@ -322,7 +372,7 @@ struct ErrorRow {
     #[serde(rename = "exception_stacks.value")]
     exception_stacks_value: Vec<Option<String>>,
     group_id: u64,
-    hierarchical_hashes: Vec<Uuid>,
+    group_first_seen: u32,
     http_method: Option<String>,
     http_referer: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -340,7 +390,7 @@ struct ErrorRow {
     num_processing_errors: u64,
     offset: u64,
     partition: u16,
-    platform: String,
+    platform: Option<String>,
     primary_hash: Uuid,
     project_id: u64,
     received: u32,
@@ -357,7 +407,12 @@ struct ErrorRow {
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
     tags_value: Vec<String>,
+    #[serde(rename = "flags.key")]
+    flags_key: Vec<String>,
+    #[serde(rename = "flags.value")]
+    flags_value: Vec<String>,
     timestamp: u32,
+    timestamp_ms: u64,
     title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     trace_id: Option<Uuid>,
@@ -371,6 +426,9 @@ struct ErrorRow {
     user_name: Option<String>,
     user: String,
     version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    symbolicated_in_app: Option<bool>,
+    sample_weight: Option<f64>,
 }
 
 impl ErrorRow {
@@ -379,11 +437,11 @@ impl ErrorRow {
             return Err(anyhow::Error::msg("Invalid type."));
         }
 
+        let from_context = from.data.contexts.unwrap_or_default();
+        let from_trace_context = from_context.trace.unwrap_or_default();
+
         // Parse the optional string to a base16 u64.
-        let span_id = from
-            .data
-            .contexts
-            .trace
+        let span_id = from_trace_context
             .span_id
             .as_ref()
             .map(|inner| u64::from_str_radix(inner, 16).ok())
@@ -391,17 +449,10 @@ impl ErrorRow {
 
         // Hashes
         let primary_hash = to_uuid(from.primary_hash);
-        let hierarchical_hashes: Vec<Uuid> = from
-            .data
-            .hierarchical_hashes
-            .into_iter()
-            .map(to_uuid)
-            .collect();
 
         // SDK Integrations
-        let sdk_integrations = from
-            .data
-            .sdk
+        let from_sdk = from.data.sdk.unwrap_or_default();
+        let sdk_integrations = from_sdk
             .integrations
             .unwrap_or_default()
             .into_iter()
@@ -409,26 +460,35 @@ impl ErrorRow {
             .collect();
 
         // Unwrap the ip-address string.
-        let ip_address_string = from.data.user.ip_address.unwrap_or_default();
+        let from_user = from.data.user.unwrap_or_default();
+        let ip_address_string = from_user.ip_address.unwrap_or_default();
         let (ip_address_v4, ip_address_v6) = match ip_address_string.parse::<IpAddr>() {
             Err(_) => (None, None),
             Ok(IpAddr::V4(ipv4)) => (Some(ipv4), None),
             Ok(IpAddr::V6(ipv6)) => (None, Some(ipv6)),
         };
 
+        let from_request = from.data.request.unwrap_or_default();
+
         // Extract HTTP referrer from the headers list.
         let mut http_referer = None;
-        for (key, value) in from.data.request.headers {
-            if key == "Referrer" {
+        for (key, value) in from_request
+            .headers
+            .unwrap_or_default()
+            .into_iter()
+            .flatten()
+        {
+            if key == "Referer" || key == "Referrer" {
                 http_referer = value.0;
                 break;
             }
         }
 
         // Modules.
-        let mut module_names = Vec::with_capacity(from.data.modules.len());
-        let mut module_versions = Vec::with_capacity(from.data.modules.len());
-        for (name, version) in from.data.modules {
+        let from_modules = from.data.modules.unwrap_or_default();
+        let mut module_names = Vec::with_capacity(from_modules.len());
+        let mut module_versions = Vec::with_capacity(from_modules.len());
+        for (name, version) in from_modules {
             module_names.push(name);
             module_versions.push(version.unwrap_or_default());
         }
@@ -441,11 +501,12 @@ impl ErrorRow {
         let mut dist = None;
         let mut user = None;
         let mut replay_id = None;
-        let mut tags_key = Vec::with_capacity(from.data.tags.len());
-        let mut tags_value = Vec::with_capacity(from.data.tags.len());
 
-        let mut from_tags = from.data.tags;
+        let mut from_tags = from.data.tags.unwrap_or_default();
         from_tags.sort();
+
+        let mut tags_key = Vec::with_capacity(from_tags.len());
+        let mut tags_value = Vec::with_capacity(from_tags.len());
 
         for t in from_tags.into_iter().flatten() {
             if let (Some(tag_key), Some(tag_value)) = (&t.0 .0, &t.1 .0) {
@@ -476,13 +537,14 @@ impl ErrorRow {
         let mut contexts_keys = Vec::with_capacity(100);
         let mut contexts_values = Vec::with_capacity(100);
 
-        let mut other_contexts = from.data.contexts.other;
-        if !from.data.user.geo.is_empty() {
-            other_contexts.insert("geo".to_owned(), from.data.user.geo);
+        let mut other_contexts = from_context.other;
+        let from_geo = from_user.geo.unwrap_or_default();
+        if !from_geo.is_empty() {
+            other_contexts.insert("geo".to_owned(), Some(from_geo));
         }
 
         for (container_name, container) in other_contexts {
-            for (key, value) in container {
+            for (key, value) in container.unwrap_or_default() {
                 if let Some(v) = value.0 {
                     if key != "type" {
                         contexts_keys.push(format!("{}.{}", container_name, key));
@@ -496,45 +558,70 @@ impl ErrorRow {
         // python processor. some fields may be used in queries, but other fields can probably go
         // since they have already been promoted.
         if let Some(ContextStringify(Some(value))) =
-            from.data.contexts.trace.other.get("client_sample_rate")
+            from_trace_context.other.get("client_sample_rate")
         {
             contexts_keys.push("trace.client_sample_rate".to_owned());
             contexts_values.push(value.to_string());
         }
 
-        if let Some(ContextStringify(Some(value))) = from.data.contexts.trace.other.get("op") {
+        if let Some(ContextStringify(Some(value))) = from_trace_context.other.get("op") {
             contexts_keys.push("trace.op".to_owned());
             contexts_values.push(value.to_string());
         }
 
-        if let Some(span_id) = from.data.contexts.trace.span_id {
+        if let Some(span_id) = from_trace_context.span_id {
             contexts_keys.push("trace.span_id".to_owned());
             contexts_values.push(span_id.to_string());
         }
 
-        if let Some(ContextStringify(Some(status))) = from.data.contexts.trace.other.get("status") {
+        if let Some(ContextStringify(Some(status))) = from_trace_context.other.get("status") {
             contexts_keys.push("trace.status".to_owned());
             contexts_values.push(status.to_string());
         }
 
-        if let Some(trace_id) = from.data.contexts.trace.trace_id {
+        if let Some(trace_id) = from_trace_context.trace_id {
             contexts_keys.push("trace.trace_id".to_owned());
             contexts_values.push(trace_id.simple().to_string());
         }
 
+        if let Some(parent_span_id) = from_trace_context.parent_span_id {
+            contexts_keys.push("trace.parent_span_id".to_owned());
+            contexts_values.push(parent_span_id.to_string());
+        }
+
         // Conditionally overwrite replay_id if it was provided on the contexts object.
-        if let Some(rid) = from.data.contexts.replay.replay_id {
+        if let Some(rid) = from_context.replay.unwrap_or_default().replay_id {
             replay_id = Some(rid)
         }
 
+        // Split feature keys and values into two vectors if the context could be parsed.
+        let mut flags_key = Vec::new();
+        let mut flags_value = Vec::new();
+
+        if let Some(ctx) = from_context.flags {
+            if let Some(values) = ctx.values {
+                for item in values.into_iter().flatten() {
+                    if let (Some(k), Some(v)) = (item.flag.0, item.result.0) {
+                        flags_key.push(k);
+                        flags_value.push(v);
+                    }
+                }
+            }
+        };
+
         // Stacktrace.
 
-        let exceptions = from.data.exception.values.unwrap_or_default();
+        let exceptions = from
+            .data
+            .exception
+            .unwrap_or_default()
+            .values
+            .unwrap_or_default();
 
         let exception_count = exceptions.len();
         let frame_count = exceptions
             .iter()
-            .filter_map(|v| Some(v.as_ref()?.stacktrace.frames.len()))
+            .filter_map(|v| Some(v.as_ref()?.stacktrace.as_ref()?.frames.as_ref()?.len()))
             .sum();
 
         let mut stack_types = Vec::with_capacity(exception_count);
@@ -561,10 +648,18 @@ impl ErrorRow {
             for (stack_level, stack) in exceptions.into_iter().flatten().enumerate() {
                 stack_types.push(stack.ty.0);
                 stack_values.push(stack.value.0);
-                stack_mechanism_types.push(stack.mechanism.ty.0);
-                stack_mechanism_handled.push(stack.mechanism.handled.0);
+                let from_mechanism = stack.mechanism.unwrap_or_default();
+                stack_mechanism_types.push(from_mechanism.ty.0);
+                stack_mechanism_handled.push(from_mechanism.handled.0);
 
-                for frame in stack.stacktrace.frames {
+                for frame in stack
+                    .stacktrace
+                    .unwrap_or_default()
+                    .frames
+                    .unwrap_or_default()
+                    .into_iter()
+                    .flatten()
+                {
                     frame_abs_paths.push(frame.abs_path.0);
                     frame_filenames.push(frame.filename.0);
                     frame_packages.push(frame.package.0);
@@ -580,8 +675,8 @@ impl ErrorRow {
                 if exception_main_thread != Some(true) {
                     if let Some(stack_thread) = stack.thread_id {
                         for thread in threads.values.iter().flatten().filter_map(|x| x.as_ref()) {
-                            if let (Some(thread_id), Some(main)) = (thread.id, thread.main) {
-                                if thread_id == stack_thread && main {
+                            if let (Some(thread_id), Some(main)) = (&thread.id, thread.main) {
+                                if *thread_id == stack_thread && main {
                                     // if it's the main thread, mark it as such and stop it
                                     exception_main_thread = Some(true);
                                     break;
@@ -596,6 +691,11 @@ impl ErrorRow {
                 }
             }
         }
+
+        let sample_weight =
+            from.data
+                .sample_rate
+                .and_then(|rate| if rate == 0.0 { None } else { Some(1.0 / rate) });
 
         Ok(Self {
             contexts_key: contexts_keys,
@@ -619,9 +719,11 @@ impl ErrorRow {
             exception_stacks_mechanism_type: stack_mechanism_types,
             exception_stacks_type: stack_types,
             exception_stacks_value: stack_values,
+            flags_key,
+            flags_value,
             group_id: from.group_id,
-            hierarchical_hashes,
-            http_method: from.data.request.method.0,
+            group_first_seen: (from.group_first_seen.0 / 1000) as u32,
+            http_method: from_request.method.0,
             http_referer,
             ip_address_v4,
             ip_address_v6,
@@ -634,27 +736,30 @@ impl ErrorRow {
             platform: from.platform,
             primary_hash,
             project_id: from.project_id,
-            received: from.data.received as u32, // TODO: Implicit truncation.
+            received: from.data.received.unwrap_or_default() as u32, // TODO: Implicit truncation.
             release,
             replay_id,
             retention_days: from.retention_days,
             sdk_integrations,
-            sdk_name: from.data.sdk.name.0.unwrap_or_default(),
-            sdk_version: from.data.sdk.version.0.unwrap_or_default(),
+            sdk_name: from_sdk.name.0.unwrap_or_default(),
+            sdk_version: from_sdk.version.0.unwrap_or_default(),
             span_id,
             tags_key,
             tags_value,
-            timestamp: from.datetime,
+            timestamp: (from.datetime.0 / 1000) as u32,
+            timestamp_ms: from.datetime.0,
             title: from.data.title.0.unwrap_or_default(),
-            trace_id: from.data.contexts.trace.trace_id,
-            trace_sampled: from.data.contexts.trace.sampled.map(|v| v as u8),
+            trace_id: from_trace_context.trace_id,
+            trace_sampled: from_trace_context.sampled.map(|v| v as u8),
             transaction_name: transaction_name.unwrap_or_default(),
             ty: from.data.ty.0.unwrap_or_default(),
-            user_email: from.data.user.email.0,
-            user_id: from.data.user.id.0,
-            user_name: from.data.user.username.0,
+            user_email: from_user.email.0,
+            user_id: from_user.id.0,
+            user_name: from_user.username.0,
             user: user.unwrap_or_default(),
             version: from.data.version,
+            symbolicated_in_app: from.data.symbolicated_in_app,
+            sample_weight,
             ..Default::default()
         })
     }
@@ -692,6 +797,22 @@ impl<'de> Deserialize<'de> for Boolify {
     }
 }
 
+impl JsonSchema for Boolify {
+    fn schema_name() -> String {
+        "Boolify".to_owned()
+    }
+
+    fn schema_id() -> Cow<'static, str> {
+        // Include the module, in case a type with the same name is in another module/crate
+        Cow::Borrowed(concat!(module_path!(), "::Boolify"))
+    }
+
+    fn json_schema(gen: &mut SchemaGenerator) -> Schema {
+        // basically doesn't error on any type
+        Value::json_schema(gen)
+    }
+}
+
 #[derive(Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 struct Unicodify(Option<String>);
 
@@ -715,8 +836,40 @@ impl<'de> Deserialize<'de> for Unicodify {
     }
 }
 
+impl JsonSchema for Unicodify {
+    fn schema_name() -> String {
+        "Unicodify".to_owned()
+    }
+
+    fn schema_id() -> Cow<'static, str> {
+        // Include the module, in case a type with the same name is in another module/crate
+        Cow::Borrowed(concat!(module_path!(), "::Unicodify"))
+    }
+
+    fn json_schema(gen: &mut SchemaGenerator) -> Schema {
+        // basically doesn't error on any type
+        Value::json_schema(gen)
+    }
+}
+
 #[derive(Debug, Default)]
 struct ContextStringify(Option<String>);
+
+impl JsonSchema for ContextStringify {
+    fn schema_name() -> String {
+        "ContextStringify".to_owned()
+    }
+
+    fn schema_id() -> Cow<'static, str> {
+        // Include the module, in case a type with the same name is in another module/crate
+        Cow::Borrowed(concat!(module_path!(), "::ContextStringify"))
+    }
+
+    fn json_schema(gen: &mut SchemaGenerator) -> Schema {
+        // basically doesn't error on any type
+        Value::json_schema(gen)
+    }
+}
 
 impl<'de> Deserialize<'de> for ContextStringify {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -731,5 +884,54 @@ impl<'de> Deserialize<'de> for ContextStringify {
             ))),
             _ => Ok(ContextStringify(None)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::processors::tests::run_schema_type_test;
+
+    #[test]
+    fn schema() {
+        // run schema validation only for a subset of the payload, json-schema-diff gets too
+        // confused by our untagged enum/anyOf wrapper
+        run_schema_type_test::<Message>("events", None);
+    }
+
+    #[test]
+    fn deserialize_invalid_lineno() {
+        const SERIALIZED: &str = r#"
+        {
+            "function": "foo",
+            "module": "app.hello",
+            "filename": "hello",
+            "abs_path": "hello",
+            "lineno": 90052021220,
+            "colno": 86472,
+            "in_app": true,
+            "context_line": null,
+            "data": null,
+            "errors": null,
+            "raw_function": null,
+            "image_addr": null,
+            "instruction_addr": null,
+            "addr_mode": null,
+            "package": null,
+            "platform": null,
+            "post_context": null,
+            "pre_context": null,
+            "source_link": null,
+            "symbol": null,
+            "symbol_addr": null,
+            "trust": null,
+            "vars": null,
+            "snapshot": null,
+            "lock": null
+        }
+        "#;
+        let deserialized: StackFrame = serde_json::from_str(SERIALIZED).unwrap();
+        assert_eq!(deserialized.lineno, None);
     }
 }

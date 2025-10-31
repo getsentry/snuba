@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
-import Client from "../api_client";
-import { Table } from "../table";
+import Client from "SnubaAdmin/api_client";
+import { Table } from "SnubaAdmin/table";
 import {
   MigrationData,
   MigrationGroupResult,
   GroupOptions,
   RunMigrationRequest,
-  RunMigrationResult,
   Action,
-} from "./types";
+} from "SnubaAdmin/clickhouse_migrations/types";
+import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 
 function ClickhouseMigrations(props: { api: Client }) {
   const [allGroups, setAllGroups] = useState<GroupOptions>({});
@@ -189,38 +189,22 @@ function ClickhouseMigrations(props: { api: Client }) {
   }
 
   function renderMigrationIds() {
-    if (migrationGroup) {
-      return (
-        <select
-          value={migrationId || ""}
-          onChange={(evt) => selectMigration(evt.target.value)}
-          style={dropDownStyle}
-        >
-          <option disabled={!migrationGroup} value="">
-            Select a migration id
-          </option>
-          {allGroups[migrationGroup.group].migration_ids.map(
-            (m: MigrationData) => (
-              <option key={m.migration_id} value={m.migration_id}>
-                {m.migration_id} - {m.status}
-              </option>
-            )
-          )}
-        </select>
-      );
-    } else {
-      return (
-        <select
-          value={migrationId || ""}
-          onChange={(evt) => selectMigration(evt.target.value)}
-          style={dropDownStyle}
-        >
-          <option disabled={true} value="">
-            Select a migration id
-          </option>
-        </select>
-      );
-    }
+    return (
+      <CustomSelect
+        disabled={migrationGroup === null}
+        value={migrationId || ""}
+        onChange={selectMigration}
+        name="Migration ID"
+        options={
+          migrationGroup
+            ? allGroups[migrationGroup.group].migration_ids.map((m: MigrationData) => ({
+              value: m.migration_id,
+              label: `${m.migration_id} - ${m.status}`,
+            }))
+            : []
+        }
+      />
+    );
   }
 
   function renderActions() {
@@ -280,20 +264,12 @@ function ClickhouseMigrations(props: { api: Client }) {
             Attempt to run or reverse a migration for one of the migration
             groups you have access to
           </p>
-          <select
-            defaultValue={migrationGroup?.group || ""}
-            onChange={(evt) => selectGroup(evt.target.value)}
-            style={dropDownStyle}
-          >
-            <option disabled value="">
-              Select a migration group
-            </option>
-            {Object.keys(allGroups).map((name: string) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
+          <CustomSelect
+            value={migrationGroup?.group || ""}
+            onChange={selectGroup}
+            name="Migration Group"
+            options={Object.keys(allGroups).map((name: string) => (name))}
+          />
         </div>
 
         <div>

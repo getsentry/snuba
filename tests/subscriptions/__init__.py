@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timedelta
 
 import pytest
+from confluent_kafka.admin import AdminClient
 
 from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
@@ -12,12 +13,22 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertEvent
+from snuba.utils.manage_topics import create_topics
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.helpers import write_raw_unprocessed_events, write_unprocessed_events
+from tests.web.rpc.v1.test_utils import gen_item_message
 
 
 class BaseSubscriptionTest:
     @pytest.fixture(autouse=True)
     def setup_teardown(self, clickhouse_db: None) -> None:
+        settings.KAFKA_TOPIC_MAP = {
+            "events": "events-test-base-subscription",
+        }
+        admin_client = AdminClient(get_default_kafka_configuration())
+        create_topics(admin_client, [SnubaTopic.EVENTS])
+
         self.project_id = 1
         self.platforms = ["a", "b"]
         self.minutes = 20
@@ -86,11 +97,21 @@ class BaseSubscriptionTest:
             ],
         )
 
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        messages = [
+            gen_item_message(self.base_time + timedelta(minutes=tick))
+            for tick in range(self.minutes)
+        ]
+        extra_messages = [
+            gen_item_message(self.base_time - timedelta(hours=4)) for _ in range(2)
+        ]
+        write_raw_unprocessed_events(items_storage, extra_messages + messages)
+
 
 def __entity_eq__(self: Entity, other: object) -> bool:
     if not isinstance(other, Entity):
         return False
-    return type(self) == type(other)
+    return isinstance(self, type(other))
 
 
 Entity.__eq__ = __entity_eq__  # type: ignore

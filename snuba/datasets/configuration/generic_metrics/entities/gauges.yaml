@@ -26,11 +26,7 @@ schema:
     {
       name: tags.raw_value,
       type: Array,
-      args:
-        {
-          schema_modifiers: [readonly],
-          inner_type: { type: String },
-        },
+      args: { schema_modifiers: [readonly], inner_type: { type: String } },
     },
     {
       name: min,
@@ -48,9 +44,19 @@ schema:
       args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
     },
     {
+      name: sum_weighted,
+      type: AggregateFunction,
+      args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
+    },
+    {
       name: count,
       type: AggregateFunction,
       args: { func: count, arg_types: [{ type: UInt, args: { size: 64 } }] },
+    },
+    {
+      name: count_weighted,
+      type: AggregateFunction,
+      args: { func: sum, arg_types: [{ type: UInt, args: { size: 64 } }] },
     },
     {
       name: last,
@@ -109,6 +115,12 @@ storages:
         - mapper: AggregateFunctionMapper
           args:
             column_to_map: value
+            from_name: sum_weighted
+            to_name: sumMerge
+            aggr_col_name: sum_weighted
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
             from_name: count
             to_name: sumMerge
             aggr_col_name: count
@@ -118,6 +130,12 @@ storages:
             from_name: countIf
             to_name: sumMergeIf
             aggr_col_name: count
+        - mapper: AggregateFunctionMapper
+          args:
+            column_to_map: value
+            from_name: count_weighted
+            to_name: sumMerge
+            aggr_col_name: count_weighted
         - mapper: AggregateFunctionMapper
           args:
             column_to_map: value
@@ -251,19 +269,6 @@ query_processors:
       time_group_columns:
         bucketed_time: timestamp
       time_parse_columns: [timestamp]
-  - processor: ReferrerRateLimiterProcessor
-  - processor: OrganizationRateLimiterProcessor
-    args:
-      org_column: org_id
-  - processor: ProjectReferrerRateLimiter
-    args:
-      project_column: project_id
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
-  - processor: ResourceQuotaProcessor
-    args:
-      project_field: project_id
   - processor: CalculatedAverageProcessor
 
 validators:
@@ -272,3 +277,14 @@ validators:
       required_filter_columns: ["org_id", "project_id"]
 required_time_column: timestamp
 partition_key_column_name: org_id
+subscription_processors:
+  - processor: AddColumnCondition
+    args:
+      extra_condition_data_key: organization
+      extra_condition_column: org_id
+subscription_validators:
+  - validator: AggregationValidator
+    args:
+      max_allowed_aggregations: 3
+      disallowed_aggregations: [having, orderby]
+      required_time_column: timestamp

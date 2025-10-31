@@ -1,73 +1,25 @@
-import React, { useEffect, useState } from "react";
-import Client from "../api_client";
-import { selectStyle } from "./styles";
-import AllocationPolicyConfigs from "./allocation_policy";
-import { AllocationPolicy } from "./types";
+import React from "react";
+import Client from "SnubaAdmin/api_client";
+import { AllocationPolicy } from "SnubaAdmin/configurable_component/types";
+import { PolicyRenderer } from "SnubaAdmin/capacity_management/policy_renderer";
+import { ConfigurableComponentDropdownRenderer } from "SnubaAdmin/configurable_component/render_configurable_component";
 
 function CapacityManagement(props: { api: Client }) {
-  const { api } = props;
-
-  const [storages, setStorages] = useState<string[]>([]);
-  const [selectedStorage, setStorage] = useState<string>();
-  const [allocationPolicies, setAllocationPolicies] = useState<
-    AllocationPolicy[]
-  >([]);
-
-  useEffect(() => {
-    api.getStoragesWithAllocationPolicies().then((res) => {
-      setStorages(res);
-    });
-  }, []);
-
-  function selectStorage(storage: string) {
-    setStorage(storage);
-    loadAllocationPolicies(storage);
-  }
-
-  function loadAllocationPolicies(storage: string) {
-    api
-      .getAllocationPolicies(storage)
-      .then((res) => {
-        setAllocationPolicies(res);
-      })
-      .catch((err) => {
-        window.alert(err);
-      });
-  }
-
   return (
-    <div>
-      <p>
-        Storage:
-        <select
-          value={selectedStorage || ""}
-          onChange={(evt) => selectStorage(evt.target.value)}
-          style={selectStyle}
-        >
-          <option disabled value="">
-            Select a storage
-          </option>
-          {storages.map((storage_name) => (
-            <option key={storage_name} value={storage_name}>
-              {storage_name}
-            </option>
-          ))}
-        </select>
-      </p>
-
-      {selectedStorage && allocationPolicies ? (
-        allocationPolicies.map((policy: AllocationPolicy) => (
-          <AllocationPolicyConfigs
-            api={api}
-            storage={selectedStorage}
-            policy={policy}
-            key={selectedStorage + policy.policy_name}
-          />
-        ))
-      ) : (
-        <p>Storage not selected.</p>
+    <ConfigurableComponentDropdownRenderer<AllocationPolicy[]>
+      api={props.api}
+      resourceType="storage"
+      getOptions={() => props.api.getStoragesWithAllocationPolicies()}
+      loadData={(storage) => props.api.getAllocationPolicies(storage)}
+      renderContent={(policies, selectedStorage) => (
+        <PolicyRenderer
+          api={props.api}
+          policies={policies || []}
+          resourceIdentifier={selectedStorage}
+          resourceType="storage"
+        />
       )}
-    </div>
+    />
   );
 }
 

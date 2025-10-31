@@ -3,7 +3,7 @@ from snuba.query.conditions import (
     ConditionFunctions,
     binary_condition,
 )
-from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import (
     Argument,
@@ -42,10 +42,12 @@ class HandledFunctionsProcessor(LogicalQueryProcessor):
     def __init__(self, column: str):
         self.__column = column
 
-    def validate_parameters(self, exp: FunctionCall, entity: QueryEntity) -> None:
+    def validate_parameters(
+        self, exp: FunctionCall, data_source: SimpleDataSource
+    ) -> None:
         validator = SignatureValidator([])
         try:
-            validator.validate(exp.function_name, exp.parameters, entity)
+            validator.validate(exp.function_name, exp.parameters, data_source)
         except InvalidFunctionCall as err:
             raise InvalidExpressionException.from_args(
                 exp,

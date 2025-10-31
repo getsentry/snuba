@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import time
+from unittest import mock
 
 import pytest
 
 from snuba.datasets.storage import StorageKey
 from snuba.query.allocation_policies import (
-    AllocationPolicyViolation,
     AllocationPolicyViolations,
+    InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
 )
 from snuba.query.allocation_policies.concurrent_rate_limit import (
@@ -52,10 +53,10 @@ def test_rate_limit_concurrent(policy: ConcurrentRateLimitAllocationPolicy) -> N
             tenant_ids={"organization_id": 123}, query_id=f"abc{i}"
         )
 
-    with pytest.raises(AllocationPolicyViolation):
-        policy.get_quota_allowance(
-            tenant_ids={"organization_id": 123}, query_id=f"abc{MAX_CONCURRENT_QUERIES}"
-        )
+    quota_allowance = policy.get_quota_allowance(
+        tenant_ids={"organization_id": 123}, query_id=f"abc{MAX_CONCURRENT_QUERIES}"
+    )
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
 
 @pytest.mark.redis_db
@@ -69,11 +70,11 @@ def test_rate_limit_concurrent_diff_tenants(
             tenant_ids={"organization_id": RATE_LIMITED_ORG_ID}, query_id=f"abc{i}"
         )
 
-    with pytest.raises(AllocationPolicyViolation):
-        policy.get_quota_allowance(
-            tenant_ids={"organization_id": RATE_LIMITED_ORG_ID},
-            query_id=f"abc{MAX_CONCURRENT_QUERIES}",
-        )
+    quota_allowance = policy.get_quota_allowance(
+        tenant_ids={"organization_id": RATE_LIMITED_ORG_ID},
+        query_id=f"abc{MAX_CONCURRENT_QUERIES}",
+    )
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
     policy.get_quota_allowance(
         tenant_ids={"organization_id": OTHER_ORG_ID},
         query_id=f"abc{MAX_CONCURRENT_QUERIES}",
@@ -91,12 +92,9 @@ def test_configure_max_query_duration(
 
     policy.get_quota_allowance(tenant_ids={"organization_id": 123}, query_id="abc1")
     time.sleep(sleep_time)
-    try:
-        policy.get_quota_allowance(tenant_ids={"organization_id": 123}, query_id="abc2")
-    except AllocationPolicyViolation:
-        assert (
-            False
-        ), "max_query_duration_s is set to {max_query_duration_s}, test sleeps for {sleep_time} seconds, the first query should have no longer been counted towards the concurrent limit"
+    assert policy.get_quota_allowance(
+        tenant_ids={"organization_id": 123}, query_id="abc2"
+    ).can_run, "max_query_duration_s is set to {max_query_duration_s}, test sleeps for {sleep_time} seconds, the first query should have no longer been counted towards the concurrent limit"
 
 
 @pytest.mark.redis_db
@@ -110,10 +108,10 @@ def test_rate_limit_concurrent_complete_query(
         )
 
     # cant submit anymore
-    with pytest.raises(AllocationPolicyViolation):
-        policy.get_quota_allowance(
-            tenant_ids={"organization_id": 123}, query_id=f"abc{MAX_CONCURRENT_QUERIES}"
-        )
+    quota_allowance = policy.get_quota_allowance(
+        tenant_ids={"organization_id": 123}, query_id=f"abc{MAX_CONCURRENT_QUERIES}"
+    )
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
     # one query finishes
     policy.update_quota_balance(
@@ -128,11 +126,11 @@ def test_rate_limit_concurrent_complete_query(
     )
 
     # but no more than that
-    with pytest.raises(AllocationPolicyViolation):
-        policy.get_quota_allowance(
-            tenant_ids={"organization_id": 123},
-            query_id="some_query_id",
-        )
+    quota_allowance = policy.get_quota_allowance(
+        tenant_ids={"organization_id": 123},
+        query_id="some_query_id",
+    )
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
 
 @pytest.mark.redis_db
@@ -165,7 +163,7 @@ def test_tenant_selection(policy: ConcurrentRateLimitAllocationPolicy):
         "organization_id",
         123,
     )
-    with pytest.raises(AllocationPolicyViolation):
+    with pytest.raises(InvalidTenantsForAllocationPolicy):
         policy._get_tenant_key_and_value({})
 
 
@@ -263,11 +261,11 @@ def test_apply_overrides(
         policy.set_config_value(*override)
     for i in range(expected_concurrent_limit):
         policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=f"{i}")
-    with pytest.raises(AllocationPolicyViolation) as e:
-        policy.get_quota_allowance(
-            tenant_ids=tenant_ids, query_id=f"{expected_concurrent_limit+1}"
-        )
-    assert e.value.explanation["overrides"] == expected_overrides
+    allowance = policy.get_quota_allowance(
+        tenant_ids=tenant_ids, query_id=f"{expected_concurrent_limit+1}"
+    )
+    assert not allowance.can_run and allowance.max_threads == 0
+    assert allowance.explanation["overrides"] == expected_overrides
 
 
 @pytest.mark.redis_db
@@ -288,13 +286,10 @@ def test_override_isolation(
             query_id=str(i),
         )
     # query the override referrer, it should not reject because overrides are counted on their own
-    try:
-        policy.get_quota_allowance(
-            tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
-            query_id="uniq_string_1",
-        )
-    except AllocationPolicyViolation:
-        pytest.fail("overridden limits should not be affected by defaults")
+    assert policy.get_quota_allowance(
+        tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
+        query_id="uniq_string_1",
+    ).can_run
 
     # finish the overridden referrer query, make sure another one can run
     policy.update_quota_balance(
@@ -320,23 +315,19 @@ def test_override_isolation(
     )
 
     # our overridden referrer should still error because an update to the non-overridden limits shouldn't affect the overridden ones
-    with pytest.raises(AllocationPolicyViolation):
-        policy.get_quota_allowance(
-            tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
-            query_id="uniq_string_3",
-        )
+    assert not policy.get_quota_allowance(
+        tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
+        query_id="uniq_string_3",
+    ).can_run
 
 
 def test_pass_through(policy: ConcurrentRateLimitAllocationPolicy) -> None:
     ## should not be blocked because the subscriptions_executor referrer is not rate limited
-    try:
-        for i in range(MAX_CONCURRENT_QUERIES * 2):
-            policy.get_quota_allowance(
-                tenant_ids={"referrer": "subscriptions_executor", "project_id": 1234},
-                query_id=f"abc{i}",
-            )
-    except AllocationPolicyViolation:
-        pytest.fail("should not have been blocked")
+    for i in range(MAX_CONCURRENT_QUERIES * 2):
+        assert policy.get_quota_allowance(
+            tenant_ids={"referrer": "subscriptions_executor", "project_id": 1234},
+            query_id=f"abc{i}",
+        ).can_run
 
 
 @pytest.mark.redis_db
@@ -353,3 +344,14 @@ def test_cross_org(policy: ConcurrentRateLimitAllocationPolicy) -> None:
     # make sure that this can be called with cross org queries
     # and nothing raises
     policy.update_quota_balance(tenant_ids, "c", None)  # type: ignore
+
+
+@pytest.mark.redis_db
+def test_bad_tenants(policy: ConcurrentRateLimitAllocationPolicy):
+    bad_tenant_ids: dict[str, str | int] = {"referrer": "abcd"}
+    with mock.patch("snuba.settings.RAISE_ON_ALLOCATION_POLICY_FAILURES", False):
+        quota_allowance = policy.get_quota_allowance(bad_tenant_ids, "1234")
+        assert not quota_allowance.can_run and quota_allowance.max_threads == 0
+
+        # does not raise
+        policy.update_quota_balance(bad_tenant_ids, "1234", _RESULT_SUCCESS)

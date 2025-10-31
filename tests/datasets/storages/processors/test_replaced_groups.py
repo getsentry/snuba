@@ -6,6 +6,7 @@ import pytest
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import ReplacementType
 from snuba.query.conditions import BooleanFunctions
 from snuba.query.data_source.simple import Table
@@ -71,7 +72,7 @@ def build_group_ids_condition() -> Expression:
 @pytest.fixture
 def query() -> ClickhouseQuery:
     return ClickhouseQuery(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("mytable")),
         condition=build_in("project_id", [2]),
     )
 
@@ -79,7 +80,7 @@ def query() -> ClickhouseQuery:
 @pytest.fixture
 def query_with_timestamp() -> ClickhouseQuery:
     return ClickhouseQuery(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("mytable")),
         condition=build_and(
             build_in("project_id", [2]),
             build_time_range(datetime(2021, 1, 1), datetime(2021, 1, 2)),
@@ -90,7 +91,7 @@ def query_with_timestamp() -> ClickhouseQuery:
 @pytest.fixture
 def query_with_future_timestamp() -> ClickhouseQuery:
     return ClickhouseQuery(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("mytable")),
         condition=build_and(
             build_in("project_id", [2]),
             build_time_range(
@@ -103,7 +104,7 @@ def query_with_future_timestamp() -> ClickhouseQuery:
 @pytest.fixture
 def query_with_single_group_id() -> ClickhouseQuery:
     return ClickhouseQuery(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("mytable")),
         condition=build_group_id_condition(),
     )
 
@@ -111,7 +112,7 @@ def query_with_single_group_id() -> ClickhouseQuery:
 @pytest.fixture
 def query_with_multiple_group_ids() -> ClickhouseQuery:
     return ClickhouseQuery(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("mytable")),
         condition=build_group_ids_condition(),
     )
 
@@ -137,12 +138,19 @@ def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> No
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
+    query_settings = HTTPQuerySettings()
     PostReplacementConsistencyEnforcer(
         "project_id", ReplacerState.ERRORS
-    ).process_query(query, HTTPQuerySettings())
+    ).process_query(query, query_settings)
 
     assert query.get_condition() == build_in("project_id", [2])
     assert query.get_from_clause().final
+    assert (
+        query_settings.get_clickhouse_settings()[
+            "do_not_merge_across_partitions_select_final"
+        ]
+        == 1
+    )
 
 
 @pytest.mark.redis_db

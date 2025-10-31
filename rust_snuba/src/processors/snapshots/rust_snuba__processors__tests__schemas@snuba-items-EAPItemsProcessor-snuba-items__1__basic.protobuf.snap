@@ -1,0 +1,40 @@
+---
+source: src/processors/mod.rs
+expression: snapshot_payload
+---
+[
+  {
+    "attributes_bool": {
+      "some_bool": true
+    },
+    "attributes_float_3": {
+      "another_attribute": 1238.0
+    },
+    "attributes_float_6": {
+      "some_bool": 1.0
+    },
+    "attributes_float_8": {
+      "with a float": 123.123
+    },
+    "attributes_float_9": {
+      "sentry._internal.ingested_at": "<ingestion timestamp>"
+    },
+    "attributes_int": {
+      "another_attribute": 1238,
+      "sentry._internal.ingested_at": "<ingestion timestamp>"
+    },
+    "attributes_string_32": {
+      "one_attribute": "blah"
+    },
+    "downsampled_retention_days": 90,
+    "item_id": 140754042156678400000000000000000000000.0,
+    "item_type": 1,
+    "organization_id": 1,
+    "project_id": 1,
+    "retention_days": 90,
+    "sampling_factor": 1.0,
+    "sampling_weight": 1,
+    "timestamp": 1744063104,
+    "trace_id": "e6453c8a-11e8-4ffc-a6f7-827c30b550d4"
+  }
+]

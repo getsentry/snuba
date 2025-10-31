@@ -1,0 +1,8 @@
+version: v1
+kind: dataset
+name: events_analytics_platform
+
+entities:
+  - spans_num_attrs
+  - spans_str_attrs
+  - eap_items

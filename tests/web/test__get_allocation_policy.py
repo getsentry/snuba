@@ -2,41 +2,58 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Union
-from unittest import mock
 
 import pytest
 
+from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
+from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
-from snuba.query.allocation_policies import (
-    DEFAULT_PASSTHROUGH_POLICY,
-    AllocationPolicy,
-    PassthroughPolicy,
-)
+from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition
-from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.join import (
+    IndividualNode,
+    JoinClause,
+    JoinCondition,
+    JoinConditionExpression,
+    JoinType,
+)
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.web.db_query import _get_allocation_policies
 
-events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
-assert events_storage is not None
-events_table_name = events_storage.get_table_writer().get_schema().get_table_name()
+
+class PermissiveJoinClause(JoinClause[Table]):
+    def __post_init__(self) -> None:
+        """JoinClause verifies that the join clause is references
+        valid columns, these tests do not care about columns"""
+        pass
 
 
 events_table = Table(
-    events_table_name,
-    events_storage.get_schema().get_columns(),
-    allocation_policies=[PassthroughPolicy(StorageKey("flimflam"), [], {})],
+    "errors",
+    ColumnSet([]),
+    allocation_policies=[
+        PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), [], {})
+    ],
+    storage_key=StorageKey("errors"),
     final=False,
     sampling_rate=None,
-    mandatory_conditions=events_storage.get_schema()
-    .get_data_source()
-    .get_mandatory_conditions(),
+    mandatory_conditions=[],
+)
+
+groups_table = Table(
+    "groups",
+    ColumnSet([]),
+    allocation_policies=[
+        PassthroughPolicy(ResourceIdentifier(StorageKey("jimjam")), [], {})
+    ],
+    storage_key=StorageKey("groups"),
+    final=False,
+    sampling_rate=None,
+    mandatory_conditions=[],
 )
 
 composite_query = CompositeQuery(
@@ -61,21 +78,20 @@ composite_query = CompositeQuery(
 )
 
 
-class BadJoinClause(JoinClause[Table]):
-    # the join clause functionality is not supported,
-    # doesn't matter that the join clause is not valid
-    # if we support join clauses + allocation_policies
-    # we can remove this
-    def __post_init__(self) -> None:
-        pass
-
-
 join_query = CompositeQuery(
-    from_clause=BadJoinClause(
-        left_node=mock.Mock(),
-        right_node=mock.Mock(),
-        keys=[mock.Mock()],
-        join_type=mock.Mock(),
+    from_clause=PermissiveJoinClause(
+        left_node=IndividualNode(alias="err", data_source=events_table),
+        right_node=IndividualNode(
+            alias="groups",
+            data_source=groups_table,
+        ),
+        keys=[
+            JoinCondition(
+                left=JoinConditionExpression("err", "group_id"),
+                right=JoinConditionExpression("groups", "id"),
+            )
+        ],
+        join_type=JoinType.INNER,
     ),
     selected_columns=[],
 )
@@ -86,7 +102,7 @@ join_query = CompositeQuery(
     [
         pytest.param(
             composite_query,
-            [PassthroughPolicy(StorageKey("flimflam"), [], {})],
+            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), [], {})],
             id="composite query uses leaf query's allocation policy",
         ),
         pytest.param(
@@ -101,13 +117,16 @@ join_query = CompositeQuery(
                     ),
                 ],
             ),
-            [PassthroughPolicy(StorageKey("flimflam"), [], {})],
+            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), [], {})],
             id="double nested composite query uses leaf query's allocation policy",
         ),
         pytest.param(
             join_query,
-            [DEFAULT_PASSTHROUGH_POLICY],
-            id="Joins just pass through (this is a hack)",
+            [
+                PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), [], {}),
+                PassthroughPolicy(ResourceIdentifier(StorageKey("jimjam")), [], {}),
+            ],
+            id="all allocation policies from joins are put together",
         ),
         pytest.param(
             ClickhouseQuery(
@@ -122,7 +141,7 @@ join_query = CompositeQuery(
                     Literal(None, datetime(2020, 1, 1, 12, 0)),
                 ),
             ),
-            [PassthroughPolicy(StorageKey("flimflam"), [], {})],
+            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), [], {})],
             id="simple query uses table's allocation policy",
         ),
     ],

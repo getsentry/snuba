@@ -1,17 +1,18 @@
+mod eap_items;
 mod errors;
 mod functions;
 mod generic_metrics;
-mod metrics_summaries;
 mod outcomes;
+mod profile_chunks;
 mod profiles;
 mod querylog;
+mod release_health_metrics;
 mod replays;
-mod spans;
 mod utils;
 
 use crate::config::ProcessorConfig;
 use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 pub enum ProcessingFunctionType {
     ProcessingFunction(ProcessingFunction),
@@ -52,14 +53,15 @@ define_processing_functions! {
     ("ProfilesMessageProcessor", "processed-profiles", ProcessingFunctionType::ProcessingFunction(profiles::process_message)),
     ("QuerylogProcessor", "snuba-queries", ProcessingFunctionType::ProcessingFunction(querylog::process_message)),
     ("ReplaysProcessor", "ingest-replay-events", ProcessingFunctionType::ProcessingFunction(replays::process_message)),
-    ("SpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(spans::process_message)),
-    ("MetricsSummariesMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(metrics_summaries::process_message)),
     ("OutcomesProcessor", "outcomes", ProcessingFunctionType::ProcessingFunction(outcomes::process_message)),
     ("GenericCountersMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_counter_message)),
     ("GenericSetsMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_set_message)),
     ("GenericDistributionsMetricsProcessor" , "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_distribution_message)),
     ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_gauge_message)),
+    ("PolymorphicMetricsProcessor", "snuba-metrics", ProcessingFunctionType::ProcessingFunction(release_health_metrics::process_metrics_message)),
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
+    ("ProfileChunksProcessor", "snuba-profile-chunks", ProcessingFunctionType::ProcessingFunction(profile_chunks::process_message)),
+    ("EAPItemsProcessor", "snuba-items", ProcessingFunctionType::ProcessingFunction(eap_items::process_message)),
 }
 
 // COGS is recorded for these processors
@@ -80,22 +82,46 @@ mod tests {
     use std::time::SystemTime;
 
     use chrono::DateTime;
-    use pretty_assertions::assert_eq;
     use schemars::JsonSchema;
     use sentry_kafka_schemas::get_schema;
 
     use super::*;
 
-    pub fn run_schema_type_test<M: JsonSchema>(schema_name: &str) {
+    pub fn run_schema_type_test<M: JsonSchema>(schema_name: &str, subschema: Option<&str>) {
         let schema = schemars::schema_for!(M);
+
         let old_schema = sentry_kafka_schemas::get_schema(schema_name, None).unwrap();
-        let mut diff = json_schema_diff::diff(
-            serde_json::from_str(old_schema.raw_schema()).unwrap(),
-            serde_json::to_value(schema).unwrap(),
-        )
-        .unwrap();
+        let mut old_schema: serde_json::Value =
+            serde_json::from_str(old_schema.raw_schema()).unwrap();
+        if let Some(subschema) = subschema {
+            let definitions = old_schema
+                .as_object()
+                .unwrap()
+                .get("definitions")
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .clone();
+
+            old_schema = definitions.get(subschema).unwrap().clone();
+
+            old_schema
+                .as_object_mut()
+                .unwrap()
+                .insert("definitions".to_owned(), definitions.into());
+        }
+
+        println!("{}", serde_json::to_string(&schema).unwrap());
+
+        let mut diff =
+            json_schema_diff::diff(old_schema, serde_json::to_value(schema).unwrap()).unwrap();
         diff.retain(|change| change.change.is_breaking());
-        assert_eq!(diff, vec![]);
+        if !diff.is_empty() {
+            insta::assert_debug_snapshot!(
+                format!("{}-{}", schema_name, subschema.unwrap_or("")),
+                diff
+            );
+        }
     }
 
     #[test]
@@ -126,7 +152,18 @@ mod tests {
                     settings.add_redaction(".*.message_timestamp", "<event timestamp>");
                 }
 
-                settings.set_description(std::str::from_utf8(example.payload()).unwrap());
+                if *topic_name == "snuba-items" {
+                    settings.add_redaction(
+                        ".*.*[\"sentry._internal.ingested_at\"]",
+                        "<ingestion timestamp>",
+                    );
+                }
+
+                // This payload is protobuf (so binary), not JSON (so text).
+                if *topic_name != "snuba-items" {
+                    settings.set_description(std::str::from_utf8(example.payload()).unwrap());
+                }
+
                 let _guard = settings.bind_to_scope();
 
                 let payload = KafkaPayload::new(None, None, Some(example.payload().to_vec()));

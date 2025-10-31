@@ -14,13 +14,15 @@
     },
     {
       "members": [
-        "group:team-sns@sentry.io"
+        "group:team-sns@sentry.io",
+        "group:access-snuba-admin@sentry.io"
       ],
       "role": "roles/MigrationsReader"
     },
     {
       "members": [
-        "group:team-sns@sentry.io"
+        "group:team-sns@sentry.io",
+        "group:team-ops@sentry.io"
       ],
       "role": "roles/AllTools"
     },
@@ -32,8 +34,11 @@
     },
     {
       "members": [
-          "group:team-starfish@sentry.io",
-          "group:team-ingest@sentry.io"
+          "group:team-ingest@sentry.io",
+          "group:team-visibility@sentry.io",
+          "group:team-performance@sentry.io",
+          "group:team-eng-managers@sentry.io",
+          "group:team-telemetry-experience@sentry.io"
       ],
       "role": "roles/CardinalityAnalyzer"
     },
@@ -43,6 +48,13 @@
         "group:team-sns@sentry.io"
       ],
       "role": "roles/AllMigrationsExecutor"
+    },
+    {
+      "members": [
+        "group:team-ops@sentry.io",
+        "group:team-sns@sentry.io"
+      ],
+      "role": "roles/ClickhouseAdmin"
     }
   ]
 }

@@ -44,19 +44,6 @@ storage_selector:
   selector: DefaultQueryStorageSelector
 
 query_processors:
-  - processor: OrganizationRateLimiterProcessor
-    args:
-      org_column: organization_id
-  - processor: ReferrerRateLimiterProcessor
-  - processor: ProjectReferrerRateLimiter
-    args:
-      project_column: project_id
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
-  - processor: ResourceQuotaProcessor
-    args:
-      project_field: project_id
   - processor: TimeSeriesProcessor
     args:
       time_group_columns:

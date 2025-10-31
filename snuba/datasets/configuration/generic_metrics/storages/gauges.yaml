@@ -67,7 +67,17 @@ schema:
         args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
       },
       {
+        name: sum_weighted,
+        type: AggregateFunction,
+        args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
+      },
+      {
         name: count,
+        type: AggregateFunction,
+        args: { func: sum, arg_types: [{ type: UInt, args: { size: 64 } }] },
+      },
+      {
+        name: count_weighted,
         type: AggregateFunction,
         args: { func: sum, arg_types: [{ type: UInt, args: { size: 64 } }] },
       },
@@ -114,6 +124,13 @@ allocation_policies:
         statistical_detectors.distributions.fetch_top_transaction_names:
           max_threads: 4
           concurrent_limit: 10
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
 
 query_processors:
   - processor: MappingOptimizer
@@ -122,5 +139,4 @@ query_processors:
       hash_map_name: _raw_tags_hash
       killswitch: generic_metrics/tags_hash_map_enabled
       value_subcolumn_name: raw_value
-  - processor: TableRateLimit
   - processor: TupleUnaliaser

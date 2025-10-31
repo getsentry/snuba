@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, NamedTuple, TypedDict, cast
+from dataclasses import dataclass
+from typing import Any, Mapping, TypedDict, cast
 
 from snuba.reader import Column, Result, Row, transform_rows
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
@@ -59,9 +60,14 @@ class QueryTooLongException(SerializableException):
     """
 
 
-class QueryResult(NamedTuple):
+@dataclass(frozen=True)
+class QueryResult:
     result: Result
     extra: QueryExtraData
+
+    @property
+    def quota_allowance(self) -> Mapping[str, Mapping[str, Any]]:
+        return self.extra.get("stats", {}).get("quota_allowance", {})
 
 
 def transform_column_names(

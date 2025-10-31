@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 import logging
+import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 
 import structlog
 
+from snuba import settings
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.native import ClickhousePool
 
@@ -19,6 +24,10 @@ from snuba.migrations.table_engines import TableEngine
 logger = structlog.get_logger().bind(module=__name__)
 
 
+class OperationMissingNodes(Exception):
+    pass
+
+
 class OperationTarget(Enum):
     """
     Represents the target nodes of an operation.
@@ -28,6 +37,9 @@ class OperationTarget(Enum):
     LOCAL = "local"
     DISTRIBUTED = "distributed"
     UNSET = "unset"  # target is not set. will throw an error if executed
+
+    def __repr__(self) -> str:
+        return f"OperationTarget.{self.value.upper()}"
 
 
 class SqlOperation(ABC):
@@ -46,41 +58,84 @@ class SqlOperation(ABC):
         return self._storage_set
 
     def get_nodes(self) -> Sequence[ClickhouseNode]:
+        """
+        This should return the given local or dist nodes for which the operation should
+        be ran. If there are no nodes found, this probably means something is wrong.
+
+        However, this will return `[]` in the event that the target typs is for the
+        distributed nodes and the cluster is a single node cluster, since there are
+        no dist nodes in a single node cluster.
+        """
+        if self.target not in [OperationTarget.LOCAL, OperationTarget.DISTRIBUTED]:
+            raise ValueError(f"Target not set for {self}")
+
         cluster = get_cluster(self._storage_set)
-        local_nodes, dist_nodes = (
-            cluster.get_local_nodes(),
-            cluster.get_distributed_nodes(),
+
+        nodes = (
+            cluster.get_local_nodes()
+            if self.target == OperationTarget.LOCAL
+            else cluster.get_distributed_nodes()
         )
 
-        if self.target == OperationTarget.LOCAL:
-            nodes = local_nodes
-        elif self.target == OperationTarget.DISTRIBUTED:
-            nodes = dist_nodes
-        else:
-            raise ValueError(f"Target not set for {self}")
-        return nodes
+        if nodes or (
+            not nodes and self.target == OperationTarget.DISTRIBUTED and cluster.is_single_node()
+        ):
+            return nodes
+
+        raise OperationMissingNodes(
+            f"No {self.target.value} nodes found for {cluster.get_clickhouse_cluster_name()}"
+        )
 
     def execute(self) -> None:
         nodes = self.get_nodes()
         cluster = get_cluster(self._storage_set)
         if nodes:
-            logger.info(f"Executing op: {self.format_sql()[:32]}...")
+            if settings.LOG_MIGRATIONS:
+                logger.info(f"Executing op: {self.format_sql()[:32]}...")
         for node in nodes:
-            connection = cluster.get_node_connection(
-                ClickhouseClientSettings.MIGRATE, node
-            )
-            logger.info(f"Executing on {self.target.value} node: {node}")
+            connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+            if settings.LOG_MIGRATIONS:
+                logger.info(f"Executing on {self.target.value} node: {node}")
             try:
                 connection.execute(self.format_sql(), settings=self._settings)
+                self._block_on_mutations(connection)
             except Exception:
                 logger.exception(
                     f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{self.format_sql()}\n{self._settings}"
                 )
                 raise
 
+    def _block_on_mutations(
+        self, conn: ClickhousePool, poll_seconds: int = 5, timeout_seconds: int = 300
+    ) -> None:
+        """
+        This function blocks until all entries of system.mutations
+        have is_done=1. Polls system.mutations every poll_seconds.
+        Raises error if not unblocked after timeout_seconds.
+        """
+        slept_so_far = 0
+        while True:
+            is_mutating = conn.execute(
+                "select count(*) from system.mutations where is_done=0"
+            ).results != [(0,)]
+            if not is_mutating:
+                return
+            elif slept_so_far >= timeout_seconds:
+                raise TimeoutError(
+                    f"{conn.host}:{conn.port} not finished mutating after {timeout_seconds} seconds"
+                )
+            else:
+                time.sleep(poll_seconds)
+                slept_so_far += poll_seconds
+
     @abstractmethod
     def format_sql(self) -> str:
         raise NotImplementedError
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, SqlOperation):
+            return False
+        return other.format_sql() == self.format_sql()
 
 
 class RunSql(SqlOperation):
@@ -97,6 +152,20 @@ class RunSql(SqlOperation):
         return self.__statement
 
 
+class RetryOnSyncError:
+    def execute(self) -> None:
+        for i in range(30, -1, -1):  # wait at most ~30 seconds
+            try:
+                super().execute()  # type: ignore
+                break
+            except Exception as e:
+                # Metadata on replica is not up to date with common metadata in Zookeeper (status code = 517)
+                if i and e.code == 517:  # type: ignore
+                    time.sleep(1)
+                else:
+                    raise
+
+
 class CreateTable(SqlOperation):
     """
     The create table operation takes a table name, column list and table engine.
@@ -111,8 +180,9 @@ class CreateTable(SqlOperation):
         columns: Sequence[Column[MigrationModifiers]],
         engine: TableEngine,
         target: OperationTarget = OperationTarget.UNSET,
+        settings: Optional[Mapping[str, Any]] = None,
     ):
-        super().__init__(storage_set, target=target)
+        super().__init__(storage_set, target=target, settings=settings)
         self.table_name = table_name
         self.__columns = columns
         self.engine = engine
@@ -121,9 +191,7 @@ class CreateTable(SqlOperation):
         columns = ", ".join([col.for_schema() for col in self.__columns])
         cluster = get_cluster(self._storage_set)
         engine = self.engine.get_sql(cluster, self.table_name)
-        return (
-            f"CREATE TABLE IF NOT EXISTS {self.table_name} ({columns}) ENGINE {engine};"
-        )
+        return f"CREATE TABLE IF NOT EXISTS {self.table_name} ({columns}) ENGINE {engine};"
 
 
 class CreateMaterializedView(SqlOperation):
@@ -175,7 +243,7 @@ class DropTable(SqlOperation):
         self.table_name = table_name
 
     def format_sql(self) -> str:
-        return f"DROP TABLE IF EXISTS {self.table_name};"
+        return f"DROP TABLE IF EXISTS {self.table_name} SYNC;"
 
 
 class TruncateTable(SqlOperation):
@@ -245,7 +313,7 @@ class RemoveTableTTL(SqlOperation):
         return f"ALTER TABLE {self.__table_name} REMOVE TTL;"
 
 
-class AddColumn(SqlOperation):
+class AddColumn(RetryOnSyncError, SqlOperation):
     """
     Adds a column to a table.
 
@@ -272,8 +340,19 @@ class AddColumn(SqlOperation):
         optional_after_clause = f" AFTER {self.__after}" if self.__after else ""
         return f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS {column}{optional_after_clause};"
 
+    def get_reverse(self) -> DropColumn:
+        return DropColumn(
+            storage_set=self.storage_set,
+            table_name=self.table_name,
+            column_name=self.column.name,
+            target=self.target,
+        )
 
-class DropColumn(SqlOperation):
+    def __repr__(self) -> str:
+        return f"AddColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column={repr(self.column)}, after={repr(self.__after)}, target={repr(self.target)})"
+
+
+class DropColumn(RetryOnSyncError, SqlOperation):
     """
     Drops a column from a table.
 
@@ -296,12 +375,13 @@ class DropColumn(SqlOperation):
         self.column_name = column_name
 
     def format_sql(self) -> str:
-        return (
-            f"ALTER TABLE {self.table_name} DROP COLUMN IF EXISTS {self.column_name};"
-        )
+        return f"ALTER TABLE {self.table_name} DROP COLUMN IF EXISTS {self.column_name};"
+
+    def __repr__(self) -> str:
+        return f"DropColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column_name={repr(self.column_name)}, target={repr(self.target)})"
 
 
-class ModifyColumn(SqlOperation):
+class ModifyColumn(RetryOnSyncError, SqlOperation):
     """
     Modify a column in a table.
 
@@ -418,7 +498,45 @@ class AddIndex(SqlOperation):
         return f"ALTER TABLE {self.__table_name} ADD INDEX IF NOT EXISTS {self.__index_name} {self.__index_expression} TYPE {self.__index_type} GRANULARITY {self.__granularity}{optional_after_clause};"
 
 
-class DropIndex(SqlOperation):
+@dataclass
+class AddIndicesData:
+    name: str  # e.g.: bf_index
+    expression: str  # e.g.: mapKeys(my_map)
+    type: str  # e.g.: bloom_filter(0.1)
+    granularity: int  # e.g.: 4
+
+
+class AddIndices(SqlOperation):
+    """
+    Adds an index.
+
+    Only works with the MergeTree family of tables.
+
+    In ClickHouse versions prior to 20.1.2.4, this requires setting
+    allow_experimental_data_skipping_indices = 1
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        indices: Sequence[AddIndicesData],
+        target: OperationTarget = OperationTarget.UNSET,
+    ):
+        super().__init__(storage_set, target=target)
+        self.__table_name = table_name
+        self.__indices = indices
+
+    def format_sql(self) -> str:
+        statements = [
+            f"ADD INDEX IF NOT EXISTS {idx.name} {idx.expression} TYPE {idx.type} GRANULARITY {idx.granularity}"
+            for idx in self.__indices
+        ]
+
+        return f"ALTER TABLE {self.__table_name} {', '.join(statements)};"
+
+
+class DropIndex(RetryOnSyncError, SqlOperation):
     """
     Drops an index.
     """
@@ -429,15 +547,57 @@ class DropIndex(SqlOperation):
         table_name: str,
         index_name: str,
         target: OperationTarget = OperationTarget.UNSET,
+        run_async: bool = False,
     ):
         super().__init__(storage_set, target=target)
         self.__table_name = table_name
         self.__index_name = index_name
+        self.__run_async = run_async
 
     def format_sql(self) -> str:
+        settings = ""
+        if self.__run_async:
+            settings = " SETTINGS mutations_sync=0"
         return (
-            f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name};"
+            f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name}{settings};"
         )
+
+    def _block_on_mutations(
+        self, conn: ClickhousePool, poll_seconds: int = 5, timeout_seconds: int = 300
+    ) -> None:
+        if self.__run_async:
+            return
+        else:
+            super()._block_on_mutations(conn, poll_seconds, timeout_seconds)
+
+
+class DropIndices(RetryOnSyncError, SqlOperation):
+    """
+    Drops many indices.
+    Only works with the MergeTree family of tables.
+    In ClickHouse versions prior to 20.1.2.4, this requires setting
+    allow_experimental_data_skipping_indices = 1
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        indices: Sequence[str],
+        target: OperationTarget = OperationTarget.UNSET,
+        run_async: bool = False,
+    ):
+        super().__init__(storage_set, target=target)
+        self.__table_name = table_name
+        self.__indices = indices
+        self.__run_async = run_async
+
+    def format_sql(self) -> str:
+        settings = ""
+        if self.__run_async:
+            settings = " SETTINGS mutations_sync=0, alter_sync=0"
+        statements = [f"DROP INDEX IF EXISTS {idx}" for idx in self.__indices]
+        return f"ALTER TABLE {self.__table_name} {', '.join(statements)}{settings};"
 
 
 class InsertIntoSelect(SqlOperation):
@@ -560,9 +720,7 @@ class RunSqlAsCode(GenericOperation):
 
     def __init__(
         self,
-        operation_function: Union[
-            SqlOperation, Callable[[Optional[ClickhousePool]], SqlOperation]
-        ],
+        operation_function: Union[SqlOperation, Callable[[Optional[ClickhousePool]], SqlOperation]],
     ) -> None:
         self.__operation_function = operation_function
 

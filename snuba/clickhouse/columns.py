@@ -2,24 +2,29 @@ from __future__ import annotations
 
 from typing import Sequence, Union
 
-from snuba.utils.schemas import UUID, AggregateFunction, Any, Array, Column
+from snuba.utils.schemas import JSON, UUID, AggregateFunction, Any, Array, Bool, Column
 from snuba.utils.schemas import ColumnSet as BaseColumnSet
 from snuba.utils.schemas import (
     ColumnType,
     Date,
     DateTime,
+    DateTime64,
     Enum,
     FixedString,
     FlattenedColumn,
     Float,
+    Int,
     IPv4,
     IPv6,
+    Map,
     Nested,
     Nullable,
     ReadOnly,
     SchemaModifiers,
+    SimpleAggregateFunction,
     String,
     TModifiers,
+    Tuple,
     TypeModifier,
     TypeModifiers,
     UInt,
@@ -30,26 +35,33 @@ __all__ = (
     "Any",
     "AggregateFunction",
     "Array",
+    "Bool",
     "Column",
     "ColumnSet",
     "ColumnType",
     "Date",
     "DateTime",
+    "DateTime64",
     "Enum",
     "FixedString",
     "FlattenedColumn",
     "Float",
     "IPv4",
     "IPv6",
+    "JSON",
+    "Map",
     "Nested",
     "Nullable",
     "ReadOnly",
     "SchemaModifiers",
+    "SimpleAggregateFunction",
     "String",
     "TModifiers",
     "TypeModifier",
     "TypeModifiers",
+    "Tuple",
     "UInt",
+    "Int",
     "UUID",
 )
 
@@ -68,9 +80,7 @@ class ColumnSet(BaseColumnSet):
 
     def __init__(
         self,
-        columns: Sequence[
-            Union[Column[SchemaModifiers], tuple[str, ColumnType[SchemaModifiers]]]
-        ],
+        columns: Sequence[Union[Column[SchemaModifiers], tuple[str, ColumnType[SchemaModifiers]]]],
     ) -> None:
         for column in columns:
             assert not isinstance(column, WildcardColumn)

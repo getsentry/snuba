@@ -2,30 +2,47 @@ use std::cmp::min;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::timer;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::timer;
 use serde::{Deserialize, Serialize};
 
-pub type CommitLogOffsets = BTreeMap<u16, (u64, DateTime<Utc>)>;
-
 #[derive(Clone, Debug, PartialEq)]
+pub struct CommitLogEntry {
+    pub offset: u64,
+    pub orig_message_ts: DateTime<Utc>,
+    pub received_p99: Vec<DateTime<Utc>>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct CommitLogOffsets(pub BTreeMap<u16, CommitLogEntry>);
+
+impl CommitLogOffsets {
+    fn merge(&mut self, other: CommitLogOffsets) {
+        for (partition, other_entry) in other.0 {
+            self.0
+                .entry(partition)
+                .and_modify(|entry| {
+                    entry.offset = other_entry.offset;
+                    entry.orig_message_ts = other_entry.orig_message_ts;
+                    entry.received_p99.extend(&other_entry.received_p99);
+                })
+                .or_insert(other_entry);
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct CogsData {
     pub data: BTreeMap<String, u64>, // app_feature: bytes_len
 }
 
 impl CogsData {
-    fn merge(mut self, other: Option<CogsData>) -> Self {
-        match other {
-            None => self,
-            Some(data) => {
-                for (k, v) in data.data {
-                    self.data
-                        .entry(k)
-                        .and_modify(|curr| *curr += v)
-                        .or_insert(v);
-                }
-                self
-            }
+    fn merge(&mut self, other: CogsData) {
+        for (k, v) in other.data {
+            self.data
+                .entry(k)
+                .and_modify(|curr| *curr += v)
+                .or_insert(v);
         }
     }
 }
@@ -156,8 +173,8 @@ impl InsertBatch {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct BytesInsertBatch {
-    rows: RowData,
+pub struct BytesInsertBatch<R> {
+    pub rows: R,
 
     /// when the message was inserted into the snuba topic
     ///
@@ -179,21 +196,23 @@ pub struct BytesInsertBatch {
     // For each partition we store the offset and timestamp to be produced to the commit log
     commit_log_offsets: CommitLogOffsets,
 
-    cogs_data: Option<CogsData>,
+    cogs_data: CogsData,
 }
 
-impl BytesInsertBatch {
+impl<R> BytesInsertBatch<R> {
     pub fn new(
-        rows: RowData,
-        message_timestamp: DateTime<Utc>,
+        rows: R,
+        message_timestamp: Option<DateTime<Utc>>,
         origin_timestamp: Option<DateTime<Utc>>,
         sentry_received_timestamp: Option<DateTime<Utc>>,
         commit_log_offsets: CommitLogOffsets,
-        cogs_data: Option<CogsData>,
+        cogs_data: CogsData,
     ) -> Self {
         BytesInsertBatch {
             rows,
-            message_timestamp: message_timestamp.into(),
+            message_timestamp: message_timestamp
+                .map(LatencyRecorder::from)
+                .unwrap_or_default(),
             origin_timestamp: origin_timestamp
                 .map(LatencyRecorder::from)
                 .unwrap_or_default(),
@@ -205,21 +224,36 @@ impl BytesInsertBatch {
         }
     }
 
-    pub fn merge(mut self, other: Self) -> Self {
-        self.rows
-            .encoded_rows
-            .extend_from_slice(&other.rows.encoded_rows);
-        self.commit_log_offsets.extend(other.commit_log_offsets);
-        self.rows.num_rows += other.rows.num_rows;
-        self.message_timestamp.merge(other.message_timestamp);
-        self.origin_timestamp.merge(other.origin_timestamp);
-        self.sentry_received_timestamp
-            .merge(other.sentry_received_timestamp);
-        self.cogs_data = match self.cogs_data {
-            Some(cogs_data) => Some(cogs_data.merge(other.cogs_data)),
-            None => other.cogs_data,
+    pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
+        &self.commit_log_offsets
+    }
+
+    pub fn cogs_data(&self) -> &CogsData {
+        &self.cogs_data
+    }
+
+    pub fn clone_meta(&self) -> BytesInsertBatch<()> {
+        BytesInsertBatch {
+            rows: (),
+            message_timestamp: self.message_timestamp.clone(),
+            origin_timestamp: self.origin_timestamp.clone(),
+            sentry_received_timestamp: self.sentry_received_timestamp.clone(),
+            commit_log_offsets: self.commit_log_offsets.clone(),
+            cogs_data: self.cogs_data.clone(),
+        }
+    }
+
+    pub fn take(self) -> (R, BytesInsertBatch<()>) {
+        let new = BytesInsertBatch {
+            rows: (),
+            message_timestamp: self.message_timestamp,
+            origin_timestamp: self.origin_timestamp,
+            sentry_received_timestamp: self.sentry_received_timestamp,
+            commit_log_offsets: self.commit_log_offsets,
+            cogs_data: self.cogs_data,
         };
-        self
+
+        (self.rows, new)
     }
 
     pub fn record_message_latency(&self) {
@@ -231,21 +265,23 @@ impl BytesInsertBatch {
         self.sentry_received_timestamp
             .send_metric(write_time, "sentry_received_latency");
     }
+}
 
+impl BytesInsertBatch<RowData> {
     pub fn len(&self) -> usize {
         self.rows.num_rows
     }
 
-    pub fn encoded_rows(&self) -> &[u8] {
-        &self.rows.encoded_rows
-    }
-
-    pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
-        &self.commit_log_offsets
-    }
-
-    pub fn cogs_data(&self) -> Option<&CogsData> {
-        self.cogs_data.as_ref()
+    pub fn merge(mut self, other: BytesInsertBatch<RowData>) -> Self {
+        self.rows.encoded_rows.extend(other.rows.encoded_rows);
+        self.rows.num_rows += other.rows.num_rows;
+        self.commit_log_offsets.merge(other.commit_log_offsets);
+        self.message_timestamp.merge(other.message_timestamp);
+        self.origin_timestamp.merge(other.origin_timestamp);
+        self.sentry_received_timestamp
+            .merge(other.sentry_received_timestamp);
+        self.cogs_data.merge(other.cogs_data);
+        self
     }
 }
 

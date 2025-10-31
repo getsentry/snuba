@@ -22,9 +22,6 @@ storage_selector:
 
 query_processors:
   - processor: BasicFunctionsProcessor
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
 
 join_relationships:
   owns:

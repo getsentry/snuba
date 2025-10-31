@@ -1,9 +1,9 @@
-import Nav from "../../nav";
-import Client from "../../api_client";
+import Nav from "SnubaAdmin/nav";
+import Client from "SnubaAdmin/api_client";
 import React from "react";
 import { it, expect, jest, afterEach } from "@jest/globals";
 import { render, act, waitFor } from "@testing-library/react";
-import { AllowedTools } from "../../types";
+import { AllowedTools } from "SnubaAdmin/types";
 
 it("should only display allowed tools", async () => {
   let data = {

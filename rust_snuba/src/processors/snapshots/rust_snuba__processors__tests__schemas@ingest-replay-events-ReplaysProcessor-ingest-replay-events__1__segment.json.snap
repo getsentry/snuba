@@ -39,6 +39,9 @@ expression: snapshot_payload
     "offset": 1,
     "os_name": "Windows",
     "os_version": ">=10",
+    "ota_updates_channel": "",
+    "ota_updates_runtime_version": "",
+    "ota_updates_update_id": "",
     "partition": 0,
     "platform": "javascript",
     "project_id": 1,
@@ -57,14 +60,22 @@ expression: snapshot_payload
     "tags.value": [
       "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
     ],
+    "tap_message": "",
+    "tap_view_class": "",
+    "tap_view_id": "",
     "timestamp": 1687904093,
     "title": null,
     "trace_ids": [],
     "urls": [],
     "user": "test@test.com",
     "user_email": "test@test.com",
+    "user_geo_city": "",
+    "user_geo_country_code": "",
+    "user_geo_region": "",
+    "user_geo_subdivision": "",
     "user_id": "",
     "user_name": "",
+    "viewed_by_id": 0,
     "warning_id": "00000000-0000-0000-0000-000000000000"
   }
 ]

@@ -11,7 +11,7 @@ from snuba.query.query_settings import (
     QuerySettings,
     SubscriptionQuerySettings,
 )
-from snuba.query.schema import MQL_QUERY_SCHEMA, SNQL_QUERY_SCHEMA
+from snuba.query.schema import DELETE_QUERY_SCHEMA, MQL_QUERY_SCHEMA, SNQL_QUERY_SCHEMA
 from snuba.request.exceptions import JsonSchemaValidationException
 from snuba.schemas import Schema, validate_jsonschema
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -83,9 +83,15 @@ class RequestSchema:
 
     @classmethod
     def build(
-        cls, settings_class: Type[QuerySettings], is_mql: bool = False
+        cls,
+        settings_class: Type[QuerySettings],
+        is_mql: bool = False,
+        is_delete: bool = False,
     ) -> RequestSchema:
-        generic_schema = SNQL_QUERY_SCHEMA if not is_mql else MQL_QUERY_SCHEMA
+        if is_delete:
+            generic_schema = DELETE_QUERY_SCHEMA
+        else:
+            generic_schema = SNQL_QUERY_SCHEMA if not is_mql else MQL_QUERY_SCHEMA
         settings_schema = SETTINGS_SCHEMAS[settings_class]
         return cls(generic_schema, settings_schema, ATTRIBUTION_INFO_SCHEMA)
 

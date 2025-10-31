@@ -6,7 +6,7 @@ storage:
   key: group_attributes
   set_key: group_attributes
 
-readiness_state: partial
+readiness_state: complete
 
 schema:
   columns:
@@ -16,6 +16,8 @@ schema:
 
       { name: group_status, type: UInt, args: { size: 8 } },
       { name: group_substatus, type: UInt, args: { size: 8, schema_modifiers: [ nullable ] } },
+      { name: group_priority, type: UInt, args: { size: 8, schema_modifiers: [ nullable ] } },
+      { name: group_first_release, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
       { name: group_first_seen, type: DateTime },
       { name: group_num_comments, type: UInt, args: { size: 64 } },
 
@@ -46,13 +48,15 @@ allocation_policies:
         - project_id
       default_config_overrides:
         is_enforced: 0
-  - name: PassthroughPolicy
+  - name: ReferrerGuardRailPolicy
     args:
       required_tenant_types:
-        - blank
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
 
 query_processors:
-  - processor: TableRateLimit
   - processor: ConsistencyEnforcerProcessor
 
 mandatory_condition_checkers:

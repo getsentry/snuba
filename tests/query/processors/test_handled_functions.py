@@ -52,9 +52,7 @@ def test_handled_processor() -> None:
                                 FunctionCall(None, "isNull", (Argument(None, "x"),)),
                                 binary_condition(
                                     ConditionFunctions.NEQ,
-                                    FunctionCall(
-                                        None, "assumeNotNull", (Argument(None, "x"),)
-                                    ),
+                                    FunctionCall(None, "assumeNotNull", (Argument(None, "x"),)),
                                     Literal(None, 0),
                                 ),
                             ),
@@ -65,18 +63,14 @@ def test_handled_processor() -> None:
             ),
         ],
     )
-    processor = handled_functions.HandledFunctionsProcessor(
-        "exception_stacks.mechanism_handled"
-    )
+    processor = handled_functions.HandledFunctionsProcessor("exception_stacks.mechanism_handled")
     processor.process_query(unprocessed, HTTPQuerySettings())
 
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
-    ret = unprocessed.get_selected_columns()[1].expression.accept(
-        ClickhouseExpressionFormatter()
-    )
+    ret = unprocessed.get_selected_columns()[1].expression.accept(ClickhouseExpressionFormatter())
     assert ret == (
-        "(arrayAll(x -> (isNull(x) OR notEquals(assumeNotNull(x), 0)), exception_stacks.mechanism_handled) AS result)"
+        "(arrayAll(x -> (isNull(x) OR notEquals(assumeNotNull(x), 0)), `exception_stacks.mechanism_handled`) AS result)"
     )
 
 
@@ -136,9 +130,7 @@ def test_not_handled_processor() -> None:
                                 FunctionCall(None, "isNotNull", (Argument(None, "x"),)),
                                 binary_condition(
                                     ConditionFunctions.EQ,
-                                    FunctionCall(
-                                        None, "assumeNotNull", (Argument(None, "x"),)
-                                    ),
+                                    FunctionCall(None, "assumeNotNull", (Argument(None, "x"),)),
                                     Literal(None, 0),
                                 ),
                             ),
@@ -156,11 +148,9 @@ def test_not_handled_processor() -> None:
 
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
-    ret = unprocessed.get_selected_columns()[1].expression.accept(
-        ClickhouseExpressionFormatter()
-    )
+    ret = unprocessed.get_selected_columns()[1].expression.accept(ClickhouseExpressionFormatter())
     assert ret == (
-        "(arrayExists(x -> isNotNull(x) AND equals(assumeNotNull(x), 0), exception_stacks.mechanism_handled) AS result)"
+        "(arrayExists(x -> isNotNull(x) AND equals(assumeNotNull(x), 0), `exception_stacks.mechanism_handled`) AS result)"
     )
 
 

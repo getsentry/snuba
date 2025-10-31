@@ -1,0 +1,45 @@
+---
+source: src/processors/mod.rs
+description: "{\n  \"version\": 2,\n  \"use_case_id\": \"spans\",\n  \"org_id\": 1,\n  \"project_id\": 3,\n  \"metric_id\": 65563,\n  \"timestamp\": 1704614940,\n  \"sentry_received_timestamp\": 1704614940,\n  \"tags\": {\n    \"9223372036854776010\": \"production\",\n    \"9223372036854776017\": \"healthy\",\n    \"65690\": \"metric_e2e_spans_dist_v_VUW93LMS\"\n  },\n  \"retention_days\": 90,\n  \"mapping_meta\": {\n    \"d\": {\n      \"65560\": \"d:spans/duration@second\"\n    },\n    \"h\": {\n      \"9223372036854776017\": \"session.status\",\n      \"9223372036854776010\": \"environment\"\n    },\n    \"f\": {\n      \"65691\": \"metric_e2e_spans_dist_k_VUW93LMS\"\n    }\n  },\n  \"type\": \"d\",\n  \"value\": {\n    \"format\": \"zstd\",\n    \"data\": \"KLUv/QBYrQAAcAAA8D8AQAAAAAAAAAhAAgBgRgCw\"\n  }\n}\n"
+expression: snapshot_payload
+---
+[
+  {
+    "distribution_values": [
+      1.0,
+      2.0,
+      3.0
+    ],
+    "granularities": [
+      1,
+      2,
+      3
+    ],
+    "materialization_version": 4,
+    "metric_id": 65563,
+    "metric_type": "distribution",
+    "min_retention_days": 90,
+    "org_id": 1,
+    "project_id": 3,
+    "record_meta": 1,
+    "retention_days": 90,
+    "tags.indexed_value": [
+      0,
+      0,
+      0
+    ],
+    "tags.key": [
+      65690,
+      9223372036854776010,
+      9223372036854776017
+    ],
+    "tags.raw_value": [
+      "metric_e2e_spans_dist_v_VUW93LMS",
+      "production",
+      "healthy"
+    ],
+    "timeseries_id": 1436359714,
+    "timestamp": 1704614940,
+    "use_case_id": "spans"
+  }
+]

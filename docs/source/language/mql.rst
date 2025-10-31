@@ -4,7 +4,7 @@ The MQL query language
 
 This document describes the Metrics Query Language (MQL). For more details on
 how to actually send a query to Snuba see :doc:`/query/overview`. The full grammar
-can be found in the ``snuba-sdk`` `<repository https://github.com/getsentry/snuba-sdk/blob/main/snuba_sdk/mql/mql.py>`_.
+can be found in the ``snuba-sdk`` `repository <https://github.com/getsentry/snuba-sdk/blob/main/snuba_sdk/mql/mql.py>`_.
 
 Queries are composed at their core of timeseries, which are aggregate functions on a metric::
 

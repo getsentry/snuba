@@ -2,7 +2,12 @@ from typing import Any, List, Mapping, Sequence, Union
 
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
+from snuba.query.data_source.join import (
+    IndividualNode,
+    JoinClause,
+    JoinType,
+    JoinVisitor,
+)
 from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.expressions import StringifyVisitor
@@ -135,22 +140,27 @@ class TracingQueryFormatter(
         return [f"{self.visit(node.data_source)} AS `{node.alias}`"]
 
     def visit_join_clause(self, node: JoinClause[SimpleDataSource]) -> List[str]:
-        # There is only one of these in the on clause (I think)
-        on_list = [
-            [
-                f"{c.left.table_alias}.{c.left.column}",
-                f"{c.right.table_alias}.{c.right.column}",
+        if node.join_type == JoinType.CROSS:
+            return [
+                *_indent_str_list(node.left_node.accept(self), 1),
+                f"{node.join_type.name.upper()} JOIN",
+                *_indent_str_list(node.right_node.accept(self), 1),
             ]
-            for c in node.keys
-        ][0]
-
-        return [
-            *_indent_str_list(node.left_node.accept(self), 1),
-            f"{node.join_type.name.upper()} JOIN",
-            *_indent_str_list(node.right_node.accept(self), 1),
-            "ON",
-            *_indent_str_list(
-                on_list,
-                1,
-            ),
-        ]
+        else:
+            on_list = [
+                [
+                    f"{c.left.table_alias}.{c.left.column}",
+                    f"{c.right.table_alias}.{c.right.column}",
+                ]
+                for c in node.keys
+            ][0]
+            return [
+                *_indent_str_list(node.left_node.accept(self), 1),
+                f"{node.join_type.name.upper()} JOIN",
+                *_indent_str_list(node.right_node.accept(self), 1),
+                "ON",
+                *_indent_str_list(
+                    on_list,
+                    1,
+                ),
+            ]

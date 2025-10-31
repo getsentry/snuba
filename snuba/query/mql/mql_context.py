@@ -19,7 +19,6 @@ class MQLContext:
     the request itself. It should not do any validation beyond type checks.
     """
 
-    entity: str
     start: str
     end: str
     rollup: Rollup
@@ -27,14 +26,16 @@ class MQLContext:
     indexer_mappings: dict[str, str | int]
     limit: int | None
     offset: int | None
+    extrapolate: bool
 
     def __post_init__(self) -> None:
         self.validate()
 
     def validate(self) -> None:
-        for field in ["entity", "start", "end"]:
+        for field in ["start", "end"]:
             if not isinstance(getattr(self, field), str) or getattr(self, field) == "":
                 raise ParsingException(f"MQL context: {field} must be a str")
+
         if not isinstance(self.rollup, Rollup):
             raise ParsingException("MQL context: rollup must be a Rollup")
         if not isinstance(self.scope, MetricsScope):
@@ -45,12 +46,13 @@ class MQLContext:
             raise ParsingException("MQL context: limit must be an int")
         if self.offset is not None and not isinstance(self.offset, int):
             raise ParsingException("MQL context: offset must be an int")
+        if self.extrapolate is not None and not isinstance(self.extrapolate, bool):
+            raise ParsingException("MQL context: extrapolate flag must be a bool")
 
     @staticmethod
     def from_dict(mql_context_dict: dict[str, Any]) -> MQLContext:
         try:
             return MQLContext(
-                entity=mql_context_dict["entity"],
                 start=mql_context_dict["start"],
                 end=mql_context_dict["end"],
                 rollup=Rollup(**mql_context_dict["rollup"]),
@@ -58,6 +60,7 @@ class MQLContext:
                 indexer_mappings=mql_context_dict["indexer_mappings"],
                 limit=mql_context_dict["limit"],
                 offset=mql_context_dict["offset"],
+                extrapolate=mql_context_dict.get("extrapolate", False),
             )
         except KeyError as e:
             raise ParsingException(f"MQL context: missing required field {e}")

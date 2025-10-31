@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import Client from "../api_client";
-import { Table } from "../table";
-import QueryDisplay from "./query_display";
-import { CardinalityQueryResult, PredefinedQuery } from "./types";
+import Client from "SnubaAdmin/api_client";
+import { Table } from "SnubaAdmin/table";
+import QueryDisplay from "SnubaAdmin/cardinality_analyzer/query_display";
+import { CardinalityQueryResult, PredefinedQuery } from "SnubaAdmin/cardinality_analyzer/types";
 
 function CardinalityQueries(props: { api: Client }) {
   const [predefinedQueryOptions, setPredefinedQueryOptions] = useState<

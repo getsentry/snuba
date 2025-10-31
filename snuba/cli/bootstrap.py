@@ -6,12 +6,8 @@ import click
 from confluent_kafka import KafkaException
 
 from snuba.clusters.cluster import CLUSTERS
-from snuba.datasets.storages.factory import get_all_storage_keys
 from snuba.environment import setup_logging
-from snuba.migrations.connect import (
-    check_clickhouse_connections,
-    check_for_inactive_replicas,
-)
+from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.runner import Runner
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
@@ -90,5 +86,4 @@ def bootstrap(
 
     if migrate:
         check_clickhouse_connections(CLUSTERS)
-        check_for_inactive_replicas(get_all_storage_keys())
         Runner().run_all(force=True)

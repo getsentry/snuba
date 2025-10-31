@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import List, Mapping
 
 from snuba.clickhouse.columns import Array, DateTime, String
@@ -10,7 +11,6 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Expression, FunctionCall
-from snuba.query.parser.validation import ExpressionValidator
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
 from snuba.query.validation.functions import AllowedFunctionValidator
 from snuba.query.validation.signature import Any, Column, SignatureValidator
@@ -88,6 +88,21 @@ class QueryEntityFinder(
 
     def visit_join_clause(self, node: JoinClause[QueryEntity]) -> List[QueryEntity]:
         return node.right_node.accept(self) + node.left_node.accept(self)
+
+
+class ExpressionValidator(ABC):
+    """
+    Validates an individual expression in a Snuba logical query.
+    """
+
+    @abstractmethod
+    def validate(self, exp: Expression, data_source: DataSource) -> None:
+        """
+        If the expression is valid according to this validator it
+        returns, otherwise it raises a subclass of
+        snuba.query.parser.ValidationException
+        """
+        raise NotImplementedError
 
 
 class FunctionCallsValidator(ExpressionValidator):

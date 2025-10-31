@@ -6,6 +6,8 @@ from typing import Any
 import fastjsonschema
 import sentry_sdk
 
+from snuba import settings
+
 # Snubadocs are automatically generated from this file. When adding new schemas or individual keys,
 # please ensure you add a description key in the same level and succinctly describe the property.
 
@@ -85,11 +87,10 @@ STREAM_LOADER_SCHEMA = {
     "description": "The stream loader for a writing to ClickHouse. This provides what is needed to start a Kafka consumer and fill in the ClickHouse table.",
 }
 
+
 ######
 # Column specific json schemas
-def make_column_schema(
-    column_type: dict[str, Any], args: dict[str, Any]
-) -> dict[str, Any]:
+def make_column_schema(column_type: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
     args["properties"]["schema_modifiers"] = TYPE_STRING_ARRAY
     return {
         "type": "object",
@@ -115,7 +116,7 @@ def del_name_field(column_schema: dict[str, Any]) -> dict[str, Any]:
 
 
 NUMBER_SCHEMA = make_column_schema(
-    column_type={"enum": ["UInt", "Float"]},
+    column_type={"enum": ["UInt", "Float", "Int"]},
     args={
         "type": "object",
         "properties": {
@@ -138,7 +139,7 @@ FIXED_STRING_SCHEMA = make_column_schema(
 
 
 NO_ARG_SCHEMA = make_column_schema(
-    column_type={"enum": ["String", "DateTime", "UUID", "IPv4", "IPv6"]},
+    column_type={"enum": ["String", "DateTime", "UUID", "IPv4", "IPv6", "Bool", "Date"]},
     args={
         "type": "object",
         "properties": {},
@@ -146,10 +147,54 @@ NO_ARG_SCHEMA = make_column_schema(
     },
 )
 
+DATETIME64_SCHEMA = make_column_schema(
+    column_type={"const": "DateTime64"},
+    args={
+        "type": "object",
+        "properties": {
+            "precision": {"type": "integer"},
+            "timezone": {"type": "string"},
+        },
+        "additionalProperties": False,
+    },
+)
+
+JSON_SCHEMA = make_column_schema(
+    column_type={"const": "JSON"},
+    args={
+        "type": "object",
+        "properties": {
+            "max_dynamic_paths": {"type": "integer"},
+            "max_dynamic_types": {"type": "integer"},
+            "type_hints": {"type": "object"},
+            "skip_paths": TYPE_STRING_ARRAY,
+            "skip_regexp": TYPE_STRING_ARRAY,
+        },
+        "additionalProperties": False,
+    },
+)
+
 # Get just the type
-_SIMPLE_COLUMN_TYPES = [
-    del_name_field(col_type) for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA]
+_SIMPLE_COLUMN_TYPES = [del_name_field(col_type) for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA]]
+
+# Tuple inner types are the same as normal column types except they don't have a name
+_SIMPLE_TUPLE_INNER_TYPES = [
+    del_name_field(col_type) for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA, DATETIME64_SCHEMA]
 ]
+
+TUPLE_SCHEMA = make_column_schema(
+    column_type={"const": "Tuple"},
+    args={
+        "type": "object",
+        "properties": {
+            "inner_types": {
+                "type": "array",
+                "items": {"anyOf": _SIMPLE_TUPLE_INNER_TYPES},
+            }
+        },
+        "additionalProperties": False,
+    },
+)
 
 AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
     column_type={"const": "AggregateFunction"},
@@ -159,7 +204,22 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
             "func": TYPE_STRING,
             "arg_types": {
                 "type": "array",
-                "items": {"anyOf": _SIMPLE_COLUMN_TYPES},
+                "items": {"anyOf": [*_SIMPLE_COLUMN_TYPES, TUPLE_SCHEMA]},
+            },
+        },
+        "additionalProperties": False,
+    },
+)
+
+SIMPLE_AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
+    column_type={"const": "SimpleAggregateFunction"},
+    args={
+        "type": "object",
+        "properties": {
+            "func": TYPE_STRING,
+            "arg_types": {
+                "type": "array",
+                "items": {"anyOf": [*_SIMPLE_COLUMN_TYPES, TUPLE_SCHEMA]},
             },
         },
         "additionalProperties": False,
@@ -191,13 +251,14 @@ SIMPLE_COLUMN_SCHEMAS = [
     FIXED_STRING_SCHEMA,
     NO_ARG_SCHEMA,
     AGGREGATE_FUNCTION_SCHEMA,
+    SIMPLE_AGGREGATE_FUNCTION_SCHEMA,
     ENUM_SCHEMA,
+    DATETIME64_SCHEMA,
+    JSON_SCHEMA,
 ]
 
 # Array inner types are the same as normal column types except they don't have a name
-_SIMPLE_ARRAY_INNER_TYPES = [
-    del_name_field(col_type) for col_type in SIMPLE_COLUMN_SCHEMAS
-]
+_SIMPLE_ARRAY_INNER_TYPES = [del_name_field(col_type) for col_type in SIMPLE_COLUMN_SCHEMAS]
 
 # Up to one subarray is supported. Eg Array(Array(String())).
 _SUB_ARRAY_SCHEMA = make_column_schema(
@@ -213,16 +274,29 @@ ARRAY_SCHEMA = make_column_schema(
     column_type={"const": "Array"},
     args={
         "type": "object",
+        "properties": {"inner_type": {"anyOf": [*_SIMPLE_ARRAY_INNER_TYPES, _SUB_ARRAY_SCHEMA]}},
+        "additionalProperties": False,
+    },
+)
+
+MAP_SCHEMA = make_column_schema(
+    column_type={"const": "Map"},
+    args={
+        "type": "object",
         "properties": {
-            "inner_type": {"anyOf": [*_SIMPLE_ARRAY_INNER_TYPES, _SUB_ARRAY_SCHEMA]}
+            "key": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
+            "value": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
         },
         "additionalProperties": False,
     },
 )
 
+
 COLUMN_SCHEMAS = [
     *SIMPLE_COLUMN_SCHEMAS,
     ARRAY_SCHEMA,
+    MAP_SCHEMA,
+    TUPLE_SCHEMA,
 ]
 
 
@@ -230,12 +304,11 @@ NESTED_SCHEMA = make_column_schema(
     column_type={"const": "Nested"},
     args={
         "type": "object",
-        "properties": {
-            "subcolumns": {"type": "array", "items": {"anyOf": COLUMN_SCHEMAS}}
-        },
+        "properties": {"subcolumns": {"type": "array", "items": {"anyOf": COLUMN_SCHEMAS}}},
         "additionalProperties": False,
     },
 )
+
 
 SCHEMA_COLUMNS = {
     "type": "array",
@@ -329,11 +402,6 @@ STORAGE_QUERY_PROCESSORS_SCHEMA = registered_class_array_schema(
     "processor",
     "QueryProcessor",
     "Name of ClickhouseQueryProcessor class config key. Responsible for the transformation applied to a query.",
-)
-STORAGE_QUERY_SPLITTERS_SCHEMA = registered_class_array_schema(
-    "splitter",
-    "QuerySplitStrategy",
-    "Name of QuerySplitStrategy class config key. Responsible for splitting a query into two at runtime and combining the results.",
 )
 STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA = registered_class_array_schema(
     "condition",
@@ -527,6 +595,36 @@ ENTITY_JOIN_RELATIONSHIPS = {
     },
 }
 
+DELETION_SETTINGS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_enabled": {
+            "type": "integer",
+        },
+        "tables": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Names of the tables to delete from.",
+        },
+        "allowed_columns": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Columns allowed in WHERE clause.",
+        },
+        "max_rows_to_delete": {
+            "type": "integer",
+        },
+        "bulk_delete_only": {"type": "boolean"},
+    },
+    "required": ["is_enabled", "tables"],
+    "additionalProperties": False,
+}
+DELETION_PROCESSORS_SCHEMA = registered_class_array_schema(
+    "processor",
+    "DeletionProcessor",
+    "This processor should validate the query against the storage",
+)
+
 # Full schemas:
 
 V1_READABLE_STORAGE_SCHEMA = {
@@ -540,9 +638,15 @@ V1_READABLE_STORAGE_SCHEMA = {
         "readiness_state": READINESS_STATE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
-        "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
+        "deletion_settings": DELETION_SETTINGS_SCHEMA,
+        "deletion_processors": DELETION_PROCESSORS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
+        "delete_allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
+        "required_time_column": {
+            "type": ["string", "null"],
+            "description": "The name of the required time column specifed in schema",
+        },
     },
     "required": [
         "version",
@@ -567,13 +671,19 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "schema": SCHEMA_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
-        "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
+        "deletion_settings": DELETION_SETTINGS_SCHEMA,
+        "deletion_processors": DELETION_PROCESSORS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
+        "delete_allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",
             "description": "Extra Clickhouse fields that are used for consumer writes",
+        },
+        "required_time_column": {
+            "type": ["string", "null"],
+            "description": "The name of the required time column specifed in schema",
         },
     },
     "required": [
@@ -605,7 +715,6 @@ V1_CDC_STORAGE_SCHEMA = {
         "postgres_table": TYPE_STRING,
         "row_processor": CDC_STORAGE_ROW_PROCESSOR_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
-        "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
@@ -715,7 +824,6 @@ V1_DATASET_SCHEMA = {
         "version",
         "kind",
         "name",
-        "entities",
     ],
     "additionalProperties": False,
 }
@@ -742,19 +850,23 @@ V1_MIGRATION_GROUP_SCHEMA = {
     "additionalProperties": False,
 }
 
-with sentry_sdk.start_span(op="compile", description="Storage Validators"):
-    STORAGE_VALIDATORS = {
-        "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
-        "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
-        "cdc_storage": fastjsonschema.compile(V1_CDC_STORAGE_SCHEMA),
-    }
+if settings.VALIDATE_DATASET_YAMLS_ON_STARTUP:
+    with sentry_sdk.start_span(op="compile", description="Storage Validators"):
+        STORAGE_VALIDATORS = {
+            "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
+            "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
+            "cdc_storage": fastjsonschema.compile(V1_CDC_STORAGE_SCHEMA),
+        }
 
-with sentry_sdk.start_span(op="compile", description="Entity Validators"):
-    ENTITY_VALIDATORS = {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
+    with sentry_sdk.start_span(op="compile", description="Entity Validators"):
+        ENTITY_VALIDATORS = {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
 
-
-with sentry_sdk.start_span(op="compile", description="Dataset Validators"):
-    DATASET_VALIDATORS = {"dataset": fastjsonschema.compile(V1_DATASET_SCHEMA)}
+    with sentry_sdk.start_span(op="compile", description="Dataset Validators"):
+        DATASET_VALIDATORS = {"dataset": fastjsonschema.compile(V1_DATASET_SCHEMA)}
+else:
+    STORAGE_VALIDATORS = {}
+    ENTITY_VALIDATORS = {}
+    DATASET_VALIDATORS = {}
 
 
 ALL_VALIDATORS = {

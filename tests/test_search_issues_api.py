@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Callable, MutableMapping, Tuple, Union
+from unittest.mock import Mock, patch
 
 import pytest
 import simplejson as json
@@ -8,6 +9,7 @@ import simplejson as json
 from snuba.core.initialize import initialize_snuba
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.state import set_config
 from tests.base import BaseApiTest
 from tests.datasets.configuration.utils import ConfigurationTest
 from tests.helpers import write_unprocessed_events
@@ -83,6 +85,112 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
                 }
             ),
             headers={"referer": "test"},
+        )
+
+    def delete_query(
+        self,
+        group_id: int,
+        debug: bool = True,
+    ) -> Any:
+        return self.app.delete(
+            "/search_issues",
+            data=json.dumps(
+                {
+                    "query": {"columns": {"group_id": [group_id], "project_id": [3]}},
+                    "debug": True,
+                    "tenant_ids": {"referrer": "test", "organization_id": 1},
+                }
+            ),
+            headers={"referer": "test"},
+        )
+
+    @patch("snuba.web.bulk_delete_query.produce_delete_query")
+    def test_simple_delete(self, mock_produce_delete: Mock) -> None:
+        set_config("read_through_cache.short_circuit", 1)
+        now = datetime.now().replace(minute=0, second=0, microsecond=0)
+        occurrence_id = str(uuid.uuid4())
+        group_id = 4
+
+        evt: MutableMapping[str, Any] = dict(
+            organization_id=1,
+            project_id=3,
+            event_id=str(uuid.uuid4().hex),
+            group_id=group_id,
+            primary_hash=str(uuid.uuid4().hex),
+            datetime=datetime.utcnow().isoformat() + "Z",
+            platform="other",
+            message="message",
+            data={"received": now.timestamp()},
+            occurrence_data=dict(
+                id=occurrence_id,
+                type=1,
+                issue_title="search me",
+                fingerprint=["one", "two"],
+                detection_time=now.timestamp(),
+            ),
+            retention_days=90,
+        )
+
+        assert self.events_storage
+        write_unprocessed_events(self.events_storage, [evt])
+
+        # delete fails when feature flag is off
+        set_config("storage_deletes_enabled", 0)
+        response = self.delete_query(group_id)
+        assert int(int(response.status_code) / 100) != 2
+
+        # delete succeeds when feature flag is on
+        set_config("storage_deletes_enabled", 1)
+        response = self.delete_query(group_id)
+        data = json.loads(response.data)
+        assert response.status_code == 200, data
+
+        # check we produce the delete query message
+        assert mock_produce_delete.call_count == 1
+
+        # check args for delete query message
+        called_args = mock_produce_delete.call_args[0][0]
+        assert called_args["storage_name"] == "search_issues"
+        assert called_args["conditions"]["project_id"] == [3]
+        assert called_args["conditions"]["group_id"] == [4]
+        assert called_args["rows_to_delete"] == 1
+
+    def test_bad_delete(self) -> None:
+        res = self.app.delete(
+            "/search_issues",
+            data=json.dumps(
+                {
+                    "debug": True,
+                    "tenant_ids": {"referrer": "test", "organization_id": 1},
+                }
+            ),
+            headers={"referer": "test"},
+        )
+        assert int(res.status_code / 100) == 4  # 400 status code
+        assert "'query' is a required property" in res.get_json()["error"]["message"]
+
+        # test for invalid column types
+        res = self.app.delete(
+            "/search_issues",
+            data=json.dumps(
+                {
+                    "query": {
+                        "columns": {
+                            "group_id": ["invalid_id"],
+                            "project_id": [3],
+                        },
+                    },
+                    "debug": True,
+                    "tenant_ids": {"referrer": "test", "organization_id": 1},
+                }
+            ),
+            headers={"referer": "test"},
+        )
+        assert res.status_code == 400
+        data = json.loads(res.data)
+        assert (
+            data["error"]["message"]
+            == "Invalid value invalid_id for column type schemas.UInt(64, modifiers=None)"
         )
 
     def test_simple_search_query(self) -> None:
@@ -174,9 +282,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         insert_row[2]["occurrence_data"]["culprit"] = "my culprit"
         insert_row[2]["occurrence_data"]["level"] = "info"
 
-        response = self.app.post(
-            "/tests/search_issues/eventstream", data=json.dumps(insert_row)
-        )
+        response = self.app.post("/tests/search_issues/eventstream", data=json.dumps(insert_row))
         assert response.status_code == 200
 
         from_date = (now - timedelta(days=1)).isoformat()
@@ -208,14 +314,10 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     def test_eventstream_query_transaction_duration(self) -> None:
         now = datetime.utcnow()
         insert_row = base_insert_event(now)
-        insert_row[2]["data"]["start_timestamp"] = int(
-            (now - timedelta(seconds=10)).timestamp()
-        )
+        insert_row[2]["data"]["start_timestamp"] = int((now - timedelta(seconds=10)).timestamp())
         insert_row[2]["data"]["timestamp"] = int(now.timestamp())
 
-        response = self.app.post(
-            "/tests/search_issues/eventstream", data=json.dumps(insert_row)
-        )
+        response = self.app.post("/tests/search_issues/eventstream", data=json.dumps(insert_row))
         assert response.status_code == 200
 
         from_date = (now - timedelta(days=1)).isoformat()
@@ -241,9 +343,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         insert_row = base_insert_event(now)
         insert_row[2]["data"]["tags"] = [["transaction", transaction_name]]
 
-        response = self.app.post(
-            "/tests/search_issues/eventstream", data=json.dumps(insert_row)
-        )
+        response = self.app.post("/tests/search_issues/eventstream", data=json.dumps(insert_row))
         assert response.status_code == 200
 
         from_date = (now - timedelta(days=1)).isoformat()
@@ -274,9 +374,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             "replay": {"replay_id": replay_id},
         }
 
-        response = self.app.post(
-            "/tests/search_issues/eventstream", data=json.dumps(insert_row)
-        )
+        response = self.app.post("/tests/search_issues/eventstream", data=json.dumps(insert_row))
         assert response.status_code == 200
 
         from_date = (now - timedelta(days=1)).isoformat()
@@ -301,3 +399,54 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
                 "replay_id": replay_id.replace("-", ""),
             }
         ]
+
+    def test_eventstream_query_message(self) -> None:
+        now = datetime.utcnow()
+        insert_row = base_insert_event(now)
+        message = "my message"
+        insert_row[2]["message"] = message
+
+        response = self.app.post("/tests/search_issues/eventstream", data=json.dumps(insert_row))
+        assert response.status_code == 200
+
+        from_date = (now - timedelta(days=1)).isoformat()
+        to_date = (now + timedelta(days=1)).isoformat()
+        response = self.post_query(
+            f"""MATCH (search_issues)
+                        SELECT project_id, message
+                        WHERE project_id = 1
+                        AND timestamp >= toDateTime('{from_date}')
+                        AND timestamp < toDateTime('{to_date}')
+                    """
+        )
+
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+        assert data["stats"]["consistent"]
+        assert data["data"] == [{"project_id": 1, "message": message}]
+
+    def test_eventstream_timestamp_ms_precision(self) -> None:
+        """Test that timestamp_ms preserves millisecond precision through the full eventstream"""
+        now = datetime.utcnow()
+        now_ms = now.replace(microsecond=0) + timedelta(milliseconds=123)
+
+        insert_row = base_insert_event(now_ms)
+        insert_row[2]["datetime"] = now_ms.isoformat() + "Z"
+
+        response = self.app.post("/tests/search_issues/eventstream", data=json.dumps(insert_row))
+        assert response.status_code == 200
+
+        from_date = (now - timedelta(days=1)).isoformat()
+        to_date = (now + timedelta(days=1)).isoformat()
+        response = self.post_query(
+            f"""
+            MATCH (search_issues)
+            SELECT timestamp_ms
+            WHERE project_id = 1
+            AND timestamp >= toDateTime('{from_date}') AND timestamp < toDateTime('{to_date}')
+            """
+        )
+        data = json.loads(response.data)
+
+        assert datetime.fromisoformat(data["data"][0]["timestamp_ms"]) == now_ms

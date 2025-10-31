@@ -1,13 +1,12 @@
 #!/bin/bash
 
-eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
-/devinfra/scripts/k8s/k8stunnel
+eval $(regions-project-env-vars --region="${SENTRY_REGION}")
+/devinfra/scripts/get-cluster-credentials
 
-/devinfra/scripts/k8s/k8s-spawn-job.py \
-  --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
+k8s-spawn-job \
   --label-selector="service=${SNUBA_SERVICE_NAME}" \
   --container-name="${SNUBA_SERVICE_NAME}" \
   "snuba-migrate" \
-  "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+  "us-docker.pkg.dev/sentryio/snuba-mr/image:${GO_REVISION_SNUBA_REPO}" \
   -- \
   snuba migrations migrate --check-dangerous -r complete -r partial

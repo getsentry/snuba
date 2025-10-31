@@ -19,12 +19,12 @@ required_time_column: timestamp
 storages:
   - storage: outcomes_hourly
     is_writable: false
+  - storage: outcomes_daily
+    is_writable: false
   - storage: outcomes_raw
     is_writable: true
 storage_selector:
-  selector: SimpleQueryStorageSelector
-  args:
-    storage: outcomes_hourly
+  selector: OutcomesStorageSelector
 query_processors:
   - processor: BasicFunctionsProcessor
   - processor: TimeSeriesProcessor
@@ -33,10 +33,6 @@ query_processors:
         time: timestamp
       time_parse_columns:
         - timestamp
-  - processor: ReferrerRateLimiterProcessor
-  - processor: OrganizationRateLimiterProcessor
-    args:
-      org_column: org_id
 validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator

@@ -1,0 +1,13 @@
+---
+source: src/processors/mod.rs
+expression: diff
+---
+[
+    Change {
+        path: "",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "environment",
+        },
+    },
+]

@@ -172,7 +172,7 @@ def test_data_source(
 
     request = json_to_snql(query_body, "discover")
     request.validate()
-    query, _ = parse_snql_query(str(request.query), dataset)
+    query = parse_snql_query(str(request.query), dataset)
     entity = query.get_from_clause()
     assert isinstance(entity, EntitySource)
     assert entity.key == expected_entity

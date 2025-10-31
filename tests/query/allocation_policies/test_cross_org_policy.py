@@ -1,10 +1,7 @@
 import pytest
 
-from snuba.query.allocation_policies import (
-    AllocationPolicyViolation,
-    InvalidPolicyConfig,
-    QueryResultOrError,
-)
+from snuba.configs.configuration import InvalidConfig
+from snuba.query.allocation_policies import QueryResultOrError
 from snuba.query.allocation_policies.cross_org import CrossOrgQueryAllocationPolicy
 from snuba.web import QueryResult
 
@@ -37,17 +34,20 @@ class TestCrossOrgQueryAllocationPolicy:
         )
         assert unimportant_allowance.can_run is True
         assert unimportant_allowance.max_threads == 10
-        assert unimportant_allowance.explanation == {"reason": "pass_through"}
+        assert unimportant_allowance.explanation == {
+            "reason": "pass_through",
+            "storage_key": "generic_metrics_distributions",
+        }
         cross_org_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
         )
         assert cross_org_allowance.can_run is True
         assert cross_org_allowance.max_threads == 1
 
-        with pytest.raises(AllocationPolicyViolation):
-            policy.get_quota_allowance(
-                tenant_ids={"referrer": "statistical_detectors"}, query_id="3"
-            )
+        quota_allowance = policy.get_quota_allowance(
+            tenant_ids={"referrer": "statistical_detectors"}, query_id="3"
+        )
+        assert not quota_allowance.can_run and quota_allowance.max_threads == 0
         policy.update_quota_balance(
             tenant_ids={"referrer": "statistical_detectors"},
             query_id="2",
@@ -126,10 +126,11 @@ class TestCrossOrgQueryAllocationPolicy:
             0,
             {"referrer": "statistical_detectors"},
         )
-        with pytest.raises(AllocationPolicyViolation):
-            policy.get_quota_allowance(
-                tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
-            )
+
+        quota_allowance = policy.get_quota_allowance(
+            tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
+        )
+        assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
     @pytest.mark.redis_db
     def test_override_unregistered_referrer(self):
@@ -146,7 +147,7 @@ class TestCrossOrgQueryAllocationPolicy:
                 },
             }
         )
-        with pytest.raises(InvalidPolicyConfig):
+        with pytest.raises(InvalidConfig):
             policy.set_config_value(
                 "referrer_concurrent_override",
                 6,
@@ -185,10 +186,9 @@ class TestCrossOrgQueryAllocationPolicy:
         assert allowance.can_run is True
         assert allowance.max_threads == 1
 
-        with pytest.raises(AllocationPolicyViolation) as violation:
-            allowance = policy.get_quota_allowance(
-                tenant_ids={"referrer": "unregistered", "cross_org_query": 1},
-                query_id="2",
-            )
-
-        assert violation.value.quota_allowance["explanation"]["cross_org_query"] == "This referrer is not registered for the current storage generic_metrics_distributions, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"  # type: ignore
+        allowance = policy.get_quota_allowance(
+            tenant_ids={"referrer": "unregistered", "cross_org_query": 1},
+            query_id="2",
+        )
+        assert not allowance.can_run
+        assert allowance.explanation["cross_org_query"] == "This referrer is not registered for the current storage generic_metrics_distributions, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"  # type: ignore

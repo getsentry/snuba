@@ -28,8 +28,10 @@ schema:
     { name: segment_name, type: String },
     { name: time, type: DateTime },
     { name: start_timestamp, type: DateTime },
+    { name: start_timestamp_precise, type: DateTime64, args: { precision: 6 } },
     { name: start_ms, type: UInt, args: { size: 16 } },
     { name: end_timestamp, type: DateTime },
+    { name: end_timestamp_precise, type: DateTime64, args: { precision: 6 } },
     { name: end_ms, type: UInt, args: { size: 16 } },
     { name: duration, type: UInt, args: { size: 32 } },
     { name: exclusive_time, type: Float, args: { size: 64 } },
@@ -153,16 +155,10 @@ query_processors:
         - end_timestamp
         - timestamp
   - processor: BasicFunctionsProcessor
-  - processor: ReferrerRateLimiterProcessor
-  - processor: ProjectReferrerRateLimiter
+  - processor: LowCardinalityProcessor
     args:
-      project_column: project_id
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
-  - processor: ResourceQuotaProcessor
-    args:
-      project_field: project_id
+      columns:
+        - op
 
 validate_data_model: error
 validators:

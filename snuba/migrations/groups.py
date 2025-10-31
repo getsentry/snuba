@@ -4,15 +4,17 @@ from typing import Dict, Set
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.migrations.group_loader import (
+    CDCLoader,
     DiscoverLoader,
+    EventsAnalyticsPlatformLoader,
     EventsLoader,
     FunctionsLoader,
     GenericMetricsLoader,
     GroupAttributesLoader,
     GroupLoader,
     MetricsLoader,
-    MetricsSummariesLoader,
     OutcomesLoader,
+    ProfileChunksLoader,
     ProfilesLoader,
     QuerylogLoader,
     ReplaysLoader,
@@ -41,8 +43,10 @@ class MigrationGroup(Enum):
     TEST_MIGRATION = "test_migration"
     SEARCH_ISSUES = "search_issues"
     SPANS = "spans"
+    EVENTS_ANALYTICS_PLATFORM = "events_analytics_platform"
     GROUP_ATTRIBUTES = "group_attributes"
-    METRICS_SUMMARIES = "metrics_summaries"
+    PROFILE_CHUNKS = "profile_chunks"
+    CDC = "cdc"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -57,9 +61,8 @@ OPTIONAL_GROUPS = {
     MigrationGroup.GENERIC_METRICS,
     MigrationGroup.TEST_MIGRATION,
     MigrationGroup.SEARCH_ISSUES,
-    MigrationGroup.SPANS,
     MigrationGroup.GROUP_ATTRIBUTES,
-    MigrationGroup.METRICS_SUMMARIES,
+    MigrationGroup.PROFILE_CHUNKS,
 }
 
 
@@ -81,12 +84,16 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         storage_sets_keys={StorageSetKey.MIGRATIONS},
         readiness_state=ReadinessState.COMPLETE,
     ),
+    MigrationGroup.CDC: _MigrationGroup(
+        loader=CDCLoader(),
+        storage_sets_keys={StorageSetKey.CDC},
+        readiness_state=ReadinessState.DEPRECATE,
+    ),
     MigrationGroup.EVENTS: _MigrationGroup(
         loader=EventsLoader(),
         storage_sets_keys={
             StorageSetKey.EVENTS,
             StorageSetKey.EVENTS_RO,
-            StorageSetKey.CDC,
         },
         readiness_state=ReadinessState.COMPLETE,
     ),
@@ -152,23 +159,30 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     ),
     MigrationGroup.SEARCH_ISSUES: _MigrationGroup(
         loader=SearchIssuesLoader(),
-        storage_sets_keys={StorageSetKey.SEARCH_ISSUES},
+        storage_sets_keys={
+            StorageSetKey.SEARCH_ISSUES,
+        },
         readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.SPANS: _MigrationGroup(
         loader=SpansLoader(),
         storage_sets_keys={StorageSetKey.SPANS},
-        readiness_state=ReadinessState.PARTIAL,
+        readiness_state=ReadinessState.COMPLETE,
+    ),
+    MigrationGroup.EVENTS_ANALYTICS_PLATFORM: _MigrationGroup(
+        loader=EventsAnalyticsPlatformLoader(),
+        storage_sets_keys={StorageSetKey.EVENTS_ANALYTICS_PLATFORM},
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.GROUP_ATTRIBUTES: _MigrationGroup(
         loader=GroupAttributesLoader(),
         storage_sets_keys={StorageSetKey.GROUP_ATTRIBUTES},
-        readiness_state=ReadinessState.PARTIAL,
+        readiness_state=ReadinessState.COMPLETE,
     ),
-    MigrationGroup.METRICS_SUMMARIES: _MigrationGroup(
-        loader=MetricsSummariesLoader(),
-        storage_sets_keys={StorageSetKey.METRICS_SUMMARIES},
-        readiness_state=ReadinessState.PARTIAL,
+    MigrationGroup.PROFILE_CHUNKS: _MigrationGroup(
+        loader=ProfileChunksLoader(),
+        storage_sets_keys={StorageSetKey.PROFILE_CHUNKS},
+        readiness_state=ReadinessState.COMPLETE,
     ),
 }
 
@@ -205,8 +219,13 @@ def get_storage_set_keys(group: MigrationGroup) -> Set[StorageSetKey]:
 def get_group_readiness_state_from_storage_set(
     storage_set_key: StorageSetKey,
 ) -> ReadinessState:
-    migration_group = _STORAGE_SET_TO_MIGRATION_GROUP_MAPPING[storage_set_key]
-    return _REGISTERED_MIGRATION_GROUPS[migration_group].readiness_state
+    migration_group = _STORAGE_SET_TO_MIGRATION_GROUP_MAPPING.get(storage_set_key, None)
+    if not migration_group:
+        return ReadinessState.LIMITED
+    registered_migration_group = _REGISTERED_MIGRATION_GROUPS.get(migration_group, None)
+    if registered_migration_group:
+        return registered_migration_group.readiness_state
+    return ReadinessState.LIMITED
 
 
 def get_group_readiness_state(group: MigrationGroup) -> ReadinessState:

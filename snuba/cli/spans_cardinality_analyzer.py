@@ -77,11 +77,11 @@ def spans_cardinality_analyzer(
     result = connection.execute(
         span_grouping_distinct_modules_query(time_window_hrs=2),
     )
-    distinct_span_groups = [row[0] for row in result.results]
-    logger.info(f"Got distinct span modules: {distinct_span_groups}")
+    high_cardinality_span_groups = [row[0] for row in result.results]
+    logger.info(f"Span modules with high cardinality: {high_cardinality_span_groups}")
 
     # Get the cardinality of each module and write to CSV file and send to Slack
-    for span_group in distinct_span_groups:
+    for span_group in high_cardinality_span_groups:
         logger.info(f"Getting cardinality for span group: {span_group}")
         result = connection.execute(
             span_grouping_cardinality_query(span_group, time_window_hrs=24, limit=1000)

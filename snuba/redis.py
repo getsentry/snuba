@@ -61,24 +61,26 @@ def _initialize_redis_cluster(config: settings.RedisClusterConfig) -> RedisClien
         startup_nodes = config["cluster_startup_nodes"]
         if startup_nodes is None:
             startup_nodes = [{"host": config["host"], "port": config["port"]}]
-        startup_cluster_nodes = [
-            ClusterNode(n["host"], n["port"]) for n in startup_nodes
-        ]
+        startup_cluster_nodes = [ClusterNode(n["host"], n["port"]) for n in startup_nodes]
         return RetryingRedisCluster(
             startup_nodes=startup_cluster_nodes,
             socket_keepalive=True,
             password=config["password"],
             max_connections_per_node=True,
             reinitialize_steps=config["reinitialize_steps"],
+            socket_timeout=config.get("socket_timeout", settings.REDIS_SOCKET_TIMEOUT),
         )
     else:
         return SingleNodeRedis(
+            _retries=2,
+            _backoff_max=3,
             host=config["host"],
             port=config["port"],
             password=config["password"],
             db=config["db"],
             ssl=config.get("ssl", False),
             socket_keepalive=True,
+            socket_timeout=config.get("socket_timeout", settings.REDIS_SOCKET_TIMEOUT),
         )
 
 
@@ -92,16 +94,18 @@ _default_redis_client: RedisClientType = _initialize_redis_cluster(
         "db": settings.REDIS_DB,
         "ssl": settings.REDIS_SSL,
         "reinitialize_steps": settings.REDIS_REINITIALIZE_STEPS,
+        "socket_timeout": settings.REDIS_SOCKET_TIMEOUT,
     }
 )
 
 
 def _initialize_specialized_redis_cluster(
-    config: settings.RedisClusterConfig | None,
+    config: settings.RedisClusterConfig | None, **overrides: float
 ) -> RedisClientType:
     if config is None:
         return _default_redis_client
-
+    for k, v in overrides.items():
+        config[k] = v  # type: ignore
     return _initialize_redis_cluster(config)
 
 
@@ -114,32 +118,40 @@ class RedisClientKey(Enum):
     DLQ = "dlq"
     OPTIMIZE = "optimize"
     ADMIN_AUTH = "admin_auth"
+    MANUAL_JOBS = "manual_jobs"
 
 
 _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
     RedisClientKey.CACHE: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["cache"]
+        settings.REDIS_CLUSTERS["cache"],
+        # cache lookups above 1 second are not worth it to wait any longer
+        socket_timeout=1,
     ),
     RedisClientKey.RATE_LIMITER: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["rate_limiter"]
+        settings.REDIS_CLUSTERS["rate_limiter"], socket_timeout=1
     ),
     RedisClientKey.SUBSCRIPTION_STORE: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["subscription_store"]
+        settings.REDIS_CLUSTERS["subscription_store"],
+        # subscription store reads a large amount of data from redis and also does it on a regular schedule
+        socket_timeout=30,
     ),
     RedisClientKey.REPLACEMENTS_STORE: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["replacements_store"]
+        settings.REDIS_CLUSTERS["replacements_store"], socket_timeout=1
     ),
     RedisClientKey.CONFIG: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["config"]
+        settings.REDIS_CLUSTERS["config"], socket_timeout=1
     ),
     RedisClientKey.DLQ: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["dlq"]
+        settings.REDIS_CLUSTERS["dlq"], socket_timeout=1
     ),
     RedisClientKey.OPTIMIZE: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["optimize"]
+        settings.REDIS_CLUSTERS["optimize"], socket_timeout=1
     ),
     RedisClientKey.ADMIN_AUTH: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["admin_auth"]
+        settings.REDIS_CLUSTERS["admin_auth"], socket_timeout=1
+    ),
+    RedisClientKey.MANUAL_JOBS: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["manual_jobs"], socket_timeout=1
     ),
 }
 

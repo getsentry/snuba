@@ -5,7 +5,7 @@ from typing import Optional, Sequence
 
 import click
 
-from snuba import settings, state
+from snuba import settings
 from snuba.consumers.consumer_config import resolve_consumer_config
 from snuba.datasets.storages.factory import get_writable_storage_keys
 
@@ -14,9 +14,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--storage",
     "storage_names",
-    type=click.Choice(
-        [storage_key.value for storage_key in get_writable_storage_keys()]
-    ),
+    type=click.Choice([storage_key.value for storage_key in get_writable_storage_keys()]),
     help="The storage to target",
     multiple=True,
     required=True,
@@ -28,7 +26,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 )
 @click.option(
     "--auto-offset-reset",
-    default="error",
+    default="earliest",
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
@@ -77,12 +75,6 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Kafka bootstrap server to use to produce replacements.",
 )
 @click.option(
-    "--slice-id",
-    "slice_id",
-    type=int,
-    help="The slice id for the storage",
-)
-@click.option(
     "--max-batch-size",
     default=settings.DEFAULT_MAX_BATCH_SIZE,
     type=int,
@@ -102,14 +94,13 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default="info",
 )
 @click.option(
-    "--skip-write/--no-skip-write",
-    "skip_write",
-    help="Skip the write to clickhouse",
-    default=True,
-)
-@click.option(
     "--concurrency",
     type=int,
+)
+@click.option(
+    "--clickhouse-concurrency",
+    type=int,
+    help="Number of concurrent clickhouse batches at one time.",
 )
 @click.option(
     "--use-rust-processor/--use-python-processor",
@@ -136,6 +127,18 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=30000,
 )
 @click.option(
+    "--async-inserts",
+    is_flag=True,
+    default=False,
+    help="Enable async inserts for ClickHouse",
+)
+@click.option(
+    "--max-dlq-buffer-length",
+    type=int,
+    default=25000,
+    help="Set a per-partition limit to the length of the DLQ buffer",
+)
+@click.option(
     "--health-check-file",
     default=None,
     type=str,
@@ -147,6 +150,41 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     is_flag=True,
     default=False,
     help="Enforce schema on the raw events topic.",
+)
+@click.option(
+    "--stop-at-timestamp",
+    type=int,
+    help="Unix timestamp after which to stop processing messages",
+)
+@click.option(
+    "--batch-write-timeout-ms",
+    type=int,
+    default=None,
+    help="Optional timeout for batch writer client connecting and sending request to Clickhouse",
+)
+@click.option(
+    "--quantized-rebalance-consumer-group-delay-secs",
+    type=int,
+    default=None,
+    help="Quantized rebalancing means that during deploys, rebalancing is triggered across all pods within a consumer group at the same time. The value is used by the pods to align their group join/leave activity to some multiple of the delay",
+)
+@click.option(
+    "--join-timeout-ms",
+    type=int,
+    default=1000,
+    help="number of milliseconds to wait for the current batch to be flushed by the consumer in case of rebalance",
+)
+@click.option(
+    "--health-check",
+    default="arroyo",
+    type=click.Choice(["snuba", "arroyo"]),
+    help="Specify which health check to use for the consumer. If not specified, the default Arroyo health check is used.",
+)
+@click.option(
+    "--consumer-version",
+    default="v2",
+    type=click.Choice(["v1", "v2"]),
+    help="DEPRECATED: value is ignored.",
 )
 def rust_consumer(
     *,
@@ -162,18 +200,25 @@ def rust_consumer(
     bootstrap_servers: Sequence[str],
     commit_log_bootstrap_servers: Sequence[str],
     replacement_bootstrap_servers: Sequence[str],
-    slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
     log_level: str,
-    skip_write: bool,
     concurrency: Optional[int],
+    clickhouse_concurrency: Optional[int],
     use_rust_processor: bool,
     group_instance_id: Optional[str],
     max_poll_interval_ms: int,
+    async_inserts: bool,
+    health_check: str,
     python_max_queue_depth: Optional[int],
     health_check_file: Optional[str],
     enforce_schema: bool,
+    stop_at_timestamp: Optional[int],
+    batch_write_timeout_ms: Optional[int],
+    max_dlq_buffer_length: Optional[int],
+    quantized_rebalance_consumer_group_delay_secs: Optional[int],
+    join_timeout_ms: Optional[int],
+    consumer_version: Optional[str],
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -191,8 +236,9 @@ def rust_consumer(
         max_batch_time_ms=max_batch_time_ms,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
-        slice_id=slice_id,
+        slice_id=None,
         group_instance_id=group_instance_id,
+        quantized_rebalance_consumer_group_delay_secs=quantized_rebalance_consumer_group_delay_secs,
     )
 
     consumer_config_raw = json.dumps(asdict(consumer_config))
@@ -203,24 +249,30 @@ def rust_consumer(
 
     os.environ["RUST_LOG"] = log_level.lower()
 
-    # XXX: Temporary way to quickly test different values for concurrency
-    # Should be removed before this is put into  prod
-    concurrency_override = state.get_int_config(
-        f"rust_consumer.{storage_names[0]}.concurrency"
-    )
+    if not async_inserts:
+        # we don't want to allow increasing this if
+        # we aren't using async inserts since that will increase
+        # the number of inserts/sec on clickhouse
+        clickhouse_concurrency = 2
 
     exitcode = rust_snuba.consumer(  # type: ignore
         consumer_group,
         auto_offset_reset,
         no_strict_offset_reset,
         consumer_config_raw,
-        skip_write,
-        concurrency_override or concurrency or 1,
+        concurrency or 1,
+        clickhouse_concurrency or 2,
         use_rust_processor,
         enforce_schema,
         max_poll_interval_ms,
+        async_inserts,
+        health_check,
         python_max_queue_depth,
         health_check_file,
+        stop_at_timestamp,
+        batch_write_timeout_ms,
+        max_dlq_buffer_length,
+        join_timeout_ms,
     )
 
     sys.exit(exitcode)

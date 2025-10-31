@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import simplejson as json
+from confluent_kafka.admin import AdminClient
 from dateutil.parser import parse as parse_datetime
 from sentry_sdk import Client, Hub
 
@@ -23,6 +24,9 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertBatch, InsertEvent, ReplacementType
 from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.utils.manage_topics import create_topics
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
 from tests.helpers import write_processed_messages
@@ -113,20 +117,22 @@ class SimpleAPITest(BaseApiTest):
                                             self.base_time + timedelta(minutes=tick)
                                         ).timetuple()
                                     ),
-                                    "tags": {
-                                        # Sentry
-                                        "environment": self.environments[
-                                            (tock * p) % len(self.environments)
-                                        ],
-                                        "sentry:release": str(tick),
-                                        "sentry:dist": "dist1",
-                                        "os.name": "windows",
-                                        "os.rooted": 1,
-                                        # User
-                                        "foo": "baz",
-                                        "foo.bar": "qux",
-                                        "os_name": "linux",
-                                    },
+                                    "tags": list(
+                                        {
+                                            # Sentry
+                                            "environment": self.environments[
+                                                (tock * p) % len(self.environments)
+                                            ],
+                                            "sentry:release": str(tick),
+                                            "sentry:dist": "dist1",
+                                            "os.name": "windows",
+                                            "os.rooted": 1,
+                                            # User
+                                            "foo": "baz",
+                                            "foo.bar": "qux",
+                                            "os_name": "linux",
+                                        }.items()
+                                    ),
                                     "exception": {
                                         "values": [
                                             {
@@ -623,7 +629,7 @@ class TestApi(SimpleAPITest):
                         "retention_days": settings.DEFAULT_RETENTION_DAYS,
                         "data": {
                             "received": calendar.timegm(self.base_time.timetuple()),
-                            "tags": {},
+                            "tags": [],
                             "exception": {
                                 "values": [
                                     {
@@ -1440,43 +1446,6 @@ class TestApi(SimpleAPITest):
         assert "timing" in result
         assert "timestamp" in result["timing"]
 
-    def test_project_rate_limiting(self) -> None:
-        # All projects except project 1 are allowed
-        state.set_config("project_concurrent_limit", 1)
-        state.set_config("project_concurrent_limit_1", 0)
-
-        response = self.post(
-            json.dumps(
-                {
-                    "project": 2,
-                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                    "selected_columns": ["platform"],
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                }
-            )
-        )
-        assert response.status_code == 200
-
-        response = self.post(
-            json.dumps(
-                {
-                    "project": 1,
-                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                    "selected_columns": ["platform"],
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                }
-            )
-        )
-        assert response.status_code == 429
-        data = json.loads(response.data)
-        assert data["error"]["message"] == "project concurrent of 1 exceeds limit of 0"
-
     def test_doesnt_select_deletions(self) -> None:
         query = {
             "project": 1,
@@ -1969,31 +1938,6 @@ class TestApi(SimpleAPITest):
         )
         assert "deleted = 0" in result["sql"] or "equals(deleted, 0)" in result["sql"]
 
-    def test_hierarchical_hashes_array_slice(self) -> None:
-        response = self.post(
-            json.dumps(
-                {
-                    "project": 1,
-                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                    "granularity": 3600,
-                    "selected_columns": [["arraySlice", ["hierarchical_hashes", 0, 2]]],
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                }
-            ),
-        )
-
-        assert response.status_code == 200
-        result = json.loads(response.data)
-
-        val = (
-            "SELECT (arrayMap(x -> replaceAll(toString(x), '-', ''), "
-            "arraySlice(hierarchical_hashes, 0, 2)) AS `_snuba_arraySlice(hierarchical_hashes, 0, 2)`)"
-        )
-        assert result["sql"].startswith(val)
-
     def test_backslashes_in_query(self) -> None:
         response = self.post(
             json.dumps(
@@ -2019,34 +1963,10 @@ class TestApi(SimpleAPITest):
         data = json.loads(response.data)
         assert data["data"] == [{"times_seen": 0}]
 
-    def test_hierarchical_hashes_array_join(self) -> None:
-        response = self.post(
-            json.dumps(
-                {
-                    "project": 1,
-                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                    "granularity": 3600,
-                    "selected_columns": [["arrayJoin", ["hierarchical_hashes"]]],
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                }
-            ),
-        )
-
-        assert response.status_code == 200
-        result = json.loads(response.data)
-
-        val = (
-            "SELECT (arrayJoin((arrayMap(x -> replaceAll(toString(x), '-', ''), "
-            "hierarchical_hashes) AS _snuba_hierarchical_hashes)) AS `_snuba_arrayJoin(hierarchical_hashes)`)"
-        )
-        assert result["sql"].startswith(val)
-
     def test_test_endpoints(self) -> None:
         project_id = 73
         group_id = 74
+        state: object = {}
         event = (
             2,
             "insert",
@@ -2062,6 +1982,7 @@ class TestApi(SimpleAPITest):
                 "message": "message",
                 "data": {"received": time.mktime(self.base_time.timetuple())},
             },
+            state,
         )
         response = self.app.post("/tests/events/eventstream", data=json.dumps(event))
         assert response.status_code == 200
@@ -2081,7 +2002,7 @@ class TestApi(SimpleAPITest):
         result = json.loads(self.post(json.dumps(query)).data)
         assert result["data"] == [{"count": 1, "project_id": project_id}]
 
-        event = (
+        replacement = (
             2,
             ReplacementType.END_DELETE_GROUPS,
             {
@@ -2093,7 +2014,9 @@ class TestApi(SimpleAPITest):
                 ),
             },
         )
-        response = self.app.post("/tests/events/eventstream", data=json.dumps(event))
+        response = self.app.post(
+            "/tests/events/eventstream", data=json.dumps(replacement)
+        )
         assert response.status_code == 200
 
         result = json.loads(self.post(json.dumps(query)).data)
@@ -2142,75 +2065,37 @@ class TestApi(SimpleAPITest):
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
     def test_record_queries(self, record_query_mock: MagicMock) -> None:
-        for use_split, expected_query_count in [(0, 1), (1, 2)]:
-            state.set_config("use_split", use_split)
-            record_query_mock.reset_mock()
-            result = json.loads(
-                self.post(
-                    json.dumps(
-                        {
-                            "project": 1,
-                            "tenant_ids": {"referrer": "test", "organization_id": 1234},
-                            "selected_columns": [
-                                "event_id",
-                                "title",
-                                "transaction",
-                                "tags[a]",
-                                "tags[b]",
-                                "message",
-                                "project_id",
-                            ],
-                            "limit": 5,
-                            "from_date": self.base_time.isoformat(),
-                            "to_date": (
-                                self.base_time + timedelta(minutes=self.minutes)
-                            ).isoformat(),
-                        }
-                    ),
-                ).data
-            )
-
-            assert len(result["data"]) == 5
-            assert record_query_mock.call_count == 1
-            metadata = record_query_mock.call_args[0][0]
-            assert metadata["dataset"] == "events"
-            assert metadata["request"]["referrer"] == "test"
-            assert len(metadata["query_list"]) == expected_query_count
-
-    @patch("snuba.web.query._run_query_pipeline")
-    def test_error_handler(self, pipeline_mock: MagicMock) -> None:
-        from redis.exceptions import ClusterDownError
-
-        pipeline_mock.side_effect = ClusterDownError("stuff")
-        response = self.post(
-            json.dumps(
-                {
-                    "conditions": [
-                        ["project_id", "IN", [1]],
-                        ["group_id", "IN", [self.group_ids[0]]],
-                    ],
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                    "limit": 1,
-                    "offset": 0,
-                    "orderby": ["-timestamp", "-event_id"],
-                    "project": [1],
-                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                    "selected_columns": [
-                        "event_id",
-                        "group_id",
-                        "project_id",
-                        "timestamp",
-                    ],
-                }
-            ),
+        record_query_mock.reset_mock()
+        result = json.loads(
+            self.post(
+                json.dumps(
+                    {
+                        "project": 1,
+                        "tenant_ids": {"referrer": "test", "organization_id": 1234},
+                        "selected_columns": [
+                            "event_id",
+                            "title",
+                            "transaction",
+                            "tags[a]",
+                            "tags[b]",
+                            "message",
+                            "project_id",
+                        ],
+                        "limit": 5,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
+                    }
+                ),
+            ).data
         )
-        assert response.status_code == 500
-        data = json.loads(response.data)
-        assert data["error"]["type"] == "internal_server_error"
-        assert data["error"]["message"] == "stuff"
+
+        assert len(result["data"]) == 5
+        assert record_query_mock.call_count == 1
+        metadata = record_query_mock.call_args[0][0]
+        assert metadata["dataset"] == "events"
+        assert metadata["request"]["referrer"] == "test"
 
 
 @pytest.mark.clickhouse_db
@@ -2220,6 +2105,12 @@ class TestCreateSubscriptionApi(BaseApiTest):
     entity_key = "events"
 
     def test(self) -> None:
+        settings.KAFKA_TOPIC_MAP = {
+            "events": "events-test-api",
+        }
+        admin_client = AdminClient(get_default_kafka_configuration())
+        create_topics(admin_client, [SnubaTopic.EVENTS])
+
         expected_uuid = uuid.uuid1()
 
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
@@ -2241,6 +2132,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert data == {
             "subscription_id": f"0/{expected_uuid.hex}",
         }
+        settings.KAFKA_TOPIC_MAP = {}
 
     def test_tenant_ids(self) -> None:
         expected_uuid = uuid.uuid1()
@@ -2290,6 +2182,8 @@ class TestCreateSubscriptionApi(BaseApiTest):
         Test that ensures that the passed entity is the selected one, not the dataset's default
         entity
         """
+        admin_client = AdminClient(get_default_kafka_configuration())
+        create_topics(admin_client, [SnubaTopic.METRICS])
 
         expected_uuid = uuid.uuid1()
         entity_key = EntityKey.METRICS_COUNTERS
@@ -2392,7 +2286,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                         "project_id": 1,
                         "time_window": int(timedelta(minutes=10).total_seconds()),
                         "resolution": int(timedelta(minutes=1).total_seconds()),
-                        "query": "MATCH (events) SELECT count() AS count BY project_id WHERE platform IN tuple('a')",
+                        "query": "MATCH (events) SELECT count() AS count BY project_id HAVING platform IN tuple('a')",
                     }
                 ).encode("utf-8"),
             )
@@ -2401,7 +2295,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         data = json.loads(resp.data)
         assert data == {
             "error": {
-                "message": "A maximum of 1 aggregation is allowed in the select",
+                "message": "invalid clause having in subscription query",
                 "type": "invalid_query",
             }
         }

@@ -3,20 +3,24 @@ from typing import Tuple
 import pytest
 
 from snuba.clickhouse.columns import (
+    JSON,
     UUID,
     AggregateFunction,
     Array,
+    Bool,
     ColumnType,
     Date,
     DateTime,
+    DateTime64,
     Enum,
     FixedString,
     Float,
     IPv4,
     IPv6,
     String,
-    UInt,
 )
+from snuba.clickhouse.columns import Tuple as TupleCol
+from snuba.clickhouse.columns import UInt
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.parse_schema import _get_column
 
@@ -34,7 +38,9 @@ test_data = [
     (("IPv6", "", "", ""), IPv6()),
     (("String", "", "", ""), String()),
     (("UInt32", "", "", ""), UInt(32)),
+    (("UInt128", "", "", ""), UInt(128)),
     (("UUID", "", "", ""), UUID()),
+    (("Bool", "", "", ""), Bool()),
     # Aggregate functions
     (
         ("AggregateFunction(uniq, UInt8)", "", "", ""),
@@ -91,6 +97,56 @@ test_data = [
         ("DateTime", "", "", "DoubleDelta, LZ4"),
         (DateTime(Modifiers(codecs=["DoubleDelta", "LZ4"]))),
     ),
+    # DateTime64
+    (
+        ("DateTime64", "", "", ""),
+        DateTime64(3),
+    ),
+    (
+        ("DateTime64(6)", "", "", ""),
+        DateTime64(6),
+    ),
+    (
+        ("DateTime64(9, 'America/New_York')", "", "", ""),
+        DateTime64(9, "America/New_York"),
+    ),
+    (
+        ("Tuple(String, UUID, String, String)", "", "", ""),
+        TupleCol(types=((String(), UUID(), String(), String()))),
+    ),
+    (
+        ("Tuple(String)", "", "", ""),
+        TupleCol(types=((String(),))),
+    ),
+    (
+        ("Tuple(UInt64, String)", "", "", ""),
+        TupleCol(
+            types=(
+                (
+                    UInt(64),
+                    String(),
+                )
+            )
+        ),
+    ),
+    # JSON type
+    (("JSON", "", "", ""), JSON()),
+    (("JSON('a.b' String)", "", "", ""), JSON(type_hints={"a.b": String()})),
+    (
+        (
+            "JSON(max_dynamic_paths=10, max_dynamic_types=10, 'a.b' String, 'c.d' DateTime, SKIP 'a.c', SKIP REGEXP 'b.*')",
+            "",
+            "",
+            "",
+        ),
+        JSON(
+            max_dynamic_paths=10,
+            max_dynamic_types=10,
+            type_hints={"a.b": String(), "c.d": DateTime()},
+            skip_paths=["a.c"],
+            skip_regexp=["b.*"],
+        ),
+    ),
 ]
 
 
@@ -100,6 +156,4 @@ def test_parse_column(
     expected_output: Tuple[Tuple[str, str, str, str, str], ColumnType[Modifiers]],
 ) -> None:
     (input_name, input_type, default_expr, codec_expr) = input
-    assert (
-        _get_column(input_name, input_type, default_expr, codec_expr) == expected_output
-    )
+    assert _get_column(input_name, input_type, default_expr, codec_expr) == expected_output

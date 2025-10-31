@@ -18,6 +18,7 @@ def test_get_dataset() -> None:
     for ds_name in [
         "discover",
         "events",
+        "events_analytics_platform",
         "groupassignee",
         "groupedmessage",
         "metrics",
@@ -62,6 +63,7 @@ def test_all_names() -> None:
     assert set(get_enabled_dataset_names()) == {
         "discover",
         "events",
+        "events_analytics_platform",
         "groupassignee",
         "groupedmessage",
         "metrics",

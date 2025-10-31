@@ -262,8 +262,10 @@ expression: snapshot_payload
     "exception_stacks.value": [
       "Some exception."
     ],
+    "flags.key": [],
+    "flags.value": [],
+    "group_first_seen": 0,
     "group_id": 124,
-    "hierarchical_hashes": [],
     "http_method": null,
     "http_referer": null,
     "ip_address_v4": "84.115.213.8",
@@ -282,6 +284,7 @@ expression: snapshot_payload
     "received": 1679060103,
     "release": null,
     "retention_days": 90,
+    "sample_weight": null,
     "sdk_integrations": [
       "ComposeUserInteraction",
       "UncaughtExceptionHandler",
@@ -329,6 +332,7 @@ expression: snapshot_payload
       "id:b7478c1e-a9ba-4e5a-bc65-364142284f89"
     ],
     "timestamp": 1677512412,
+    "timestamp_ms": 1677512412223,
     "title": "Exception: Some exception.",
     "trace_id": "1da660e8-8c01-430b-85fe-68537ed5838b",
     "transaction_name": "MainActivity.capture_exception",

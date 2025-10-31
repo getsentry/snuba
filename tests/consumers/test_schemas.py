@@ -52,6 +52,7 @@ def _generate_tests() -> Iterator[Case]:
 
 
 @pytest.mark.parametrize("case", _generate_tests())
+@pytest.mark.redis_db
 def test_all_schemas(case: Case) -> None:
     """
     "Assert" that no message processor crashes under the example payloads in
@@ -77,9 +78,15 @@ def test_all_schemas(case: Case) -> None:
             )
 
 
-TEMPORARILY_SKIPPED_TOPICS = [
-    "ingest-sessions",
+# Topic that is deprecated but is still in snuba's codebase
+DEPRECATED_TOPICS = [
     "cdc",
+    "snuba-spans",
+    "snuba-eap-spans-commit-log",
+    "scheduled-subscriptions-eap-spans",
+    "eap-spans-subscription-results",
+    "snuba-eap-mutations",
+    "snuba-ourlogs",
 ]
 
 
@@ -94,7 +101,7 @@ def test_has_kafka_schema() -> None:
         try:
             sentry_kafka_schemas.get_codec(topic_name)
         except sentry_kafka_schemas.SchemaNotFound:
-            if topic_name in TEMPORARILY_SKIPPED_TOPICS:
-                print("Temporarily skipped validation for topic: %s" % topic_name)
+            if topic_name in DEPRECATED_TOPICS:
+                print("Skipped validation for topic: %s" % topic_name)
             else:
                 raise

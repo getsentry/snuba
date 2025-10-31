@@ -11,6 +11,7 @@ from snuba.clickhouse.formatter.query import (
     format_query_anonymized,
 )
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -27,6 +28,8 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Table
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import column, literal, literals_tuple
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 
 ERRORS_SCHEMA = ColumnSet(
@@ -47,18 +50,25 @@ GROUPS_SCHEMA = ColumnSet(
 )
 GROUPS_ASSIGNEE = ColumnSet([("id", UInt(32)), ("user", String())])
 
-node_err = IndividualNode(alias="err", data_source=Table("errors_local", ERRORS_SCHEMA))
+node_err = IndividualNode(
+    alias="err",
+    data_source=Table("errors_local", ERRORS_SCHEMA, storage_key=StorageKey("errors")),
+)
 node_group = IndividualNode(
-    alias="groups", data_source=Table("groupedmessage_local", GROUPS_SCHEMA)
+    alias="groups",
+    data_source=Table("groupedmessage_local", GROUPS_SCHEMA, storage_key=StorageKey("groups")),
 )
 node_assignee = IndividualNode(
-    alias="assignee", data_source=Table("groupassignee_local", GROUPS_ASSIGNEE)
+    alias="assignee",
+    data_source=Table(
+        "groupassignee_local", GROUPS_ASSIGNEE, storage_key=StorageKey("group_assignee")
+    ),
 )
 
 test_cases = [
     pytest.param(
         Query(
-            Table("my_table", ColumnSet([])),
+            Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
             selected_columns=[
                 SelectedExpression("column1", Column(None, None, "column1")),
                 SelectedExpression("column2", Column(None, "table1", "column2")),
@@ -113,7 +123,7 @@ test_cases = [
     ),
     pytest.param(
         Query(
-            Table("my_table", ColumnSet([])),
+            Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
             selected_columns=[
                 SelectedExpression(
                     "my_complex_math",
@@ -192,7 +202,7 @@ test_cases = [
     ),
     pytest.param(
         Query(
-            Table("my_table", ColumnSet([])),
+            Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
             selected_columns=[
                 SelectedExpression("field_##$$%", Column("al1", None, "field_##$$%")),
                 SelectedExpression("f@!@", Column("al2", "t&^%$", "f@!@")),
@@ -225,7 +235,7 @@ test_cases = [
     ),
     pytest.param(
         Query(
-            Table("my_table", ColumnSet([])),
+            Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
             selected_columns=[
                 SelectedExpression("al", Column("al", None, "column3")),
                 SelectedExpression("al2", Column("al2", None, "column4")),
@@ -285,14 +295,12 @@ test_cases = [
     pytest.param(
         CompositeQuery(
             from_clause=Query(
-                Table("my_table", ColumnSet([])),
+                Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
                 selected_columns=[
                     SelectedExpression("column1", Column(None, None, "column1")),
                     SelectedExpression(
                         "sub_average",
-                        FunctionCall(
-                            "sub_average", "avg", (Column(None, None, "column2"),)
-                        ),
+                        FunctionCall("sub_average", "avg", (Column(None, None, "column2"),)),
                     ),
                     SelectedExpression("column3", Column(None, None, "column3")),
                 ],
@@ -306,9 +314,7 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "average",
-                    FunctionCall(
-                        "average", "avg", (Column(None, None, "sub_average"),)
-                    ),
+                    FunctionCall("average", "avg", (Column(None, None, "sub_average"),)),
                 ),
                 SelectedExpression("alias", Column("alias", None, "column3")),
             ],
@@ -366,9 +372,7 @@ test_cases = [
                 SelectedExpression("error_id", Column("error_id", "err", "event_id")),
                 SelectedExpression("message", Column("message", "groups", "message")),
             ],
-            condition=binary_condition(
-                "eq", Column(None, "groups", "id"), Literal(None, 1)
-            ),
+            condition=binary_condition("eq", Column(None, "groups", "id"), Literal(None, 1)),
         ),
         [
             "SELECT (err.event_id AS error_id), (groups.message AS message)",
@@ -405,7 +409,11 @@ test_cases = [
                     left_node=IndividualNode(
                         alias="err",
                         data_source=Query(
-                            from_clause=Table("errors_local", ERRORS_SCHEMA),
+                            from_clause=Table(
+                                "errors_local",
+                                ERRORS_SCHEMA,
+                                storage_key=StorageKey("dontmatter"),
+                            ),
                             selected_columns=[
                                 SelectedExpression(
                                     "error_id", Column("error_id", None, "event_id")
@@ -424,12 +432,14 @@ test_cases = [
                     right_node=IndividualNode(
                         alias="groups",
                         data_source=Query(
-                            from_clause=Table("groupedmessage_local", GROUPS_SCHEMA),
+                            from_clause=Table(
+                                "groupedmessage_local",
+                                GROUPS_SCHEMA,
+                                storage_key=StorageKey("dontmatter"),
+                            ),
                             selected_columns=[
                                 SelectedExpression("id", Column("id", None, "id")),
-                                SelectedExpression(
-                                    "message", Column("message", None, "message")
-                                ),
+                                SelectedExpression("message", Column("message", None, "message")),
                             ],
                             condition=binary_condition(
                                 "eq",
@@ -449,11 +459,13 @@ test_cases = [
                 right_node=IndividualNode(
                     alias="assignee",
                     data_source=Query(
-                        from_clause=Table("groupassignee_local", GROUPS_ASSIGNEE),
+                        from_clause=Table(
+                            "groupassignee_local",
+                            GROUPS_ASSIGNEE,
+                            storage_key=StorageKey("dontmatter"),
+                        ),
                         selected_columns=[
-                            SelectedExpression(
-                                "group_id", Column("group_id", None, "group_id")
-                            ),
+                            SelectedExpression("group_id", Column("group_id", None, "group_id")),
                         ],
                         condition=binary_condition(
                             "eq",
@@ -543,6 +555,22 @@ test_cases = [
         ),
         id="Join of multiple subqueries",
     ),
+    pytest.param(
+        Query(
+            Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
+            selected_columns=[
+                SelectedExpression("column1", Column(None, None, "column1")),
+            ],
+            condition=f.less(
+                f.tuple(*(column(c_name) for c_name in ["a.b", "b.c"])),
+                literals_tuple(None, [literal(c) for c in ["c", "d"]]),
+            ),
+        ),
+        ["SELECT column1", ["FROM", "my_table"], "WHERE less((`a.b`, `b.c`), ('c', 'd'))"],
+        "SELECT column1 FROM my_table WHERE less((`a.b`, `b.c`), ('c', 'd'))",
+        "SELECT column1 FROM my_table WHERE less((`a.b`, `b.c`), ('$S', '$S'))",
+        id="Simple query with tuple comparison",
+    ),
 ]
 
 
@@ -568,7 +596,13 @@ def test_format_clickhouse_specific_query() -> None:
     """
 
     query = Query(
-        Table("my_table", ColumnSet([]), final=True, sampling_rate=0.1),
+        Table(
+            "my_table",
+            ColumnSet([]),
+            final=True,
+            sampling_rate=0.1,
+            storage_key=StorageKey("dontmatter"),
+        ),
         selected_columns=[
             SelectedExpression("column1", Column(None, None, "column1")),
             SelectedExpression("column2", Column(None, "table1", "column2")),
@@ -606,6 +640,28 @@ def test_format_clickhouse_specific_query() -> None:
         "LIMIT 10 BY environment "
         "LIMIT 100 OFFSET 50"
     )
+
+    assert clickhouse_query.get_sql() == expected
+
+
+def test_delete_query() -> None:
+    query = Query(
+        Table(
+            "my_table",
+            ColumnSet([]),
+            storage_key=StorageKey("dontmatter"),
+        ),
+        condition=binary_condition(
+            "eq",
+            lhs=Column(None, None, "project_id"),
+            rhs=Literal(None, 1),
+        ),
+        on_cluster=Literal(None, "cluster_name"),
+        is_delete=True,
+    )
+
+    clickhouse_query = format_query(query)
+    expected = "DELETE " "FROM my_table " "ON CLUSTER 'cluster_name' " "WHERE eq(project_id, 1)"
 
     assert clickhouse_query.get_sql() == expected
 
@@ -703,8 +759,5 @@ TEST_JOIN = [
 def test_join_format(
     clause: JoinClause[Table], formatted_seq: SequenceNode, formatted_str: str
 ) -> None:
-    assert (
-        str(clause.accept(JoinFormatter(ClickhouseExpressionFormatter)))
-        == formatted_str
-    )
+    assert str(clause.accept(JoinFormatter(ClickhouseExpressionFormatter))) == formatted_str
     assert clause.accept(JoinFormatter(ClickhouseExpressionFormatter)) == formatted_seq

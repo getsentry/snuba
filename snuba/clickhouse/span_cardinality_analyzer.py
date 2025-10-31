@@ -68,8 +68,8 @@ AND (timestamp >= now() - INTERVAL {time_window_hrs} HOUR)
 AND (metric_id IN [{IndexedIDs.SPAN_DURATION_METRIC.value},
 {IndexedIDs.SPAN_EXCLUSIVE_TIME_METRIC.value}])
 AND `span.category` = '{span_category}'
-AND count_groups > {CARDINALITY_LIMIT}
 GROUP BY org_id, project_id, `span.category`
+HAVING count_groups > {CARDINALITY_LIMIT}
 ORDER BY count_groups DESC
 LIMIT {limit}
 """

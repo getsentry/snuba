@@ -1,9 +1,9 @@
-import TopicData from "../../kafka/index";
-import Client from "../../api_client";
+import TopicData from "SnubaAdmin/kafka/index";
+import Client from "SnubaAdmin/api_client";
 import React from "react";
 import { it, expect, jest, afterEach } from "@jest/globals";
 import { render, act, waitFor } from "@testing-library/react";
-import { KafkaTopicData } from "../../kafka/types";
+import { KafkaTopicData } from "SnubaAdmin/kafka/types";
 
 it("should display data fetched from API when rendering", async () => {
   let data = [

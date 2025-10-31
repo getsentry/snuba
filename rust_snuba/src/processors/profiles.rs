@@ -1,8 +1,8 @@
 use crate::config::ProcessorConfig;
 use anyhow::Context;
 use chrono::DateTime;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
 use schemars::JsonSchema;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -121,6 +121,6 @@ mod tests {
 
     #[test]
     fn schema() {
-        run_schema_type_test::<InputMessage>("processed-profiles");
+        run_schema_type_test::<InputMessage>("processed-profiles", None);
     }
 }

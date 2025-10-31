@@ -21,9 +21,6 @@ storage_selector:
 
 query_processors:
   - processor: BasicFunctionsProcessor
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
 validate_data_model: error
 validators: []
 required_time_column: null

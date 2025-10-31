@@ -172,8 +172,8 @@ TEST_CASES = [
         build_query(
             selected_columns=[Column("count", None, "count")],
             condition=and_exp(
-                noop_or,
-                and_exp(noop_or, and_exp(noop_or, optimized_tag_expression())),
+                and_exp(noop_or, noop_or),
+                and_exp(noop_or, optimized_tag_expression()),
             ),
         ),
         id="useless condition nested in AND",
@@ -188,8 +188,8 @@ TEST_CASES = [
             condition=and_exp(
                 Literal(None, True),
                 and_exp(
-                    Literal(None, True),
-                    and_exp(Literal(None, True), and_exp(Literal(None, True), noop)),
+                    and_exp(Literal(None, True), Literal(None, True)),
+                    and_exp(Literal(None, True), noop),
                 ),
             ),
         ),
@@ -269,8 +269,12 @@ def test_useless_has_condition(
 
     # change the existence expression to be a has(tags, 'my_tag') expression for boh queries
     # this allows reuse of the previous test cases
-    EmptyTagConditionProcessor().process_query(input_query, HTTPQuerySettings())
-    EmptyTagConditionProcessor().process_query(expected_query, HTTPQuerySettings())
+    EmptyTagConditionProcessor("tags.key").process_query(
+        input_query, HTTPQuerySettings()
+    )
+    EmptyTagConditionProcessor("tags.key").process_query(
+        expected_query, HTTPQuerySettings()
+    )
 
     MappingOptimizer(
         column_name="tags",

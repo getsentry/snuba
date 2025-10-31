@@ -132,6 +132,39 @@ class ReplacingMergeTree(MergeTree):
             return f"ReplicatedReplacingMergeTree({zoo_path}, '{{replica}}')"
 
 
+class CollapsingMergeTree(MergeTree):
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        order_by: str,
+        primary_key: Optional[str] = None,
+        sign_column: Optional[str] = None,
+        partition_by: Optional[str] = None,
+        sample_by: Optional[str] = None,
+        ttl: Optional[str] = None,
+        settings: Optional[Mapping[str, str]] = None,
+        unsharded: bool = False,
+    ) -> None:
+        super().__init__(
+            storage_set=storage_set,
+            order_by=order_by,
+            primary_key=primary_key,
+            partition_by=partition_by,
+            sample_by=sample_by,
+            ttl=ttl,
+            settings=settings,
+            unsharded=unsharded,
+        )
+        self.__sign_column = sign_column
+
+    def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
+        if cluster.is_single_node():
+            return f"CollapsingMergeTree({self.__sign_column})"
+        else:
+            zoo_path = self._get_zookeeper_path(cluster, table_name)
+            return f"ReplicatedCollapsingMergeTree({zoo_path}, '{{replica}}', {self.__sign_column})"
+
+
 class SummingMergeTree(MergeTree):
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
         if cluster.is_single_node():
