@@ -43,9 +43,7 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
     attribute_key = attribute_key_to_expression(request.key)
 
     conditions: list[Expression] = [
-        f.has(
-            column("attributes_string"), getattr(attribute_key, "key", request.key.name)
-        ),
+        f.has(column("attributes_string"), getattr(attribute_key, "key", request.key.name)),
     ]
     if request.meta.trace_item_type:
         conditions.append(f.equals(column("item_type"), request.meta.trace_item_type))
@@ -98,9 +96,7 @@ def _build_query(
     assert attr_value.alias
     inner_query = Query(
         from_clause=entity,
-        selected_columns=[
-            SelectedExpression(name=attr_value.alias, expression=attr_value)
-        ],
+        selected_columns=[SelectedExpression(name=attr_value.alias, expression=attr_value)],
         condition=_build_conditions(request),
         offset=0,
         limit=10000,
@@ -111,16 +107,14 @@ def _build_query(
         selected_columns=[
             SelectedExpression(
                 name="attr_value",
-                expression=f.distinct(column(attr_value.alias, alias="attr_value")),
+                expression=f.distinct(column(attr_value.alias), alias="attr_value"),
             ),
         ],
         order_by=[
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
         ],
         limit=request.limit,
-        offset=(
-            request.page_token.offset if request.page_token.HasField("offset") else 0
-        ),
+        offset=(request.page_token.offset if request.page_token.HasField("offset") else 0),
     )
     return res
 
@@ -165,9 +159,7 @@ class AttributeValuesRequest(
     def response_class(cls) -> Type[TraceItemAttributeValuesResponse]:
         return TraceItemAttributeValuesResponse
 
-    def _execute(
-        self, in_msg: TraceItemAttributeValuesRequest
-    ) -> TraceItemAttributeValuesResponse:
+    def _execute(self, in_msg: TraceItemAttributeValuesRequest) -> TraceItemAttributeValuesResponse:
         # if for some reason the item_id is the key, we can just return the value
         # item ids are unique
         if in_msg.key.name == "sentry.item_id" and in_msg.value_substring_match:
@@ -196,9 +188,7 @@ class AttributeValuesRequest(
                 else PageToken(
                     filter_offset=TraceItemFilter(
                         comparison_filter=ComparisonFilter(
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_STRING, name="attr_value"
-                            ),
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="attr_value"),
                             op=ComparisonFilter.OP_GREATER_THAN,
                             value=AttributeValue(val_str=values[-1]),
                         )
