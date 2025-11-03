@@ -308,7 +308,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             ConcurrentRateLimitAllocationPolicy(
                 storage_key=EAP_RESOURCE_IDENTIFIER,
                 required_tenant_types=["organization_id", "referrer", "project_id"],
-                default_config_overrides={"is_enforced": 0},
+                default_config_overrides={"is_enforced": 0, "concurrent_limit": 66},
             ),
             ReferrerGuardRailPolicy(
                 storage_key=EAP_RESOURCE_IDENTIFIER,
