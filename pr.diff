@@ -1,0 +1,292 @@
+diff --git a/snuba/query/allocation_policies/__init__.py b/snuba/query/allocation_policies/__init__.py
+index f21b09769..53b6de076 100644
+--- a/snuba/query/allocation_policies/__init__.py
++++ b/snuba/query/allocation_policies/__init__.py
+@@ -18,7 +18,7 @@ from snuba.datasets.storages.storage_key import StorageKey
+ from snuba.utils.metrics.wrapper import MetricsWrapper
+ from snuba.utils.registered_class import import_submodules_in_directory
+ from snuba.utils.serializable_exception import JsonSerializable, SerializableException
+-from snuba.web import QueryException, QueryResult
++from snuba.web import QueryResult
+
+ CAPMAN_PREFIX = "capman"
+ CAPMAN_HASH = "capman"
+@@ -42,7 +42,7 @@ class QueryResultOrError:
+     differently"""
+
+     query_result: QueryResult | None
+-    error: QueryException | None
++    error: Exception | None
+
+     def __post_init__(self) -> None:
+         assert self.query_result is not None or self.error is not None
+diff --git a/snuba/web/rpc/__init__.py b/snuba/web/rpc/__init__.py
+index f00bb9569..d0edb342a 100644
+--- a/snuba/web/rpc/__init__.py
++++ b/snuba/web/rpc/__init__.py
+@@ -14,7 +14,6 @@ from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
+ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+
+ from snuba import environment, state
+-from snuba.query.allocation_policies import AllocationPolicyViolations
+ from snuba.utils.metrics.backends.abstract import MetricsBackend
+ from snuba.utils.metrics.timer import Timer
+ from snuba.utils.metrics.wrapper import MetricsWrapper
+@@ -28,13 +27,13 @@ from snuba.web.rpc.common.common import Tin, Tout
+ from snuba.web.rpc.common.exceptions import (
+     HighAccuracyQueryTimeoutException,
+     QueryTimeoutException,
++    RPCAllocationPolicyException,
+     RPCRequestException,
+     convert_rpc_exception_to_proto,
+ )
+ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+     RoutingContext,
+     RoutingDecision,
+-    get_stats_dict,
+ )
+ from snuba.web.rpc.storage_routing.routing_strategy_selector import (
+     RoutingStrategySelector,
+@@ -84,35 +83,6 @@ def _flush_logs() -> None:
+         pass
+
+
+-def _create_rate_limited_exception(
+-    routing_decision: RoutingDecision,
+-) -> QueryException:
+-    """
+-    Create a QueryException for rate-limited queries with allocation policy details.
+-
+-    Returns a QueryException with AllocationPolicyViolations as the cause.
+-    """
+-    error = QueryException.from_args(
+-        AllocationPolicyViolations.__name__,
+-        "Query cannot be run due to routing strategy deciding it cannot run, most likely due to allocation policies",
+-        extra={
+-            "stats": get_stats_dict(routing_decision),
+-            "sql": "no sql run",
+-            "experiments": {},
+-        },
+-    )
+-    error.__cause__ = AllocationPolicyViolations.from_args(
+-        {
+-            "summary": {},
+-            "details": {
+-                key: quota_allowance.to_dict()
+-                for key, quota_allowance in routing_decision.routing_context.allocation_policies_recommendations.items()
+-            },
+-        }
+-    )
+-    return error
+-
+-
+ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
+     def __init__(
+         self, timer: Timer | None = None, metrics_backend: MetricsBackend | None = None
+@@ -239,7 +209,10 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
+                     "request_rate_limited",
+                     tags=self._timer.tags,
+                 )
+-                raise _create_rate_limited_exception(self.routing_decision)
++                raise RPCAllocationPolicyException(
++                    "Query cannot be run due to routing strategy deciding it cannot run, most likely due to allocation policies",
++                    self.routing_decision.to_log_dict(),
++                )
+         except QueryException as e:
+             out = self.response_class()()
+             if (
+@@ -358,13 +331,18 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
+         self._timer.mark("rpc_end")
+         self._timer.send_metrics_to(self.metrics)
+         if error is not None:
+-            if isinstance(error, RPCRequestException) and 400 <= error.status_code < 500:
++            if isinstance(error, RPCAllocationPolicyException):
++                sentry_sdk.capture_exception(error)
++                self.metrics.increment(
++                    "request_rate_limited",
++                    tags=self._timer.tags,
++                )
++            elif isinstance(error, RPCRequestException) and 400 <= error.status_code < 500:
+                 self.metrics.increment(
+                     "request_invalid",
+                     tags=self._timer.tags,
+                 )
+-            # AllocationPolicyViolations is not a request_error
+-            elif not isinstance(error.__cause__, AllocationPolicyViolations):
++            else:
+                 sentry_sdk.capture_exception(error)
+                 self.metrics.increment(
+                     "request_error",
+diff --git a/snuba/web/rpc/common/exceptions.py b/snuba/web/rpc/common/exceptions.py
+index 4a553eef2..7cdb990c2 100644
+--- a/snuba/web/rpc/common/exceptions.py
++++ b/snuba/web/rpc/common/exceptions.py
+@@ -1,5 +1,6 @@
+-from typing import Union
++from typing import Any, Union
+
++from google.protobuf import any_pb2, struct_pb2
+ from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
+
+ from snuba.web import QueryException
+@@ -7,9 +8,11 @@ from snuba.web import QueryException
+
+ class RPCRequestException(Exception):
+     status_code: int
++    details: dict[str, Any]
+
+-    def __init__(self, status_code: int, message: str):
++    def __init__(self, status_code: int, message: str, details: dict[str, Any] | None = None):
+         self.status_code = status_code
++        self.details = details or {}
+         super().__init__(message)
+
+
+@@ -28,8 +31,33 @@ class QueryTimeoutException(RPCRequestException):
+         super().__init__(408, message)
+
+
++class RPCAllocationPolicyException(RPCRequestException):
++
++    def __init__(
++        self,
++        message: str,
++        routing_decision_dict: dict[str, Any],
++    ) -> None:
++        self.routing_decision_dict = routing_decision_dict
++        super().__init__(429, message, details=routing_decision_dict)
++
++    @classmethod
++    def from_args(
++        cls, routing_decision_dict: dict[str, Any], message: str
++    ) -> "RPCAllocationPolicyException":
++        return cls(
++            message=message,
++            routing_decision_dict=routing_decision_dict,
++        )
++
++
+ def convert_rpc_exception_to_proto(exc: Union[RPCRequestException, QueryException]) -> ErrorProto:
++
+     if isinstance(exc, RPCRequestException):
++        s = struct_pb2.Struct()
++        s.update(exc.details)  # dict must be JSON-serializable
++        a = any_pb2.Any()
++        a.Pack(s)
+         return ErrorProto(code=exc.status_code, message=str(exc))
+
+     inferred_status = 500
+diff --git a/snuba/web/rpc/storage_routing/routing_strategies/storage_routing.py b/snuba/web/rpc/storage_routing/routing_strategies/storage_routing.py
+index 3f672d03c..7d4f77fcd 100644
+--- a/snuba/web/rpc/storage_routing/routing_strategies/storage_routing.py
++++ b/snuba/web/rpc/storage_routing/routing_strategies/storage_routing.py
+@@ -55,6 +55,7 @@ from snuba.utils.metrics.timer import Timer
+ from snuba.utils.metrics.wrapper import MetricsWrapper
+ from snuba.utils.registered_class import import_submodules_in_directory
+ from snuba.web import QueryException, QueryResult
++from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
+ from snuba.web.rpc.storage_routing.common import extract_message_meta
+ from snuba.web.rpc.storage_routing.load_retriever import LoadInfo, get_cluster_loadinfo
+
+@@ -516,10 +517,10 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
+         self, routing_decision: RoutingDecision, error: Exception | None
+     ) -> None:
+         if routing_decision.routing_context.query_result is not None or isinstance(
+-            error, QueryException
++            error, (QueryException, RPCAllocationPolicyException)
+         ):
+             query_result_or_error = QueryResultOrError(
+-                query_result=routing_decision.routing_context.query_result, error=error  # type: ignore
++                query_result=routing_decision.routing_context.query_result, error=error
+             )
+             for allocation_policy in self.get_allocation_policies():
+                 allocation_policy.update_quota_balance(
+diff --git a/tests/web/rpc/v1/test_storage_routing.py b/tests/web/rpc/v1/test_storage_routing.py
+index 1a0922faf..99f990f12 100644
+--- a/tests/web/rpc/v1/test_storage_routing.py
++++ b/tests/web/rpc/v1/test_storage_routing.py
+@@ -20,12 +20,12 @@ from snuba.query.allocation_policies import (
+     NO_SUGGESTION,
+     NO_UNITS,
+     AllocationPolicy,
+-    AllocationPolicyViolations,
+     QueryResultOrError,
+     QuotaAllowance,
+ )
+ from snuba.utils.metrics.timer import Timer
+-from snuba.web import QueryException, QueryResult
++from snuba.web import QueryResult
++from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
+ from snuba.web.rpc.storage_routing.common import extract_message_meta
+ from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
+     OutcomesBasedRoutingStrategy,
+@@ -479,11 +479,10 @@ def test_routing_strategy_with_rejecting_allocation_policy() -> None:
+             RejectionPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {})
+         ],
+     ):
+-        with pytest.raises(QueryException) as excinfo:
++        with pytest.raises(RPCAllocationPolicyException) as excinfo:
+             EndpointTimeSeries().execute(_get_in_msg())
+         assert update_called
+-        assert excinfo.value.exception_type == AllocationPolicyViolations.__name__
+-        assert excinfo.value.extra["stats"]["can_run"] == False
++        assert excinfo.value.details["can_run"] == False
+
+
+ @pytest.mark.redis_db
+@@ -638,13 +637,19 @@ def test_allocation_policy_updates_quota() -> None:
+     ):
+         for _ in range(MAX_QUERIES_TO_RUN):
+             EndpointTimeSeries().execute(_get_in_msg())
+-        with pytest.raises(QueryException) as e:
++        with pytest.raises(RPCAllocationPolicyException) as e:
+             EndpointTimeSeries().execute(_get_in_msg())
+
+-    cause = e.value.__cause__
+-    assert isinstance(cause, AllocationPolicyViolations)
+-    assert "QueryCountPolicy" in cause.violations
+-    assert "QueryCountPolicyDuplicate" in cause.violations
++    assert (
++        e.value.details["allocation_policies_recommendations"]["QueryCountPolicy"]["can_run"]
++        == False
++    )
++    assert (
++        e.value.details["allocation_policies_recommendations"]["QueryCountPolicyDuplicate"][
++            "can_run"
++        ]
++        == False
++    )
+
+
+ @pytest.mark.eap
+diff --git a/tests/web/rpc/v1/test_trace_item_attribute_values_v1.py b/tests/web/rpc/v1/test_trace_item_attribute_values_v1.py
+index bf7a3619f..5e762225a 100644
+--- a/tests/web/rpc/v1/test_trace_item_attribute_values_v1.py
++++ b/tests/web/rpc/v1/test_trace_item_attribute_values_v1.py
+@@ -110,6 +110,12 @@ def setup_teardown(
+                 "sentry.transaction": AnyValue(string_value="*foo"),
+             },
+         ),
++        gen_item_message(
++            start_timestamp=start_timestamp,
++            attributes={
++                "metric.questions.6._id": AnyValue(string_value="jlfsj"),
++            },
++        ),
+     ]
+     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+     yield messages
+@@ -193,3 +199,13 @@ class TestTraceItemAttributes(BaseApiTest):
+         )
+         res = AttributeValuesRequest().execute(req)
+         assert res.values == [item_id]
++
++    def test_attribute_names_with_dots(self, setup_teardown: Any) -> None:
++        message = TraceItemAttributeValuesRequest(
++            meta=COMMON_META,
++            limit=10,
++            key=AttributeKey(name="metric.questions.6._id", type=AttributeKey.TYPE_STRING),
++        )
++        response = AttributeValuesRequest().execute(message)
++        assert len(response.values) == 1
++        assert set(response.values) == {"jlfsj"}

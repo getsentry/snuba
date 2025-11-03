@@ -256,6 +256,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         except Exception as e:
             out = self.response_class()()
             error = e
+        print("kjdlfkjaldfjka", self.routing_decision.to_log_dict())
         return self.__after_execute(in_msg, out, error)
 
     def __before_execute(self, in_msg: Tin) -> None:
@@ -354,6 +355,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 "request_success",
                 tags=self._timer.tags,
             )
+        print("dfjlajkfkl", self.routing_decision.to_log_dict())
         return res
 
     def _after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:

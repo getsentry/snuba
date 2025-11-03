@@ -43,7 +43,7 @@ class RPCAllocationPolicyException(RPCRequestException):
 
     @classmethod
     def from_args(
-        cls, routing_decision_dict: dict[str, Any], message: str
+        cls, message: str, routing_decision_dict: dict[str, Any]
     ) -> "RPCAllocationPolicyException":
         return cls(
             message=message,
@@ -55,10 +55,10 @@ def convert_rpc_exception_to_proto(exc: Union[RPCRequestException, QueryExceptio
 
     if isinstance(exc, RPCRequestException):
         s = struct_pb2.Struct()
-        s.update(exc.details)  # dict must be JSON-serializable
+        s.update(exc.details)
         a = any_pb2.Any()
         a.Pack(s)
-        return ErrorProto(code=exc.status_code, message=str(exc))
+        return ErrorProto(code=exc.status_code, message=str(exc), details=[a])
 
     inferred_status = 500
     if exc.exception_type == "RateLimitExceeded":
