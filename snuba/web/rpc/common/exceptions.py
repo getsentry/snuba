@@ -1,4 +1,3 @@
-from dataclasses import field
 from typing import Any, Union
 
 from google.protobuf import any_pb2, struct_pb2
@@ -9,11 +8,11 @@ from snuba.web import QueryException
 
 class RPCRequestException(Exception):
     status_code: int
-    details: dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any]
 
-    def __init__(self, status_code: int, message: str, details: dict[str, Any] = {}):
+    def __init__(self, status_code: int, message: str, details: dict[str, Any] | None = None):
         self.status_code = status_code
-        self.details = details
+        self.details = details or {}
         super().__init__(message)
 
 
