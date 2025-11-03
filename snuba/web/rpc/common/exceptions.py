@@ -1,5 +1,7 @@
-from typing import Union
+from dataclasses import field
+from typing import Any, Union
 
+from google.protobuf import any_pb2, struct_pb2
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 
 from snuba.web import QueryException
@@ -7,9 +9,11 @@ from snuba.web import QueryException
 
 class RPCRequestException(Exception):
     status_code: int
+    details: dict[str, Any] = field(default_factory=dict)
 
-    def __init__(self, status_code: int, message: str):
+    def __init__(self, status_code: int, message: str, details: dict[str, Any] = {}):
         self.status_code = status_code
+        self.details = details
         super().__init__(message)
 
 
@@ -28,8 +32,33 @@ class QueryTimeoutException(RPCRequestException):
         super().__init__(408, message)
 
 
+class RPCAllocationPolicyException(RPCRequestException):
+
+    def __init__(
+        self,
+        message: str,
+        routing_decision_dict: dict[str, Any],
+    ) -> None:
+        self.routing_decision_dict = routing_decision_dict
+        super().__init__(429, message, details=routing_decision_dict)
+
+    @classmethod
+    def from_args(
+        cls, routing_decision_dict: dict[str, Any], message: str
+    ) -> "RPCAllocationPolicyException":
+        return cls(
+            message=message,
+            routing_decision_dict=routing_decision_dict,
+        )
+
+
 def convert_rpc_exception_to_proto(exc: Union[RPCRequestException, QueryException]) -> ErrorProto:
+
     if isinstance(exc, RPCRequestException):
+        s = struct_pb2.Struct()
+        s.update(exc.details)  # dict must be JSON-serializable
+        a = any_pb2.Any()
+        a.Pack(s)
         return ErrorProto(code=exc.status_code, message=str(exc))
 
     inferred_status = 500
