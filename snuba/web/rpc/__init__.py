@@ -256,7 +256,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         except Exception as e:
             out = self.response_class()()
             error = e
-        print("kjdlfkjaldfjka", self.routing_decision.to_log_dict())
         return self.__after_execute(in_msg, out, error)
 
     def __before_execute(self, in_msg: Tin) -> None:
@@ -332,13 +331,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            if isinstance(error, RPCAllocationPolicyException):
-                sentry_sdk.capture_exception(error)
-                self.metrics.increment(
-                    "request_rate_limited",
-                    tags=self._timer.tags,
-                )
-            elif isinstance(error, RPCRequestException) and 400 <= error.status_code < 500:
+            if (
+                isinstance(error, RPCRequestException)
+                and not isinstance(error, RPCAllocationPolicyException)
+                and 400 <= error.status_code < 500
+            ):
                 self.metrics.increment(
                     "request_invalid",
                     tags=self._timer.tags,
@@ -355,7 +352,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 "request_success",
                 tags=self._timer.tags,
             )
-        print("dfjlajkfkl", self.routing_decision.to_log_dict())
         return res
 
     def _after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
