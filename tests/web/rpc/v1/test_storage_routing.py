@@ -20,12 +20,12 @@ from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     NO_UNITS,
     AllocationPolicy,
-    AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
 )
 from snuba.utils.metrics.timer import Timer
-from snuba.web import QueryException, QueryResult
+from snuba.web import QueryResult
+from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
@@ -266,7 +266,7 @@ def test_metrics_output() -> None:
         recorded_payload = record_query.mock_calls[0].args[0]
         assert recorded_payload["dataset"] == "storage_routing"
         assert recorded_payload["status"] == "TIER_8"
-        assert recorded_payload["request"]["referrer"] == "MetricsStrategy"
+        assert recorded_payload["request"]["referrer"] == "something"
 
         # query_id is a uuid, so we don't need to assert it
         recorded_payload["query_list"][0]["stats"].pop("query_id")
@@ -479,11 +479,10 @@ def test_routing_strategy_with_rejecting_allocation_policy() -> None:
             RejectionPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {})
         ],
     ):
-        with pytest.raises(QueryException) as excinfo:
+        with pytest.raises(RPCAllocationPolicyException) as excinfo:
             EndpointTimeSeries().execute(_get_in_msg())
         assert update_called
-        assert excinfo.value.exception_type == AllocationPolicyViolations.__name__
-        assert excinfo.value.extra["stats"]["can_run"] == False
+        assert excinfo.value.details["can_run"] == False
 
 
 @pytest.mark.redis_db
@@ -638,13 +637,19 @@ def test_allocation_policy_updates_quota() -> None:
     ):
         for _ in range(MAX_QUERIES_TO_RUN):
             EndpointTimeSeries().execute(_get_in_msg())
-        with pytest.raises(QueryException) as e:
+        with pytest.raises(RPCAllocationPolicyException) as e:
             EndpointTimeSeries().execute(_get_in_msg())
 
-    cause = e.value.__cause__
-    assert isinstance(cause, AllocationPolicyViolations)
-    assert "QueryCountPolicy" in cause.violations
-    assert "QueryCountPolicyDuplicate" in cause.violations
+    assert (
+        e.value.details["allocation_policies_recommendations"]["QueryCountPolicy"]["can_run"]
+        == False
+    )
+    assert (
+        e.value.details["allocation_policies_recommendations"]["QueryCountPolicyDuplicate"][
+            "can_run"
+        ]
+        == False
+    )
 
 
 @pytest.mark.eap

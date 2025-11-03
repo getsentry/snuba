@@ -12,6 +12,9 @@ from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import (
+    QueryInfo,
+    QueryMetadata,
+    QueryStats,
     RequestMeta,
     ResponseMeta,
     TraceItemType,
@@ -180,7 +183,18 @@ class TestGetTrace(BaseApiTest):
         response = EndpointGetTrace().execute(message)
         spans, timestamps = generate_spans_and_timestamps()
         expected_response = GetTraceResponse(
-            meta=ResponseMeta(request_id=_REQUEST_ID),
+            meta=ResponseMeta(
+                request_id=_REQUEST_ID,
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
+            ),
             trace_id=_TRACE_ID,
             item_groups=[
                 GetTraceResponse.ItemGroup(
@@ -243,7 +257,18 @@ class TestGetTrace(BaseApiTest):
         response = EndpointGetTrace().execute(message)
         spans, timestamps = generate_spans_and_timestamps()
         expected_response = GetTraceResponse(
-            meta=ResponseMeta(request_id=_REQUEST_ID),
+            meta=ResponseMeta(
+                request_id=_REQUEST_ID,
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
+            ),
             trace_id=_TRACE_ID,
             item_groups=[
                 GetTraceResponse.ItemGroup(
@@ -358,7 +383,18 @@ class TestGetTrace(BaseApiTest):
         response = EndpointGetTrace().execute(message)
         logs, timestamps = generate_logs_and_timestamps()
         expected_response = GetTraceResponse(
-            meta=ResponseMeta(request_id=_REQUEST_ID),
+            meta=ResponseMeta(
+                request_id=_REQUEST_ID,
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
+            ),
             trace_id=_TRACE_ID,
             item_groups=[
                 GetTraceResponse.ItemGroup(

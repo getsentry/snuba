@@ -66,14 +66,14 @@ jobs:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
 
-      - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
+      - uses: getsentry/action-setup-venv@v3.0.0
         with:
           python-version: 3.11.11
           cache-dependency-path: uv.lock
           # NOTE: can't pass --only-dev yet since we're missing some mypy stub packages
           install-cmd: uv sync --frozen --active
 
-      - uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+      - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml', 'uv.lock') }}
@@ -144,7 +144,7 @@ jobs:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
 
-      - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
+      - uses: getsentry/action-setup-venv@v3.0.0
         with:
           python-version: 3.11.11
           cache-dependency-path: uv.lock
@@ -160,7 +160,6 @@ jobs:
     timeout-minutes: 20
     outputs:
       branch: ${{ steps.branch.outputs.branch }}
-      image_tag: ${{ steps.publish.outputs.image_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -182,19 +181,13 @@ jobs:
           tags: 'ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}'
           outputs: 'type=docker,dest=/tmp/snuba-ci.tar'
 
-      - name: Push snuba-ci image to GHCR
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
-          docker load --input /tmp/snuba-ci.tar
-          docker push ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
-
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
       # contributions also work, as all the test jobs need this image.
       # otherwise third-party contributors would have to provide a working,
       # authenticated GHCR, which seems impossible to ensure in the general
       # case.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: snuba-ci
           path: /tmp/snuba-ci.tar
@@ -219,7 +212,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: snuba-ci
           path: /tmp
@@ -296,7 +289,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: snuba-ci
           path: /tmp
@@ -402,7 +395,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: snuba-ci
           path: /tmp

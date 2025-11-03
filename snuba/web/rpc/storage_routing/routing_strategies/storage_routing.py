@@ -55,6 +55,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.web import QueryException, QueryResult
+from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.load_retriever import LoadInfo, get_cluster_loadinfo
 
@@ -196,7 +197,7 @@ def _construct_hacky_querylog_payload(
                 if routing_decision.routing_context.in_msg
                 else {}
             ),
-            "referrer": strategy.__class__.__name__,
+            "referrer": cast(str, routing_decision.routing_context.tenant_ids["referrer"]),
         },
         "dataset": "storage_routing",
         "entity": "eap",
@@ -470,12 +471,17 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             self.update_allocation_policies_balances(routing_decision, error)
 
             # these metrics are meant to track reject/throttle/success decisions, so they get emitted even if the query did not run successfully after routing
+            tags = {
+                "strategy": self.class_name(),
+                "resource_identifier": routing_decision.strategy.resource_identifier.value,
+                "referrer": cast(str, routing_decision.routing_context.tenant_ids["referrer"]),
+            }
             if not routing_decision.can_run:
-                self.metrics.increment("rejected_query", tags={"strategy": self.class_name()})
+                self.metrics.increment("rejected_query", tags=tags)
             elif routing_decision.is_throttled:
-                self.metrics.increment("throttled_query", tags={"strategy": self.class_name()})
+                self.metrics.increment("throttled_query", tags=tags)
             else:
-                self.metrics.increment("successful_query", tags={"strategy": self.class_name()})
+                self.metrics.increment("successful_query", tags=tags)
 
             self._emit_routing_mistake(routing_decision)
             self._output_metrics(routing_decision.routing_context)
@@ -511,10 +517,10 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         self, routing_decision: RoutingDecision, error: Exception | None
     ) -> None:
         if routing_decision.routing_context.query_result is not None or isinstance(
-            error, QueryException
+            error, (QueryException, RPCAllocationPolicyException)
         ):
             query_result_or_error = QueryResultOrError(
-                query_result=routing_decision.routing_context.query_result, error=error  # type: ignore
+                query_result=routing_decision.routing_context.query_result, error=error
             )
             for allocation_policy in self.get_allocation_policies():
                 allocation_policy.update_quota_balance(

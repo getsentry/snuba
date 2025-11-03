@@ -308,13 +308,19 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         return GetTraceResponse
 
     def _execute(self, in_msg: GetTraceRequest) -> GetTraceResponse:
+        query_results = []
+        item_groups = []
+        for item in in_msg.items:
+            item_group, query_result = self._query_item_group(in_msg, item)
+            item_groups.append(item_group)
+            query_results.append(query_result)
+
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
-            [],
-            [self._timer],
+            query_results,
+            [self._timer] * len(query_results),
         )
-        item_groups = [self._query_item_group(in_msg, item) for item in in_msg.items]
         return GetTraceResponse(
             item_groups=item_groups,
             meta=response_meta,
@@ -325,7 +331,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         self,
         in_msg: GetTraceRequest,
         item: GetTraceRequest.TraceItem,
-    ) -> GetTraceResponse.ItemGroup:
+    ) -> tuple[GetTraceResponse.ItemGroup, Any]:
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=_build_snuba_request(in_msg, item),
@@ -334,7 +340,8 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         items = _convert_results(
             results.result.get("data", []),
         )
-        return GetTraceResponse.ItemGroup(
+        item_group = GetTraceResponse.ItemGroup(
             item_type=item.item_type,
             items=items,
         )
+        return item_group, results

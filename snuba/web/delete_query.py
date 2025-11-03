@@ -6,6 +6,7 @@ from snuba import settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
@@ -306,6 +307,21 @@ def _execute_query(
             extra={
                 "stats": stats,
                 "sql": "no sql run",
+                "experiments": {},
+            },
+        )
+        error.__cause__ = e
+    except QueryException as e:
+        error = e
+    except Exception as e:
+        error = QueryException.from_args(
+            # This exception needs to have the message of the cause in it for sentry
+            # to pick it up properly
+            e.__class__.__name__,
+            e.message if isinstance(e, ClickhouseError) else str(e),
+            {
+                "stats": stats,
+                "sql": "",
                 "experiments": {},
             },
         )
