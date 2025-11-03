@@ -74,11 +74,16 @@ def setup_logging(level: Optional[str] = None) -> None:
 
 
 def before_send(event: Event, hint: Hint) -> Event | None:
-    """Filter out AllocationPolicyViolations from being sent to Sentry"""
+    """Filter out AllocationPolicyViolations and RPCAllocationPolicyException from being sent to Sentry"""
     if "exc_info" in hint:
         _, exc_value, _ = hint["exc_info"]
         # Check if it's an AllocationPolicyViolations in the cause chain
         if exc_value is not None:
+            from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
+
+            if isinstance(exc_value, RPCAllocationPolicyException):
+                return None  # Don't send to Sentry
+
             cause = getattr(exc_value, "__cause__", None)
             from snuba.query.allocation_policies import AllocationPolicyViolations
 
