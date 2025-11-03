@@ -205,10 +205,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     span.set_data("selected_tier", self.routing_decision.tier)
                     out = self._execute(in_msg)
             else:
-                self.metrics.increment(
-                    "request_rate_limited",
-                    tags=self._timer.tags,
-                )
                 raise RPCAllocationPolicyException(
                     "Query cannot be run due to routing strategy deciding it cannot run, most likely due to allocation policies",
                     self.routing_decision.to_log_dict(),
@@ -331,11 +327,12 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            if (
-                isinstance(error, RPCRequestException)
-                and not isinstance(error, RPCAllocationPolicyException)
-                and 400 <= error.status_code < 500
-            ):
+            if isinstance(error, RPCAllocationPolicyException):
+                self.metrics.increment(
+                    "request_rate_limited",
+                    tags=self._timer.tags,
+                )
+            elif isinstance(error, RPCRequestException) and 400 <= error.status_code < 500:
                 self.metrics.increment(
                     "request_invalid",
                     tags=self._timer.tags,
