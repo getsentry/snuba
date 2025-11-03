@@ -301,19 +301,22 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         return False
 
     def get_allocation_policies(self) -> list[AllocationPolicy]:
+        # by default all routing strategies share allocation policies since effectively they are all
+        # protecting the same resource (EAP)
+        EAP_RESOURCE_IDENTIFIER = ResourceIdentifier("EAP")
         return [
             ConcurrentRateLimitAllocationPolicy(
-                storage_key=ResourceIdentifier(self.__class__.__name__),
+                storage_key=EAP_RESOURCE_IDENTIFIER,
                 required_tenant_types=["organization_id", "referrer", "project_id"],
                 default_config_overrides={"is_enforced": 0},
             ),
             ReferrerGuardRailPolicy(
-                storage_key=ResourceIdentifier(self.__class__.__name__),
+                storage_key=EAP_RESOURCE_IDENTIFIER,
                 required_tenant_types=["referrer"],
                 default_config_overrides={"is_enforced": 0, "is_active": 0},
             ),
             BytesScannedRejectingPolicy(
-                storage_key=ResourceIdentifier(self.__class__.__name__),
+                storage_key=EAP_RESOURCE_IDENTIFIER,
                 required_tenant_types=["organization_id", "project_id", "referrer"],
                 default_config_overrides={"is_active": 0, "is_enforced": 0},
             ),
