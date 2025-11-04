@@ -33,4 +33,6 @@ eval $(regions-project-env-vars --region="${SENTRY_REGION}")
   --label-selector="${LABEL_SELECTOR}" \
   --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${GO_REVISION_SNUBA_REPO}" \
   --type="cronjob" \
-  --container-name="optimize"
+  --container-name="optimize" \
+  --container-name="cleanup" \
+  --container-name="cardinality-report"

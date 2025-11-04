@@ -121,21 +121,21 @@ function(region) {
     },
   },
   stages: [
-            {
-              checks: {
-                jobs: {
-                  checks: {
-                    elastic_profile_id: 'snuba',
-                    tasks: [
-                      gocdtasks.script(importstr '../bash/check-github.sh'),
-                      gocdtasks.script(importstr '../bash/check-migrations.sh'),
-                    ],
-                  },
-                },
-              },
-            },
+    {
+      checks: {
+        jobs: {
+          checks: {
+            elastic_profile_id: 'snuba',
+            tasks: [
+              gocdtasks.script(importstr '../bash/check-github.sh'),
+              gocdtasks.script(importstr '../bash/check-migrations.sh'),
+            ],
+          },
+        },
+      },
+    },
 
-          ] + deploy_canary_stage(region) + [
+  ] + deploy_canary_stage(region) + [
 
     {
       'deploy-primary': {
