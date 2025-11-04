@@ -200,9 +200,13 @@ def _convert_result_timeseries(
     frc = FormulaReliabilityCalculator(request, data, time_buckets)
     for timeseries in result_timeseries.values():
         if timeseries.label in frc:
-            reliabilities = frc.get(timeseries.label)
+            extrapolation_contexts = frc.get(timeseries.label)
+
             for i in range(len(timeseries.data_points)):
-                timeseries.data_points[i].reliability = reliabilities[i]
+                context = extrapolation_contexts[i]
+                timeseries.data_points[i].avg_sampling_rate = context.average_sample_rate
+                timeseries.data_points[i].sample_count = context.sample_count
+                timeseries.data_points[i].reliability = context.reliability
     _remove_non_requested_expressions(request.expressions, result_timeseries)
 
     return result_timeseries.values()
