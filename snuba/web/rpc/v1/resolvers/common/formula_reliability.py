@@ -126,7 +126,7 @@ class FormulaReliabilityContext:
                     reliability_context.formula_extrapolation_contexts[formula] = (
                         FormulaExtrapolationContext(
                             # no way to get the true sample rate so we approximate it
-                            # by taking the max sample count of the parts of the formula
+                            # by taking the max sample rate of the parts of the formula
                             average_sample_rate=max(
                                 context.average_sample_rate,
                                 reliability_context.formula_extrapolation_contexts[
