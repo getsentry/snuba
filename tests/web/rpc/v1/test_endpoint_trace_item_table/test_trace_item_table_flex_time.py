@@ -450,7 +450,7 @@ class TestTraceItemTableFlexTime:
         times_queried = 0
         end_pagination = PageToken(end_pagination=True)
         page_token = PageToken(offset=0)
-        queried_item_ids = []
+        queried_item_ids: list[str] = []
         while page_token != end_pagination:
             times_queried += 1
             message = _generate_table_request(
@@ -475,4 +475,6 @@ class TestTraceItemTableFlexTime:
 
         # make sure there are no duplicates and we got all the items from the time range (before we added new data)
         assert len(set(queried_item_ids)) == len(queried_item_ids)
-        assert set(queried_item_ids) == set(all_ids_item_ids)
+        # make sure all the data that was stored before the first query was retrieved (it's possible that there would be more retrieved
+        # since we added more items as we queried)
+        assert set(all_ids_item_ids).issubset(set(queried_item_ids))
