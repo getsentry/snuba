@@ -1,8 +1,8 @@
-local snuba = import './pipelines/snuba.libsonnet';
+local snuba = import './pipelines/snuba-rs.libsonnet';
 local pipedream = import 'github.com/getsentry/gocd-jsonnet/libs/pipedream.libsonnet';
 
-local pipedream_config = {
-  name: 'snuba',
+local rs_pipedream_config = {
+  name: 'snuba-rs',
   materials: {
     snuba_repo: {
       git: 'git@github.com:getsentry/snuba.git',
@@ -21,4 +21,4 @@ local pipedream_config = {
   auto_deploy: true,
 };
 
-pipedream.render(pipedream_config, snuba)
+pipedream.render(rs_pipedream_config, snuba)
