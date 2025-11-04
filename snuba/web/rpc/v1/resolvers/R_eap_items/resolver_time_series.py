@@ -239,7 +239,11 @@ def _get_reliability_context_columns(
         which_oneof = expr.WhichOneof("expression")
         assert which_oneof in ["conditional_aggregation", "aggregation"]
         aggregation = getattr(expr, which_oneof)
-        if aggregation.extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED:
+        if aggregation.extrapolation_mode in [
+            ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+            ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+        ]:
             confidence_interval_column = get_confidence_interval_column(
                 aggregation, _get_attribute_key_to_expression_function(request_meta)
             )

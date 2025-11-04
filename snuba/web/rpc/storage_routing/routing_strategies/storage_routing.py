@@ -55,6 +55,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.web import QueryException, QueryResult
+from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.load_retriever import LoadInfo, get_cluster_loadinfo
 
@@ -516,10 +517,10 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         self, routing_decision: RoutingDecision, error: Exception | None
     ) -> None:
         if routing_decision.routing_context.query_result is not None or isinstance(
-            error, QueryException
+            error, (QueryException, RPCAllocationPolicyException)
         ):
             query_result_or_error = QueryResultOrError(
-                query_result=routing_decision.routing_context.query_result, error=error  # type: ignore
+                query_result=routing_decision.routing_context.query_result, error=error
             )
             for allocation_policy in self.get_allocation_policies():
                 allocation_policy.update_quota_balance(
