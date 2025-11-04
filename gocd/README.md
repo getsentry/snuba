@@ -34,10 +34,10 @@ These are a set of jsonnet and libsonnet files which are used
 to generate the GoCD pipelines. This avoids duplication across
 our pipelines as we deploy to multiple regions.
 
-The `gocd/templates/snuba-{py,rs}.jsonnet` file is the entry point for the
+The `gocd/templates/snuba.jsonnet` file is the entry point for the
 generated pipelines.
 
-`gocd/templates/pipelines/snuba-{py,rs}.libsonnet` define the pipeline behaviors.
+`gocd/templates/pipelines/snuba.libsonnet` define the pipeline behaviors.
 This library defines the GoCD pipeline, following the same naming
 as the [GoCD yaml pipelines](https://github.com/tomzo/gocd-yaml-config-plugin#readme).
 
