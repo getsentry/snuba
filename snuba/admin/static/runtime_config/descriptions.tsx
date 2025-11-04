@@ -18,7 +18,6 @@ const DESCRIPTIONS: { [key: string]: string } = {
   "pipeline_split_rate_limiter": "When running concurrent pipelines with the PipelineDelegator, split the rate limiter name space for each pipeline.",
   "project_quota_time_percentage": "Controls the project quota limit. A counter class tracks the processing time spent on some task for a project and compares it with this quota",
   "rate_limit_shard_factor": "How many keys the query rate limiter should shard a set into. More keys means smaller avg redis-set size (therefore faster ops), but more (pipelined) ops. This would be more useful if the rate limiter redis was actually a multi-node redis cluster. Right now we run this code just so it is ready, should we have to scale, and to be able to tweak set size if we have to.",
-  "rate_limit_use_transaction_pipe": "Whether the concurrent rate limiter uses a redis transaction to perform its opertaions, see https://github.com/getsentry/snuba/pull/4965/files",
   "read_through_cache.short_circuit": "First stage of removing the readthrough cache entirely is disabling and monitoring - Rahul",
   "retry_duplicate_query_id": "Whether to retry clickhouse queries with a random query id (exactly once) if clickhouse rejected the query before due to the query id already being used. This can be useful in case of redis failover scenarios when we lose query cache.",
   "run_new_mql_parser": "Feature flag sample rate for running new MQL join parser",
