@@ -6,39 +6,6 @@ local gocdtasks = import 'github.com/getsentry/gocd-jsonnet/libs/gocd-tasks.libs
 // - https://github.com/tomzo/gocd-yaml-config-plugin#pipeline
 // - https://www.notion.so/sentry/GoCD-New-Service-Quickstart-6d8db7a6964049b3b0e78b8a4b52e25d
 
-local migrate_stage(stage_name, region) = [
-  {
-    [stage_name]: {
-      fetch_materials: true,
-      jobs: {
-        migrate: {
-          timeout: 1200,
-          elastic_profile_id: 'snuba',
-          environment_variables: {
-            // Use snuba-admin pod spec for running migrations
-            SNUBA_SERVICE_NAME: 'snuba-admin',
-          },
-          tasks: [
-            if getsentry.is_st(region) then
-              gocdtasks.script(importstr '../bash/migrate-st.sh')
-            else
-              gocdtasks.script(importstr '../bash/migrate.sh'),
-            {
-              plugin: {
-                options: gocdtasks.script(importstr '../bash/migrate-reverse.sh'),
-                run_if: 'failed',
-                configuration: {
-                  id: 'script-executor',
-                  version: 1,
-                },
-              },
-            },
-          ],
-        },
-      },
-    },
-  },
-];
 
 // Snuba deploy to SaaS is blocked till S4S deploy is healthy
 local s4s_health_check(region) =
@@ -96,16 +63,6 @@ local saas_health_check(region) =
   else
     [];
 
-// Snuba relies on checks to prevent folks from writing migrations and code
-// at the same time, this means there is a requirement that folks MUST deploy
-// the migration before merge code changes relying on that migration.
-// This doesn't hold true for ST deployments today, so temporarily run an
-// early migration stage for ST deployments.
-local early_migrate(region) =
-  if getsentry.is_st(region) then
-    migrate_stage('st_migrate', region)
-  else
-    [];
 
 local deploy_canary_stage(region) =
   if region == 'us' then
@@ -178,8 +135,7 @@ function(region) {
               },
             },
 
-          ] + early_migrate(region) +
-          deploy_canary_stage(region) + [
+          ] + deploy_canary_stage(region) + [
 
     {
       'deploy-primary': {
