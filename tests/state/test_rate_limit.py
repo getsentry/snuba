@@ -29,16 +29,9 @@ def rate_limit_shards(request: Any) -> None:
     state.set_config("rate_limit_shard_factor", request.param)
 
 
-@pytest.fixture(params=[0, 1])
-def use_transaction_pipe(request: Any) -> None:
-    state.set_config("rate_limit_use_transaction_pipe", request.param)
-
-
 class TestRateLimit:
     @pytest.mark.redis_db
-    def test_ratelimit_aggregator(
-        self, rate_limit_shards: Any, use_transaction_pipe: Any
-    ) -> None:
+    def test_ratelimit_aggregator(self, rate_limit_shards: Any) -> None:
         # No concurrent limit should not raise
         rate_limit_params1 = RateLimitParameters("foo", "bar", None, 1)
         rate_limit_params2 = RateLimitParameters("foo", "bar", None, 0)
@@ -52,9 +45,7 @@ class TestRateLimit:
                 pass
 
     @pytest.mark.redis_db
-    def test_concurrent_limit(
-        self, rate_limit_shards: Any, use_transaction_pipe: Any
-    ) -> None:
+    def test_concurrent_limit(self, rate_limit_shards: Any) -> None:
         # No concurrent limit should not raise
         rate_limit_params = RateLimitParameters("foo", "bar", None, None)
         with rate_limit(rate_limit_params) as stats:
@@ -93,9 +84,7 @@ class TestRateLimit:
                 pass
 
     @pytest.mark.redis_db
-    def test_fails_open(
-        self, rate_limit_shards: Any, use_transaction_pipe: Any
-    ) -> None:
+    def test_fails_open(self, rate_limit_shards: Any) -> None:
         with patch("snuba.state.rate_limit.rds.pipeline") as pipeline:
             pipeline.execute.side_effect = Exception("Boom!")
             rate_limit_params = RateLimitParameters("foo", "bar", 4, 20)
@@ -103,9 +92,7 @@ class TestRateLimit:
                 pass
 
     @pytest.mark.redis_db
-    def test_per_second_limit(
-        self, rate_limit_shards: Any, use_transaction_pipe: Any
-    ) -> None:
+    def test_per_second_limit(self, rate_limit_shards: Any) -> None:
         bucket = uuid.uuid4()
         rate_limit_params = RateLimitParameters("foo", str(bucket), 1, None)
         # Create 30 queries at time 0, should all be allowed
@@ -138,9 +125,7 @@ class TestRateLimit:
                 assert stats is not None
 
     @pytest.mark.redis_db
-    def test_aggregator(
-        self, rate_limit_shards: Any, use_transaction_pipe: Any
-    ) -> None:
+    def test_aggregator(self, rate_limit_shards: Any) -> None:
         # do not raise with multiple valid rate limits
         rate_limit_params_outer = RateLimitParameters("foo", "bar", None, 5)
         rate_limit_params_inner = RateLimitParameters("foo", "bar", None, 5)
@@ -153,9 +138,7 @@ class TestRateLimit:
         rate_limit_params_inner = RateLimitParameters("foo", "bar", None, 5)
 
         with pytest.raises(RateLimitExceeded):
-            with RateLimitAggregator(
-                [rate_limit_params_outer, rate_limit_params_inner]
-            ):
+            with RateLimitAggregator([rate_limit_params_outer, rate_limit_params_inner]):
                 pass
 
         # raise when the outer rate limit should fail
@@ -163,13 +146,11 @@ class TestRateLimit:
         rate_limit_params_inner = RateLimitParameters("foo", "bar", None, 0)
 
         with pytest.raises(RateLimitExceeded):
-            with RateLimitAggregator(
-                [rate_limit_params_outer, rate_limit_params_inner]
-            ):
+            with RateLimitAggregator([rate_limit_params_outer, rate_limit_params_inner]):
                 pass
 
     @pytest.mark.redis_db
-    def test_rate_limit_container(self, use_transaction_pipe: Any) -> None:
+    def test_rate_limit_container(self) -> None:
         rate_limit_container = RateLimitStatsContainer()
         rate_limit_stats = RateLimitStats(rate=0.5, concurrent=2)
 
@@ -184,7 +165,7 @@ class TestRateLimit:
         }
 
     @pytest.mark.redis_db
-    def test_bypass_rate_limit(self, use_transaction_pipe: Any) -> None:
+    def test_bypass_rate_limit(self) -> None:
         rate_limit_params = RateLimitParameters("foo", "bar", None, None)
         state.set_config("bypass_rate_limit", 1)
 
@@ -192,16 +173,12 @@ class TestRateLimit:
             assert stats is None
 
     @pytest.mark.redis_db
-    def test_rate_limit_exceptions(self, use_transaction_pipe: Any) -> None:
+    def test_rate_limit_exceptions(self) -> None:
         params = RateLimitParameters("foo", "bar", None, 5)
         bucket = "{}{}".format(state.ratelimit_prefix, params.bucket)
 
         def count() -> int:
-            return int(
-                get_redis_client(RedisClientKey.RATE_LIMITER).zcount(
-                    bucket, "-inf", "+inf"
-                )
-            )
+            return int(get_redis_client(RedisClientKey.RATE_LIMITER).zcount(bucket, "-inf", "+inf"))
 
         with rate_limit(params):
             assert count() == 1
@@ -211,14 +188,12 @@ class TestRateLimit:
         with pytest.raises(RateLimitExceeded):
             with rate_limit(params):
                 assert count() == 2
-                raise RateLimitExceeded(
-                    "stuff"
-                )  # simulate an inner rate limiter failing
+                raise RateLimitExceeded("stuff")  # simulate an inner rate limiter failing
 
         assert count() == 2
 
     @pytest.mark.redis_db
-    def test_rate_limit_ttl(self, use_transaction_pipe: Any) -> None:
+    def test_rate_limit_ttl(self) -> None:
         params = RateLimitParameters("foo", "bar", None, 5)
         bucket = "{}{}".format(state.ratelimit_prefix, params.bucket)
 
@@ -241,9 +216,7 @@ tests = [
     tests,
 )
 @pytest.mark.redis_db
-def test_rate_limit_failures(
-    vals: Tuple[int, int, int], rate_limit_shards: Any, use_transaction_pipe: Any
-) -> None:
+def test_rate_limit_failures(vals: Tuple[int, int, int], rate_limit_shards: Any) -> None:
     params = []
     for i, v in enumerate(vals):
         params.append(RateLimitParameters(f"foo{i}", f"bar{i}", None, v))
