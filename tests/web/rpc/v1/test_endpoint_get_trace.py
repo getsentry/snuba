@@ -12,6 +12,7 @@ from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
     QueryInfo,
     QueryMetadata,
     QueryStats,
@@ -212,6 +213,7 @@ class TestGetTrace(BaseApiTest):
                     ],
                 ),
             ],
+            page_token=PageToken(end_pagination=True),
         )
         response_dict = MessageToDict(response)
         for item_group in response_dict["itemGroups"]:
@@ -302,6 +304,7 @@ class TestGetTrace(BaseApiTest):
                     ],
                 ),
             ],
+            page_token=PageToken(end_pagination=True),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -419,6 +422,7 @@ class TestGetTrace(BaseApiTest):
                     ],
                 ),
             ],
+            page_token=PageToken(end_pagination=True),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 

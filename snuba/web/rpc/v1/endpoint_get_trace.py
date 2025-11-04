@@ -61,13 +61,26 @@ APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY = "EndpointGetTrace.apply_final_rollou
 TIMESTAMP_FIELD_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
     TraceItemType.TRACE_ITEM_TYPE_SPAN: "sentry.start_timestamp_precise",
 }
-# positive integer or None, representing no limit
-PAGINATION_MAX_ITEMS: int | None = ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS
-if PAGINATION_MAX_ITEMS is not None and PAGINATION_MAX_ITEMS <= 0:
-    if PAGINATION_MAX_ITEMS < 0:
+
+
+def get_pagination_max_items() -> int | None:
+    """
+    returns an integer > 0, or None if there is no limit. This is configured using the snuba setting ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS
+    """
+    if (
+        ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS is None
+        or ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS == 0
+    ):
+        return None
+    if ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS < 0:
         # warning that the pagination max items is negative
         sentry_sdk.capture_message(f"Pagination max items is negative: {PAGINATION_MAX_ITEMS}")
-    PAGINATION_MAX_ITEMS = None
+        return None
+    return ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS
+
+
+# positive integer or None, representing no limit
+PAGINATION_MAX_ITEMS: int | None = get_pagination_max_items()
 
 
 class EndpointGetTrace_PageToken:
@@ -474,7 +487,7 @@ def _get_pagination_limit(user_requested_limit: int) -> int | None:
     If the user requested a limit, we use the minimum of the user requested limit and
     the ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS snuba setting.
 
-    If the user requested a limit of 0, we assume the user did not pass a limit, we we
+    If the user requested a limit of 0, we assume the user did not pass a limit, we
     use the default ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS.
     """
     if user_requested_limit > 0:
@@ -503,8 +516,8 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
     def _execute(self, in_msg: GetTraceRequest) -> GetTraceResponse:
         limit = _get_pagination_limit(in_msg.limit)
         page_token = EndpointGetTrace_PageToken.from_protobuf(in_msg.page_token)
-        item_groups = []
         query_results = []
+        item_groups = []
         if page_token is None:
             start = 0
         else:
@@ -554,10 +567,9 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         limit: int | None,
         page_token: EndpointGetTrace_PageToken | None,
     ) -> tuple[GetTraceResponse.ItemGroup, Any, float, str]:
-        request = _build_snuba_request(in_msg, item, limit, page_token)
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=request,
+            request=_build_snuba_request(in_msg, item, limit, page_token),
             timer=self._timer,
         )
         processed_results = _process_results(

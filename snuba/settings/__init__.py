@@ -454,7 +454,7 @@ VALIDATE_DATASET_YAMLS_ON_STARTUP = False
 MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
 SNQL_DISABLED_DATASETS: set[str] = set([])
 
-ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS = 60
+ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS = 0  # 0 means no limit
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
