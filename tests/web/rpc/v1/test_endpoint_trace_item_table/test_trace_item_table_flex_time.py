@@ -19,6 +19,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
+from sentry_relay.consts import DataCategory
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -28,10 +29,7 @@ from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import 
 )
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.routing_strategies.common import (
-    OutcomeCategory,
-    store_outcomes_data,
-)
+from tests.web.rpc.v1.routing_strategies.common import store_outcomes_data
 from tests.web.rpc.v1.test_utils import BASE_TIME, gen_item_message
 
 _LOG_COUNT = 120
@@ -88,9 +86,7 @@ def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> None:
         outcome_data.append((data_point.time, data_point.num_outcomes))
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
-    store_outcomes_data(
-        outcome_data, OutcomeCategory.LOG_ITEM, org_id=_ORG_ID, project_id=_PROJECT_ID
-    )
+    store_outcomes_data(outcome_data, DataCategory.LOG_ITEM, org_id=_ORG_ID, project_id=_PROJECT_ID)
 
 
 def get_item_ids_from_response(response: TraceItemTableResponse) -> list[str]:
