@@ -699,7 +699,9 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                     DataPoint(
                         data=expected_sum_plus_sum,
                         data_present=True,
+                        avg_sampling_rate=0.5,
                         reliability=Reliability.RELIABILITY_HIGH,
+                        sample_count=120,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -777,7 +779,9 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                     DataPoint(
                         data=expected_form2,
                         data_present=True,
+                        avg_sampling_rate=0.5,
                         reliability=Reliability.RELIABILITY_HIGH,
+                        sample_count=12,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -868,7 +872,9 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                     DataPoint(
                         data=expected_form1,
                         data_present=True,
+                        avg_sampling_rate=0.5,
                         reliability=Reliability.RELIABILITY_LOW,
+                        sample_count=12,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -964,7 +970,9 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                     DataPoint(
                         data=expected_form3,
                         data_present=True,
+                        avg_sampling_rate=0.5,
                         reliability=Reliability.RELIABILITY_LOW,
+                        sample_count=12,
                     )
                     for _ in range(len(expected_buckets))
                 ],
