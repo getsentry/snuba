@@ -113,7 +113,13 @@ class NormalizeFormulaLabelsVisitor(RequestVisitor):
     def visit_Column(self, node: Column, new_label: str) -> None:
         node.label = new_label
 
-        match node.WhichOneof("column"):
+        column_type = node.WhichOneof("column")
+        # Handle columns that only have a label but no column type
+        # (e.g., order_by columns that reference existing columns by label)
+        if column_type is None:
+            return
+
+        match column_type:
             case "key":
                 self.visit(node.key, new_label)
             case "aggregation":
@@ -125,7 +131,7 @@ class NormalizeFormulaLabelsVisitor(RequestVisitor):
             case "literal":
                 self.visit(node.literal, new_label)
             case _:
-                raise ValueError(f"Unknown column type: {node.WhichOneof('column')}")
+                raise ValueError(f"Unknown column type: {column_type}")
 
     def visit_AttributeKey(self, node: AttributeKey, new_label: str) -> None:
         return
