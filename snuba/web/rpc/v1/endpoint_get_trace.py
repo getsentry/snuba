@@ -28,7 +28,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, equals, literal
+from snuba.query.dsl import and_cond, column, equals, literal, or_cond
 from snuba.query.expressions import FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -83,17 +83,20 @@ class EndpointGetTrace_PageToken:
     def __init__(
         self,
         last_item_index: int,
-        last_seen_timestamp: float,
+        last_seen_timestamp_precise: float,
         last_seen_item_id: str,
     ):
         """
         last_item_index: the index of the last item in GetTraceRequest.items that was being processed
-        last_seen_timestamp: ISO 8601 formatted timestamp of the last seen item, used for filter sorting,
+        last_seen_timestamp_precise: timestamp of the last seen item, used for filter sorting,
         last_seen_item_id: id of the last seen item, used for filter sorting,
         """
         self.last_item_index = last_item_index
-        self.last_seen_timestamp = last_seen_timestamp
-        self.last_seen_item_id = last_seen_item_id
+        # this is the precise timestamp stored in the attributes of the item
+        self.last_seen_timestamp_precise = last_seen_timestamp_precise
+        # this is the non-precise timestamp that is stored in the timestamp column of the eap_items table
+        self.last_seen_timestamp = int(last_seen_timestamp_precise)
+        self.last_seen_item_id = int(last_seen_item_id, 16)
 
     @classmethod
     def from_protobuf(cls, page_token: PageToken) -> Optional["EndpointGetTrace_PageToken"]:
@@ -109,18 +112,18 @@ class EndpointGetTrace_PageToken:
             raise ValueError("Invalid page token")
         last_item_index = filters[0].comparison_filter.value.val_int
         if not (
-            filters[1].comparison_filter.key.name == "last_seen_timestamp"
+            filters[1].comparison_filter.key.name == "last_seen_timestamp_precise"
             and filters[1].comparison_filter.key.type == AttributeKey.Type.TYPE_DOUBLE
         ):
             raise ValueError("Invalid page token")
-        last_seen_timestamp = filters[1].comparison_filter.value.val_double
+        last_seen_timestamp_precise = filters[1].comparison_filter.value.val_double
         if not (
             filters[2].comparison_filter.key.name == "last_seen_item_id"
             and filters[2].comparison_filter.key.type == AttributeKey.Type.TYPE_STRING
         ):
             raise ValueError("Invalid page token")
         last_seen_item_id = filters[2].comparison_filter.value.val_str
-        return cls(last_item_index, last_seen_timestamp, last_seen_item_id)
+        return cls(last_item_index, last_seen_timestamp_precise, last_seen_item_id)
 
     def to_protobuf(self) -> PageToken:
         filters = TraceItemFilter(
@@ -138,10 +141,11 @@ class EndpointGetTrace_PageToken:
                     TraceItemFilter(
                         comparison_filter=ComparisonFilter(
                             key=AttributeKey(
-                                name="last_seen_timestamp", type=AttributeKey.Type.TYPE_DOUBLE
+                                name="last_seen_timestamp_precise",
+                                type=AttributeKey.Type.TYPE_DOUBLE,
                             ),
                             op=ComparisonFilter.OP_EQUALS,
-                            value=AttributeValue(val_double=self.last_seen_timestamp),
+                            value=AttributeValue(val_double=self.last_seen_timestamp_precise),
                         )
                     ),
                     TraceItemFilter(
@@ -150,7 +154,7 @@ class EndpointGetTrace_PageToken:
                                 name="last_seen_item_id", type=AttributeKey.Type.TYPE_STRING
                             ),
                             op=ComparisonFilter.OP_EQUALS,
-                            value=AttributeValue(val_str=self.last_seen_item_id),
+                            value=AttributeValue(val_str=hex(self.last_seen_item_id)),
                         )
                     ),
                 ]
@@ -193,16 +197,6 @@ def _build_query(
         ),
     ]
 
-    """
-    TODO: remove this
-    SelectedExpression(
-        name="_internal_table_timestamp",
-        expression=column(
-            "timestamp",
-            alias="_internal_table_timestamp",
-        ),
-    ),
-    """
     if len(item.attributes) > 0:
         for attribute_key in item.attributes:
             selected_columns.append(
@@ -248,6 +242,36 @@ def _build_query(
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
         sample=None,
     )
+    page_token_filter = (
+        [
+            or_cond(
+                f.greater(
+                    column("timestamp"),
+                    literal(page_token.last_seen_timestamp),
+                ),
+                f.greater(
+                    column("item_timestamp"),
+                    literal(page_token.last_seen_timestamp_precise),
+                ),
+                and_cond(
+                    f.equals(
+                        column("timestamp"),
+                        literal(page_token.last_seen_timestamp),
+                    ),
+                    f.equals(
+                        column("item_timestamp"),
+                        literal(page_token.last_seen_timestamp_precise),
+                    ),
+                    f.greater(
+                        f.reinterpretAsUInt128(f.reverse(f.unhex(column("item_id")))),
+                        literal(page_token.last_seen_item_id),
+                    ),
+                ),
+            )
+        ]
+        if page_token is not None
+        else []
+    )
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -265,31 +289,24 @@ def _build_query(
                 column("trace_id"),
                 literal(request.trace_id),
             ),
-            # only adds item_id filter if a page token is provided
-            *(
-                [
-                    f.greaterOrEquals(
-                        column("item_timestamp"),
-                        literal(page_token.last_seen_timestamp),
-                    ),
-                    f.greater(
-                        column("item_id"),
-                        literal(page_token.last_seen_item_id),
-                    ),
-                ]
-                if page_token is not None
-                else []
-            ),
+            *(page_token_filter),
         ),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
+                expression=column("timestamp"),
+            ),
+            OrderBy(
+                direction=OrderByDirection.ASC,
                 expression=column("item_timestamp"),
+            ),
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=column("item_id"),
             ),
         ],
         limit=limit,
     )
-
     if random.random() < _get_apply_final_rollout_percentage():
         query.set_final(True)
 
@@ -386,7 +403,11 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
 
 ProcessedResults = NamedTuple(
     "ProcessedResults",
-    [("items", list[GetTraceResponse.Item]), ("last_seen_timestamp", float), ("last_seen_id", str)],
+    [
+        ("items", list[GetTraceResponse.Item]),
+        ("last_seen_timestamp_precise", float),
+        ("last_seen_id", str),
+    ],
 )
 
 
@@ -399,14 +420,13 @@ def _process_results(
     return the results as another entry in the ProcessedResults named tuple.
     """
     items: list[GetTraceResponse.Item] = []
-    last_seen_timestamp = 0.0
+    last_seen_timestamp_precise = 0.0
     last_seen_id = ""
 
     for row in data:
         id = row.pop("id")
         ts = row.pop("timestamp")
-        row.pop("_internal_table_timestamp")  # TODO: remove this
-        last_seen_timestamp = float(ts)
+        last_seen_timestamp_precise = float(ts)
         last_seen_id = id
 
         timestamp = Timestamp()
@@ -443,7 +463,9 @@ def _process_results(
         items.append(item)
 
     return ProcessedResults(
-        items=items, last_seen_timestamp=last_seen_timestamp, last_seen_id=last_seen_id
+        items=items,
+        last_seen_timestamp_precise=last_seen_timestamp_precise,
+        last_seen_id=last_seen_id,
     )
 
 
@@ -488,18 +510,24 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         else:
             start = page_token.last_item_index
         for i, item in enumerate(in_msg.items[start:], start=start):
-            item_group, query_result, last_seen_timestamp, last_seen_id = self._query_item_group(
-                in_msg, item, limit, page_token
+            item_group, query_result, last_seen_timestamp_precise, last_seen_id = (
+                self._query_item_group(in_msg, item, limit, page_token)
             )
-            item_groups.append(item_group)
-            query_results.append(query_result)
             page_token = None
+            query_results.append(query_result)
+            if len(item_group.items) == 0:
+                continue
+
+            item_groups.append(item_group)
+
             if limit is not None:
                 limit -= len(item_group.items)
 
             if limit is not None and limit <= 0:
                 # create a page token, we have reached the limit
-                page_token = EndpointGetTrace_PageToken(i, last_seen_timestamp, last_seen_id)
+                page_token = EndpointGetTrace_PageToken(
+                    i, last_seen_timestamp_precise, last_seen_id
+                )
                 break
 
         response_meta = extract_response_meta(
@@ -526,16 +554,17 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         limit: int | None,
         page_token: EndpointGetTrace_PageToken | None,
     ) -> tuple[GetTraceResponse.ItemGroup, Any, float, str]:
+        request = _build_snuba_request(in_msg, item, limit, page_token)
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=_build_snuba_request(in_msg, item, limit, page_token),
+            request=request,
             timer=self._timer,
         )
         processed_results = _process_results(
             results.result.get("data", []),
         )
         items = processed_results.items
-        last_seen_timestamp = processed_results.last_seen_timestamp
+        last_seen_timestamp_precise = processed_results.last_seen_timestamp_precise
         last_seen_id = processed_results.last_seen_id
         return (
             GetTraceResponse.ItemGroup(
@@ -543,6 +572,6 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
                 items=items,
             ),
             results,
-            last_seen_timestamp,
+            last_seen_timestamp_precise,
             last_seen_id,
         )
