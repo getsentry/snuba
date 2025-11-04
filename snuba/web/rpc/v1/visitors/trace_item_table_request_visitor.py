@@ -36,9 +36,7 @@ class ValidateColumnLabelsVisitor(RequestVisitor):
             if column.label == "":
                 continue
             if column.label in self.column_labels:
-                raise BadSnubaRPCRequestException(
-                    f"Duplicate column label: {column.label}"
-                )
+                raise BadSnubaRPCRequestException(f"Duplicate column label: {column.label}")
             self.column_labels.add(column.label)
 
         for column in node.columns:
@@ -136,9 +134,7 @@ class NormalizeFormulaLabelsVisitor(RequestVisitor):
     def visit_AttributeKey(self, node: AttributeKey, new_label: str) -> None:
         return
 
-    def visit_AttributeAggregation(
-        self, node: AttributeAggregation, new_label: str
-    ) -> None:
+    def visit_AttributeAggregation(self, node: AttributeAggregation, new_label: str) -> None:
         node.label = new_label
 
     def visit_AttributeConditionalAggregation(
@@ -194,7 +190,5 @@ class SetAggregateLabelsVisitor(RequestVisitor):
     def visit_AttributeAggregation(self, node: AttributeAggregation) -> None:
         node.label = self.current_label
 
-    def visit_AttributeConditionalAggregation(
-        self, node: AttributeConditionalAggregation
-    ) -> None:
+    def visit_AttributeConditionalAggregation(self, node: AttributeConditionalAggregation) -> None:
         node.label = self.current_label
