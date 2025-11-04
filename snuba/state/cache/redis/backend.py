@@ -114,7 +114,6 @@ class RedisCache(Cache[TValue]):
             return function()
 
         try:
-            # set disable_lua_scripts to use the simple read-through cache without queueing.
             return self.__get_value_with_simple_readthrough(
                 key, function, record_cache_hit_type, timer
             )

@@ -5,9 +5,8 @@
 // due to the historically dynamic nature of runtime config,
 // descriptions here can be defined to apply to an arbitrary
 // *regex pattern* of description keys.
-const DESCRIPTIONS: {[key: string]: string} = {
+const DESCRIPTIONS: { [key: string]: string } = {
   'quantized_rebalance_consumer_group_delay_secs__.*': "quantized rebalancing means that during deploys, we try to trigger rebalancing across all pods within a consumer group at the same time. a value of 15 means that pods align their group join/leave activity to some multiple of 15 seconds, by sleeping during startup or shutdown. the setting is suffixed with __foo e.g. meaning the 'foo' consumer group is affected. this refers to de-facto consumer groups, not logical ones. the same concept exists in sentry's python consumers. in snuba, this only affects rust consumers.",
-  "disable_lua_randomize_query_id": "randomize clickhouse queryId to enable simple readthrough cache.",
   "enable_bypass_cache_referrers": "Any referrer listed in BYPASS_CACHE_REFERRERS under Snuba settings will bypass readthrough cache",
   "enable_filter_in_select_optimizer": "delete to turn off filter in select optimizer (api parsing)",
   ".*_ignore_consistent_queries_sample_rate": "Ignore consistent queries to given dataset. This flag should be set to a value between 0 and 1 where 0 means we never ignore any incoming consistent queries and 1 means ignoring all consistent queries.",
@@ -20,7 +19,6 @@ const DESCRIPTIONS: {[key: string]: string} = {
   "project_quota_time_percentage": "Controls the project quota limit. A counter class tracks the processing time spent on some task for a project and compares it with this quota",
   "rate_limit_shard_factor": "How many keys the query rate limiter should shard a set into. More keys means smaller avg redis-set size (therefore faster ops), but more (pipelined) ops. This would be more useful if the rate limiter redis was actually a multi-node redis cluster. Right now we run this code just so it is ready, should we have to scale, and to be able to tweak set size if we have to.",
   "rate_limit_use_transaction_pipe": "Whether the concurrent rate limiter uses a redis transaction to perform its opertaions, see https://github.com/getsentry/snuba/pull/4965/files",
-  "read_through_cache.disable_lua_scripts_sample_rate": "Percentage of request enabled to use simple readthrough cache",
   "read_through_cache.short_circuit": "First stage of removing the readthrough cache entirely is disabling and monitoring - Rahul",
   "retry_duplicate_query_id": "Whether to retry clickhouse queries with a random query id (exactly once) if clickhouse rejected the query before due to the query id already being used. This can be useful in case of redis failover scenarios when we lose query cache.",
   "run_new_mql_parser": "Feature flag sample rate for running new MQL join parser",
