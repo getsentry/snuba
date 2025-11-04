@@ -192,9 +192,7 @@ test_data = [
 ]
 
 
-@pytest.mark.parametrize(
-    "query_config,expected,query_prefix,async_override,referrer", test_data
-)
+@pytest.mark.parametrize("query_config,expected,query_prefix,async_override,referrer", test_data)
 @pytest.mark.redis_db
 def test_query_settings_from_config(
     query_config: Mapping[str, Any],
@@ -206,8 +204,7 @@ def test_query_settings_from_config(
     for k, v in query_config.items():
         state.set_config(k, v)
     assert (
-        _get_query_settings_from_config(query_prefix, async_override, referrer=referrer)
-        == expected
+        _get_query_settings_from_config(query_prefix, async_override, referrer=referrer) == expected
     )
 
 
@@ -221,8 +218,7 @@ def _build_test_query(
                 storage.get_schema().get_data_source().get_table_name(),  # type: ignore
                 schema=storage.get_schema().get_columns(),
                 final=False,
-                allocation_policies=allocation_policies
-                or storage.get_allocation_policies(),
+                allocation_policies=allocation_policies or storage.get_allocation_policies(),
                 storage_key=storage.get_storage_key(),
             ),
             selected_columns=[
@@ -251,9 +247,7 @@ def test_db_record_bytes_scanned() -> None:
     storage_key = StorageKey("errors_ro")
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
-        allocation_policies=[
-            PassthroughPolicy(ResourceIdentifier(storage_key), [], {})
-        ],
+        allocation_policies=[PassthroughPolicy(ResourceIdentifier(storage_key), [], {})],
     )
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
@@ -419,9 +413,7 @@ def test_bypass_cache_referrer() -> None:
 
     # cache should not be used for "some_bypass_cache_referrer" so if the
     # bypass does not work, the test will try to use a bad cache
-    with mock.patch(
-        "snuba.settings.BYPASS_CACHE_REFERRERS", ["some_bypass_cache_referrer"]
-    ):
+    with mock.patch("snuba.settings.BYPASS_CACHE_REFERRERS", ["some_bypass_cache_referrer"]):
         with mock.patch("snuba.web.db_query._get_cache_partition"):
             result = db_query(
                 clickhouse_query=query,
@@ -703,9 +695,9 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         }
         # extra data contains policy failure information
         assert (
-            excinfo.value.extra["stats"]["quota_allowance"]["details"][
-                "RejectAllocationPolicy"
-            ]["explanation"]["reason"]
+            excinfo.value.extra["stats"]["quota_allowance"]["details"]["RejectAllocationPolicy"][
+                "explanation"
+            ]["reason"]
             == "policy rejects all queries"
         )
         assert query_metadata_list[0].request_status.status.value == "rate-limited"
@@ -769,9 +761,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
         [
-            ThreadLimitPolicy(
-                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
-            ),
+            ThreadLimitPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
             ThreadLimitPolicyDuplicate(
                 ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
             ),
@@ -858,9 +848,7 @@ def test_allocation_policy_updates_quota() -> None:
             return QuotaAllowance(
                 can_run=can_run,
                 max_threads=0,
-                explanation={
-                    "reason": f"can only run {queries_run_duplicate} queries!"
-                },
+                explanation={"reason": f"can only run {queries_run_duplicate} queries!"},
                 is_throttled=False,
                 throttle_threshold=MAX_QUERIES_TO_RUN,
                 rejection_threshold=MAX_QUERIES_TO_RUN,
@@ -882,9 +870,7 @@ def test_allocation_policy_updates_quota() -> None:
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
         [
-            CountQueryPolicy(
-                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
-            ),
+            CountQueryPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
             CountQueryPolicyDuplicate(
                 ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
             ),
@@ -1030,8 +1016,6 @@ def test_db_query_ignore_consistent() -> None:
 @pytest.mark.redis_db
 def test_cache_metrics_with_simple_readthrough() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
-    state.set_config("disable_lua_randomize_query_id", 1)
-    state.set_config("read_through_cache.disable_lua_scripts_sample_rate", 1)
 
     formatted_query = format_query(query)
     reader = storage.get_cluster().get_reader()
@@ -1117,9 +1101,7 @@ def test_policy_sets_max_bytes_to_read() -> None:
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
         [
-            MaxBytesPolicy(
-                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
-            ),
+            MaxBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
         ],
     )
 
