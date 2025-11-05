@@ -213,7 +213,11 @@ class TestGetTrace(BaseApiTest):
                     ],
                 ),
             ],
-            page_token=PageToken(end_pagination=True),
+            page_token=(
+                PageToken(end_pagination=True)
+                if state.get_int_config("enable_trace_pagination", 0)
+                else None
+            ),
         )
         response_dict = MessageToDict(response)
         for item_group in response_dict["itemGroups"]:
@@ -304,7 +308,11 @@ class TestGetTrace(BaseApiTest):
                     ],
                 ),
             ],
-            page_token=PageToken(end_pagination=True),
+            page_token=(
+                PageToken(end_pagination=True)
+                if state.get_int_config("enable_trace_pagination", 0)
+                else None
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -422,7 +430,11 @@ class TestGetTrace(BaseApiTest):
                     ],
                 ),
             ],
-            page_token=PageToken(end_pagination=True),
+            page_token=(
+                PageToken(end_pagination=True)
+                if state.get_int_config("enable_trace_pagination", 0)
+                else None
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -468,6 +480,7 @@ def get_span_id(span: TraceItem) -> str:
 class TestGetTracePagination(BaseApiTest):
     def test_pagination_with_user_limit(self, setup_teardown: Any) -> None:
         """Test that pagination respects user-provided limit"""
+        state.set_config("enable_trace_pagination", 1)
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
 

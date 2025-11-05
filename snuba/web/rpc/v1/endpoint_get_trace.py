@@ -285,6 +285,30 @@ def _build_query(
         if page_token is not None
         else []
     )
+    old_order_by = [
+        OrderBy(
+            direction=OrderByDirection.ASC,
+            expression=column("item_timestamp"),
+        ),
+    ]
+    new_order_by = [
+        OrderBy(
+            direction=OrderByDirection.ASC,
+            expression=column("timestamp"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.ASC,
+            expression=column("item_timestamp"),
+        ),
+        OrderBy(
+            direction=OrderByDirection.ASC,
+            expression=column("item_id"),
+        ),
+    ]
+    if state.get_int_config("enable_trace_pagination", 0):
+        order_by = new_order_by
+    else:
+        order_by = old_order_by
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -304,20 +328,7 @@ def _build_query(
             ),
             *(page_token_filter),
         ),
-        order_by=[
-            OrderBy(
-                direction=OrderByDirection.ASC,
-                expression=column("timestamp"),
-            ),
-            OrderBy(
-                direction=OrderByDirection.ASC,
-                expression=column("item_timestamp"),
-            ),
-            OrderBy(
-                direction=OrderByDirection.ASC,
-                expression=column("item_id"),
-            ),
-        ],
+        order_by=order_by,
         limit=limit,
     )
     if random.random() < _get_apply_final_rollout_percentage():
@@ -514,8 +525,14 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         return GetTraceResponse
 
     def _execute(self, in_msg: GetTraceRequest) -> GetTraceResponse:
-        limit = _get_pagination_limit(in_msg.limit)
-        page_token = EndpointGetTrace_PageToken.from_protobuf(in_msg.page_token)
+        enable_pagination = state.get_int_config("enable_trace_pagination", 0)
+        if enable_pagination:
+            limit = _get_pagination_limit(in_msg.limit)
+            page_token = EndpointGetTrace_PageToken.from_protobuf(in_msg.page_token)
+        else:
+            limit = None
+            page_token = None
+
         query_results = []
         item_groups = []
         if page_token is None:
@@ -549,15 +566,17 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             query_results,
             [self._timer] * len(query_results),
         )
+        if not enable_pagination:
+            serialized_page_token = None
+        elif page_token is None:
+            serialized_page_token = None
+        else:
+            serialized_page_token = page_token.to_protobuf()
         return GetTraceResponse(
             item_groups=item_groups,
             meta=response_meta,
             trace_id=in_msg.trace_id,
-            page_token=(
-                page_token.to_protobuf()
-                if page_token is not None
-                else PageToken(end_pagination=True)
-            ),
+            page_token=serialized_page_token,
         )
 
     def _query_item_group(
