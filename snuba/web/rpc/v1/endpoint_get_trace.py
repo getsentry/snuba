@@ -574,7 +574,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         if not enable_pagination:
             serialized_page_token = None
         elif page_token is None:
-            serialized_page_token = None
+            serialized_page_token = PageToken(end_pagination=True)
         else:
             serialized_page_token = page_token.to_protobuf()
         return GetTraceResponse(
