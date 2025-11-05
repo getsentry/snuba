@@ -77,7 +77,9 @@ def get_pagination_max_items() -> int | None:
         return None
     if ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS < 0:
         # warning that the pagination max items is negative
-        sentry_sdk.capture_message(f"Pagination max items is negative: {PAGINATION_MAX_ITEMS}")
+        sentry_sdk.capture_message(
+            f"Pagination max items is negative: {ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS}"
+        )
         return None
     return ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS
 
