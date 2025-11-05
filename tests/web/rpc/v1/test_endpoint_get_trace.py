@@ -26,6 +26,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.settings import ENABLE_TRACE_PAGINATION_DEFAULT
 from snuba.web.rpc.v1.endpoint_get_trace import (
     APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
     EndpointGetTrace,
@@ -215,7 +216,7 @@ class TestGetTrace(BaseApiTest):
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if state.get_int_config("enable_trace_pagination", 0)
+                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
                 else None
             ),
         )
@@ -310,7 +311,7 @@ class TestGetTrace(BaseApiTest):
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if state.get_int_config("enable_trace_pagination", 0)
+                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
                 else None
             ),
         )
@@ -432,7 +433,7 @@ class TestGetTrace(BaseApiTest):
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if state.get_int_config("enable_trace_pagination", 0)
+                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
                 else None
             ),
         )

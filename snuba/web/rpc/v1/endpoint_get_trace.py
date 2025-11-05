@@ -33,7 +33,10 @@ from snuba.query.expressions import FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.settings import ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS
+from snuba.settings import (
+    ENABLE_TRACE_PAGINATION_DEFAULT,
+    ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS,
+)
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
@@ -305,7 +308,7 @@ def _build_query(
             expression=column("item_id"),
         ),
     ]
-    if state.get_int_config("enable_trace_pagination", 0):
+    if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT):
         order_by = new_order_by
     else:
         order_by = old_order_by
@@ -525,7 +528,9 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         return GetTraceResponse
 
     def _execute(self, in_msg: GetTraceRequest) -> GetTraceResponse:
-        enable_pagination = state.get_int_config("enable_trace_pagination", 0)
+        enable_pagination = state.get_int_config(
+            "enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT
+        )
         if enable_pagination:
             limit = _get_pagination_limit(in_msg.limit)
             page_token = EndpointGetTrace_PageToken.from_protobuf(in_msg.page_token)
