@@ -10,6 +10,7 @@ new_columns = [
     Column(
         "attributes_array",
         JSON(
+            max_dynamic_paths=128,
             modifiers=Modifiers(
                 codecs=[
                     "ZSTD(1)",
