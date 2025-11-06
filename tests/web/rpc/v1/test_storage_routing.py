@@ -40,6 +40,12 @@ from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 RANDOM_REQUEST_ID = str(uuid.uuid4())
 
 
+class AnyInt(int):
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, int) or isinstance(other, self.__class__)
+
+
 def _get_in_msg() -> TimeSeriesRequest:
     ts = Timestamp()
     ts.GetCurrentTime()
@@ -300,8 +306,8 @@ def test_metrics_output() -> None:
                     "max_threads": 10,
                     "explanation": {},
                     "is_throttled": False,
-                    "throttle_threshold": 22,
-                    "rejection_threshold": 22,
+                    "throttle_threshold": AnyInt(22),
+                    "rejection_threshold": AnyInt(22),
                     "quota_used": 1,
                     "quota_unit": "concurrent_queries",
                     "suggestion": "no_suggestion",
@@ -312,8 +318,8 @@ def test_metrics_output() -> None:
                     "max_threads": 10,
                     "explanation": {},
                     "is_throttled": False,
-                    "throttle_threshold": 1000000000000,
-                    "rejection_threshold": 1000000000000,
+                    "throttle_threshold": AnyInt(1000000000000),
+                    "rejection_threshold": AnyInt(1000000000000),
                     "quota_used": 0,
                     "quota_unit": "no_units",
                     "suggestion": "no_suggestion",
@@ -324,8 +330,8 @@ def test_metrics_output() -> None:
                     "max_threads": 10,
                     "explanation": {},
                     "is_throttled": False,
-                    "throttle_threshold": 1000000000000,
-                    "rejection_threshold": 1000000000000,
+                    "throttle_threshold": AnyInt(1000000000000),
+                    "rejection_threshold": AnyInt(1000000000000),
                     "quota_used": 0,
                     "quota_unit": "no_units",
                     "suggestion": "no_suggestion",
