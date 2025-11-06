@@ -539,7 +539,7 @@ class TestGetTracePagination(BaseApiTest):
         assert len(items_received) == len(_SPANS) + len(_LOGS)
 
     def test_pagination_with_no_user_limit(self, setup_teardown: Any) -> None:
-        """Test that pagination respects user-provided limit"""
+        """Test that pagination respects uses the default max items value when no user limit is provided"""
         configmax = 9
         with patch(
             "snuba.web.rpc.v1.endpoint_get_trace.ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS", configmax
