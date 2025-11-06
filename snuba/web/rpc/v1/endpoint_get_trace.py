@@ -66,29 +66,7 @@ TIMESTAMP_FIELD_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
 }
 
 
-def get_pagination_max_items() -> int | None:
-    """
-    returns an integer > 0, or None if there is no limit. This is configured using the snuba setting ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS
-    """
-    if (
-        ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS is None
-        or ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS == 0
-    ):
-        return None
-    if ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS < 0:
-        # warning that the pagination max items is negative
-        sentry_sdk.capture_message(
-            f"Pagination max items is negative: {ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS}"
-        )
-        return None
-    return ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS
-
-
-# positive integer or None, representing no limit
-PAGINATION_MAX_ITEMS: int | None = get_pagination_max_items()
-
-
-class EndpointGetTrace_PageToken:
+class EndpointGetTracePageToken:
     """
     Page token for the EndpointGetTrace RPC. Used for pagination when results are too large to fit in a single response.
     It uses Protobuf PageToken as the data layer to send over the http, but we should only use this class to interact with
@@ -117,7 +95,7 @@ class EndpointGetTrace_PageToken:
         self.last_seen_item_id = int(last_seen_item_id, 16)
 
     @classmethod
-    def from_protobuf(cls, page_token: PageToken) -> Optional["EndpointGetTrace_PageToken"]:
+    def from_protobuf(cls, page_token: PageToken) -> Optional["EndpointGetTracePageToken"]:
         if page_token == PageToken():
             return None
         filters = page_token.filter_offset.and_filter.filters
@@ -185,7 +163,7 @@ def _build_query(
     request: GetTraceRequest,
     item: GetTraceRequest.TraceItem,
     limit: int | None = None,
-    page_token: EndpointGetTrace_PageToken | None = None,
+    page_token: EndpointGetTracePageToken | None = None,
 ) -> Query:
     selected_columns: list[SelectedExpression] = [
         SelectedExpression(
@@ -362,7 +340,7 @@ def _build_snuba_request(
     request: GetTraceRequest,
     item: GetTraceRequest.TraceItem,
     limit: int | None,
-    page_token: EndpointGetTrace_PageToken | None,
+    page_token: EndpointGetTracePageToken | None,
 ) -> SnubaRequest:
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
@@ -506,14 +484,19 @@ def _get_pagination_limit(user_requested_limit: int) -> int | None:
     If the user requested a limit of 0, we assume the user did not pass a limit, we
     use the default ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS.
     """
-    if user_requested_limit > 0:
-        # user requested a limit
-        if PAGINATION_MAX_ITEMS is None:
+    if ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS <= 0:
+        # no limit unless the user requests one
+        if ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS < 0:
+            sentry_sdk.capture_message(
+                f"Pagination max items is negative, no limit will be applied: {ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS}"
+            )
+        if user_requested_limit > 0:
             return user_requested_limit
-        else:
-            return min(user_requested_limit, PAGINATION_MAX_ITEMS)
-    # user did not request a limit
-    return PAGINATION_MAX_ITEMS
+        return None
+
+    if user_requested_limit > 0:
+        return min(user_requested_limit, ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS)
+    return ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS
 
 
 class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
@@ -535,7 +518,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         )
         if enable_pagination:
             limit = _get_pagination_limit(in_msg.limit)
-            page_token = EndpointGetTrace_PageToken.from_protobuf(in_msg.page_token)
+            page_token = EndpointGetTracePageToken.from_protobuf(in_msg.page_token)
         else:
             limit = None
             page_token = None
@@ -562,9 +545,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
 
             if limit is not None and limit <= 0:
                 # create a page token, we have reached the limit
-                page_token = EndpointGetTrace_PageToken(
-                    i, last_seen_timestamp_precise, last_seen_id
-                )
+                page_token = EndpointGetTracePageToken(i, last_seen_timestamp_precise, last_seen_id)
                 break
 
         response_meta = extract_response_meta(
@@ -591,7 +572,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         in_msg: GetTraceRequest,
         item: GetTraceRequest.TraceItem,
         limit: int | None,
-        page_token: EndpointGetTrace_PageToken | None,
+        page_token: EndpointGetTracePageToken | None,
     ) -> tuple[GetTraceResponse.ItemGroup, Any, float, str]:
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
