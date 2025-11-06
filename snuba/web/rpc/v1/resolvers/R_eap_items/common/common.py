@@ -1,5 +1,7 @@
-from typing import Final, Mapping, Sequence
+from collections import defaultdict
+from typing import Final, Mapping, Sequence, cast
 
+from sentry_conventions.attributes import _ATTRIBUTE_METADATA
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     VirtualColumnContext,
@@ -13,9 +15,7 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 COLUMN_PREFIX: str = "sentry."
 
-NORMALIZED_COLUMNS_EAP_ITEMS: Final[
-    Mapping[str, Sequence[AttributeKey.Type.ValueType]]
-] = {
+NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, Sequence[AttributeKey.Type.ValueType]]] = {
     f"{COLUMN_PREFIX}organization_id": [AttributeKey.Type.TYPE_INT],
     f"{COLUMN_PREFIX}project_id": [AttributeKey.Type.TYPE_INT],
     f"{COLUMN_PREFIX}timestamp": [
@@ -48,60 +48,20 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
     AttributeKey.Type.TYPE_BOOLEAN: "attributes_float",
 }
 
-# TODO: Replace with the dict from the sentry-conventions package
-# https://github.com/getsentry/sentry-conventions/blob/main/shared/deprecated_attributes.json
-ATTRIBUTES_TO_COALESCE: dict[str, list[str]] = {
-    "code.file.path": ["code.filepath"],
-    "code.function.name": ["code.namespace"],
-    "code.line.number": ["code.lineno"],
-    "db.namespace": ["db.name"],
-    "db.operation.name": ["db.operation"],
-    "db.query.text": ["db.statement"],
-    "db.system.name": ["db.system"],
-    "error.type": ["fs_error"],
-    "gen_ai.request.available_tools": ["ai.tools"],
-    "gen_ai.request.frequency_penalty": ["ai.frequency_penalty"],
-    "gen_ai.request.messages": ["ai.input_messages"],
-    "gen_ai.request.presence_penalty": ["ai.presence_penalty"],
-    "gen_ai.request.seed": ["ai.seed"],
-    "gen_ai.request.temperature": ["ai.temperature"],
-    "gen_ai.request.top_k": ["ai.top_k"],
-    "gen_ai.request.top_p": ["ai.top_p"],
-    "gen_ai.response.finish_reason": ["ai.finish_reason"],
-    "gen_ai.response.id": ["ai.generation_id"],
-    "gen_ai.response.model": ["ai.model_id"],
-    "gen_ai.response.text": ["ai.responses"],
-    "gen_ai.response.tool_calls": ["ai.tool_calls"],
-    "gen_ai.system": ["ai.model.provider"],
-    "gen_ai.tool.name": ["ai.function_call"],
-    "gen_ai.usage.input_tokens": ["gen_ai.usage.prompt_tokens"],
-    "gen_ai.usage.output_tokens": ["gen_ai.usage.completion_tokens"],
-    "gen_ai.usage.total_tokens": ["ai.total_tokens.used"],
-    "http.client_ip": ["http.client_ip"],
-    "http.request.method": ["http.method"],
-    "http.response.body.size": ["http.response_content_length"],
-    "http.response.size": ["http.response_transfer_size"],
-    "http.response.status_code": ["http.status_code"],
-    "http.route": ["route"],
-    "network.local.address": ["net.sock.host.addr"],
-    "network.local.port": ["net.sock.host.port"],
-    "network.peer.address": ["net.sock.peer.addr"],
-    "network.peer.port": ["net.sock.peer.port"],
-    "network.protocol.name": ["net.protocol.name"],
-    "network.protocol.version": ["net.protocol.version"],
-    "network.transport": ["net.transport"],
-    "sentry.environment": ["environment"],
-    "sentry.profile_id": ["profile_id"],
-    "sentry.release": ["release"],
-    "sentry.replay_id": ["replay_id"],
-    "sentry.transaction": ["transaction"],
-    "server.address": ["net.peer.name"],
-    "server.port": ["net.peer.port"],
-    "url.full": ["http.url"],
-    "url.path": ["http.target"],
-    "url.scheme": ["http.scheme"],
-    "user_agent.original": ["http.user_agent"],
-}
+
+def _build_deprecated_attributes() -> dict[str, list[str]]:
+    current_to_deprecated: dict[str, list[str]] = defaultdict(list)
+    for name, metadata in _ATTRIBUTE_METADATA.items():
+        if metadata.deprecation:
+            replacement = cast(str, metadata.deprecation.replacement)
+            current_to_deprecated[replacement].append(name)
+            if metadata.aliases:
+                for alias in metadata.aliases:
+                    current_to_deprecated[replacement].append(alias)
+    return current_to_deprecated
+
+
+ATTRIBUTES_TO_COALESCE: dict[str, list[str]] = _build_deprecated_attributes()
 
 
 def _build_label_mapping_key(attribute_key: AttributeKey) -> str:
@@ -249,9 +209,7 @@ def apply_virtual_columns(
                 f.CAST(f.ifNull(attribute_expression, literal("")), "String"),
                 literals_array(None, [literal(k) for k in context.value_map.keys()]),
                 literals_array(None, [literal(v) for v in context.value_map.values()]),
-                literal(
-                    context.default_value if context.default_value != "" else "unknown"
-                ),
+                literal(context.default_value if context.default_value != "" else "unknown"),
                 alias=context.to_column_name,
             )
 
