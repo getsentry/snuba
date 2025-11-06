@@ -49,19 +49,19 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
 }
 
 
-def _build_deprecated_attributes() -> dict[str, list[str]]:
-    current_to_deprecated: dict[str, list[str]] = defaultdict(list)
+def _build_deprecated_attributes() -> dict[str, set[str]]:
+    current_to_deprecated: dict[str, set[str]] = defaultdict(set)
     for name, metadata in _ATTRIBUTE_METADATA.items():
         if metadata.deprecation:
             replacement = cast(str, metadata.deprecation.replacement)
-            current_to_deprecated[replacement].append(name)
+            deprecated = {name}
             if metadata.aliases:
-                for alias in metadata.aliases:
-                    current_to_deprecated[replacement].append(alias)
+                deprecated.union(set(metadata.aliases))
+            current_to_deprecated[replacement].union(deprecated)
     return current_to_deprecated
 
 
-ATTRIBUTES_TO_COALESCE: dict[str, list[str]] = _build_deprecated_attributes()
+ATTRIBUTES_TO_COALESCE: dict[str, set[str]] = _build_deprecated_attributes()
 
 
 def _build_label_mapping_key(attribute_key: AttributeKey) -> str:
@@ -133,7 +133,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
                 for attribute_name in [
                     attr_key.name,
                 ]
-                + ATTRIBUTES_TO_COALESCE[attr_key.name]
+                + list(ATTRIBUTES_TO_COALESCE[attr_key.name])
             ]
             return f.coalesce(
                 *expressions,
