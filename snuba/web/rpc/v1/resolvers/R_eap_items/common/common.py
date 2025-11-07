@@ -56,8 +56,8 @@ def _build_deprecated_attributes() -> dict[str, set[str]]:
             replacement = cast(str, metadata.deprecation.replacement)
             deprecated = {name}
             if metadata.aliases:
-                deprecated.union(set(metadata.aliases))
-            current_to_deprecated[replacement].union(deprecated)
+                deprecated.update(metadata.aliases)
+            current_to_deprecated[replacement].update(deprecated)
     return current_to_deprecated
 
 
