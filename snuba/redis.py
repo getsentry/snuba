@@ -128,7 +128,7 @@ _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
         socket_timeout=1,
     ),
     RedisClientKey.RATE_LIMITER: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["rate_limiter"], socket_timeout=1
+        settings.REDIS_CLUSTERS["rate_limiter"], socket_timeout=0.5
     ),
     RedisClientKey.SUBSCRIPTION_STORE: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["subscription_store"],
