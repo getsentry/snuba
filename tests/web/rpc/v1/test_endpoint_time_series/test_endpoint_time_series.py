@@ -1580,7 +1580,7 @@ class TestTimeSeriesApi(BaseApiTest):
             3600,
             metrics=[
                 DummyMetric(
-                    "gen_ai.usage.total_tokens",
+                    "ai.total_tokens.used",
                     get_value=lambda x: 1,
                 ),
             ],
