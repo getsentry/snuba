@@ -83,8 +83,8 @@ impl TryFrom<TraceItem> for EAPItem {
             downsampled_retention_days: Default::default(),
             sampling_factor: 1.0,
             sampling_weight: 1,
-            client_sample_rate: from.client_sample_rate,
-            server_sample_rate: from.server_sample_rate,
+            client_sample_rate: 1.0,
+            server_sample_rate: 1.0,
         };
 
         for (key, value) in from.attributes {
@@ -102,10 +102,12 @@ impl TryFrom<TraceItem> for EAPItem {
 
         if from.client_sample_rate > 0.0 {
             eap_item.sampling_factor *= from.client_sample_rate;
+            eap_item.client_sample_rate = from.client_sample_rate;
         }
 
         if from.server_sample_rate > 0.0 {
             eap_item.sampling_factor *= from.server_sample_rate;
+            eap_item.server_sample_rate = from.server_sample_rate;
         }
 
         // Lower precision to compensate floating point errors.
