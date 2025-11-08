@@ -59,6 +59,9 @@ struct EAPItem {
     sampling_factor: f64,
     sampling_weight: u64,
 
+    client_sample_rate: f64,
+    server_sample_rate: f64,
+
     retention_days: Option<u16>,
     downsampled_retention_days: Option<u16>,
 }
@@ -80,6 +83,8 @@ impl TryFrom<TraceItem> for EAPItem {
             downsampled_retention_days: Default::default(),
             sampling_factor: 1.0,
             sampling_weight: 1,
+            client_sample_rate: from.client_sample_rate,
+            server_sample_rate: from.server_sample_rate,
         };
 
         for (key, value) in from.attributes {
