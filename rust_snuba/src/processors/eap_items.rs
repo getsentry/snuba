@@ -139,10 +139,10 @@ macro_rules! seq_attrs {
 
 #[derive(Debug, Serialize, PartialEq)]
 enum EAPValue {
-    StringValue(String),
-    BoolValue(bool),
-    IntValue(i64),
-    DoubleValue(f64),
+    String(String),
+    Bool(bool),
+    Int(i64),
+    Double(f64),
 }
 
 seq_attrs! {
@@ -203,10 +203,10 @@ impl AttributeMap {
         let mut values: Vec<EAPValue> = Vec::default();
         for value in v.values {
             match value.value {
-                Some(Value::StringValue(string)) => values.push(EAPValue::StringValue(string)),
-                Some(Value::DoubleValue(double)) => values.push(EAPValue::DoubleValue(double)),
-                Some(Value::IntValue(int)) => values.push(EAPValue::IntValue(int)),
-                Some(Value::BoolValue(bool)) => values.push(EAPValue::BoolValue(bool)),
+                Some(Value::StringValue(string)) => values.push(EAPValue::String(string)),
+                Some(Value::DoubleValue(double)) => values.push(EAPValue::Double(double)),
+                Some(Value::IntValue(int)) => values.push(EAPValue::Int(int)),
+                Some(Value::BoolValue(bool)) => values.push(EAPValue::Bool(bool)),
                 Some(Value::BytesValue(_)) => (),
                 Some(Value::KvlistValue(_)) => (),
                 Some(Value::ArrayValue(_)) => (),
@@ -351,7 +351,7 @@ mod tests {
                 .attributes_array
                 .get("arrays")
                 .unwrap()[0],
-            EAPValue::IntValue(1234567890)
+            EAPValue::Int(1234567890)
         );
     }
 }
