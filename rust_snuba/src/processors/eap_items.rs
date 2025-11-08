@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_protos::snuba::v1::any_value::Value;
-use sentry_protos::snuba::v1::TraceItem;
+use sentry_protos::snuba::v1::{ArrayValue, TraceItem};
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
@@ -88,8 +88,8 @@ impl TryFrom<TraceItem> for EAPItem {
                 Some(Value::DoubleValue(double)) => eap_item.attributes.insert_float(key, double),
                 Some(Value::IntValue(int)) => eap_item.attributes.insert_int(key, int),
                 Some(Value::BoolValue(bool)) => eap_item.attributes.insert_bool(key, bool),
+                Some(Value::ArrayValue(array)) => eap_item.attributes.insert_array(key, array),
                 Some(Value::BytesValue(_)) => (),
-                Some(Value::ArrayValue(_)) => (),
                 Some(Value::KvlistValue(_)) => (),
                 None => (),
             }
@@ -137,9 +137,17 @@ macro_rules! seq_attrs {
     }
 }
 
+#[derive(Debug, Serialize, PartialEq)]
+enum EAPValue {
+    StringValue(String),
+    BoolValue(bool),
+    IntValue(i64),
+    DoubleValue(f64),
+}
+
 seq_attrs! {
 #[derive(Debug, Default, Serialize)]
-pub(crate) struct AttributeMap {
+struct AttributeMap {
     attributes_bool: HashMap<String, bool>,
     attributes_int: HashMap<String, i64>,
     #(
@@ -149,6 +157,8 @@ pub(crate) struct AttributeMap {
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_float_~N: HashMap<String, f64>,
     )*
+
+    attributes_array: HashMap<String, Vec<EAPValue>>,
 }
 }
 
@@ -188,6 +198,24 @@ impl AttributeMap {
         self.insert_float(k.clone(), v as f64);
         self.attributes_int.insert(k, v);
     }
+
+    pub fn insert_array(&mut self, k: String, v: ArrayValue) {
+        let mut values: Vec<EAPValue> = Vec::default();
+        for value in v.values {
+            match value.value {
+                Some(Value::StringValue(string)) => values.push(EAPValue::StringValue(string)),
+                Some(Value::DoubleValue(double)) => values.push(EAPValue::DoubleValue(double)),
+                Some(Value::IntValue(int)) => values.push(EAPValue::IntValue(int)),
+                Some(Value::BoolValue(bool)) => values.push(EAPValue::BoolValue(bool)),
+                Some(Value::BytesValue(_)) => (),
+                Some(Value::KvlistValue(_)) => (),
+                Some(Value::ArrayValue(_)) => (),
+                None => (),
+            }
+        }
+
+        self.attributes_array.insert(k, values);
+    }
 }
 
 #[cfg(test)]
@@ -195,7 +223,8 @@ mod tests {
     use std::time::SystemTime;
 
     use prost_types::Timestamp;
-    use sentry_protos::snuba::v1::TraceItemType;
+    use sentry_protos::snuba::v1::any_value::Value;
+    use sentry_protos::snuba::v1::{AnyValue, ArrayValue, TraceItemType};
     use serde::Deserialize;
 
     use super::*;
@@ -294,5 +323,35 @@ mod tests {
         let item: Item = serde_json::from_slice(&batch.rows.encoded_rows).unwrap();
 
         assert_eq!(item.downsampled_retention_days, 365);
+    }
+
+    #[test]
+    fn test_insert_arrays() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+
+        trace_item.attributes.insert(
+            "arrays".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![AnyValue {
+                        value: Some(Value::IntValue(1234567890)),
+                    }],
+                })),
+            },
+        );
+
+        let eap_item = EAPItem::try_from(trace_item);
+
+        assert!(eap_item.is_ok());
+        assert_eq!(
+            eap_item
+                .unwrap()
+                .attributes
+                .attributes_array
+                .get("arrays")
+                .unwrap()[0],
+            EAPValue::IntValue(1234567890)
+        );
     }
 }
