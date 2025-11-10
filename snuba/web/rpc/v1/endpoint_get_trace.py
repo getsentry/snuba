@@ -488,7 +488,7 @@ def _get_pagination_limit(user_requested_limit: int) -> int | None:
         # no limit unless the user requests one
         if ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS < 0:
             sentry_sdk.capture_message(
-                f"Pagination max items is negative, no limit will be applied: {ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS}"
+                f"Pagination max items is negative, no global limit will be applied: {ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS}"
             )
         if user_requested_limit > 0:
             return user_requested_limit
