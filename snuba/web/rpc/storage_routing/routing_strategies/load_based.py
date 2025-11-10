@@ -48,7 +48,6 @@ class LoadBasedRoutingStrategy(OutcomesBasedRoutingStrategy):
             routing_decision.is_throttled = False
             routing_decision.clickhouse_settings["max_threads"] = pass_through_max_threads
             routing_decision.routing_context.extra_info["load_based_pass_through"] = {
-                "cluster_load": load_info.cluster_load,
                 "threshold": pass_through_threshold,
                 "max_threads": pass_through_max_threads,
             }

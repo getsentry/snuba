@@ -105,7 +105,5 @@ def test_load_based_routing_pass_through_even_if_policies_reject() -> None:
     assert routing_decision.can_run is True
     assert routing_decision.clickhouse_settings.get("max_threads") == 10
     assert "load_based_pass_through" in routing_decision.routing_context.extra_info
-    assert (
-        routing_decision.routing_context.extra_info["load_based_pass_through"]["cluster_load"]
-        == 5.0
-    )
+    assert routing_decision.routing_context.cluster_load_info is not None
+    assert routing_decision.routing_context.cluster_load_info.cluster_load == 5.0
