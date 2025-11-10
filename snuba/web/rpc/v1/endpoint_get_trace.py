@@ -513,7 +513,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         return GetTraceResponse
 
     def _execute(self, in_msg: GetTraceRequest) -> GetTraceResponse:
-        if in_msg.limit > 0:
+        if in_msg.limit != 0:
             self.metrics.increment(
                 "eap_trace_request_with_limit", 1, tags={"referrer": in_msg.meta.referrer}
             )
