@@ -80,7 +80,6 @@ def test_multiple_batches_strategies(mock_execute: Mock, mock_num_mutations: Moc
 
     assert mock_execute.call_count == 2
     assert commit_step.submit.call_count == 2
-    assert False
 
 
 @patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
