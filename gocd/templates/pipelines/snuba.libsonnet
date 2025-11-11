@@ -136,7 +136,7 @@ local deploy_canary_stage(region) =
                 LABEL_SELECTOR: 'service=snuba,is_canary=true',
               },
               tasks: [
-                gocdtasks.script(importstr '../bash/deploy-py.sh'),
+                gocdtasks.script(importstr '../bash/deploy.sh'),
                 gocdtasks.script(importstr '../bash/canary-ddog-health-check.sh'),
               ],
             },
@@ -208,9 +208,9 @@ function(region) {
             },
             tasks: [
               if getsentry.is_st(region) then
-                gocdtasks.script(importstr '../bash/deploy-st-py.sh')
+                gocdtasks.script(importstr '../bash/deploy-st.sh')
               else
-                gocdtasks.script(importstr '../bash/deploy-py.sh'),
+                gocdtasks.script(importstr '../bash/deploy.sh'),
             ],
           },
         },
