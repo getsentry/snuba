@@ -122,8 +122,16 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
 ]
 
 # Dogstatsd Options
-DOGSTATSD_HOST: str | None = os.environ.get("SNUBA_STATSD_HOST") or None
-DOGSTATSD_PORT: int | None = int(os.environ.get("SNUBA_STATSD_PORT") or 0) or None
+DOGSTATSD_HOST: str | None = None
+DOGSTATSD_PORT: int | None = None
+DOGSTATSD_ADDR: str | None = os.environ.get("SNUBA_STATSD_ADDR") or None
+if DOGSTATSD_ADDR:
+    ip, separator, port = DOGSTATSD_ADDR.rpartition(':')
+    DOGSTATSD_HOST = ip
+    DOGSTATSD_PORT = int(port)
+else:
+    DOGSTATSD_HOST = os.environ.get("SNUBA_STATSD_HOST") or None
+    DOGSTATSD_PORT = int(os.environ.get("SNUBA_STATSD_PORT") or 0) or None
 DOGSTATSD_SAMPLING_RATES = {
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
