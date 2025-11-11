@@ -15,6 +15,10 @@ use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
+use crate::runtime_config::get_str_config;
+
+const INSERT_ARRAYS_CONFIG: &str = "eap_items_consumer_insert_arrays";
+
 pub fn process_message(
     msg: KafkaPayload,
     _metadata: KafkaMessageMetadata,
@@ -88,7 +92,16 @@ impl TryFrom<TraceItem> for EAPItem {
                 Some(Value::DoubleValue(double)) => eap_item.attributes.insert_float(key, double),
                 Some(Value::IntValue(int)) => eap_item.attributes.insert_int(key, int),
                 Some(Value::BoolValue(bool)) => eap_item.attributes.insert_bool(key, bool),
-                Some(Value::ArrayValue(array)) => eap_item.attributes.insert_array(key, array),
+                Some(Value::ArrayValue(array)) => {
+                    if get_str_config(INSERT_ARRAYS_CONFIG)
+                        .ok()
+                        .flatten()
+                        .unwrap_or("0".to_string())
+                        == "1"
+                    {
+                        eap_item.attributes.insert_array(key, array)
+                    }
+                }
                 Some(Value::BytesValue(_)) => (),
                 Some(Value::KvlistValue(_)) => (),
                 None => (),
@@ -222,6 +235,7 @@ impl AttributeMap {
 mod tests {
     use std::time::SystemTime;
 
+    use crate::runtime_config::patch_str_config_for_test;
     use prost_types::Timestamp;
     use sentry_protos::snuba::v1::any_value::Value;
     use sentry_protos::snuba::v1::{AnyValue, ArrayValue, TraceItemType};
@@ -340,6 +354,8 @@ mod tests {
                 })),
             },
         );
+
+        patch_str_config_for_test(INSERT_ARRAYS_CONFIG, Some("1"));
 
         let eap_item = EAPItem::try_from(trace_item);
 
