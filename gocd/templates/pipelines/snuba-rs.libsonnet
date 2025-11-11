@@ -125,6 +125,7 @@ function(region) {
         'Dockerfile',
         'snuba/cli/**',
       ],
+      inverse_filter: true,
     },
   },
   stages: [
