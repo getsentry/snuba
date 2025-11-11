@@ -21,10 +21,7 @@ def pipeline_passed(pipeline: Dict[str, Any]) -> bool:
         stage["name"]: stage["status"] for stage in pipeline["stages"]
     }
 
-    if "pipeline-complete" in stage_status_dict:
-        return stage_status_dict["pipeline-complete"] == "Passed"
-    else:
-        return all(status == "Passed" for status in stage_status_dict.values())
+    return stage_status_dict.get("pipeline-complete", None) == "Passed"
 
 
 # print the most recent passing sha for a repo
