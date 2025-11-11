@@ -118,6 +118,13 @@ function(region) {
       shallow_clone: false,
       branch: 'master',
       destination: 'snuba',
+      filter: [
+        'rust_snuba/**',
+        'snuba/datasets/configuration/**',
+        'snuba/settings/**',
+        'Dockerfile',
+        'snuba/cli/**',
+      ],
     },
   },
   stages: [
