@@ -1,6 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Set
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -8,7 +8,7 @@ from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageCon
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
-from snuba import state
+from snuba import settings, state
 from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.storage_routing.common import extract_message_meta
@@ -82,13 +82,17 @@ def test_outcomes_based_routing_queries_daily_table() -> None:
     assert routing_decision.can_run
 
 
+@pytest.mark.parametrize("setting, expected_tier", ((set(), Tier.TIER_8), ({_ORG_ID}, Tier.TIER_1)))
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
+def test_outcomes_based_routing_sampled_data_past_thirty_days(
+    setting: Set[int], expected_tier: Tier
+) -> None:
     state.set_config(
         "enable_long_term_retention_downsampling",
         1,
     )
+    settings.CUSTOM_RETENTION_ORGANIZATION_IDS = setting
     strategy = OutcomesBasedRoutingStrategy()
 
     # request that queries last 50 days of data
@@ -101,7 +105,7 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     )
 
     routing_decision = strategy.get_routing_decision(context)
-    assert routing_decision.tier == Tier.TIER_8
+    assert routing_decision.tier == expected_tier
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
@@ -121,7 +125,7 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     )
 
     routing_decision = strategy.get_routing_decision(context)
-    assert routing_decision.tier == Tier.TIER_8
+    assert routing_decision.tier == expected_tier
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
@@ -135,7 +139,7 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     )
 
     routing_decision = strategy.get_routing_decision(context)
-    assert routing_decision.tier == Tier.TIER_8
+    assert routing_decision.tier == expected_tier
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
