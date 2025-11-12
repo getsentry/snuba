@@ -156,6 +156,12 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             formatted = (c.accept(self) for c in get_first_level_or_conditions(exp))
             return f"({' OR '.join(formatted)})"
 
+        elif exp.function_name == BooleanFunctions.NOT:
+            # Format NOT function without applying alias to avoid malformed SQL
+            # when the inner expression has an alias starting with special characters
+            formatted = self.__visit_params(exp.parameters)
+            return f"not({formatted})"
+
         ret = f"{escape_identifier(exp.function_name)}({self.__visit_params(exp.parameters)})"
         return self._alias(ret, exp.alias)
 
