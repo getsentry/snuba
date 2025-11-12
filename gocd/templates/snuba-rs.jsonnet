@@ -9,14 +9,13 @@ local rs_pipedream_config = {
       shallow_clone: true,
       branch: 'master',
       destination: 'snuba',
-      filter: [
+      includes: [
         'rust_snuba/**',
         'snuba/datasets/configuration/**',
         'snuba/settings/**',
         'Dockerfile',
         'snuba/cli/**',
       ],
-      inverse_filter: true,
     },
   },
   rollback: {

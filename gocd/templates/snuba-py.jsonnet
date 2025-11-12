@@ -9,7 +9,7 @@ local py_pipedream_config = {
       shallow_clone: true,
       branch: 'master',
       destination: 'snuba',
-      filter: ['rust_snuba/**'],
+      ignore: ['rust_snuba/**'],
     },
   },
   rollback: {
