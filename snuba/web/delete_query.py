@@ -280,7 +280,7 @@ def _execute_query(
     formatted_query = format_query(query)
     allocation_policies = _get_delete_allocation_policies(storage)
     query_id = uuid.uuid4().hex
-    clickhouse_settings: MutableMapping[str, Any] = {"query_id": query_id}
+    query_settings.push_clickhouse_setting("query_id", query_id)
     result = None
     error = None
 
@@ -299,7 +299,11 @@ def _execute_query(
             allocation_policies,
             query_id,
         )
-        result = storage.get_cluster().get_deleter().execute(formatted_query, clickhouse_settings)
+        result = (
+            storage.get_cluster()
+            .get_deleter()
+            .execute(formatted_query, query_settings.get_clickhouse_settings())
+        )
     except AllocationPolicyViolations as e:
         error = QueryException.from_args(
             AllocationPolicyViolations.__name__,
