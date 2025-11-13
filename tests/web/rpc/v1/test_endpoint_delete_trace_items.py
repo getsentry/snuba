@@ -223,7 +223,9 @@ class TestEndpointDeleteTrace(BaseApiTest):
 
         with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
             with patch("snuba.web.bulk_delete_query.produce_delete_query"):
-                EndpointDeleteTraceItems().execute(message)
+                assert isinstance(
+                    EndpointDeleteTraceItems().execute(message), DeleteTraceItemsResponse
+                )
 
     def test_filters_with_unsupported_operation_rejected(self) -> None:
         """Test that filters with operations other than OP_EQUALS/OP_IN are rejected"""
