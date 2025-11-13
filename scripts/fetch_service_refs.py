@@ -17,13 +17,11 @@ MAX_FETCHES = 100
 
 
 def pipeline_passed(pipeline: Dict[str, Any]) -> bool:
-    # stage["result"] isn't populated if it isn't run
-    # the other possible statuses are Unknown (not run yet), Cancelled, Failed
-    return all(
-        stage["status"] == "Passed"
-        for stage in pipeline["stages"]
-        if stage["name"] != "migrate"
-    )
+    stage_status_dict: Dict[str, str] = {
+        stage["name"]: stage["status"] for stage in pipeline["stages"]
+    }
+
+    return stage_status_dict.get("pipeline-complete", None) == "Passed"
 
 
 # print the most recent passing sha for a repo
@@ -51,9 +49,7 @@ def main(pipeline_name: str = "deploy-snuba-us", repo: str = "snuba") -> int:
         except urllib.error.HTTPError as e:
             raise SystemExit(f"Failed to fetch pipeline history:\n{e.read().decode()}")
 
-        print(
-            "fetching pipeline history for", pipeline_name, fetch_url, file=sys.stderr
-        )
+        print("fetching pipeline history for", pipeline_name, fetch_url, file=sys.stderr)
         data = json.loads(resp.read())
 
         if "_links" in data and "next" in data["_links"]:
@@ -62,9 +58,7 @@ def main(pipeline_name: str = "deploy-snuba-us", repo: str = "snuba") -> int:
             fetch_url = None
         rev = None
 
-        for pipeline in sorted(
-            data["pipelines"], key=lambda _: int(_["counter"]), reverse=True
-        ):
+        for pipeline in sorted(data["pipelines"], key=lambda _: int(_["counter"]), reverse=True):
             # Look at the most recent passing pipeline,
             # and get its deployment revision for the main material.
             if pipeline_passed(pipeline):
@@ -72,17 +66,11 @@ def main(pipeline_name: str = "deploy-snuba-us", repo: str = "snuba") -> int:
                 for r in pipeline["build_cause"]["material_revisions"]:
                     # example material description format... `in` is good enough
                     # 'URL: git@github.com:getsentry/devinfra-example-service.git, Branch: main'
-                    if (
-                        f"git@github.com:getsentry/{repo}.git"
-                        in r["material"]["description"]
-                    ):
+                    if f"git@github.com:getsentry/{repo}.git" in r["material"]["description"]:
                         rev = r["modifications"][0]["revision"]
                         print(rev)
                         return 0
-                    elif (
-                        f"https://github.com/getsentry/{repo}.git"
-                        in r["material"]["description"]
-                    ):
+                    elif f"https://github.com/getsentry/{repo}.git" in r["material"]["description"]:
                         rev = r["modifications"][0]["revision"]
                         print(rev)
                         return 0
