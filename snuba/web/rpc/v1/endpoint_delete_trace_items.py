@@ -1,8 +1,12 @@
-from typing import Type
+from typing import Any, Dict, List, Optional, Type, cast
 
 from sentry_protos.snuba.v1.endpoint_delete_trace_items_pb2 import (
     DeleteTraceItemsRequest,
     DeleteTraceItemsResponse,
+)
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    ComparisonFilter,
+    TraceItemFilter,
 )
 
 from snuba.attribution.appid import AppID
@@ -11,6 +15,81 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.bulk_delete_query import delete_from_storage
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+
+
+def _extract_attribute_value(comparison_filter: ComparisonFilter) -> Any:
+    """Extract the value from a ComparisonFilter's AttributeValue."""
+    value_field = comparison_filter.value.WhichOneof("value")
+    if value_field == "val_str":
+        return comparison_filter.value.val_str
+    elif value_field == "val_int":
+        return comparison_filter.value.val_int
+    elif value_field == "val_double":
+        return comparison_filter.value.val_double
+    elif value_field == "val_bool":
+        return comparison_filter.value.val_bool
+    elif value_field == "val_str_array":
+        return list(comparison_filter.value.val_str_array.values)
+    elif value_field == "val_int_array":
+        return list(comparison_filter.value.val_int_array.values)
+    elif value_field == "val_double_array":
+        return list(comparison_filter.value.val_double_array.values)
+    else:
+        raise BadSnubaRPCRequestException(f"Unsupported attribute value type: {value_field}")
+
+
+def _trace_item_filters_to_attribute_conditions(
+    filters: list[TraceItemFilter],
+) -> Dict[str, list[Any]]:
+    """
+    Convert TraceItemFilters to attribute_conditions for deletion.
+
+    Only supports ComparisonFilter with OP_EQUALS or OP_IN operations.
+    All filters are combined with AND logic.
+
+    Args:
+        filters: List of TraceItemFilter from the request
+
+    Returns:
+        Dict mapping attribute names to lists of values
+
+    Raises:
+        BadSnubaRPCRequestException: If unsupported filter types or operations are encountered
+    """
+    attribute_conditions: Dict[str, list[Any]] = {}
+
+    for trace_filter in filters:
+        # Only support comparison filters for deletion
+        if not trace_filter.HasField("comparison_filter"):
+            raise BadSnubaRPCRequestException(
+                "Only comparison filters are supported for deletion. "
+                "AND, OR, and NOT filters are not supported."
+            )
+
+        comparison_filter = trace_filter.comparison_filter
+        op = comparison_filter.op
+
+        # Only support equality operations for deletion
+        if op not in (ComparisonFilter.OP_EQUALS, ComparisonFilter.OP_IN):
+            op_name = ComparisonFilter.Op.Name(op)
+            raise BadSnubaRPCRequestException(
+                f"Only OP_EQUALS and OP_IN operations are supported for deletion. Got: {op_name}"
+            )
+
+        attribute_name = comparison_filter.key.name
+        value = _extract_attribute_value(comparison_filter)
+
+        # Convert single values to lists for consistency
+        if not isinstance(value, list):
+            value = [value]
+
+        # If the attribute already exists, extend the list (OR logic within same attribute)
+        if attribute_name in attribute_conditions:
+            attribute_conditions[attribute_name].extend(value)
+        else:
+            attribute_conditions[attribute_name] = value
+
+    return attribute_conditions
 
 
 class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceItemsResponse]):
@@ -36,9 +115,6 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
         if has_trace_ids and has_filters:
             raise BadSnubaRPCRequestException("Provide only one of trace_ids or filters, not both.")
 
-        if has_filters:
-            raise NotImplementedError("Currently, only delete by trace_ids is supported")
-
         attribution_info = {
             "app_id": AppID("eap"),
             "referrer": request.meta.referrer,
@@ -51,14 +127,38 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
             "parent_api": "eap_delete_trace_items",
         }
 
+        # Build base conditions that apply to all deletions
+        conditions: Dict[str, List[Any]] = {
+            "organization_id": [request.meta.organization_id],
+            "project_id": list(request.meta.project_ids),
+        }
+
+        attribute_conditions: Optional[Dict[str, List[Any]]] = None
+
+        if has_trace_ids:
+            # Delete by trace_ids (no attribute filtering)
+            conditions["trace_id"] = [str(tid) for tid in request.trace_ids]
+        else:
+            # Delete by filters (with attribute filtering)
+            # item_type must be specified in the request metadata for attribute-based deletion
+            if request.meta.trace_item_type == 0:  # TRACE_ITEM_TYPE_UNSPECIFIED
+                raise BadSnubaRPCRequestException(
+                    "trace_item_type must be specified in metadata when using filters"
+                )
+
+            conditions["item_type"] = [request.meta.trace_item_type]
+            # Convert filters to list - filters may be TraceItemFilterWithType which has a 'filter' field
+            filters_list: List[TraceItemFilter] = [
+                cast(TraceItemFilter, f.filter if hasattr(f, "filter") else f)
+                for f in request.filters
+            ]
+            attribute_conditions = _trace_item_filters_to_attribute_conditions(filters_list)
+
         delete_result = delete_from_storage(
             get_writable_storage(StorageKey.EAP_ITEMS),
-            {
-                "organization_id": [request.meta.organization_id],
-                "trace_id": list(request.trace_ids),
-                "project_id": list(request.meta.project_ids),
-            },
+            conditions,
             attribution_info,
+            attribute_conditions,
         )
 
         response = DeleteTraceItemsResponse()
