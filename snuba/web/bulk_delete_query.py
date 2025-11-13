@@ -1,7 +1,17 @@
 import logging
 import time
+from dataclasses import dataclass
 from threading import Thread
-from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence, TypedDict
+from typing import (
+    Any,
+    Dict,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    TypedDict,
+)
 
 import rapidjson
 from confluent_kafka import KafkaError
@@ -38,6 +48,12 @@ from snuba.web.delete_query import (
 
 metrics = MetricsWrapper(environment.metrics, "snuba.delete")
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AttributeConditions:
+    item_type: int
+    attributes: Dict[str, List[Any]]
 
 
 class DeleteQueryMessage(TypedDict):
@@ -125,42 +141,20 @@ def produce_delete_query(delete_query: DeleteQueryMessage) -> None:
 
 
 def _validate_attribute_conditions(
-    attribute_conditions: Dict[str, list[Any]],
-    conditions: Dict[str, list[Any]],
+    attribute_conditions: AttributeConditions,
     delete_settings: DeletionSettings,
 ) -> None:
     """
-    Validates that the attribute_conditions are allowed for the item_type specified in conditions.
+    Validates that the attribute_conditions are allowed for the configured item_type.
 
     Args:
-        attribute_conditions: Dict mapping attribute names to their values
-        conditions: Dict mapping column names to their values (must include 'item_type')
+        attribute_conditions: AttributeConditions containing item_type and attribute mappings
         delete_settings: The deletion settings for the storage
 
     Raises:
-        InvalidQueryException: If item_type is not in conditions, if no attributes are configured
-                              for the item_type, or if any requested attributes are not allowed
+        InvalidQueryException: If no attributes are configured for the item_type,
+                              or if any requested attributes are not allowed
     """
-    if not attribute_conditions:
-        return
-
-    # Ensure item_type is specified in conditions
-    if "item_type" not in conditions:
-        raise InvalidQueryException(
-            "item_type must be specified in conditions when using attribute_conditions"
-        )
-
-    # Get the item_type value(s)
-    item_type_values = conditions["item_type"]
-    if not item_type_values:
-        raise InvalidQueryException("item_type cannot be empty when using attribute_conditions")
-
-    # For now, we only support a single item_type value when using attribute_conditions
-    if len(item_type_values) > 1:
-        raise InvalidQueryException("attribute_conditions only supports a single item_type value")
-
-    item_type = item_type_values[0]
-
     # Get the string name for the item_type from the configuration
     # The configuration uses string names (e.g., "occurrence") as keys
     allowed_attrs_config = delete_settings.allowed_attributes_by_item_type
@@ -182,11 +176,11 @@ def _validate_attribute_conditions(
 
     if matching_allowed_attrs is None:
         raise InvalidQueryException(
-            f"No attribute-based deletions configured for item_type {item_type}"
+            f"No attribute-based deletions configured for item_type {attribute_conditions.item_type}"
         )
 
     # Validate that all requested attributes are allowed
-    requested_attrs = set(attribute_conditions.keys())
+    requested_attrs = set(attribute_conditions.attributes.keys())
     allowed_attrs_set = set(matching_allowed_attrs)
     invalid_attrs = requested_attrs - allowed_attrs_set
 
@@ -202,7 +196,7 @@ def delete_from_storage(
     storage: WritableTableStorage,
     conditions: Dict[str, list[Any]],
     attribution_info: Mapping[str, Any],
-    attribute_conditions: Optional[Dict[str, list[Any]]] = None,
+    attribute_conditions: Optional[AttributeConditions] = None,
 ) -> dict[str, Result]:
     """
     This method does a series of validation checks (outline below),
@@ -239,9 +233,9 @@ def delete_from_storage(
 
     # validate attribute conditions if provided
     if attribute_conditions:
-        _validate_attribute_conditions(attribute_conditions, conditions, delete_settings)
+        _validate_attribute_conditions(attribute_conditions, delete_settings)
         logger.error(
-            "valid attribute_conditions passed to delete_from_storage, but they will be ignored "
+            "valid attribute_conditions passed to delete_from_storage, but delete will be ignored "
             "as functionality is not yet implemented"
         )
         # deleting by just conditions and ignoring attribute_conditions would be dangerous

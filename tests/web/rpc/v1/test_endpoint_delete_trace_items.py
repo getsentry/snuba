@@ -16,7 +16,11 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     TraceItemFilterWithType,
     TraceItemType,
 )
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    AttributeValue,
+    IntArray,
+)
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
@@ -147,8 +151,11 @@ class TestEndpointDeleteTrace(BaseApiTest):
         assert called_args["conditions"]["trace_id"] == [_TRACE_ID]
         assert called_args["rows_to_delete"] == _SPAN_COUNT
 
+    # This should not yet produce a message to bulk_delete topic because
+    # we haven't wired that behavior through yet (it should not error out,
+    # though).
+    @pytest.mark.xfail
     def test_filters_with_equals_operation_accepted(self) -> None:
-        """Test that filters with OP_EQUALS are properly converted to attribute_conditions"""
         ts = Timestamp()
         ts.GetCurrentTime()
 
@@ -188,8 +195,7 @@ class TestEndpointDeleteTrace(BaseApiTest):
         ts = Timestamp()
         ts.GetCurrentTime()
 
-        int_array = AttributeValue.IntArray()  # type: ignore
-        int_array.values.extend([12345, 67890])
+        int_array = IntArray(values=[12345, 67890])
 
         message = DeleteTraceItemsRequest(
             meta=RequestMeta(

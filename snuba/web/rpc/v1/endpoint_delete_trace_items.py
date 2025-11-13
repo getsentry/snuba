@@ -10,7 +10,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter
 from snuba.attribution.appid import AppID
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.bulk_delete_query import delete_from_storage
+from snuba.web.bulk_delete_query import AttributeConditions, delete_from_storage
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
@@ -37,24 +37,26 @@ def _extract_attribute_value(comparison_filter: ComparisonFilter) -> Any:
 
 
 def _trace_item_filters_to_attribute_conditions(
+    item_type: int,
     filters: Sequence[TraceItemFilterWithType],
-) -> Dict[str, list[Any]]:
+) -> AttributeConditions:
     """
-    Convert TraceItemFilters to attribute_conditions for deletion.
+    Convert TraceItemFilters to AttributeConditions for deletion.
 
     Only supports ComparisonFilter with OP_EQUALS or OP_IN operations.
     All filters are combined with AND logic.
 
     Args:
+        item_type: The trace item type (e.g., occurrence, span)
         filters: List of TraceItemFilterWithType from the request
 
     Returns:
-        Dict mapping attribute names to lists of values
+        AttributeConditions object containing item_type and attribute mappings
 
     Raises:
         BadSnubaRPCRequestException: If unsupported filter types or operations are encountered
     """
-    attribute_conditions: Dict[str, list[Any]] = {}
+    attributes: Dict[str, List[Any]] = {}
 
     for filter_with_type in filters:
         # Extract the actual filter from TraceItemFilterWithType
@@ -84,12 +86,12 @@ def _trace_item_filters_to_attribute_conditions(
             value = [value]
 
         # If the attribute already exists, extend the list (OR logic within same attribute)
-        if attribute_name in attribute_conditions:
-            attribute_conditions[attribute_name].extend(value)
+        if attribute_name in attributes:
+            attributes[attribute_name].extend(value)
         else:
-            attribute_conditions[attribute_name] = value
+            attributes[attribute_name] = value
 
-    return attribute_conditions
+    return AttributeConditions(item_type=item_type, attributes=attributes)
 
 
 class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceItemsResponse]):
@@ -133,7 +135,7 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
             "project_id": list(request.meta.project_ids),
         }
 
-        attribute_conditions: Optional[Dict[str, List[Any]]] = None
+        attribute_conditions: Optional[AttributeConditions] = None
 
         if has_trace_ids:
             # Delete by trace_ids (no attribute filtering)
@@ -146,8 +148,12 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
                     "trace_item_type must be specified in metadata when using filters"
                 )
 
-            conditions["item_type"] = [request.meta.trace_item_type]
-            attribute_conditions = _trace_item_filters_to_attribute_conditions(request.filters)
+            attribute_conditions = _trace_item_filters_to_attribute_conditions(
+                request.meta.trace_item_type,
+                request.filters,
+            )
+            # Add item_type to conditions for the delete query
+            conditions["item_type"] = [attribute_conditions.item_type]
 
         delete_result = delete_from_storage(
             get_writable_storage(StorageKey.EAP_ITEMS),
