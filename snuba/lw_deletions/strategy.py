@@ -98,8 +98,9 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self._check_ongoing_mutations()
         query_settings = HTTPQuerySettings()
         # starting in 24.4 the default is 2
-        lw_sync = get_int_config("lightweight_deletes_sync", 2)
-        query_settings.set_clickhouse_settings({"lightweight_deletes_sync": lw_sync})
+        lw_sync = get_int_config("lightweight_deletes_sync")
+        if lw_sync:
+            query_settings.set_clickhouse_settings({"lightweight_deletes_sync": lw_sync})
         for table in self.__tables:
             query = construct_query(self.__storage, table, construct_or_conditions(conditions))
             start = time.time()
