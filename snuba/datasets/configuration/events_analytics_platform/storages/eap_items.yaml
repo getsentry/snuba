@@ -147,6 +147,9 @@ deletion_settings:
     - organization_id
     - trace_id
     - item_type
+  allowed_attributes_by_item_type:
+    occurrence:
+      - group_id
 
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
