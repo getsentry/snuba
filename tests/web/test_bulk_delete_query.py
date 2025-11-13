@@ -146,9 +146,15 @@ def test_attribute_conditions_valid() -> None:
 
     # Mock out _enforce_max_rows to avoid needing actual data
     with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
-        with patch("snuba.web.bulk_delete_query.produce_delete_query"):
-            # Should not raise an exception
-            delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+        with patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce:
+            # Should not raise an exception, but should return empty dict since
+            # functionality is not yet implemented
+            result = delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+
+            # Should return empty because we haven't implemented the functionality yet
+            assert result == {}
+            # Should not have produced a message since we return early
+            assert mock_produce.call_count == 0
 
 
 @pytest.mark.redis_db

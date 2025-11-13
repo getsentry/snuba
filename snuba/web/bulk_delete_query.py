@@ -56,11 +56,13 @@ class AttributeConditions:
     attributes: Dict[str, List[Any]]
 
 
-class DeleteQueryMessage(TypedDict):
+class DeleteQueryMessage(TypedDict, total=False):
     rows_to_delete: int
     storage_name: str
     conditions: ConditionsType
     tenant_ids: Mapping[str, str | int]
+    attribute_conditions: Optional[Dict[str, List[Any]]]
+    attribute_conditions_item_type: Optional[int]
 
 
 PRODUCER_MAP: MutableMapping[str, Producer] = {}
@@ -242,7 +244,9 @@ def delete_from_storage(
         return {}
 
     attr_info = _get_attribution_info(attribution_info)
-    return delete_from_tables(storage, delete_settings.tables, conditions, attr_info)
+    return delete_from_tables(
+        storage, delete_settings.tables, conditions, attr_info, attribute_conditions
+    )
 
 
 def construct_query(storage: WritableTableStorage, table: str, condition: Expression) -> Query:
@@ -266,6 +270,7 @@ def delete_from_tables(
     tables: Sequence[str],
     conditions: Dict[str, Any],
     attribution_info: AttributionInfo,
+    attribute_conditions: Optional[AttributeConditions] = None,
 ) -> dict[str, Result]:
 
     highest_rows_to_delete = 0
@@ -293,6 +298,12 @@ def delete_from_tables(
         "conditions": conditions,
         "tenant_ids": attribution_info.tenant_ids,
     }
+
+    # Add attribute_conditions to the message if present
+    if attribute_conditions:
+        delete_query["attribute_conditions"] = attribute_conditions.attributes
+        delete_query["attribute_conditions_item_type"] = attribute_conditions.item_type
+
     produce_delete_query(delete_query)
     return result
 
