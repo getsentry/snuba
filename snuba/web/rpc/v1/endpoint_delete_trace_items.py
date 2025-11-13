@@ -1,13 +1,11 @@
-from typing import Any, Dict, List, Optional, Type, cast
+from typing import Any, Dict, List, Optional, Sequence, Type
 
 from sentry_protos.snuba.v1.endpoint_delete_trace_items_pb2 import (
     DeleteTraceItemsRequest,
     DeleteTraceItemsResponse,
 )
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
-    ComparisonFilter,
-    TraceItemFilter,
-)
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemFilterWithType
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter
 
 from snuba.attribution.appid import AppID
 from snuba.datasets.storages.factory import get_writable_storage
@@ -39,7 +37,7 @@ def _extract_attribute_value(comparison_filter: ComparisonFilter) -> Any:
 
 
 def _trace_item_filters_to_attribute_conditions(
-    filters: list[TraceItemFilter],
+    filters: Sequence[TraceItemFilterWithType],
 ) -> Dict[str, list[Any]]:
     """
     Convert TraceItemFilters to attribute_conditions for deletion.
@@ -48,7 +46,7 @@ def _trace_item_filters_to_attribute_conditions(
     All filters are combined with AND logic.
 
     Args:
-        filters: List of TraceItemFilter from the request
+        filters: List of TraceItemFilterWithType from the request
 
     Returns:
         Dict mapping attribute names to lists of values
@@ -58,7 +56,9 @@ def _trace_item_filters_to_attribute_conditions(
     """
     attribute_conditions: Dict[str, list[Any]] = {}
 
-    for trace_filter in filters:
+    for filter_with_type in filters:
+        # Extract the actual filter from TraceItemFilterWithType
+        trace_filter = filter_with_type.filter
         # Only support comparison filters for deletion
         if not trace_filter.HasField("comparison_filter"):
             raise BadSnubaRPCRequestException(
@@ -147,12 +147,7 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
                 )
 
             conditions["item_type"] = [request.meta.trace_item_type]
-            # Convert filters to list - filters may be TraceItemFilterWithType which has a 'filter' field
-            filters_list: List[TraceItemFilter] = [
-                cast(TraceItemFilter, f.filter if hasattr(f, "filter") else f)
-                for f in request.filters
-            ]
-            attribute_conditions = _trace_item_filters_to_attribute_conditions(filters_list)
+            attribute_conditions = _trace_item_filters_to_attribute_conditions(request.filters)
 
         delete_result = delete_from_storage(
             get_writable_storage(StorageKey.EAP_ITEMS),
