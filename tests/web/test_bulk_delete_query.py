@@ -134,3 +134,73 @@ def test_delete_invalid_column_name() -> None:
 
     with pytest.raises(InvalidQueryException):
         delete_from_storage(storage, conditions, attr_info)
+
+
+@pytest.mark.redis_db
+def test_attribute_conditions_valid() -> None:
+    """Test that valid attribute_conditions are accepted for eap_items storage"""
+    storage = get_writable_storage(StorageKey("eap_items"))
+    conditions = {"project_id": [1], "item_type": [1]}
+    attribute_conditions = {"group_id": [12345]}
+    attr_info = get_attribution_info()
+
+    # Mock out _enforce_max_rows to avoid needing actual data
+    with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
+        with patch("snuba.web.bulk_delete_query.produce_delete_query"):
+            # Should not raise an exception
+            delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+
+
+@pytest.mark.redis_db
+def test_attribute_conditions_invalid_attribute() -> None:
+    """Test that invalid attribute names in attribute_conditions are rejected"""
+    storage = get_writable_storage(StorageKey("eap_items"))
+    conditions = {"project_id": [1], "item_type": [1]}
+    attribute_conditions = {"invalid_attr": [12345]}
+    attr_info = get_attribution_info()
+
+    with pytest.raises(InvalidQueryException, match="Invalid attributes for deletion"):
+        delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+
+
+@pytest.mark.redis_db
+def test_attribute_conditions_missing_item_type() -> None:
+    """Test that attribute_conditions requires item_type in conditions"""
+    storage = get_writable_storage(StorageKey("eap_items"))
+    conditions = {"project_id": [1]}
+    attribute_conditions = {"group_id": [12345]}
+    attr_info = get_attribution_info()
+
+    with pytest.raises(
+        InvalidQueryException,
+        match="item_type must be specified in conditions when using attribute_conditions",
+    ):
+        delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+
+
+@pytest.mark.redis_db
+def test_attribute_conditions_multiple_item_types() -> None:
+    """Test that attribute_conditions doesn't support multiple item_type values"""
+    storage = get_writable_storage(StorageKey("eap_items"))
+    conditions = {"project_id": [1], "item_type": [1, 2]}
+    attribute_conditions = {"group_id": [12345]}
+    attr_info = get_attribution_info()
+
+    with pytest.raises(
+        InvalidQueryException, match="attribute_conditions only supports a single item_type value"
+    ):
+        delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+
+
+@pytest.mark.redis_db
+def test_attribute_conditions_storage_not_configured() -> None:
+    """Test that storages without attribute deletion config reject attribute_conditions"""
+    storage = get_writable_storage(StorageKey("search_issues"))
+    conditions = {"project_id": [1], "item_type": [1]}
+    attribute_conditions = {"some_attr": [12345]}
+    attr_info = get_attribution_info()
+
+    with pytest.raises(
+        InvalidQueryException, match="No attribute-based deletions configured for this storage"
+    ):
+        delete_from_storage(storage, conditions, attr_info, attribute_conditions)
