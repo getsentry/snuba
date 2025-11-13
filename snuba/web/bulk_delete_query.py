@@ -244,6 +244,8 @@ def delete_from_storage(
             "valid attribute_conditions passed to delete_from_storage, but they will be ignored "
             "as functionality is not yet implemented"
         )
+        # deleting by just conditions and ignoring attribute_conditions would be dangerous
+        return {}
 
     attr_info = _get_attribution_info(attribution_info)
     return delete_from_tables(storage, delete_settings.tables, conditions, attr_info)
