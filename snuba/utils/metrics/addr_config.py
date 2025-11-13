@@ -1,6 +1,7 @@
 import os
 from typing import Optional
 
+
 def get_statsd_addr() -> tuple[Optional[str], Optional[int]]:
     """Returns the address of the StatsD server."""
     SNUBA_STATSD_ADDR = os.environ.get("SNUBA_STATSD_ADDR")
