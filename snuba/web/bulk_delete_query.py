@@ -240,6 +240,10 @@ def delete_from_storage(
     # validate attribute conditions if provided
     if attribute_conditions:
         _validate_attribute_conditions(attribute_conditions, conditions, delete_settings)
+        logger.error(
+            "valid attribute_conditions passed to delete_from_storage, but they will be ignored "
+            "as functionality is not yet implemented"
+        )
 
     attr_info = _get_attribution_info(attribution_info)
     return delete_from_tables(storage, delete_settings.tables, conditions, attr_info)
