@@ -272,7 +272,6 @@ def delete_from_tables(
     attribution_info: AttributionInfo,
     attribute_conditions: Optional[AttributeConditions] = None,
 ) -> dict[str, Result]:
-
     highest_rows_to_delete = 0
     result: dict[str, Result] = {}
     for table in tables:
