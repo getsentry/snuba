@@ -31,7 +31,7 @@ from snuba.query.dsl import literal
 from snuba.query.exceptions import InvalidQueryException, NoRowsToDeleteException
 from snuba.query.expressions import Expression
 from snuba.reader import Result
-from snuba.state import get_str_config
+from snuba.state import get_int_config, get_str_config
 from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
@@ -236,12 +236,14 @@ def delete_from_storage(
     # validate attribute conditions if provided
     if attribute_conditions:
         _validate_attribute_conditions(attribute_conditions, delete_settings)
-        logger.error(
-            "valid attribute_conditions passed to delete_from_storage, but delete will be ignored "
-            "as functionality is not yet implemented"
-        )
-        # deleting by just conditions and ignoring attribute_conditions would be dangerous
-        return {}
+
+        if not get_int_config("permit_delete_by_attribute", default=0):
+            logger.error(
+                "valid attribute_conditions passed to delete_from_storage, but delete will be ignored "
+                "as functionality is not yet launched (permit_delete_by_attribute=0)"
+            )
+            # deleting by just conditions and ignoring attribute_conditions would be dangerous
+            return {}
 
     attr_info = _get_attribution_info(attribution_info)
     return delete_from_tables(

@@ -197,3 +197,36 @@ def test_attribute_conditions_storage_not_configured() -> None:
         InvalidQueryException, match="No attribute-based deletions configured for this storage"
     ):
         delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+
+
+@pytest.mark.redis_db
+def test_attribute_conditions_feature_flag_enabled() -> None:
+    """Test that attribute_conditions are processed when feature flag is enabled"""
+    storage = get_writable_storage(StorageKey("eap_items"))
+    conditions = {"project_id": [1], "item_type": [1]}
+    attribute_conditions = AttributeConditions(item_type=1, attributes={"group_id": [12345]})
+    attr_info = get_attribution_info()
+
+    # Enable the feature flag
+    set_config("is_attribute_delete_launched", 1)
+
+    try:
+        # Mock out _enforce_max_rows to avoid needing actual data
+        with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
+            with patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce:
+                # Should process normally and produce a message
+                result = delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+
+                # Should have produced a message
+                assert mock_produce.call_count == 1
+                # Should return success results
+                assert result != {}
+
+                # Verify the message includes attribute_conditions
+                call_args = mock_produce.call_args[0][0]
+                assert "attribute_conditions" in call_args
+                assert call_args["attribute_conditions"] == {"group_id": [12345]}
+                assert call_args["attribute_conditions_item_type"] == 1
+    finally:
+        # Clean up: disable the feature flag
+        set_config("is_attribute_delete_launched", 0)
