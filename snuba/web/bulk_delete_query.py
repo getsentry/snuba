@@ -31,7 +31,7 @@ from snuba.query.dsl import literal
 from snuba.query.exceptions import InvalidQueryException, NoRowsToDeleteException
 from snuba.query.expressions import Expression
 from snuba.reader import Result
-from snuba.state import get_str_config
+from snuba.state import get_int_config, get_str_config
 from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
@@ -56,11 +56,13 @@ class AttributeConditions:
     attributes: Dict[str, List[Any]]
 
 
-class DeleteQueryMessage(TypedDict):
+class DeleteQueryMessage(TypedDict, total=False):
     rows_to_delete: int
     storage_name: str
     conditions: ConditionsType
     tenant_ids: Mapping[str, str | int]
+    attribute_conditions: Optional[Dict[str, List[Any]]]
+    attribute_conditions_item_type: Optional[int]
 
 
 PRODUCER_MAP: MutableMapping[str, Producer] = {}
@@ -234,15 +236,18 @@ def delete_from_storage(
     # validate attribute conditions if provided
     if attribute_conditions:
         _validate_attribute_conditions(attribute_conditions, delete_settings)
-        logger.error(
-            "valid attribute_conditions passed to delete_from_storage, but delete will be ignored "
-            "as functionality is not yet implemented"
-        )
-        # deleting by just conditions and ignoring attribute_conditions would be dangerous
-        return {}
+
+        if not get_int_config("permit_delete_by_attribute", default=0):
+            logger.error(
+                "valid attribute_conditions passed to delete_from_storage, but delete will be ignored "
+                "as functionality is not yet launched (permit_delete_by_attribute=0)"
+            )
+            return {}
 
     attr_info = _get_attribution_info(attribution_info)
-    return delete_from_tables(storage, delete_settings.tables, conditions, attr_info)
+    return delete_from_tables(
+        storage, delete_settings.tables, conditions, attr_info, attribute_conditions
+    )
 
 
 def construct_query(storage: WritableTableStorage, table: str, condition: Expression) -> Query:
@@ -266,8 +271,8 @@ def delete_from_tables(
     tables: Sequence[str],
     conditions: Dict[str, Any],
     attribution_info: AttributionInfo,
+    attribute_conditions: Optional[AttributeConditions] = None,
 ) -> dict[str, Result]:
-
     highest_rows_to_delete = 0
     result: dict[str, Result] = {}
     for table in tables:
@@ -293,6 +298,12 @@ def delete_from_tables(
         "conditions": conditions,
         "tenant_ids": attribution_info.tenant_ids,
     }
+
+    # Add attribute_conditions to the message if present
+    if attribute_conditions:
+        delete_query["attribute_conditions"] = attribute_conditions.attributes
+        delete_query["attribute_conditions_item_type"] = attribute_conditions.item_type
+
     produce_delete_query(delete_query)
     return result
 
