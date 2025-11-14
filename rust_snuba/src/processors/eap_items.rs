@@ -1,18 +1,23 @@
 use anyhow::Context;
 use chrono::DateTime;
+use chrono::Utc;
+use prost::Message;
 use seq_macro::seq;
 use serde::Serialize;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use prost::Message;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_protos::snuba::v1::any_value::Value;
-use sentry_protos::snuba::v1::TraceItem;
+use sentry_protos::snuba::v1::{ArrayValue, TraceItem};
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
+
+use crate::runtime_config::get_str_config;
+
+const INSERT_ARRAYS_CONFIG: &str = "eap_items_consumer_insert_arrays";
 
 pub fn process_message(
     msg: KafkaPayload,
@@ -26,9 +31,19 @@ pub fn process_message(
         Some(trace_item.retention_days as u16),
         &config.env_config,
     ));
+    let downsampled_retention_days = if trace_item.downsampled_retention_days > 0 {
+        Some(trace_item.downsampled_retention_days as u16)
+    } else {
+        retention_days
+    };
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
     eap_item.retention_days = retention_days;
+    eap_item.downsampled_retention_days = downsampled_retention_days;
+    eap_item.attributes.insert_int(
+        "sentry._internal.ingested_at".into(),
+        Utc::now().timestamp_millis(),
+    );
 
     InsertBatch::from_rows([eap_item], origin_timestamp)
 }
@@ -48,7 +63,11 @@ struct EAPItem {
     sampling_factor: f64,
     sampling_weight: u64,
 
+    client_sample_rate: f64,
+    server_sample_rate: f64,
+
     retention_days: Option<u16>,
+    downsampled_retention_days: Option<u16>,
 }
 
 impl TryFrom<TraceItem> for EAPItem {
@@ -65,8 +84,11 @@ impl TryFrom<TraceItem> for EAPItem {
             timestamp: timestamp.seconds as u32,
             attributes: Default::default(),
             retention_days: Default::default(),
+            downsampled_retention_days: Default::default(),
             sampling_factor: 1.0,
             sampling_weight: 1,
+            client_sample_rate: 1.0,
+            server_sample_rate: 1.0,
         };
 
         for (key, value) in from.attributes {
@@ -75,8 +97,17 @@ impl TryFrom<TraceItem> for EAPItem {
                 Some(Value::DoubleValue(double)) => eap_item.attributes.insert_float(key, double),
                 Some(Value::IntValue(int)) => eap_item.attributes.insert_int(key, int),
                 Some(Value::BoolValue(bool)) => eap_item.attributes.insert_bool(key, bool),
+                Some(Value::ArrayValue(array)) => {
+                    if get_str_config(INSERT_ARRAYS_CONFIG)
+                        .ok()
+                        .flatten()
+                        .unwrap_or("0".to_string())
+                        == "1"
+                    {
+                        eap_item.attributes.insert_array(key, array)
+                    }
+                }
                 Some(Value::BytesValue(_)) => (),
-                Some(Value::ArrayValue(_)) => (),
                 Some(Value::KvlistValue(_)) => (),
                 None => (),
             }
@@ -84,10 +115,12 @@ impl TryFrom<TraceItem> for EAPItem {
 
         if from.client_sample_rate > 0.0 {
             eap_item.sampling_factor *= from.client_sample_rate;
+            eap_item.client_sample_rate = from.client_sample_rate;
         }
 
         if from.server_sample_rate > 0.0 {
             eap_item.sampling_factor *= from.server_sample_rate;
+            eap_item.server_sample_rate = from.server_sample_rate;
         }
 
         // Lower precision to compensate floating point errors.
@@ -124,9 +157,17 @@ macro_rules! seq_attrs {
     }
 }
 
+#[derive(Debug, Serialize, PartialEq)]
+enum EAPValue {
+    String(String),
+    Bool(bool),
+    Int(i64),
+    Double(f64),
+}
+
 seq_attrs! {
 #[derive(Debug, Default, Serialize)]
-pub(crate) struct AttributeMap {
+struct AttributeMap {
     attributes_bool: HashMap<String, bool>,
     attributes_int: HashMap<String, i64>,
     #(
@@ -136,6 +177,8 @@ pub(crate) struct AttributeMap {
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_float_~N: HashMap<String, f64>,
     )*
+
+    attributes_array: HashMap<String, Vec<EAPValue>>,
 }
 }
 
@@ -175,14 +218,60 @@ impl AttributeMap {
         self.insert_float(k.clone(), v as f64);
         self.attributes_int.insert(k, v);
     }
+
+    pub fn insert_array(&mut self, k: String, v: ArrayValue) {
+        let mut values: Vec<EAPValue> = Vec::default();
+        for value in v.values {
+            match value.value {
+                Some(Value::StringValue(string)) => values.push(EAPValue::String(string)),
+                Some(Value::DoubleValue(double)) => values.push(EAPValue::Double(double)),
+                Some(Value::IntValue(int)) => values.push(EAPValue::Int(int)),
+                Some(Value::BoolValue(bool)) => values.push(EAPValue::Bool(bool)),
+                Some(Value::BytesValue(_)) => (),
+                Some(Value::KvlistValue(_)) => (),
+                Some(Value::ArrayValue(_)) => (),
+                None => (),
+            }
+        }
+
+        self.attributes_array.insert(k, values);
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::SystemTime;
+
+    use crate::runtime_config::patch_str_config_for_test;
     use prost_types::Timestamp;
-    use sentry_protos::snuba::v1::TraceItemType;
+    use sentry_protos::snuba::v1::any_value::Value;
+    use sentry_protos::snuba::v1::{AnyValue, ArrayValue, TraceItemType};
+    use serde::Deserialize;
 
     use super::*;
+
+    fn generate_trace_item(item_id: Uuid) -> TraceItem {
+        TraceItem {
+            attributes: Default::default(),
+            downsampled_retention_days: Default::default(),
+            item_id: item_id.as_u128().to_le_bytes().to_vec(),
+            item_type: TraceItemType::Span.into(),
+            organization_id: 1,
+            project_id: 1,
+            received: Some(Timestamp {
+                seconds: 1745562493,
+                nanos: 0,
+            }),
+            retention_days: 90,
+            timestamp: Some(Timestamp {
+                seconds: 1745562493,
+                nanos: 0,
+            }),
+            trace_id: Uuid::new_v4().to_string(),
+            client_sample_rate: 1.0,
+            server_sample_rate: 1.0,
+        }
+    }
 
     #[test]
     fn test_fnv_1a() {
@@ -192,25 +281,100 @@ mod tests {
     #[test]
     fn test_item_id_is_properly_decoded() {
         let item_id = Uuid::new_v4();
-        let trace_item = TraceItem {
-            attributes: Default::default(),
-            item_id: item_id.as_u128().to_le_bytes().to_vec(),
-            item_type: TraceItemType::Span.into(),
-            organization_id: 1,
-            project_id: 1,
-            received: Default::default(),
-            retention_days: 1,
-            timestamp: Some(Timestamp {
-                seconds: 1745562493,
-                nanos: 0,
-            }),
-            trace_id: Uuid::new_v4().to_string(),
-            client_sample_rate: 1.0,
-            server_sample_rate: 1.0,
-        };
+        let trace_item = generate_trace_item(item_id);
         let eap_item = EAPItem::try_from(trace_item);
 
         assert!(eap_item.is_ok());
         assert_eq!(item_id.as_u128(), eap_item.unwrap().item_id);
+    }
+
+    #[test]
+    fn test_downsampled_retention_days_default() {
+        let item_id = Uuid::new_v4();
+        let trace_item = generate_trace_item(item_id);
+        let mut payload = Vec::new();
+
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let batch = process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        #[derive(Deserialize)]
+        pub struct Item {
+            retention_days: u16,
+            downsampled_retention_days: u16,
+        }
+
+        let item: Item = serde_json::from_slice(&batch.rows.encoded_rows).unwrap();
+
+        assert_eq!(item.retention_days, item.downsampled_retention_days);
+    }
+
+    #[test]
+    fn test_downsampled_retention_days_extended() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+
+        trace_item.downsampled_retention_days = 365;
+
+        let mut payload = Vec::new();
+
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let batch = process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        #[derive(Deserialize)]
+        pub struct Item {
+            downsampled_retention_days: u16,
+        }
+
+        let item: Item = serde_json::from_slice(&batch.rows.encoded_rows).unwrap();
+
+        assert_eq!(item.downsampled_retention_days, 365);
+    }
+
+    #[test]
+    fn test_insert_arrays() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+
+        trace_item.attributes.insert(
+            "arrays".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![AnyValue {
+                        value: Some(Value::IntValue(1234567890)),
+                    }],
+                })),
+            },
+        );
+
+        patch_str_config_for_test(INSERT_ARRAYS_CONFIG, Some("1"));
+
+        let eap_item = EAPItem::try_from(trace_item);
+
+        assert!(eap_item.is_ok());
+        assert_eq!(
+            eap_item
+                .unwrap()
+                .attributes
+                .attributes_array
+                .get("arrays")
+                .unwrap()[0],
+            EAPValue::Int(1234567890)
+        );
     }
 }

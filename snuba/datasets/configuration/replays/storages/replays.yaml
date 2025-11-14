@@ -82,6 +82,10 @@ schema:
         type: String,
         args: { schema_modifiers: [nullable] },
       },
+      { name: user_geo_city, type: String },
+      { name: user_geo_country_code, type: String },
+      { name: user_geo_region, type: String },
+      { name: user_geo_subdivision, type: String },
       { name: viewed_by_id, type: UInt, args: { size: 64 } },
       { name: os_name, type: String, args: { schema_modifiers: [nullable] } },
       {
@@ -118,6 +122,18 @@ schema:
         name: device_model,
         type: String,
         args: { schema_modifiers: [nullable] },
+      },
+      {
+        name: ota_updates_channel,
+        type: String,
+      },
+      {
+        name: ota_updates_runtime_version,
+        type: String,
+      },
+      {
+        name: ota_updates_update_id,
+        type: String,
       },
       { name: sdk_name, type: String, args: { schema_modifiers: [nullable] } },
       {
@@ -168,6 +184,9 @@ schema:
       { name: click_component_name, type: String, args: {} },
       { name: click_is_dead, type: UInt, args: { size: 8 } },
       { name: click_is_rage, type: UInt, args: { size: 8 } },
+      { name: tap_message, type: String, args: {} },
+      { name: tap_view_class, type: String, args: {} },
+      { name: tap_view_id, type: String, args: {} },
       { name: count_error_events, type: UInt, args: { size: 8 } },
       { name: count_warning_events, type: UInt, args: { size: 8 } },
       { name: count_info_events, type: UInt, args: { size: 8 } },

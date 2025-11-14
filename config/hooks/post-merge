@@ -10,22 +10,21 @@ trap "rm -f ${files_changed_upstream}" EXIT
 
 git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD > "$files_changed_upstream"
 
-commandline=
+command=
 
 if grep -E --quiet 'migrations/groups.py' "$files_changed_upstream"; then
-  commandline+=" apply-migrations"
+  command="make apply-migrations"
 fi
 
-if grep -E --quiet 'requirements.txt' "$files_changed_upstream"; then
-  commandline+=" install-py-dev"
+if grep -E --quiet 'uv.lock' "$files_changed_upstream"; then
+  command="devenv sync"
 fi
 
 if grep -E --quiet 'rust_snuba/' "$files_changed_upstream"; then
-  commandline+=" install-rs-dev"
+  command="make install-rs-dev"
 fi
 
-if [ -n "$commandline" ]; then
-  command="make$commandline"
+if [ -n "$command" ]; then
   cat <<EOF
 
 [${red}${bold}!!!${reset}] ${red} It looks like some dependencies have changed that will require your intervention. Run the following to update:${reset}

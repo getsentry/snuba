@@ -228,6 +228,16 @@ schema:
       type: DateTime64,
       args: { schema_modifiers: [nullable], precision: 3 },
     },
+    {
+      name: sample_weight,
+      type: Float,
+      args: { schema_modifiers: [nullable], size: 64 },
+    },
+    {
+      name: group_first_seen,
+      type: DateTime,
+      args: { schema_modifiers: [nullable] },
+    },
   ]
 required_time_column: timestamp
 storages:

@@ -1,6 +1,9 @@
 import logging
 from typing import Callable, Optional
 
+import sentry_sdk
+
+from redis import ResponseError
 from redis.exceptions import ConnectionError, ReadOnlyError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from snuba import environment, settings
@@ -19,6 +22,11 @@ RESULT_VALUE = 0
 RESULT_EXECUTE = 1
 RESULT_WAIT = 2
 SIMPLE_READTHROUGH = 3
+
+DONT_CAPTURE_ERRORS = {
+    # if you need to track this error, see datadog metric snuba.read_through_cache.redis_cache_set_error
+    ResponseError("OOM command not allowed under OOM prevention."),
+}
 
 
 class RedisCache(Cache[TValue]):
@@ -63,7 +71,15 @@ class RedisCache(Cache[TValue]):
         record_cache_hit_type(SIMPLE_READTHROUGH)
         result_key = self.__build_key(key)
 
-        cached_value = self.__client.get(result_key)
+        cached_value = None
+        try:
+            cached_value = self.__client.get(result_key)
+        except Exception as e:
+            if settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES:
+                raise e
+            if e not in DONT_CAPTURE_ERRORS:
+                sentry_sdk.capture_exception(e)
+
         if timer is not None:
             timer.mark("cache_get")
         metric_tags = timer.tags if timer is not None else {}
@@ -74,11 +90,17 @@ class RedisCache(Cache[TValue]):
         else:
             try:
                 value = function()
-                self.__client.set(
-                    result_key,
-                    self.__codec.encode(value),
-                    ex=get_config("cache_expiry_sec", 1),
-                )
+                try:
+                    self.__client.set(
+                        result_key,
+                        self.__codec.encode(value),
+                        ex=get_config("cache_expiry_sec", 1),
+                    )
+                except Exception as e:
+                    metrics.increment("redis_cache_set_error", tags=metric_tags)
+                    if e not in DONT_CAPTURE_ERRORS:
+                        sentry_sdk.capture_exception(e)
+                    return value
                 record_cache_hit_type(RESULT_EXECUTE)
                 if timer is not None:
                     timer.mark("cache_set")
@@ -100,7 +122,6 @@ class RedisCache(Cache[TValue]):
             return function()
 
         try:
-            # set disable_lua_scripts to use the simple read-through cache without queueing.
             return self.__get_value_with_simple_readthrough(
                 key, function, record_cache_hit_type, timer
             )

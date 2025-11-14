@@ -16,7 +16,7 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     _get_closest_percentile_index,
     get_confidence_interval_column,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.common import (
+from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression,
 )
 

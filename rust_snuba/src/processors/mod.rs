@@ -1,18 +1,13 @@
 mod eap_items;
-mod eap_items_span;
-pub(crate) mod eap_spans;
 mod errors;
 mod functions;
 mod generic_metrics;
-mod ourlogs;
 mod outcomes;
 mod profile_chunks;
 mod profiles;
 mod querylog;
 mod release_health_metrics;
 mod replays;
-mod spans;
-mod uptime_monitor_checks;
 mod utils;
 
 use crate::config::ProcessorConfig;
@@ -58,10 +53,6 @@ define_processing_functions! {
     ("ProfilesMessageProcessor", "processed-profiles", ProcessingFunctionType::ProcessingFunction(profiles::process_message)),
     ("QuerylogProcessor", "snuba-queries", ProcessingFunctionType::ProcessingFunction(querylog::process_message)),
     ("ReplaysProcessor", "ingest-replay-events", ProcessingFunctionType::ProcessingFunction(replays::process_message)),
-    ("UptimeMonitorChecksProcessor", "snuba-uptime-results", ProcessingFunctionType::ProcessingFunction(uptime_monitor_checks::process_message)),
-    ("SpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(spans::process_message)),
-    ("EAPSpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(eap_spans::process_message)),
-    ("OurlogsMessageProcessor", "snuba-ourlogs", ProcessingFunctionType::ProcessingFunction(ourlogs::process_message)),
     ("OutcomesProcessor", "outcomes", ProcessingFunctionType::ProcessingFunction(outcomes::process_message)),
     ("GenericCountersMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_counter_message)),
     ("GenericSetsMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_set_message)),
@@ -71,7 +62,6 @@ define_processing_functions! {
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
     ("ProfileChunksProcessor", "snuba-profile-chunks", ProcessingFunctionType::ProcessingFunction(profile_chunks::process_message)),
     ("EAPItemsProcessor", "snuba-items", ProcessingFunctionType::ProcessingFunction(eap_items::process_message)),
-    ("EAPItemsSpanProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(eap_items_span::process_message)),
 }
 
 // COGS is recorded for these processors
@@ -162,9 +152,11 @@ mod tests {
                     settings.add_redaction(".*.message_timestamp", "<event timestamp>");
                 }
 
-                if *topic_name == "snuba-ourlogs" {
-                    settings.add_redaction(".*.item_id", "<item ID>"); //UUID7 has timestamp in it
-                    settings.add_redaction(".**[\"sentry.timestamp_precise\"]", "<item timestamp>");
+                if *topic_name == "snuba-items" {
+                    settings.add_redaction(
+                        ".*.*[\"sentry._internal.ingested_at\"]",
+                        "<ingestion timestamp>",
+                    );
                 }
 
                 // This payload is protobuf (so binary), not JSON (so text).

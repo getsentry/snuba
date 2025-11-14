@@ -13,14 +13,13 @@ schema:
     { name: sampling_weight, type: UInt, args: { size: 64 } },
     { name: sampling_factor, type: Float, args: { size: 64 } },
     { name: retention_days, type: UInt, args: { size: 16 } },
+    { name: downsampled_retention_days, type: UInt, args: { size: 16 } },
 
     { name: attributes_bool, type: Map, args: { key: { type: String }, value: { type: Bool } } },
     { name: attributes_int, type: Map, args: { key: { type: String }, value: { type: Int, args: { size: 64 } } } },
 
     { name: attributes_string, type: Map, args: { key: { type: String }, value: { type: String } } },
     { name: attributes_float, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
-    { name: _hash_map_float, type: Array, args: { inner_type: { type: UInt, args: { size: 64 } } } },
-    { name: _hash_map_string, type: Array, args: { inner_type: { type: UInt, args: { size: 64 } } } },
   ]
 
 storages:
@@ -79,8 +78,8 @@ query_processors:
   - processor: HashMapHasFunctionTransformer
     args:
       hash_bucket_names:
-        - _hash_map_float
-        - _hash_map_string
+        - attributes_string
+        - attributes_float
       num_attribute_buckets: 40
 
 validators: []

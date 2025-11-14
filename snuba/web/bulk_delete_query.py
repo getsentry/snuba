@@ -1,7 +1,17 @@
 import logging
 import time
+from dataclasses import dataclass
 from threading import Thread
-from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence, TypedDict
+from typing import (
+    Any,
+    Dict,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    TypedDict,
+)
 
 import rapidjson
 from confluent_kafka import KafkaError
@@ -12,6 +22,7 @@ from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
+from snuba.datasets.deletion_settings import DeletionSettings
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.conditions import combine_or_conditions
@@ -39,6 +50,12 @@ metrics = MetricsWrapper(environment.metrics, "snuba.delete")
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class AttributeConditions:
+    item_type: int
+    attributes: Dict[str, List[Any]]
+
+
 class DeleteQueryMessage(TypedDict):
     rows_to_delete: int
     storage_name: str
@@ -48,7 +65,8 @@ class DeleteQueryMessage(TypedDict):
 
 PRODUCER_MAP: MutableMapping[str, Producer] = {}
 STORAGE_TOPIC: Mapping[str, Topic] = {
-    StorageKey.SEARCH_ISSUES.value: Topic.LW_DELETIONS_GENERIC_EVENTS
+    StorageKey.SEARCH_ISSUES.value: Topic.LW_DELETIONS_GENERIC_EVENTS,
+    StorageKey.EAP_ITEMS.value: Topic.LW_DELETIONS_EAP_ITEMS,
 }
 
 
@@ -80,17 +98,13 @@ def flush_producers() -> None:
             for storage, producer in PRODUCER_MAP.items():
                 messages_remaining = producer.flush(5.0)
                 if messages_remaining:
-                    logger.debug(
-                        f"{messages_remaining} {storage} messages pending delivery"
-                    )
+                    logger.debug(f"{messages_remaining} {storage} messages pending delivery")
             time.sleep(1)
 
     Thread(target=_flush_producers, name="flush_producers", daemon=True).start()
 
 
-def _delete_query_delivery_callback(
-    error: Optional[KafkaError], message: KafkaMessage
-) -> None:
+def _delete_query_delivery_callback(error: Optional[KafkaError], message: KafkaMessage) -> None:
     metrics.increment(
         "delete_query.delivery_callback",
         tags={"status": "failure" if error else "success"},
@@ -126,11 +140,63 @@ def produce_delete_query(delete_query: DeleteQueryMessage) -> None:
         logger.exception("Could not produce delete query due to error: %r", ex)
 
 
+def _validate_attribute_conditions(
+    attribute_conditions: AttributeConditions,
+    delete_settings: DeletionSettings,
+) -> None:
+    """
+    Validates that the attribute_conditions are allowed for the configured item_type.
+
+    Args:
+        attribute_conditions: AttributeConditions containing item_type and attribute mappings
+        delete_settings: The deletion settings for the storage
+
+    Raises:
+        InvalidQueryException: If no attributes are configured for the item_type,
+                              or if any requested attributes are not allowed
+    """
+    # Get the string name for the item_type from the configuration
+    # The configuration uses string names (e.g., "occurrence") as keys
+    allowed_attrs_config = delete_settings.allowed_attributes_by_item_type
+
+    if not allowed_attrs_config:
+        raise InvalidQueryException("No attribute-based deletions configured for this storage")
+
+    # Check if the item_type has any allowed attributes configured
+    # Since the config uses string names and we're given an integer, we need to find the matching config
+    # For now, we'll check all configured item types and validate against any that match
+
+    # Try to find a matching configuration by item_type name
+    matching_allowed_attrs = None
+    for configured_item_type, allowed_attrs in allowed_attrs_config.items():
+        # For this initial implementation, we'll use the string key directly
+        # In the future, we might need a mapping from item_type int to string name
+        matching_allowed_attrs = allowed_attrs
+        break  # For now, assume the first/only configured type
+
+    if matching_allowed_attrs is None:
+        raise InvalidQueryException(
+            f"No attribute-based deletions configured for item_type {attribute_conditions.item_type}"
+        )
+
+    # Validate that all requested attributes are allowed
+    requested_attrs = set(attribute_conditions.attributes.keys())
+    allowed_attrs_set = set(matching_allowed_attrs)
+    invalid_attrs = requested_attrs - allowed_attrs_set
+
+    if invalid_attrs:
+        raise InvalidQueryException(
+            f"Invalid attributes for deletion: {invalid_attrs}. "
+            f"Allowed attributes: {allowed_attrs_set}"
+        )
+
+
 @with_span()
 def delete_from_storage(
     storage: WritableTableStorage,
     conditions: Dict[str, list[Any]],
     attribution_info: Mapping[str, Any],
+    attribute_conditions: Optional[AttributeConditions] = None,
 ) -> dict[str, Result]:
     """
     This method does a series of validation checks (outline below),
@@ -141,15 +207,14 @@ def delete_from_storage(
     * storage validation that deletes are enabled
     * column names are valid (allowed_columns storage setting)
     * column types are valid
+    * attribute names are valid (allowed_attributes_by_item_type storage setting)
     """
     if not deletes_are_enabled():
         raise DeletesNotEnabledError("Deletes not enabled in this region")
 
     delete_settings = storage.get_deletion_settings()
     if not delete_settings.is_enabled:
-        raise DeletesNotEnabledError(
-            f"Deletes not enabled for {storage.get_storage_key().value}"
-        )
+        raise DeletesNotEnabledError(f"Deletes not enabled for {storage.get_storage_key().value}")
 
     columns_diff = set(conditions.keys()) - set(delete_settings.allowed_columns)
     if columns_diff != set():
@@ -166,13 +231,21 @@ def delete_from_storage(
     except InvalidColumnType as e:
         raise InvalidQueryException(e.message)
 
+    # validate attribute conditions if provided
+    if attribute_conditions:
+        _validate_attribute_conditions(attribute_conditions, delete_settings)
+        logger.error(
+            "valid attribute_conditions passed to delete_from_storage, but delete will be ignored "
+            "as functionality is not yet implemented"
+        )
+        # deleting by just conditions and ignoring attribute_conditions would be dangerous
+        return {}
+
     attr_info = _get_attribution_info(attribution_info)
     return delete_from_tables(storage, delete_settings.tables, conditions, attr_info)
 
 
-def construct_query(
-    storage: WritableTableStorage, table: str, condition: Expression
-) -> Query:
+def construct_query(storage: WritableTableStorage, table: str, condition: Expression) -> Query:
     cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
     on_cluster = literal(cluster_name) if cluster_name else None
     return Query(
@@ -233,7 +306,5 @@ def construct_or_conditions(conditions: Sequence[ConditionsType]) -> Expression:
 
 
 def should_use_killswitch(storage_name: str, project_id: str) -> bool:
-    killswitch_config = get_str_config(
-        f"lw_deletes_killswitch_{storage_name}", default=""
-    )
+    killswitch_config = get_str_config(f"lw_deletes_killswitch_{storage_name}", default="")
     return project_id in killswitch_config if killswitch_config else False

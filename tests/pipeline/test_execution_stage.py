@@ -7,6 +7,7 @@ from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
+from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.query_pipeline import QueryPipelineResult
@@ -17,7 +18,6 @@ from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     NO_UNITS,
     AllocationPolicy,
-    AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -38,7 +38,7 @@ from snuba.utils.schemas import UUID, String, UInt
 
 
 class MockAllocationPolicy(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         # Define policy specific config definitions, these will be used along
         # with the default definitions of the base class. (is_enforced, is_active)
         return []
@@ -106,7 +106,7 @@ def ch_query() -> Query:
             storage_key=StorageKey.TRANSACTIONS,
             allocation_policies=[
                 MockAllocationPolicy(
-                    StorageKey("mystorage"),
+                    ResourceIdentifier(StorageKey("mystorage")),
                     required_tenant_types=["organization_id", "referrer"],
                     default_config_overrides={},
                 )

@@ -28,8 +28,10 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
-sampling_weight_column = column("sampling_weight")
 sampling_factor_column = column("sampling_factor")
+client_sample_rate_column = column("client_sample_rate")
+server_sample_rate_column = column("server_sample_rate")
+
 
 Z_VALUE_P95 = 1.96  # Z value for 95% confidence interval is 1.96 which comes from the normal distribution z score.
 Z_VALUE_P975 = 2.24  # Z value for 97.5% confidence interval used for the avg() CI
@@ -46,6 +48,10 @@ CONFIDENCE_INTERVAL_THRESHOLD = 0.5
 CUSTOM_COLUMN_PREFIX = "__snuba_custom_column__"
 
 _FLOATING_POINT_PRECISION = 9
+
+# Attribute names for sample rates
+CLIENT_SAMPLE_RATE_ATTRIBUTE = "client_sample_rate"
+SERVER_SAMPLE_RATE_ATTRIBUTE = "server_sample_rate"
 
 
 def _get_condition_in_aggregation(
@@ -116,12 +122,9 @@ class ExtrapolationContext(ABC):
                 ).startswith("p")
                 if is_percentile:
                     percentile = (
-                        float(custom_column_information.metadata["function_type"][1:])
-                        / 100
+                        float(custom_column_information.metadata["function_type"][1:]) / 100
                     )
-                    granularity = float(
-                        custom_column_information.metadata.get("granularity", "0")
-                    )
+                    granularity = float(custom_column_information.metadata.get("granularity", "0"))
                     width = float(custom_column_information.metadata.get("width", "0"))
             elif custom_column_information.custom_column_id == "average_sample_rate":
                 average_sample_rate = col_value
@@ -194,9 +197,7 @@ class PercentileExtrapolationContext(ExtrapolationContext):
         ci_upper = self.confidence_interval[percentile_index_upper]
 
         max_err = max(self.value - ci_lower, ci_upper - self.value)
-        relative_confidence = (
-            abs(max_err / self.value) if self.value != 0 else float("inf")
-        )
+        relative_confidence = abs(max_err / self.value) if self.value != 0 else float("inf")
 
         if self.sample_count <= PERCENTILE_SAMPLE_COUNT_THRESHOLD:
             return Reliability.RELIABILITY_LOW
@@ -229,17 +230,13 @@ class CustomColumnInformation:
         if self.referenced_column is not None:
             alias += f"${self.referenced_column}"
         if self.metadata:
-            alias += "$" + ",".join(
-                [f"{key}:{value}" for key, value in self.metadata.items()]
-            )
+            alias += "$" + ",".join([f"{key}:{value}" for key, value in self.metadata.items()])
         return alias
 
     @staticmethod
     def from_alias(alias: str) -> "CustomColumnInformation":
         if not alias.startswith(CUSTOM_COLUMN_PREFIX):
-            raise ValueError(
-                f"Alias {alias} does not start with {CUSTOM_COLUMN_PREFIX}"
-            )
+            raise ValueError(f"Alias {alias} does not start with {CUSTOM_COLUMN_PREFIX}")
 
         alias = alias[len(CUSTOM_COLUMN_PREFIX) :]
         parts = alias.split("$")
@@ -254,12 +251,19 @@ class CustomColumnInformation:
         return CustomColumnInformation(column_type, referenced_column, metadata)
 
 
-def _get_sampling_weight_expression(use_sampling_factor: bool) -> Expression:
-    return (
-        f.divide(1, sampling_factor_column)
-        if use_sampling_factor
-        else sampling_weight_column
-    )
+def _get_sampling_weight_expression(
+    use_sampling_factor: bool,
+    extrapolation_mode: ExtrapolationMode.ValueType,
+) -> Expression:
+    if extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY:
+        # Use client sample rate attribute, convert to weight (1/rate)
+        return f.divide(1, client_sample_rate_column)
+    elif extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY:
+        # Use server sample rate attribute, convert to weight (1/rate)
+        return f.divide(1, server_sample_rate_column)
+    else:
+        # Default behavior for existing modes - always use sampling_factor now
+        return f.divide(1, sampling_factor_column)
 
 
 def get_attribute_confidence_interval_alias(
@@ -301,7 +305,10 @@ def get_average_sample_rate_column(
         referenced_column=aggregation.label,
         metadata={},
     ).to_alias()
-    sampling_weight = _get_sampling_weight_expression(use_sampling_factor)
+    sampling_weight = _get_sampling_weight_expression(
+        use_sampling_factor,
+        aggregation.extrapolation_mode,
+    )
     field = attribute_key_to_expression(aggregation.key)
     condition_in_aggregation = _get_condition_in_aggregation(
         aggregation, attribute_key_to_expression
@@ -344,9 +351,7 @@ def get_count_column(
     )
 
 
-def _get_possible_percentiles(
-    percentile: float, granularity: float, width: float
-) -> List[float]:
+def _get_possible_percentiles(percentile: float, granularity: float, width: float) -> List[float]:
     """
     Returns a list of possible percentiles to use for the confidence interval calculation from the range percentile - width to percentile + width,
     with a granularity of granularity.
@@ -386,12 +391,13 @@ def _get_possible_percentiles_expression(
         aggregation, {"granularity": str(granularity), "width": str(width)}
     )
     alias_dict = {"alias": alias} if alias else {}
-    sampling_weight = _get_sampling_weight_expression(use_sampling_factor)
+    sampling_weight = _get_sampling_weight_expression(
+        use_sampling_factor,
+        aggregation.extrapolation_mode,
+    )
     return cf.quantilesTDigestWeighted(*possible_percentiles)(
         field,
-        f.cast(
-            f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)), "UInt64"
-        ),
+        f.cast(f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)), "UInt64"),
         **alias_dict,
     )
 
@@ -408,10 +414,11 @@ def get_extrapolated_function(
         aggregation, attribute_key_to_expression
     )
 
-    sampling_weight = _get_sampling_weight_expression(use_sampling_factor)
-    function_map_sample_weighted: dict[
-        Function.ValueType, CurriedFunctionCall | FunctionCall
-    ] = {
+    sampling_weight = _get_sampling_weight_expression(
+        use_sampling_factor,
+        aggregation.extrapolation_mode,
+    )
+    function_map_sample_weighted: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
         Function.FUNCTION_SUM: f.sumIfOrNull(
             f.multiply(field, sampling_weight),
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
@@ -420,39 +427,29 @@ def get_extrapolated_function(
         Function.FUNCTION_AVERAGE: f.divide(
             f.sumIfOrNull(
                 f.multiply(field, sampling_weight),
-                and_cond(
-                    get_field_existence_expression(field), condition_in_aggregation
-                ),
+                and_cond(get_field_existence_expression(field), condition_in_aggregation),
             ),
             f.sumIfOrNull(
                 sampling_weight,
-                and_cond(
-                    get_field_existence_expression(field), condition_in_aggregation
-                ),
+                and_cond(get_field_existence_expression(field), condition_in_aggregation),
             ),
             **alias_dict,
         ),
         Function.FUNCTION_AVG: f.divide(
             f.sumIfOrNull(
                 f.multiply(field, sampling_weight),
-                and_cond(
-                    get_field_existence_expression(field), condition_in_aggregation
-                ),
+                and_cond(get_field_existence_expression(field), condition_in_aggregation),
             ),
             f.sumIfOrNull(
                 sampling_weight,
-                and_cond(
-                    get_field_existence_expression(field), condition_in_aggregation
-                ),
+                and_cond(get_field_existence_expression(field), condition_in_aggregation),
             ),
             **alias_dict,
         ),
         Function.FUNCTION_COUNT: f.round(
             f.sumIfOrNull(
                 sampling_weight,
-                and_cond(
-                    get_field_existence_expression(field), condition_in_aggregation
-                ),
+                and_cond(get_field_existence_expression(field), condition_in_aggregation),
             ),
             **alias_dict,
         ),
@@ -553,7 +550,10 @@ def _get_ci_count(
         aggregation, attribute_key_to_expression
     )
     alias_dict = {"alias": alias} if alias else {}
-    sampling_weight = _get_sampling_weight_expression(use_sampling_factor)
+    sampling_weight = _get_sampling_weight_expression(
+        use_sampling_factor,
+        aggregation.extrapolation_mode,
+    )
     variance = f.sumIf(
         f.minus(
             f.multiply(sampling_weight, sampling_weight),
@@ -594,7 +594,10 @@ def _get_ci_sum(
         aggregation, attribute_key_to_expression
     )
     alias_dict = {"alias": alias} if alias else {}
-    sampling_weight = _get_sampling_weight_expression(use_sampling_factor)
+    sampling_weight = _get_sampling_weight_expression(
+        use_sampling_factor,
+        aggregation.extrapolation_mode,
+    )
     variance = f.sumIf(
         f.multiply(
             f.multiply(field, field),
@@ -646,7 +649,10 @@ def _get_ci_avg(
         aggregation, attribute_key_to_expression
     )
     alias_dict = {"alias": alias} if alias else {}
-    sampling_weight = _get_sampling_weight_expression(use_sampling_factor)
+    sampling_weight = _get_sampling_weight_expression(
+        use_sampling_factor,
+        aggregation.extrapolation_mode,
+    )
 
     expr_sum = f.sumIfOrNull(
         f.multiply(field, sampling_weight),
@@ -828,23 +834,20 @@ def aggregation_to_expression(
         ),
     }
 
-    if (
-        aggregation.extrapolation_mode
-        == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
-    ):
+    if aggregation.extrapolation_mode in [
+        ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+        ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+        ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+    ]:
         agg_func_expr = get_extrapolated_function(
             aggregation, field, attribute_key_to_expression, use_sampling_factor
         )
     else:
         agg_func_expr = function_map.get(aggregation.aggregate)
         if agg_func_expr is not None:
-            agg_func_expr = f.round(
-                agg_func_expr, _FLOATING_POINT_PRECISION, **alias_dict
-            )
+            agg_func_expr = f.round(agg_func_expr, _FLOATING_POINT_PRECISION, **alias_dict)
 
     if agg_func_expr is None:
-        raise BadSnubaRPCRequestException(
-            f"Aggregation not specified for {aggregation.key.name}"
-        )
+        raise BadSnubaRPCRequestException(f"Aggregation not specified for {aggregation.key.name}")
 
     return agg_func_expr

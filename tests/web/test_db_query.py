@@ -10,6 +10,7 @@ from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -19,7 +20,6 @@ from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     NO_UNITS,
     AllocationPolicy,
-    AllocationPolicyConfig,
     AllocationPolicyViolations,
     PassthroughPolicy,
     QueryResultOrError,
@@ -192,9 +192,7 @@ test_data = [
 ]
 
 
-@pytest.mark.parametrize(
-    "query_config,expected,query_prefix,async_override,referrer", test_data
-)
+@pytest.mark.parametrize("query_config,expected,query_prefix,async_override,referrer", test_data)
 @pytest.mark.redis_db
 def test_query_settings_from_config(
     query_config: Mapping[str, Any],
@@ -206,8 +204,7 @@ def test_query_settings_from_config(
     for k, v in query_config.items():
         state.set_config(k, v)
     assert (
-        _get_query_settings_from_config(query_prefix, async_override, referrer=referrer)
-        == expected
+        _get_query_settings_from_config(query_prefix, async_override, referrer=referrer) == expected
     )
 
 
@@ -221,8 +218,7 @@ def _build_test_query(
                 storage.get_schema().get_data_source().get_table_name(),  # type: ignore
                 schema=storage.get_schema().get_columns(),
                 final=False,
-                allocation_policies=allocation_policies
-                or storage.get_allocation_policies(),
+                allocation_policies=allocation_policies or storage.get_allocation_policies(),
                 storage_key=storage.get_storage_key(),
             ),
             selected_columns=[
@@ -251,7 +247,7 @@ def test_db_record_bytes_scanned() -> None:
     storage_key = StorageKey("errors_ro")
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
-        allocation_policies=[PassthroughPolicy(storage_key, [], {})],
+        allocation_policies=[PassthroughPolicy(ResourceIdentifier(storage_key), [], {})],
     )
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
@@ -323,7 +319,7 @@ def test_db_query_success() -> None:
                     "reason": "within limit",
                     "policy": "referrer_guard_rail_policy",
                     "referrer": "something",
-                    "storage_key": "StorageKey.ERRORS_RO",
+                    "storage_key": "errors_ro",
                 },
                 "is_throttled": False,
                 "throttle_threshold": 66,
@@ -339,7 +335,7 @@ def test_db_query_success() -> None:
                 "explanation": {
                     "reason": "within limit",
                     "overrides": {},
-                    "storage_key": "StorageKey.ERRORS_RO",
+                    "storage_key": "errors_ro",
                 },
                 "is_throttled": False,
                 "throttle_threshold": 22,
@@ -354,7 +350,7 @@ def test_db_query_success() -> None:
                 "max_bytes_to_read": 0,
                 "explanation": {
                     "reason": "within_limit",
-                    "storage_key": "StorageKey.ERRORS_RO",
+                    "storage_key": "errors_ro",
                 },
                 "is_throttled": False,
                 "throttle_threshold": 1706666666666,
@@ -369,7 +365,7 @@ def test_db_query_success() -> None:
                 "max_threads": 10,
                 "explanation": {
                     "reason": "pass_through",
-                    "storage_key": "StorageKey.ERRORS_RO",
+                    "storage_key": "errors_ro",
                 },
                 "is_throttled": False,
                 "throttle_threshold": MAX_THRESHOLD,
@@ -417,9 +413,7 @@ def test_bypass_cache_referrer() -> None:
 
     # cache should not be used for "some_bypass_cache_referrer" so if the
     # bypass does not work, the test will try to use a bad cache
-    with mock.patch(
-        "snuba.settings.BYPASS_CACHE_REFERRERS", ["some_bypass_cache_referrer"]
-    ):
+    with mock.patch("snuba.settings.BYPASS_CACHE_REFERRERS", ["some_bypass_cache_referrer"]):
         with mock.patch("snuba.web.db_query._get_cache_partition"):
             result = db_query(
                 clickhouse_query=query,
@@ -484,7 +478,7 @@ class MockThrottleAllocationPolicy(AllocationPolicy):
         default_config_overrides: dict[str, Any] = {},
     ) -> None:
         super().__init__(
-            storage_key=storage_key,
+            storage_key=ResourceIdentifier(storage_key),
             required_tenant_types=required_tenant_types,
             default_config_overrides=default_config_overrides,
         )
@@ -514,7 +508,7 @@ class MockThrottleAllocationPolicy(AllocationPolicy):
     ) -> None:
         return
 
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
 
@@ -551,7 +545,7 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
                     "max_bytes_to_read": 0,
                     "explanation": {
                         "reason": "ThrottleAllocationPolicy1 throttles all queries",
-                        "storage_key": "StorageKey.DOESNTMATTER",
+                        "storage_key": "doesntmatter",
                     },
                     "is_throttled": True,
                     "throttle_threshold": 1000000000000,
@@ -566,7 +560,7 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
                     "max_bytes_to_read": 0,
                     "explanation": {
                         "reason": "ThrottleAllocationPolicy2 throttles all queries",
-                        "storage_key": "StorageKey.DOESNTMATTER",
+                        "storage_key": "doesntmatter",
                     },
                     "is_throttled": True,
                     "throttle_threshold": 1000000000000,
@@ -582,7 +576,7 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
                 "is_rejected": False,
                 "is_throttled": True,
                 "rejection_storage_key": None,
-                "throttle_storage_key": "StorageKey.DOESNTMATTER",
+                "throttle_storage_key": "doesntmatter",
                 "rejected_by": {},
                 "throttled_by": {
                     "policy": "ThrottleAllocationPolicy1",
@@ -590,7 +584,7 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
                     "quota_unit": NO_UNITS,
                     "suggestion": NO_SUGGESTION,
                     "throttle_threshold": 1000000000000,
-                    "storage_key": "StorageKey.DOESNTMATTER",
+                    "storage_key": "doesntmatter",
                 },
             },
         }
@@ -604,7 +598,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
     update_called = False
 
     class RejectAllocationPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
         def _get_quota_allowance(
@@ -635,7 +629,9 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
     with mock.patch(
         "snuba.web.db_query._get_allocation_policies",
         return_value=[
-            RejectAllocationPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {})
+            RejectAllocationPolicy(
+                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
+            )
         ],
     ):
         query_metadata_list: list[ClickhouseQueryMetadata] = []
@@ -660,15 +656,15 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                 "is_successful": False,
                 "is_rejected": True,
                 "is_throttled": True,
-                "rejection_storage_key": "StorageKey.DOESNTMATTER",
-                "throttle_storage_key": "StorageKey.DOESNTMATTER",
+                "rejection_storage_key": "doesntmatter",
+                "throttle_storage_key": "doesntmatter",
                 "rejected_by": {
                     "policy": "RejectAllocationPolicy",
                     "rejection_threshold": MAX_THRESHOLD,
                     "quota_used": 0,
                     "quota_unit": NO_UNITS,
                     "suggestion": NO_SUGGESTION,
-                    "storage_key": "StorageKey.DOESNTMATTER",
+                    "storage_key": "doesntmatter",
                 },
                 "throttled_by": {
                     "policy": "RejectAllocationPolicy",
@@ -676,7 +672,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                     "quota_used": 0,
                     "quota_unit": NO_UNITS,
                     "suggestion": NO_SUGGESTION,
-                    "storage_key": "StorageKey.DOESNTMATTER",
+                    "storage_key": "doesntmatter",
                 },
             },
             "details": {
@@ -685,7 +681,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                     "max_bytes_to_read": 0,
                     "explanation": {
                         "reason": "policy rejects all queries",
-                        "storage_key": "StorageKey.DOESNTMATTER",
+                        "storage_key": "doesntmatter",
                     },
                     "max_threads": 0,
                     "is_throttled": True,
@@ -699,9 +695,9 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         }
         # extra data contains policy failure information
         assert (
-            excinfo.value.extra["stats"]["quota_allowance"]["details"][
-                "RejectAllocationPolicy"
-            ]["explanation"]["reason"]
+            excinfo.value.extra["stats"]["quota_allowance"]["details"]["RejectAllocationPolicy"][
+                "explanation"
+            ]["reason"]
             == "policy rejects all queries"
         )
         assert query_metadata_list[0].request_status.status.value == "rate-limited"
@@ -719,7 +715,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
     POLICY_THREADS = 4
 
     class ThreadLimitPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
         def _get_quota_allowance(
@@ -765,8 +761,10 @@ def test_allocation_policy_threads_applied_to_query() -> None:
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
         [
-            ThreadLimitPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
-            ThreadLimitPolicyDuplicate(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+            ThreadLimitPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
+            ThreadLimitPolicyDuplicate(
+                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
+            ),
         ],
     )
 
@@ -800,7 +798,7 @@ def test_allocation_policy_updates_quota() -> None:
     queries_run = 0
 
     class CountQueryPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
         def _get_quota_allowance(
@@ -835,7 +833,7 @@ def test_allocation_policy_updates_quota() -> None:
     queries_run_duplicate = 0
 
     class CountQueryPolicyDuplicate(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
         def _get_quota_allowance(
@@ -850,9 +848,7 @@ def test_allocation_policy_updates_quota() -> None:
             return QuotaAllowance(
                 can_run=can_run,
                 max_threads=0,
-                explanation={
-                    "reason": f"can only run {queries_run_duplicate} queries!"
-                },
+                explanation={"reason": f"can only run {queries_run_duplicate} queries!"},
                 is_throttled=False,
                 throttle_threshold=MAX_QUERIES_TO_RUN,
                 rejection_threshold=MAX_QUERIES_TO_RUN,
@@ -874,8 +870,10 @@ def test_allocation_policy_updates_quota() -> None:
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
         [
-            CountQueryPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
-            CountQueryPolicyDuplicate(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+            CountQueryPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
+            CountQueryPolicyDuplicate(
+                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
+            ),
         ],
     )
 
@@ -908,7 +906,7 @@ def test_allocation_policy_updates_quota() -> None:
             "is_successful": False,
             "is_rejected": True,
             "is_throttled": False,
-            "rejection_storage_key": "StorageKey.DOESNTMATTER",
+            "rejection_storage_key": "doesntmatter",
             "throttle_storage_key": None,
             "rejected_by": {
                 "policy": "CountQueryPolicy",
@@ -916,7 +914,7 @@ def test_allocation_policy_updates_quota() -> None:
                 "quota_used": queries_run,
                 "quota_unit": "queries",
                 "suggestion": "scan less concurrent queries",
-                "storage_key": "StorageKey.DOESNTMATTER",
+                "storage_key": "doesntmatter",
             },
             "throttled_by": {},
         },
@@ -926,7 +924,7 @@ def test_allocation_policy_updates_quota() -> None:
                 "max_threads": 0,
                 "explanation": {
                     "reason": "can only run 2 queries!",
-                    "storage_key": "StorageKey.DOESNTMATTER",
+                    "storage_key": "doesntmatter",
                 },
                 "is_throttled": False,
                 "max_bytes_to_read": 0,
@@ -1018,8 +1016,6 @@ def test_db_query_ignore_consistent() -> None:
 @pytest.mark.redis_db
 def test_cache_metrics_with_simple_readthrough() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
-    state.set_config("disable_lua_randomize_query_id", 1)
-    state.set_config("read_through_cache.disable_lua_scripts_sample_rate", 1)
 
     formatted_query = format_query(query)
     reader = storage.get_cluster().get_reader()
@@ -1075,7 +1071,7 @@ def test_cache_metrics_with_simple_readthrough() -> None:
 @pytest.mark.redis_db
 def test_policy_sets_max_bytes_to_read() -> None:
     class MaxBytesPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        def _additional_config_definitions(self) -> list[Configuration]:
             return []
 
         def _get_quota_allowance(
@@ -1105,7 +1101,7 @@ def test_policy_sets_max_bytes_to_read() -> None:
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
         [
-            MaxBytesPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {}),
+            MaxBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
         ],
     )
 
@@ -1130,7 +1126,7 @@ def test_policy_sets_max_bytes_to_read() -> None:
         "details": {
             "MaxBytesPolicy": {
                 "can_run": True,
-                "explanation": {"storage_key": "StorageKey.DOESNTMATTER"},
+                "explanation": {"storage_key": "doesntmatter"},
                 "is_throttled": True,
                 "max_bytes_to_read": 1,
                 "max_threads": 10,
@@ -1149,12 +1145,12 @@ def test_policy_sets_max_bytes_to_read() -> None:
             "rejected_by": {},
             "rejection_storage_key": None,
             "threads_used": 10,
-            "throttle_storage_key": "StorageKey.DOESNTMATTER",
+            "throttle_storage_key": "doesntmatter",
             "throttled_by": {
                 "policy": "MaxBytesPolicy",
                 "quota_unit": "concurrent_queries",
                 "quota_used": 123,
-                "storage_key": "StorageKey.DOESNTMATTER",
+                "storage_key": "doesntmatter",
                 "suggestion": "no_suggestion",
                 "throttle_threshold": 420,
             },

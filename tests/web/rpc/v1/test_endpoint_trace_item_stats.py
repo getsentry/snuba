@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     AttributeDistribution,
     AttributeDistributionsRequest,
@@ -33,17 +34,21 @@ from tests.web.rpc.v1.test_utils import (
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
-    messages = [
-        gen_item_message(
-            start_timestamp=BASE_TIME - timedelta(minutes=i),
-            attributes={
-                "low_cardinality": AnyValue(string_value=f"{i // 40}"),
-                "sentry.sdk.name": AnyValue(string_value="sentry.python.django"),
-            },
-            remove_default_attributes=True,
-        )
-        for i in range(120)
-    ]
+    messages = []
+    for i in range(120):
+        for item_type in [TraceItemType.TRACE_ITEM_TYPE_SPAN, TraceItemType.TRACE_ITEM_TYPE_LOG]:
+            messages.append(
+                gen_item_message(
+                    start_timestamp=BASE_TIME - timedelta(minutes=i),
+                    type=item_type,
+                    attributes={
+                        "low_cardinality": AnyValue(string_value=f"{i // 40}"),
+                        "sentry.sdk.name": AnyValue(string_value="sentry.python.django"),
+                    },
+                    remove_default_attributes=True,
+                )
+            )
+
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
@@ -71,9 +76,7 @@ class TestTraceItemAttributesStats(BaseApiTest):
             ],
         )
 
-        response = self.app.post(
-            "/rpc/EndpointTraceItemStats/v1", data=message.SerializeToString()
-        )
+        response = self.app.post("/rpc/EndpointTraceItemStats/v1", data=message.SerializeToString())
         error_proto = ErrorProto()
         if response.status_code != 200:
             error_proto.ParseFromString(response.data)
@@ -89,6 +92,9 @@ class TestTraceItemAttributesStats(BaseApiTest):
                 start_timestamp=START_TIMESTAMP,
                 end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY,
+                ),
             ),
             stats_types=[
                 StatsType(
@@ -111,10 +117,7 @@ class TestTraceItemAttributesStats(BaseApiTest):
         )
 
         assert response.results[0].HasField("attribute_distributions")
-        assert (
-            expected_sdk_name_stats
-            in response.results[0].attribute_distributions.attributes
-        )
+        assert expected_sdk_name_stats in response.results[0].attribute_distributions.attributes
 
         expected_low_cardinality_stat = AttributeDistribution(
             attribute_name="low_cardinality",
@@ -134,30 +137,6 @@ class TestTraceItemAttributesStats(BaseApiTest):
 
         assert match
 
-    def test_backwards_compatibility(self, setup_teardown: Any) -> None:
-        message = TraceItemStatsRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            stats_types=[
-                StatsType(
-                    attribute_distributions=AttributeDistributionsRequest(
-                        max_buckets=10,
-                        max_attributes=100,
-                    )
-                )
-            ],
-        )
-
-        response = EndpointTraceItemStats().execute(message)
-        assert len(response.results[0].attribute_distributions.attributes) == 2
-
     def test_with_filter(self, setup_teardown: Any) -> None:
         message = TraceItemStatsRequest(
             meta=RequestMeta(
@@ -168,12 +147,13 @@ class TestTraceItemAttributesStats(BaseApiTest):
                 start_timestamp=START_TIMESTAMP,
                 end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY,
+                ),
             ),
             filter=TraceItemFilter(
                 comparison_filter=ComparisonFilter(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_STRING, name="low_cardinality"
-                    ),
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="low_cardinality"),
                     op=ComparisonFilter.OP_EQUALS,
                     value=AttributeValue(val_str="0"),
                 )
@@ -190,16 +170,11 @@ class TestTraceItemAttributesStats(BaseApiTest):
         response = EndpointTraceItemStats().execute(message)
         expected_sdk_name_stats = AttributeDistribution(
             attribute_name="sentry.sdk.name",
-            buckets=[
-                AttributeDistribution.Bucket(label="sentry.python.django", value=40)
-            ],
+            buckets=[AttributeDistribution.Bucket(label="sentry.python.django", value=40)],
         )
 
         assert response.results[0].HasField("attribute_distributions")
-        assert (
-            expected_sdk_name_stats
-            in response.results[0].attribute_distributions.attributes
-        )
+        assert expected_sdk_name_stats in response.results[0].attribute_distributions.attributes
 
         expected_low_cardinality_stats = AttributeDistribution(
             attribute_name="low_cardinality",
@@ -207,6 +182,5 @@ class TestTraceItemAttributesStats(BaseApiTest):
         )
 
         assert (
-            expected_low_cardinality_stats
-            in response.results[0].attribute_distributions.attributes
+            expected_low_cardinality_stats in response.results[0].attribute_distributions.attributes
         )

@@ -94,6 +94,7 @@ EVENTS_COLUMNS = ColumnSet(
         ("num_processing_errors", UInt(64, Modifiers(nullable=True))),
         ("symbolicated_in_app", UInt(8, Modifiers(nullable=True))),
         ("timestamp_ms", DateTime64(3, modifiers=Modifiers(nullable=True))),
+        ("sample_weight", Float(64, Modifiers(nullable=True))),
     ]
 )
 
