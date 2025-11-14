@@ -242,7 +242,6 @@ def delete_from_storage(
                 "valid attribute_conditions passed to delete_from_storage, but delete will be ignored "
                 "as functionality is not yet launched (permit_delete_by_attribute=0)"
             )
-            # deleting by just conditions and ignoring attribute_conditions would be dangerous
             return {}
 
     attr_info = _get_attribution_info(attribution_info)

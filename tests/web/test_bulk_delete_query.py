@@ -208,7 +208,7 @@ def test_attribute_conditions_feature_flag_enabled() -> None:
     attr_info = get_attribution_info()
 
     # Enable the feature flag
-    set_config("is_attribute_delete_launched", 1)
+    set_config("permit_delete_by_attribute", 1)
 
     try:
         # Mock out _enforce_max_rows to avoid needing actual data
@@ -229,4 +229,4 @@ def test_attribute_conditions_feature_flag_enabled() -> None:
                 assert call_args["attribute_conditions_item_type"] == 1
     finally:
         # Clean up: disable the feature flag
-        set_config("is_attribute_delete_launched", 0)
+        set_config("permit_delete_by_attribute", 0)
