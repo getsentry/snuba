@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Mapping, MutableMapping, Sequence, Type
+from typing import List, Mapping, MutableMapping, Sequence, Type
 
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.utils.hashes import fnv_1a
 from snuba.web.bulk_delete_query import DeleteQueryMessage
 from snuba.web.delete_query import ConditionsType
 
@@ -54,14 +55,49 @@ class SearchIssuesFormatter(Formatter):
         ]
 
 
-class IdentityFormatter(Formatter):
+class EAPItemsFormatter(Formatter):
+    # Number of attribute buckets used in eap_items storage
+    # TODO: find a way to wire this in from a canonical source
+    NUM_ATTRIBUTE_BUCKETS = 40
+
     def format(self, messages: Sequence[DeleteQueryMessage]) -> Sequence[ConditionsType]:
-        return [msg["conditions"] for msg in messages]
+        """
+        For eap_items storage, we need to resolve attribute_conditions to their
+        bucketed column names. Attributes are stored in hash-bucketed map columns
+        like attributes_string_0, attributes_string_1, etc.
+
+        For example, if attribute_conditions has {"group_id": [123]}, we need to:
+        1. Determine which bucket "group_id" belongs to
+        2. Add it to the conditions as attributes_string_{bucket_idx}['group_id'] = [123]
+        """
+        formatted_conditions: List[ConditionsType] = []
+
+        for message in messages:
+            conditions = dict(message["conditions"])
+
+            # Process attribute_conditions if present
+            if "attribute_conditions" in message and message["attribute_conditions"]:
+                attribute_conditions = message["attribute_conditions"]
+
+                # For each attribute, determine its bucket and add to conditions
+                for attr_name, attr_values in attribute_conditions.items():
+                    # Hash the attribute name to determine which bucket it belongs to
+                    bucket_idx = fnv_1a(attr_name.encode("utf-8")) % self.NUM_ATTRIBUTE_BUCKETS
+
+                    # Create the bucketed column name with the attribute key
+                    # Format: "attributes_string_{bucket_idx}['{attr_name}']"
+                    bucketed_column = f"attributes_string_{bucket_idx}['{attr_name}']"
+
+                    conditions[bucketed_column] = attr_values
+
+            formatted_conditions.append(conditions)
+
+        return formatted_conditions
 
 
 STORAGE_FORMATTER: Mapping[str, Type[Formatter]] = {
     StorageKey.SEARCH_ISSUES.value: SearchIssuesFormatter,
     # TODO: We will probably do something more sophisticated here in the future
     # but it won't make much of a difference until we support delete by attribute
-    StorageKey.EAP_ITEMS.value: IdentityFormatter,
+    StorageKey.EAP_ITEMS.value: EAPItemsFormatter,
 }
