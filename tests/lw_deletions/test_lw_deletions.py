@@ -96,6 +96,7 @@ def test_clickhouse_settings(mock_execute: Mock, mock_num_mutations: Mock) -> No
         next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics),
         increment_by=increment_by,
     )
+    state.set_config("lightweight_deletes_sync", 2)
     make_message = generate_message()
     strategy.submit(next(make_message))
     strategy.submit(next(make_message))

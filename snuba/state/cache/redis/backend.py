@@ -3,6 +3,7 @@ from typing import Callable, Optional
 
 import sentry_sdk
 
+from redis import ResponseError
 from redis.exceptions import ConnectionError, ReadOnlyError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from snuba import environment, settings
@@ -21,6 +22,11 @@ RESULT_VALUE = 0
 RESULT_EXECUTE = 1
 RESULT_WAIT = 2
 SIMPLE_READTHROUGH = 3
+
+DONT_CAPTURE_ERRORS = {
+    # if you need to track this error, see datadog metric snuba.read_through_cache.redis_cache_set_error
+    ResponseError("OOM command not allowed under OOM prevention."),
+}
 
 
 class RedisCache(Cache[TValue]):
@@ -71,7 +77,8 @@ class RedisCache(Cache[TValue]):
         except Exception as e:
             if settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES:
                 raise e
-            sentry_sdk.capture_exception(e)
+            if e not in DONT_CAPTURE_ERRORS:
+                sentry_sdk.capture_exception(e)
 
         if timer is not None:
             timer.mark("cache_get")
@@ -91,7 +98,8 @@ class RedisCache(Cache[TValue]):
                     )
                 except Exception as e:
                     metrics.increment("redis_cache_set_error", tags=metric_tags)
-                    sentry_sdk.capture_exception(e)
+                    if e not in DONT_CAPTURE_ERRORS:
+                        sentry_sdk.capture_exception(e)
                     return value
                 record_cache_hit_type(RESULT_EXECUTE)
                 if timer is not None:
