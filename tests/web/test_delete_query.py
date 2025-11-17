@@ -7,6 +7,7 @@ import pytest
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
 from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.storages.factory import get_writable_storage
@@ -22,9 +23,14 @@ from snuba.query.allocation_policies import (
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import and_cond, column, equals, literal
+from snuba.query.expressions import Column, SubscriptableReference
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.web import QueryException
-from snuba.web.delete_query import _execute_query, _parse_column_expression
+from snuba.web.delete_query import (
+    _construct_condition,
+    _execute_query,
+    _parse_column_expression,
+)
 
 
 @pytest.mark.clickhouse_db
@@ -158,25 +164,18 @@ def test_delete_query_with_rejecting_allocation_policy() -> None:
 
 
 def test_parse_column_expression_regular_column() -> None:
-    """Test that regular column names are parsed correctly."""
-    from snuba.query.expressions import Column
-
     expr = _parse_column_expression("project_id")
     assert isinstance(expr, Column)
     assert expr.column_name == "project_id"
 
 
 def test_parse_column_expression_map_access() -> None:
-    from snuba.query.expressions import SubscriptableReference
-
     expr = _parse_column_expression("attributes_string_36['group_id']")
     assert isinstance(expr, SubscriptableReference)
     assert expr.column.column_name == "attributes_string_36"
     assert expr.key.value == "group_id"
 
     # double quotes are also acceptable
-    from snuba.query.expressions import SubscriptableReference
-
     expr = _parse_column_expression('attributes_string_0["event_id"]')
     assert isinstance(expr, SubscriptableReference)
     assert expr.column.column_name == "attributes_string_0"
@@ -184,9 +183,6 @@ def test_parse_column_expression_map_access() -> None:
 
 
 def test_parse_column_expression_formats_correctly() -> None:
-    from snuba.clickhouse.formatter.query import format_query
-    from snuba.web.delete_query import _construct_condition
-
     conditions = {
         "project_id": [1],
         "attributes_string_36['group_id']": [12345],
