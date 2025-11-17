@@ -97,7 +97,7 @@ def test_search_issues_formatter(
         ),
     ],
 )
-def test_identity_formatter(
+def test_eap_items_formatter_identity_conditions(
     messages: Sequence[DeleteQueryMessage],
     expected_formatted: Sequence[ConditionsType],
     formatter: Type[Formatter],
@@ -107,7 +107,6 @@ def test_identity_formatter(
 
 
 def test_eap_items_formatter_with_attribute_conditions() -> None:
-    """Test that EAPItemsFormatter correctly resolves attribute_conditions to bucketed columns"""
     # Create a message with attribute_conditions (integer values)
     messages = [
         create_delete_query_message(
@@ -130,7 +129,6 @@ def test_eap_items_formatter_with_attribute_conditions() -> None:
 
 
 def test_eap_items_formatter_multiple_attributes() -> None:
-    """Test that EAPItemsFormatter handles multiple attributes with different types correctly"""
     messages = [
         create_delete_query_message(
             conditions={"project_id": [1], "item_type": [1]},
@@ -157,23 +155,7 @@ def test_eap_items_formatter_multiple_attributes() -> None:
     assert formatted[0][expected_transaction_column] == ["test_transaction"]
 
 
-def test_eap_items_formatter_without_attribute_conditions() -> None:
-    """Test that EAPItemsFormatter works without attribute_conditions (backwards compatibility)"""
-    messages = [
-        create_delete_query_message(
-            conditions={"project_id": [1], "trace_id": ["abc123"]},
-        )
-    ]
-
-    formatter = EAPItemsFormatter()
-    formatted = formatter.format(messages)
-
-    assert len(formatted) == 1
-    assert formatted[0] == {"project_id": [1], "trace_id": ["abc123"]}
-
-
 def test_eap_items_formatter_with_float_attributes() -> None:
-    """Test that EAPItemsFormatter handles float attribute values correctly"""
     messages = [
         create_delete_query_message(
             conditions={"project_id": [1], "item_type": [1]},
@@ -194,7 +176,6 @@ def test_eap_items_formatter_with_float_attributes() -> None:
 
 
 def test_eap_items_formatter_with_bool_attributes() -> None:
-    """Test that EAPItemsFormatter handles bool attribute values correctly"""
     messages = [
         create_delete_query_message(
             conditions={"project_id": [1], "item_type": [1]},
