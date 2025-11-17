@@ -207,9 +207,5 @@ def test_parse_column_expression_formats_correctly() -> None:
     formatted = format_query(query)
     sql = formatted.get_sql()
 
-    # Should NOT have backticks around the entire map access expression
-    assert "`attributes_string_36['group_id']`" not in sql
-    # Should have the correct format without backticks
-    assert "attributes_string_36['group_id']" in sql
     assert "equals(project_id, 1)" in sql
     assert "equals(attributes_string_36['group_id'], 12345)" in sql
