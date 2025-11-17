@@ -7,7 +7,6 @@ from snuba.datasets.deletion_settings import get_trace_item_type_name
 
 
 def test_get_trace_item_type_name_valid() -> None:
-    """Test that get_trace_item_type_name returns the correct name for valid values"""
     assert get_trace_item_type_name(TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED) == "unspecified"
     assert get_trace_item_type_name(TraceItemType.TRACE_ITEM_TYPE_SPAN) == "span"
     assert get_trace_item_type_name(TraceItemType.TRACE_ITEM_TYPE_ERROR) == "error"
@@ -24,14 +23,12 @@ def test_get_trace_item_type_name_valid() -> None:
 
 
 def test_get_trace_item_type_name_by_integer() -> None:
-    """Test that get_trace_item_type_name works with integer values directly"""
     assert get_trace_item_type_name(0) == "unspecified"
     assert get_trace_item_type_name(1) == "span"
     assert get_trace_item_type_name(7) == "occurrence"
 
 
 def test_get_trace_item_type_name_invalid() -> None:
-    """Test that get_trace_item_type_name raises ValueError for invalid values"""
     with pytest.raises(ValueError, match="Unknown TraceItemType value: 999"):
         get_trace_item_type_name(999)
 
