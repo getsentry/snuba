@@ -1,3 +1,4 @@
+import re
 import typing
 import uuid
 from typing import Any, Mapping, MutableMapping, Optional, Sequence
@@ -382,8 +383,6 @@ def _parse_column_expression(col_name: str) -> Expression:
         "project_id" -> Column("project_id")
         "attributes_string_0['group_id']" -> SubscriptableReference(Column("attributes_string_0"), Literal("group_id"))
     """
-    import re
-
     # Pattern to match "column_name['key']" or 'column_name["key"]'
     match = re.match(r"^([a-zA-Z_][a-zA-Z0-9_]*)\[(['\"])(.+?)\2\]$", col_name)
 
