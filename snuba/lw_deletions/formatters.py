@@ -63,12 +63,13 @@ class EAPItemsFormatter(Formatter):
     def format(self, messages: Sequence[DeleteQueryMessage]) -> Sequence[ConditionsType]:
         """
         For eap_items storage, we need to resolve attribute_conditions to their
-        bucketed column names. Attributes are stored in hash-bucketed map columns
-        like attributes_string_0, attributes_string_1, etc.
+        appropriate column names based on type:
+        - int/bool: Single columns (no bucketing) like attributes_int['key'] or attributes_bool['key']
+        - string/float: Hash-bucketed columns like attributes_string_0['key'] or attributes_float_23['key']
 
         For example, if attribute_conditions has {"group_id": [123]}, we need to:
-        1. Determine which bucket "group_id" belongs to
-        2. Add it to the conditions as attributes_string_{bucket_idx}['group_id'] = [123]
+        1. Determine the type based on the values (int in this case)
+        2. Since int doesn't use bucketing, add it as attributes_int['group_id'] = [123]
         """
         formatted_conditions: List[ConditionsType] = []
 
@@ -79,14 +80,34 @@ class EAPItemsFormatter(Formatter):
             if "attribute_conditions" in message and message["attribute_conditions"]:
                 attribute_conditions = message["attribute_conditions"]
 
-                # For each attribute, determine its bucket and add to conditions
+                # For each attribute, determine its type and bucket (if applicable)
                 for attr_name, attr_values in attribute_conditions.items():
-                    # Hash the attribute name to determine which bucket it belongs to
-                    bucket_idx = fnv_1a(attr_name.encode("utf-8")) % self.NUM_ATTRIBUTE_BUCKETS
+                    if not attr_values:
+                        continue
 
-                    # Create the bucketed column name with the attribute key
-                    # Format: "attributes_string_{bucket_idx}['{attr_name}']"
-                    bucketed_column = f"attributes_string_{bucket_idx}['{attr_name}']"
+                    # Determine the attribute type from the first value
+                    # All values in the list should be of the same type
+                    first_value = attr_values[0]
+                    if isinstance(first_value, bool):
+                        # Check bool before int since bool is a subclass of int in Python
+                        attr_type = "bool"
+                    elif isinstance(first_value, int):
+                        attr_type = "int"
+                    elif isinstance(first_value, float):
+                        attr_type = "float"
+                    else:
+                        # Default to string for str and any other type
+                        attr_type = "string"
+
+                    # Only string and float attributes use bucketing
+                    # int and bool attributes are stored in single columns
+                    if attr_type in ("int", "bool"):
+                        # No bucketing for int and bool
+                        bucketed_column = f"attributes_{attr_type}['{attr_name}']"
+                    else:
+                        # Bucketing for string and float
+                        bucket_idx = fnv_1a(attr_name.encode("utf-8")) % self.NUM_ATTRIBUTE_BUCKETS
+                        bucketed_column = f"attributes_{attr_type}_{bucket_idx}['{attr_name}']"
 
                     conditions[bucketed_column] = attr_values
 

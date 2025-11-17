@@ -108,7 +108,7 @@ def test_identity_formatter(
 
 def test_eap_items_formatter_with_attribute_conditions() -> None:
     """Test that EAPItemsFormatter correctly resolves attribute_conditions to bucketed columns"""
-    # Create a message with attribute_conditions
+    # Create a message with attribute_conditions (integer values)
     messages = [
         create_delete_query_message(
             conditions={"project_id": [1], "item_type": [1]},
@@ -120,9 +120,8 @@ def test_eap_items_formatter_with_attribute_conditions() -> None:
     formatter = EAPItemsFormatter()
     formatted = formatter.format(messages)
 
-    # Calculate the expected bucket for "group_id"
-    expected_bucket = fnv_1a("group_id".encode("utf-8")) % 40
-    expected_column = f"attributes_string_{expected_bucket}['group_id']"
+    # Since values are integers, should use attributes_int (no bucketing)
+    expected_column = "attributes_int['group_id']"
 
     assert len(formatted) == 1
     assert formatted[0]["project_id"] == [1]
@@ -131,13 +130,13 @@ def test_eap_items_formatter_with_attribute_conditions() -> None:
 
 
 def test_eap_items_formatter_multiple_attributes() -> None:
-    """Test that EAPItemsFormatter handles multiple attributes correctly"""
+    """Test that EAPItemsFormatter handles multiple attributes with different types correctly"""
     messages = [
         create_delete_query_message(
             conditions={"project_id": [1], "item_type": [1]},
             attribute_conditions={
-                "group_id": [12345],
-                "transaction": ["test_transaction"],
+                "group_id": [12345],  # int (no bucketing)
+                "transaction": ["test_transaction"],  # string (bucketing)
             },
             attribute_conditions_item_type=1,
         )
@@ -146,11 +145,11 @@ def test_eap_items_formatter_multiple_attributes() -> None:
     formatter = EAPItemsFormatter()
     formatted = formatter.format(messages)
 
-    # Calculate expected buckets
-    group_id_bucket = fnv_1a("group_id".encode("utf-8")) % 40
+    # Calculate expected bucket for transaction (string uses bucketing)
     transaction_bucket = fnv_1a("transaction".encode("utf-8")) % 40
 
-    expected_group_id_column = f"attributes_string_{group_id_bucket}['group_id']"
+    # group_id is int (no bucketing), transaction is string (with bucketing)
+    expected_group_id_column = "attributes_int['group_id']"
     expected_transaction_column = f"attributes_string_{transaction_bucket}['transaction']"
 
     assert len(formatted) == 1
@@ -171,3 +170,44 @@ def test_eap_items_formatter_without_attribute_conditions() -> None:
 
     assert len(formatted) == 1
     assert formatted[0] == {"project_id": [1], "trace_id": ["abc123"]}
+
+
+def test_eap_items_formatter_with_float_attributes() -> None:
+    """Test that EAPItemsFormatter handles float attribute values correctly"""
+    messages = [
+        create_delete_query_message(
+            conditions={"project_id": [1], "item_type": [1]},
+            attribute_conditions={"duration": [123.45, 678.90]},
+            attribute_conditions_item_type=1,
+        )
+    ]
+
+    formatter = EAPItemsFormatter()
+    formatted = formatter.format(messages)
+
+    # Calculate the expected bucket for "duration"
+    expected_bucket = fnv_1a("duration".encode("utf-8")) % 40
+    expected_column = f"attributes_float_{expected_bucket}['duration']"
+
+    assert len(formatted) == 1
+    assert formatted[0][expected_column] == [123.45, 678.90]
+
+
+def test_eap_items_formatter_with_bool_attributes() -> None:
+    """Test that EAPItemsFormatter handles bool attribute values correctly"""
+    messages = [
+        create_delete_query_message(
+            conditions={"project_id": [1], "item_type": [1]},
+            attribute_conditions={"is_error": [True, False]},
+            attribute_conditions_item_type=1,
+        )
+    ]
+
+    formatter = EAPItemsFormatter()
+    formatted = formatter.format(messages)
+
+    # Bool attributes don't use bucketing
+    expected_column = "attributes_bool['is_error']"
+
+    assert len(formatted) == 1
+    assert formatted[0][expected_column] == [True, False]

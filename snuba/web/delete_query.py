@@ -27,7 +27,13 @@ from snuba.query.exceptions import (
     NoRowsToDeleteException,
     TooManyDeleteRowsException,
 )
-from snuba.query.expressions import Expression, FunctionCall
+from snuba.query.expressions import (
+    Column,
+    Expression,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Result
 from snuba.state import get_config, get_int_config
@@ -354,12 +360,41 @@ def _execute_query(
 def _construct_condition(columns: ConditionsType) -> Expression:
     and_conditions = []
     for col, values in columns.items():
+        # Check if this is a map access pattern like "attributes_string_0['group_id']"
+        col_expr = _parse_column_expression(col)
+
         if len(values) == 1:
-            exp = equals(column(col), literal(values[0]))
+            exp = equals(col_expr, literal(values[0]))
         else:
             literal_values = [literal(v) for v in values]
-            exp = in_cond(column(col), literals_tuple(alias=None, literals=literal_values))
+            exp = in_cond(col_expr, literals_tuple(alias=None, literals=literal_values))
 
         and_conditions.append(exp)
 
     return combine_and_conditions(and_conditions)
+
+
+def _parse_column_expression(col_name: str) -> Expression:
+    """
+    Parse a column name that might include map access notation.
+
+    Examples:
+        "project_id" -> Column("project_id")
+        "attributes_string_0['group_id']" -> SubscriptableReference(Column("attributes_string_0"), Literal("group_id"))
+    """
+    import re
+
+    # Pattern to match "column_name['key']" or 'column_name["key"]'
+    match = re.match(r"^([a-zA-Z_][a-zA-Z0-9_]*)\[(['\"])(.+?)\2\]$", col_name)
+
+    if match:
+        base_column_name = match.group(1)
+        key_name = match.group(3)
+        return SubscriptableReference(
+            alias=None,
+            column=Column(alias=None, table_name=None, column_name=base_column_name),
+            key=Literal(alias=None, value=key_name),
+        )
+    else:
+        # Regular column
+        return column(col_name)
