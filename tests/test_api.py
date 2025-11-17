@@ -1471,10 +1471,6 @@ class TestApi(SimpleAPITest):
             assert events[0]["exception"]["values"][0]["type"] == "ZeroDivisionError"
 
     def test_split_query(self, request: pytest.FixtureRequest) -> None:
-        state.set_config("use_split", 1)
-        request.addfinalizer(lambda: state.set_config("use_split", 0))
-        state.set_config("split_step", 3600)  # first batch will be 1 hour
-
         # Test getting the last 150 events, should happen in 2 batches
         result = json.loads(
             self.post(
