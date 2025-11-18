@@ -22,7 +22,7 @@ jobs:
     if: github.repository_owner == 'getsentry'
     steps:
     - uses: actions/checkout@v5
-    - uses: getsentry/action-build-and-push-images@f6e4a98f7ed028edcfb1159f3a2905b30e51f1fd
+    - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
       with:
         image_name: 'snuba'
         platforms: linux/${{ matrix.platform }}
@@ -31,6 +31,7 @@ jobs:
         ghcr: true
         tag_nightly: false
         tag_latest: false
+        build_target: 'application'
 
   build-production:
     runs-on: ubuntu-24.04
@@ -41,7 +42,7 @@ jobs:
     if: ${{ github.ref_name == 'master' }}
     steps:
       - uses: actions/checkout@v5
-      - uses: getsentry/action-build-and-push-images@f6e4a98f7ed028edcfb1159f3a2905b30e51f1fd
+      - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
         with:
           image_name: 'snuba'
           platforms: linux/amd64
@@ -53,6 +54,7 @@ jobs:
           google_ar_image_name: us-docker.pkg.dev/sentryio/snuba-mr/image
           google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
           google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
+          build_target: 'application'
 
   assemble:
     needs: [build-multiplatform]
