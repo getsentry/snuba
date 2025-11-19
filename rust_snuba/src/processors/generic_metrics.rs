@@ -344,15 +344,6 @@ fn should_use_killswitch(config: Result<Option<String>, Error>, use_case: &Messa
     false
 }
 
-#[allow(dead_code)]
-fn parse_matview_ver_from_runtime_opt(metric_type: &str) -> Option<u8> {
-    get_str_config(&format!("gen_metrics_{}_matview_version", metric_type))
-        .ok()
-        .flatten()?
-        .parse::<u8>()
-        .ok()
-}
-
 fn process_message<T>(
     payload: KafkaPayload,
     config: &ProcessorConfig,
