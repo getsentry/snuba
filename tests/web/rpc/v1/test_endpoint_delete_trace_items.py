@@ -10,7 +10,21 @@ from sentry_protos.snuba.v1.endpoint_delete_trace_items_pb2 import (
     DeleteTraceItemsRequest,
     DeleteTraceItemsResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, ResponseMeta
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    RequestMeta,
+    ResponseMeta,
+    TraceItemFilterWithType,
+    TraceItemType,
+)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    AttributeValue,
+    IntArray,
+)
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    ComparisonFilter,
+    TraceItemFilter,
+)
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
@@ -136,3 +150,194 @@ class TestEndpointDeleteTrace(BaseApiTest):
         assert called_args["conditions"]["organization_id"] == [1]
         assert called_args["conditions"]["trace_id"] == [_TRACE_ID]
         assert called_args["rows_to_delete"] == _SPAN_COUNT
+
+    # This should not yet produce a message to bulk_delete topic because
+    # we haven't wired that behavior through yet (it should not error out,
+    # though).
+    @pytest.mark.xfail
+    def test_filters_with_equals_operation_accepted(self) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+
+        message = DeleteTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
+                request_id=_REQUEST_ID,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
+            ),
+            filters=[
+                TraceItemFilterWithType(
+                    filter=TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(name="group_id", type=AttributeKey.TYPE_INT),
+                            op=ComparisonFilter.OP_EQUALS,
+                            value=AttributeValue(val_int=12345),
+                        )
+                    )
+                )
+            ],
+        )
+
+        with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
+            with patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce:
+                EndpointDeleteTraceItems().execute(message)
+
+                # Verify produce_delete_query was called with attribute_conditions
+                assert mock_produce.call_count == 1
+
+    def test_filters_with_in_operation_accepted(self) -> None:
+        """Test that filters with OP_IN are properly converted to attribute_conditions"""
+        ts = Timestamp()
+        ts.GetCurrentTime()
+
+        int_array = IntArray(values=[12345, 67890])
+
+        message = DeleteTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
+                request_id=_REQUEST_ID,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
+            ),
+            filters=[
+                TraceItemFilterWithType(
+                    filter=TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(name="group_id", type=AttributeKey.TYPE_INT),
+                            op=ComparisonFilter.OP_IN,
+                            value=AttributeValue(val_int_array=int_array),
+                        )
+                    )
+                )
+            ],
+        )
+
+        with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
+            with patch("snuba.web.bulk_delete_query.produce_delete_query"):
+                assert isinstance(
+                    EndpointDeleteTraceItems().execute(message), DeleteTraceItemsResponse
+                )
+
+    def test_filters_with_unsupported_operation_rejected(self) -> None:
+        """Test that filters with operations other than OP_EQUALS/OP_IN are rejected"""
+        ts = Timestamp()
+        ts.GetCurrentTime()
+
+        message = DeleteTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
+                request_id=_REQUEST_ID,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
+            ),
+            filters=[
+                TraceItemFilterWithType(
+                    filter=TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(name="timestamp", type=AttributeKey.TYPE_INT),
+                            op=ComparisonFilter.OP_GREATER_THAN,
+                            value=AttributeValue(val_int=1234567890),
+                        )
+                    )
+                )
+            ],
+        )
+
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="Only OP_EQUALS and OP_IN operations are supported for deletion",
+        ):
+            EndpointDeleteTraceItems().execute(message)
+
+    def test_filters_with_and_filter_rejected(self) -> None:
+        """Test that AND/OR/NOT filters are rejected"""
+        ts = Timestamp()
+        ts.GetCurrentTime()
+
+        from sentry_protos.snuba.v1.trace_item_filter_pb2 import AndFilter
+
+        message = DeleteTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
+                request_id=_REQUEST_ID,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
+            ),
+            filters=[
+                TraceItemFilterWithType(
+                    filter=TraceItemFilter(
+                        and_filter=AndFilter(
+                            filters=[
+                                TraceItemFilter(
+                                    comparison_filter=ComparisonFilter(
+                                        key=AttributeKey(
+                                            name="group_id", type=AttributeKey.TYPE_INT
+                                        ),
+                                        op=ComparisonFilter.OP_EQUALS,
+                                        value=AttributeValue(val_int=12345),
+                                    )
+                                )
+                            ]
+                        )
+                    )
+                )
+            ],
+        )
+
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="Only comparison filters are supported for deletion",
+        ):
+            EndpointDeleteTraceItems().execute(message)
+
+    def test_filters_without_item_type_rejected(self) -> None:
+        """Test that filters without item_type in metadata are rejected"""
+        ts = Timestamp()
+        ts.GetCurrentTime()
+
+        message = DeleteTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
+                request_id=_REQUEST_ID,
+                # trace_item_type is intentionally omitted (defaults to UNSPECIFIED)
+            ),
+            filters=[
+                TraceItemFilterWithType(
+                    filter=TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(name="group_id", type=AttributeKey.TYPE_INT),
+                            op=ComparisonFilter.OP_EQUALS,
+                            value=AttributeValue(val_int=12345),
+                        )
+                    )
+                )
+            ],
+        )
+
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="trace_item_type must be specified in metadata when using filters",
+        ):
+            EndpointDeleteTraceItems().execute(message)

@@ -20,6 +20,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
+from snuba.query.dsl import Functions as f
 from snuba.query.dsl import arrayJoin, column, count, tupleElement
 from snuba.query.expressions import FunctionCall, Literal
 from snuba.query.logical import Query
@@ -153,12 +154,14 @@ def _build_attr_distribution_query(
         in_msg.filter,
         (attribute_key_to_expression),
     )
+    item_type_filter = f.equals(column("item_type"), in_msg.meta.trace_item_type)
     query = Query(
         from_clause=EAP_ITEMS_ENTITY,
         selected_columns=selected_columns,
         condition=base_conditions_and(
             in_msg.meta,
             trace_item_filters_expression,
+            item_type_filter,
         ),
         order_by=[
             OrderBy(

@@ -82,7 +82,7 @@ def store_spans_timeseries(
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestTimeSeriesApi(BaseApiTest):
     def test_basic(self) -> None:
@@ -223,7 +223,8 @@ class TestTimeSeriesApi(BaseApiTest):
             label="sum",
             buckets=expected_buckets,
             data_points=[
-                DataPoint(data=150, data_present=True) for _ in range(len(expected_buckets))
+                DataPoint(data=150, data_present=True, sample_count=150)
+                for _ in range(len(expected_buckets))
             ],
         )
         expected_formula_timeseries = TimeSeries(
@@ -942,14 +943,16 @@ class TestTimeSeriesApi(BaseApiTest):
             label="avg",
             buckets=expected_buckets,
             data_points=[
-                DataPoint(data=1, data_present=True) for _ in range(len(expected_buckets))
+                DataPoint(data=1, data_present=True, sample_count=300)
+                for _ in range(len(expected_buckets))
             ],
         )
         expected_sum_timeseries = TimeSeries(
             label="sum",
             buckets=expected_buckets,
             data_points=[
-                DataPoint(data=300, data_present=True) for _ in range(len(expected_buckets))
+                DataPoint(data=300, data_present=True, sample_count=300)
+                for _ in range(len(expected_buckets))
             ],
         )
         expected_formula_timeseries = TimeSeries(
@@ -1094,18 +1097,21 @@ class TestTimeSeriesApi(BaseApiTest):
                 DataPoint(
                     data=2,
                     data_present=True,
+                    sample_count=600,
                 ),
                 DataPoint(
                     data=2,
                     data_present=True,
+                    sample_count=600,
                 ),
                 DataPoint(
                     data=2,
                     data_present=True,
+                    sample_count=600,
                 ),
-                DataPoint(data=-1.0, data_present=True),
-                DataPoint(data=-1.0, data_present=True),
-                DataPoint(data=-1.0, data_present=True),
+                DataPoint(data=-1.0, data_present=True, sample_count=600),
+                DataPoint(data=-1.0, data_present=True, sample_count=600),
+                DataPoint(data=-1.0, data_present=True, sample_count=600),
             ],
         )
         assert response.result_timeseries == [expected_timeseries]
@@ -1172,7 +1178,8 @@ class TestTimeSeriesApi(BaseApiTest):
             label="sum",
             buckets=expected_buckets,
             data_points=[
-                DataPoint(data=300, data_present=True) for _ in range(len(expected_buckets))
+                DataPoint(data=300, data_present=True, sample_count=granularity_secs)
+                for _ in range(len(expected_buckets))
             ],
         )
         expected_formula_timeseries = TimeSeries(
@@ -1192,7 +1199,9 @@ class TestTimeSeriesApi(BaseApiTest):
             label="1 / 2",
             buckets=expected_buckets,
             data_points=[
-                DataPoint(data=0.5, data_present=True) for _ in range(len(expected_buckets))
+                # literal division should have no samples
+                DataPoint(data=0.5, data_present=True, sample_count=0)
+                for _ in range(len(expected_buckets))
             ],
         )
         assert sorted(response.result_timeseries, key=lambda x: x.label) == [
@@ -1434,7 +1443,11 @@ class TestTimeSeriesApi(BaseApiTest):
                 label="metric1",
                 buckets=expected_buckets,
                 data_points=[
-                    DataPoint(data=granularity_secs * (metric1_value * 2), data_present=True)
+                    DataPoint(
+                        data=granularity_secs * (metric1_value * 2),
+                        data_present=True,
+                        sample_count=granularity_secs,
+                    )
                     for _ in range(len(expected_buckets))
                 ],
             ),
@@ -1442,7 +1455,11 @@ class TestTimeSeriesApi(BaseApiTest):
                 label="metric2",
                 buckets=expected_buckets,
                 data_points=[
-                    DataPoint(data=granularity_secs * (metric2_value * 2), data_present=True)
+                    DataPoint(
+                        data=granularity_secs * (metric2_value * 2),
+                        data_present=True,
+                        sample_count=granularity_secs,
+                    )
                     for _ in range(len(expected_buckets))
                 ],
             ),
@@ -1563,7 +1580,7 @@ class TestTimeSeriesApi(BaseApiTest):
             3600,
             metrics=[
                 DummyMetric(
-                    "gen_ai.usage.total_tokens",
+                    "ai.total_tokens.used",
                     get_value=lambda x: 1,
                 ),
             ],

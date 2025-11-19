@@ -69,7 +69,15 @@ class TestCommon:
 
     def test_coalesce(self) -> None:
         new_attribute = list(ATTRIBUTES_TO_COALESCE.keys())[0]
-        old_attribute = ATTRIBUTES_TO_COALESCE[new_attribute][0]
+        old_attributes = ATTRIBUTES_TO_COALESCE[new_attribute]
+        references = [
+            SubscriptableReference(
+                alias=None,
+                column=column("attributes_string"),
+                key=literal(old_attribute),
+            )
+            for old_attribute in old_attributes
+        ]
 
         assert attribute_key_to_expression(
             AttributeKey(
@@ -82,10 +90,6 @@ class TestCommon:
                 column=column("attributes_string"),
                 key=literal(new_attribute),
             ),
-            SubscriptableReference(
-                alias=None,
-                column=column("attributes_string"),
-                key=literal(old_attribute),
-            ),
+            *references,
             alias=f"{new_attribute}_TYPE_STRING",
         )

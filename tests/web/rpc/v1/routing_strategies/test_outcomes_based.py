@@ -226,7 +226,7 @@ def test_outcomes_based_routing_highest_accuracy_mode(store_outcomes_fixture: An
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_outcomes_based_routing_defaults_to_spans_for_unspecified_item_type(
+def test_outcomes_based_routing_defaults_to_tier1_for_unspecified_item_type(
     store_outcomes_fixture: Any,
 ) -> None:
     strategy = OutcomesBasedRoutingStrategy()
@@ -241,6 +241,6 @@ def test_outcomes_based_routing_defaults_to_spans_for_unspecified_item_type(
             query_id=uuid.uuid4().hex,
         )
     )
-    assert routing_decision.tier == Tier.TIER_512
+    assert routing_decision.tier == Tier.TIER_1
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
