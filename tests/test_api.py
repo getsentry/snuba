@@ -36,9 +36,7 @@ from tests.helpers import write_processed_messages
 @pytest.mark.redis_db
 class SimpleAPITest(BaseApiTest):
     @pytest.fixture(autouse=True)
-    def setup_teardown(
-        self, clickhouse_db: None, redis_db: None
-    ) -> Generator[None, None, None]:
+    def setup_teardown(self, clickhouse_db: None, redis_db: None) -> Generator[None, None, None]:
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
         self.environments = ["prød", "test"]  # 2 environments
@@ -47,9 +45,9 @@ class SimpleAPITest(BaseApiTest):
         self.group_ids = [int(hsh[:16], 16) for hsh in self.hashes]
         self.minutes = 180
 
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) - timedelta(minutes=self.minutes)
+        self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
+            minutes=self.minutes
+        )
         storage = get_entity(EntityKey.EVENTS).get_writable_storage()
         assert storage is not None
         self.storage = storage
@@ -96,26 +94,18 @@ class SimpleAPITest(BaseApiTest):
                                 "organization_id": 1,
                                 "project_id": p,
                                 "event_id": uuid.uuid4().hex,
-                                "datetime": (
-                                    self.base_time + timedelta(minutes=tick)
-                                ).strftime(settings.PAYLOAD_DATETIME_FORMAT),
+                                "datetime": (self.base_time + timedelta(minutes=tick)).strftime(
+                                    settings.PAYLOAD_DATETIME_FORMAT
+                                ),
                                 "message": "a message",
-                                "platform": self.platforms[
-                                    (tock * p) % len(self.platforms)
-                                ],
-                                "primary_hash": self.hashes[
-                                    (tock * p) % len(self.hashes)
-                                ],
-                                "group_id": self.group_ids[
-                                    (tock * p) % len(self.hashes)
-                                ],
+                                "platform": self.platforms[(tock * p) % len(self.platforms)],
+                                "primary_hash": self.hashes[(tock * p) % len(self.hashes)],
+                                "group_id": self.group_ids[(tock * p) % len(self.hashes)],
                                 "retention_days": settings.DEFAULT_RETENTION_DAYS,
                                 "data": {
                                     # Project N sends every Nth (mod len(hashes)) hash (and platform)
                                     "received": calendar.timegm(
-                                        (
-                                            self.base_time + timedelta(minutes=tick)
-                                        ).timetuple()
+                                        (self.base_time + timedelta(minutes=tick)).timetuple()
                                     ),
                                     "tags": list(
                                         {
@@ -217,12 +207,8 @@ class TestApi(SimpleAPITest):
             assert "data" in result, result
             buckets = self.minutes / rollup_mins
             for b in range(int(buckets)):
-                bucket_time = parse_datetime(result["data"][b]["time"]).replace(
-                    tzinfo=None
-                )
-                assert bucket_time == self.base_time + timedelta(
-                    minutes=b * rollup_mins
-                )
+                bucket_time = parse_datetime(result["data"][b]["time"]).replace(tzinfo=None)
+                assert bucket_time == self.base_time + timedelta(minutes=b * rollup_mins)
                 assert result["data"][b]["aggregate"] == float(rollup_mins) / p
 
     def test_rollups(self) -> None:
@@ -249,12 +235,8 @@ class TestApi(SimpleAPITest):
             )
             buckets = self.minutes / rollup_mins
             for b in range(int(buckets)):
-                bucket_time = parse_datetime(result["data"][b]["time"]).replace(
-                    tzinfo=None
-                )
-                assert bucket_time == self.base_time + timedelta(
-                    minutes=b * rollup_mins
-                )
+                bucket_time = parse_datetime(result["data"][b]["time"]).replace(tzinfo=None)
+                assert bucket_time == self.base_time + timedelta(minutes=b * rollup_mins)
                 assert (
                     result["data"][b]["aggregate"] == rollup_mins
                 )  # project 1 has 1 event per minute
@@ -320,9 +302,7 @@ class TestApi(SimpleAPITest):
                         "selected_columns": ["group_id"],
                         "groupby": "group_id",
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -340,9 +320,7 @@ class TestApi(SimpleAPITest):
                         "groupby": "group_id",
                         "conditions": [["group_id", "=", 100]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -361,9 +339,7 @@ class TestApi(SimpleAPITest):
                         "groupby": "group_id",
                         "conditions": [["group_id", "IN", [100, 200]]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -384,9 +360,7 @@ class TestApi(SimpleAPITest):
                         "offset": 1,
                         "limit": 1,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -407,9 +381,7 @@ class TestApi(SimpleAPITest):
                         "orderby": "-count",
                         "limit": 1,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -439,9 +411,7 @@ class TestApi(SimpleAPITest):
                         "limitby": [100, "environment"],
                         "debug": True,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -464,9 +434,7 @@ class TestApi(SimpleAPITest):
                         "orderby": "-count",
                         "limit": 1,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -492,13 +460,9 @@ class TestApi(SimpleAPITest):
                         "granularity": 3600,
                         "aggregations": [["count()", "", "count"]],
                         "groupby": "platform",
-                        "conditions": [
-                            ["platform", "NOT IN", ["b", "c", "d", "e", "f"]]
-                        ],
+                        "conditions": [["platform", "NOT IN", ["b", "c", "d", "e", "f"]]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -517,9 +481,7 @@ class TestApi(SimpleAPITest):
                         "orderby": "event_id",
                         "limit": 1,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -537,9 +499,7 @@ class TestApi(SimpleAPITest):
                         "orderby": "event_id",
                         "limit": 1,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -557,9 +517,7 @@ class TestApi(SimpleAPITest):
                         "orderby": "event_id",
                         "limit": 1,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -577,9 +535,7 @@ class TestApi(SimpleAPITest):
                         "orderby": "event_id",
                         "limit": 1,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -601,9 +557,7 @@ class TestApi(SimpleAPITest):
                             ["type", "!=", "transaction"],
                         ],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -620,9 +574,7 @@ class TestApi(SimpleAPITest):
                         "project_id": 4,
                         "event_id": uuid.uuid4().hex,
                         "group_id": 1,
-                        "datetime": (self.base_time).strftime(
-                            settings.PAYLOAD_DATETIME_FORMAT
-                        ),
+                        "datetime": (self.base_time).strftime(settings.PAYLOAD_DATETIME_FORMAT),
                         "message": f"handled {value}",
                         "platform": "test",
                         "primary_hash": self.hashes[0],
@@ -661,9 +613,7 @@ class TestApi(SimpleAPITest):
                         "conditions": [[["isHandled", []], "=", 1]],
                         "orderby": ["message"],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -682,9 +632,7 @@ class TestApi(SimpleAPITest):
                         "conditions": [[["notHandled", []], "=", 1]],
                         "orderby": ["message"],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -703,13 +651,9 @@ class TestApi(SimpleAPITest):
                         "granularity": 3600,
                         "aggregations": [["count()", "", "count"]],
                         "groupby": "platform",
-                        "conditions": [
-                            ["platform", "=", r"production'; DROP TABLE test; --"]
-                        ],
+                        "conditions": [["platform", "=", r"production'; DROP TABLE test; --"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -724,9 +668,7 @@ class TestApi(SimpleAPITest):
                         "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "aggregations": [["count()", "", "count"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -746,9 +688,7 @@ class TestApi(SimpleAPITest):
                         "groupby": "platform",
                         "conditions": [["platform", "=", r"\'"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -781,9 +721,7 @@ class TestApi(SimpleAPITest):
                         "limit": 1,
                         "debug": True,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -811,9 +749,7 @@ class TestApi(SimpleAPITest):
                         "limit": 1,
                         "debug": True,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -838,9 +774,7 @@ class TestApi(SimpleAPITest):
                         "limit": 1,
                         "debug": True,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -863,21 +797,15 @@ class TestApi(SimpleAPITest):
                         "limit": 1,
                         "debug": True,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
         )
 
         # make sure the conditions is in PREWHERE and nowhere else
-        assert (
-            "PREWHERE in((project_id AS _snuba_project_id), tuple(1))" in result["sql"]
-        )
-        assert (
-            result["sql"].count("in((project_id AS _snuba_project_id), tuple(1))") == 1
-        )
+        assert "PREWHERE in((project_id AS _snuba_project_id), tuple(1))" in result["sql"]
+        assert result["sql"].count("in((project_id AS _snuba_project_id), tuple(1))") == 1
 
     def test_aggregate(self) -> None:
         result = json.loads(
@@ -889,9 +817,7 @@ class TestApi(SimpleAPITest):
                         "groupby": "project_id",
                         "aggregations": [["topK(4)", "group_id", "aggregate"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -912,9 +838,7 @@ class TestApi(SimpleAPITest):
                         "groupby": "project_id",
                         "aggregations": [["uniq", "group_id", "aggregate"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -930,9 +854,7 @@ class TestApi(SimpleAPITest):
                         "groupby": ["project_id", "time"],
                         "aggregations": [["uniq", "group_id", "aggregate"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -953,9 +875,7 @@ class TestApi(SimpleAPITest):
                             ["topK(1)", "platform", "top_platforms"],
                         ],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -977,13 +897,9 @@ class TestApi(SimpleAPITest):
                         "project": 3,
                         "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "groupby": "project_id",
-                        "aggregations": [
-                            ["argMax", ["event_id", "timestamp"], "latest_event"]
-                        ],
+                        "aggregations": [["argMax", ["event_id", "timestamp"], "latest_event"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1003,9 +919,7 @@ class TestApi(SimpleAPITest):
                         "having": [["times_seen", ">", 1]],
                         "aggregations": [["count()", "", "times_seen"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1022,9 +936,7 @@ class TestApi(SimpleAPITest):
                         "having": [["times_seen", ">", 100]],
                         "aggregations": [["count()", "", "times_seen"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1042,9 +954,7 @@ class TestApi(SimpleAPITest):
                         "selected_columns": ["group_id"],
                         "groupby": "time",
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1064,9 +974,7 @@ class TestApi(SimpleAPITest):
                         "conditions": [["tags[sentry:dist]", "IN", ["dist1", "dist2"]]],
                         "aggregations": [["count()", "", "aggregate"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1089,9 +997,7 @@ class TestApi(SimpleAPITest):
                         ],
                         "aggregations": [["count()", "", "aggregate"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1114,9 +1020,7 @@ class TestApi(SimpleAPITest):
                         ],
                         "aggregations": [["count()", "", "aggregate"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1135,9 +1039,7 @@ class TestApi(SimpleAPITest):
                         "conditions": [["tags[os.rooted]", "=", "1"]],
                         "aggregations": [["count()", "", "aggregate"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1159,9 +1061,7 @@ class TestApi(SimpleAPITest):
                         "groupby": "group_id",
                         "conditions": [["group_id", "=", 0], ["group_id", "=", 1]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1180,9 +1080,7 @@ class TestApi(SimpleAPITest):
                         "sample": 1000,
                         "selected_columns": ["project_id"],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 )
             ).data
@@ -1198,9 +1096,7 @@ class TestApi(SimpleAPITest):
                         "sample": 0.1,
                         "selected_columns": ["project_id"],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 )
             ).data
@@ -1223,9 +1119,7 @@ class TestApi(SimpleAPITest):
                         ],
                         "conditions": [["tags_value", "IS NOT NULL", None]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1275,9 +1169,7 @@ class TestApi(SimpleAPITest):
                         "granularity": 3600,
                         "aggregations": [["topK(100)", "tags_key", "top"]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1329,9 +1221,7 @@ class TestApi(SimpleAPITest):
                             "project.name",
                         ],
                     ],
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
+                    "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     "totals": False,
                 }
             ),
@@ -1358,9 +1248,7 @@ class TestApi(SimpleAPITest):
                         "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "dataset": "events",
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                         "groupby": ["tags_key", "tags_value"],
                         "conditions": [
                             ["type", "!=", "transaction"],
@@ -1395,9 +1283,7 @@ class TestApi(SimpleAPITest):
                         "aggregations": [["count()", "", "count"]],
                         "conditions": [["environment", "IN", ["prød"]]],
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1414,9 +1300,7 @@ class TestApi(SimpleAPITest):
                     "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "conditions": [["platform", "NOT IN", [long_string]]],
                     "selected_columns": ["project_id"],
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
+                    "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                 }
             ),
         )
@@ -1435,9 +1319,7 @@ class TestApi(SimpleAPITest):
                         "selected_columns": ["group_id"],
                         "groupby": "group_id",
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1539,9 +1421,7 @@ class TestApi(SimpleAPITest):
                         "orderby": [["-substringUTF8", ["environment", 1, 3]], "time"],
                         "debug": True,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1603,9 +1483,7 @@ class TestApi(SimpleAPITest):
                         "project": 1,
                         "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                         "orderby": "-timestamp",
                         "selected_columns": ["tags[sentry:release]", "timestamp"],
                         "limit": 150,
@@ -1625,9 +1503,7 @@ class TestApi(SimpleAPITest):
                         "project": 1,
                         "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                         "orderby": "-timestamp",
                         "selected_columns": ["tags[sentry:release]", "timestamp"],
                         "limit": 150,
@@ -1648,9 +1524,7 @@ class TestApi(SimpleAPITest):
                         "project": 1,
                         "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                         "orderby": "-timestamp",
                         "selected_columns": ["tags[sentry:release]", "timestamp"],
                         "limit": 200,
@@ -1670,9 +1544,7 @@ class TestApi(SimpleAPITest):
                         "project": 1,
                         "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                         "orderby": "-timestamp",
                         "selected_columns": ["tags[sentry:release]", "timestamp"],
                         "limit": 10,
@@ -1691,9 +1563,7 @@ class TestApi(SimpleAPITest):
                         "project": 1,
                         "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                         "orderby": "-timestamp",
                         "selected_columns": ["tags[sentry:release]", "timestamp"],
                         "limit": 10,
@@ -1714,9 +1584,7 @@ class TestApi(SimpleAPITest):
                         "project": 1,
                         "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                         "orderby": "-timestamp",
                         "selected_columns": ["tags[sentry:release]", "timestamp"],
                         "limit": 10,
@@ -1737,9 +1605,7 @@ class TestApi(SimpleAPITest):
                         "project": 1,
                         "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                         "orderby": "-timestamp",
                         "selected_columns": ["tags[sentry:release]", "timestamp"],
                         "conditions": [["message", "=", "doesnt exist"]],
@@ -1810,9 +1676,7 @@ class TestApi(SimpleAPITest):
                 ),
             ).data
         )
-        assert [d["tags[sentry:release]"] for d in result["data"]] == list(
-            map(str, range(0, 5))
-        )
+        assert [d["tags[sentry:release]"] for d in result["data"]] == list(map(str, range(0, 5)))
 
         result = json.loads(
             self.post(
@@ -1848,9 +1712,7 @@ class TestApi(SimpleAPITest):
                         "project": 1,
                         "tenant_ids": {"referrer": "r", "organization_id": 1234},
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                         "orderby": "-timestamp",
                         "selected_columns": [
                             "event_id",
@@ -1874,7 +1736,7 @@ class TestApi(SimpleAPITest):
             map(str, reversed(range(0, 10)))
         )
 
-    def test_consistent(self, disable_query_cache: Callable[..., Any]) -> None:
+    def test_consistent(self) -> None:
         state.set_config("consistent_override", "test_override=0;another=0.5")
         state.set_config("read_through_cache.short_circuit", 1)
         query_data = {
@@ -1909,9 +1771,7 @@ class TestApi(SimpleAPITest):
                     ],
                     "debug": True,
                     "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
+                    "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                 }
             ),
         )
@@ -1929,9 +1789,7 @@ class TestApi(SimpleAPITest):
                         "selected_columns": ["group_id"],
                         "groupby": "group_id",
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data
@@ -1946,9 +1804,7 @@ class TestApi(SimpleAPITest):
                     "tenant_ids": {"referrer": "r", "organization_id": 1234},
                     "dataset": "events",
                     "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
+                    "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     "conditions": [
                         [["positionCaseInsensitive", ["message", "'Api\\'"]], "!=", 0],
                         ["environment", "IN", ["production"]],
@@ -1994,9 +1850,7 @@ class TestApi(SimpleAPITest):
             "groupby": "project_id",
             "aggregations": [["count()", "", "count"]],
             "conditions": [["group_id", "=", group_id]],
-            "from_date": (
-                self.base_time - timedelta(minutes=2 * self.minutes)
-            ).isoformat(),
+            "from_date": (self.base_time - timedelta(minutes=2 * self.minutes)).isoformat(),
             "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
         }
         result = json.loads(self.post(json.dumps(query)).data)
@@ -2009,23 +1863,17 @@ class TestApi(SimpleAPITest):
                 "transaction_id": "foo",
                 "project_id": project_id,
                 "group_ids": [group_id],
-                "datetime": (self.base_time + timedelta(days=7)).strftime(
-                    "%Y-%m-%dT%H:%M:%S.%fZ"
-                ),
+                "datetime": (self.base_time + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             },
         )
-        response = self.app.post(
-            "/tests/events/eventstream", data=json.dumps(replacement)
-        )
+        response = self.app.post("/tests/events/eventstream", data=json.dumps(replacement))
         assert response.status_code == 200
 
         result = json.loads(self.post(json.dumps(query)).data)
         assert result["data"] == []
 
         storage = get_writable_storage(StorageKey.ERRORS)
-        clickhouse = storage.get_cluster().get_query_connection(
-            ClickhouseClientSettings.QUERY
-        )
+        clickhouse = storage.get_cluster().get_query_connection(ClickhouseClientSettings.QUERY)
 
         # There is data in the events table
         assert len(clickhouse.execute(f"SELECT * FROM {self.table}").results) > 0
@@ -2035,9 +1883,7 @@ class TestApi(SimpleAPITest):
         table = writer.get_schema().get_table_name()
 
         assert table not in clickhouse.execute("SHOW TABLES").results
-        assert (
-            self.redis_db_size(get_redis_client(RedisClientKey.REPLACEMENTS_STORE)) == 0
-        )
+        assert self.redis_db_size(get_redis_client(RedisClientKey.REPLACEMENTS_STORE)) == 0
 
         # No data in events table
         assert len(clickhouse.execute(f"SELECT * FROM {self.table}").results) == 0
@@ -2055,9 +1901,7 @@ class TestApi(SimpleAPITest):
                         "orderby": "-count",
                         "limit": 1000000,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             )
@@ -2083,9 +1927,7 @@ class TestApi(SimpleAPITest):
                         ],
                         "limit": 5,
                         "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
+                        "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                     }
                 ),
             ).data

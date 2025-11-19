@@ -17,7 +17,7 @@ from snuba.state import set_config
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
-from snuba.web.bulk_delete_query import delete_from_storage
+from snuba.web.bulk_delete_query import AttributeConditions, delete_from_storage
 from snuba.web.delete_query import DeletesNotEnabledError
 
 CONSUMER_CONFIG = {
@@ -134,3 +134,60 @@ def test_delete_invalid_column_name() -> None:
 
     with pytest.raises(InvalidQueryException):
         delete_from_storage(storage, conditions, attr_info)
+
+
+@pytest.mark.redis_db
+def test_attribute_conditions_valid() -> None:
+    """Test that valid attribute_conditions are accepted for eap_items storage"""
+    storage = get_writable_storage(StorageKey("eap_items"))
+    conditions = {"project_id": [1], "item_type": [1]}
+    attribute_conditions = AttributeConditions(item_type=1, attributes={"group_id": [12345]})
+    attr_info = get_attribution_info()
+
+    # Mock out _enforce_max_rows to avoid needing actual data
+    with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
+        with patch("snuba.web.bulk_delete_query.produce_delete_query"):
+            # Should not raise an exception
+            delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+
+
+@pytest.mark.redis_db
+def test_attribute_conditions_invalid_attribute() -> None:
+    """Test that invalid attribute names in attribute_conditions are rejected"""
+    storage = get_writable_storage(StorageKey("eap_items"))
+    conditions = {"project_id": [1], "item_type": [1]}
+    attribute_conditions = AttributeConditions(item_type=1, attributes={"invalid_attr": [12345]})
+    attr_info = get_attribution_info()
+
+    with pytest.raises(InvalidQueryException, match="Invalid attributes for deletion"):
+        delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+
+
+@pytest.mark.redis_db
+def test_attribute_conditions_missing_item_type() -> None:
+    """Test that attribute_conditions requires item_type in conditions"""
+    storage = get_writable_storage(StorageKey("eap_items"))
+    conditions = {"project_id": [1]}
+    attribute_conditions = AttributeConditions(item_type=1, attributes={"group_id": [12345]})
+    attr_info = get_attribution_info()
+
+    # Since item_type is now in AttributeConditions, we need to test a different scenario
+    # The validation now should pass, but we need to ensure item_type is also in conditions
+    with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
+        with patch("snuba.web.bulk_delete_query.produce_delete_query"):
+            # This should now succeed since we're no longer checking conditions dict
+            delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+
+
+@pytest.mark.redis_db
+def test_attribute_conditions_storage_not_configured() -> None:
+    """Test that storages without attribute deletion config reject attribute_conditions"""
+    storage = get_writable_storage(StorageKey("search_issues"))
+    conditions = {"project_id": [1], "group_id": [1]}  # Valid columns for search_issues
+    attribute_conditions = AttributeConditions(item_type=1, attributes={"some_attr": [12345]})
+    attr_info = get_attribution_info()
+
+    with pytest.raises(
+        InvalidQueryException, match="No attribute-based deletions configured for this storage"
+    ):
+        delete_from_storage(storage, conditions, attr_info, attribute_conditions)

@@ -1,5 +1,36 @@
 # Changelog
 
+## 25.11.0
+
+### Various fixes & improvements
+
+- chore(rpc): Add example request for EndpointTraceItemDetails (#7538) by @Zylphrex
+- feat(deletes): support TraceItemFilter[s] in DeleteTraceItems API (#7535) by @onewland
+- feat(deletes): add support for delete by attribute in config (#7534) by @onewland
+- fix(deletes): some ch versions dont have setting (#7536) by @MeredithAnya
+- feat: consolidate statsd config to a single environment variable of `SNUBA_STATSD_ADDR` (#7524) by @aldy505
+- chore: stop capturing redis oom set failure in sentry (#7528) by @kylemumma
+- fix(deletes): properly update clickhouse_settings (#7533) by @MeredithAnya
+- gocd: update path filters to match gocd-yaml-config-plugin docs (#7532) by @onewland
+- make test less flaky (#7531) by @volokluev
+- ref: bump sentry-arroyo to 2.33.0 (#7530) by @getsentry-bot
+- chore: add metric to see how many GetTrace request have a user provided limit (#7521) by @kylemumma
+- gocd: split deploy triggers take 2 (#7527) by @onewland
+- gocd: add filter for deploys for snuba-{py,rs} (#7526) by @onewland
+- feat(eap): Insert arrays in EAP (#7514) by @phacops
+- gocd: split pipelines, leaving original, update migration check script (#7525) by @onewland
+- Revert "[gocd] split snuba deploys into snuba-deploy-py and snuba-deploy-rs (take 2) (#7510)" (4468c1a7) by @getsentry-bot
+- Revert "fix(gocd): use deploy-snuba-py-s4s and deploy-snuba-rs-s4s to check m… (#7523)" (505a7270) by @getsentry-bot
+- fix(gocd): use deploy-snuba-py-s4s and deploy-snuba-rs-s4s to check m… (#7523) by @onewland
+- chore(deps): bump actions/checkout from 4 to 5 (#7517) by @dependabot
+- [gocd] split snuba deploys into snuba-deploy-py and snuba-deploy-rs (take 2) (#7510) by @onewland
+- ref(lw-deletes): add runtime config lightweight_deletes_sync (#7522) by @MeredithAnya
+- fix(trace-item-stats): Apply eap item type filter (#7520) by @shruthilayaj
+- feat(eap): Insert client and server sample rates in EAP (#7515) by @phacops
+- feat: pagination support in GetTrace endpoint (#7508) by @kylemumma
+
+_Plus 64 more_
+
 ## 25.10.0
 
 ### Various fixes & improvements

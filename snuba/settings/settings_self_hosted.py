@@ -1,6 +1,8 @@
 import os
 from typing import Set
 
+from snuba.utils.metrics.addr_config import get_statsd_addr
+
 env = os.environ.get
 
 ALLOCATION_POLICY_ENABLED = False
@@ -17,8 +19,7 @@ REDIS_DB = int(env("REDIS_DB", 1))
 USE_REDIS_CLUSTER = False
 
 # Dogstatsd Options
-DOGSTATSD_HOST = env("DOGSTATSD_HOST")
-DOGSTATSD_PORT = env("DOGSTATSD_PORT")
+DOGSTATSD_HOST, DOGSTATSD_PORT = get_statsd_addr()
 
 # Dataset readiness states supported in this environment
 SUPPORTED_STATES: Set[str] = {"deprecate", "complete"}

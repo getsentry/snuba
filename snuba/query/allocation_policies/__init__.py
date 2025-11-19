@@ -18,7 +18,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
-from snuba.web import QueryException, QueryResult
+from snuba.web import QueryResult
 
 CAPMAN_PREFIX = "capman"
 CAPMAN_HASH = "capman"
@@ -42,7 +42,7 @@ class QueryResultOrError:
     differently"""
 
     query_result: QueryResult | None
-    error: QueryException | None
+    error: Exception | None
 
     def __post_init__(self) -> None:
         assert self.query_result is not None or self.error is not None
