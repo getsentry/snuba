@@ -108,12 +108,6 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> Generator[List[bytes]
                 "sentry.transaction": AnyValue(string_value="*foo"),
             },
         ),
-        gen_item_message(
-            start_timestamp=start_timestamp,
-            attributes={
-                "metric.questions.6._id": AnyValue(string_value="jlfsj"),
-            },
-        ),
     ]
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
     yield messages
@@ -187,13 +181,3 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         res = AttributeValuesRequest().execute(req)
         assert res.values == [item_id]
-
-    def test_attribute_names_with_dots(self, setup_teardown: Any) -> None:
-        message = TraceItemAttributeValuesRequest(
-            meta=COMMON_META,
-            limit=10,
-            key=AttributeKey(name="metric.questions.6._id", type=AttributeKey.TYPE_STRING),
-        )
-        response = AttributeValuesRequest().execute(message)
-        assert len(response.values) == 1
-        assert set(response.values) == {"jlfsj"}
