@@ -11,6 +11,7 @@ import sentry_sdk
 
 from snuba import environment
 from snuba import settings as snuba_settings
+from snuba import state
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -44,6 +45,11 @@ from snuba.web.db_query import db_query, update_query_metadata_and_stats
 
 metrics = MetricsWrapper(environment.metrics, "api")
 logger = logging.getLogger("snuba.pipeline.stages.query_execution")
+
+DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG = (
+    "ExecutionStage.disable_max_query_size_check_for_clusters"
+)
+MAX_QUERY_SIZE_BYTES_CONFIG = "ExecutionStage.max_query_size_bytes"
 
 
 class ExecutionStage(QueryPipelineStage[ClickhouseQuery | CompositeQuery[Table], QueryResult]):
@@ -157,6 +163,21 @@ def _run_and_apply_column_names(
     return result
 
 
+def _max_query_size_bytes() -> int:
+    return (
+        state.get_int_config(MAX_QUERY_SIZE_BYTES_CONFIG, MAX_QUERY_SIZE_BYTES)
+        or MAX_QUERY_SIZE_BYTES
+    )
+
+
+def _disable_max_query_size_check_for_clusters() -> set[str]:
+    return set(
+        (state.get_str_config(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, "") or "").split(
+            ","
+        )
+    )
+
+
 def _format_storage_query_and_run(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
@@ -207,11 +228,16 @@ def _format_storage_query_and_run(
         "cluster_name": cluster_name,
     }
 
-    if query_size_bytes > MAX_QUERY_SIZE_BYTES:
+    if (
+        not cluster_name
+        or
+        # This will force to fallback on the ClickHouse limit.
+        cluster_name not in _disable_max_query_size_check_for_clusters()
+    ) and query_size_bytes > _max_query_size_bytes():
         cause = QueryTooLongException(
             f"After processing, query is {query_size_bytes} bytes, "
             "which is too long for ClickHouse to process. "
-            f"Max size is {MAX_QUERY_SIZE_BYTES} bytes."
+            f"Max size is {_max_query_size_bytes()} bytes."
         )
         stats = update_query_metadata_and_stats(
             query=clickhouse_query,
@@ -273,10 +299,10 @@ def get_query_size_group(query_size_bytes: int) -> str:
     Eg. If the query size is equal to the max query size, this function
     returns "100%".
     """
-    if query_size_bytes == MAX_QUERY_SIZE_BYTES:
+    if query_size_bytes == _max_query_size_bytes():
         return "100%"
     else:
-        query_size_group = int(floor(query_size_bytes / MAX_QUERY_SIZE_BYTES * 10)) * 10
+        query_size_group = int(floor(query_size_bytes / _max_query_size_bytes() * 10)) * 10
         return f">={query_size_group}%"
 
 

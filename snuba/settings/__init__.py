@@ -119,6 +119,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "profile_chunks",
         },
         "single_node": True,
+        "cluster_name": "test_cluster",
     },
 ]
 
