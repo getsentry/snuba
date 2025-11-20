@@ -360,6 +360,18 @@ impl<R> BytesInsertBatch<R> {
         self.sentry_received_timestamp
             .send_metric(write_time, "sentry_received_latency");
     }
+
+    pub fn emit_item_type_metrics(&self) {
+        use sentry_arroyo::counter;
+
+        for (item_type, count) in &self.item_type_metrics.counts {
+            counter!(
+                "insertions.item_type_count",
+                *count as i64,
+                "item_type" => item_type.to_string()
+            );
+        }
+    }
 }
 
 impl BytesInsertBatch<RowData> {
