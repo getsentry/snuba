@@ -261,11 +261,16 @@ def test_disable_max_query_size_check(ch_query: Query) -> None:
     settings = HTTPQuerySettings()
     timer = Timer("test")
     metadata = get_fake_metadata()
+    cluster_name = (
+        snubasettings.CLUSTERS[0]["cluster_name"]
+        if "cluster_name" in snubasettings.CLUSTERS[0]
+        else "test_cluster"
+    )
 
     # Lowering this should make the query too big...
     state.set_config(MAX_QUERY_SIZE_BYTES_CONFIG, 1)
     # Unless we disable the check for this cluster.
-    state.set_config(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, "test_cluster")
+    state.set_config(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, cluster_name)
 
     res = ExecutionStage(attinfo, query_metadata=metadata).execute(
         QueryPipelineResult(
