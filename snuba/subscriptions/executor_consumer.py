@@ -19,6 +19,7 @@ from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.processing.strategies.produce import Produce
 from arroyo.types import Commit
+from clickhouse_driver.errors import ErrorCodes
 
 from snuba import state
 from snuba.clickhouse.errors import ClickhouseError
@@ -93,9 +94,7 @@ def build_executor_consumer(
 ) -> StreamProcessor[KafkaPayload]:
     # Validate that a valid dataset/entity pair was passed in
     dataset = get_dataset(dataset_name)
-    dataset_entity_names = [
-        get_entity_name(e).value for e in dataset.get_all_entities()
-    ]
+    dataset_entity_names = [get_entity_name(e).value for e in dataset.get_all_entities()]
 
     # Only entities in the same dataset with the same scheduled and result topics
     # may be run together
@@ -197,9 +196,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             self.__total_partition_count,
             self.__total_concurrent_queries,
         )
-        self.__metrics.gauge(
-            "calculated_max_concurrent_queries", calculated_max_concurrent_queries
-        )
+        self.__metrics.gauge("calculated_max_concurrent_queries", calculated_max_concurrent_queries)
 
         strategy: ProcessingStrategy[KafkaPayload] = ExecuteQuery(
             self.__dataset,
@@ -242,15 +239,11 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__encoder = SubscriptionScheduledTaskEncoder()
         self.__result_encoder = SubscriptionTaskResultEncoder()
 
-        self.__queue: Deque[
-            Tuple[Message[KafkaPayload], SubscriptionTaskResultFuture]
-        ] = deque()
+        self.__queue: Deque[Tuple[Message[KafkaPayload], SubscriptionTaskResultFuture]] = deque()
 
         self.__closed = False
 
-        self.__concurrent_gauge: Gauge = ThreadSafeGauge(
-            self.__metrics, "executor.concurrent"
-        )
+        self.__concurrent_gauge: Gauge = ThreadSafeGauge(self.__metrics, "executor.concurrent")
 
         self.__concurrent_clickhouse_gauge: Gauge = ThreadSafeGauge(
             self.__metrics, "executor.concurrent.clickhouse"
@@ -261,9 +254,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     ) -> Tuple[SubscriptionRequest, Result]:
         # Measure the amount of time that took between the task's scheduled
         # time and it beginning to execute.
-        self.__metrics.timing(
-            "executor.latency", (time.time() - task.timestamp.timestamp()) * 1000
-        )
+        self.__metrics.timing("executor.latency", (time.time() - task.timestamp.timestamp()) * 1000)
 
         timer = Timer("query")
 
@@ -297,14 +288,39 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             try:
                 transformed_message = message.replace(
                     self.__result_encoder.encode(
-                        SubscriptionTaskResult(
-                            result_future.task, result_future.future.result()
-                        )
+                        SubscriptionTaskResult(result_future.task, result_future.future.result())
                     )
                 )
             except QueryException as exc:
                 cause = exc.__cause__
                 if isinstance(cause, ClickhouseError):
+                    if cause.code == ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
+
+                        sleep_interval_seconds = (
+                            state.get_config(
+                                "subscriptions_executor_simultaneous_queries_sleep_seconds", None
+                            )
+                            or 1
+                        )
+                        logger.warning(
+                            "Too many simultaneous queries in ClickHouse, backing off for %ss and retrying",
+                            sleep_interval_seconds,
+                        )
+                        time.sleep(sleep_interval_seconds)
+                        # Re-submit the same task for another attempt without acknowledging/committing
+                        self.__queue.appendleft(
+                            (
+                                message,
+                                SubscriptionTaskResultFuture(
+                                    result_future.task,
+                                    self.__executor.submit(
+                                        self.__execute_query,
+                                        result_future.task,
+                                        result_future.task.task.tick_upper_offset,
+                                    ),
+                                ),
+                            )
+                        )
                     if cause.code in NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
                         logger.exception("Error running subscription query %r", exc)
                     else:
@@ -321,9 +337,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         # we will start raising MessageRejected to slow down the consumer as
         # it means our executor cannot keep up
         queue_size_factor = state.get_config("executor_queue_size_factor", 10)
-        assert (
-            queue_size_factor is not None
-        ), "Invalid executor_queue_size_factor config"
+        assert queue_size_factor is not None, "Invalid executor_queue_size_factor config"
         max_queue_size = self.__max_concurrent_queries * queue_size_factor
 
         # Tell the consumer to pause until we have removed some futures from
@@ -343,8 +357,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         # Don't execute stale subscriptions
         if (
             self.__stale_threshold_seconds is not None
-            and time.time() - datetime.timestamp(task.timestamp)
-            >= self.__stale_threshold_seconds
+            and time.time() - datetime.timestamp(task.timestamp) >= self.__stale_threshold_seconds
         ):
             should_execute = False
 
@@ -354,9 +367,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                     message,
                     SubscriptionTaskResultFuture(
                         task,
-                        self.__executor.submit(
-                            self.__execute_query, task, tick_upper_offset
-                        ),
+                        self.__executor.submit(self.__execute_query, task, tick_upper_offset),
                     ),
                 )
             )
@@ -385,9 +396,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             message, result_future = self.__queue.popleft()
 
             transformed_message = self.__result_encoder.encode(
-                SubscriptionTaskResult(
-                    result_future.task, result_future.future.result(remaining)
-                )
+                SubscriptionTaskResult(result_future.task, result_future.future.result(remaining))
             )
 
             self.__next_step.submit(message.replace(transformed_message))
