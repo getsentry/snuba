@@ -170,6 +170,14 @@ def _max_query_size_bytes() -> int:
     )
 
 
+def _disable_max_query_size_check_for_clusters() -> set[str]:
+    return set(
+        (state.get_str_config(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, "") or "").split(
+            ","
+        )
+    )
+
+
 def _format_storage_query_and_run(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
@@ -220,13 +228,11 @@ def _format_storage_query_and_run(
         "cluster_name": cluster_name,
     }
 
-    # This will force to fallback on the ClickHouse limit.
-    disable_max_query_size_check_for_clusters: str = (
-        state.get_str_config(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, "") or ""
-    )
-
     if (
-        not cluster_name or cluster_name not in disable_max_query_size_check_for_clusters
+        not cluster_name
+        or
+        # This will force to fallback on the ClickHouse limit.
+        cluster_name not in _disable_max_query_size_check_for_clusters()
     ) and query_size_bytes > _max_query_size_bytes():
         cause = QueryTooLongException(
             f"After processing, query is {query_size_bytes} bytes, "
