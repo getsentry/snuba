@@ -19,7 +19,6 @@ from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.processing.strategies.produce import Produce
 from arroyo.types import Commit
-from clickhouse_driver.errors import ErrorCodes
 
 from snuba import state
 from snuba.clickhouse.errors import ClickhouseError
@@ -294,35 +293,12 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             except QueryException as exc:
                 cause = exc.__cause__
                 if isinstance(cause, ClickhouseError):
-                    if cause.code == ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
-
-                        sleep_interval_seconds = (
-                            state.get_config(
-                                "subscriptions_executor_simultaneous_queries_sleep_seconds", None
-                            )
-                            or 1
-                        )
-                        logger.warning(
-                            "Too many simultaneous queries in ClickHouse, backing off for %ss and retrying",
-                            sleep_interval_seconds,
-                        )
-                        time.sleep(sleep_interval_seconds)
-                        # Re-submit the same task for another attempt without acknowledging/committing
-                        self.__queue.appendleft(
-                            (
-                                message,
-                                SubscriptionTaskResultFuture(
-                                    result_future.task,
-                                    self.__executor.submit(
-                                        self.__execute_query,
-                                        result_future.task,
-                                        result_future.task.task.tick_upper_offset,
-                                    ),
-                                ),
-                            )
-                        )
                     if cause.code in NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
                         logger.exception("Error running subscription query %r", exc)
+                        self.__metrics.increment(
+                            "subscription_executor_nonretryable_error",
+                            tags={"error_type": str(cause.code)},
+                        )
                     else:
                         raise SubscriptionQueryException(exc.message)
 
