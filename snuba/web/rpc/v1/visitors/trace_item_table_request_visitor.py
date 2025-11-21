@@ -36,9 +36,7 @@ class ValidateColumnLabelsVisitor(RequestVisitor):
             if column.label == "":
                 continue
             if column.label in self.column_labels:
-                raise BadSnubaRPCRequestException(
-                    f"Duplicate column label: {column.label}"
-                )
+                raise BadSnubaRPCRequestException(f"Duplicate column label: {column.label}")
             self.column_labels.add(column.label)
 
         for column in node.columns:
@@ -113,7 +111,13 @@ class NormalizeFormulaLabelsVisitor(RequestVisitor):
     def visit_Column(self, node: Column, new_label: str) -> None:
         node.label = new_label
 
-        match node.WhichOneof("column"):
+        column_type = node.WhichOneof("column")
+        # Handle columns that only have a label but no column type
+        # (e.g., order_by columns that reference existing columns by label)
+        if column_type is None:
+            return
+
+        match column_type:
             case "key":
                 self.visit(node.key, new_label)
             case "aggregation":
@@ -125,14 +129,12 @@ class NormalizeFormulaLabelsVisitor(RequestVisitor):
             case "literal":
                 self.visit(node.literal, new_label)
             case _:
-                raise ValueError(f"Unknown column type: {node.WhichOneof('column')}")
+                raise ValueError(f"Unknown column type: {column_type}")
 
     def visit_AttributeKey(self, node: AttributeKey, new_label: str) -> None:
         return
 
-    def visit_AttributeAggregation(
-        self, node: AttributeAggregation, new_label: str
-    ) -> None:
+    def visit_AttributeAggregation(self, node: AttributeAggregation, new_label: str) -> None:
         node.label = new_label
 
     def visit_AttributeConditionalAggregation(
@@ -188,7 +190,5 @@ class SetAggregateLabelsVisitor(RequestVisitor):
     def visit_AttributeAggregation(self, node: AttributeAggregation) -> None:
         node.label = self.current_label
 
-    def visit_AttributeConditionalAggregation(
-        self, node: AttributeConditionalAggregation
-    ) -> None:
+    def visit_AttributeConditionalAggregation(self, node: AttributeConditionalAggregation) -> None:
         node.label = self.current_label
