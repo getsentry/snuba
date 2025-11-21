@@ -6,7 +6,7 @@ import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 
-from snuba import state
+from snuba import settings, state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Expression
@@ -164,6 +164,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         if (
             state.get_int_config("enable_long_term_retention_downsampling", 0)
             and older_than_thirty_days
+            and in_msg_meta.organization_id not in settings.CUSTOM_RETENTION_ORGANIZATION_IDS
         ):
             routing_decision.tier = Tier.TIER_8
 
