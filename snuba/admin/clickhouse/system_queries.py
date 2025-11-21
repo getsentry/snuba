@@ -41,9 +41,7 @@ def _run_sql_query_on_host(
     connection = (
         get_ro_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
         if not sudo
-        else get_sudo_node_connection(
-            clickhouse_host, clickhouse_port, storage_name, settings
-        )
+        else get_sudo_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
     )
     query_result = connection.execute(query=sql, with_column_types=True)
     return query_result
@@ -134,6 +132,17 @@ ALTER_QUERY_RE = re.compile(
     re.IGNORECASE + re.VERBOSE,
 )
 
+DROP_TABLE_COMMAND_RE = re.compile(
+    r"""
+        ^
+        (DROP\s+TABLE)
+        [\w\s,=()*+<>'%\-\/:\.`]+
+        ;? # Optional semicolon
+        $
+    """,
+    re.IGNORECASE + re.VERBOSE,
+)
+
 
 def is_query_using_only_system_tables(
     clickhouse_host: str,
@@ -185,9 +194,7 @@ def is_valid_system_query(
     )
 
     for node in disallowed_ast_nodes:
-        if any(
-            line[0].lstrip().startswith(node) for line in explain_ast_result.results
-        ):
+        if any(line[0].lstrip().startswith(node) for line in explain_ast_result.results):
             return False
 
     return is_query_using_only_system_tables(
@@ -243,6 +250,15 @@ def is_query_alter(sql_query: str) -> bool:
     return True if match else False
 
 
+def is_query_drop_table(sql_query: str) -> bool:
+    """
+    Validates whether we are running something like DROP TABLE ...
+    """
+    sql_query = " ".join(sql_query.split())
+    match = DROP_TABLE_COMMAND_RE.match(sql_query)
+    return True if match else False
+
+
 def validate_query(
     clickhouse_host: str,
     clickhouse_port: int,
@@ -257,12 +273,11 @@ def validate_query(
         is_system_command(system_query_sql)
         or is_query_alter(system_query_sql)
         or is_query_optimize(system_query_sql)
+        or is_query_drop_table(system_query_sql)
     ):
         return
 
-    if is_valid_system_query(
-        clickhouse_host, clickhouse_port, storage_name, system_query_sql
-    ):
+    if is_valid_system_query(clickhouse_host, clickhouse_port, storage_name, system_query_sql):
         if sudo_mode:
             raise InvalidCustomQuery("Query is valid but sudo is not allowed")
         return
@@ -287,9 +302,7 @@ def run_system_query_on_host_with_sql(
         if not can_sudo:
             raise UnauthorizedForSudo()
 
-    validate_query(
-        clickhouse_host, clickhouse_port, storage_name, system_query_sql, sudo_mode
-    )
+    validate_query(clickhouse_host, clickhouse_port, storage_name, system_query_sql, sudo_mode)
 
     try:
         return _run_sql_query_on_host(
