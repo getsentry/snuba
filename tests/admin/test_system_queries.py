@@ -124,6 +124,7 @@ def test_invalid_system_query(sql_query: str) -> None:
             "SYSTEM DROP REPLICA 'snuba-events-analytics-platform-2-2' FROM ZKPATH '/clickhouse/tables/events_analytics_platform/2/default/eap_spans_2_local'",
             True,
         ),
+        ("DROP TABLE eap_spans_local_1;", True),
     ],
 )
 @pytest.mark.clickhouse_db
