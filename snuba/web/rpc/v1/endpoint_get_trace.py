@@ -1,3 +1,4 @@
+import json
 import random
 import uuid
 from datetime import datetime
@@ -58,6 +59,7 @@ NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
     "project_id",
     "trace_id",
     "sampling_factor",
+    "attributes_bool",
 ]
 APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY = "EndpointGetTrace.apply_final_rollout_percentage"
 
@@ -217,6 +219,14 @@ def _build_query(
                     ("attributes_float"),
                     "mapConcat",
                     tuple(column(f"attributes_float_{i}") for i in range(40)),
+                ),
+            ),
+            SelectedExpression(
+                name=("attributes_array"),
+                expression=FunctionCall(
+                    "attributes_array",
+                    "toJSONString",
+                    (column("attributes_array"),),
                 ),
             ),
         ]
@@ -418,6 +428,21 @@ ProcessedResults = NamedTuple(
 )
 
 
+def _transform_array_value(value: dict[str, str]) -> Any:
+    for t, v in value.items():
+        if t == "Int":
+            return int(v)
+        return v
+
+
+def _process_arrays(raw: str) -> dict[str, list[Any]]:
+    parsed = json.loads(raw)
+    arrays = {}
+    for key, values in parsed.items():
+        arrays[key] = [_transform_array_value(v) for v in values]
+    return arrays
+
+
 def _process_results(
     data: Iterable[Dict[str, Any]],
 ) -> ProcessedResults:
@@ -433,6 +458,7 @@ def _process_results(
     for row in data:
         id = row.pop("id")
         ts = row.pop("timestamp")
+        arrays = row.pop("attributes_array")
         last_seen_timestamp_precise = float(ts)
         last_seen_id = id
 
@@ -458,6 +484,10 @@ def _process_results(
                     add_attribute(k, v)
             else:
                 add_attribute(key, value)
+
+        attributes_array = _process_arrays(arrays)
+        for key, value in attributes_array.items():
+            add_attribute(k, v)
 
         item = GetTraceResponse.Item(
             id=id,
