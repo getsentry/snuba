@@ -70,11 +70,24 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
 
         col = Param("col", ColumnMatch(None, column_match))
 
+        casted_col = Param(
+            "casted_col",
+            FunctionCallMatch(Param("cast", String("cast")), (col, LiteralMatch(AnyMatch(str)))),
+        )
+
         self.__condition_matcher = Or(
             [
                 FunctionCallMatch(operator, (literal, col)),
                 FunctionCallMatch(operator, (col, literal)),
                 FunctionCallMatch(Param("operator", String("has")), (col, literal)),
+            ]
+        )
+
+        self.__casted_condition_matcher = Or(
+            [
+                FunctionCallMatch(operator, (casted_col, literal)),
+                FunctionCallMatch(operator, (literal, casted_col)),
+                FunctionCallMatch(Param("operator", String("has")), (casted_col, literal)),
             ]
         )
 
@@ -100,9 +113,7 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
         )
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        query.transform_expressions(
-            self._process_expressions, skip_transform_condition=True
-        )
+        query.transform_expressions(self._process_expressions, skip_transform_condition=True)
 
         condition = query.get_condition()
         if condition is not None:
@@ -117,9 +128,7 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
 
     def __strip_column_alias(self, exp: Expression) -> Expression:
         assert isinstance(exp, Column)
-        return Column(
-            alias=None, table_name=exp.table_name, column_name=exp.column_name
-        )
+        return Column(alias=None, table_name=exp.table_name, column_name=exp.column_name)
 
     def __contains_unoptimizable_condition(self, exp: Expression) -> bool:
         """
@@ -144,9 +153,18 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
                 match.string("operator"),
                 (
                     self.__strip_column_alias(match.expression("col")),
-                    self._translate_literal(
-                        assert_literal(match.expression("literal"))
-                    ),
+                    self._translate_literal(assert_literal(match.expression("literal"))),
+                ),
+            )
+
+        casted_match = self.__casted_condition_matcher.match(exp)
+        if casted_match is not None:
+            return FunctionCall(
+                exp.alias,
+                casted_match.string("operator"),
+                (
+                    self.__strip_column_alias(casted_match.expression("col")),
+                    self._translate_literal(assert_literal(casted_match.expression("literal"))),
                 ),
             )
 
