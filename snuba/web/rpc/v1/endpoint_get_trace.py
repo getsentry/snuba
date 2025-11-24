@@ -478,16 +478,16 @@ def _process_results(
                 )
             )
 
-        for key, value in row.items():
-            if isinstance(value, dict):
-                for k, v in value.items():
-                    add_attribute(k, v)
+        for row_key, row_value in row.items():
+            if isinstance(row_value, dict):
+                for column_key, column_value in row_value.items():
+                    add_attribute(column_key, column_value)
             else:
-                add_attribute(key, value)
+                add_attribute(row_key, row_value)
 
         attributes_array = _process_arrays(arrays)
-        for key, value in attributes_array.items():
-            add_attribute(k, v)
+        for array_key, array_value in attributes_array.items():
+            add_attribute(array_key, array_value)
 
         item = GetTraceResponse.Item(
             id=id,
