@@ -100,7 +100,7 @@ def write_eap_item(
         count: the number of these spans to write.
     """
 
-    def convert_attribute_value(v: Any) -> AnyValue:
+    def convert_attribute_value(value: Any) -> AnyValue:
         if isinstance(value, str):
             return AnyValue(string_value=value)
         elif isinstance(value, int):
