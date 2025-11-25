@@ -69,40 +69,50 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
         )
 
         col = Param("col", ColumnMatch(None, column_match))
-
-        casted_col = Param(
-            "casted_col",
-            FunctionCallMatch(Param("cast", String("cast")), (col, LiteralMatch(AnyMatch(str)))),
-        )
+        casted_col = FunctionCallMatch(String("cast"), (col, LiteralMatch(String("String"))))
 
         self.__condition_matcher = Or(
             [
                 FunctionCallMatch(operator, (literal, col)),
                 FunctionCallMatch(operator, (col, literal)),
                 FunctionCallMatch(Param("operator", String("has")), (col, literal)),
-            ]
-        )
-
-        self.__casted_condition_matcher = Or(
-            [
+                # These are the same as above but the column is wrapped in `cast(..., 'String')`
                 FunctionCallMatch(operator, (casted_col, literal)),
                 FunctionCallMatch(operator, (literal, casted_col)),
                 FunctionCallMatch(Param("operator", String("has")), (casted_col, literal)),
             ]
         )
 
-        self.__in_condition_matcher = FunctionCallMatch(
-            in_operators,
-            (
-                col,
-                Param(
-                    "literals",
-                    FunctionCallMatch(
-                        Or([String("array"), String("tuple")]),
-                        all_parameters=LiteralMatch(),
+        self.__in_condition_matcher = Or(
+            [
+                FunctionCallMatch(
+                    in_operators,
+                    (
+                        col,
+                        Param(
+                            "literals",
+                            FunctionCallMatch(
+                                Or([String("array"), String("tuple")]),
+                                all_parameters=LiteralMatch(),
+                            ),
+                        ),
                     ),
                 ),
-            ),
+                # These are the same as above but the column is wrapped in `cast(..., 'String')`
+                FunctionCallMatch(
+                    in_operators,
+                    (
+                        casted_col,
+                        Param(
+                            "literals",
+                            FunctionCallMatch(
+                                Or([String("array"), String("tuple")]),
+                                all_parameters=LiteralMatch(),
+                            ),
+                        ),
+                    ),
+                ),
+            ]
         )
 
         self.__unoptimizable_condition_matcher = Or(
@@ -154,17 +164,6 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
                 (
                     self.__strip_column_alias(match.expression("col")),
                     self._translate_literal(assert_literal(match.expression("literal"))),
-                ),
-            )
-
-        casted_match = self.__casted_condition_matcher.match(exp)
-        if casted_match is not None:
-            return FunctionCall(
-                exp.alias,
-                casted_match.string("operator"),
-                (
-                    self.__strip_column_alias(casted_match.expression("col")),
-                    self._translate_literal(assert_literal(casted_match.expression("literal"))),
                 ),
             )
 

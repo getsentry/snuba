@@ -241,6 +241,20 @@ tests = [
         "equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
         id="equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
     ),
+    pytest.param(
+        binary_condition(
+            ConditionFunctions.IN,
+            FunctionCall(None, "cast", (Column(None, None, "column1"), Literal(None, "String"))),
+            FunctionCall(None, "tuple", (Literal(None, "a7d67cf796774551a95be6543cacd459"),)),
+        ),
+        binary_condition(
+            ConditionFunctions.IN,
+            Column(None, None, "column1"),
+            FunctionCall(None, "tuple", (Literal(None, "a7d67cf7-9677-4551-a95b-e6543cacd459"),)),
+        ),
+        "in(column1, tuple('a7d67cf7-9677-4551-a95b-e6543cacd459'))",
+        id="in(column1, tuple('a7d67cf7-9677-4551-a95b-e6543cacd459'))",
+    ),
 ]
 
 
