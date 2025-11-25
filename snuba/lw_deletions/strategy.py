@@ -15,6 +15,7 @@ from arroyo.types import BaseValue, Commit, Message, Partition
 from snuba import settings
 from snuba.attribution import AppID
 from snuba.attribution.attribution_info import AttributionInfo
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storage import WritableTableStorage
 from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
 from snuba.lw_deletions.formatters import Formatter
@@ -24,6 +25,7 @@ from snuba.state import get_int_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.web import QueryException
 from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
+from snuba.web.constants import LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
 from snuba.web.delete_query import (
     ConditionsType,
     TooManyOngoingMutationsError,
@@ -36,6 +38,10 @@ TPayload = TypeVar("TPayload")
 import logging
 
 logger = logging.Logger(__name__)
+
+
+class LWDeleteQueryException(Exception):
+    pass
 
 
 class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
@@ -58,9 +64,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__next_step.poll()
 
     def submit(self, message: Message[ValuesBatch[KafkaPayload]]) -> None:
-        decode_messages = [
-            rapidjson.loads(m.payload.value) for m in message.value.payload
-        ]
+        decode_messages = [rapidjson.loads(m.payload.value) for m in message.value.payload]
         conditions = self.__formatter.format(decode_messages)
 
         try:
@@ -93,30 +97,40 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
     def _execute_delete(self, conditions: Sequence[ConditionsType]) -> None:
         self._check_ongoing_mutations()
         query_settings = HTTPQuerySettings()
+        # starting in 24.4 the default is 2
+        lw_sync = get_int_config("lightweight_deletes_sync")
+        if lw_sync is not None:
+            query_settings.set_clickhouse_settings({"lightweight_deletes_sync": lw_sync})
+
         for table in self.__tables:
-            query = construct_query(
-                self.__storage, table, construct_or_conditions(conditions)
-            )
+            query = construct_query(self.__storage, table, construct_or_conditions(conditions))
             start = time.time()
-            _execute_query(
-                query=query,
-                storage=self.__storage,
-                cluster_name=self.__cluster_name,
-                table=table,
-                attribution_info=self._get_attribute_info(),
-                query_settings=query_settings,
-            )
-            self.__metrics.timing(
-                "execute_delete_query_ms",
-                (time.time() - start) * 1000,
-                tags={"table": table},
-            )
+            try:
+                _execute_query(
+                    query=query,
+                    storage=self.__storage,
+                    cluster_name=self.__cluster_name,
+                    table=table,
+                    attribution_info=self._get_attribute_info(),
+                    query_settings=query_settings,
+                )
+                self.__metrics.timing(
+                    "execute_delete_query_ms",
+                    (time.time() - start) * 1000,
+                    tags={"table": table},
+                )
+            except QueryException as exc:
+                self.__metrics.increment("execute_delete_query_failed", tags={"table": table})
+                cause = exc.__cause__
+                if isinstance(cause, ClickhouseError):
+                    if cause.code in LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
+                        logger.exception("Error running delete query %r", exc)
+                    else:
+                        raise LWDeleteQueryException(exc.message)
 
     def _check_ongoing_mutations(self) -> None:
         start = time.time()
-        ongoing_mutations = _num_ongoing_mutations(
-            self.__storage.get_cluster(), self.__tables
-        )
+        ongoing_mutations = _num_ongoing_mutations(self.__storage.get_cluster(), self.__tables)
         max_ongoing_mutations = typing.cast(
             int,
             get_int_config(
@@ -124,9 +138,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 default=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE,
             ),
         )
-        self.__metrics.timing(
-            "ongoing_mutations_query_ms", (time.time() - start) * 1000
-        )
+        self.__metrics.timing("ongoing_mutations_query_ms", (time.time() - start) * 1000)
         max_ongoing_mutations = int(settings.MAX_ONGOING_MUTATIONS_FOR_DELETE)
         if ongoing_mutations > max_ongoing_mutations:
 

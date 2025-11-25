@@ -3610,9 +3610,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_arroyo"
-version = "2.29.6"
+version = "2.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d39c05e1c205b2ae2d547414ac7fff8802cbe924912597331598d0a923105c"
+checksum = "5a67c1f9025432e6c4a0ed8f1f8cbdae9dcb5a22ba740c5ea5676b85d0abeb0e"
 dependencies = [
  "chrono",
  "coarsetime",
@@ -3631,9 +3631,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_protos"
-version = "0.3.2"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0ddd4d0bee156b176c1bfed0d8e85deebdaa56862aa2d252d71ca8bc7eefbcc"
+checksum = "a4f430f99d74f03624087b4fa5aecd8a5ae11a3494733f73d231087087c5bb61"
 dependencies = [
  "prost",
  "prost-types",

@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from operator import attrgetter
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from google.protobuf.json_format import MessageToDict
@@ -12,6 +13,10 @@ from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
+    QueryInfo,
+    QueryMetadata,
+    QueryStats,
     RequestMeta,
     ResponseMeta,
     TraceItemType,
@@ -22,6 +27,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.settings import ENABLE_TRACE_PAGINATION_DEFAULT
 from snuba.web.rpc.v1.endpoint_get_trace import (
     APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
     EndpointGetTrace,
@@ -180,7 +186,18 @@ class TestGetTrace(BaseApiTest):
         response = EndpointGetTrace().execute(message)
         spans, timestamps = generate_spans_and_timestamps()
         expected_response = GetTraceResponse(
-            meta=ResponseMeta(request_id=_REQUEST_ID),
+            meta=ResponseMeta(
+                request_id=_REQUEST_ID,
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
+            ),
             trace_id=_TRACE_ID,
             item_groups=[
                 GetTraceResponse.ItemGroup(
@@ -198,6 +215,11 @@ class TestGetTrace(BaseApiTest):
                     ],
                 ),
             ],
+            page_token=(
+                PageToken(end_pagination=True)
+                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
+                else None
+            ),
         )
         response_dict = MessageToDict(response)
         for item_group in response_dict["itemGroups"]:
@@ -243,7 +265,18 @@ class TestGetTrace(BaseApiTest):
         response = EndpointGetTrace().execute(message)
         spans, timestamps = generate_spans_and_timestamps()
         expected_response = GetTraceResponse(
-            meta=ResponseMeta(request_id=_REQUEST_ID),
+            meta=ResponseMeta(
+                request_id=_REQUEST_ID,
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
+            ),
             trace_id=_TRACE_ID,
             item_groups=[
                 GetTraceResponse.ItemGroup(
@@ -277,6 +310,11 @@ class TestGetTrace(BaseApiTest):
                     ],
                 ),
             ],
+            page_token=(
+                PageToken(end_pagination=True)
+                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
+                else None
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -358,7 +396,18 @@ class TestGetTrace(BaseApiTest):
         response = EndpointGetTrace().execute(message)
         logs, timestamps = generate_logs_and_timestamps()
         expected_response = GetTraceResponse(
-            meta=ResponseMeta(request_id=_REQUEST_ID),
+            meta=ResponseMeta(
+                request_id=_REQUEST_ID,
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
+            ),
             trace_id=_TRACE_ID,
             item_groups=[
                 GetTraceResponse.ItemGroup(
@@ -383,6 +432,11 @@ class TestGetTrace(BaseApiTest):
                     ],
                 ),
             ],
+            page_token=(
+                PageToken(end_pagination=True)
+                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
+                else None
+            ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -421,3 +475,134 @@ def get_span_id(span: TraceItem) -> str:
     )[
         2:
     ].rjust(16, "0")
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestGetTracePagination(BaseApiTest):
+    def test_pagination_with_user_limit(self, setup_teardown: Any) -> None:
+        """Test that pagination respects user-provided limit"""
+        state.set_config("enable_trace_pagination", 1)
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+        mylimit = 10
+
+        # Request with a limit of 10 spans (less than the 120 available)
+        message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            limit=mylimit,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    attributes=[
+                        AttributeKey(
+                            name="sentry.item_id",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
+                    ],
+                ),
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                    attributes=[
+                        AttributeKey(
+                            name="sentry.item_id",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
+                    ],
+                ),
+            ],
+        )
+        items_received = set[str]()
+        while True:
+            response = EndpointGetTrace().execute(message)
+            curr_response_len = 0
+            for group in response.item_groups:
+                for item in group.items:
+                    curr_response_len += 1
+                    assert item.id not in items_received
+                    items_received.add(item.id)
+            assert curr_response_len <= mylimit
+            if curr_response_len < mylimit:
+                assert response.page_token.end_pagination == True
+            if response.page_token.end_pagination:
+                break
+            message.page_token.CopyFrom(response.page_token)
+        assert len(items_received) == len(_SPANS) + len(_LOGS)
+
+    def test_pagination_with_no_user_limit(self, setup_teardown: Any) -> None:
+        """Test that pagination respects uses the default max items value when no user limit is provided"""
+        configmax = 9
+        with patch(
+            "snuba.web.rpc.v1.endpoint_get_trace.ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS", configmax
+        ):
+            state.set_config("enable_trace_pagination", 1)
+            """
+            import snuba.web.rpc.v1.endpoint_get_trace as endpoint_get_trace
+
+            reload(endpoint_get_trace)
+            from snuba.web.rpc.v1.endpoint_get_trace import (
+                EndpointGetTrace,
+            )
+            """
+
+            ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+            three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+
+            # Request with a limit of 10 spans (less than the 120 available)
+            message = GetTraceRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=ts,
+                    end_timestamp=Timestamp(seconds=three_hours_later),
+                    request_id=_REQUEST_ID,
+                ),
+                trace_id=_TRACE_ID,
+                items=[
+                    GetTraceRequest.TraceItem(
+                        item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                        attributes=[
+                            AttributeKey(
+                                name="sentry.item_id",
+                                type=AttributeKey.Type.TYPE_STRING,
+                            ),
+                        ],
+                    ),
+                    GetTraceRequest.TraceItem(
+                        item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                        attributes=[
+                            AttributeKey(
+                                name="sentry.item_id",
+                                type=AttributeKey.Type.TYPE_STRING,
+                            ),
+                        ],
+                    ),
+                ],
+            )
+            items_received = set[str]()
+            while True:
+                response = EndpointGetTrace().execute(message)
+                curr_response_len = 0
+                for group in response.item_groups:
+                    for item in group.items:
+                        curr_response_len += 1
+                        assert item.id not in items_received
+                        items_received.add(item.id)
+                assert curr_response_len <= configmax
+                if curr_response_len < configmax:
+                    assert response.page_token.end_pagination == True
+                if response.page_token.end_pagination:
+                    break
+                message.page_token.CopyFrom(response.page_token)
+            assert len(items_received) == len(_SPANS) + len(_LOGS)

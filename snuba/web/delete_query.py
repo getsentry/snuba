@@ -6,6 +6,7 @@ from snuba import settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
@@ -279,7 +280,7 @@ def _execute_query(
     formatted_query = format_query(query)
     allocation_policies = _get_delete_allocation_policies(storage)
     query_id = uuid.uuid4().hex
-    clickhouse_settings: MutableMapping[str, Any] = {"query_id": query_id}
+    query_settings.push_clickhouse_setting("query_id", query_id)
     result = None
     error = None
 
@@ -298,7 +299,11 @@ def _execute_query(
             allocation_policies,
             query_id,
         )
-        result = storage.get_cluster().get_deleter().execute(formatted_query, clickhouse_settings)
+        result = (
+            storage.get_cluster()
+            .get_deleter()
+            .execute(formatted_query, query_settings.get_clickhouse_settings())
+        )
     except AllocationPolicyViolations as e:
         error = QueryException.from_args(
             AllocationPolicyViolations.__name__,
@@ -306,6 +311,21 @@ def _execute_query(
             extra={
                 "stats": stats,
                 "sql": "no sql run",
+                "experiments": {},
+            },
+        )
+        error.__cause__ = e
+    except QueryException as e:
+        error = e
+    except Exception as e:
+        error = QueryException.from_args(
+            # This exception needs to have the message of the cause in it for sentry
+            # to pick it up properly
+            e.__class__.__name__,
+            e.message if isinstance(e, ClickhouseError) else str(e),
+            {
+                "stats": stats,
+                "sql": "",
                 "experiments": {},
             },
         )

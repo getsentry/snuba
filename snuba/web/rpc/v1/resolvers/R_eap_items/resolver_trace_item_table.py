@@ -35,8 +35,6 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
-from snuba.state import get_int_config
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -226,8 +224,6 @@ def _get_reliability_context_columns(
     """
 
     if column.HasField("formula"):
-        if not get_int_config("enable_formula_reliability", ENABLE_FORMULA_RELIABILITY_DEFAULT):
-            return []
         # also query for the left and right parts of the formula separately
         # this will be used later to calculate the reliability of the formula
         # ex: SELECT agg1/agg2 will become SELECT agg1/agg2, agg1, agg2
@@ -247,10 +243,11 @@ def _get_reliability_context_columns(
     if not (column.HasField("conditional_aggregation")):
         return []
 
-    if (
-        column.conditional_aggregation.extrapolation_mode
-        == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
-    ):
+    if column.conditional_aggregation.extrapolation_mode in [
+        ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+        ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+        ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+    ]:
         context_columns = []
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,

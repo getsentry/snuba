@@ -12,6 +12,9 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import (
     PageToken,
+    QueryInfo,
+    QueryMetadata,
+    QueryStats,
     RequestMeta,
     ResponseMeta,
     TraceItemType,
@@ -86,18 +89,12 @@ class TestTraceItemTableForLogs(BaseApiTest):
                 ),
             ),
             columns=[
-                Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.body")
-                ),
-                Column(
-                    key=AttributeKey(type=AttributeKey.Type.TYPE_INT, name="int_tag")
-                ),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.body")),
+                Column(key=AttributeKey(type=AttributeKey.Type.TYPE_INT, name="int_tag")),
             ],
             order_by=[
                 TraceItemTableRequest.OrderBy(
-                    column=Column(
-                        key=AttributeKey(type=AttributeKey.TYPE_INT, name="int_tag")
-                    )
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="int_tag"))
                 )
             ],
             limit=20,
@@ -108,9 +105,7 @@ class TestTraceItemTableForLogs(BaseApiTest):
             column_values=[
                 TraceItemColumnValues(
                     attribute_name="sentry.body",
-                    results=[
-                        AttributeValue(val_str=f"hello world {i}") for i in index_range
-                    ],
+                    results=[AttributeValue(val_str=f"hello world {i}") for i in index_range],
                 ),
                 TraceItemColumnValues(
                     attribute_name="int_tag",
@@ -123,6 +118,15 @@ class TestTraceItemTableForLogs(BaseApiTest):
                 downsampled_storage_meta=DownsampledStorageMeta(
                     can_go_to_higher_accuracy_tier=False,
                 ),
+                query_info=[
+                    QueryInfo(
+                        stats=QueryStats(
+                            progress_bytes=response.meta.query_info[0].stats.progress_bytes
+                        ),
+                        metadata=QueryMetadata(),
+                        trace_logs="",
+                    )
+                ],
             ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)

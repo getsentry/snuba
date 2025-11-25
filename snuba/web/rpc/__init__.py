@@ -14,7 +14,6 @@ from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba import environment, state
-from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -28,13 +27,13 @@ from snuba.web.rpc.common.common import Tin, Tout
 from snuba.web.rpc.common.exceptions import (
     HighAccuracyQueryTimeoutException,
     QueryTimeoutException,
+    RPCAllocationPolicyException,
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
-    get_stats_dict,
 )
 from snuba.web.rpc.storage_routing.routing_strategy_selector import (
     RoutingStrategySelector,
@@ -82,35 +81,6 @@ def _flush_logs() -> None:
     except Exception:
         # Silently ignore flush errors to avoid interfering with main logic
         pass
-
-
-def _create_rate_limited_exception(
-    routing_decision: RoutingDecision,
-) -> QueryException:
-    """
-    Create a QueryException for rate-limited queries with allocation policy details.
-
-    Returns a QueryException with AllocationPolicyViolations as the cause.
-    """
-    error = QueryException.from_args(
-        AllocationPolicyViolations.__name__,
-        "Query cannot be run due to routing strategy deciding it cannot run, most likely due to allocation policies",
-        extra={
-            "stats": get_stats_dict(routing_decision),
-            "sql": "no sql run",
-            "experiments": {},
-        },
-    )
-    error.__cause__ = AllocationPolicyViolations.from_args(
-        {
-            "summary": {},
-            "details": {
-                key: quota_allowance.to_dict()
-                for key, quota_allowance in routing_decision.routing_context.allocation_policies_recommendations.items()
-            },
-        }
-    )
-    return error
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -235,11 +205,10 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     span.set_data("selected_tier", self.routing_decision.tier)
                     out = self._execute(in_msg)
             else:
-                self.metrics.increment(
-                    "request_rate_limited",
-                    tags=self._timer.tags,
+                raise RPCAllocationPolicyException(
+                    "Query cannot be run due to routing strategy deciding it cannot run, most likely due to allocation policies",
+                    self.routing_decision.to_log_dict(),
                 )
-                raise _create_rate_limited_exception(self.routing_decision)
         except QueryException as e:
             out = self.response_class()()
             if (
@@ -358,13 +327,17 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            if isinstance(error, RPCRequestException) and 400 <= error.status_code < 500:
+            if isinstance(error, RPCAllocationPolicyException):
+                self.metrics.increment(
+                    "request_rate_limited",
+                    tags=self._timer.tags,
+                )
+            elif isinstance(error, RPCRequestException) and 400 <= error.status_code < 500:
                 self.metrics.increment(
                     "request_invalid",
                     tags=self._timer.tags,
                 )
-            # AllocationPolicyViolations is not a request_error
-            elif not isinstance(error.__cause__, AllocationPolicyViolations):
+            else:
                 sentry_sdk.capture_exception(error)
                 self.metrics.increment(
                     "request_error",

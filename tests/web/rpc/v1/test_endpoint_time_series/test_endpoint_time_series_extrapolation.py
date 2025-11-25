@@ -22,7 +22,6 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state import set_config
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -57,9 +56,7 @@ def store_timeseries(
     messages = []
     for secs in range(0, len_secs, period_secs):
         dt = start_datetime + timedelta(seconds=secs)
-        numbers = {
-            m.name: AnyValue(double_value=float(m.get_value(secs))) for m in metrics
-        }
+        numbers = {m.name: AnyValue(double_value=float(m.get_value(secs))) for m in metrics}
         if callable(server_sample_rate):
             real_server_sample_rate = server_sample_rate(secs)
         else:
@@ -97,9 +94,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
@@ -212,9 +207,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
@@ -268,9 +261,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
@@ -294,9 +285,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             TimeSeries(
                 label="p50(test_metric2)",
                 buckets=expected_buckets,
-                data_points=[
-                    DataPoint(data_present=False) for _ in range(len(expected_buckets))
-                ],
+                data_points=[DataPoint(data_present=False) for _ in range(len(expected_buckets))],
             )
         ]
 
@@ -322,9 +311,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
@@ -378,9 +365,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
@@ -440,9 +425,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
@@ -504,9 +487,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
@@ -560,9 +541,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
@@ -615,9 +594,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
@@ -655,7 +632,6 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         ]
 
     def test_formula(self) -> None:
-        set_config("enable_formula_reliability_ts", True)
         # store a a test metric with a value of 1, every second for an hour
         granularity_secs = 120
         query_duration = 3600
@@ -676,9 +652,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             expressions=[
@@ -725,7 +699,9 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                     DataPoint(
                         data=expected_sum_plus_sum,
                         data_present=True,
+                        avg_sampling_rate=0.5,
                         reliability=Reliability.RELIABILITY_HIGH,
+                        sample_count=120,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -733,7 +709,6 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         ]
 
     def test_formula_reliability_basic(self) -> None:
-        set_config("enable_formula_reliability_ts", True)
         """
         this tests a simple formula that adds two reliable aggregates is reliable
         """
@@ -783,9 +758,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             expressions=[form2],
@@ -796,9 +769,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(0, query_duration, granularity_secs)
         ]
-        expected_expr1 = (
-            granularity_secs // interval_secs * metric_value1
-        ) / sample_rate1
+        expected_expr1 = (granularity_secs // interval_secs * metric_value1) / sample_rate1
         expected_form2 = expected_expr1 + expected_expr1
         expected = [
             TimeSeries(
@@ -808,7 +779,9 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                     DataPoint(
                         data=expected_form2,
                         data_present=True,
+                        avg_sampling_rate=0.5,
                         reliability=Reliability.RELIABILITY_HIGH,
+                        sample_count=12,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -817,7 +790,6 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         assert response.result_timeseries == expected
 
     def test_formula_reliability_unreliable(self) -> None:
-        set_config("enable_formula_reliability_ts", True)
         """
         this tests a simple formula that adds a reliable and an unreliable aggregate returns unreliable
         """
@@ -875,9 +847,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             expressions=[myform],
@@ -889,13 +859,9 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(0, query_duration, granularity_secs)
         ]
-        expected_expr1 = (
-            granularity_secs // interval_secs * metric_value1
-        ) / sample_rate1
+        expected_expr1 = (granularity_secs // interval_secs * metric_value1) / sample_rate1
 
-        expected_expr2 = (
-            granularity_secs // interval_secs * metric_value2
-        ) / sample_rate2
+        expected_expr2 = (granularity_secs // interval_secs * metric_value2) / sample_rate2
         expected_form1 = expected_expr1 + expected_expr2
         actual = sorted(response.result_timeseries, key=lambda x: x.label)
         expected = [
@@ -906,7 +872,9 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                     DataPoint(
                         data=expected_form1,
                         data_present=True,
+                        avg_sampling_rate=0.5,
                         reliability=Reliability.RELIABILITY_LOW,
+                        sample_count=12,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -915,7 +883,6 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         assert actual == expected
 
     def test_formula_reliability_nested(self) -> None:
-        set_config("enable_formula_reliability_ts", True)
         """
         this tests that a nested formula that adds two reliable aggregates and an unreliable aggregate returns unreliable
         """
@@ -979,9 +946,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             expressions=[form3],
@@ -992,13 +957,9 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(0, query_duration, granularity_secs)
         ]
-        expected_expr1 = (
-            granularity_secs // interval_secs * metric_value1
-        ) / sample_rate1
+        expected_expr1 = (granularity_secs // interval_secs * metric_value1) / sample_rate1
 
-        expected_expr2 = (
-            granularity_secs // interval_secs * metric_value2
-        ) / sample_rate2
+        expected_expr2 = (granularity_secs // interval_secs * metric_value2) / sample_rate2
         expected_form3 = expected_expr1 + expected_expr1 + expected_expr2
         actual = sorted(response.result_timeseries, key=lambda x: x.label)
         expected = [
@@ -1009,7 +970,9 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                     DataPoint(
                         data=expected_form3,
                         data_present=True,
+                        avg_sampling_rate=0.5,
                         reliability=Reliability.RELIABILITY_LOW,
+                        sample_count=12,
                     )
                     for _ in range(len(expected_buckets))
                 ],

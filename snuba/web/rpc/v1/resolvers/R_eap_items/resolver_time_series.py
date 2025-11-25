@@ -35,8 +35,6 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.settings import ENABLE_FORMULA_RELIABILITY_DEFAULT
-from snuba.state import get_int_config
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -199,14 +197,17 @@ def _convert_result_timeseries(
                 else:
                     timeseries.data_points.append(DataPoint(data=0, data_present=False))
 
-    if get_int_config("enable_formula_reliability_ts", ENABLE_FORMULA_RELIABILITY_DEFAULT):
-        frc = FormulaReliabilityCalculator(request, data, time_buckets)
-        for timeseries in result_timeseries.values():
-            if timeseries.label in frc:
-                reliabilities = frc.get(timeseries.label)
-                for i in range(len(timeseries.data_points)):
-                    timeseries.data_points[i].reliability = reliabilities[i]
-        _remove_non_requested_expressions(request.expressions, result_timeseries)
+    frc = FormulaReliabilityCalculator(request, data, time_buckets)
+    for timeseries in result_timeseries.values():
+        if timeseries.label in frc:
+            extrapolation_contexts = frc.get(timeseries.label)
+
+            for i in range(len(timeseries.data_points)):
+                context = extrapolation_contexts[i]
+                timeseries.data_points[i].avg_sampling_rate = context.average_sample_rate
+                timeseries.data_points[i].sample_count = context.sample_count
+                timeseries.data_points[i].reliability = context.reliability
+    _remove_non_requested_expressions(request.expressions, result_timeseries)
 
     return result_timeseries.values()
 
@@ -238,7 +239,11 @@ def _get_reliability_context_columns(
         which_oneof = expr.WhichOneof("expression")
         assert which_oneof in ["conditional_aggregation", "aggregation"]
         aggregation = getattr(expr, which_oneof)
-        if aggregation.extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED:
+        if aggregation.extrapolation_mode in [
+            ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+            ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+        ]:
             confidence_interval_column = get_confidence_interval_column(
                 aggregation, _get_attribute_key_to_expression_function(request_meta)
             )
@@ -266,8 +271,6 @@ def _get_reliability_context_columns(
             SelectedExpression(name=count_column.alias, expression=count_column)
         )
     elif expr.WhichOneof("expression") == "formula":
-        if not get_int_config("enable_formula_reliability_ts", ENABLE_FORMULA_RELIABILITY_DEFAULT):
-            return []
         # also query for the left and right parts of the formula separately
         # this will be used later to calculate the reliability of the formula
         # ex: SELECT agg1/agg2 will become SELECT agg1/agg2, agg1, agg2

@@ -11,6 +11,7 @@ from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
 from sentry_sdk.integrations.threading import ThreadingIntegration
+from sentry_sdk.types import Event, Hint
 from structlog.processors import JSONRenderer
 from structlog.types import EventDict
 from structlog_sentry import SentryProcessor
@@ -34,9 +35,7 @@ def add_severity_attribute(
     return event_dict
 
 
-def drop_level(
-    logger: logging.Logger, method_name: str, event_dict: EventDict
-) -> EventDict:
+def drop_level(logger: logging.Logger, method_name: str, event_dict: EventDict) -> EventDict:
     """
     The "SentryProcessor" requires a `level` field but we're already
     emitting it as `severity` for Google Cloud, so we delete the duplication
@@ -74,10 +73,30 @@ def setup_logging(level: Optional[str] = None) -> None:
     )
 
 
+def before_send(event: Event, hint: Hint) -> Event | None:
+    """Filter out AllocationPolicyViolations and RPCAllocationPolicyException from being sent to Sentry"""
+    if "exc_info" in hint:
+        _, exc_value, _ = hint["exc_info"]
+        # Check if it's an AllocationPolicyViolations in the cause chain
+        if exc_value is not None:
+            from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
+
+            if isinstance(exc_value, RPCAllocationPolicyException):
+                return None  # Don't send to Sentry
+
+            cause = getattr(exc_value, "__cause__", None)
+            from snuba.query.allocation_policies import AllocationPolicyViolations
+
+            if isinstance(cause, AllocationPolicyViolations):
+                return None  # Don't send to Sentry
+    return event
+
+
 def setup_sentry() -> None:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
         spotlight=None if settings.DEBUG else False,
+        before_send=before_send,
         integrations=[
             FlaskIntegration(),
             GnuBacktraceIntegration(),

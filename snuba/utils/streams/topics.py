@@ -41,7 +41,6 @@ class Topic(Enum):
     PROFILE_CHUNKS = "snuba-profile-chunks"
 
     REPLAYEVENTS = "ingest-replay-events"
-    UPTIME_RESULTS = "snuba-uptime-results"
     GENERIC_METRICS = "snuba-generic-metrics"
     GENERIC_METRICS_SETS_COMMIT_LOG = "snuba-generic-metrics-sets-commit-log"
     GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG = "snuba-generic-metrics-distributions-commit-log"
