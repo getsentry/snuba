@@ -379,13 +379,14 @@ def _build_snuba_request(
 
 
 def convert_to_attribute_value(value: Any) -> AttributeValue:
-    if isinstance(value, int):
-        return AttributeValue(
-            val_int=value,
-        )
-    elif isinstance(value, bool):
+    print(value)
+    if isinstance(value, bool):
         return AttributeValue(
             val_bool=value,
+        )
+    elif isinstance(value, int):
+        return AttributeValue(
+            val_int=value,
         )
     elif isinstance(value, float):
         return AttributeValue(
@@ -408,19 +409,19 @@ def convert_to_attribute_value(value: Any) -> AttributeValue:
 
 
 def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeValue]:
-    if isinstance(value, int):
-        return (
-            AttributeKey(
-                name=key,
-                type=AttributeKey.Type.TYPE_INT,
-            ),
-            convert_to_attribute_value(value),
-        )
-    elif isinstance(value, bool):
+    if isinstance(value, bool):
         return (
             AttributeKey(
                 name=key,
                 type=AttributeKey.Type.TYPE_BOOLEAN,
+            ),
+            convert_to_attribute_value(value),
+        )
+    elif isinstance(value, int):
+        return (
+            AttributeKey(
+                name=key,
+                type=AttributeKey.Type.TYPE_INT,
             ),
             convert_to_attribute_value(value),
         )
@@ -498,8 +499,10 @@ def _process_results(
         id = row.pop("id")
         ts = row.pop("timestamp")
         arrays = row.pop("attributes_array", "{}")
-        booleans = row.pop("selected_attributes_bool", {})
-        integers = row.pop("selected_attributes_int", {})
+        # We want to merge these values after to overwrite potential floats
+        # with the same name.
+        booleans = row.pop("attributes_bool", {})
+        integers = row.pop("attributes_int", {})
         last_seen_timestamp_precise = float(ts)
         last_seen_id = id
 

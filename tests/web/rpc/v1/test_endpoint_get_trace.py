@@ -95,23 +95,21 @@ _PROTOBUF_TO_SENTRY_PROTOS: dict[str, tuple[str, AttributeKey.Type.ValueType]] =
 def get_attributes(
     span: TraceItem,
 ) -> list[GetTraceResponse.Item.Attribute]:
-    attributes: list[GetTraceResponse.Item.Attribute] = [
-        GetTraceResponse.Item.Attribute(
+    attributes: dict[str, GetTraceResponse.Item.Attribute] = {
+        "sampling_factor": GetTraceResponse.Item.Attribute(
             key=AttributeKey(
                 name="sampling_factor",
                 type=AttributeKey.Type.TYPE_DOUBLE,
             ),
             value=AttributeValue(val_double=1.0),
         ),
-    ]
+    }
 
     for key in {"organization_id", "project_id", "trace_id"}:
         attribute_key, attribute_value = _value_to_attribute(key, getattr(span, key))
-        attributes.append(
-            GetTraceResponse.Item.Attribute(
-                key=attribute_key,
-                value=attribute_value,
-            )
+        attributes[key] = GetTraceResponse.Item.Attribute(
+            key=attribute_key,
+            value=attribute_value,
         )
 
     def _convert_to_attribute_value(value: AnyValue) -> AttributeValue:
@@ -136,13 +134,11 @@ def get_attributes(
             type=_PROTOBUF_TO_SENTRY_PROTOS[str(value_type)][1],
         )
         attribute_value = _convert_to_attribute_value(value)
-        attributes.append(
-            GetTraceResponse.Item.Attribute(
-                key=attribute_key,
-                value=attribute_value,
-            )
+        attributes[key] = GetTraceResponse.Item.Attribute(
+            key=attribute_key,
+            value=attribute_value,
         )
-    return attributes
+    return list(attributes.values())
 
 
 @pytest.fixture(autouse=False)
