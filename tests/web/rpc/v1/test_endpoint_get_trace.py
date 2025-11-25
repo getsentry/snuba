@@ -86,10 +86,8 @@ _LOGS = [
 _PROTOBUF_TO_SENTRY_PROTOS: dict[str, tuple[str, AttributeKey.Type.ValueType]] = {
     "string_value": ("val_str", AttributeKey.Type.TYPE_STRING),
     "double_value": ("val_double", AttributeKey.Type.TYPE_DOUBLE),
-    # we store integers as double
-    "int_value": ("val_double", AttributeKey.Type.TYPE_DOUBLE),
-    # we store boolean as double
-    "bool_value": ("val_double", AttributeKey.Type.TYPE_DOUBLE),
+    "int_value": ("val_int", AttributeKey.Type.TYPE_INT),
+    "bool_value": ("val_bool", AttributeKey.Type.TYPE_BOOLEAN),
     "array_value": ("val_array", AttributeKey.Type.TYPE_ARRAY),
 }
 
