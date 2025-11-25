@@ -174,6 +174,7 @@ pub fn process_metrics_message(
                     origin_timestamp: None,
                     sentry_received_timestamp,
                     cogs_data: None,
+                    item_type_metrics: None,
                 })
             } else {
                 Ok(InsertBatch::skip())
