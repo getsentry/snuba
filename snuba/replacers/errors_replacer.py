@@ -55,7 +55,7 @@ from snuba.replacers.replacer_processor import (
     ReplacerProcessor,
     ReplacerState,
 )
-from snuba.state import get_config
+from snuba.state import get_config, get_float_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 """
@@ -109,22 +109,10 @@ class Replacement(ReplacementBase):
         raise NotImplementedError()
 
     def should_write_every_node(self) -> bool:
-        project_rollout_setting = get_config("write_node_replacements_projects", "")
-        if project_rollout_setting:
-            # The expected for mat is [project,project,...]
-            project_rollout_setting = project_rollout_setting[1:-1]
-            if project_rollout_setting:
-                rolled_out_projects = [
-                    int(p.strip()) for p in project_rollout_setting.split(",")
-                ]
-                if self.get_project_id() in rolled_out_projects:
-                    return True
-
-        global_rollout_setting = get_config("write_node_replacements_global", 0.0)
-        assert isinstance(global_rollout_setting, float)
-        if random.random() < global_rollout_setting:
+        write_node_replacement_setting = get_float_config("write_node_replacements_global", 1.0)
+        assert isinstance(write_node_replacement_setting, float)
+        if random.random() < write_node_replacement_setting:
             return True
-
         return False
 
 
@@ -286,9 +274,7 @@ def _build_event_set_filter(
         except ValueError:  # e.g. "2023-08-28T03:05:38+00:00"
             timestamp = datetime.fromisoformat(msg_value)
 
-        return (
-            f"timestamp {operator} toDateTime('{timestamp.strftime(DATETIME_FORMAT)}')"
-        )
+        return f"timestamp {operator} toDateTime('{timestamp.strftime(DATETIME_FORMAT)}')"
 
     from_condition = get_timestamp_condition(from_timestamp, ">=")
     to_condition = get_timestamp_condition(to_timestamp, "<=")
@@ -370,10 +356,7 @@ class ReplaceGroupReplacement(Replacement):
             to_timestamp=self.to_timestamp,
         )
 
-        return (
-            f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
-            % query_args
-        )
+        return f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}" % query_args
 
     def get_count_query(self, table_name: str) -> Optional[str]:
         return f"""\
@@ -420,9 +403,7 @@ class DeleteGroupsReplacement(Replacement):
 
         assert all(isinstance(gid, int) for gid in group_ids)
 
-        timestamp = datetime.strptime(
-            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
-        )
+        timestamp = datetime.strptime(message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
 
         return cls(
             required_columns=context.required_columns,
@@ -512,16 +493,11 @@ class TombstoneEventsReplacement(Replacement):
         )
 
         if self.old_primary_hash:
-            query_args["old_primary_hash"] = "'%s'" % (
-                str(uuid.UUID(self.old_primary_hash)),
-            )
+            query_args["old_primary_hash"] = "'%s'" % (str(uuid.UUID(self.old_primary_hash)),)
 
             prewhere.append("primary_hash = %(old_primary_hash)s")
 
-        return (
-            f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
-            % query_args
-        )
+        return f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}" % query_args
 
     def get_count_query(self, table_name: str) -> Optional[str]:
         return f"""\
@@ -644,9 +620,7 @@ class MergeReplacement(Replacement):
 
         assert all(isinstance(gid, int) for gid in previous_group_ids)
 
-        timestamp = datetime.strptime(
-            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
-        )
+        timestamp = datetime.strptime(message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
 
         # HACK: We were sending duplicates of the `end_merge` message from Sentry,
         # this is only for performance of the backlog.
@@ -706,9 +680,7 @@ class MergeReplacement(Replacement):
 
         if self.new_group_first_seen is not None:
             group_first_seen_str = self.new_group_first_seen.strftime(DATETIME_FORMAT)
-            replacement_columns[
-                "group_first_seen"
-            ] = f"CAST('{group_first_seen_str}' AS DateTime)"
+            replacement_columns["group_first_seen"] = f"CAST('{group_first_seen_str}' AS DateTime)"
 
         select_columns = ", ".join(
             map(
@@ -757,9 +729,7 @@ class UnmergeGroupsReplacement(Replacement):
 
         assert all(isinstance(h, str) for h in hashes)
 
-        timestamp = datetime.strptime(
-            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
-        )
+        timestamp = datetime.strptime(message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
 
         return UnmergeGroupsReplacement(
             state_name=context.state_name,
@@ -784,9 +754,7 @@ class UnmergeGroupsReplacement(Replacement):
     @cached_property
     def _where_clause(self) -> str:
         if self.state_name == ReplacerState.ERRORS:
-            hashes = ", ".join(
-                ["'%s'" % str(uuid.UUID(_hashify(h))) for h in self.hashes]
-            )
+            hashes = ", ".join(["'%s'" % str(uuid.UUID(_hashify(h))) for h in self.hashes])
         else:
             hashes = ", ".join("'%s'" % _hashify(h) for h in self.hashes)
 
@@ -826,9 +794,7 @@ class UnmergeGroupsReplacement(Replacement):
         """
 
 
-def _convert_hash(
-    hash: str, state_name: ReplacerState, convert_types: bool = False
-) -> str:
+def _convert_hash(hash: str, state_name: ReplacerState, convert_types: bool = False) -> str:
     if state_name == ReplacerState.ERRORS:
         if convert_types:
             return "toUUID('%s')" % str(uuid.UUID(_hashify(hash)))
@@ -862,9 +828,7 @@ class DeleteTagReplacement(Replacement):
             return None
 
         assert isinstance(tag, str)
-        timestamp = datetime.strptime(
-            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
-        )
+        timestamp = datetime.strptime(message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
         tag_column_name = context.tag_column_map["tags"].get(tag, tag)
         is_promoted = tag in context.promoted_tags["tags"]
 
@@ -897,11 +861,7 @@ class DeleteTagReplacement(Replacement):
                 # The promoted tag columns of events are non nullable, but those of
                 # errors are non nullable. We check the column against the schema
                 # to determine whether to write an empty string or NULL.
-                column_type = (
-                    self.schema.get_data_source()
-                    .get_columns()
-                    .get(self.tag_column_name)
-                )
+                column_type = self.schema.get_data_source().get_columns().get(self.tag_column_name)
                 assert column_type is not None
                 is_nullable = column_type.type.has_modifier(Nullable)
                 if is_nullable:
