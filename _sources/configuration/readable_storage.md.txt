@@ -1,0 +1,41 @@
+# Readable Storage Schema
+
+## Properties
+
+- **version**: Version of schema.
+- **kind**: Component kind.
+- **name** *(string)*: Name of the readable storage.
+- **storage** *(object)*:
+  - **key** *(string)*: A unique key identifier for the storage.
+  - **set_key** *(string)*: A unique key identifier for a collection of storages located in the same cluster.
+- **readiness_state** *(string)*: The readiness state defines the availability of the storage in various environments. Internally, this label is used to determine which environments this storage is released in. There for four different readiness states: limited, deprecrate, partial, and complete. Different environments support a set of these readiness_states . If this is a new storage, start with limited which only exposes the storage to CI and local development. Must be one of: ['limited', 'deprecate', 'partial', 'complete', 'experimental'].
+- **schema** *(object)*:
+  - **columns** *(array)*: Objects (or nested objects) representing columns containg a name, type and args.
+  - **local_table_name** *(string)*: The local table name in a single-node ClickHouse.
+  - **dist_table_name** *(string)*: The distributed table name in distributed ClickHouse.
+  - **not_deleted_mandatory_condition** *(string)*: The name of the column flagging a deletion, eg deleted column in Errors. Defining this column here will ensure any query served by this storage explicitly filters out any 'deleted' rows. Should only be used for storages supporting deletion replacement.
+  - **partition_format** *(array)*: The format of the partitions in Clickhouse. Used in the cleanup job.
+- **query_processors** *(array)*
+    - **processor** *(string)*: Name of ClickhouseQueryProcessor class config key. Responsible for the transformation applied to a query.
+    - **args** *(object)*: Key/value mappings required to instantiate QueryProcessor class.
+- **deletion_settings** *(object)*:
+  - **is_enabled** *(integer)*
+  - **tables** *(array)*: Names of the tables to delete from.
+  - **allowed_columns** *(array)*: Columns allowed in WHERE clause.
+  - **max_rows_to_delete** *(integer)*
+  - **bulk_delete_only** *(boolean)*
+  - **allowed_attributes_by_item_type** *(object)*: Mapping of item_type to list of allowed attributes for deletion. Can contain additional properties.
+    - **Additional Properties** *(array)*
+- **deletion_processors** *(array)*
+    - **processor** *(string)*: This processor should validate the query against the storage.
+    - **args** *(object)*: Key/value mappings required to instantiate DeletionProcessor class.
+- **mandatory_condition_checkers** *(array)*
+    - **condition** *(string)*: Name of ConditionChecker class config key. Responsible for running final checks on a query to ensure that transformations haven't impacted/removed conditions required for security reasons.
+    - **args** *(object)*: Key/value mappings required to instantiate ConditionChecker class.
+- **allocation_policies** *(array)*
+    - **name** *(string)*: Name of the AllocationPolicy used for allocating read resources per query on this storage.
+    - **args** *(object)*: Key/value mappings required to instantiate AllocationPolicy class.
+- **delete_allocation_policies** *(array)*
+    - **name** *(string)*: Name of the AllocationPolicy used for allocating read resources per query on this storage.
+    - **args** *(object)*: Key/value mappings required to instantiate AllocationPolicy class.
+- **required_time_column** *(['string', 'null'])*: The name of the required time column specifed in schema.
