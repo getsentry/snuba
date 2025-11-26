@@ -3631,9 +3631,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_protos"
-version = "0.4.6"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4f430f99d74f03624087b4fa5aecd8a5ae11a3494733f73d231087087c5bb61"
+checksum = "a9c7982b14e18f140d41b22f71b42fe71364ef06686f2def4ed8102263bb3c4e"
 dependencies = [
  "prost",
  "prost-types",
