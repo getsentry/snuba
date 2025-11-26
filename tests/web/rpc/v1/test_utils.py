@@ -73,10 +73,9 @@ _DEFAULT_ATTRIBUTES = {
         array_value=ArrayValue(
             values=[
                 AnyValue(int_value=1),
-                AnyValue(int_value=2),
-                AnyValue(int_value=3),
-                AnyValue(int_value=4),
-                AnyValue(int_value=5),
+                AnyValue(bool_value=True),
+                AnyValue(double_value=3.0),
+                AnyValue(string_value="blah"),
             ]
         )
     ),
