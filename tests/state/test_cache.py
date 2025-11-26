@@ -9,10 +9,12 @@ from unittest import mock
 
 import pytest
 import rapidjson
+import sentry_sdk
 from sentry_redis_tools.failover_redis import FailoverRedis
 
-from redis import RedisError
+from redis import RedisError, ResponseError
 from redis.exceptions import ReadOnlyError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state import set_config
 from snuba.state.cache.abstract import Cache
@@ -255,3 +257,14 @@ def test_set_fails_open(backend: Cache[bytes]) -> None:
     assert isinstance(backend, RedisCache)
     with mock.patch.object(redis_client, "set", side_effect=RedisError()):
         backend.get_readthrough("key", lambda: b"value", noop)
+
+
+@pytest.mark.redis_db
+@pytest.mark.parametrize(
+    "error", [ResponseError("OOM command not allowed under OOM prevention."), RedisTimeoutError()]
+)
+def test_dont_record_expected_errors(backend: Cache[bytes], error: Exception) -> None:
+    with mock.patch.object(redis_client, "set", side_effect=error):
+        with mock.patch.object(sentry_sdk, "capture_exception") as capture_exception:
+            backend.get_readthrough("key", lambda: b"value", noop)
+            capture_exception.assert_not_called()
