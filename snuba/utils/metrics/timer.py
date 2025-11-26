@@ -24,9 +24,7 @@ class Timer:
         self.__name = name
         self.__clock = clock
 
-        self.__marks: MutableSequence[Tuple[str, float]] = [
-            (self.__name, self.__clock.time())
-        ]
+        self.__marks: MutableSequence[Tuple[str, float]] = [(self.__name, self.__clock.time())]
         self.__data: Optional[TimerData] = None
         self.__tags: Dict[str, str] = dict(tags or {})
 
@@ -108,12 +106,30 @@ class Timer:
         backend: MetricsBackend,
         tags: Optional[Tags] = None,
         mark_tags: Optional[Tags] = None,
+        use_distribution: bool = False,
     ) -> None:
+        """
+        Send metrics to the backend.
+
+        :param backend: The metrics backend to send to
+        :param tags: Additional tags to merge with timer tags
+        :param mark_tags: Additional tags specifically for mark metrics
+        :param use_distribution: If True, send as distribution metrics for histogram bucketing.
+                                If False, send as timing metrics (default behavior).
+        """
         data = self.finish()
         merged_tags = {**data["tags"], **tags} if tags else self.__tags
-        backend.timing(self.__name, data["duration_ms"], tags=merged_tags)
+
+        # Send overall duration
+        if use_distribution:
+            backend.distribution(self.__name, data["duration_ms"], tags=merged_tags)
+        else:
+            backend.timing(self.__name, data["duration_ms"], tags=merged_tags)
+
+        # Send mark durations
         for mark, duration in data["marks_ms"].items():
-            merged_mark_tags = (
-                {**data["tags"], **mark_tags} if mark_tags else data["tags"]
-            )
-            backend.timing(f"{self.__name}.{mark}", duration, tags=merged_mark_tags)
+            merged_mark_tags = {**data["tags"], **mark_tags} if mark_tags else data["tags"]
+            if use_distribution:
+                backend.distribution(f"{self.__name}.{mark}", duration, tags=merged_mark_tags)
+            else:
+                backend.timing(f"{self.__name}.{mark}", duration, tags=merged_mark_tags)

@@ -1,6 +1,6 @@
 from snuba.utils.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
-from tests.backends.metrics import TestingMetricsBackend, Timing
+from tests.backends.metrics import Distribution, TestingMetricsBackend, Timing
 
 
 def test_timer() -> None:
@@ -53,10 +53,32 @@ def test_timer_send_metrics() -> None:
     overridden_tags = {"foo": "bar", "blue": "dog"}
     assert backend.calls == [
         Timing("timer", (10.0 + 10.0) * 1000, {"key": "value", **set_tags}),
-        Timing(
-            "timer.thing1", 10.0 * 1000, {"mark-key": "mark-value", **overridden_tags}
-        ),
-        Timing(
-            "timer.thing2", 10.0 * 1000, {"mark-key": "mark-value", **overridden_tags}
-        ),
+        Timing("timer.thing1", 10.0 * 1000, {"mark-key": "mark-value", **overridden_tags}),
+        Timing("timer.thing2", 10.0 * 1000, {"mark-key": "mark-value", **overridden_tags}),
+    ]
+
+
+def test_timer_send_metrics_as_distribution() -> None:
+    """Test that timer can send distribution metrics for histogram bucketing."""
+    backend = TestingMetricsBackend()
+
+    time = TestingClock()
+    set_tags = {"foo": "bar", "blue": "car"}
+    t = Timer("timer", clock=time, tags=set_tags)
+    time.sleep(10)
+    t.mark("thing1")
+    time.sleep(10)
+    t.mark("thing2")
+    t.send_metrics_to(
+        backend,
+        tags={"key": "value"},
+        mark_tags={"mark-key": "mark-value", "blue": "dog"},
+        use_distribution=True,
+    )
+
+    overridden_tags = {"foo": "bar", "blue": "dog"}
+    assert backend.calls == [
+        Distribution("timer", (10.0 + 10.0) * 1000, {"key": "value", **set_tags}),
+        Distribution("timer.thing1", 10.0 * 1000, {"mark-key": "mark-value", **overridden_tags}),
+        Distribution("timer.thing2", 10.0 * 1000, {"mark-key": "mark-value", **overridden_tags}),
     ]

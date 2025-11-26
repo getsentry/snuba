@@ -325,7 +325,8 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self.routing_decision.strategy.after_execute(self.routing_decision, error)
 
         self._timer.mark("rpc_end")
-        self._timer.send_metrics_to(self.metrics)
+        # Send timing metrics as distributions for histogram bucketing in DataDog
+        self._timer.send_metrics_to(self.metrics, use_distribution=True)
         if error is not None:
             if isinstance(error, RPCAllocationPolicyException):
                 self.metrics.increment(
