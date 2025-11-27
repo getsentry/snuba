@@ -5,9 +5,11 @@ import pytest
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     AttributeDistribution,
+    AttributeDistributions,
     AttributeDistributionsRequest,
     StatsType,
     TraceItemStatsRequest,
+    TraceItemStatsResult,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
@@ -37,6 +39,15 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     messages = []
     for i in range(120):
         for item_type in [TraceItemType.TRACE_ITEM_TYPE_SPAN, TraceItemType.TRACE_ITEM_TYPE_LOG]:
+            if i % 2 != 0:
+                # 50%
+                duration_ms = "50"
+            elif i % 6 == 0:
+                # 16.67%
+                duration_ms = "10"
+            else:
+                # 33.33%
+                duration_ms = "100"
             messages.append(
                 gen_item_message(
                     start_timestamp=BASE_TIME - timedelta(minutes=i),
@@ -44,6 +55,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
                     attributes={
                         "low_cardinality": AnyValue(string_value=f"{i // 40}"),
                         "sentry.sdk.name": AnyValue(string_value="sentry.python.django"),
+                        "duration_ms": AnyValue(string_value=duration_ms),
                     },
                     remove_default_attributes=True,
                 )
@@ -134,8 +146,61 @@ class TestTraceItemAttributesStats(BaseApiTest):
                 for bucket in expected_low_cardinality_stat.buckets:
                     match = True
                     assert bucket in stat.buckets
-
         assert match
+
+        expected_duration_stat = AttributeDistribution(
+            attribute_name="duration_ms",
+            buckets=[
+                AttributeDistribution.Bucket(label="50", value=60),
+                AttributeDistribution.Bucket(label="100", value=40),
+                AttributeDistribution.Bucket(label="10", value=20),
+            ],
+        )
+        assert expected_duration_stat in response.results[0].attribute_distributions.attributes
+
+    def test_allow_list(self, setup_teardown: Any) -> None:
+        message = TraceItemStatsRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY,
+                ),
+            ),
+            stats_types=[
+                StatsType(
+                    attribute_distributions=AttributeDistributionsRequest(
+                        max_buckets=10,
+                        max_attributes=100,
+                        attributes=[
+                            AttributeKey(name="duration_ms", type=AttributeKey.TYPE_STRING)
+                        ],
+                    )
+                )
+            ],
+        )
+        response = EndpointTraceItemStats().execute(message)
+        assert response.results == [
+            TraceItemStatsResult(
+                attribute_distributions=AttributeDistributions(
+                    attributes=[
+                        AttributeDistribution(
+                            attribute_name="duration_ms",
+                            buckets=[
+                                AttributeDistribution.Bucket(label="50", value=60),
+                                AttributeDistribution.Bucket(label="100", value=40),
+                                AttributeDistribution.Bucket(label="10", value=20),
+                            ],
+                        )
+                    ]
+                )
+            )
+        ]
 
     def test_with_filter(self, setup_teardown: Any) -> None:
         message = TraceItemStatsRequest(

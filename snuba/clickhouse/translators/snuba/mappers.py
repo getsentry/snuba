@@ -122,9 +122,7 @@ class ColumnToFunctionOnColumn(ColumnToExpression):
         return FunctionCallExpr(
             alias=expression.alias,
             function_name=self.to_function_name,
-            parameters=(
-                ColumnExpr(None, expression.table_name, self.to_function_column),
-            ),
+            parameters=(ColumnExpr(None, expression.table_name, self.to_function_column),),
         )
 
 
@@ -240,6 +238,9 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
     to_col_name: str
     num_attribute_buckets: int
 
+    def _get_bucket(self, s: str) -> int:
+        return fnv_1a(s.encode("utf-8")) % self.num_attribute_buckets
+
     def attempt_map(
         self,
         expression: SubscriptableReference,
@@ -256,7 +257,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         if not isinstance(key.value, str):
             return None
 
-        bucket_idx = fnv_1a(key.value.encode("utf-8")) % self.num_attribute_buckets
+        bucket_idx = self._get_bucket(key.value)
         return arrayElement(
             expression.alias,
             ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
@@ -330,9 +331,7 @@ def build_nullable_mapping_expr(
                 "has",
                 (ColumnExpr(None, table_name, f"{col_name}.key"), mapping_key),
             ),
-            build_mapping_expr(
-                None, table_name, col_name, mapping_key, value_subcolumn_name
-            ),
+            build_mapping_expr(None, table_name, col_name, mapping_key, value_subcolumn_name),
             LiteralExpr(None, None),
         ),
     )
@@ -382,9 +381,7 @@ class FunctionNameMapper(FunctionCallMapper):
         return FunctionCallExpr(
             alias=expression.alias,
             function_name=self.to_name,
-            parameters=tuple(
-                exp.accept(children_translator) for exp in expression.parameters
-            ),
+            parameters=tuple(exp.accept(children_translator) for exp in expression.parameters),
         )
 
 
