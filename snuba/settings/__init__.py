@@ -456,7 +456,7 @@ MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
 SNQL_DISABLED_DATASETS: set[str] = set([])
 
 ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS: int = 0  # 0 means no limit
-ENABLE_TRACE_PAGINATION_DEFAULT = 0
+ENABLE_TRACE_PAGINATION_DEFAULT = 1
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
