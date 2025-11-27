@@ -10,13 +10,4 @@ statusProvider:
       - 'build-arm64'
       - 'assemble'
 targets:
-  - id: release
-    name: docker
-    source: ghcr.io/getsentry/snuba
-    target: getsentry/snuba
-  - id: latest
-    name: docker
-    source: ghcr.io/getsentry/snuba
-    target: getsentry/snuba
-    targetFormat: '{{{target}}}:latest'
   - name: github
