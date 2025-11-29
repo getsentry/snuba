@@ -379,7 +379,6 @@ def _build_snuba_request(
 
 
 def convert_to_attribute_value(value: Any) -> AttributeValue:
-    print(value)
     if isinstance(value, bool):
         return AttributeValue(
             val_bool=value,
