@@ -106,16 +106,7 @@ impl TryFrom<TraceItem> for EAPItem {
                 Some(Value::DoubleValue(double)) => eap_item.attributes.insert_float(key, double),
                 Some(Value::IntValue(int)) => eap_item.attributes.insert_int(key, int),
                 Some(Value::BoolValue(bool)) => eap_item.attributes.insert_bool(key, bool),
-                Some(Value::ArrayValue(array)) => {
-                    if get_str_config(INSERT_ARRAYS_CONFIG)
-                        .ok()
-                        .flatten()
-                        .unwrap_or("0".to_string())
-                        == "1"
-                    {
-                        eap_item.attributes.insert_array(key, array)
-                    }
-                }
+                Some(Value::ArrayValue(array)) => eap_item.attributes.insert_array(key, array),
                 Some(Value::BytesValue(_)) => (),
                 Some(Value::KvlistValue(_)) => (),
                 None => (),
@@ -229,6 +220,15 @@ impl AttributeMap {
     }
 
     pub fn insert_array(&mut self, k: String, v: ArrayValue) {
+        if get_str_config(INSERT_ARRAYS_CONFIG)
+            .ok()
+            .flatten()
+            .unwrap_or("0".to_string())
+            != "1"
+        {
+            return;
+        }
+
         let mut values: Vec<EAPValue> = Vec::default();
         for value in v.values {
             match value.value {

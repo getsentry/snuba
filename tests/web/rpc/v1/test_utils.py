@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     OrFilter,
     TraceItemFilter,
 )
-from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue, TraceItem
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -69,6 +69,16 @@ _DEFAULT_ATTRIBUTES = {
     "transaction.method": AnyValue(string_value="POST"),
     "transaction.op": AnyValue(string_value="http.server"),
     "user": AnyValue(string_value="ip:127.0.0.1"),
+    "i_am_an_array": AnyValue(
+        array_value=ArrayValue(
+            values=[
+                AnyValue(int_value=1),
+                AnyValue(bool_value=True),
+                AnyValue(double_value=3.0),
+                AnyValue(string_value="blah"),
+            ]
+        )
+    ),
 }
 
 
@@ -89,16 +99,24 @@ def write_eap_item(
         count: the number of these spans to write.
     """
 
+    def convert_attribute_value(value: Any) -> AnyValue:
+        if isinstance(value, str):
+            return AnyValue(string_value=value)
+        elif isinstance(value, int):
+            return AnyValue(int_value=value)
+        elif isinstance(value, bool):
+            return AnyValue(bool_value=value)
+        elif isinstance(value, float):
+            return AnyValue(double_value=value)
+        elif isinstance(value, list):
+            return AnyValue(
+                array_value=ArrayValue(values=[convert_attribute_value(v) for v in value])
+            )
+        return AnyValue()
+
     attributes: dict[str, AnyValue] = {}
     for key, value in raw_attributes.items():
-        if isinstance(value, str):
-            attributes[key] = AnyValue(string_value=value)
-        elif isinstance(value, int):
-            attributes[key] = AnyValue(int_value=value)
-        elif isinstance(value, bool):
-            attributes[key] = AnyValue(bool_value=value)
-        else:
-            attributes[key] = AnyValue(double_value=value)
+        attributes[key] = convert_attribute_value(value)
 
     write_raw_unprocessed_events(
         get_storage(StorageKey("eap_items")),  # type: ignore
