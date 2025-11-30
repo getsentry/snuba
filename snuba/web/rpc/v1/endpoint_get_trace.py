@@ -501,11 +501,11 @@ def _process_results(
     for row in data:
         id = row.pop("id")
         ts = row.pop("timestamp")
-        arrays = row.pop("attributes_array", "{}")
+        arrays = row.pop("attributes_array", "{}") or "{}"
         # We want to merge these values after to overwrite potential floats
         # with the same name.
-        booleans = row.pop("attributes_bool", {})
-        integers = row.pop("attributes_int", {})
+        booleans = row.pop("attributes_bool", {}) or {}
+        integers = row.pop("attributes_int", {}) or {}
         last_seen_timestamp_precise = float(ts)
         last_seen_id = id
 
