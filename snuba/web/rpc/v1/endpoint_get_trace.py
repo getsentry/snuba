@@ -471,11 +471,9 @@ def _transform_array_value(value: dict[str, str]) -> Any:
     for t, v in value.items():
         if t == "Int":
             return int(v)
-        if t == "Bool":
-            return bool(v)
         if t == "Double":
             return float(v)
-        if t == "String":
+        if t in {"String", "Bool"}:
             return v
     raise BadSnubaRPCRequestException(f"array value type unknown: {type(v)}")
 
