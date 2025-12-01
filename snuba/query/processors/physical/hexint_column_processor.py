@@ -29,9 +29,7 @@ class HexIntColumnProcessor(BaseTypeConverter):
             raise ColumnTypeError("Invalid hexint", should_report=False)
 
         if exp.value == "":
-            raise ColumnTypeError(
-                "Invalid hexint", should_report=False, skip_optimization=True
-            )
+            raise ColumnTypeError("Invalid hexint", should_report=False, skip_optimization=True)
 
         try:
             translated = int(exp.value, 16)
@@ -73,9 +71,7 @@ class HexIntArrayColumnProcessor(BaseTypeConverter):
             raise ColumnTypeError("Invalid hexint", report=False)
 
         if exp.value == "":
-            raise ColumnTypeError(
-                "Invalid hexint", report=False, skip_optimization=True
-            )
+            raise ColumnTypeError("Invalid hexint", report=False, skip_optimization=True)
 
         try:
             translated = int(exp.value, 16)
