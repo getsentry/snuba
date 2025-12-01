@@ -104,3 +104,40 @@ def test_hexint_column_processor(unprocessed: Expression, formatted_value: str) 
     assert condition is not None
     ret = condition.accept(ClickhouseExpressionFormatter())
     assert ret == formatted_value
+
+
+def test_hexint_processor_skips_empty_literal_optimization() -> None:
+    unprocessed_query = Query(
+        Table("transactions", ColumnSet([]), storage_key=StorageKey("dontmatter")),
+        selected_columns=[SelectedExpression("column1", Column(None, None, "column1"))],
+        condition=binary_condition(
+            ConditionFunctions.EQ,
+            FunctionCall(
+                None,
+                "cast",
+                (Column(None, None, "column1"), Literal(None, "String")),
+            ),
+            Literal(None, ""),
+        ),
+    )
+
+    HexIntColumnProcessor(set(["column1"])).process_query(
+        unprocessed_query, HTTPQuerySettings()
+    )
+
+    condition = unprocessed_query.get_condition()
+    assert isinstance(condition, FunctionCall)
+    assert condition.function_name == ConditionFunctions.EQ
+
+    lhs, rhs = condition.parameters
+    assert isinstance(rhs, Literal)
+    assert rhs.value == ""
+
+    assert isinstance(lhs, FunctionCall)
+    assert lhs.function_name == "cast"
+    cast_arg, cast_target = lhs.parameters
+    assert isinstance(cast_target, Literal)
+    assert cast_target.value == "String"
+
+    assert isinstance(cast_arg, FunctionCall)
+    assert cast_arg.function_name == "lower"

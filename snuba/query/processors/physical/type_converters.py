@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Set
+from typing import Optional, Set
 
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import ConditionFunctions
@@ -156,14 +156,25 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
             assert isinstance(lit, Literal)
             return lit
 
+        def _translate_or_skip(lit: Literal) -> Optional[Literal]:
+            try:
+                return self._translate_literal(lit)
+            except ColumnTypeError as exc:
+                if getattr(exc, "extra_data", {}).get("skip_optimization"):
+                    return None
+                raise
+
         match = self.__condition_matcher.match(exp)
         if match is not None:
+            translated_literal = _translate_or_skip(assert_literal(match.expression("literal")))
+            if translated_literal is None:
+                return exp
             return FunctionCall(
                 exp.alias,
                 match.string("operator"),
                 (
                     self.__strip_column_alias(match.expression("col")),
-                    self._translate_literal(assert_literal(match.expression("literal"))),
+                    translated_literal,
                 ),
             )
 
@@ -178,15 +189,17 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
                 assert isinstance(param, Literal)
 
             wrapper = tuple if collection_func.function_name == "tuple" else list
+            new_params = []
+            for lit in collection_func.parameters:
+                translated = _translate_or_skip(assert_literal(lit))
+                if translated is None:
+                    return exp
+                new_params.append(translated)
+
             new_collection_func = FunctionCall(
                 collection_func.alias,
                 collection_func.function_name,
-                parameters=wrapper(
-                    [
-                        self._translate_literal(assert_literal(lit))
-                        for lit in collection_func.parameters
-                    ]
-                ),
+                parameters=wrapper(new_params),
             )
             return FunctionCall(
                 exp.alias,

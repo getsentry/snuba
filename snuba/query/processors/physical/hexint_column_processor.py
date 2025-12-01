@@ -25,14 +25,23 @@ class HexIntColumnProcessor(BaseTypeConverter):
         self._size = size
 
     def _translate_literal(self, exp: Literal) -> Literal:
-        try:
-            assert isinstance(exp.value, str)
-            # 128 bit integers in clickhouse need to be referenced as strings
-            if self._size == 32:
-                return Literal(alias=exp.alias, value=str(int(exp.value, 16)))
-            return Literal(alias=exp.alias, value=int(exp.value, 16))
-        except (AssertionError, ValueError):
+        if not isinstance(exp.value, str):
             raise ColumnTypeError("Invalid hexint", should_report=False)
+
+        if exp.value == "":
+            raise ColumnTypeError(
+                "Invalid hexint", should_report=False, skip_optimization=True
+            )
+
+        try:
+            translated = int(exp.value, 16)
+        except ValueError:
+            raise ColumnTypeError("Invalid hexint", should_report=False)
+
+        # 128 bit integers in clickhouse need to be referenced as strings
+        if self._size == 32:
+            return Literal(alias=exp.alias, value=str(translated))
+        return Literal(alias=exp.alias, value=translated)
 
     def _process_expressions(self, exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in self.columns:
@@ -60,11 +69,20 @@ class HexIntColumnProcessor(BaseTypeConverter):
 
 class HexIntArrayColumnProcessor(BaseTypeConverter):
     def _translate_literal(self, exp: Literal) -> Literal:
-        try:
-            assert isinstance(exp.value, str)
-            return Literal(alias=exp.alias, value=int(exp.value, 16))
-        except (AssertionError, ValueError):
+        if not isinstance(exp.value, str):
             raise ColumnTypeError("Invalid hexint", report=False)
+
+        if exp.value == "":
+            raise ColumnTypeError(
+                "Invalid hexint", report=False, skip_optimization=True
+            )
+
+        try:
+            translated = int(exp.value, 16)
+        except ValueError:
+            raise ColumnTypeError("Invalid hexint", report=False)
+
+        return Literal(alias=exp.alias, value=translated)
 
     def _process_expressions(self, exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in self.columns:
