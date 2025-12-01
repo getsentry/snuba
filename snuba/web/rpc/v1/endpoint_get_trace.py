@@ -479,7 +479,7 @@ def _transform_array_value(value: dict[str, str]) -> Any:
 
 
 def _process_arrays(raw: str) -> dict[str, list[Any]]:
-    parsed = json.loads(raw)
+    parsed = json.loads(raw) or {}
     arrays = {}
     for key, values in parsed.items():
         arrays[key] = [_transform_array_value(v) for v in values]
