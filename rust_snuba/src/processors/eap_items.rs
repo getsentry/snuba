@@ -15,10 +15,6 @@ use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
 
-use crate::runtime_config::get_str_config;
-
-const INSERT_ARRAYS_CONFIG: &str = "eap_items_consumer_insert_arrays";
-
 pub fn process_message(
     msg: KafkaPayload,
     _metadata: KafkaMessageMetadata,
@@ -220,15 +216,6 @@ impl AttributeMap {
     }
 
     pub fn insert_array(&mut self, k: String, v: ArrayValue) {
-        if get_str_config(INSERT_ARRAYS_CONFIG)
-            .ok()
-            .flatten()
-            .unwrap_or("0".to_string())
-            != "1"
-        {
-            return;
-        }
-
         let mut values: Vec<EAPValue> = Vec::default();
         for value in v.values {
             match value.value {

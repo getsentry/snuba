@@ -145,8 +145,6 @@ def get_attributes(
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
 
-    state.set_config("eap_items_consumer_insert_arrays", "1")
-
     write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
     write_raw_unprocessed_events(items_storage, _LOGS)  # type: ignore
 
@@ -176,8 +174,6 @@ class TestGetTrace(BaseApiTest):
         assert response.status_code == 200, error_proto
 
     def test_with_data_all_attributes(self, setup_teardown: Any) -> None:
-        state.set_config("eap_items_consumer_insert_arrays", "1")
-
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         message = GetTraceRequest(
