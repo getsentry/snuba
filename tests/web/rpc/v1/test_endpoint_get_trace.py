@@ -145,6 +145,8 @@ def get_attributes(
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
 
+    state.set_config("eap_items_consumer_insert_arrays", "1")
+
     write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
     write_raw_unprocessed_events(items_storage, _LOGS)  # type: ignore
 
