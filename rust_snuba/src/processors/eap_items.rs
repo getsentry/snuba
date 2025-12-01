@@ -238,7 +238,6 @@ impl AttributeMap {
 mod tests {
     use std::time::SystemTime;
 
-    use crate::runtime_config::patch_str_config_for_test;
     use prost_types::Timestamp;
     use sentry_protos::snuba::v1::any_value::Value;
     use sentry_protos::snuba::v1::{AnyValue, ArrayValue, TraceItemType};
@@ -439,8 +438,6 @@ mod tests {
                 })),
             },
         );
-
-        patch_str_config_for_test(INSERT_ARRAYS_CONFIG, Some("1"));
 
         let eap_item = EAPItem::try_from(trace_item);
 
