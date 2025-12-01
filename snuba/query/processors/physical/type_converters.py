@@ -69,27 +69,50 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
         )
 
         col = Param("col", ColumnMatch(None, column_match))
+        casted_col = FunctionCallMatch(String("cast"), (col, LiteralMatch(String("String"))))
 
         self.__condition_matcher = Or(
             [
                 FunctionCallMatch(operator, (literal, col)),
                 FunctionCallMatch(operator, (col, literal)),
                 FunctionCallMatch(Param("operator", String("has")), (col, literal)),
+                # These are the same as above but the column is wrapped in `cast(..., 'String')`
+                FunctionCallMatch(operator, (casted_col, literal)),
+                FunctionCallMatch(operator, (literal, casted_col)),
+                FunctionCallMatch(Param("operator", String("has")), (casted_col, literal)),
             ]
         )
 
-        self.__in_condition_matcher = FunctionCallMatch(
-            in_operators,
-            (
-                col,
-                Param(
-                    "literals",
-                    FunctionCallMatch(
-                        Or([String("array"), String("tuple")]),
-                        all_parameters=LiteralMatch(),
+        self.__in_condition_matcher = Or(
+            [
+                FunctionCallMatch(
+                    in_operators,
+                    (
+                        col,
+                        Param(
+                            "literals",
+                            FunctionCallMatch(
+                                Or([String("array"), String("tuple")]),
+                                all_parameters=LiteralMatch(),
+                            ),
+                        ),
                     ),
                 ),
-            ),
+                # These are the same as above but the column is wrapped in `cast(..., 'String')`
+                FunctionCallMatch(
+                    in_operators,
+                    (
+                        casted_col,
+                        Param(
+                            "literals",
+                            FunctionCallMatch(
+                                Or([String("array"), String("tuple")]),
+                                all_parameters=LiteralMatch(),
+                            ),
+                        ),
+                    ),
+                ),
+            ]
         )
 
         self.__unoptimizable_condition_matcher = Or(
@@ -100,9 +123,7 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
         )
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        query.transform_expressions(
-            self._process_expressions, skip_transform_condition=True
-        )
+        query.transform_expressions(self._process_expressions, skip_transform_condition=True)
 
         condition = query.get_condition()
         if condition is not None:
@@ -117,9 +138,7 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
 
     def __strip_column_alias(self, exp: Expression) -> Expression:
         assert isinstance(exp, Column)
-        return Column(
-            alias=None, table_name=exp.table_name, column_name=exp.column_name
-        )
+        return Column(alias=None, table_name=exp.table_name, column_name=exp.column_name)
 
     def __contains_unoptimizable_condition(self, exp: Expression) -> bool:
         """
@@ -144,9 +163,7 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
                 match.string("operator"),
                 (
                     self.__strip_column_alias(match.expression("col")),
-                    self._translate_literal(
-                        assert_literal(match.expression("literal"))
-                    ),
+                    self._translate_literal(assert_literal(match.expression("literal"))),
                 ),
             )
 
