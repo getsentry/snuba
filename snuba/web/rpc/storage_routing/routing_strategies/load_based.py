@@ -1,15 +1,13 @@
 import sentry_sdk
 
 from snuba.configs.configuration import Configuration
-from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
-    OutcomesBasedRoutingStrategy,
-)
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    BaseRoutingStrategy,
     RoutingDecision,
 )
 
 
-class LoadBasedRoutingStrategy(OutcomesBasedRoutingStrategy):
+class LoadBasedRoutingStrategy(BaseRoutingStrategy):
     """
     If cluster load is under a threshold, ignore recommendations and allow the query to pass through with the tier decided based on outcomes-based routing.
     """
@@ -34,8 +32,6 @@ class LoadBasedRoutingStrategy(OutcomesBasedRoutingStrategy):
         self,
         routing_decision: RoutingDecision,
     ) -> None:
-        super()._update_routing_decision(routing_decision)
-
         load_info = routing_decision.routing_context.cluster_load_info
         if load_info is None:
             return
