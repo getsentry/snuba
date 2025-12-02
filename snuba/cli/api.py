@@ -4,7 +4,7 @@ from typing import Optional, Union
 import click
 
 from snuba.environment import setup_logging
-from snuba.utils import uwsgi
+from snuba.utils import server
 
 
 @click.command()
@@ -49,7 +49,7 @@ def api(
         if log_level:
             os.environ["LOG_LEVEL"] = log_level
 
-        uwsgi.run(
+        server.serve(
             "snuba.web.wsgi:application",
             f"{host}:{port}",
             processes=processes,
