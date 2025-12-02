@@ -132,7 +132,7 @@ def _grab_specific_attributes_query(attributes: Iterable[AttributeKey]) -> Expre
         raise RuntimeError("Failed to find SubscriptableHashBucketMapper for attributes_string")
     attr_to_bucket_fn = attr_to_bucket._get_bucket
 
-    # if the attribute is in the map return [(key,value)] else return []
+    # sql select: if the attribute is in attributes_string_n, return [(key,value)] else return []
     individual_attribute_select = []
     for attribute in attributes:
         bucket = attr_to_bucket_fn(attribute.name)
@@ -152,7 +152,8 @@ def _grab_specific_attributes_query(attributes: Iterable[AttributeKey]) -> Expre
                 f.array(),
             )
         )
-    # an array of [(key,val), (key,val), ...] containing all the requested attributes
+    # sql select: an array of [(key,val), (key,val), ...] containing all the requested attributes
+    # the empty arrays are gone now
     concat = f.arrayConcat(*individual_attribute_select)
     # now each tuple will be its own row, (key,val)
     kv = arrayJoin(
