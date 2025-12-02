@@ -1,5 +1,33 @@
 # Changelog
 
+## 25.11.1
+
+### Build / dependencies / internal 🔧
+
+- ref: bump sentry-protos to 0.4.7 by @getsentry-bot in [#7559](https://github.com/getsentry/snuba/pull/7559)
+- chore: enable trace pagination support by default by @kylemumma in [#7558](https://github.com/getsentry/snuba/pull/7558)
+- ref: bump sentry-protos to 0.4.6 by @getsentry-bot in [#7553](https://github.com/getsentry/snuba/pull/7553)
+- ref(consumer): change BytesInsertBatch to support builder pattern by @onewland in [#7479](https://github.com/getsentry/snuba/pull/7479)
+
+### New Features ✨
+
+- feat(eap): record item type counts in batches by @onewland in [#7481](https://github.com/getsentry/snuba/pull/7481)
+- feat(processor): Handle casted columns in UUID column processor by @Zylphrex in [#7552](https://github.com/getsentry/snuba/pull/7552)
+
+### Bug Fixes 🐛
+
+- fix: subscription executors should not crash when there are too many concurrent queries by @xurui-c in [#7547](https://github.com/getsentry/snuba/pull/7547)
+- fix(gocd): fix gocd filters for rs/py deploys by @onewland in [#7545](https://github.com/getsentry/snuba/pull/7545)
+
+### Other
+
+- ref(runtime-config): update write_node_replacements_global default by @MeredithAnya in [#7556](https://github.com/getsentry/snuba/pull/7556)
+- feat(query-pipeline): Add configs to customize maximum size of a query by @phacops in [#7546](https://github.com/getsentry/snuba/pull/7546)
+- ref(runtime-config): remove *_matview_version by @MeredithAnya in [#7543](https://github.com/getsentry/snuba/pull/7543)
+- ref(runtime-config): remove use_split by @MeredithAnya in [#7540](https://github.com/getsentry/snuba/pull/7540)
+- meta: Bump new development version in [2fdaba59](https://github.com/getsentry/snuba/commit/2fdaba59535e35903816147913647ed3d4fe60dd)
+- ref(runtime-config): remove use_readthrough_query_cache by @MeredithAnya in [#7541](https://github.com/getsentry/snuba/pull/7541)
+
 ## 25.11.0
 
 ### Various fixes & improvements
