@@ -12,7 +12,7 @@ def serve(
     processes: int = 1,
     threads: int = 1,
     reload: bool = False,
-    name: str | None = None
+    name: str | None = None,
 ) -> NoReturn:
     host, port = bind.rsplit(":", maxsplit=1)
     server = Granian(
