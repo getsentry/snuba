@@ -49,8 +49,8 @@ def create_metrics(
         new_datadog_backend = DatadogMetricsBackend(
             partial(
                 DogStatsd,
-                host=host,
-                port=port,
+                host=new_datadog_host,
+                port=new_datadog_port,
                 namespace=f"dd_{prefix}",
                 constant_tags=(
                     [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
