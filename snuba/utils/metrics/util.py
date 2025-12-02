@@ -51,7 +51,7 @@ def create_metrics(
                 DogStatsd,
                 host=host,
                 port=port,
-                namespace=prefix,
+                namespace=f"dd_{prefix}",
                 constant_tags=(
                     [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
                 ),
