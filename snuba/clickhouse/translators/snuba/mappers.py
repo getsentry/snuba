@@ -238,9 +238,6 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
     to_col_name: str
     num_attribute_buckets: int
 
-    def _get_bucket(self, s: str) -> int:
-        return fnv_1a(s.encode("utf-8")) % self.num_attribute_buckets
-
     def attempt_map(
         self,
         expression: SubscriptableReference,
@@ -257,7 +254,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         if not isinstance(key.value, str):
             return None
 
-        bucket_idx = self._get_bucket(key.value)
+        bucket_idx = fnv_1a(key.value.encode("utf-8")) % self.num_attribute_buckets
         return arrayElement(
             expression.alias,
             ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),

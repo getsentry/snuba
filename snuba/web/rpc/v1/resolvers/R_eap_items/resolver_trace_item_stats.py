@@ -16,7 +16,6 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.clickhouse.translators.snuba.mappers import SubscriptableHashBucketMapper
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
@@ -115,28 +114,10 @@ def _grab_specific_attributes_query(attributes: Iterable[AttributeKey]) -> Expre
     returns an experssion that selects only the attributes in the allow list. each attribute will be its own row,
     and it will be a tuple like: (key, value)
     """
-    # this gives you a function that maps an attribute name to the column that its in
-    # ex: "span.op" -> "attributes_string_4", bc attributes are hashed into 40 buckets based on name
-    attr_to_bucket = next(
-        (
-            e
-            for e in get_entity(EntityKey("eap_items"))
-            .get_all_storage_connections()[0]
-            .translation_mappers.subscriptables
-            if isinstance(e, SubscriptableHashBucketMapper)
-            and e.from_column_name == "attributes_string"
-        ),
-        None,
-    )
-    if attr_to_bucket is None:
-        raise RuntimeError("Failed to find SubscriptableHashBucketMapper for attributes_string")
-    attr_to_bucket_fn = attr_to_bucket._get_bucket
-
-    # sql select: if the attribute is in attributes_string_n, return [(key,value)] else return []
+    # sql select: if the attribute is in attributes_string, return [(key,value)] else return []
     individual_attribute_select = []
     for attribute in attributes:
-        bucket = attr_to_bucket_fn(attribute.name)
-        attribute_map = column(f"attributes_string_{bucket}")
+        attribute_map = column("attributes_string")
         individual_attribute_select.append(
             if_cond(
                 f.mapContains(attribute_map, attribute.name),
