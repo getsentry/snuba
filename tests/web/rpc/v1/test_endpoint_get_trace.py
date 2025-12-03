@@ -21,7 +21,11 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     ResponseMeta,
     TraceItemType,
 )
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    Array,
+    AttributeKey,
+    AttributeValue,
+)
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
 from snuba import state
@@ -79,62 +83,68 @@ _LOGS = [
     for i in range(10)
 ]
 
-
-_PROTOBUF_TO_SENTRY_PROTOS = {
+_PROTOBUF_TO_SENTRY_PROTOS: dict[str, tuple[str, AttributeKey.Type.ValueType]] = {
     "string_value": ("val_str", AttributeKey.Type.TYPE_STRING),
     "double_value": ("val_double", AttributeKey.Type.TYPE_DOUBLE),
-    # we store integers as double
-    "int_value": ("val_double", AttributeKey.Type.TYPE_DOUBLE),
-    # we store boolean as double
-    "bool_value": ("val_double", AttributeKey.Type.TYPE_DOUBLE),
+    "int_value": ("val_int", AttributeKey.Type.TYPE_INT),
+    "bool_value": ("val_bool", AttributeKey.Type.TYPE_BOOLEAN),
+    "array_value": ("val_array", AttributeKey.Type.TYPE_ARRAY),
 }
 
 
 def get_attributes(
     span: TraceItem,
 ) -> list[GetTraceResponse.Item.Attribute]:
-    attributes: list[GetTraceResponse.Item.Attribute] = [
-        GetTraceResponse.Item.Attribute(
+    attributes: dict[str, GetTraceResponse.Item.Attribute] = {
+        "sampling_factor": GetTraceResponse.Item.Attribute(
             key=AttributeKey(
                 name="sampling_factor",
                 type=AttributeKey.Type.TYPE_DOUBLE,
             ),
             value=AttributeValue(val_double=1.0),
         ),
-    ]
+    }
 
     for key in {"organization_id", "project_id", "trace_id"}:
         attribute_key, attribute_value = _value_to_attribute(key, getattr(span, key))
-        attributes.append(
-            GetTraceResponse.Item.Attribute(
-                key=attribute_key,
-                value=attribute_value,
-            )
+        attributes[key] = GetTraceResponse.Item.Attribute(
+            key=attribute_key,
+            value=attribute_value,
         )
-    for key, value in span.attributes.items():
+
+    def _convert_to_attribute_value(value: AnyValue) -> AttributeValue:
         value_type = value.WhichOneof("value")
         if value_type:
-            attribute_key = AttributeKey(
-                name=key,
-                type=_PROTOBUF_TO_SENTRY_PROTOS[value_type][1],
-            )
-            args = {_PROTOBUF_TO_SENTRY_PROTOS[value_type][0]: getattr(value, value_type)}
+            arg_name = _PROTOBUF_TO_SENTRY_PROTOS[str(value_type)][0]
+            arg_value = getattr(value, value_type)
+            if value_type == "array_value":
+                arg_value = Array(values=[_convert_to_attribute_value(v) for v in arg_value.values])
+            args = {arg_name: arg_value}
         else:
-            continue
+            args = {"is_null": True}
 
-        attribute_value = AttributeValue(**args)
-        attributes.append(
-            GetTraceResponse.Item.Attribute(
-                key=attribute_key,
-                value=attribute_value,
-            )
+        return AttributeValue(**args)
+
+    for key, value in span.attributes.items():
+        value_type = value.WhichOneof("value")
+        if not value_type:
+            continue
+        attribute_key = AttributeKey(
+            name=key,
+            type=_PROTOBUF_TO_SENTRY_PROTOS[str(value_type)][1],
         )
-    return attributes
+        attribute_value = _convert_to_attribute_value(value)
+        attributes[key] = GetTraceResponse.Item.Attribute(
+            key=attribute_key,
+            value=attribute_value,
+        )
+    return list(attributes.values())
 
 
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
+
     write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
     write_raw_unprocessed_events(items_storage, _LOGS)  # type: ignore
 

@@ -4,7 +4,6 @@ expression: snapshot_payload
 ---
 [
   {
-    "attributes_array": {},
     "attributes_bool": {
       "some_bool": true
     },

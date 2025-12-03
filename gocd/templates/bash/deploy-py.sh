@@ -24,7 +24,6 @@ eval $(regions-project-env-vars --region="${SENTRY_REGION}")
   --container-name="metrics-counters-subscriptions-scheduler" \
   --container-name="metrics-sets-subscriptions-scheduler" \
   --container-name="metrics-subscriptions-executor" \
-  --container-name="outcomes-billing-consumer" \
   --container-name="search-issues-consumer" \
   --container-name="snuba-admin" \
   --container-name="transactions-subscriptions-executor" \
