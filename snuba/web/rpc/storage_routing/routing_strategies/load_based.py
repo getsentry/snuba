@@ -18,7 +18,7 @@ class LoadBasedRoutingStrategy(BaseRoutingStrategy):
                 name="pass_through_load_percentage",
                 description="If cluster load is below this percentage, allow the query to run regardless of allocation policies",
                 value_type=int,
-                default=20,
+                default=10,
             ),
             Configuration(
                 name="pass_through_max_threads",
