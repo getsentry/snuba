@@ -11,6 +11,7 @@ def serve(
     threads: int = 1,
     reload: bool = False,
     name: str | None = None,
+    lifetime: int | None = None,
 ) -> None:
     host, port = bind.rsplit(":", maxsplit=1)
     server = Granian(
@@ -19,6 +20,7 @@ def serve(
         port=int(port),
         interface=Interfaces.WSGI,
         workers=processes,
+        workers_lifetime=lifetime,
         workers_kill_timeout=30,
         blocking_threads=threads,
         respawn_failed_workers=True,
