@@ -10,6 +10,7 @@ from typing import (
     MutableMapping,
     Optional,
     Sequence,
+    Tuple,
     TypedDict,
 )
 
@@ -17,6 +18,7 @@ import rapidjson
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as KafkaMessage
 from confluent_kafka import Producer
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
@@ -54,6 +56,7 @@ logger = logging.getLogger(__name__)
 class AttributeConditions:
     item_type: int
     attributes: Dict[str, List[Any]]
+    attributes_by_key: Dict[str, Tuple[AttributeKey, List[Any]]]
 
 
 class DeleteQueryMessage(TypedDict, total=False):
