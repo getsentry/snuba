@@ -33,30 +33,47 @@ from tests.web.rpc.v1.test_utils import (
 )
 
 
+def pick_n_deterministic(choices: list[Any], weights: list[int], num_choices: int) -> list[Any]:
+    """
+    deterministically chooses num_choices from choices, where weights is the proportion of each choice
+    that will be chosen. weights must sum to 100 and be the same size as choices. each index in weights
+    corresponds to the index in choices.
+    """
+    if len(choices) != len(weights):
+        raise ValueError("choices and weights must be the same length")
+    if sum(weights) != 100:
+        raise ValueError("weights must sum to 100")
+
+    results = []
+    for i, choice in enumerate(choices):
+        how_many = int((weights[i] / 100) * num_choices)
+        results.extend([choice] * how_many)
+    return results
+
+
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
     messages = []
+    durations = pick_n_deterministic(
+        choices=["10", "30", "50", None],
+        weights=[5, 70, 15, 10],
+        num_choices=120,
+    )
     for i in range(120):
         for item_type in [TraceItemType.TRACE_ITEM_TYPE_SPAN, TraceItemType.TRACE_ITEM_TYPE_LOG]:
-            if i % 2 != 0:
-                # 50%
-                duration_ms = "50"
-            elif i % 6 == 0:
-                # 16.67%
-                duration_ms = "10"
-            else:
-                # 33.33%
-                duration_ms = "100"
+            attributes = {
+                "low_cardinality": AnyValue(string_value=f"{i // 40}"),
+                "sentry.sdk.name": AnyValue(string_value="sentry.python.django"),
+            }
+            if durations[i] is not None:
+                attributes["duration_ms"] = AnyValue(string_value=durations[i])
+
             messages.append(
                 gen_item_message(
                     start_timestamp=BASE_TIME - timedelta(minutes=i),
                     type=item_type,
-                    attributes={
-                        "low_cardinality": AnyValue(string_value=f"{i // 40}"),
-                        "sentry.sdk.name": AnyValue(string_value="sentry.python.django"),
-                        "duration_ms": AnyValue(string_value=duration_ms),
-                    },
+                    attributes=attributes,
                     remove_default_attributes=True,
                 )
             )
@@ -151,9 +168,9 @@ class TestTraceItemAttributesStats(BaseApiTest):
         expected_duration_stat = AttributeDistribution(
             attribute_name="duration_ms",
             buckets=[
-                AttributeDistribution.Bucket(label="50", value=60),
-                AttributeDistribution.Bucket(label="100", value=40),
-                AttributeDistribution.Bucket(label="10", value=20),
+                AttributeDistribution.Bucket(label="30", value=84),
+                AttributeDistribution.Bucket(label="50", value=18),
+                AttributeDistribution.Bucket(label="10", value=6),
             ],
         )
         assert expected_duration_stat in response.results[0].attribute_distributions.attributes
@@ -192,9 +209,9 @@ class TestTraceItemAttributesStats(BaseApiTest):
                         AttributeDistribution(
                             attribute_name="duration_ms",
                             buckets=[
-                                AttributeDistribution.Bucket(label="50", value=60),
-                                AttributeDistribution.Bucket(label="100", value=40),
-                                AttributeDistribution.Bucket(label="10", value=20),
+                                AttributeDistribution.Bucket(label="30", value=84),
+                                AttributeDistribution.Bucket(label="50", value=18),
+                                AttributeDistribution.Bucket(label="10", value=6),
                             ],
                         )
                     ]
