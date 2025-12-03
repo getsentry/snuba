@@ -122,9 +122,7 @@ class ColumnToFunctionOnColumn(ColumnToExpression):
         return FunctionCallExpr(
             alias=expression.alias,
             function_name=self.to_function_name,
-            parameters=(
-                ColumnExpr(None, expression.table_name, self.to_function_column),
-            ),
+            parameters=(ColumnExpr(None, expression.table_name, self.to_function_column),),
         )
 
 
@@ -330,9 +328,7 @@ def build_nullable_mapping_expr(
                 "has",
                 (ColumnExpr(None, table_name, f"{col_name}.key"), mapping_key),
             ),
-            build_mapping_expr(
-                None, table_name, col_name, mapping_key, value_subcolumn_name
-            ),
+            build_mapping_expr(None, table_name, col_name, mapping_key, value_subcolumn_name),
             LiteralExpr(None, None),
         ),
     )
@@ -382,9 +378,7 @@ class FunctionNameMapper(FunctionCallMapper):
         return FunctionCallExpr(
             alias=expression.alias,
             function_name=self.to_name,
-            parameters=tuple(
-                exp.accept(children_translator) for exp in expression.parameters
-            ),
+            parameters=tuple(exp.accept(children_translator) for exp in expression.parameters),
         )
 
 
