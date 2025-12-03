@@ -42,4 +42,5 @@ def admin(
             f"{host}:{port}",
             processes=processes,
             threads=threads,
+            name="snuba-admin",
         )

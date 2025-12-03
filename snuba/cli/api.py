@@ -54,4 +54,5 @@ def api(
             f"{host}:{port}",
             processes=processes,
             threads=threads,
+            name="snuba-api",
         )
