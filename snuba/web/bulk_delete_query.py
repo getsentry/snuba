@@ -282,7 +282,6 @@ def delete_from_tables(
     tables: Sequence[str],
     conditions: Tuple[Dict[str, Any], Optional[AttributeConditions]],
     attribution_info: AttributionInfo,
-    attribute_conditions: Optional[AttributeConditions] = None,
 ) -> dict[str, Result]:
     highest_rows_to_delete = 0
     result: dict[str, Result] = {}
@@ -312,6 +311,7 @@ def delete_from_tables(
     }
 
     # Add attribute_conditions to the message if present
+    _, attribute_conditions = conditions
     if attribute_conditions:
         delete_query["attribute_conditions"] = _serialize_attribute_conditions(attribute_conditions)
         delete_query["attribute_conditions_item_type"] = attribute_conditions.item_type
