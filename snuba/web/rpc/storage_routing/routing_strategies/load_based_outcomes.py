@@ -17,6 +17,7 @@ class LoadBasedOutcomesRoutingStrategy(BaseRoutingStrategy):
     """
 
     def __init__(self) -> None:
+        super().__init__()
         self._outcomes_based_routing_strategy = OutcomesBasedRoutingStrategy()
         self._load_based_routing_strategy = LoadBasedRoutingStrategy()
 
