@@ -27,5 +27,5 @@ class OutcomesThenLoadBasedRoutingStrategy(BaseRoutingStrategy):
         )
 
     def _update_routing_decision(self, routing_decision: RoutingDecision) -> None:
-        self._outcomes_based_routing_strategy._update_routing_decision(routing_decision)
         self._load_based_routing_strategy._update_routing_decision(routing_decision)
+        self._outcomes_based_routing_strategy._update_routing_decision(routing_decision)
