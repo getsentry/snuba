@@ -1,15 +1,14 @@
 import logging
 import time
-from dataclasses import dataclass
 from threading import Thread
 from typing import (
     Any,
     Dict,
-    List,
     Mapping,
     MutableMapping,
     Optional,
     Sequence,
+    Tuple,
     TypedDict,
 )
 
@@ -25,6 +24,7 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.deletion_settings import DeletionSettings, get_trace_item_type_name
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.lw_deletions.types import AttributeConditions
 from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import literal
@@ -50,10 +50,10 @@ metrics = MetricsWrapper(environment.metrics, "snuba.delete")
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class AttributeConditions:
-    item_type: int
-    attributes: Dict[str, List[Any]]
+class WireAttributeCondition(TypedDict):
+    attr_key_type: int
+    attr_key_name: str
+    attr_values: Sequence[bool | str | int | float]
 
 
 class DeleteQueryMessage(TypedDict, total=False):
@@ -61,7 +61,7 @@ class DeleteQueryMessage(TypedDict, total=False):
     storage_name: str
     conditions: ConditionsType
     tenant_ids: Mapping[str, str | int]
-    attribute_conditions: Optional[Dict[str, List[Any]]]
+    attribute_conditions: Optional[Dict[str, WireAttributeCondition]]
     attribute_conditions_item_type: Optional[int]
 
 
@@ -194,7 +194,7 @@ def _validate_attribute_conditions(
 @with_span()
 def delete_from_storage(
     storage: WritableTableStorage,
-    conditions: Dict[str, list[Any]],
+    column_conditions: Dict[str, list[Any]],
     attribution_info: Mapping[str, Any],
     attribute_conditions: Optional[AttributeConditions] = None,
 ) -> dict[str, Result]:
@@ -216,7 +216,7 @@ def delete_from_storage(
     if not delete_settings.is_enabled:
         raise DeletesNotEnabledError(f"Deletes not enabled for {storage.get_storage_key().value}")
 
-    columns_diff = set(conditions.keys()) - set(delete_settings.allowed_columns)
+    columns_diff = set(column_conditions.keys()) - set(delete_settings.allowed_columns)
     if columns_diff != set():
         raise InvalidQueryException(
             f"Invalid Columns to filter by, must be in {delete_settings.allowed_columns}"
@@ -226,7 +226,7 @@ def delete_from_storage(
     columns = storage.get_schema().get_columns()
     column_validator = ColumnValidator(columns)
     try:
-        for col, values in conditions.items():
+        for col, values in column_conditions.items():
             column_validator.validate(col, values)
     except InvalidColumnType as e:
         raise InvalidQueryException(e.message)
@@ -244,7 +244,7 @@ def delete_from_storage(
 
     attr_info = _get_attribution_info(attribution_info)
     return delete_from_tables(
-        storage, delete_settings.tables, conditions, attr_info, attribute_conditions
+        storage, delete_settings.tables, (column_conditions, attribute_conditions), attr_info
     )
 
 
@@ -264,12 +264,24 @@ def construct_query(storage: WritableTableStorage, table: str, condition: Expres
     )
 
 
+def _serialize_attribute_conditions(
+    attribute_conditions: AttributeConditions,
+) -> Dict[str, WireAttributeCondition]:
+    result: Dict[str, WireAttributeCondition] = {}
+    for key, (attr_key_enum, values) in attribute_conditions.attributes_by_key.items():
+        result[key] = {
+            "attr_key_type": attr_key_enum.type,
+            "attr_key_name": attr_key_enum.name,
+            "attr_values": values,
+        }
+    return result
+
+
 def delete_from_tables(
     storage: WritableTableStorage,
     tables: Sequence[str],
-    conditions: Dict[str, Any],
+    conditions: Tuple[Dict[str, Any], Optional[AttributeConditions]],
     attribution_info: AttributionInfo,
-    attribute_conditions: Optional[AttributeConditions] = None,
 ) -> dict[str, Result]:
     highest_rows_to_delete = 0
     result: dict[str, Result] = {}
@@ -290,23 +302,27 @@ def delete_from_tables(
     if project_id and should_use_killswitch(storage_name, str(project_id)):
         return result
 
+    column_conditions, _ = conditions
     delete_query: DeleteQueryMessage = {
         "rows_to_delete": highest_rows_to_delete,
         "storage_name": storage_name,
-        "conditions": conditions,
+        "conditions": column_conditions,
         "tenant_ids": attribution_info.tenant_ids,
     }
 
     # Add attribute_conditions to the message if present
+    _, attribute_conditions = conditions
     if attribute_conditions:
-        delete_query["attribute_conditions"] = attribute_conditions.attributes
+        delete_query["attribute_conditions"] = _serialize_attribute_conditions(attribute_conditions)
         delete_query["attribute_conditions_item_type"] = attribute_conditions.item_type
 
     produce_delete_query(delete_query)
     return result
 
 
-def construct_or_conditions(conditions: Sequence[ConditionsType]) -> Expression:
+def construct_or_conditions(
+    conditions: Sequence[Tuple[ConditionsType, Optional[AttributeConditions]]],
+) -> Expression:
     """
     Combines multiple AND conditions: (equals(project_id, 1) AND in(group_id, (2, 3, 4, 5))
     into OR conditions for a bulk delete

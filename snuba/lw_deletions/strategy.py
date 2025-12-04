@@ -1,6 +1,6 @@
 import time
 import typing
-from typing import Mapping, Optional, Sequence, TypeVar
+from typing import Mapping, Optional, Sequence, Tuple, TypeVar
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
@@ -19,6 +19,7 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storage import WritableTableStorage
 from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
 from snuba.lw_deletions.formatters import Formatter
+from snuba.lw_deletions.types import AttributeConditions
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import get_int_config
@@ -94,7 +95,9 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             parent_api=None,
         )
 
-    def _execute_delete(self, conditions: Sequence[ConditionsType]) -> None:
+    def _execute_delete(
+        self, conditions: Sequence[Tuple[ConditionsType, Optional[AttributeConditions]]]
+    ) -> None:
         self._check_ongoing_mutations()
         query_settings = HTTPQuerySettings()
         # starting in 24.4 the default is 2
