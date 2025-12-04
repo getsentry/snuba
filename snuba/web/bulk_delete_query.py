@@ -59,12 +59,18 @@ class AttributeConditions:
     attributes_by_key: Dict[str, Tuple[AttributeKey, List[Any]]]
 
 
+class WireAttributeCondition(TypedDict):
+    attr_key_type: int
+    attr_key_name: str
+    attr_values: Sequence[bool | str | int | float]
+
+
 class DeleteQueryMessage(TypedDict, total=False):
     rows_to_delete: int
     storage_name: str
     conditions: ConditionsType
     tenant_ids: Mapping[str, str | int]
-    attribute_conditions: Optional[Dict[str, List[Any]]]
+    attribute_conditions: Optional[Dict[str, WireAttributeCondition]]
     attribute_conditions_item_type: Optional[int]
 
 
@@ -267,6 +273,47 @@ def construct_query(storage: WritableTableStorage, table: str, condition: Expres
     )
 
 
+def _serialize_attribute_conditions(
+    attribute_conditions: AttributeConditions,
+) -> Dict[str, WireAttributeCondition]:
+    result: Dict[str, WireAttributeCondition] = {}
+    for key, (attr_key_enum, values) in attribute_conditions.attributes_by_key.items():
+        result[key] = {
+            "attr_key_type": attr_key_enum.type,
+            "attr_key_name": attr_key_enum.name,
+            "attr_values": values,
+        }
+    return result
+
+
+def _deserialize_attribute_conditions(
+    data: Optional[Dict[str, WireAttributeCondition]],
+    item_type: Optional[int] = None,
+) -> Optional[AttributeConditions]:
+    if data is None:
+        return None
+    assert item_type is not None, "attribute_conditions cannot be deserialized without item_type"
+
+    attributes: Dict[str, List[Any]] = {}
+    attributes_by_key: Dict[str, Tuple[AttributeKey, List[Any]]] = {}
+
+    for key, wire_condition in data.items():
+        attr_key_type = wire_condition["attr_key_type"]
+        attr_key_name = wire_condition["attr_key_name"]
+        attr_values = list(wire_condition["attr_values"])
+        attr_key_enum = AttributeKey(
+            type=AttributeKey.Type.ValueType(attr_key_type), name=attr_key_name
+        )
+        attributes[key] = attr_values
+        attributes_by_key[key] = (attr_key_enum, attr_values)
+
+    return AttributeConditions(
+        item_type=item_type,
+        attributes=attributes,
+        attributes_by_key=attributes_by_key,
+    )
+
+
 def delete_from_tables(
     storage: WritableTableStorage,
     tables: Sequence[str],
@@ -302,7 +349,7 @@ def delete_from_tables(
 
     # Add attribute_conditions to the message if present
     if attribute_conditions:
-        delete_query["attribute_conditions"] = attribute_conditions.attributes
+        delete_query["attribute_conditions"] = _serialize_attribute_conditions(attribute_conditions)
         delete_query["attribute_conditions_item_type"] = attribute_conditions.item_type
 
     produce_delete_query(delete_query)

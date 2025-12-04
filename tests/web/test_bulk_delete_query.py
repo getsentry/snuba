@@ -286,7 +286,13 @@ def test_attribute_conditions_feature_flag_enabled() -> None:
                 # Verify the message includes attribute_conditions
                 call_args = mock_produce.call_args[0][0]
                 assert "attribute_conditions" in call_args
-                assert call_args["attribute_conditions"] == {"group_id": [12345]}
+                assert call_args["attribute_conditions"] == {
+                    "group_id": {
+                        "attr_key_name": "group_id",
+                        "attr_key_type": AttributeKey.TYPE_INT,
+                        "attr_values": [12345],
+                    }
+                }
                 assert call_args["attribute_conditions_item_type"] == TRACE_ITEM_TYPE_OCCURRENCE
     finally:
         # Clean up: disable the feature flag
