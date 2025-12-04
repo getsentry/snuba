@@ -9,7 +9,7 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
 
 class LoadBasedRoutingStrategy(BaseRoutingStrategy):
     """
-    If cluster load is under a threshold, ignore recommendations and allow the query to pass through with the tier decided based on outcomes-based routing.
+    If cluster load is under a threshold, ignore recommendations and allow the query to pass through. This routing strategy does not decide tiering
     """
 
     def _additional_config_definitions(self) -> list[Configuration]:

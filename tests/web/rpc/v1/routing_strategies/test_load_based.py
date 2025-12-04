@@ -20,8 +20,8 @@ from snuba.query.allocation_policies import (
 )
 from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
-from snuba.web.rpc.storage_routing.routing_strategies.load_based import (
-    LoadBasedRoutingStrategy,
+from snuba.web.rpc.storage_routing.routing_strategies.load_based_outcomes import (
+    LoadBasedOutcomesRoutingStrategy,
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
@@ -53,7 +53,6 @@ def _get_request_meta(hour_interval: int = 1) -> RequestMeta:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_load_based_routing_pass_through_even_if_policies_reject() -> None:
-    # policy that always rejects (can_run=False)
     class RejectAllPolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[Configuration]:
             return []
@@ -81,7 +80,7 @@ def test_load_based_routing_pass_through_even_if_policies_reject() -> None:
         ) -> None:
             return
 
-    strategy = LoadBasedRoutingStrategy()
+    strategy = LoadBasedOutcomesRoutingStrategy()
     request = TraceItemTableRequest(meta=_get_request_meta(hour_interval=1))
     context = RoutingContext(
         in_msg=request,
