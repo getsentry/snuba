@@ -11,7 +11,8 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter
 from snuba.attribution.appid import AppID
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.bulk_delete_query import AttributeConditions, delete_from_storage
+from snuba.lw_deletions.types import AttributeConditions
+from snuba.web.bulk_delete_query import delete_from_storage
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 

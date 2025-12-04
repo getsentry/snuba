@@ -1,7 +1,6 @@
-import re
 import typing
 import uuid
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.attribution import get_app_id
@@ -14,6 +13,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.lw_deletions.types import AttributeConditions
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
     AllocationPolicy,
@@ -28,13 +28,7 @@ from snuba.query.exceptions import (
     NoRowsToDeleteException,
     TooManyDeleteRowsException,
 )
-from snuba.query.expressions import (
-    Column,
-    Expression,
-    FunctionCall,
-    Literal,
-    SubscriptableReference,
-)
+from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Result
 from snuba.state import get_config, get_int_config
@@ -42,6 +36,9 @@ from snuba.utils.metrics.util import with_span
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.web import QueryException, QueryExtraData, QueryResult
 from snuba.web.db_query import _apply_allocation_policies_quota
+from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
+    attribute_key_to_expression,
+)
 
 ConditionsType = Mapping[str, Sequence[str | int | float]]
 
@@ -131,7 +128,7 @@ def _delete_from_table(
             storage_key=storage.get_storage_key(),
             allocation_policies=storage.get_delete_allocation_policies(),
         ),
-        condition=_construct_condition(conditions),
+        condition=_construct_condition((conditions, None)),
         on_cluster=on_cluster,
         is_delete=True,
     )
@@ -358,42 +355,30 @@ def _execute_query(
         raise error or Exception("No error or result when running query, this should never happen")
 
 
-def _construct_condition(columns: ConditionsType) -> Expression:
+def _construct_condition(
+    conditions_tuple: Tuple[ConditionsType, Optional[AttributeConditions]],
+) -> Expression:
+    columns, attr_conditions = conditions_tuple
     and_conditions = []
     for col, values in columns.items():
-        # Check if this is a map access pattern like "attributes_string_0['group_id']"
-        col_expr = _parse_column_expression(col)
-
         if len(values) == 1:
-            exp = equals(col_expr, literal(values[0]))
+            exp = equals(column(col), literal(values[0]))
         else:
             literal_values = [literal(v) for v in values]
-            exp = in_cond(col_expr, literals_tuple(alias=None, literals=literal_values))
+            exp = in_cond(column(col), literals_tuple(alias=None, literals=literal_values))
 
         and_conditions.append(exp)
 
+    if attr_conditions:
+        for attr_key, attr_values in attr_conditions.attributes_by_key.values():
+            if len(attr_values) == 1:
+                exp = equals(attribute_key_to_expression(attr_key), literal(values[0]))
+            else:
+                literal_values = [literal(v) for v in values]
+                exp = in_cond(
+                    attribute_key_to_expression(attr_key),
+                    literals_tuple(alias=None, literals=literal_values),
+                )
+            and_conditions.append(exp)
+
     return combine_and_conditions(and_conditions)
-
-
-def _parse_column_expression(col_name: str) -> Expression:
-    """
-    Parse a column name that might include map access notation.
-
-    Examples:
-        "project_id" -> Column("project_id")
-        "attributes_string_0['group_id']" -> SubscriptableReference(Column("attributes_string_0"), Literal("group_id"))
-    """
-    # Pattern to match "column_name['key']" or 'column_name["key"]'
-    match = re.match(r"^([a-zA-Z_][a-zA-Z0-9_]*)\[(['\"])(.+?)\2\]$", col_name)
-
-    if match:
-        base_column_name = match.group(1)
-        key_name = match.group(3)
-        return SubscriptableReference(
-            alias=None,
-            column=Column(alias=None, table_name=None, column_name=base_column_name),
-            key=Literal(alias=None, value=key_name),
-        )
-    else:
-        # Regular column
-        return column(col_name)

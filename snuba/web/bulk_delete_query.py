@@ -1,11 +1,9 @@
 import logging
 import time
-from dataclasses import dataclass
 from threading import Thread
 from typing import (
     Any,
     Dict,
-    List,
     Mapping,
     MutableMapping,
     Optional,
@@ -18,7 +16,6 @@ import rapidjson
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as KafkaMessage
 from confluent_kafka import Producer
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
@@ -27,6 +24,7 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.deletion_settings import DeletionSettings, get_trace_item_type_name
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.lw_deletions.types import AttributeConditions
 from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import literal
@@ -50,13 +48,6 @@ from snuba.web.delete_query import (
 
 metrics = MetricsWrapper(environment.metrics, "snuba.delete")
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class AttributeConditions:
-    item_type: int
-    attributes: Dict[str, List[Any]]
-    attributes_by_key: Dict[str, Tuple[AttributeKey, List[Any]]]
 
 
 class WireAttributeCondition(TypedDict):
@@ -203,7 +194,7 @@ def _validate_attribute_conditions(
 @with_span()
 def delete_from_storage(
     storage: WritableTableStorage,
-    conditions: Dict[str, list[Any]],
+    column_conditions: Dict[str, list[Any]],
     attribution_info: Mapping[str, Any],
     attribute_conditions: Optional[AttributeConditions] = None,
 ) -> dict[str, Result]:
@@ -225,7 +216,7 @@ def delete_from_storage(
     if not delete_settings.is_enabled:
         raise DeletesNotEnabledError(f"Deletes not enabled for {storage.get_storage_key().value}")
 
-    columns_diff = set(conditions.keys()) - set(delete_settings.allowed_columns)
+    columns_diff = set(column_conditions.keys()) - set(delete_settings.allowed_columns)
     if columns_diff != set():
         raise InvalidQueryException(
             f"Invalid Columns to filter by, must be in {delete_settings.allowed_columns}"
@@ -235,7 +226,7 @@ def delete_from_storage(
     columns = storage.get_schema().get_columns()
     column_validator = ColumnValidator(columns)
     try:
-        for col, values in conditions.items():
+        for col, values in column_conditions.items():
             column_validator.validate(col, values)
     except InvalidColumnType as e:
         raise InvalidQueryException(e.message)
@@ -253,7 +244,7 @@ def delete_from_storage(
 
     attr_info = _get_attribution_info(attribution_info)
     return delete_from_tables(
-        storage, delete_settings.tables, conditions, attr_info, attribute_conditions
+        storage, delete_settings.tables, (column_conditions, attribute_conditions), attr_info
     )
 
 
@@ -289,7 +280,7 @@ def _serialize_attribute_conditions(
 def delete_from_tables(
     storage: WritableTableStorage,
     tables: Sequence[str],
-    conditions: Dict[str, Any],
+    conditions: Tuple[Dict[str, Any], Optional[AttributeConditions]],
     attribution_info: AttributionInfo,
     attribute_conditions: Optional[AttributeConditions] = None,
 ) -> dict[str, Result]:
@@ -312,10 +303,11 @@ def delete_from_tables(
     if project_id and should_use_killswitch(storage_name, str(project_id)):
         return result
 
+    column_conditions, _ = conditions
     delete_query: DeleteQueryMessage = {
         "rows_to_delete": highest_rows_to_delete,
         "storage_name": storage_name,
-        "conditions": conditions,
+        "conditions": column_conditions,
         "tenant_ids": attribution_info.tenant_ids,
     }
 
@@ -328,7 +320,9 @@ def delete_from_tables(
     return result
 
 
-def construct_or_conditions(conditions: Sequence[ConditionsType]) -> Expression:
+def construct_or_conditions(
+    conditions: Sequence[Tuple[ConditionsType, Optional[AttributeConditions]]],
+) -> Expression:
     """
     Combines multiple AND conditions: (equals(project_id, 1) AND in(group_id, (2, 3, 4, 5))
     into OR conditions for a bulk delete

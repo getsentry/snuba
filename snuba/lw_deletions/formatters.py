@@ -15,11 +15,8 @@ from typing import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.bulk_delete_query import (
-    AttributeConditions,
-    DeleteQueryMessage,
-    WireAttributeCondition,
-)
+from snuba.lw_deletions.types import AttributeConditions
+from snuba.web.bulk_delete_query import DeleteQueryMessage, WireAttributeCondition
 from snuba.web.delete_query import ConditionsType
 
 

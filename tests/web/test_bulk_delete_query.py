@@ -13,12 +13,13 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from snuba import settings
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.lw_deletions.types import AttributeConditions
 from snuba.query.exceptions import InvalidQueryException
 from snuba.state import set_config
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
-from snuba.web.bulk_delete_query import AttributeConditions, delete_from_storage
+from snuba.web.bulk_delete_query import delete_from_storage
 from snuba.web.delete_query import DeletesNotEnabledError
 
 # TraceItemType values from sentry_protos
