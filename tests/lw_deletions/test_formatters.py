@@ -1,20 +1,20 @@
-from typing import Any, Sequence, Type
+from typing import Sequence, Tuple, Type
 
 import pytest
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.lw_deletions.formatters import (
     EAPItemsFormatter,
     Formatter,
     SearchIssuesFormatter,
 )
-from snuba.utils.hashes import fnv_1a
-from snuba.web.bulk_delete_query import DeleteQueryMessage
+from snuba.web.bulk_delete_query import DeleteQueryMessage, WireAttributeCondition
 from snuba.web.delete_query import ConditionsType
 
 
 def create_delete_query_message(
     conditions: ConditionsType,
-    attribute_conditions: dict[str, list[Any]] | None = None,
+    attribute_conditions: dict[str, WireAttributeCondition] | None = None,
     attribute_conditions_item_type: int | None = None,
 ) -> DeleteQueryMessage:
     msg = DeleteQueryMessage(
@@ -41,7 +41,7 @@ SEARCH_ISSUES_FORMATTER = SearchIssuesFormatter
                 create_delete_query_message({"project_id": [1], "group_id": [4, 5, 6]}),
             ],
             [
-                {"project_id": [1], "group_id": [1, 2, 3, 4, 5, 6]},
+                ({"project_id": [1], "group_id": [1, 2, 3, 4, 5, 6]}, None),
             ],
             SEARCH_ISSUES_FORMATTER,
             id="search_issues_combine_group_ids_same_project",
@@ -52,8 +52,8 @@ SEARCH_ISSUES_FORMATTER = SearchIssuesFormatter
                 create_delete_query_message({"project_id": [2], "group_id": [3]}),
             ],
             [
-                {"project_id": [1], "group_id": [1, 2, 3]},
-                {"project_id": [2], "group_id": [3]},
+                ({"project_id": [1], "group_id": [1, 2, 3]}, None),
+                ({"project_id": [2], "group_id": [3]}, None),
             ],
             SEARCH_ISSUES_FORMATTER,
             id="search_issues_diff_projects_dont_combine",
@@ -64,7 +64,7 @@ SEARCH_ISSUES_FORMATTER = SearchIssuesFormatter
                 create_delete_query_message({"project_id": [1], "group_id": [2, 3, 4]}),
             ],
             [
-                {"project_id": [1], "group_id": [1, 2, 3, 4]},
+                ({"project_id": [1], "group_id": [1, 2, 3, 4]}, None),
             ],
             SEARCH_ISSUES_FORMATTER,
             id="search_issues_dedupe_group_ids_in_same_project",
@@ -73,7 +73,7 @@ SEARCH_ISSUES_FORMATTER = SearchIssuesFormatter
 )
 def test_search_issues_formatter(
     messages: Sequence[DeleteQueryMessage],
-    expected_formatted: Sequence[ConditionsType],
+    expected_formatted: Sequence[Tuple[ConditionsType, None]],
     formatter: Type[Formatter],
 ) -> None:
     formatted = formatter().format(messages)
@@ -89,8 +89,8 @@ def test_search_issues_formatter(
                 create_delete_query_message({"project_id": [1], "trace_id": [4, 5, 6]}),
             ],
             [
-                {"project_id": [1], "trace_id": [1, 2, 3]},
-                {"project_id": [1], "trace_id": [4, 5, 6]},
+                ({"project_id": [1], "trace_id": [1, 2, 3]}, None),
+                ({"project_id": [1], "trace_id": [4, 5, 6]}, None),
             ],
             EAPItemsFormatter,
             id="identity does basically nothing",
@@ -99,7 +99,7 @@ def test_search_issues_formatter(
 )
 def test_eap_items_formatter_identity_conditions(
     messages: Sequence[DeleteQueryMessage],
-    expected_formatted: Sequence[ConditionsType],
+    expected_formatted: Sequence[Tuple[ConditionsType, None]],
     formatter: Type[Formatter],
 ) -> None:
     formatted = formatter().format(messages)
@@ -107,34 +107,16 @@ def test_eap_items_formatter_identity_conditions(
 
 
 def test_eap_items_formatter_with_attribute_conditions() -> None:
-    # Create a message with attribute_conditions (integer values)
-    messages = [
-        create_delete_query_message(
-            conditions={"project_id": [1], "item_type": [1]},
-            attribute_conditions={"group_id": [12345, 67890]},
-            attribute_conditions_item_type=1,
-        )
-    ]
-
-    formatter = EAPItemsFormatter()
-    formatted = formatter.format(messages)
-
-    # Since values are integers, should use attributes_int (no bucketing)
-    expected_column = "attributes_int['group_id']"
-
-    assert len(formatted) == 1
-    assert formatted[0]["project_id"] == [1]
-    assert formatted[0]["item_type"] == [1]
-    assert formatted[0][expected_column] == [12345, 67890]
-
-
-def test_eap_items_formatter_multiple_attributes() -> None:
+    # Create a message with attribute_conditions in wire format
     messages = [
         create_delete_query_message(
             conditions={"project_id": [1], "item_type": [1]},
             attribute_conditions={
-                "group_id": [12345],  # int (no bucketing)
-                "transaction": ["test_transaction"],  # string (bucketing)
+                "group_id": {
+                    "attr_key_type": AttributeKey.Type.TYPE_INT,
+                    "attr_key_name": "group_id",
+                    "attr_values": [12345, 67890],
+                }
             },
             attribute_conditions_item_type=1,
         )
@@ -143,23 +125,72 @@ def test_eap_items_formatter_multiple_attributes() -> None:
     formatter = EAPItemsFormatter()
     formatted = formatter.format(messages)
 
-    # Calculate expected bucket for transaction (string uses bucketing)
-    transaction_bucket = fnv_1a("transaction".encode("utf-8")) % 40
+    # EAPItemsFormatter now returns conditions and deserialized AttributeConditions
+    assert len(formatted) == 1
+    conditions, attr_conditions = formatted[0]
+    assert conditions == {"project_id": [1], "item_type": [1]}
+    assert attr_conditions is not None
+    assert attr_conditions.item_type == 1
+    assert attr_conditions.attributes == {"group_id": [12345, 67890]}
+    assert "group_id" in attr_conditions.attributes_by_key
+    attr_key, values = attr_conditions.attributes_by_key["group_id"]
+    assert attr_key.type == AttributeKey.Type.TYPE_INT
+    assert attr_key.name == "group_id"
+    assert values == [12345, 67890]
 
-    # group_id is int (no bucketing), transaction is string (with bucketing)
-    expected_group_id_column = "attributes_int['group_id']"
-    expected_transaction_column = f"attributes_string_{transaction_bucket}['transaction']"
+
+def test_eap_items_formatter_multiple_attributes() -> None:
+    messages = [
+        create_delete_query_message(
+            conditions={"project_id": [1], "item_type": [1]},
+            attribute_conditions={
+                "group_id": {
+                    "attr_key_type": AttributeKey.Type.TYPE_INT,
+                    "attr_key_name": "group_id",
+                    "attr_values": [12345],
+                },
+                "transaction": {
+                    "attr_key_type": AttributeKey.Type.TYPE_STRING,
+                    "attr_key_name": "transaction",
+                    "attr_values": ["test_transaction"],
+                },
+            },
+            attribute_conditions_item_type=1,
+        )
+    ]
+
+    formatter = EAPItemsFormatter()
+    formatted = formatter.format(messages)
 
     assert len(formatted) == 1
-    assert formatted[0][expected_group_id_column] == [12345]
-    assert formatted[0][expected_transaction_column] == ["test_transaction"]
+    conditions, attr_conditions = formatted[0]
+    assert conditions == {"project_id": [1], "item_type": [1]}
+    assert attr_conditions is not None
+    assert attr_conditions.item_type == 1
+    assert attr_conditions.attributes["group_id"] == [12345]
+    assert attr_conditions.attributes["transaction"] == ["test_transaction"]
+
+    # Check the AttributeKey types
+    group_key, group_vals = attr_conditions.attributes_by_key["group_id"]
+    assert group_key.type == AttributeKey.Type.TYPE_INT
+    assert group_vals == [12345]
+
+    txn_key, txn_vals = attr_conditions.attributes_by_key["transaction"]
+    assert txn_key.type == AttributeKey.Type.TYPE_STRING
+    assert txn_vals == ["test_transaction"]
 
 
 def test_eap_items_formatter_with_float_attributes() -> None:
     messages = [
         create_delete_query_message(
             conditions={"project_id": [1], "item_type": [1]},
-            attribute_conditions={"duration": [123.45, 678.90]},
+            attribute_conditions={
+                "duration": {
+                    "attr_key_type": AttributeKey.Type.TYPE_FLOAT,
+                    "attr_key_name": "duration",
+                    "attr_values": [123.45, 678.90],
+                }
+            },
             attribute_conditions_item_type=1,
         )
     ]
@@ -167,19 +198,28 @@ def test_eap_items_formatter_with_float_attributes() -> None:
     formatter = EAPItemsFormatter()
     formatted = formatter.format(messages)
 
-    # Calculate the expected bucket for "duration"
-    expected_bucket = fnv_1a("duration".encode("utf-8")) % 40
-    expected_column = f"attributes_float_{expected_bucket}['duration']"
-
     assert len(formatted) == 1
-    assert formatted[0][expected_column] == [123.45, 678.90]
+    conditions, attr_conditions = formatted[0]
+    assert conditions == {"project_id": [1], "item_type": [1]}
+    assert attr_conditions is not None
+    assert attr_conditions.attributes["duration"] == [123.45, 678.90]
+
+    dur_key, dur_vals = attr_conditions.attributes_by_key["duration"]
+    assert dur_key.type == AttributeKey.Type.TYPE_FLOAT
+    assert dur_vals == [123.45, 678.90]
 
 
 def test_eap_items_formatter_with_bool_attributes() -> None:
     messages = [
         create_delete_query_message(
             conditions={"project_id": [1], "item_type": [1]},
-            attribute_conditions={"is_error": [True, False]},
+            attribute_conditions={
+                "is_error": {
+                    "attr_key_type": AttributeKey.Type.TYPE_BOOLEAN,
+                    "attr_key_name": "is_error",
+                    "attr_values": [True, False],
+                }
+            },
             attribute_conditions_item_type=1,
         )
     ]
@@ -187,8 +227,12 @@ def test_eap_items_formatter_with_bool_attributes() -> None:
     formatter = EAPItemsFormatter()
     formatted = formatter.format(messages)
 
-    # Bool attributes don't use bucketing
-    expected_column = "attributes_bool['is_error']"
-
     assert len(formatted) == 1
-    assert formatted[0][expected_column] == [True, False]
+    conditions, attr_conditions = formatted[0]
+    assert conditions == {"project_id": [1], "item_type": [1]}
+    assert attr_conditions is not None
+    assert attr_conditions.attributes["is_error"] == [True, False]
+
+    err_key, err_vals = attr_conditions.attributes_by_key["is_error"]
+    assert err_key.type == AttributeKey.Type.TYPE_BOOLEAN
+    assert err_vals == [True, False]

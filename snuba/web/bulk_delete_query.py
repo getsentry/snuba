@@ -286,34 +286,6 @@ def _serialize_attribute_conditions(
     return result
 
 
-def _deserialize_attribute_conditions(
-    data: Optional[Dict[str, WireAttributeCondition]],
-    item_type: Optional[int] = None,
-) -> Optional[AttributeConditions]:
-    if data is None:
-        return None
-    assert item_type is not None, "attribute_conditions cannot be deserialized without item_type"
-
-    attributes: Dict[str, List[Any]] = {}
-    attributes_by_key: Dict[str, Tuple[AttributeKey, List[Any]]] = {}
-
-    for key, wire_condition in data.items():
-        attr_key_type = wire_condition["attr_key_type"]
-        attr_key_name = wire_condition["attr_key_name"]
-        attr_values = list(wire_condition["attr_values"])
-        attr_key_enum = AttributeKey(
-            type=AttributeKey.Type.ValueType(attr_key_type), name=attr_key_name
-        )
-        attributes[key] = attr_values
-        attributes_by_key[key] = (attr_key_enum, attr_values)
-
-    return AttributeConditions(
-        item_type=item_type,
-        attributes=attributes,
-        attributes_by_key=attributes_by_key,
-    )
-
-
 def delete_from_tables(
     storage: WritableTableStorage,
     tables: Sequence[str],
