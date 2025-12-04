@@ -33,7 +33,7 @@ class LoadBasedRoutingStrategy(BaseRoutingStrategy):
         routing_decision: RoutingDecision,
     ) -> None:
         load_info = routing_decision.routing_context.cluster_load_info
-        if load_info is None:
+        if load_info is None or load_info.cluster_load < 0:
             return
 
         pass_through_threshold = int(self.get_config_value("pass_through_load_percentage"))
