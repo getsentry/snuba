@@ -40,7 +40,7 @@ config_hash = "snuba-config"
 config_description_hash = "snuba-config-description"
 config_history_hash = "snuba-config-history"
 config_changes_list = "snuba-config-changes"
-config_changes_list_limit = 100
+config_changes_list_limit = 25
 rate_limit_config_key = "snuba-ratelimit-config:"
 
 # Rate Limiting and Deduplication
