@@ -1,6 +1,6 @@
 import typing
 import uuid
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
@@ -15,7 +15,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.lw_deletions.types import AttributeConditions
+from snuba.lw_deletions.types import ConditionsBag, ConditionsType
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
     AllocationPolicy,
@@ -44,8 +44,6 @@ from snuba.web.db_query import _apply_allocation_policies_quota
 from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
     attribute_key_to_expression,
 )
-
-ConditionsType = Mapping[str, Sequence[str | int | float]]
 
 
 class DeletesNotEnabledError(Exception):
@@ -133,7 +131,7 @@ def _delete_from_table(
             storage_key=storage.get_storage_key(),
             allocation_policies=storage.get_delete_allocation_policies(),
         ),
-        condition=_construct_condition((conditions, None)),
+        condition=_construct_condition(ConditionsBag(column_conditions=conditions)),
         on_cluster=on_cluster,
         is_delete=True,
     )
@@ -371,9 +369,10 @@ def _local_bucket_calculate(attr_name: str, attr_type: str) -> SubscriptableRefe
 
 
 def _construct_condition(
-    conditions_tuple: Tuple[ConditionsType, Optional[AttributeConditions]],
+    conditions_bag: ConditionsBag,
 ) -> Expression:
-    columns, attr_conditions = conditions_tuple
+    columns = conditions_bag.column_conditions
+    attr_conditions = conditions_bag.attribute_conditions
     and_conditions = []
     for col, values in columns.items():
         if len(values) == 1:

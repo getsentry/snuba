@@ -15,9 +15,8 @@ from typing import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.lw_deletions.types import AttributeConditions
+from snuba.lw_deletions.types import AttributeConditions, ConditionsBag
 from snuba.web.bulk_delete_query import DeleteQueryMessage, WireAttributeCondition
-from snuba.web.delete_query import ConditionsType
 
 
 class Formatter(ABC):
@@ -30,16 +29,12 @@ class Formatter(ABC):
     """
 
     @abstractmethod
-    def format(
-        self, messages: Sequence[DeleteQueryMessage]
-    ) -> Sequence[Tuple[ConditionsType, Optional[AttributeConditions]]]:
+    def format(self, messages: Sequence[DeleteQueryMessage]) -> Sequence[ConditionsBag]:
         raise NotImplementedError
 
 
 class SearchIssuesFormatter(Formatter):
-    def format(
-        self, messages: Sequence[DeleteQueryMessage]
-    ) -> Sequence[Tuple[ConditionsType, None]]:
+    def format(self, messages: Sequence[DeleteQueryMessage]) -> Sequence[ConditionsBag]:
         """
         For the search issues storage we want the additional
         formatting step of combining group ids for messages
@@ -66,7 +61,9 @@ class SearchIssuesFormatter(Formatter):
             )
 
         return [
-            ({"project_id": [project_id], "group_id": list(group_ids)}, None)
+            ConditionsBag(
+                column_conditions={"project_id": [project_id], "group_id": list(group_ids)}
+            )
             for project_id, group_ids in mapping.items()
         ]
 
@@ -100,13 +97,11 @@ def _deserialize_attribute_conditions(
 
 
 class EAPItemsFormatter(Formatter):
-    def format(
-        self, messages: Sequence[DeleteQueryMessage]
-    ) -> Sequence[Tuple[ConditionsType, AttributeConditions | None]]:
+    def format(self, messages: Sequence[DeleteQueryMessage]) -> Sequence[ConditionsBag]:
         return [
-            (
-                msg["conditions"],
-                _deserialize_attribute_conditions(
+            ConditionsBag(
+                column_conditions=msg["conditions"],
+                attribute_conditions=_deserialize_attribute_conditions(
                     msg.get("attribute_conditions"),
                     msg.get("attribute_conditions_item_type"),
                 ),

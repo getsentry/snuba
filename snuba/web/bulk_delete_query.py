@@ -1,16 +1,7 @@
 import logging
 import time
 from threading import Thread
-from typing import (
-    Any,
-    Dict,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
-    TypedDict,
-)
+from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence, TypedDict
 
 import rapidjson
 from confluent_kafka import KafkaError
@@ -24,7 +15,7 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.deletion_settings import DeletionSettings, get_trace_item_type_name
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.lw_deletions.types import AttributeConditions
+from snuba.lw_deletions.types import AttributeConditions, ConditionsBag, ConditionsType
 from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import literal
@@ -38,7 +29,6 @@ from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 from snuba.web.delete_query import (
-    ConditionsType,
     DeletesNotEnabledError,
     _construct_condition,
     _enforce_max_rows,
@@ -244,7 +234,13 @@ def delete_from_storage(
 
     attr_info = _get_attribution_info(attribution_info)
     return delete_from_tables(
-        storage, delete_settings.tables, (column_conditions, attribute_conditions), attr_info
+        storage,
+        delete_settings.tables,
+        ConditionsBag(
+            column_conditions=column_conditions,
+            attribute_conditions=attribute_conditions,
+        ),
+        attr_info,
     )
 
 
@@ -280,7 +276,7 @@ def _serialize_attribute_conditions(
 def delete_from_tables(
     storage: WritableTableStorage,
     tables: Sequence[str],
-    conditions: Tuple[Dict[str, Any], Optional[AttributeConditions]],
+    conditions: ConditionsBag,
     attribution_info: AttributionInfo,
 ) -> dict[str, Result]:
     highest_rows_to_delete = 0
@@ -302,26 +298,26 @@ def delete_from_tables(
     if project_id and should_use_killswitch(storage_name, str(project_id)):
         return result
 
-    column_conditions, _ = conditions
     delete_query: DeleteQueryMessage = {
         "rows_to_delete": highest_rows_to_delete,
         "storage_name": storage_name,
-        "conditions": column_conditions,
+        "conditions": conditions.column_conditions,
         "tenant_ids": attribution_info.tenant_ids,
     }
 
     # Add attribute_conditions to the message if present
-    _, attribute_conditions = conditions
-    if attribute_conditions:
-        delete_query["attribute_conditions"] = _serialize_attribute_conditions(attribute_conditions)
-        delete_query["attribute_conditions_item_type"] = attribute_conditions.item_type
+    if conditions.attribute_conditions:
+        delete_query["attribute_conditions"] = _serialize_attribute_conditions(
+            conditions.attribute_conditions
+        )
+        delete_query["attribute_conditions_item_type"] = conditions.attribute_conditions.item_type
 
     produce_delete_query(delete_query)
     return result
 
 
 def construct_or_conditions(
-    conditions: Sequence[Tuple[ConditionsType, Optional[AttributeConditions]]],
+    conditions: Sequence[ConditionsBag],
 ) -> Expression:
     """
     Combines multiple AND conditions: (equals(project_id, 1) AND in(group_id, (2, 3, 4, 5))
