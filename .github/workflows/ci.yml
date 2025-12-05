@@ -180,6 +180,7 @@ jobs:
           tag_latest: false
           tags: 'ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}'
           outputs: 'type=docker,dest=/tmp/snuba-ci.tar'
+          build_target: 'testing'
 
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
