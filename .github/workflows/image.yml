@@ -31,9 +31,7 @@ jobs:
         ghcr: true
         tag_nightly: false
         tag_latest: false
-        # NOTE: This is specifically done to make Snuba image as lightweight as possible.
-        #       The downside is we lose working stacktrace in Rust.
-        build_target: 'application'
+        publish_on_pr: true
 
   build-production:
     runs-on: ubuntu-24.04
