@@ -31,6 +31,8 @@ jobs:
         ghcr: true
         tag_nightly: false
         tag_latest: false
+        # NOTE: This is specifically done to make Snuba image as lightweight as possible.
+        #       The downside is we lose working stacktrace in Rust.
         build_target: 'application'
 
   build-production:
@@ -54,7 +56,6 @@ jobs:
           google_ar_image_name: us-docker.pkg.dev/sentryio/snuba-mr/image
           google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
           google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
-          build_target: 'application'
 
   assemble:
     needs: [build-multiplatform]
