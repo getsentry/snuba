@@ -73,7 +73,7 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         if self._use_sentry():
             self.sentry.timing(name, value, tags, unit)
         if self._use_new_datadog() and self.new_datadog is not None:
-            self.new_datadog.timing(name, value, tags, unit)
+            self.new_datadog.distribution(name, value, tags, unit)
 
     def distribution(
         self,
