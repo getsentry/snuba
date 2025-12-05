@@ -133,9 +133,8 @@ def test_eap_items_formatter_with_attribute_conditions() -> None:
     assert bag.column_conditions == {"project_id": [1], "item_type": [1]}
     assert bag.attribute_conditions is not None
     assert bag.attribute_conditions.item_type == 1
-    assert bag.attribute_conditions.attributes == {"group_id": [12345, 67890]}
-    assert "group_id" in bag.attribute_conditions.attributes_by_key
-    attr_key, values = bag.attribute_conditions.attributes_by_key["group_id"]
+    assert "group_id" in bag.attribute_conditions.attributes
+    attr_key, values = bag.attribute_conditions.attributes["group_id"]
     assert attr_key.type == AttributeKey.Type.TYPE_INT
     assert attr_key.name == "group_id"
     assert values == [12345, 67890]
@@ -169,15 +168,13 @@ def test_eap_items_formatter_multiple_attributes() -> None:
     assert bag.column_conditions == {"project_id": [1], "item_type": [1]}
     assert bag.attribute_conditions is not None
     assert bag.attribute_conditions.item_type == 1
-    assert bag.attribute_conditions.attributes["group_id"] == [12345]
-    assert bag.attribute_conditions.attributes["transaction"] == ["test_transaction"]
 
-    # Check the AttributeKey types
-    group_key, group_vals = bag.attribute_conditions.attributes_by_key["group_id"]
+    # Check the AttributeKey types and values
+    group_key, group_vals = bag.attribute_conditions.attributes["group_id"]
     assert group_key.type == AttributeKey.Type.TYPE_INT
     assert group_vals == [12345]
 
-    txn_key, txn_vals = bag.attribute_conditions.attributes_by_key["transaction"]
+    txn_key, txn_vals = bag.attribute_conditions.attributes["transaction"]
     assert txn_key.type == AttributeKey.Type.TYPE_STRING
     assert txn_vals == ["test_transaction"]
 
@@ -204,9 +201,8 @@ def test_eap_items_formatter_with_float_attributes() -> None:
     bag = formatted[0]
     assert bag.column_conditions == {"project_id": [1], "item_type": [1]}
     assert bag.attribute_conditions is not None
-    assert bag.attribute_conditions.attributes["duration"] == [123.45, 678.90]
 
-    dur_key, dur_vals = bag.attribute_conditions.attributes_by_key["duration"]
+    dur_key, dur_vals = bag.attribute_conditions.attributes["duration"]
     assert dur_key.type == AttributeKey.Type.TYPE_FLOAT
     assert dur_vals == [123.45, 678.90]
 
@@ -233,8 +229,7 @@ def test_eap_items_formatter_with_bool_attributes() -> None:
     bag = formatted[0]
     assert bag.column_conditions == {"project_id": [1], "item_type": [1]}
     assert bag.attribute_conditions is not None
-    assert bag.attribute_conditions.attributes["is_error"] == [True, False]
 
-    err_key, err_vals = bag.attribute_conditions.attributes_by_key["is_error"]
+    err_key, err_vals = bag.attribute_conditions.attributes["is_error"]
     assert err_key.type == AttributeKey.Type.TYPE_BOOLEAN
     assert err_vals == [True, False]

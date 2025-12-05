@@ -9,8 +9,7 @@ ConditionsType = Mapping[str, Sequence[str | int | float]]
 @dataclass
 class AttributeConditions:
     item_type: int
-    attributes: Dict[str, List[Any]]
-    attributes_by_key: Dict[str, Tuple[AttributeKey, List[Any]]]
+    attributes: Dict[str, Tuple[AttributeKey, List[Any]]]
 
 
 @dataclass

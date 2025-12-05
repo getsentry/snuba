@@ -76,8 +76,7 @@ def _deserialize_attribute_conditions(
         return None
     assert item_type is not None, "attribute_conditions cannot be deserialized without item_type"
 
-    attributes: Dict[str, List[Any]] = {}
-    attributes_by_key: Dict[str, Tuple[AttributeKey, List[Any]]] = {}
+    attributes: Dict[str, Tuple[AttributeKey, List[Any]]] = {}
 
     for key, wire_condition in data.items():
         attr_key_type = wire_condition["attr_key_type"]
@@ -86,13 +85,11 @@ def _deserialize_attribute_conditions(
         attr_key_enum = AttributeKey(
             type=AttributeKey.Type.ValueType(attr_key_type), name=attr_key_name
         )
-        attributes[key] = attr_values
-        attributes_by_key[key] = (attr_key_enum, attr_values)
+        attributes[key] = (attr_key_enum, attr_values)
 
     return AttributeConditions(
         item_type=item_type,
         attributes=attributes,
-        attributes_by_key=attributes_by_key,
     )
 
 

@@ -264,7 +264,7 @@ def _serialize_attribute_conditions(
     attribute_conditions: AttributeConditions,
 ) -> Dict[str, WireAttributeCondition]:
     result: Dict[str, WireAttributeCondition] = {}
-    for key, (attr_key_enum, values) in attribute_conditions.attributes_by_key.items():
+    for key, (attr_key_enum, values) in attribute_conditions.attributes.items():
         result[key] = {
             "attr_key_type": attr_key_enum.type,
             "attr_key_name": attr_key_enum.name,

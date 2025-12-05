@@ -384,7 +384,7 @@ def _construct_condition(
         and_conditions.append(exp)
 
     if attr_conditions:
-        for attr_key, attr_values in attr_conditions.attributes_by_key.values():
+        for attr_key, attr_values in attr_conditions.attributes.values():
             unbucketed_expression = attribute_key_to_expression(attr_key)
             lhs_subscriptable = unbucketed_expression
 

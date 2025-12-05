@@ -150,8 +150,7 @@ def test_attribute_conditions_invalid_item_type() -> None:
     # Using span (1) but config only allows occurrence (7)
     attribute_conditions = AttributeConditions(
         item_type=TRACE_ITEM_TYPE_SPAN,
-        attributes={"group_id": [12345]},
-        attributes_by_key={
+        attributes={
             "group_id": (AttributeKey(type=AttributeKey.Type.TYPE_INT, name="group_id"), [12345])
         },
     )
@@ -171,8 +170,7 @@ def test_attribute_conditions_valid_occurrence() -> None:
     conditions = {"project_id": [1], "item_type": [TRACE_ITEM_TYPE_OCCURRENCE]}
     attribute_conditions = AttributeConditions(
         item_type=TRACE_ITEM_TYPE_OCCURRENCE,
-        attributes={"group_id": [12345]},
-        attributes_by_key={
+        attributes={
             "group_id": (AttributeKey(type=AttributeKey.Type.TYPE_INT, name="group_id"), [12345])
         },
     )
@@ -199,8 +197,7 @@ def test_attribute_conditions_invalid_attribute() -> None:
     # Using valid item_type (occurrence/7) but invalid attribute
     attribute_conditions = AttributeConditions(
         item_type=TRACE_ITEM_TYPE_OCCURRENCE,
-        attributes={"invalid_attr": [12345]},
-        attributes_by_key={
+        attributes={
             "invalid_attr": (
                 AttributeKey(type=AttributeKey.Type.TYPE_INT, name="invalid_attr"),
                 [12345],
@@ -220,8 +217,7 @@ def test_attribute_conditions_missing_item_type() -> None:
     conditions = {"project_id": [1]}
     attribute_conditions = AttributeConditions(
         item_type=TRACE_ITEM_TYPE_OCCURRENCE,
-        attributes={"group_id": [12345]},
-        attributes_by_key={
+        attributes={
             "group_id": (AttributeKey(type=AttributeKey.Type.TYPE_INT, name="group_id"), [12345])
         },
     )
@@ -242,8 +238,7 @@ def test_attribute_conditions_storage_not_configured() -> None:
     conditions = {"project_id": [1], "group_id": [1]}  # Valid columns for search_issues
     attribute_conditions = AttributeConditions(
         item_type=1,
-        attributes={"some_attr": [12345]},
-        attributes_by_key={
+        attributes={
             "some_attr": (AttributeKey(type=AttributeKey.Type.TYPE_INT, name="some_attr"), [12345])
         },
     )
@@ -262,8 +257,7 @@ def test_attribute_conditions_feature_flag_enabled() -> None:
     conditions = {"project_id": [1], "item_type": [TRACE_ITEM_TYPE_OCCURRENCE]}
     attribute_conditions = AttributeConditions(
         item_type=TRACE_ITEM_TYPE_OCCURRENCE,
-        attributes={"group_id": [12345]},
-        attributes_by_key={
+        attributes={
             "group_id": (AttributeKey(type=AttributeKey.Type.TYPE_INT, name="group_id"), [12345])
         },
     )
