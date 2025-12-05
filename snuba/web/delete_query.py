@@ -2,6 +2,8 @@ import typing
 import uuid
 from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+
 from snuba import settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
@@ -13,6 +15,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.lw_deletions.types import ConditionsBag, ConditionsType
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
     AllocationPolicy,
@@ -27,16 +30,20 @@ from snuba.query.exceptions import (
     NoRowsToDeleteException,
     TooManyDeleteRowsException,
 )
-from snuba.query.expressions import Expression, FunctionCall
+from snuba.query.expressions import Column, Expression, FunctionCall
+from snuba.query.expressions import Literal as QueryLiteral
+from snuba.query.expressions import SubscriptableReference
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Result
 from snuba.state import get_config, get_int_config
+from snuba.utils.hashes import fnv_1a
 from snuba.utils.metrics.util import with_span
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.web import QueryException, QueryExtraData, QueryResult
 from snuba.web.db_query import _apply_allocation_policies_quota
-
-ConditionsType = Mapping[str, Sequence[str | int | float]]
+from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
+    attribute_key_to_expression,
+)
 
 
 class DeletesNotEnabledError(Exception):
@@ -124,7 +131,7 @@ def _delete_from_table(
             storage_key=storage.get_storage_key(),
             allocation_policies=storage.get_delete_allocation_policies(),
         ),
-        condition=_construct_condition(conditions),
+        condition=_construct_condition(ConditionsBag(column_conditions=conditions)),
         on_cluster=on_cluster,
         is_delete=True,
     )
@@ -351,7 +358,21 @@ def _execute_query(
         raise error or Exception("No error or result when running query, this should never happen")
 
 
-def _construct_condition(columns: ConditionsType) -> Expression:
+def _local_bucket_calculate(attr_name: str, attr_type: str) -> SubscriptableReference:
+    bucket_idx = fnv_1a(attr_name.encode("utf-8")) % 40
+    bucketed_column = f"attributes_{attr_type}_{bucket_idx}"
+    return SubscriptableReference(
+        alias=None,
+        column=Column(alias=None, table_name=None, column_name=bucketed_column),
+        key=QueryLiteral(alias=None, value=attr_name),
+    )
+
+
+def _construct_condition(
+    conditions_bag: ConditionsBag,
+) -> Expression:
+    columns = conditions_bag.column_conditions
+    attr_conditions = conditions_bag.attribute_conditions
     and_conditions = []
     for col, values in columns.items():
         if len(values) == 1:
@@ -361,5 +382,32 @@ def _construct_condition(columns: ConditionsType) -> Expression:
             exp = in_cond(column(col), literals_tuple(alias=None, literals=literal_values))
 
         and_conditions.append(exp)
+
+    if attr_conditions:
+        for attr_key, attr_values in attr_conditions.attributes.values():
+            unbucketed_expression = attribute_key_to_expression(attr_key)
+            lhs_subscriptable = unbucketed_expression
+
+            if (
+                attr_key.type == AttributeKey.Type.TYPE_INT
+                or attr_key.type == AttributeKey.Type.TYPE_BOOLEAN
+            ):
+                pass
+            elif attr_key.type == AttributeKey.Type.TYPE_STRING:
+                lhs_subscriptable = _local_bucket_calculate(attr_key.name, "string")
+            elif attr_key.type == AttributeKey.Type.TYPE_FLOAT:
+                lhs_subscriptable = _local_bucket_calculate(attr_key.name, "float")
+            else:
+                raise BaseException("unknown type")
+
+            if len(attr_values) == 1:
+                exp = equals(lhs_subscriptable, literal(values[0]))
+            else:
+                literal_values = [literal(v) for v in values]
+                exp = in_cond(
+                    lhs_subscriptable,
+                    literals_tuple(alias=None, literals=literal_values),
+                )
+            and_conditions.append(exp)
 
     return combine_and_conditions(and_conditions)

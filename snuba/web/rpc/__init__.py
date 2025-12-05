@@ -1,5 +1,4 @@
 import logging
-import os
 import random
 import uuid
 from bisect import bisect_left
@@ -17,11 +16,7 @@ from snuba import environment, state
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import (
-    InvalidConfigKeyError,
-    RegisteredClass,
-    import_submodules_in_directory,
-)
+from snuba.utils.registered_class import InvalidConfigKeyError, RegisteredClass
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import Tin, Tout
 from snuba.web.rpc.common.exceptions import (
@@ -377,12 +372,12 @@ def list_all_endpoint_names() -> List[Tuple[str, str]]:
     ]
 
 
-_VERSIONS = ["v1"]
-_TO_IMPORT = {p: os.path.join(os.path.dirname(os.path.realpath(__file__)), p) for p in _VERSIONS}
+# _VERSIONS = ["v1"]
+# _TO_IMPORT = {p: os.path.join(os.path.dirname(os.path.realpath(__file__)), p) for p in _VERSIONS}
 
 
-for v, module_path in _TO_IMPORT.items():
-    import_submodules_in_directory(module_path, f"snuba.web.rpc.{v}")
+# for v, module_path in _TO_IMPORT.items():
+#     import_submodules_in_directory(module_path, f"snuba.web.rpc.{v}")
 
 
 def run_rpc_handler(name: str, version: str, data: bytes) -> ProtobufMessage | ErrorProto:
