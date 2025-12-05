@@ -506,10 +506,10 @@ wheels = [
 
 [[package]]
 name = "honcho"
-version = "1.1.0"
+version = "2.0.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/honcho-1.1.0-py2.py3-none-any.whl", hash = "sha256:a4d6e3a88a7b51b66351ecfc6e9d79d8f4b87351db9ad7e923f5632cc498122f" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/honcho-2.0.0-py3-none-any.whl", hash = "sha256:56dcd04fc72d362a4befb9303b1a1a812cba5da283526fbc6509be122918ddf3" },
 ]
 
 [[package]]
@@ -1362,7 +1362,7 @@ dev = [
     { name = "devservices", specifier = ">=1.2.1" },
     { name = "flake8", specifier = ">=7.0.0" },
     { name = "freezegun", specifier = ">=1.2.2" },
-    { name = "honcho", specifier = ">=1.1.0" },
+    { name = "honcho", specifier = ">=2.0.0" },
     { name = "isort", specifier = ">=5.12.0" },
     { name = "mypy", specifier = ">=1.1.1" },
     { name = "pip", specifier = ">=23.3.2" },
