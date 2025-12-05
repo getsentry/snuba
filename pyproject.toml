@@ -16,6 +16,7 @@ dependencies = [
     "google-cloud-storage>=2.18.0",
     "googleapis-common-protos>=1.63.2",
     "granian[pname]>=2.6",
+    "honcho>=1.1.0",
     "jsonschema>=4.23.0",
     "packaging>=24.1",
     "parsimonious>=0.10.0",
@@ -78,7 +79,6 @@ dev = [
     "devservices>=1.2.1",
     "flake8>=7.0.0",
     "freezegun>=1.2.2",
-    "honcho>=1.1.0",
     "isort>=5.12.0",
     "mypy>=1.1.1",
     # pip required for maturin develop
