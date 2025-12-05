@@ -303,7 +303,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: getsentry/sentry
-          path: sentry
+          path: ../sentry
           ref: hubertdeng123/add-toggle-setup-sentry-gha
 
       - name: Setup steps
@@ -311,13 +311,19 @@ jobs:
         run: |
           # We cannot execute actions that are not placed under .github of the main repo
           mkdir -p .github/actions
-          cp -r sentry/.github/actions/* .github/actions
+          cp -r ../sentry/.github/actions/* .github/actions
+
+      - name: Set Coderoot
+        run: |
+          # Create devenv config
+          mkdir -p ~/.config/sentry-devenv
+          echo -e "[devenv]\ncoderoot = $GITHUB_WORKSPACE/.." > ~/.config/sentry-devenv/config.ini
 
       - name: Setup Sentry
         id: setup-sentry
         uses: ./.github/actions/setup-sentry
         with:
-          workdir: sentry
+          workdir: ../sentry
           mode: minimal
           toggle: snuba
 
@@ -342,7 +348,7 @@ jobs:
 
       - name: Run snuba tests
         if: needs.files-changed.outputs.api_changes == 'false'
-        working-directory: sentry
+        working-directory: ../sentry
         run: |
           pytest -k 'not __In' tests \
             -m snuba_ci \
@@ -350,7 +356,7 @@ jobs:
 
       - name: Run full tests
         if: needs.files-changed.outputs.api_changes == 'true'
-        working-directory: sentry
+        working-directory: ../sentry
         run: |
           pytest -k 'not __In' \
               tests/snuba \
@@ -372,7 +378,7 @@ jobs:
 
       - name: Run CI module tests
         if: needs.files-changed.outputs.api_changes == 'true'
-        working-directory: sentry
+        working-directory: ../sentry
         run: pytest -k 'not __In' tests -vv -m snuba_ci
 
   clickhouse-versions:
