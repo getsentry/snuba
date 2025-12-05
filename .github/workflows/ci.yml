@@ -303,7 +303,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: getsentry/sentry
-          path: ../sentry
+          path: sentry
           ref: hubertdeng123/add-toggle-setup-sentry-gha
 
       - name: Setup steps
@@ -311,10 +311,9 @@ jobs:
         run: |
           # We cannot execute actions that are not placed under .github of the main repo
           mkdir -p .github/actions
-          cp -r ../sentry/.github/actions/* .github/actions
-
-      - name: Set Coderoot
-        run: |
+          cp -r sentry/.github/actions/* .github/actions
+          # Move sentry to be a sibling of snuba so devenv can find both
+          mv sentry ../sentry
           # Create devenv config
           mkdir -p ~/.config/sentry-devenv
           echo -e "[devenv]\ncoderoot = $GITHUB_WORKSPACE/.." > ~/.config/sentry-devenv/config.ini
