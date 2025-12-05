@@ -31,7 +31,6 @@ jobs:
         ghcr: true
         tag_nightly: false
         tag_latest: false
-        publish_on_pr: true
 
   build-production:
     runs-on: ubuntu-24.04
