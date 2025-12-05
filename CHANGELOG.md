@@ -1,5 +1,64 @@
 # Changelog
 
+## 25.11.1
+
+### Build / dependencies / internal 🔧
+
+- ref: bump sentry-protos to 0.4.7 by @getsentry-bot in [#7559](https://github.com/getsentry/snuba/pull/7559)
+- chore: enable trace pagination support by default by @kylemumma in [#7558](https://github.com/getsentry/snuba/pull/7558)
+- ref: bump sentry-protos to 0.4.6 by @getsentry-bot in [#7553](https://github.com/getsentry/snuba/pull/7553)
+- ref(consumer): change BytesInsertBatch to support builder pattern by @onewland in [#7479](https://github.com/getsentry/snuba/pull/7479)
+
+### New Features ✨
+
+- feat(eap): record item type counts in batches by @onewland in [#7481](https://github.com/getsentry/snuba/pull/7481)
+- feat(processor): Handle casted columns in UUID column processor by @Zylphrex in [#7552](https://github.com/getsentry/snuba/pull/7552)
+
+### Bug Fixes 🐛
+
+- fix: subscription executors should not crash when there are too many concurrent queries by @xurui-c in [#7547](https://github.com/getsentry/snuba/pull/7547)
+- fix(gocd): fix gocd filters for rs/py deploys by @onewland in [#7545](https://github.com/getsentry/snuba/pull/7545)
+
+### Other
+
+- ref(runtime-config): update write_node_replacements_global default by @MeredithAnya in [#7556](https://github.com/getsentry/snuba/pull/7556)
+- feat(query-pipeline): Add configs to customize maximum size of a query by @phacops in [#7546](https://github.com/getsentry/snuba/pull/7546)
+- ref(runtime-config): remove *_matview_version by @MeredithAnya in [#7543](https://github.com/getsentry/snuba/pull/7543)
+- ref(runtime-config): remove use_split by @MeredithAnya in [#7540](https://github.com/getsentry/snuba/pull/7540)
+- meta: Bump new development version in [2fdaba59](https://github.com/getsentry/snuba/commit/2fdaba59535e35903816147913647ed3d4fe60dd)
+- ref(runtime-config): remove use_readthrough_query_cache by @MeredithAnya in [#7541](https://github.com/getsentry/snuba/pull/7541)
+
+## 25.11.0
+
+### Various fixes & improvements
+
+- chore(rpc): Add example request for EndpointTraceItemDetails (#7538) by @Zylphrex
+- feat(deletes): support TraceItemFilter[s] in DeleteTraceItems API (#7535) by @onewland
+- feat(deletes): add support for delete by attribute in config (#7534) by @onewland
+- fix(deletes): some ch versions dont have setting (#7536) by @MeredithAnya
+- feat: consolidate statsd config to a single environment variable of `SNUBA_STATSD_ADDR` (#7524) by @aldy505
+- chore: stop capturing redis oom set failure in sentry (#7528) by @kylemumma
+- fix(deletes): properly update clickhouse_settings (#7533) by @MeredithAnya
+- gocd: update path filters to match gocd-yaml-config-plugin docs (#7532) by @onewland
+- make test less flaky (#7531) by @volokluev
+- ref: bump sentry-arroyo to 2.33.0 (#7530) by @getsentry-bot
+- chore: add metric to see how many GetTrace request have a user provided limit (#7521) by @kylemumma
+- gocd: split deploy triggers take 2 (#7527) by @onewland
+- gocd: add filter for deploys for snuba-{py,rs} (#7526) by @onewland
+- feat(eap): Insert arrays in EAP (#7514) by @phacops
+- gocd: split pipelines, leaving original, update migration check script (#7525) by @onewland
+- Revert "[gocd] split snuba deploys into snuba-deploy-py and snuba-deploy-rs (take 2) (#7510)" (4468c1a7) by @getsentry-bot
+- Revert "fix(gocd): use deploy-snuba-py-s4s and deploy-snuba-rs-s4s to check m… (#7523)" (505a7270) by @getsentry-bot
+- fix(gocd): use deploy-snuba-py-s4s and deploy-snuba-rs-s4s to check m… (#7523) by @onewland
+- chore(deps): bump actions/checkout from 4 to 5 (#7517) by @dependabot
+- [gocd] split snuba deploys into snuba-deploy-py and snuba-deploy-rs (take 2) (#7510) by @onewland
+- ref(lw-deletes): add runtime config lightweight_deletes_sync (#7522) by @MeredithAnya
+- fix(trace-item-stats): Apply eap item type filter (#7520) by @shruthilayaj
+- feat(eap): Insert client and server sample rates in EAP (#7515) by @phacops
+- feat: pagination support in GetTrace endpoint (#7508) by @kylemumma
+
+_Plus 64 more_
+
 ## 25.10.0
 
 ### Various fixes & improvements

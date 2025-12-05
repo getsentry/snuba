@@ -1,5 +1,5 @@
 import logging
-from typing import Callable, Optional
+from typing import Callable, Optional, Type
 
 import sentry_sdk
 
@@ -23,10 +23,29 @@ RESULT_EXECUTE = 1
 RESULT_WAIT = 2
 SIMPLE_READTHROUGH = 3
 
-DONT_CAPTURE_ERRORS = {
+
+class FuzzyMatchException:
+
+    def __init__(self, exception: Type[Exception], message: str | None = None):
+        self._exception = exception
+        self._message = message
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Exception):
+            return isinstance(other, self._exception) and (
+                self._message is None or self._message == str(other)
+            )
+        elif isinstance(other, self.__class__):
+            return other._exception == self._exception and other._message == self._message
+        else:
+            return False
+
+
+DONT_CAPTURE_ERRORS = (
     # if you need to track this error, see datadog metric snuba.read_through_cache.redis_cache_set_error
-    ResponseError("OOM command not allowed under OOM prevention."),
-}
+    FuzzyMatchException(ResponseError, "OOM command not allowed under OOM prevention."),
+    FuzzyMatchException(RedisTimeoutError),
+)
 
 
 class RedisCache(Cache[TValue]):
@@ -70,6 +89,7 @@ class RedisCache(Cache[TValue]):
     ) -> TValue:
         record_cache_hit_type(SIMPLE_READTHROUGH)
         result_key = self.__build_key(key)
+        metric_tags = (timer.tags if timer is not None else {}) or {}
 
         cached_value = None
         try:
@@ -79,10 +99,10 @@ class RedisCache(Cache[TValue]):
                 raise e
             if e not in DONT_CAPTURE_ERRORS:
                 sentry_sdk.capture_exception(e)
+            metrics.increment("redis_cache_get_error", tags={"error": str(e), **metric_tags})
 
         if timer is not None:
             timer.mark("cache_get")
-        metric_tags = timer.tags if timer is not None else {}
 
         if cached_value is not None:
             record_cache_hit_type(RESULT_VALUE)
@@ -96,8 +116,11 @@ class RedisCache(Cache[TValue]):
                         self.__codec.encode(value),
                         ex=get_config("cache_expiry_sec", 1),
                     )
+
                 except Exception as e:
-                    metrics.increment("redis_cache_set_error", tags=metric_tags)
+                    metrics.increment(
+                        "redis_cache_set_error", tags={"error": str(e), **metric_tags}
+                    )
                     if e not in DONT_CAPTURE_ERRORS:
                         sentry_sdk.capture_exception(e)
                     return value

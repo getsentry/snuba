@@ -13,11 +13,7 @@ use sentry_protos::snuba::v1::{ArrayValue, TraceItem};
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
-use crate::types::{InsertBatch, KafkaMessageMetadata};
-
-use crate::runtime_config::get_str_config;
-
-const INSERT_ARRAYS_CONFIG: &str = "eap_items_consumer_insert_arrays";
+use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
 
 pub fn process_message(
     msg: KafkaPayload,
@@ -36,6 +32,10 @@ pub fn process_message(
     } else {
         retention_days
     };
+
+    // Capture the item_type before consuming trace_item
+    let item_type = trace_item.item_type as u8;
+
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
     eap_item.retention_days = retention_days;
@@ -45,7 +45,12 @@ pub fn process_message(
         Utc::now().timestamp_millis(),
     );
 
-    InsertBatch::from_rows([eap_item], origin_timestamp)
+    let mut item_type_metrics = ItemTypeMetrics::new();
+    item_type_metrics.record_item(item_type);
+
+    let mut batch = InsertBatch::from_rows([eap_item], origin_timestamp)?;
+    batch.item_type_metrics = Some(item_type_metrics);
+    Ok(batch)
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -97,16 +102,7 @@ impl TryFrom<TraceItem> for EAPItem {
                 Some(Value::DoubleValue(double)) => eap_item.attributes.insert_float(key, double),
                 Some(Value::IntValue(int)) => eap_item.attributes.insert_int(key, int),
                 Some(Value::BoolValue(bool)) => eap_item.attributes.insert_bool(key, bool),
-                Some(Value::ArrayValue(array)) => {
-                    if get_str_config(INSERT_ARRAYS_CONFIG)
-                        .ok()
-                        .flatten()
-                        .unwrap_or("0".to_string())
-                        == "1"
-                    {
-                        eap_item.attributes.insert_array(key, array)
-                    }
-                }
+                Some(Value::ArrayValue(array)) => eap_item.attributes.insert_array(key, array),
                 Some(Value::BytesValue(_)) => (),
                 Some(Value::KvlistValue(_)) => (),
                 None => (),
@@ -168,8 +164,15 @@ enum EAPValue {
 seq_attrs! {
 #[derive(Debug, Default, Serialize)]
 struct AttributeMap {
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_bool: HashMap<String, bool>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_int: HashMap<String, i64>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array: HashMap<String, Vec<EAPValue>>,
+
     #(
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_string_~N: HashMap<String, String>,
@@ -177,8 +180,6 @@ struct AttributeMap {
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_float_~N: HashMap<String, f64>,
     )*
-
-    attributes_array: HashMap<String, Vec<EAPValue>>,
 }
 }
 
@@ -221,6 +222,7 @@ impl AttributeMap {
 
     pub fn insert_array(&mut self, k: String, v: ArrayValue) {
         let mut values: Vec<EAPValue> = Vec::default();
+
         for value in v.values {
             match value.value {
                 Some(Value::StringValue(string)) => values.push(EAPValue::String(string)),
@@ -242,7 +244,6 @@ impl AttributeMap {
 mod tests {
     use std::time::SystemTime;
 
-    use crate::runtime_config::patch_str_config_for_test;
     use prost_types::Timestamp;
     use sentry_protos::snuba::v1::any_value::Value;
     use sentry_protos::snuba::v1::{AnyValue, ArrayValue, TraceItemType};
@@ -347,6 +348,88 @@ mod tests {
     }
 
     #[test]
+    fn test_item_type_metrics_accumulated() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+
+        // Set the item type to Span (value 1)
+        trace_item.item_type = TraceItemType::Span.into();
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let batch = process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        // Verify that item_type_metrics is populated
+        assert!(batch.item_type_metrics.is_some());
+
+        let metrics = batch.item_type_metrics.unwrap();
+
+        // Verify that the item_type (Span = 1) has a count of 1
+        assert_eq!(metrics.counts.len(), 1);
+        assert_eq!(metrics.counts.get(&(TraceItemType::Span as u8)), Some(&1));
+    }
+
+    #[test]
+    fn test_item_type_metrics_different_types() {
+        // Process first message with item type 1 (Span)
+        let item_id_1 = Uuid::new_v4();
+        let mut trace_item_1 = generate_trace_item(item_id_1);
+        trace_item_1.item_type = TraceItemType::Span.into();
+
+        let mut payload_1 = Vec::new();
+        trace_item_1.encode(&mut payload_1).unwrap();
+
+        let payload_1 = KafkaPayload::new(None, None, Some(payload_1));
+        let meta_1 = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let batch_1 = process_message(payload_1, meta_1, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        // Process second message with item type 2 (Transaction)
+        let item_id_2 = Uuid::new_v4();
+        let mut trace_item_2 = generate_trace_item(item_id_2);
+        trace_item_2.item_type = 2; // Transaction type
+
+        let mut payload_2 = Vec::new();
+        trace_item_2.encode(&mut payload_2).unwrap();
+
+        let payload_2 = KafkaPayload::new(None, None, Some(payload_2));
+        let meta_2 = KafkaMessageMetadata {
+            partition: 0,
+            offset: 2,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let batch_2 = process_message(payload_2, meta_2, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        // Merge the metrics as would happen in the pipeline
+        let mut merged_metrics = batch_1.item_type_metrics.unwrap();
+        merged_metrics.merge(batch_2.item_type_metrics.unwrap());
+
+        // Verify that both item types are present with count 1 each
+        assert_eq!(merged_metrics.counts.len(), 2);
+        assert_eq!(
+            merged_metrics.counts.get(&(TraceItemType::Span as u8)),
+            Some(&1)
+        );
+        assert_eq!(merged_metrics.counts.get(&2u8), Some(&1));
+    }
+
+    #[test]
     fn test_insert_arrays() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
@@ -361,8 +444,6 @@ mod tests {
                 })),
             },
         );
-
-        patch_str_config_for_test(INSERT_ARRAYS_CONFIG, Some("1"));
 
         let eap_item = EAPItem::try_from(trace_item);
 

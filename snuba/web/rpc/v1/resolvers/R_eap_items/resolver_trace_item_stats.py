@@ -12,6 +12,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     TraceItemStatsResult,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -21,8 +22,8 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import arrayJoin, column, count, tupleElement
-from snuba.query.expressions import FunctionCall, Literal
+from snuba.query.dsl import arrayJoin, column, count, if_cond, literal, tupleElement
+from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -108,9 +109,45 @@ def _build_snuba_request(
     )
 
 
-def _build_attr_distribution_query(
-    in_msg: TraceItemStatsRequest, distributions_params: AttributeDistributionsRequest
-) -> Query:
+def _grab_specific_attributes_query(attributes: Iterable[AttributeKey]) -> Expression:
+    """
+    returns an experssion that selects only the attributes in the allow list. each attribute will be its own row,
+    and it will be a tuple like: (key, value)
+    """
+    # sql select: if the attribute is in attributes_string, return [(key,value)] else return []
+    individual_attribute_select = []
+    for attribute in attributes:
+        attribute_map = column("attributes_string")
+        individual_attribute_select.append(
+            if_cond(
+                f.mapContains(attribute_map, attribute.name),
+                f.array(
+                    f.tuple(
+                        literal(attribute.name),
+                        f.arrayElement(
+                            attribute_map,
+                            literal(attribute.name),
+                        ),
+                    )
+                ),
+                f.array(),
+            )
+        )
+    # sql select: an array of [(key,val), (key,val), ...] containing all the requested attributes
+    # the empty arrays are gone now
+    concat = f.arrayConcat(*individual_attribute_select)
+    # now each tuple will be its own row, (key,val)
+    kv = arrayJoin(
+        "kv",
+        concat,
+    )
+    return kv
+
+
+def _grab_all_attributes_query() -> Expression:
+    """
+    returns an experssion that selects all attributes. each attribute will be its own row, and it will be a tuple like: (key, value)
+    """
     concat_attr_maps = FunctionCall(
         alias="attr_str_concat",
         function_name="mapConcat",
@@ -118,24 +155,39 @@ def _build_attr_distribution_query(
             column(f"attributes_string_{i}") for i in range(ATTRIBUTE_BUCKETS_EAP_ITEMS)
         ),
     )
+    kv = arrayJoin(
+        "kv",
+        concat_attr_maps,
+    )
+    return kv
+
+
+def _build_attr_distribution_query(
+    in_msg: TraceItemStatsRequest, distributions_params: AttributeDistributionsRequest
+) -> Query:
+    # kv is a column that contains all attributes in the form of a tuple (key, value)
+    # each attribute will be its own row
+    if len(distributions_params.attributes) > 0:
+        kv = _grab_specific_attributes_query(distributions_params.attributes)
+    else:
+        kv = _grab_all_attributes_query()
+
     attrs_string_keys = tupleElement(
         "attr_key",
-        arrayJoin(
-            "attributes_string",
-            concat_attr_maps,
-        ),
-        Literal(None, 1),
+        column("kv"),
+        literal(1),  # index of the key in the tuple
     )
     attrs_string_values = tupleElement(
         "attr_value",
-        arrayJoin(
-            "attributes_string",
-            concat_attr_maps,
-        ),
-        Literal(None, 2),
+        column("kv"),
+        literal(2),  # index of the value in the tuple
     )
 
     selected_columns = [
+        SelectedExpression(
+            name="kv",
+            expression=kv,
+        ),
         SelectedExpression(
             name="attr_key",
             expression=attrs_string_keys,
@@ -170,8 +222,7 @@ def _build_attr_distribution_query(
             ),
         ],
         groupby=[
-            column("attr_key"),
-            column("attr_value"),
+            column("kv"),
         ],
         limitby=LimitBy(
             limit=(
