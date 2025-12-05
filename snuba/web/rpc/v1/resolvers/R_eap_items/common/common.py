@@ -1,154 +1,53 @@
-from collections import defaultdict
-from typing import Final, Mapping, Sequence, cast
+from typing import Sequence
 
-from sentry_conventions.attributes import ATTRIBUTE_METADATA
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     VirtualColumnContext,
 )
 
+from snuba.protos.common import (
+    ATTRIBUTES_TO_COALESCE,
+    COLUMN_PREFIX,
+    NORMALIZED_COLUMNS_EAP_ITEMS,
+    PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
+    PROTO_TYPE_TO_CLICKHOUSE_TYPE,
+    MalformedAttributeException,
+)
+from snuba.protos.common import (
+    attribute_key_to_expression as _attribute_key_to_expression,
+)
 from snuba.query import Query
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal, literals_array
-from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
+from snuba.query.dsl import literal, literals_array
+from snuba.query.expressions import Expression, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
-COLUMN_PREFIX: str = "sentry."
-
-NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, Sequence[AttributeKey.Type.ValueType]]] = {
-    f"{COLUMN_PREFIX}organization_id": [AttributeKey.Type.TYPE_INT],
-    f"{COLUMN_PREFIX}project_id": [AttributeKey.Type.TYPE_INT],
-    f"{COLUMN_PREFIX}timestamp": [
-        AttributeKey.Type.TYPE_FLOAT,
-        AttributeKey.Type.TYPE_DOUBLE,
-        AttributeKey.Type.TYPE_INT,
-        AttributeKey.Type.TYPE_STRING,
-    ],
-    f"{COLUMN_PREFIX}trace_id": [
-        AttributeKey.Type.TYPE_STRING
-    ],  # this gets converted from a uuid to a string in a storage processor
-    f"{COLUMN_PREFIX}item_id": [AttributeKey.Type.TYPE_STRING],
-    f"{COLUMN_PREFIX}sampling_weight": [AttributeKey.Type.TYPE_DOUBLE],
-    f"{COLUMN_PREFIX}sampling_factor": [AttributeKey.Type.TYPE_DOUBLE],
-}
-
-PROTO_TYPE_TO_CLICKHOUSE_TYPE: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
-    AttributeKey.Type.TYPE_INT: "Int64",
-    AttributeKey.Type.TYPE_STRING: "String",
-    AttributeKey.Type.TYPE_DOUBLE: "Float64",
-    AttributeKey.Type.TYPE_FLOAT: "Float64",
-    AttributeKey.Type.TYPE_BOOLEAN: "Boolean",
-}
-
-PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
-    AttributeKey.Type.TYPE_INT: "attributes_float",
-    AttributeKey.Type.TYPE_STRING: "attributes_string",
-    AttributeKey.Type.TYPE_DOUBLE: "attributes_float",
-    AttributeKey.Type.TYPE_FLOAT: "attributes_float",
-    AttributeKey.Type.TYPE_BOOLEAN: "attributes_float",
-}
-
-
-def _build_deprecated_attributes() -> dict[str, set[str]]:
-    current_to_deprecated: dict[str, set[str]] = defaultdict(set)
-    for name, metadata in ATTRIBUTE_METADATA.items():
-        if metadata.deprecation:
-            replacement = cast(str, metadata.deprecation.replacement)
-            deprecated = {name}
-            if metadata.aliases:
-                deprecated.update(metadata.aliases)
-            current_to_deprecated[replacement].update(deprecated)
-    return current_to_deprecated
-
-
-ATTRIBUTES_TO_COALESCE: dict[str, set[str]] = _build_deprecated_attributes()
-
-
-def _build_label_mapping_key(attribute_key: AttributeKey) -> str:
-    return f"{attribute_key.name}_{AttributeKey.Type.Name(attribute_key.type)}"
-
-
-def _generate_subscriptable_reference(
-    attribute_name: str,
-    attribute_type: AttributeKey.Type.ValueType,
-    alias: str | None = None,
-) -> SubscriptableReference | FunctionCall:
-    kwargs = {}
-    if alias:
-        kwargs["alias"] = alias
-    clickhouse_type = PROTO_TYPE_TO_CLICKHOUSE_TYPE[attribute_type]
-    if attribute_type in {AttributeKey.Type.TYPE_INT, AttributeKey.Type.TYPE_BOOLEAN}:
-        return f.cast(
-            SubscriptableReference(
-                column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
-                key=literal(attribute_name),
-                alias=None,
-            ),
-            f"Nullable({clickhouse_type})",
-            **kwargs,
-        )
-    return SubscriptableReference(
-        column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
-        key=literal(attribute_name),
-        alias=alias,
-    )
+# Re-export for backward compatibility
+__all__ = [
+    "ATTRIBUTES_TO_COALESCE",
+    "COLUMN_PREFIX",
+    "NORMALIZED_COLUMNS_EAP_ITEMS",
+    "PROTO_TYPE_TO_ATTRIBUTE_COLUMN",
+    "PROTO_TYPE_TO_CLICKHOUSE_TYPE",
+    "attribute_key_to_expression",
+    "apply_virtual_columns",
+]
 
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
-    if attr_key.type == AttributeKey.Type.TYPE_UNSPECIFIED:
-        raise BadSnubaRPCRequestException(
-            f"attribute key {attr_key.name} must have a type specified"
-        )
+    """Convert an AttributeKey proto to a Snuba Expression.
 
-    alias = _build_label_mapping_key(attr_key)
+    This is a wrapper around the proto-layer function that converts
+    MalformedAttributeException to BadSnubaRPCRequestException for
+    HTTP-aware code paths.
 
-    if attr_key.name == "attr_key":
-        return column("attr_key")
-
-    if attr_key.name in NORMALIZED_COLUMNS_EAP_ITEMS:
-        if attr_key.type not in NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name]:
-            formatted_attribute_types = ", ".join(
-                map(
-                    AttributeKey.Type.Name,
-                    NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name],
-                )
-            )
-            raise BadSnubaRPCRequestException(
-                f"Attribute {attr_key.name} must be one of [{formatted_attribute_types}], got {AttributeKey.Type.Name(attr_key.type)}"
-            )
-
-        return f.cast(
-            column(attr_key.name[len(COLUMN_PREFIX) :]),
-            PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
-            alias=alias,
-        )
-
-    if attr_key.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
-        if attr_key.name in ATTRIBUTES_TO_COALESCE:
-            expressions = [
-                _generate_subscriptable_reference(
-                    attribute_name,
-                    attr_key.type,
-                )
-                for attribute_name in [
-                    attr_key.name,
-                ]
-                + list(ATTRIBUTES_TO_COALESCE[attr_key.name])
-            ]
-            return f.coalesce(
-                *expressions,
-                alias=alias,
-            )
-        else:
-            return _generate_subscriptable_reference(
-                attr_key.name,
-                attr_key.type,
-                alias,
-            )
-
-    raise BadSnubaRPCRequestException(
-        f"Attribute {attr_key.name} has an unknown type: {AttributeKey.Type.Name(attr_key.type)}"
-    )
+    Raises:
+        BadSnubaRPCRequestException: If the attribute key is invalid or malformed.
+    """
+    try:
+        return _attribute_key_to_expression(attr_key)
+    except MalformedAttributeException as e:
+        raise BadSnubaRPCRequestException(str(e)) from e
 
 
 def apply_virtual_columns(
