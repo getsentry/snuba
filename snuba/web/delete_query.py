@@ -399,7 +399,7 @@ def _construct_condition(conditions_bag: ConditionsBag) -> Expression:
             if len(attr_values) == 1:
                 exp = equals(lhs_subscriptable, literal(values[0]))
             else:
-                literal_values = [literal(v) for v in values]
+                literal_values = [literal(v) for v in attr_values]
                 exp = in_cond(
                     lhs_subscriptable,
                     literals_tuple(alias=None, literals=literal_values),
