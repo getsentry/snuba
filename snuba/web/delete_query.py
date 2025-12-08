@@ -397,7 +397,7 @@ def _construct_condition(conditions_bag: ConditionsBag) -> Expression:
                 raise BaseException("unknown type")
 
             if len(attr_values) == 1:
-                exp = equals(lhs_subscriptable, literal(values[0]))
+                exp = equals(lhs_subscriptable, literal(attr_values[0]))
             else:
                 literal_values = [literal(v) for v in attr_values]
                 exp = in_cond(
