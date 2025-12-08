@@ -16,6 +16,7 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import ConditionsBag, ConditionsType
+from snuba.protos.common import attribute_key_to_expression
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
     AllocationPolicy,
@@ -41,9 +42,6 @@ from snuba.utils.metrics.util import with_span
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.web import QueryException, QueryExtraData, QueryResult
 from snuba.web.db_query import _apply_allocation_policies_quota
-from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression,
-)
 
 
 class DeletesNotEnabledError(Exception):
@@ -368,9 +366,7 @@ def _local_bucket_calculate(attr_name: str, attr_type: str) -> SubscriptableRefe
     )
 
 
-def _construct_condition(
-    conditions_bag: ConditionsBag,
-) -> Expression:
+def _construct_condition(conditions_bag: ConditionsBag) -> Expression:
     columns = conditions_bag.column_conditions
     attr_conditions = conditions_bag.attribute_conditions
     and_conditions = []
