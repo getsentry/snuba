@@ -391,7 +391,10 @@ def _construct_condition(conditions_bag: ConditionsBag) -> Expression:
                 pass
             elif attr_key.type == AttributeKey.Type.TYPE_STRING:
                 lhs_subscriptable = _local_bucket_calculate(attr_key.name, "string")
-            elif attr_key.type == AttributeKey.Type.TYPE_FLOAT:
+            elif (
+                attr_key.type == AttributeKey.Type.TYPE_FLOAT
+                or attr_key.type == AttributeKey.Type.TYPE_DOUBLE
+            ):
                 lhs_subscriptable = _local_bucket_calculate(attr_key.name, "float")
             else:
                 raise BaseException("unknown type")
