@@ -1,5 +1,6 @@
+import json
 from datetime import datetime, timedelta, timezone
-from typing import Callable, TypeVar, cast
+from typing import Any, Callable, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
@@ -48,6 +49,27 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
+
+BUCKET_COUNT = 40
+
+
+def transform_array_value(value: dict[str, str]) -> Any:
+    for t, v in value.items():
+        if t == "Int":
+            return int(v)
+        if t == "Double":
+            return float(v)
+        if t in {"String", "Bool"}:
+            return v
+    raise BadSnubaRPCRequestException(f"array value type unknown: {type(v)}")
+
+
+def process_arrays(raw: str) -> dict[str, list[Any]]:
+    parsed = json.loads(raw) or {}
+    arrays = {}
+    for key, values in parsed.items():
+        arrays[key] = [transform_array_value(v) for v in values]
+    return arrays
 
 
 def _check_non_string_values_cannot_ignore_case(

@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -80,6 +80,13 @@ _DEFAULT_ATTRIBUTES = {
         )
     ),
 }
+
+# current UTC time rounded down to the start of the current hour, then minus 180 minutes.
+BASE_TIME = datetime.now(tz=timezone.utc).replace(
+    minute=0,
+    second=0,
+    microsecond=0,
+) - timedelta(minutes=180)
 
 
 def write_eap_item(
