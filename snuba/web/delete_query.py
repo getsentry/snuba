@@ -2,8 +2,6 @@ import typing
 import uuid
 from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
-
 from snuba import settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
@@ -16,7 +14,7 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import ConditionsBag, ConditionsType
-from snuba.protos.common import attribute_key_to_expression
+from snuba.protos.common import PROTO_TYPE_TO_ATTRIBUTE_COLUMN
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
     AllocationPolicy,
@@ -356,9 +354,9 @@ def _execute_query(
         raise error or Exception("No error or result when running query, this should never happen")
 
 
-def _local_bucket_calculate(attr_name: str, attr_type: str) -> SubscriptableReference:
+def _local_bucket_calculate(attr_name: str, column_root: str) -> SubscriptableReference:
     bucket_idx = fnv_1a(attr_name.encode("utf-8")) % 40
-    bucketed_column = f"attributes_{attr_type}_{bucket_idx}"
+    bucketed_column = f"{column_root}_{bucket_idx}"
     return SubscriptableReference(
         alias=None,
         column=Column(alias=None, table_name=None, column_name=bucketed_column),
@@ -381,23 +379,8 @@ def _construct_condition(conditions_bag: ConditionsBag) -> Expression:
 
     if attr_conditions:
         for attr_key, attr_values in attr_conditions.attributes.values():
-            unbucketed_expression = attribute_key_to_expression(attr_key)
-            lhs_subscriptable = unbucketed_expression
-
-            if (
-                attr_key.type == AttributeKey.Type.TYPE_INT
-                or attr_key.type == AttributeKey.Type.TYPE_BOOLEAN
-            ):
-                pass
-            elif attr_key.type == AttributeKey.Type.TYPE_STRING:
-                lhs_subscriptable = _local_bucket_calculate(attr_key.name, "string")
-            elif (
-                attr_key.type == AttributeKey.Type.TYPE_FLOAT
-                or attr_key.type == AttributeKey.Type.TYPE_DOUBLE
-            ):
-                lhs_subscriptable = _local_bucket_calculate(attr_key.name, "float")
-            else:
-                raise BaseException("unknown type")
+            column_root = PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]
+            lhs_subscriptable = _local_bucket_calculate(attr_key.name, column_root)
 
             if len(attr_values) == 1:
                 exp = equals(lhs_subscriptable, literal(attr_values[0]))
