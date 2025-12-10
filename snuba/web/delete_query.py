@@ -9,12 +9,15 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.translators.snuba.mapping import SnubaClickhouseMappingTranslator
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import ConditionsBag, ConditionsType
-from snuba.protos.common import PROTO_TYPE_TO_ATTRIBUTE_COLUMN
+from snuba.protos.common import attribute_key_to_expression
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
     AllocationPolicy,
@@ -29,13 +32,10 @@ from snuba.query.exceptions import (
     NoRowsToDeleteException,
     TooManyDeleteRowsException,
 )
-from snuba.query.expressions import Column, Expression, FunctionCall
-from snuba.query.expressions import Literal as QueryLiteral
-from snuba.query.expressions import SubscriptableReference
+from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Result
 from snuba.state import get_config, get_int_config
-from snuba.utils.hashes import fnv_1a
 from snuba.utils.metrics.util import with_span
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.web import QueryException, QueryExtraData, QueryResult
@@ -112,6 +112,20 @@ def delete_from_storage(
     return results
 
 
+def _preprocess_for_items(storage: WritableTableStorage, where_clause: Expression) -> Expression:
+    if storage.get_storage_key() != StorageKey.EAP_ITEMS:
+        return where_clause
+
+    entity = get_entity(EntityKey.EAP_ITEMS)
+    for storage_connection in entity.get_all_storage_connections():
+        if storage_connection.storage.get_storage_key() == StorageKey.EAP_ITEMS:
+            translation_mappers = storage_connection.translation_mappers
+            translator = SnubaClickhouseMappingTranslator(translation_mappers)
+            return where_clause.accept(translator)
+
+    return where_clause
+
+
 def _delete_from_table(
     storage: WritableTableStorage,
     table: str,
@@ -120,6 +134,8 @@ def _delete_from_table(
 ) -> Result:
     cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
     on_cluster = literal(cluster_name) if cluster_name else None
+    where_clause = _construct_condition(ConditionsBag(column_conditions=conditions))
+    where_clause = _preprocess_for_items(storage, where_clause)
     query = Query(
         from_clause=Table(
             table,
@@ -127,7 +143,7 @@ def _delete_from_table(
             storage_key=storage.get_storage_key(),
             allocation_policies=storage.get_delete_allocation_policies(),
         ),
-        condition=_construct_condition(ConditionsBag(column_conditions=conditions)),
+        condition=where_clause,
         on_cluster=on_cluster,
         is_delete=True,
     )
@@ -354,16 +370,6 @@ def _execute_query(
         raise error or Exception("No error or result when running query, this should never happen")
 
 
-def _local_bucket_calculate(attr_name: str, column_root: str) -> SubscriptableReference:
-    bucket_idx = fnv_1a(attr_name.encode("utf-8")) % 40
-    bucketed_column = f"{column_root}_{bucket_idx}"
-    return SubscriptableReference(
-        alias=None,
-        column=Column(alias=None, table_name=None, column_name=bucketed_column),
-        key=QueryLiteral(alias=None, value=attr_name),
-    )
-
-
 def _construct_condition(conditions_bag: ConditionsBag) -> Expression:
     columns = conditions_bag.column_conditions
     attr_conditions = conditions_bag.attribute_conditions
@@ -379,15 +385,14 @@ def _construct_condition(conditions_bag: ConditionsBag) -> Expression:
 
     if attr_conditions:
         for attr_key, attr_values in attr_conditions.attributes.values():
-            column_root = PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]
-            lhs_subscriptable = _local_bucket_calculate(attr_key.name, column_root)
+            virtual_column = attribute_key_to_expression(attr_key)
 
             if len(attr_values) == 1:
-                exp = equals(lhs_subscriptable, literal(attr_values[0]))
+                exp = equals(virtual_column, literal(attr_values[0]))
             else:
                 literal_values = [literal(v) for v in attr_values]
                 exp = in_cond(
-                    lhs_subscriptable,
+                    virtual_column,
                     literals_tuple(alias=None, literals=literal_values),
                 )
             and_conditions.append(exp)
