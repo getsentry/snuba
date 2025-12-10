@@ -33,6 +33,7 @@ from snuba.web.delete_query import (
     _construct_condition,
     _enforce_max_rows,
     _get_attribution_info,
+    _preprocess_for_items,
     deletes_are_enabled,
 )
 
@@ -282,7 +283,9 @@ def delete_from_tables(
     highest_rows_to_delete = 0
     result: dict[str, Result] = {}
     for table in tables:
-        query = construct_query(storage, table, _construct_condition(conditions))
+        where_clause = _construct_condition(conditions)
+        where_clause = _preprocess_for_items(storage, where_clause)
+        query = construct_query(storage, table, where_clause)
         try:
             num_rows_to_delete = _enforce_max_rows(query)
             highest_rows_to_delete = max(highest_rows_to_delete, num_rows_to_delete)
