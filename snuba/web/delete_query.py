@@ -134,8 +134,7 @@ def _delete_from_table(
 ) -> Result:
     cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
     on_cluster = literal(cluster_name) if cluster_name else None
-    where_clause = _construct_condition(ConditionsBag(column_conditions=conditions))
-    where_clause = _preprocess_for_items(storage, where_clause)
+    where_clause = _construct_condition(storage, ConditionsBag(column_conditions=conditions))
     query = Query(
         from_clause=Table(
             table,
@@ -370,7 +369,9 @@ def _execute_query(
         raise error or Exception("No error or result when running query, this should never happen")
 
 
-def _construct_condition(conditions_bag: ConditionsBag) -> Expression:
+def _construct_condition(
+    storage: WritableTableStorage, conditions_bag: ConditionsBag
+) -> Expression:
     columns = conditions_bag.column_conditions
     attr_conditions = conditions_bag.attribute_conditions
     and_conditions = []
@@ -397,4 +398,5 @@ def _construct_condition(conditions_bag: ConditionsBag) -> Expression:
                 )
             and_conditions.append(exp)
 
-    return combine_and_conditions(and_conditions)
+    where_clause = combine_and_conditions(and_conditions)
+    return _preprocess_for_items(storage, where_clause)

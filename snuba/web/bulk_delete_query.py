@@ -33,7 +33,6 @@ from snuba.web.delete_query import (
     _construct_condition,
     _enforce_max_rows,
     _get_attribution_info,
-    _preprocess_for_items,
     deletes_are_enabled,
 )
 
@@ -283,8 +282,7 @@ def delete_from_tables(
     highest_rows_to_delete = 0
     result: dict[str, Result] = {}
     for table in tables:
-        where_clause = _construct_condition(conditions)
-        where_clause = _preprocess_for_items(storage, where_clause)
+        where_clause = _construct_condition(storage, conditions)
         query = construct_query(storage, table, where_clause)
         try:
             num_rows_to_delete = _enforce_max_rows(query)
@@ -320,13 +318,14 @@ def delete_from_tables(
 
 
 def construct_or_conditions(
+    storage: WritableTableStorage,
     conditions: Sequence[ConditionsBag],
 ) -> Expression:
     """
     Combines multiple AND conditions: (equals(project_id, 1) AND in(group_id, (2, 3, 4, 5))
     into OR conditions for a bulk delete
     """
-    return combine_or_conditions([_construct_condition(cond) for cond in conditions])
+    return combine_or_conditions([_construct_condition(storage, cond) for cond in conditions])
 
 
 def should_use_killswitch(storage_name: str, project_id: str) -> bool:
