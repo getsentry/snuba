@@ -103,7 +103,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             query_settings.set_clickhouse_settings({"lightweight_deletes_sync": lw_sync})
 
         for table in self.__tables:
-            query = construct_query(self.__storage, table, construct_or_conditions(conditions))
+            where_clause = construct_or_conditions(self.__storage, conditions)
+            query = construct_query(self.__storage, table, where_clause)
             start = time.time()
             try:
                 _execute_query(
