@@ -15,6 +15,18 @@ use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
 
+/// Returns the friendly name for a TraceItemType, stripping the "TRACE_ITEM_TYPE_" prefix.
+/// Returns "UNKNOWN" if the item_type value doesn't correspond to a known type.
+fn item_type_name(item_type: i32) -> &'static str {
+    TraceItemType::try_from(item_type)
+        .map(|t| {
+            t.as_str_name()
+                .strip_prefix("TRACE_ITEM_TYPE_")
+                .unwrap_or(t.as_str_name())
+        })
+        .unwrap_or("UNKNOWN")
+}
+
 pub fn process_message(
     msg: KafkaPayload,
     _metadata: KafkaMessageMetadata,
@@ -34,13 +46,7 @@ pub fn process_message(
     };
 
     // Capture the item_type name before consuming trace_item
-    let item_type_name = TraceItemType::try_from(trace_item.item_type)
-        .map(|t| {
-            t.as_str_name()
-                .strip_prefix("TRACE_ITEM_TYPE_")
-                .unwrap_or(t.as_str_name())
-        })
-        .unwrap_or("UNKNOWN");
+    let item_type = item_type_name(trace_item.item_type);
 
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
@@ -52,7 +58,7 @@ pub fn process_message(
     );
 
     let mut item_type_metrics = ItemTypeMetrics::new();
-    item_type_metrics.record_item(item_type_name);
+    item_type_metrics.record_item(item_type);
 
     let mut batch = InsertBatch::from_rows([eap_item], origin_timestamp)?;
     batch.item_type_metrics = Some(item_type_metrics);
