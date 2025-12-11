@@ -6,11 +6,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 
 from snuba.protos.common import (
-    ATTRIBUTES_TO_COALESCE,
-    COLUMN_PREFIX,
     NORMALIZED_COLUMNS_EAP_ITEMS,
-    PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
-    PROTO_TYPE_TO_CLICKHOUSE_TYPE,
     MalformedAttributeException,
 )
 from snuba.protos.common import (
@@ -21,17 +17,6 @@ from snuba.query.dsl import Functions as f
 from snuba.query.dsl import literal, literals_array
 from snuba.query.expressions import Expression, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-
-# Re-export for backward compatibility
-__all__ = [
-    "ATTRIBUTES_TO_COALESCE",
-    "COLUMN_PREFIX",
-    "NORMALIZED_COLUMNS_EAP_ITEMS",
-    "PROTO_TYPE_TO_ATTRIBUTE_COLUMN",
-    "PROTO_TYPE_TO_CLICKHOUSE_TYPE",
-    "attribute_key_to_expression",
-    "apply_virtual_columns",
-]
 
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
