@@ -64,7 +64,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__next_step.poll()
 
     def submit(self, message: Message[ValuesBatch[KafkaPayload]]) -> None:
-        if get_int_config("killswitch_lw_deletes") is not None:
+        if get_int_config("killswitch_lw_deletes", 0):
             raise MessageRejected("LW deletes killswitch is enabled")
 
         decode_messages = [rapidjson.loads(m.payload.value) for m in message.value.payload]
