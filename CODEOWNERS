@@ -6,8 +6,8 @@
 /snuba/datasets/configuration/group_attributes            @getsentry/issues @getsentry/owners-snuba
 /snuba/datasets/configuration/groupedmessage              @getsentry/issues @getsentry/owners-snuba
 /snuba/datasets/configuration/groupassignee               @getsentry/issues @getsentry/owners-snuba
-/snuba/datasets/configuration/spans                       @getsentry/performance @getsentry/owners-snuba
-/snuba/datasets/configuration/transactions                @getsentry/performance @getsentry/owners-snuba
+/snuba/datasets/configuration/spans                       @getsentry/data-browsing @getsentry/owners-snuba
+/snuba/datasets/configuration/transactions                @getsentry/data-browsing @getsentry/owners-snuba
 /snuba/datasets/configuration/functions                   @getsentry/profiling @getsentry/owners-snuba
 /snuba/datasets/configuration/profiles                    @getsentry/profiling @getsentry/owners-snuba
 /snuba/datasets/configuration/replays                     @getsentry/replay-backend @getsentry/owners-snuba
