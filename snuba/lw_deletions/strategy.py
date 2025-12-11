@@ -19,6 +19,7 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storage import WritableTableStorage
 from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
 from snuba.lw_deletions.formatters import Formatter
+from snuba.lw_deletions.types import ConditionsBag
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import get_int_config
@@ -27,7 +28,6 @@ from snuba.web import QueryException
 from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
 from snuba.web.constants import LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
 from snuba.web.delete_query import (
-    ConditionsType,
     TooManyOngoingMutationsError,
     _execute_query,
     _num_ongoing_mutations,
@@ -94,7 +94,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             parent_api=None,
         )
 
-    def _execute_delete(self, conditions: Sequence[ConditionsType]) -> None:
+    def _execute_delete(self, conditions: Sequence[ConditionsBag]) -> None:
         self._check_ongoing_mutations()
         query_settings = HTTPQuerySettings()
         # starting in 24.4 the default is 2
@@ -103,7 +103,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             query_settings.set_clickhouse_settings({"lightweight_deletes_sync": lw_sync})
 
         for table in self.__tables:
-            query = construct_query(self.__storage, table, construct_or_conditions(conditions))
+            where_clause = construct_or_conditions(self.__storage, conditions)
+            query = construct_query(self.__storage, table, where_clause)
             start = time.time()
             try:
                 _execute_query(

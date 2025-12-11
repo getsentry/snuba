@@ -1,16 +1,18 @@
-from typing import Any, Dict, List, Optional, Sequence, Type
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Type
 
 from sentry_protos.snuba.v1.endpoint_delete_trace_items_pb2 import (
     DeleteTraceItemsRequest,
     DeleteTraceItemsResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemFilterWithType
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter
 
 from snuba.attribution.appid import AppID
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.bulk_delete_query import AttributeConditions, delete_from_storage
+from snuba.lw_deletions.types import AttributeConditions
+from snuba.web.bulk_delete_query import delete_from_storage
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
@@ -56,7 +58,7 @@ def _trace_item_filters_to_attribute_conditions(
     Raises:
         BadSnubaRPCRequestException: If unsupported filter types or operations are encountered
     """
-    attributes: Dict[str, List[Any]] = {}
+    attributes: Dict[str, Tuple[AttributeKey, List[Any]]] = {}
 
     for filter_with_type in filters:
         # Extract the actual filter from TraceItemFilterWithType
@@ -87,9 +89,10 @@ def _trace_item_filters_to_attribute_conditions(
 
         # If the attribute already exists, extend the list (OR logic within same attribute)
         if attribute_name in attributes:
-            attributes[attribute_name].extend(value)
+            _, existing_values = attributes[attribute_name]
+            existing_values.extend(value)
         else:
-            attributes[attribute_name] = value
+            attributes[attribute_name] = (comparison_filter.key, value)
 
     return AttributeConditions(item_type=item_type, attributes=attributes)
 

@@ -1,15 +1,17 @@
+import pytest
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
+from snuba.protos.common import (
+    ATTRIBUTES_TO_COALESCE,
+    MalformedAttributeException,
+    attribute_key_to_expression,
+)
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
 from snuba.query.expressions import SubscriptableReference
-from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    ATTRIBUTES_TO_COALESCE,
-    attribute_key_to_expression,
-)
 
 
-class TestCommon:
+class TestAttributeKeyToExpression:
     def test_expression_trace_id(self) -> None:
         assert attribute_key_to_expression(
             AttributeKey(
@@ -93,3 +95,17 @@ class TestCommon:
             *references,
             alias=f"{new_attribute}_TYPE_STRING",
         )
+
+    def test_unspecified_type_raises_exception(self) -> None:
+        with pytest.raises(MalformedAttributeException) as exc_info:
+            attribute_key_to_expression(
+                AttributeKey(type=AttributeKey.TYPE_UNSPECIFIED, name="test_attr")
+            )
+        assert "must have a type specified" in str(exc_info.value)
+
+    def test_invalid_type_for_normalized_column_raises_exception(self) -> None:
+        with pytest.raises(MalformedAttributeException) as exc_info:
+            attribute_key_to_expression(
+                AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="sentry.trace_id")
+            )
+        assert "must be one of" in str(exc_info.value)
