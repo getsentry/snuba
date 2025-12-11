@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_protos::snuba::v1::any_value::Value;
-use sentry_protos::snuba::v1::{ArrayValue, TraceItem};
+use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
@@ -33,8 +33,14 @@ pub fn process_message(
         retention_days
     };
 
-    // Capture the item_type before consuming trace_item
-    let item_type = trace_item.item_type as u8;
+    // Capture the item_type name before consuming trace_item
+    let item_type_name = TraceItemType::try_from(trace_item.item_type)
+        .map(|t| {
+            t.as_str_name()
+                .strip_prefix("TRACE_ITEM_TYPE_")
+                .unwrap_or(t.as_str_name())
+        })
+        .unwrap_or("UNKNOWN");
 
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
@@ -46,7 +52,7 @@ pub fn process_message(
     );
 
     let mut item_type_metrics = ItemTypeMetrics::new();
-    item_type_metrics.record_item(item_type);
+    item_type_metrics.record_item(item_type_name);
 
     let mut batch = InsertBatch::from_rows([eap_item], origin_timestamp)?;
     batch.item_type_metrics = Some(item_type_metrics);
@@ -373,9 +379,9 @@ mod tests {
 
         let metrics = batch.item_type_metrics.unwrap();
 
-        // Verify that the item_type (Span = 1) has a count of 1
+        // Verify that the item_type (Span) has a count of 1
         assert_eq!(metrics.counts.len(), 1);
-        assert_eq!(metrics.counts.get(&(TraceItemType::Span as u8)), Some(&1));
+        assert_eq!(metrics.counts.get("SPAN"), Some(&1));
     }
 
     #[test]
@@ -398,10 +404,10 @@ mod tests {
         let batch_1 = process_message(payload_1, meta_1, &ProcessorConfig::default())
             .expect("The message should be processed");
 
-        // Process second message with item type 2 (Transaction)
+        // Process second message with item type Log
         let item_id_2 = Uuid::new_v4();
         let mut trace_item_2 = generate_trace_item(item_id_2);
-        trace_item_2.item_type = 2; // Transaction type
+        trace_item_2.item_type = TraceItemType::Log.into();
 
         let mut payload_2 = Vec::new();
         trace_item_2.encode(&mut payload_2).unwrap();
@@ -422,11 +428,8 @@ mod tests {
 
         // Verify that both item types are present with count 1 each
         assert_eq!(merged_metrics.counts.len(), 2);
-        assert_eq!(
-            merged_metrics.counts.get(&(TraceItemType::Span as u8)),
-            Some(&1)
-        );
-        assert_eq!(merged_metrics.counts.get(&2u8), Some(&1));
+        assert_eq!(merged_metrics.counts.get("SPAN"), Some(&1));
+        assert_eq!(merged_metrics.counts.get("LOG"), Some(&1));
     }
 
     #[test]

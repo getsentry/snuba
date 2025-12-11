@@ -49,7 +49,7 @@ impl CogsData {
 
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct ItemTypeMetrics {
-    pub counts: BTreeMap<u8, u64>, // item_type: count
+    pub counts: BTreeMap<String, u64>, // item_type_name: count
 }
 
 impl ItemTypeMetrics {
@@ -59,9 +59,9 @@ impl ItemTypeMetrics {
         }
     }
 
-    pub fn record_item(&mut self, item_type: u8) {
+    pub fn record_item(&mut self, item_type_name: &str) {
         self.counts
-            .entry(item_type)
+            .entry(item_type_name.to_string())
             .and_modify(|count| *count += 1)
             .or_insert(1);
     }
@@ -364,11 +364,11 @@ impl<R> BytesInsertBatch<R> {
     pub fn emit_item_type_metrics(&self) {
         use sentry_arroyo::counter;
 
-        for (item_type, count) in &self.item_type_metrics.counts {
+        for (item_type_name, count) in &self.item_type_metrics.counts {
             counter!(
                 "insertions.item_type_count",
                 *count as i64,
-                "item_type" => item_type.to_string()
+                "item_type" => item_type_name.clone()
             );
         }
     }
