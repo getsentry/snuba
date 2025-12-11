@@ -27,6 +27,7 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
+    attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
@@ -38,9 +39,6 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     RPCRequestException,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression,
 )
 
 _BUCKET_COUNT = 40
@@ -82,9 +80,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
                     alias="attributes_float",
                 ),
             ),
-            SelectedExpression(
-                "attributes_int", column("attributes_int", alias="attributes_int")
-            ),
+            SelectedExpression("attributes_int", column("attributes_int", alias="attributes_int")),
             SelectedExpression(
                 "attributes_bool", column("attributes_bool", alias="attributes_bool")
             ),
@@ -100,9 +96,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
                 column("trace_id"),
                 literal(request.trace_id),
             ),
-            trace_item_filters_to_expression(
-                request.filter, attribute_key_to_expression
-            ),
+            trace_item_filters_to_expression(request.filter, attribute_key_to_expression),
         ),
         limit=1,
     )
@@ -112,9 +106,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
 
 
 def _build_snuba_request(request: TraceItemDetailsRequest) -> SnubaRequest:
-    query_settings = (
-        setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
-    )
+    query_settings = setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
 
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
@@ -161,15 +153,11 @@ def _convert_results(
         )
     if (val := row.pop("project_id")) is not None:
         attrs.append(
-            TraceItemDetailsAttribute(
-                name="sentry.project_id", value=AttributeValue(val_int=val)
-            )
+            TraceItemDetailsAttribute(name="sentry.project_id", value=AttributeValue(val_int=val))
         )
     if (val := row.pop("item_type")) is not None:
         attrs.append(
-            TraceItemDetailsAttribute(
-                name="sentry.item_type", value=AttributeValue(val_int=val)
-            )
+            TraceItemDetailsAttribute(name="sentry.item_type", value=AttributeValue(val_int=val))
         )
 
     for k, v in row["attributes_string"].items():
@@ -183,9 +171,7 @@ def _convert_results(
     bool_attr_names = set()
     for k, v in row["attributes_bool"].items():
         bool_attr_names.add(k)
-        attrs.append(
-            TraceItemDetailsAttribute(name=k, value=AttributeValue(val_bool=v))
-        )
+        attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_bool=v)))
 
     for k, v in row["attributes_float"].items():
         if k in int_attr_names or k in bool_attr_names:
@@ -193,15 +179,11 @@ def _convert_results(
             # to simplfy aggregations. when returning data to the user we should only return
             # the original type, and ignore the float duplicate
             continue
-        attrs.append(
-            TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v))
-        )
+        attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v)))
     return item_id, timestamp, attrs
 
 
-class EndpointTraceItemDetails(
-    RPCEndpoint[TraceItemDetailsRequest, TraceItemDetailsResponse]
-):
+class EndpointTraceItemDetails(RPCEndpoint[TraceItemDetailsRequest, TraceItemDetailsResponse]):
     @classmethod
     def version(cls) -> str:
         return "v1"
@@ -220,13 +202,9 @@ class EndpointTraceItemDetails(
                 "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
             )
         if in_msg.item_id == "":
-            raise BadSnubaRPCRequestException(
-                "This endpoint requires item_id to be set."
-            )
+            raise BadSnubaRPCRequestException("This endpoint requires item_id to be set.")
         if in_msg.trace_id == "":
-            raise BadSnubaRPCRequestException(
-                "This endpoint requires trace_id to be set."
-            )
+            raise BadSnubaRPCRequestException("This endpoint requires trace_id to be set.")
         else:
             try:
                 _ = uuid.UUID(in_msg.trace_id)
@@ -242,9 +220,7 @@ class EndpointTraceItemDetails(
             timer=self._timer,
         )
         try:
-            item_id, timestamp, attributes = _convert_results(
-                res.result.get("data", [])
-            )
+            item_id, timestamp, attributes = _convert_results(res.result.get("data", []))
         except StopIteration:
             raise RPCRequestException(
                 status_code=404,

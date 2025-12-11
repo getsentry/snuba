@@ -10,6 +10,10 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba import settings, state
+from snuba.protos.common import MalformedAttributeException
+from snuba.protos.common import (
+    attribute_key_to_expression as _attribute_key_to_expression,
+)
 from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
@@ -24,6 +28,23 @@ from snuba.query.dsl import (
 )
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+
+
+def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
+    """Convert an AttributeKey proto to a Snuba Expression.
+
+    This is a wrapper around the proto-layer function that converts
+    MalformedAttributeException to BadSnubaRPCRequestException for
+    HTTP-aware code paths.
+
+    Raises:
+        BadSnubaRPCRequestException: If the attribute key is invalid or malformed.
+    """
+    try:
+        return _attribute_key_to_expression(attr_key)
+    except MalformedAttributeException as e:
+        raise BadSnubaRPCRequestException(str(e)) from e
+
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)

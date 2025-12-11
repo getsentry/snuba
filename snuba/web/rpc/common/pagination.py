@@ -116,9 +116,7 @@ class FlexibleTimeWindowPageWithFilters:
         time_window: TimeWindow,
         query_results: list[TraceItemColumnValues],
     ) -> "FlexibleTimeWindowPageWithFilters":
-        from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-            attribute_key_to_expression,
-        )
+        from snuba.web.rpc.common.common import attribute_key_to_expression
 
         filters = []
         # encode the window

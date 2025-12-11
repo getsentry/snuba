@@ -5,34 +5,12 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     VirtualColumnContext,
 )
 
-from snuba.protos.common import (
-    NORMALIZED_COLUMNS_EAP_ITEMS,
-    MalformedAttributeException,
-)
-from snuba.protos.common import (
-    attribute_key_to_expression as _attribute_key_to_expression,
-)
+from snuba.protos.common import NORMALIZED_COLUMNS_EAP_ITEMS
 from snuba.query import Query
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import literal, literals_array
 from snuba.query.expressions import Expression, SubscriptableReference
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-
-
-def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
-    """Convert an AttributeKey proto to a Snuba Expression.
-
-    This is a wrapper around the proto-layer function that converts
-    MalformedAttributeException to BadSnubaRPCRequestException for
-    HTTP-aware code paths.
-
-    Raises:
-        BadSnubaRPCRequestException: If the attribute key is invalid or malformed.
-    """
-    try:
-        return _attribute_key_to_expression(attr_key)
-    except MalformedAttributeException as e:
-        raise BadSnubaRPCRequestException(str(e)) from e
+from snuba.web.rpc.common.common import attribute_key_to_expression
 
 
 def apply_virtual_columns(

@@ -45,6 +45,7 @@ from snuba.settings import (
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
     project_id_and_org_conditions,
     timestamp_in_range_condition,
     treeify_or_and_conditions,
@@ -54,9 +55,6 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression,
-)
 
 NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
     "organization_id",
