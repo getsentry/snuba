@@ -5,6 +5,7 @@ use prost::Message;
 use seq_macro::seq;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::sync::OnceLock;
 use uuid::Uuid;
 
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
@@ -15,15 +16,28 @@ use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
 
-/// Returns the friendly name for a TraceItemType, stripping the "TRACE_ITEM_TYPE_" prefix.
+/// Returns the friendly name for a TraceItemType, e.g. "SPAN" instead of "TRACE_ITEM_TYPE_SPAN".
 /// Returns "UNKNOWN" if the item_type value doesn't correspond to a known type.
+/// Names are precomputed once on first call.
 fn item_type_name(item_type: i32) -> &'static str {
-    TraceItemType::try_from(item_type)
-        .map(|t| {
-            t.as_str_name()
-                .strip_prefix("TRACE_ITEM_TYPE_")
-                .unwrap_or(t.as_str_name())
+    static NAMES: OnceLock<HashMap<i32, &'static str>> = OnceLock::new();
+    NAMES
+        .get_or_init(|| {
+            let mut map = HashMap::new();
+            for i in 0..32 {
+                if let Ok(t) = TraceItemType::try_from(i) {
+                    let name = t
+                        .as_str_name()
+                        .to_lowercase()
+                        .strip_prefix("TRACE_ITEM_TYPE_")
+                        .unwrap_or(t.as_str_name());
+                    map.insert(i, name);
+                }
+            }
+            map
         })
+        .get(&item_type)
+        .copied()
         .unwrap_or("UNKNOWN")
 }
 
