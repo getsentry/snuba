@@ -28,7 +28,6 @@ fn item_type_name(item_type: i32) -> &'static str {
                 if let Ok(t) = TraceItemType::try_from(i) {
                     let name = t
                         .as_str_name()
-                        .to_lowercase()
                         .strip_prefix("TRACE_ITEM_TYPE_")
                         .unwrap_or(t.as_str_name());
                     map.insert(i, name);
