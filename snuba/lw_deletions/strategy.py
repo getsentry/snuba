@@ -17,6 +17,7 @@ from snuba.attribution import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
 from snuba.lw_deletions.formatters import Formatter
 from snuba.lw_deletions.types import ConditionsBag
@@ -63,8 +64,11 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
     def poll(self) -> None:
         self.__next_step.poll()
 
-    # TODO: allowlist is for testing purposes, this should be removed after launch
-    def _should_execute(self, conditions: Sequence[ConditionsBag]) -> bool:
+    # TODO: _is_execute_enabled is for EAP testing purposes, this should be removed after launch
+    def _is_execute_enabled(self, conditions: Sequence[ConditionsBag]) -> bool:
+        if self.__storage.get_storage_key != StorageKey.EAP_ITEMS:
+            return True
+
         query_org_ids: list[int] = [
             int(org_id)
             for cond in conditions
@@ -85,7 +89,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         conditions = self.__formatter.format(decode_messages)
 
         try:
-            if self._should_execute(conditions):
+            if self._is_execute_enabled(conditions):
                 self._execute_delete(conditions)
             else:
                 self.__metrics.increment("delete_skipped")
