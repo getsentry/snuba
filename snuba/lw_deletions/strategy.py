@@ -72,7 +72,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         ]
         assert len(query_org_ids) > 0, "No organization IDs found in conditions"
         # allowlist not being set implicitly allows all
-        if get_str_config("org_ids_delete_allowlist") is None:
+        if get_str_config("org_ids_delete_allowlist", "") == "":
             return True
         else:
             str_config = get_str_config("org_ids_delete_allowlist", "")
