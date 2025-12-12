@@ -954,21 +954,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyuwsgi"
-version = "2.0.23"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/pyuwsgi-2.0.23-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:cbde1da759d1486d6b20938b8f03b84b4dfe4a1b7ba111c586b1eaed6cd85cdc" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/pyuwsgi-2.0.23-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:87ed6c4cb321540daf42ea7271bf456c62f3fc791bfaa00a6ffc776be4edf048" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/pyuwsgi-2.0.23-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:12568dbacacd02b22791b352c3e93a9307d565512a851b36483ffe4db69b711e" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/pyuwsgi-2.0.23-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1de2f99dc4642aea7226889c76083884260920adc14a4a533660479941c6e6f2" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/pyuwsgi-2.0.23-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:ea11e270161e5cc8f6935778841f30e3226b0ee3b70185d88d8fa2bf0317bdc9" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/pyuwsgi-2.0.23-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:a7c469cbba8a2d249268f1574a61430f64ff06bb6240e316ddddfadb37e28990" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/pyuwsgi-2.0.23-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e3608203a37ebf5580f3fc4901ae1295fd181caa7ec49d29b7dcc1864725049e" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/pyuwsgi-2.0.23-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6505cb52b25eecf81338b9f17f4b47ec6288f3911eb65a5a9f3be03ed2ba0b97" },
-]
-
-[[package]]
 name = "pyyaml"
 version = "6.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -1260,7 +1245,6 @@ dependencies = [
     { name = "python-dateutil", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "python-jose", extra = ["cryptography"], marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "python-rapidjson", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-    { name = "pyuwsgi", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pyyaml", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "redis", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "rust-snuba", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1334,7 +1318,6 @@ requires-dist = [
     { name = "python-dateutil", specifier = ">=2.8.2" },
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.3.0" },
     { name = "python-rapidjson", specifier = ">=1.8" },
-    { name = "pyuwsgi", specifier = ">=2.0.23" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "redis", specifier = ">=4.5.4" },
     { name = "rust-snuba", editable = "rust_snuba" },
