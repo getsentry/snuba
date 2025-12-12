@@ -22,7 +22,7 @@ from snuba.lw_deletions.formatters import Formatter
 from snuba.lw_deletions.types import ConditionsBag
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.state import get_int_config
+from snuba.state import get_int_config, get_str_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.web import QueryException
 from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
@@ -63,15 +63,27 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
     def poll(self) -> None:
         self.__next_step.poll()
 
-    def submit(self, message: Message[ValuesBatch[KafkaPayload]]) -> None:
-        if get_int_config("killswitch_lw_deletes", 0):
-            raise MessageRejected("LW deletes killswitch is enabled")
+    # TODO: allowlist is for testing purposes, this should be removed after launch
+    def _should_execute(self, conditions: Sequence[ConditionsBag]) -> bool:
+        query_org_ids = [cond.column_conditions.get("organization_id") for cond in conditions]
+        # allowlist not being set implicitly allows all
+        if get_str_config("org_ids_delete_allowlist") is None:
+            return True
+        else:
+            str_config = get_str_config("org_ids_delete_allowlist", "")
+            assert str_config
+            org_ids_delete_allowlist = set([int(org_id) for org_id in str_config.split(",")])
+            return org_ids_delete_allowlist.issuperset(query_org_ids)
 
+    def submit(self, message: Message[ValuesBatch[KafkaPayload]]) -> None:
         decode_messages = [rapidjson.loads(m.payload.value) for m in message.value.payload]
         conditions = self.__formatter.format(decode_messages)
 
         try:
-            self._execute_delete(conditions)
+            if self._should_execute(conditions):
+                self._execute_delete(conditions)
+            else:
+                self.__metrics.increment("delete_skipped")
         except TooManyOngoingMutationsError as err:
             # backpressure is applied while we wait for the
             # currently ongoing mutations to finish
