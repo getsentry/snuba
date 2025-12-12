@@ -65,7 +65,12 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
 
     # TODO: allowlist is for testing purposes, this should be removed after launch
     def _should_execute(self, conditions: Sequence[ConditionsBag]) -> bool:
-        query_org_ids = [cond.column_conditions.get("organization_id") for cond in conditions]
+        query_org_ids: list[int] = [
+            int(org_id)
+            for cond in conditions
+            for org_id in cond.column_conditions.get("organization_id", [])
+        ]
+        assert len(query_org_ids) > 0, "No organization IDs found in conditions"
         # allowlist not being set implicitly allows all
         if get_str_config("org_ids_delete_allowlist") is None:
             return True
