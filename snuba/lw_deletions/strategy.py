@@ -66,7 +66,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
 
     # TODO: _is_execute_enabled is for EAP testing purposes, this should be removed after launch
     def _is_execute_enabled(self, conditions: Sequence[ConditionsBag]) -> bool:
-        if self.__storage.get_storage_key != StorageKey.EAP_ITEMS:
+        if self.__storage.get_storage_key() != StorageKey.EAP_ITEMS:
             return True
 
         query_org_ids: list[int] = [
