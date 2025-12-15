@@ -31,7 +31,6 @@
 /.github/workflows/release.yml  @getsentry/release-approvers
 /.craft.yml                     @getsentry/release-approvers
 /docker-compose.gcb.yml         @getsentry/owners-snuba
-/docker-compose.yml             @getsentry/release-approvers
 /docker_entrypoint.sh           @getsentry/release-approvers
 /cloudbuild.yaml                @getsentry/release-approvers
 /scripts/bump-version.sh        @getsentry/release-approvers
