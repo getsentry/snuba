@@ -18,11 +18,9 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         self,
         datadog: DatadogMetricsBackend,
         sentry: SentryMetricsBackend,
-        new_datadog: DatadogMetricsBackend | None = None,
     ) -> None:
         self.datadog = datadog
         self.sentry = sentry
-        self.new_datadog = new_datadog
 
     def _use_sentry(self) -> bool:
         from snuba import state
@@ -31,10 +29,10 @@ class SentryDatadogMetricsBackend(MetricsBackend):
             return bool(random.random() < settings.DDM_METRICS_SAMPLE_RATE)
         return False
 
-    def _use_new_datadog(self) -> bool:
+    def _write_timings_as_distributions(self) -> bool:
         from snuba import state
 
-        return str(state.get_config("use_new_datadog_metrics", "0")) == "1"
+        return str(state.get_config("write_timings_as_distributions", "0")) == "1"
 
     def increment(
         self,
@@ -46,8 +44,6 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         self.datadog.increment(name, value, tags, unit)
         if self._use_sentry():
             self.sentry.increment(name, value, tags, unit)
-        if self._use_new_datadog() and self.new_datadog is not None:
-            self.new_datadog.increment(name, value, tags, unit)
 
     def gauge(
         self,
@@ -59,8 +55,6 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         self.datadog.gauge(name, value, tags, unit)
         if self._use_sentry():
             self.sentry.gauge(name, value, tags, unit)
-        if self._use_new_datadog() and self.new_datadog is not None:
-            self.new_datadog.gauge(name, value, tags, unit)
 
     def timing(
         self,
@@ -69,11 +63,15 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         tags: Tags | None = None,
         unit: str | None = None,
     ) -> None:
+        # Note (Volo) 12/15/2025: timing metrics were originally written to veneur which
+        # would then calculate percentiles. datadog now supports direct aggregations of percentiles
+        # we keep the veneur timing metric to maintain historical data, this should be removed by
+        # 02/15/2026 once we have enough historical data already
         self.datadog.timing(name, value, tags, unit)
         if self._use_sentry():
             self.sentry.timing(name, value, tags, unit)
-        if self._use_new_datadog() and self.new_datadog is not None:
-            self.new_datadog.distribution(name, value, tags, unit)
+        if self._write_timings_as_distributions():
+            self.datadog.distribution(name, value, tags, unit)
 
     def distribution(
         self,
@@ -85,8 +83,6 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         self.datadog.distribution(name, value, tags, unit)
         if self._use_sentry():
             self.sentry.distribution(name, value, tags, unit)
-        if self._use_new_datadog() and self.new_datadog is not None:
-            self.new_datadog.distribution(name, value, tags, unit)
 
     def events(
         self,
@@ -97,5 +93,3 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         tags: Tags | None = None,
     ) -> None:
         self.datadog.events(title, text, alert_type, priority, tags)
-        if self._use_new_datadog() and self.new_datadog is not None:
-            self.new_datadog.events(title, text, alert_type, priority, tags)
