@@ -1,5 +1,52 @@
 # Changelog
 
+## 25.12.0
+
+### New Features ✨
+
+- feat(deletes): support item attribute conditions in API and consumer by @onewland in [#7570](https://github.com/getsentry/snuba/pull/7570)
+
+#### Eap
+
+- feat(eap): Allow arrays to be queried from EAP by @phacops in [#7551](https://github.com/getsentry/snuba/pull/7551)
+- feat(eap): emit item type counts by @onewland in [#7548](https://github.com/getsentry/snuba/pull/7548)
+
+- feat(oncall): don't send transient cache set errors to sentry, emit metric by @volokluev in [#7560](https://github.com/getsentry/snuba/pull/7560)
+
+- feat(self-hosted): Manually run post release script by @hubertdeng123 in [#7563](https://github.com/getsentry/snuba/pull/7563)
+
+- feat: support attribute allowlist in traceitemstats by @kylemumma in [#7568](https://github.com/getsentry/snuba/pull/7568)
+
+### Bug Fixes 🐛
+
+- fix(image): Ensure we install dev dependencies by @hubertdeng123 in [#7578](https://github.com/getsentry/snuba/pull/7578)
+
+- fix: Remove "performance" code owners by @gggritso in [#7584](https://github.com/getsentry/snuba/pull/7584)
+
+### Build / dependencies / internal 🔧
+
+#### Deps
+
+- chore(deps): bump actions/create-github-app-token from 2.1.4 to 2.2.0 by @dependabot in [#7550](https://github.com/getsentry/snuba/pull/7550)
+- chore(deps): bump actions/dependency-review-action from 4.8.1 to 4.8.2 by @dependabot in [#7539](https://github.com/getsentry/snuba/pull/7539)
+- chore(deps): bump actions/checkout from 5 to 6 by @dependabot in [#7549](https://github.com/getsentry/snuba/pull/7549)
+
+- chore(gocd): remove outcomes-billing consumer from python deploys by @onewland in [#7564](https://github.com/getsentry/snuba/pull/7564)
+
+- ci: leaner snuba image by @aldy505 in [#7542](https://github.com/getsentry/snuba/pull/7542)
+
+### Other
+
+- ref(eap): fix outcomes based routing retention downsampling by @MeredithAnya in [#7592](https://github.com/getsentry/snuba/pull/7592)
+- ref: bump sentry-arroyo to 2.35.0 by @getsentry-bot in [#7583](https://github.com/getsentry/snuba/pull/7583)
+- Change new_datadog timing to send distribution metrics by @volokluev in [#7582](https://github.com/getsentry/snuba/pull/7582)
+- Double write metrics to new datadog by @volokluev in [#7555](https://github.com/getsentry/snuba/pull/7555)
+- ref: remove build_target for GAR image by @aldy505 in [#7571](https://github.com/getsentry/snuba/pull/7571)
+- ref(redis): increase changes limit from 25 to 100 by @MeredithAnya in [#7572](https://github.com/getsentry/snuba/pull/7572)
+- ref: bump sentry-protos to 0.4.8 by @getsentry-bot in [#7569](https://github.com/getsentry/snuba/pull/7569)
+- ref: bump sentry-arroyo to 2.34.0 by @getsentry-bot in [#7567](https://github.com/getsentry/snuba/pull/7567)
+- dep: bump granian to 2.6 by @gi0baro in [#7565](https://github.com/getsentry/snuba/pull/7565)
+
 ## 25.11.1
 
 ### Build / dependencies / internal 🔧
