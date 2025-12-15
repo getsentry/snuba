@@ -17,12 +17,13 @@ from snuba.attribution import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
 from snuba.lw_deletions.formatters import Formatter
 from snuba.lw_deletions.types import ConditionsBag
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.state import get_int_config
+from snuba.state import get_int_config, get_str_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.web import QueryException
 from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
@@ -63,12 +64,35 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
     def poll(self) -> None:
         self.__next_step.poll()
 
+    # TODO: _is_execute_enabled is for EAP testing purposes, this should be removed after launch
+    def _is_execute_enabled(self, conditions: Sequence[ConditionsBag]) -> bool:
+        if self.__storage.get_storage_key() != StorageKey.EAP_ITEMS:
+            return True
+
+        query_org_ids: list[int] = [
+            int(org_id)
+            for cond in conditions
+            for org_id in cond.column_conditions.get("organization_id", [])
+        ]
+        assert len(query_org_ids) > 0, "No organization IDs found in conditions"
+        # allowlist not being set implicitly allows all
+        if get_str_config("org_ids_delete_allowlist", "") == "":
+            return True
+        else:
+            str_config = get_str_config("org_ids_delete_allowlist", "")
+            assert str_config
+            org_ids_delete_allowlist = set([int(org_id) for org_id in str_config.split(",")])
+            return org_ids_delete_allowlist.issuperset(query_org_ids)
+
     def submit(self, message: Message[ValuesBatch[KafkaPayload]]) -> None:
         decode_messages = [rapidjson.loads(m.payload.value) for m in message.value.payload]
         conditions = self.__formatter.format(decode_messages)
 
         try:
-            self._execute_delete(conditions)
+            if self._is_execute_enabled(conditions):
+                self._execute_delete(conditions)
+            else:
+                self.__metrics.increment("delete_skipped")
         except TooManyOngoingMutationsError as err:
             # backpressure is applied while we wait for the
             # currently ongoing mutations to finish
