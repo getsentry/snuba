@@ -8,8 +8,7 @@ class DummyHandledFunctionsProcessor(LogicalQueryProcessor):
     """
     The product keeps sending queries for notHandled/isHandled to transactions and search issues datasets
 
-    Over 3 years I haven't been able to get them to fix it.
-    Rather than failing the functions I just assume the error is handled
+    Rather than failing the functions just assume the error is handled
     """
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
