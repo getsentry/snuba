@@ -49,21 +49,17 @@ impl CogsData {
 }
 
 /// Returns the friendly name for a TraceItemType, e.g. "span" instead of "TRACE_ITEM_TYPE_SPAN".
-/// Returns "unknown" if the item_type value doesn't correspond to a known type.
-fn item_type_name(item_type: i32) -> String {
-    TraceItemType::try_from(item_type)
-        .map(|t| {
-            t.as_str_name()
-                .strip_prefix("TRACE_ITEM_TYPE_")
-                .unwrap_or(t.as_str_name())
-                .to_lowercase()
-        })
-        .unwrap_or_else(|_| "unknown".to_string())
+fn item_type_name(item_type: TraceItemType) -> String {
+    item_type
+        .as_str_name()
+        .strip_prefix("TRACE_ITEM_TYPE_")
+        .unwrap_or(item_type.as_str_name())
+        .to_lowercase()
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct ItemTypeMetrics {
-    pub counts: BTreeMap<i32, u64>, // item_type: count
+    pub counts: BTreeMap<TraceItemType, u64>,
 }
 
 impl ItemTypeMetrics {
@@ -73,7 +69,7 @@ impl ItemTypeMetrics {
         }
     }
 
-    pub fn record_item(&mut self, item_type: i32) {
+    pub fn record_item(&mut self, item_type: TraceItemType) {
         self.counts
             .entry(item_type)
             .and_modify(|count| *count += 1)

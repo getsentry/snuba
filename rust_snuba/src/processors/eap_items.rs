@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_protos::snuba::v1::any_value::Value;
-use sentry_protos::snuba::v1::{ArrayValue, TraceItem};
+use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
@@ -33,7 +33,8 @@ pub fn process_message(
         retention_days
     };
 
-    let item_type = trace_item.item_type;
+    let item_type =
+        TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
     eap_item.retention_days = retention_days;
@@ -373,7 +374,7 @@ mod tests {
 
         // Verify that the item_type (Span) has a count of 1
         assert_eq!(metrics.counts.len(), 1);
-        assert_eq!(metrics.counts.get(&(TraceItemType::Span as i32)), Some(&1));
+        assert_eq!(metrics.counts.get(&TraceItemType::Span), Some(&1));
     }
 
     #[test]
@@ -420,14 +421,8 @@ mod tests {
 
         // Verify that both item types are present with count 1 each
         assert_eq!(merged_metrics.counts.len(), 2);
-        assert_eq!(
-            merged_metrics.counts.get(&(TraceItemType::Span as i32)),
-            Some(&1)
-        );
-        assert_eq!(
-            merged_metrics.counts.get(&(TraceItemType::Log as i32)),
-            Some(&1)
-        );
+        assert_eq!(merged_metrics.counts.get(&TraceItemType::Span), Some(&1));
+        assert_eq!(merged_metrics.counts.get(&TraceItemType::Log), Some(&1));
     }
 
     #[test]
