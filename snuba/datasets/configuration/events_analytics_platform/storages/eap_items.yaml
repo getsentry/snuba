@@ -131,7 +131,14 @@ query_processors:
         max_execution_time: 25
         timeout_before_checking_execution_speed: 0
 
-delete_allocation_policies: []
+delete_allocation_policies:
+  - name: DeleteConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
 
 deletion_settings:
   is_enabled: 1
