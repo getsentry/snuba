@@ -41,24 +41,6 @@ def create_metrics(
     from snuba.utils.metrics.backends.dualwrite import SentryDatadogMetricsBackend
     from snuba.utils.metrics.backends.sentry import SentryMetricsBackend
 
-    new_datadog_host: Optional[str] = settings.NEW_DOGSTATSD_HOST
-    new_datadog_port: Optional[int] = settings.NEW_DOGSTATSD_PORT
-    new_datadog_backend: Optional[DatadogMetricsBackend] = None
-
-    if new_datadog_host and new_datadog_port:
-        new_datadog_backend = DatadogMetricsBackend(
-            partial(
-                DogStatsd,
-                host=new_datadog_host,
-                port=new_datadog_port,
-                namespace=f"dd_{prefix}",
-                constant_tags=(
-                    [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
-                ),
-            ),
-            sample_rates,
-        )
-
     return SentryDatadogMetricsBackend(
         DatadogMetricsBackend(
             partial(
@@ -73,7 +55,6 @@ def create_metrics(
             sample_rates,
         ),
         SentryMetricsBackend(),
-        new_datadog_backend,
     )
 
 
