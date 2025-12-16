@@ -5,40 +5,15 @@ use prost::Message;
 use seq_macro::seq;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::OnceLock;
 use uuid::Uuid;
 
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_protos::snuba::v1::any_value::Value;
-use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
+use sentry_protos::snuba::v1::{ArrayValue, TraceItem};
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
-
-/// Returns the friendly name for a TraceItemType, e.g. "SPAN" instead of "TRACE_ITEM_TYPE_SPAN".
-/// Returns "UNKNOWN" if the item_type value doesn't correspond to a known type.
-/// Names are precomputed once on first call.
-fn item_type_name(item_type: i32) -> &'static str {
-    static NAMES: OnceLock<HashMap<i32, &'static str>> = OnceLock::new();
-    NAMES
-        .get_or_init(|| {
-            let mut map = HashMap::new();
-            for i in 0..32 {
-                if let Ok(t) = TraceItemType::try_from(i) {
-                    let name = t
-                        .as_str_name()
-                        .strip_prefix("TRACE_ITEM_TYPE_")
-                        .unwrap_or(t.as_str_name());
-                    map.insert(i, name);
-                }
-            }
-            map
-        })
-        .get(&item_type)
-        .copied()
-        .unwrap_or("UNKNOWN")
-}
 
 pub fn process_message(
     msg: KafkaPayload,
@@ -58,9 +33,7 @@ pub fn process_message(
         retention_days
     };
 
-    // Capture the item_type name before consuming trace_item
-    let item_type = item_type_name(trace_item.item_type);
-
+    let item_type = trace_item.item_type;
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
     eap_item.retention_days = retention_days;
@@ -400,7 +373,7 @@ mod tests {
 
         // Verify that the item_type (Span) has a count of 1
         assert_eq!(metrics.counts.len(), 1);
-        assert_eq!(metrics.counts.get("SPAN"), Some(&1));
+        assert_eq!(metrics.counts.get(&(TraceItemType::Span as i32)), Some(&1));
     }
 
     #[test]
@@ -447,8 +420,14 @@ mod tests {
 
         // Verify that both item types are present with count 1 each
         assert_eq!(merged_metrics.counts.len(), 2);
-        assert_eq!(merged_metrics.counts.get("SPAN"), Some(&1));
-        assert_eq!(merged_metrics.counts.get("LOG"), Some(&1));
+        assert_eq!(
+            merged_metrics.counts.get(&(TraceItemType::Span as i32)),
+            Some(&1)
+        );
+        assert_eq!(
+            merged_metrics.counts.get(&(TraceItemType::Log as i32)),
+            Some(&1)
+        );
     }
 
     #[test]

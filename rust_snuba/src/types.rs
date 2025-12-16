@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::timer;
+use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -47,9 +48,22 @@ impl CogsData {
     }
 }
 
+/// Returns the friendly name for a TraceItemType, e.g. "span" instead of "TRACE_ITEM_TYPE_SPAN".
+/// Returns "unknown" if the item_type value doesn't correspond to a known type.
+fn item_type_name(item_type: i32) -> String {
+    TraceItemType::try_from(item_type)
+        .map(|t| {
+            t.as_str_name()
+                .strip_prefix("TRACE_ITEM_TYPE_")
+                .unwrap_or(t.as_str_name())
+                .to_lowercase()
+        })
+        .unwrap_or_else(|_| "unknown".to_string())
+}
+
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct ItemTypeMetrics {
-    pub counts: BTreeMap<String, u64>, // item_type_name: count
+    pub counts: BTreeMap<i32, u64>, // item_type: count
 }
 
 impl ItemTypeMetrics {
@@ -59,9 +73,9 @@ impl ItemTypeMetrics {
         }
     }
 
-    pub fn record_item(&mut self, item_type_name: &str) {
+    pub fn record_item(&mut self, item_type: i32) {
         self.counts
-            .entry(item_type_name.to_string())
+            .entry(item_type)
             .and_modify(|count| *count += 1)
             .or_insert(1);
     }
@@ -364,11 +378,11 @@ impl<R> BytesInsertBatch<R> {
     pub fn emit_item_type_metrics(&self) {
         use sentry_arroyo::counter;
 
-        for (item_type_name, count) in &self.item_type_metrics.counts {
+        for (item_type, count) in &self.item_type_metrics.counts {
             counter!(
                 "insertions.item_type_count",
                 *count as i64,
-                "item_type" => item_type_name.clone()
+                "item_type" => item_type_name(*item_type)
             );
         }
     }
