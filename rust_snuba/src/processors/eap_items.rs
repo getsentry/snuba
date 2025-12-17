@@ -45,7 +45,7 @@ pub fn process_message(
     );
 
     let mut item_type_metrics = ItemTypeMetrics::new();
-    item_type_metrics.record_item(item_type);
+    item_type_metrics.record_item(item_type, payload.len());
 
     let mut batch = InsertBatch::from_rows([eap_item], origin_timestamp)?;
     batch.item_type_metrics = Some(item_type_metrics);
