@@ -2,8 +2,8 @@ use std::cmp::min;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::timer;
-use sentry_arroyo::{backends::kafka::types::KafkaPayload, gauge};
 use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Serialize};
 
@@ -504,5 +504,33 @@ mod tests {
         let now = Utc.timestamp_opt(65, 0).unwrap();
         assert_eq!(accumulator.max_value_ms(now), 4000);
         assert_eq!(accumulator.avg_value_ms(now), 3000);
+    }
+
+    #[test]
+    fn test_item_type_metrics_merge() {
+        let mut metrics1 = ItemTypeMetrics::new();
+        metrics1.record_item(TraceItemType::Span, 100);
+        metrics1.record_item(TraceItemType::Span, 150);
+        metrics1.record_item(TraceItemType::Log, 200);
+
+        let mut metrics2 = ItemTypeMetrics::new();
+        metrics2.record_item(TraceItemType::Span, 50);
+        metrics2.record_item(TraceItemType::Log, 75);
+
+        metrics1.merge(metrics2);
+
+        // Verify counts are merged correctly
+        assert_eq!(metrics1.counts.get(&TraceItemType::Span), Some(&3));
+        assert_eq!(metrics1.counts.get(&TraceItemType::Log), Some(&2));
+
+        // Verify bytes_processed are merged correctly
+        assert_eq!(
+            metrics1.bytes_processed.get(&TraceItemType::Span),
+            Some(&300)
+        ); // 100 + 150 + 50
+        assert_eq!(
+            metrics1.bytes_processed.get(&TraceItemType::Log),
+            Some(&275)
+        ); // 200 + 75
     }
 }

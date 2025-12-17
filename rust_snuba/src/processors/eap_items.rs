@@ -354,10 +354,11 @@ mod tests {
         // Set the item type to Span (value 1)
         trace_item.item_type = TraceItemType::Span.into();
 
-        let mut payload = Vec::new();
-        trace_item.encode(&mut payload).unwrap();
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+        let payload_len = payload_bytes.len();
 
-        let payload = KafkaPayload::new(None, None, Some(payload));
+        let payload = KafkaPayload::new(None, None, Some(payload_bytes));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -375,6 +376,13 @@ mod tests {
         // Verify that the item_type (Span) has a count of 1
         assert_eq!(metrics.counts.len(), 1);
         assert_eq!(metrics.counts.get(&TraceItemType::Span), Some(&1));
+
+        // Verify that bytes_processed is accumulated
+        assert_eq!(metrics.bytes_processed.len(), 1);
+        assert_eq!(
+            metrics.bytes_processed.get(&TraceItemType::Span),
+            Some(&payload_len)
+        );
     }
 
     #[test]
