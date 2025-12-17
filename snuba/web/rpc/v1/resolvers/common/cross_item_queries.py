@@ -1,6 +1,7 @@
 import uuid
 from typing import Any, Literal, overload
 
+import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from proto import Message  # type: ignore
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
@@ -171,6 +172,12 @@ def get_trace_ids_for_cross_item_query(
     trace_ids: list[str] = []
     for row in results.result.get("data", []):
         trace_ids.append(list(row.values())[0])
+
+    sentry_sdk.update_current_span(
+        attributes={
+            "cross_item_query_trace_ids_count": len(trace_ids),
+        }
+    )
 
     if return_query_results:
         return trace_ids, [results]
