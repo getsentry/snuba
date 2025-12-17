@@ -71,7 +71,7 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         if self._use_sentry():
             self.sentry.timing(name, value, tags, unit)
         if self._write_timings_as_distributions():
-            self.datadog.distribution(name, value, tags, unit)
+            self.datadog.distribution(f"{name}.distribution", value, tags, unit)
 
     def distribution(
         self,
