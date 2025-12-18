@@ -29,13 +29,13 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     BUCKET_COUNT,
+    attribute_key_to_expression,
     base_conditions_and,
     process_arrays,
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.debug_info import setup_trace_query_settings
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import attribute_key_to_expression
 
 _DEFAULT_PAGE_SIZE = 10_000
 
@@ -325,7 +325,7 @@ def _convert_rows(rows: Iterable[Dict[str, Any]]) -> ProcessedResults:
         ts = row.pop("timestamp")
         client_sample_rate = float(1.0 / row.pop("sampling_weight", 1.0))
         server_sample_rate = float(1.0 / row.pop("sampling_weight", 1.0))
-        sampling_factor = row.pop("sampling_factor", 1.0)
+        sampling_factor = row.pop("sampling_factor", 1.0)  # noqa: F841
         arrays = row.pop("attributes_array", "{}") or "{}"
         booleans = row.pop("attributes_bool", {}) or {}
         integers = row.pop("attributes_int", {}) or {}
