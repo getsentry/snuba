@@ -213,8 +213,8 @@ function QueryDisplay(props: {
             onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
               setClusterlessHost(evt.currentTarget.checked)
             }
-            onLabel="Input host nodes"
-            offLabel="Auto populate nodes"
+            onLabel="Manual Host Entry"
+            offLabel="Auto Populate Nodes"
             size="xl"
           />
         </div>
