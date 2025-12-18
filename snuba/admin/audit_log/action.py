@@ -18,6 +18,7 @@ class AuditLogAction(Enum):
     CONFIGURABLE_COMPONENT_DELETE = "configurable_component.delete"
     DLQ_REPLAY = "dlq.replay"
     RAN_SUDO_SYSTEM_QUERY = "ran.sudo.system.query"
+    RAN_CLUSTERLESS_SYSTEM_QUERY = "ran.clusterless.system.query"
 
 
 RUNTIME_CONFIG_ACTIONS = [
