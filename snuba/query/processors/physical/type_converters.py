@@ -127,12 +127,12 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
 
         condition = query.get_condition()
         if condition is not None:
-            # if self.__contains_unoptimizable_condition(condition):
-            #     processed = condition.transform(self._process_expressions)
-            if not self.__contains_unoptimizable_condition(condition):
+            if self.__contains_unoptimizable_condition(condition):
+                processed = condition.transform(self._process_expressions)
+            else:
                 processed = condition.transform(self.__process_optimizable_condition)
-                # if condition == processed:
-                #     processed = processed.transform(self._process_expressions)
+                if condition == processed:
+                    processed = processed.transform(self._process_expressions)
 
             query.set_ast_condition(processed)
 
