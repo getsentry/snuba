@@ -1137,6 +1137,7 @@ def test_prod_mql_query_valid_query(admin_api: FlaskClient) -> None:
         ),
         headers={"Referer": "https://snuba-admin.getsentry.net/"},
     )
+    breakpoint()
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "data" in data
