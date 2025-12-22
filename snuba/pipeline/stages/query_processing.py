@@ -19,12 +19,11 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.logical import EntityQuery
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.query_settings import QuerySettings
 from snuba.request import Request
 
 
-class EntityProcessingStage(
-    QueryPipelineStage[Request, ClickhouseQuery | CompositeQuery[Table]]
-):
+class EntityProcessingStage(QueryPipelineStage[Request, ClickhouseQuery | CompositeQuery[Table]]):
     def _process_data(
         self, pipe_input: QueryPipelineData[Request]
     ) -> ClickhouseQuery | CompositeQuery[Table]:
@@ -34,9 +33,7 @@ class EntityProcessingStage(
             return translated_storage_query
 
         run_entity_validators(cast(EntityQuery, query), pipe_input.query_settings)
-        if isinstance(query, LogicalQuery) and isinstance(
-            query.get_from_clause(), Entity
-        ):
+        if isinstance(query, LogicalQuery) and isinstance(query.get_from_clause(), Entity):
             return run_entity_processing_executor(query, pipe_input.query_settings)
         elif isinstance(query, CompositeQuery):
             # if we were not able to translate the storage query earlier and we got to this point, this is
@@ -56,15 +53,18 @@ class StorageProcessingStage(
     ]
 ):
     def _apply_default_subscriptable_mapping(
-        self, query: ClickhouseQuery | CompositeQuery[Table]
+        self, query: ClickhouseQuery | CompositeQuery[Table], query_settings: QuerySettings
     ) -> None:
-        query.transform_expressions(transform_subscriptables)
+        query.transform_expressions(
+            transform_subscriptables,
+            skip_transform_order_by=query_settings.get_skip_transform_order_by(),
+        )
 
     def _process_data(
         self, pipe_input: QueryPipelineData[ClickhouseQuery | CompositeQuery[Table]]
     ) -> ClickhouseQuery | CompositeQuery[Table]:
         if pipe_input.query_settings.get_apply_default_subscriptable_mapping():
-            self._apply_default_subscriptable_mapping(pipe_input.data)
+            self._apply_default_subscriptable_mapping(pipe_input.data, pipe_input.query_settings)
         if isinstance(pipe_input.data, ClickhouseQuery):
             query_plan = build_best_plan(pipe_input.data, pipe_input.query_settings, [])
             return apply_storage_processors(query_plan, pipe_input.query_settings)

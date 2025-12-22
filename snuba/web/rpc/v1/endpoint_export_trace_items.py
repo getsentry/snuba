@@ -261,6 +261,7 @@ def _build_snuba_request(
     in_msg: ExportTraceItemsRequest, limit: int, page_token: ExportTraceItemsPageToken | None = None
 ) -> SnubaRequest:
     query_settings = setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
+    query_settings.set_skip_transform_order_by(True)
     return SnubaRequest(
         id=uuid.UUID(in_msg.meta.request_id),
         original_body=MessageToDict(in_msg),

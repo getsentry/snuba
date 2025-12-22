@@ -285,6 +285,7 @@ class Query(DataSource, ABC):
         func: Callable[[Expression], Expression],
         skip_transform_condition: bool = False,
         skip_array_join: bool = False,
+        skip_transform_order_by: bool = False,
     ) -> None:
         """
         Transforms in place the current query object by applying a transformation
@@ -319,12 +320,13 @@ class Query(DataSource, ABC):
             self.__condition = self.__condition.transform(func) if self.__condition else None
         self.__groupby = transform_expression_list(self.__groupby)
         self.__having = self.__having.transform(func) if self.__having else None
-        self.__order_by = list(
-            map(
-                lambda clause: replace(clause, expression=clause.expression.transform(func)),
-                self.__order_by,
+        if not skip_transform_order_by:
+            self.__order_by = list(
+                map(
+                    lambda clause: replace(clause, expression=clause.expression.transform(func)),
+                    self.__order_by,
+                )
             )
-        )
 
         if self.__limitby is not None:
             self.__limitby = LimitBy(
