@@ -1,5 +1,32 @@
 # Changelog
 
+## 25.12.1
+
+### New Features ✨
+
+- feat(deletes): add EAP deletes allowlist for launch by @onewland in [#7591](https://github.com/getsentry/snuba/pull/7591)
+
+- feat(eap): record bytes ingested by item type by @onewland in [#7604](https://github.com/getsentry/snuba/pull/7604)
+
+### Bug Fixes 🐛
+
+- fix notHandled errors for search issues and transactions by @volokluev in [#7599](https://github.com/getsentry/snuba/pull/7599)
+
+### Build / dependencies / internal 🔧
+
+- chore(eap): Try to understand the number of trace IDs we're fetching by @phacops in [#7603](https://github.com/getsentry/snuba/pull/7603)
+
+- chore(snuba): take new_datadog out of metrics config by @volokluev in [#7598](https://github.com/getsentry/snuba/pull/7598)
+
+### Other
+
+- ref(admin): allow system queries on nodes sans clusters by @MeredithAnya in [#7605](https://github.com/getsentry/snuba/pull/7605)
+- Update distribution metric naming convention by @volokluev in [#7602](https://github.com/getsentry/snuba/pull/7602)
+- cleanup: emit item type in metrics as string by @onewland in [#7588](https://github.com/getsentry/snuba/pull/7588)
+- cleanup: remove stale docker-compose by @onewland in [#7597](https://github.com/getsentry/snuba/pull/7597)
+- meta: Bump new development version in [8e2624b3](https://github.com/getsentry/snuba/commit/8e2624b36b1ea55f6f1645bff0c8017fb0192664)
+- ref(eap): kill snuba.web.rpc.v1.resolvers.R_eap_items.common.common by @onewland in [#7590](https://github.com/getsentry/snuba/pull/7590)
+
 ## 25.12.0
 
 ### New Features ✨
