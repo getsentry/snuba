@@ -12,6 +12,137 @@ Led the development and implementation of the Capacity-Based Routing System, a m
 
 ---
 
+## Technical Summary: What These PRs Actually Built
+
+### Core System Architecture
+Built a complete capacity-based routing system that intelligently routes Snuba queries to different ClickHouse clusters based on real-time load metrics and configurable policies. The system consists of:
+
+**1. Cluster Load Monitoring (PR #7143)**
+- Implemented mechanism to query ClickHouse system tables to retrieve current cluster load metrics
+- Built aggregation logic to calculate load statistics for EAP item clusters
+- Created data structures to represent cluster health and capacity information
+
+**2. Routing Strategy Framework (PR #7201, #7337)**
+- Migrated routing logic from internal Snuba layers to the RPC layer for better separation of concerns
+- Unified `AllocationPolicy` and `RoutingStrategy` under a common `ConfigurableComponent` abstraction
+- Enabled dynamic component instantiation by namespace and class name
+- Created a flexible configuration system where routing behavior can be modified without code changes
+
+**3. Component Registry System (PR #7379, #7401)**
+- Built `RegisteredClass` metaclass integration for automatic component discovery
+- Implemented namespace-based component isolation (e.g., `AllocationPolicy.BytesScannedWindowPolicy`)
+- Fixed registry pollution bug where subclasses across different namespaces shared the same registry
+- Created dual API: `ConfigurableComponent.get_component_class(namespace).get_from_name(name)` and `AllocationPolicy.get_from_name(name)`
+
+**4. Allocation Policy Enhancements (PR #7375, #7411)**
+- Integrated resource identifiers into allocation policies (moving beyond just storage keys)
+- Made allocation policies self-aware of their type (select vs. delete policies)
+- Migrated EAP-specific allocation policies from generic layer into the outcomes-based routing strategy
+- Enabled routing strategies to encapsulate their own allocation policies for better cohesion
+
+**5. Configuration Management APIs (PR #7346)**
+- Built RESTful endpoints in Snuba Admin for:
+  - Listing available routing strategies and allocation policies
+  - Retrieving current configuration for a resource
+  - Updating routing strategy configuration with validation
+- Implemented payload serialization/deserialization for `ConfigurableComponent` instances
+- Added dependency coordination between backend refactoring PRs
+
+**6. User Interface (PR #7399)**
+- Developed Snuba Admin UI page for CBRS configuration
+- Built forms for selecting routing strategies and setting configuration parameters
+- Integrated with backend APIs for reading/writing configurations
+- Added visual feedback for configuration changes and validation errors
+
+**7. API Refinements (PR #7421)**
+- Removed confusing default routing decision parameter from API
+- Simplified routing strategy interface to only track necessary routing context
+- Cleaned up fail-open logic to reduce cognitive complexity
+
+**8. Production Quality Fixes (PR #7241, #7473)**
+- Fixed missing request metadata in routing decision objects causing NoneType errors
+- Corrected querylog referrer field that was incorrectly logging routing strategy name instead of actual referrer
+- Both fixes improved observability and prevented runtime errors in production
+
+### Technical Design Patterns Used
+
+**Configurable Component Pattern**: Created an abstract base class with metaclass magic that allows:
+- Automatic registration of subclasses in a global registry
+- Dynamic instantiation by string name
+- Namespace isolation to prevent class name collisions
+- Serialization/deserialization for API transport
+
+**Strategy Pattern**: Routing strategies encapsulate different algorithms for cluster selection:
+- `OutcomesBasedRoutingStrategy`: Routes based on historical query outcomes
+- Future strategies can be added without modifying core routing logic
+
+**Policy Composition**: Allocation policies are composable filters that can:
+- Reject queries based on bytes scanned thresholds
+- Enforce concurrent query limits per resource
+- Implement guardrails for specific referrers
+- Stack multiple policies for complex resource management
+
+**RPC Layer Design**: Moved routing decisions to RPC boundary for:
+- Cleaner separation between query processing and cluster selection
+- Ability to apply routing logic before query execution begins
+- Better testability with clear input/output contracts
+
+### Data Flow
+```
+1. Query arrives at Snuba RPC endpoint
+2. Routing strategy evaluates:
+   - Request metadata (referrer, query type, organization)
+   - Cluster load metrics from ClickHouse
+   - Historical query outcomes
+3. Allocation policies filter available clusters:
+   - Check bytes scanned budgets
+   - Verify concurrent query limits
+   - Apply referrer-specific guardrails
+4. Selected cluster receives query
+5. Query execution and results logging (with correct metadata)
+6. Outcomes feed back into routing strategy for future decisions
+```
+
+### Key Technical Decisions
+
+**Why unify AllocationPolicy and RoutingStrategy?**
+- Both needed dynamic configuration from operators
+- Both needed serialization for API transport  
+- Consolidating under `ConfigurableComponent` eliminated code duplication and created consistent configuration interface
+
+**Why move to RPC layer?**
+- Routing decisions need to happen before query parsing and optimization
+- RPC layer has access to raw request metadata needed for routing
+- Separation of concerns: routing logic doesn't belong in query execution pipeline
+
+**Why namespace isolation for component registry?**
+- Prevents name collisions between different component types
+- Allows `BaseRoutingStrategy.all_names()` to only return routing strategies
+- Makes component discovery more intuitive and less error-prone
+
+**Why make allocation policies type-aware?**
+- Select and delete queries have different resource profiles
+- Policies need different enforcement for read vs. write operations
+- Self-awareness eliminates need for external type tracking
+
+### Technical Complexity Challenges Solved
+
+1. **Metaclass Programming**: Extended `RegisteredClass` metaclass to support namespace isolation while maintaining backward compatibility
+2. **Circular Dependencies**: Carefully ordered PR merges (#7379, #7375, then #7346) to avoid breaking builds
+3. **Type System Complexity**: Maintained type safety across dynamic component instantiation using `TypeVar` and generic types
+4. **API Design**: Created intuitive configuration API that balances flexibility with type safety
+5. **UI State Management**: Built React components that handle async configuration updates with proper error handling
+
+### Impact on System Performance
+
+- **Query Routing**: Enables load balancing across multiple ClickHouse clusters based on real-time metrics
+- **Resource Protection**: Prevents cluster overload through configurable allocation policies  
+- **Operational Flexibility**: Operators can change routing behavior without code deployments
+- **Observability**: Proper logging of routing decisions and referrers enables debugging and analysis
+- **Extensibility**: New routing strategies can be added with minimal code changes
+
+---
+
 ## Key Contributions
 
 ### 1. Infrastructure Foundation (PR #7143)
