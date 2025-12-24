@@ -144,6 +144,32 @@ class TestSnQLApi(BaseApiTest):
 
         assert response.status_code == 200, data
 
+    def test_buggy_query(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "consistent": False,
+                    "query": "MATCH { MATCH (events) SELECT group_id, argMax(event_id, timestamp) AS `event_id`, argMax(title, timestamp) AS `title`, argMax(exception_frames.filename, timestamp) AS `exception_frames.filename`, argMax(exception_frames.function, timestamp) AS `exception_frames.function` BY group_id WHERE project_id IN array(1) AND group_id IN array(6359260219, 6087680054, 6390261498, 6365203340, 6400032892, 6031005315, 6360744188, 6372010905, 6469432548, 6469437311) AND timestamp >= toDateTime('2025-03-21T15:50:40.875807') AND timestamp < toDateTime('2025-04-04T15:50:40.875813') } SELECT group_id, event_id, title WHERE  arrayElement(exception_frames.function, -20) LIKE '%::user' LIMIT 5",
+                    "dataset": "events",
+                    "app_id": "default",
+                    "tenant_ids": {"organization_id": [1], "referrer": "seer.rpc"},
+                    "parent_api": "/api/0/internal/seer-rpc/{method_name}/",
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+        assert data["stats"]["consistent"]
+        assert data["data"] == [
+            {
+                "count": 1,
+                "tags[custom_tag]": "custom_value",
+                "project_id": self.project_id,
+            }
+        ]
+
     def test_simple_query(self) -> None:
         response = self.post(
             "/discover/snql",
