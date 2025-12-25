@@ -1,5 +1,6 @@
-minVersion: "0.27.2"
-changelogPolicy: auto
+minVersion: "2.15.0"
+changelog:
+  policy: auto
 artifactProvider:
   name: none
 statusProvider:
@@ -13,10 +14,10 @@ targets:
   - id: release
     name: docker
     source: ghcr.io/getsentry/snuba
-    target: getsentry/snuba
+    target: ghcr.io/getsentry/snuba
   - id: latest
     name: docker
     source: ghcr.io/getsentry/snuba
-    target: getsentry/snuba
+    target: ghcr.io/getsentry/snuba
     targetFormat: '{{{target}}}:latest'
   - name: github
