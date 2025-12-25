@@ -26,6 +26,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
+    BUCKET_COUNT,
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
     base_conditions_and,
@@ -40,8 +41,6 @@ from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     RPCRequestException,
 )
-
-_BUCKET_COUNT = 40
 
 
 def _build_query(request: TraceItemDetailsRequest) -> Query:
@@ -69,14 +68,14 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             SelectedExpression(
                 "attributes_string",
                 f.mapConcat(
-                    *[column(f"attributes_string_{n}") for n in range(_BUCKET_COUNT)],
+                    *[column(f"attributes_string_{n}") for n in range(BUCKET_COUNT)],
                     alias="attributes_string",
                 ),
             ),
             SelectedExpression(
                 "attributes_float",
                 f.mapConcat(
-                    *[column(f"attributes_float_{n}") for n in range(_BUCKET_COUNT)],
+                    *[column(f"attributes_float_{n}") for n in range(BUCKET_COUNT)],
                     alias="attributes_float",
                 ),
             ),
