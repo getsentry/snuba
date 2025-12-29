@@ -324,13 +324,15 @@ def _convert_rows(rows: Iterable[Dict[str, Any]]) -> ProcessedResults:
         item_id = row.pop("id")
         item_type = row.pop("item_type")
         ts = row.pop("timestamp")
-        client_sample_rate = float(1.0 / row.pop("sampling_weight", 1.0))
-        server_sample_rate = float(1.0 / row.pop("sampling_weight", 1.0))
+        client_sample_rate = float(1.0 / row.pop("client_sample_rate", 1.0))
+        server_sample_rate = float(1.0 / row.pop("server_sample_rate", 1.0))
         sampling_factor = row.pop("sampling_factor", 1.0)  # noqa: F841
         arrays = row.pop("attributes_array", "{}") or "{}"
         booleans = row.pop("attributes_bool", {}) or {}
         integers = row.pop("attributes_int", {}) or {}
         floats = row.pop("attributes_float", {}) or {}
+
+        breakpoint()
 
         attributes_map: dict[str, AnyValue] = {}
 
