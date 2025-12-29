@@ -11,6 +11,8 @@ from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem
 from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.web import QueryResult
+from snuba.web.query import run_query
 from snuba.web.rpc.v1.endpoint_export_trace_items import EndpointExportTraceItems
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -126,3 +128,36 @@ class TestExportTraceItems(BaseApiTest):
         _assert_attributes_keys(items)
 
         assert len(items) == _SPAN_COUNT + _LOG_COUNT
+
+    def test_no_transformation_on_order_by(self, setup_teardown: Any, monkeypatch: Any) -> None:
+        # Wrap the real run_query to capture the actual QueryResult while still hitting ClickHouse.
+        captured: dict[str, Any] = {}
+
+        def wrapper(dataset, request, timer, robust: bool = False, concurrent_queries_gauge=None) -> QueryResult:  # type: ignore[no-untyped-def]
+            qr = run_query(dataset, request, timer, robust, concurrent_queries_gauge)
+            captured["query_result"] = qr
+            return qr
+
+        monkeypatch.setattr("snuba.web.rpc.v1.endpoint_export_trace_items.run_query", wrapper)
+
+        message = ExportTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="integration-test",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME).timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(seconds=_SPAN_COUNT)).timestamp())
+                ),
+                request_id=_REQUEST_ID,
+            ),
+        )
+
+        EndpointExportTraceItems().execute(message)
+
+        qr = captured["query_result"]
+        assert (
+            "ORDER BY organization_id ASC, project_id ASC, item_type ASC, timestamp ASC, trace_id ASC, item_id ASC"
+            in qr.extra["sql"]
+        )
