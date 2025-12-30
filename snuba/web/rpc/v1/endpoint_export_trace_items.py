@@ -332,8 +332,6 @@ def _convert_rows(rows: Iterable[Dict[str, Any]]) -> ProcessedResults:
         integers = row.pop("attributes_int", {}) or {}
         floats = row.pop("attributes_float", {}) or {}
 
-        breakpoint()
-
         attributes_map: dict[str, AnyValue] = {}
 
         for row_key, row_value in row.items():

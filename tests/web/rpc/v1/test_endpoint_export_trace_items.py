@@ -157,7 +157,6 @@ class TestExportTraceItems(BaseApiTest):
         EndpointExportTraceItems().execute(message)
 
         qr = captured["query_result"]
-        breakpoint()
         assert (
             "ORDER BY organization_id ASC, project_id ASC, item_type ASC, timestamp ASC, trace_id ASC, item_id ASC"
             in qr.extra["sql"]
