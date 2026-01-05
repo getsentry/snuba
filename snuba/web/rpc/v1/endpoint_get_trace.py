@@ -288,18 +288,14 @@ def _build_query(
         ),
     ]
     new_order_by = [
-        OrderBy(
-            direction=OrderByDirection.ASC,
-            expression=column("timestamp"),
-        ),
-        OrderBy(
-            direction=OrderByDirection.ASC,
-            expression=column("item_timestamp"),
-        ),
-        OrderBy(
-            direction=OrderByDirection.ASC,
-            expression=column("item_id"),
-        ),
+        # we add organization_id and project_id to the order by to optimize data reading
+        # https://clickhouse.com/docs/sql-reference/statements/select/order-by#optimization-of-data-reading
+        OrderBy(direction=OrderByDirection.ASC, expression=column("organization_id")),
+        OrderBy(direction=OrderByDirection.ASC, expression=column("project_id")),
+        OrderBy(direction=OrderByDirection.ASC, expression=column("item_type")),
+        OrderBy(direction=OrderByDirection.ASC, expression=column("timestamp")),
+        OrderBy(direction=OrderByDirection.ASC, expression=column("trace_id")),
+        OrderBy(direction=OrderByDirection.ASC, expression=column("item_id")),
     ]
     if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT):
         order_by = new_order_by
@@ -355,13 +351,13 @@ def _build_snuba_request(
     limit: int | None,
     page_token: EndpointGetTracePageToken | None,
 ) -> SnubaRequest:
+    query_settings = setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
+    query_settings.set_skip_transform_order_by(True)
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
         query=_build_query(request, item, limit, page_token),
-        query_settings=(
-            setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
-        ),
+        query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
             team="eap",
