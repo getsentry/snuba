@@ -171,6 +171,12 @@ def _build_query(
         SelectedExpression("organization_id", column("organization_id", alias="organization_id")),
         SelectedExpression("project_id", column("project_id", alias="project_id")),
         SelectedExpression("item_type", column("item_type", alias="item_type")),
+        SelectedExpression(
+            "client_sample_rate", column("client_sample_rate", alias="client_sample_rate")
+        ),
+        SelectedExpression(
+            "server_sample_rate", column("server_sample_rate", alias="server_sample_rate")
+        ),
         SelectedExpression("sampling_weight", column("sampling_weight", alias="sampling_weight")),
         SelectedExpression("sampling_factor", column("sampling_factor", alias="sampling_factor")),
         SelectedExpression(
