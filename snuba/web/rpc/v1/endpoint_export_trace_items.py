@@ -88,7 +88,7 @@ class ExportTraceItemsPageToken:
             filters[2].comparison_filter.key.name == "last_seen_trace_id"
             and filters[2].comparison_filter.key.type == AttributeKey.Type.TYPE_STRING
         ):
-            raise ValueError("Invalid item type")
+            raise ValueError("Invalid trace id")
         last_seen_trace_id = filters[2].comparison_filter.value.val_str
 
         if not (
