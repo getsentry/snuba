@@ -327,6 +327,7 @@ def _convert_rows(rows: Iterable[Dict[str, Any]]) -> ProcessedResults:
         client_sample_rate = row.pop("client_sample_rate", 1.0)
         server_sample_rate = row.pop("server_sample_rate", 1.0)
         sampling_factor = row.pop("sampling_factor", 1.0)  # noqa: F841
+        sampling_weight = row.pop("sampling_weight", 1.0)  # noqa: F841
         arrays = row.pop("attributes_array", "{}") or "{}"
         booleans = row.pop("attributes_bool", {}) or {}
         integers = row.pop("attributes_int", {}) or {}
