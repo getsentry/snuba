@@ -651,7 +651,6 @@ class TestGetTracePagination(BaseApiTest):
         )
 
         EndpointGetTrace().execute(message)
-        breakpoint()
 
         qr = captured["query_result"]
         assert (
