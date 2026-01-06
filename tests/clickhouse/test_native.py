@@ -83,37 +83,6 @@ CLUSTER_HOST = "host"
 CLUSTER_PORT = 100
 
 
-@pytest.mark.redis_db
-def test_fallback_logic() -> None:
-    state.set_config("use_fallback_host_in_native_connection_pool", 1)
-
-    network_failure_connection = mock.Mock()
-    network_failure_connection.execute.side_effect = EOFError()
-
-    verification_connection = mock.Mock()
-    verification_connection.execute.return_value = []
-
-    pool = ClickhousePool(CLUSTER_HOST, CLUSTER_PORT, "test", "test", TEST_DB_NAME)
-
-    # The execute method will try to reuse a single slot in the connection
-    # pool but reestablish new connections with _create_conn if a connection
-    # fails with a network-related error. It may be cleaner to move connection
-    # negotation/establishment into another class for separation of concerns.
-    with mock.patch.object(pool, "_create_conn", lambda x, y=False: network_failure_connection):
-        pool.pool = queue.LifoQueue(1)
-        pool.pool.put(network_failure_connection, block=False)
-        pool.fallback_pool = queue.LifoQueue(1)
-        pool.fallback_pool.put(verification_connection, block=False)
-        pool.execute("SELECT something")
-
-    assert (
-        network_failure_connection.execute.call_count == 3
-    ), "Expected three (failed) attempts with main connection pool"
-    assert (
-        verification_connection.execute.call_count == 1
-    ), "Expected one (successful) attempt with fallback connection pool"
-
-
 def teardown_function(_: Callable[..., Any]) -> None:
     state.delete_config("use_fallback_host_in_native_connection_pool")
     state.delete_config(f"fallback_hosts:{CLUSTER_HOST}:{CLUSTER_PORT}")
@@ -133,7 +102,7 @@ def test_execute_retries(retryable: bool, expected: int) -> None:
 
     pool = ClickhousePool(CLUSTER_HOST, CLUSTER_PORT, "test", "test", TEST_DB_NAME)
 
-    with mock.patch.object(pool, "_create_conn", lambda x, y=False: socket_timeout_connection):
+    with mock.patch.object(pool, "_create_conn", lambda: socket_timeout_connection):
         pool.pool = queue.LifoQueue(1)
         pool.pool.put(socket_timeout_connection, block=False)
         with pytest.raises(ClickhouseError):

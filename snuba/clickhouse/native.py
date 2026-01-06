@@ -70,7 +70,6 @@ def capture_logging() -> Generator[StringIO, None, None]:
 
 
 class ClickhousePool(object):
-    FALLBACK_POOL_SIZE = 3
 
     def __init__(
         self,
@@ -100,20 +99,11 @@ class ClickhousePool(object):
         self.client_settings = client_settings
 
         self.pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(max_pool_size)
-        self.fallback_pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(
-            self.FALLBACK_POOL_SIZE
-        )
         self.__gauge = ThreadSafeGauge(metrics, "connections")
 
         # Fill the queue up so that doing get() on it will block properly
         for _ in range(max_pool_size):
             self.pool.put(None)
-
-        for _ in range(self.FALLBACK_POOL_SIZE):
-            self.fallback_pool.put(None)
-
-    def fallback_pool_enabled(self) -> bool:
-        return state.get_config("use_fallback_host_in_native_connection_pool", 0) == 1
 
     # This will actually return an int if an INSERT query is run, but we never capture the
     # output of INSERT queries so I left this as a Sequence.
@@ -141,7 +131,7 @@ class ClickhousePool(object):
             conn = self.pool.get(block=True)
 
             if retryable:
-                attempts_remaining = 3 + (1 if self.fallback_pool_enabled() else 0)
+                attempts_remaining = 3
             else:
                 attempts_remaining = 1
 
@@ -223,25 +213,15 @@ class ClickhousePool(object):
                     conn = None
                     self.__gauge.decrement()
 
-                    # Move to fallback-mode for one last try if it's enabled
-                    if attempts_remaining == 1 and self.fallback_pool_enabled():
-                        # return a client instance placeholder back to the main connection pool
-                        self.pool.put(None, block=False)
-                        # turn fallback mode on (so new connections will come from run-time config)
-                        fallback_mode = True
-                        # try reusing a connection from the fallback connection pool, but if
-                        # it's None we'll create the connection on-demand later
-                        conn = self.fallback_pool.get(block=True)
-                    else:
-                        if attempts_remaining == 0:
-                            if isinstance(e, errors.Error):
-                                raise ClickhouseError(e.message, code=e.code) from e
-                            else:
-                                raise e
+                    if attempts_remaining == 0:
+                        if isinstance(e, errors.Error):
+                            raise ClickhouseError(e.message, code=e.code) from e
                         else:
-                            # Short sleep to make sure we give the load
-                            # balancer a chance to mark a bad host as down.
-                            time.sleep(0.1)
+                            raise e
+                    else:
+                        # Short sleep to make sure we give the load
+                        # balancer a chance to mark a bad host as down.
+                        time.sleep(0.1)
                 except errors.Error as e:
                     if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
                         attempts_remaining -= 1
@@ -264,10 +244,7 @@ class ClickhousePool(object):
                     raise ClickhouseError(e.message, code=e.code) from e
         finally:
             # Return finished connection to the appropriate connection pool
-            if not fallback_mode:
-                self.pool.put(conn, block=False)
-            else:
-                self.fallback_pool.put(conn, block=False)
+            self.pool.put(conn, block=False)
 
         return ClickhouseResult()
 
