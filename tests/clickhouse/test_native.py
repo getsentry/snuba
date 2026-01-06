@@ -84,18 +84,6 @@ CLUSTER_PORT = 100
 
 
 @pytest.mark.redis_db
-def test_get_fallback_host() -> None:
-    FALLBACK_HOSTS_CONFIG_VAL = "host1:100,host2:100,host3:100"
-    FALLBACK_HOSTS = [("host1", 100), ("host2", 100), ("host3", 100)]
-
-    state.set_config(f"fallback_hosts:{CLUSTER_HOST}:{CLUSTER_PORT}", FALLBACK_HOSTS_CONFIG_VAL)
-
-    pool = ClickhousePool(CLUSTER_HOST, CLUSTER_PORT, "test", "test", TEST_DB_NAME)
-
-    assert pool.get_fallback_host() in FALLBACK_HOSTS
-
-
-@pytest.mark.redis_db
 def test_fallback_logic() -> None:
     state.set_config("use_fallback_host_in_native_connection_pool", 1)
 

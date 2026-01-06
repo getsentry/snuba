@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import queue
-import random
 import re
 import time
 from contextlib import contextmanager
@@ -16,7 +15,6 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
-    Tuple,
     TypedDict,
     Union,
     cast,
@@ -117,19 +115,6 @@ class ClickhousePool(object):
     def fallback_pool_enabled(self) -> bool:
         return state.get_config("use_fallback_host_in_native_connection_pool", 0) == 1
 
-    def get_fallback_host(self) -> Tuple[str, int]:
-        config_hosts_str = state.get_config(f"fallback_hosts:{self.host}:{self.port}", None)
-        assert config_hosts_str, f"no fallback hosts found for {self.host}:{self.port}"
-
-        config_hosts = cast(str, config_hosts_str).split(",")
-        selected_host_port = random.choice(config_hosts).split(":")
-
-        assert (
-            len(selected_host_port) == 2
-        ), f"expected host:port format in fallback hosts for {self.host}:{self.port}"
-
-        return (selected_host_port[0], int(selected_host_port[1]))
-
     # This will actually return an int if an INSERT query is run, but we never capture the
     # output of INSERT queries so I left this as a Sequence.
     def execute(
@@ -152,8 +137,6 @@ class ClickhousePool(object):
         return relatively quickly with an error in case of more persistent
         failures.
         """
-        fallback_mode = False
-
         try:
             conn = self.pool.get(block=True)
 
@@ -167,7 +150,7 @@ class ClickhousePool(object):
                 # Lazily create connection instances
                 if conn is None:
                     self.__gauge.increment()
-                    conn = self._create_conn(fallback_mode)
+                    conn = self._create_conn()
 
                 try:
                     if capture_trace:
@@ -227,7 +210,7 @@ class ClickhousePool(object):
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                     metrics.increment(
-                        ("connection_error" if not fallback_mode else "fallback_connection_error"),
+                        "connection_error",
                         tags={
                             "host": self.host,
                             "port": str(self.port),
@@ -364,12 +347,10 @@ class ClickhousePool(object):
             except errors.Error as e:
                 raise ClickhouseError(e.message, code=e.code) from e
 
-    def _create_conn(self, use_fallback_host: bool = False) -> Client:
-        if use_fallback_host:
-            (fallback_host, fallback_port) = self.get_fallback_host()
+    def _create_conn(self) -> Client:
         return Client(
-            host=(self.host if not use_fallback_host else fallback_host),
-            port=(self.port if not use_fallback_host else fallback_port),
+            host=self.host,
+            port=self.port,
             user=self.user,
             password=self.password,
             database=self.database,
