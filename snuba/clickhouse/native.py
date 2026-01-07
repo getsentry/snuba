@@ -4,6 +4,7 @@ import logging
 import queue
 import random
 import re
+import socket
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -281,10 +282,32 @@ class ClickhousePool(object):
                     raise ClickhouseError(e.message, code=e.code) from e
         finally:
             # Return finished connection to the appropriate connection pool
-            if not fallback_mode:
-                self.pool.put(conn, block=False)
-            else:
-                self.fallback_pool.put(conn, block=False)
+            # Wrap in try-except to handle socket errors during connection cleanup
+            # (e.g., Errno 107 ENOTCONN when socket.shutdown is called on an
+            # already-closed connection)
+            try:
+                if not fallback_mode:
+                    self.pool.put(conn, block=False)
+                else:
+                    self.fallback_pool.put(conn, block=False)
+            except socket.error as e:
+                # Log socket errors during cleanup but don't propagate them
+                # The connection is likely already closed by the peer
+                logger.warning(
+                    "Socket error while returning connection to pool: %s (errno: %s)",
+                    e,
+                    e.errno if hasattr(e, "errno") else "unknown",
+                )
+                # Still need to return something to the pool to maintain pool size
+                # Use None as a placeholder for a broken connection
+                try:
+                    if not fallback_mode:
+                        self.pool.put(None, block=False)
+                    else:
+                        self.fallback_pool.put(None, block=False)
+                except Exception:
+                    # If even putting None fails, just pass - pool is likely full
+                    pass
 
         return ClickhouseResult()
 
