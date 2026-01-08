@@ -81,7 +81,9 @@ _PASS_THROUGH_REFERRERS = set(
 
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e10)
-_RATE_LIMITER = RedisSlidingWindowRateLimiter(get_redis_client(RedisClientKey.RATE_LIMITER))
+_RATE_LIMITER = RedisSlidingWindowRateLimiter(
+    get_redis_client(RedisClientKey.RATE_LIMITER)
+)
 DEFAULT_OVERRIDE_LIMIT = -1
 DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 QUOTA_UNIT = "bytes"
@@ -115,7 +117,9 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             ),
         ]
 
-    def _are_tenant_ids_valid(self, tenant_ids: dict[str, str | int]) -> tuple[bool, str]:
+    def _are_tenant_ids_valid(
+        self, tenant_ids: dict[str, str | int]
+    ) -> tuple[bool, str]:
         if self.is_cross_org_query(tenant_ids):
             return True, "cross org query"
         if tenant_ids.get("referrer") is None:
@@ -213,9 +217,9 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             is_throttled = False
             if granted_quota.granted <= 0:
                 is_throttled = True
-                explanation["reason"] = (
-                    f"organization {org_id} is over the bytes scanned limit of {org_limit_bytes_scanned}"
-                )
+                explanation[
+                    "reason"
+                ] = f"organization {org_id} is over the bytes scanned limit of {org_limit_bytes_scanned}"
                 explanation["is_enforced"] = self.is_enforced
                 explanation["granted_quota"] = granted_quota.granted
                 explanation["limit"] = org_limit_bytes_scanned
