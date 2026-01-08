@@ -891,5 +891,3 @@ V1_ALL_SCHEMAS = {
     "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
     "migration_group": V1_MIGRATION_GROUP_SCHEMA,
 }
-
-hello = "k"
