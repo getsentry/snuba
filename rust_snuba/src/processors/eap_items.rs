@@ -141,7 +141,7 @@ fn fnv_1a(input: &[u8]) -> u32 {
 
 fn read_item_id(from: Vec<u8>) -> u128 {
     let (item_id_bytes, _) = from.split_at(std::mem::size_of::<u128>());
-    u128::from_le_bytes(item_id_bytes.try_into().unwrap())
+    u128::from_be_bytes(item_id_bytes.try_into().unwrap())
 }
 
 macro_rules! seq_attrs {
@@ -254,7 +254,7 @@ mod tests {
         TraceItem {
             attributes: Default::default(),
             downsampled_retention_days: Default::default(),
-            item_id: item_id.as_u128().to_le_bytes().to_vec(),
+            item_id: item_id.as_bytes().to_vec(), // this is how relay does it
             item_type: TraceItemType::Span.into(),
             organization_id: 1,
             project_id: 1,
@@ -290,8 +290,9 @@ mod tests {
 
     #[test]
     fn test_item_id_maintains_order() {
-        let item_id1 = Uuid::new_v7(uuid::Timestamp::from_rfc4122(0, 0));
-        let item_id2 = Uuid::new_v7(uuid::Timestamp::from_rfc4122(1, 0));
+        let item_id1 = Uuid::new_v7(uuid::Timestamp::from_unix(uuid::NoContext, 1, 0));
+        let item_id2 = Uuid::new_v7(uuid::Timestamp::from_unix(uuid::NoContext, 2, 0));
+
         let eap_item1 = EAPItem::try_from(generate_trace_item(item_id1)).unwrap();
         let eap_item2 = EAPItem::try_from(generate_trace_item(item_id2)).unwrap();
 
