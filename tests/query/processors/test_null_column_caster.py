@@ -82,7 +82,9 @@ test_data = [
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
-                    expression=FunctionCall(None, "uniq", (Column(None, None, "mismatched1"),)),
+                    expression=FunctionCall(
+                        None, "uniq", (Column(None, None, "mismatched1"),)
+                    ),
                 )
             ],
         ),
@@ -116,7 +118,9 @@ test_data = [
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
-                    expression=FunctionCall(None, "uniq", (Column(None, None, "mismatched2"),)),
+                    expression=FunctionCall(
+                        None, "uniq", (Column(None, None, "mismatched2"),)
+                    ),
                 )
             ],
         ),
@@ -150,7 +154,9 @@ test_data = [
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
-                    expression=FunctionCall(None, "uniq", (Column(None, None, "not_mismatched"),)),
+                    expression=FunctionCall(
+                        None, "uniq", (Column(None, None, "not_mismatched"),)
+                    ),
                 )
             ],
         ),
@@ -159,7 +165,9 @@ test_data = [
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
-                    expression=FunctionCall(None, "uniq", (Column(None, None, "not_mismatched"),)),
+                    expression=FunctionCall(
+                        None, "uniq", (Column(None, None, "not_mismatched"),)
+                    ),
                 )
             ],
         ),

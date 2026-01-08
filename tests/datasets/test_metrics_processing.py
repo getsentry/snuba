@@ -210,7 +210,9 @@ TEST_CASES = [
 ]
 
 
-@pytest.mark.parametrize("entity_name, column_name, entity_key, translated_value", TEST_CASES)
+@pytest.mark.parametrize(
+    "entity_name, column_name, entity_key, translated_value", TEST_CASES
+)
 @pytest.mark.clickhouse_db
 def test_metrics_processing(
     entity_name: str,

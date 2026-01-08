@@ -61,10 +61,14 @@ LOGICAL_QUERY = LogicalQuery(
     from_clause=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, 0.5),
     selected_columns=[
         SelectedExpression("c1", Column("_snuba_c1", "t", "c")),
-        SelectedExpression("f1", FunctionCall("_snuba_f1", "f", (Column(None, "t", "c2"),))),
+        SelectedExpression(
+            "f1", FunctionCall("_snuba_f1", "f", (Column(None, "t", "c2"),))
+        ),
     ],
     array_join=Column(None, None, "col"),
-    condition=binary_condition("equals", Column(None, None, "c4"), Literal(None, "asd")),
+    condition=binary_condition(
+        "equals", Column(None, None, "c4"), Literal(None, "asd")
+    ),
     groupby=[Column(None, "t", "c4")],
     having=binary_condition("equals", Column(None, None, "c6"), Literal(None, "asd2")),
     order_by=[OrderBy(OrderByDirection.ASC, Column(None, "t", "c"))],
@@ -112,7 +116,9 @@ TEST_JOIN = [
         CompositeQuery(
             from_clause=LOGICAL_QUERY,
             selected_columns=[
-                SelectedExpression("f", FunctionCall("f", "avg", (Column(None, "t", "c"),)))
+                SelectedExpression(
+                    "f", FunctionCall("f", "avg", (Column(None, "t", "c"),))
+                )
             ],
         ),
         [
@@ -181,7 +187,9 @@ TEST_JOIN = [
                 from_clause=CompositeQuery(
                     from_clause=SIMPLE_SELECT_QUERY,
                     selected_columns=[
-                        SelectedExpression("f", FunctionCall("f", "avg", (Column(None, "t", "c"),)))
+                        SelectedExpression(
+                            "f", FunctionCall("f", "avg", (Column(None, "t", "c"),))
+                        )
                     ],
                 ),
                 selected_columns=[SelectedExpression("tc", Column(None, "t", "c"))],
