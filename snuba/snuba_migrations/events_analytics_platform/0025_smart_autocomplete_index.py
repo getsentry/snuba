@@ -30,7 +30,9 @@ class Migration(migration.ClickhouseNodeMigration):
                     name=self.str_hash_map_col,
                     type=Array(
                         UInt(64),
-                        Modifiers(materialized=get_array_vals_hash("mapKeys(attrs_string)")),
+                        Modifiers(
+                            materialized=get_array_vals_hash("mapKeys(attrs_string)")
+                        ),
                     ),
                 ),
                 after="attrs_string",
@@ -43,7 +45,9 @@ class Migration(migration.ClickhouseNodeMigration):
                     self.str_hash_map_col,
                     type=Array(
                         UInt(64),
-                        Modifiers(materialized=get_array_vals_hash("mapKeys(attrs_string)")),
+                        Modifiers(
+                            materialized=get_array_vals_hash("mapKeys(attrs_string)")
+                        ),
                     ),
                 ),
                 after="attrs_string",

@@ -163,7 +163,9 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=self.storage_set_key,
                 table_name=getattr(self, f"{prefix}_tag_value_dist_table_name"),
                 engine=table_engines.Distributed(
-                    local_table_name=getattr(self, f"{prefix}_tag_value_local_table_name"),
+                    local_table_name=getattr(
+                        self, f"{prefix}_tag_value_local_table_name"
+                    ),
                     sharding_key=None,
                 ),
                 columns=self.tag_value_table_columns,
@@ -173,7 +175,9 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=self.storage_set_key,
                 view_name=getattr(self, f"{prefix}_tag_value_view_name"),
                 columns=self.tag_value_table_columns,
-                destination_table_name=getattr(self, f"{prefix}_tag_value_local_table_name"),
+                destination_table_name=getattr(
+                    self, f"{prefix}_tag_value_local_table_name"
+                ),
                 target=OperationTarget.LOCAL,
                 query="""
                 SELECT

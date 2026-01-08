@@ -16,7 +16,9 @@ class Migration(migration.ClickhouseNodeMigration):
                 operations.AddColumn(
                     storage_set=StorageSetKey.SEARCH_ISSUES,
                     table_name=table_name,
-                    column=Column("group_first_seen", DateTime(MigrationModifiers(nullable=True))),
+                    column=Column(
+                        "group_first_seen", DateTime(MigrationModifiers(nullable=True))
+                    ),
                     after="message",
                     target=target,
                 ),

@@ -9,16 +9,22 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
 
-    def __forward_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
+    def __forward_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             operations.ModifyColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name=table_name,
-                column=Column("level", String(Modifiers(low_cardinality=True, nullable=True))),
+                column=Column(
+                    "level", String(Modifiers(low_cardinality=True, nullable=True))
+                ),
             )
         ]
 
-    def __backwards_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
+    def __backwards_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             operations.ModifyColumn(
                 storage_set=StorageSetKey.EVENTS,

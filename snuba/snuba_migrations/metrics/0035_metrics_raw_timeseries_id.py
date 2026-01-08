@@ -7,6 +7,7 @@ from snuba.migrations.operations import OperationTarget
 
 
 class Migration(migration.ClickhouseNodeMigration):
+
     """
     Adds the timeseries_id column to the metrics raw table so we can add
     a sharding key for each timeseries and scale the release health cluster.

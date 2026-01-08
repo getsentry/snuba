@@ -24,7 +24,9 @@ class Migration(migration.ClickhouseNodeMigration):
                 operations.AddColumn(
                     storage_set=StorageSetKey.EVENTS,
                     table_name=table_name,
-                    column=Column("num_processing_errors", UInt(64, Modifiers(nullable=True))),
+                    column=Column(
+                        "num_processing_errors", UInt(64, Modifiers(nullable=True))
+                    ),
                     after="trace_sampled",
                     target=target,
                 ),

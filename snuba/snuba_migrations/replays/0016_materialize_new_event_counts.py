@@ -71,7 +71,9 @@ columns: List[Tuple[str, Column[Modifiers]]] = [
             "count_warning_events",
             UInt(
                 8,
-                Modifiers(materialized="warning_id != '00000000-0000-0000-0000-000000000000'"),
+                Modifiers(
+                    materialized="warning_id != '00000000-0000-0000-0000-000000000000'"
+                ),
             ),
         ),
     ),

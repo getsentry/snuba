@@ -40,7 +40,9 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
         for sampling_weight in self.sampling_weights:
-            downsampled_local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
+            downsampled_local_table_name = (
+                f"eap_items_1_downsample_{sampling_weight}_local"
+            )
             ops.append(
                 operations.AddColumn(
                     storage_set=storage_set_name,
@@ -73,7 +75,9 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
         for sampling_weight in self.sampling_weights:
-            downsampled_local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
+            downsampled_local_table_name = (
+                f"eap_items_1_downsample_{sampling_weight}_local"
+            )
             ops.append(
                 operations.DropColumn(
                     storage_set=storage_set_name,
