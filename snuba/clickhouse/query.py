@@ -1,8 +1,7 @@
 from typing import Callable, Iterable, Optional, Sequence
 
-from snuba.query import LimitBy, OrderBy
+from snuba.query import LimitBy, OrderBy, SelectedExpression
 from snuba.query import ProcessableQuery as AbstractQuery
-from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.expressions import ExpressionVisitor

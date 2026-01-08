@@ -163,9 +163,9 @@ def test_executor_consumer() -> None:
     result = result_consumer.poll(5)
     assert result is not None, "Did not receive a result message"
     data = json.loads(result.payload.value)
-    assert (
-        data["payload"]["subscription_id"] == "1/91b46cb6224f11ecb2ddacde48001122"
-    ), "Invalid subscription id"
+    assert data["payload"]["subscription_id"] == "1/91b46cb6224f11ecb2ddacde48001122", (
+        "Invalid subscription id"
+    )
 
     result_producer.close()
 
@@ -452,7 +452,6 @@ def test_max_concurrent_queries(
     total_concurrent_queries: int,
     expected_max_concurrent_queries: int,
 ) -> None:
-
     calculated = calculate_max_concurrent_queries(
         assigned_partition_count, total_partition_count, total_concurrent_queries
     )

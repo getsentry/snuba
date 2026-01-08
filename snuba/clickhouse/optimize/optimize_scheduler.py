@@ -99,7 +99,7 @@ class OptimizeScheduler:
 
         if current_time >= self.__full_job_end_time:
             raise OptimizedSchedulerTimeout(
-                f"Optimize job cutoff time exceeded " f"{self.__full_job_end_time}. Abandoning"
+                f"Optimize job cutoff time exceeded {self.__full_job_end_time}. Abandoning"
             )
 
         if num_threads == 1:

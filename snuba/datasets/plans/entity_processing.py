@@ -68,9 +68,9 @@ class EntityProcessingExecutor:
             with sentry_sdk.start_span(
                 op="build_plan.sliced_storage", description="select_storage"
             ):
-                assert (
-                    self.__partition_key_column_name is not None
-                ), "partition key column name must be defined for a sliced storage"
+                assert self.__partition_key_column_name is not None, (
+                    "partition key column name must be defined for a sliced storage"
+                )
                 assert isinstance(storage, ReadableTableStorage)
                 return ColumnBasedStorageSliceSelector(
                     storage=storage.get_storage_key(),

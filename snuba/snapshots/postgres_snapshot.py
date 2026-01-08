@@ -169,9 +169,9 @@ class PostgresSnapshot(BulkLoadSource):
                 columns = csv_file.fieldnames
 
                 descriptor_columns = self.__descriptor.get_table(table).columns
-                assert (
-                    descriptor_columns is not None
-                ), "Cannot import a snapshot that does not provide a columns list"
+                assert descriptor_columns is not None, (
+                    "Cannot import a snapshot that does not provide a columns list"
+                )
                 expected_columns = [c.name for c in descriptor_columns]
                 if expected_columns:
                     expected_set = set(expected_columns)

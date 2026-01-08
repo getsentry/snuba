@@ -127,7 +127,6 @@ def test_get_clusters_for_readiness_states(
     expected_clusters: list[cluster.ClickhouseCluster],
     expected_storage_set_keys: set[ReadinessState],
 ) -> None:
-
     result_clusters = get_clusters_for_readiness_states(readiness_states, clusters)
     assert result_clusters == expected_clusters
     assert (

@@ -430,9 +430,9 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         default_config_overrides: dict[str, Any] = cast(
             "dict[str, Any]", kwargs.pop("default_config_overrides", {})
         )
-        assert isinstance(
-            required_tenant_types, list
-        ), "required_tenant_types must be a list of strings"
+        assert isinstance(required_tenant_types, list), (
+            "required_tenant_types must be a list of strings"
+        )
         assert isinstance(storage_key, str)
         return cls(
             required_tenant_types=required_tenant_types,

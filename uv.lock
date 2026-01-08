@@ -1146,7 +1146,6 @@ wheels = [
 [[package]]
 name = "snuba"
 version = "26.1.0.dev0"
-version = "26.1.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "blinker", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },

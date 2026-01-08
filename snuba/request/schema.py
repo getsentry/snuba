@@ -56,9 +56,9 @@ class RequestSchema:
             ]
         ):
             assert schema["type"] == "object", "subschema must be object"
-            assert (
-                schema["additionalProperties"] is False
-            ), "subschema must not allow additional properties"
+            assert schema["additionalProperties"] is False, (
+                "subschema must not allow additional properties"
+            )
             self.__composite_schema["required"].extend(schema.get("required", []))
 
             for property_name, property_schema in schema["properties"].items():
@@ -68,9 +68,9 @@ class RequestSchema:
                 self.__composite_schema["properties"][property_name] = property_schema
 
             for definition_name, definition_schema in schema.get("definitions", {}).items():
-                assert (
-                    definition_name not in self.__composite_schema["definitions"]
-                ), "subschema cannot redefine definition"
+                assert definition_name not in self.__composite_schema["definitions"], (
+                    "subschema cannot redefine definition"
+                )
                 self.__composite_schema["definitions"][definition_name] = definition_schema
 
         self.__composite_schema["required"] = set(self.__composite_schema["required"])

@@ -22,9 +22,9 @@ class GCSUploader:
     """
 
     def __init__(self, bucket_name: str):
-        assert (
-            os.environ.get("GOOGLE_CLOUD_PROJECT") is not None
-        ), "GOOGLE_CLOUD_PROJECT environment variable must be set."
+        assert os.environ.get("GOOGLE_CLOUD_PROJECT") is not None, (
+            "GOOGLE_CLOUD_PROJECT environment variable must be set."
+        )
         self.project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
         self.bucket_name = bucket_name
         self.storage_client = Client(project=self.project_id)

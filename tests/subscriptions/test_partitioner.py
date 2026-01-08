@@ -23,12 +23,7 @@ TESTS = [
     pytest.param(
         SnQLSubscriptionData(
             project_id=123,
-            query=(
-                "MATCH (events) "
-                "SELECT count() AS count BY time "
-                "WHERE "
-                "platform IN tuple('a') "
-            ),
+            query=("MATCH (events) SELECT count() AS count BY time WHERE platform IN tuple('a') "),
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity=get_entity(EntityKey.EVENTS),

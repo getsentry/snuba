@@ -82,7 +82,6 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
         def get_migration_ids(
             group: MigrationGroup, policy_name: str
         ) -> Sequence[Mapping[str, str | bool]]:
-
             _, migrations = run_migration_checks_and_policies(
                 {group.value: {MigrationPolicy.class_from_name(policy_name)()}}, runner
             )[0]
@@ -169,7 +168,6 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.parametrize("action", ["run", "reverse"])
 def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
-
     method = "run_migration" if action == "run" else "reverse_migration"
 
     with patch(
@@ -343,7 +341,6 @@ def test_get_iam_roles(caplog: Any) -> None:
         iam_file.flush()
 
         with patch("snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", iam_file.name):
-
             user1 = AdminUser(email="test_user1@sentry.io", id="unknown")
             _set_roles(user1)
 
@@ -432,7 +429,6 @@ def test_get_iam_roles_cache() -> None:
 
         iam_file.flush()
         with patch("snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", iam_file.name):
-
             user1 = AdminUser(email="test_user1@sentry.io", id="unknown")
             _set_roles(user1)
 

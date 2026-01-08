@@ -24,7 +24,6 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
             self.__initialize()
 
     def __initialize(self) -> None:
-
         self._config_built_datasets: dict[str, Dataset] = {
             dataset.name: dataset
             for dataset in [

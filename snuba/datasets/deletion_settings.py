@@ -48,6 +48,5 @@ def get_trace_item_type_name(item_type: int) -> str:
     except ValueError as e:
         # This happens when item_type is not a valid enum value
         raise ValueError(
-            f"Unknown TraceItemType value: {item_type}. "
-            "Must be a valid TraceItemType enum value."
+            f"Unknown TraceItemType value: {item_type}. Must be a valid TraceItemType enum value."
         ) from e

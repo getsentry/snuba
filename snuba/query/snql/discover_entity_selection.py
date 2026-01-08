@@ -9,9 +9,10 @@ from snuba.clickhouse.columns import (
     FixedString,
     Float,
     Nested,
+    String,
+    UInt,
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
-from snuba.clickhouse.columns import String, UInt
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query.conditions import (
     BINARY_OPERATORS,

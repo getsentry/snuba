@@ -213,9 +213,9 @@ def test_subquery_generator(
         clause: JoinClause[Table], expected: Mapping[str, Optional[JoinModifier]]
     ) -> None:
         right_alias = clause.right_node.alias
-        assert (
-            right_alias in expected and clause.join_modifier == expected[right_alias]
-        ), f"Invalid modifier for alias: {right_alias}, found: {clause.join_modifier}"
+        assert right_alias in expected and clause.join_modifier == expected[right_alias], (
+            f"Invalid modifier for alias: {right_alias}, found: {clause.join_modifier}"
+        )
         if isinstance(clause.left_node, JoinClause):
             assert_transformation(clause.left_node, expected)
 

@@ -8,11 +8,9 @@ from snuba.query.conditions import (
     in_condition,
 )
 from snuba.query.dsl import arrayJoin, tupleElement
-from snuba.query.expressions import Argument
+from snuba.query.expressions import Argument, Expression, Lambda
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
-from snuba.query.expressions import Lambda
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Column, FunctionCall, Or, Param, String
 from snuba.query.processors.physical.abstract_array_join_optimizer import (

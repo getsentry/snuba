@@ -379,7 +379,6 @@ class Runner:
         group: Optional[MigrationGroup] = None,
         readiness_states: Optional[Sequence[ReadinessState]] = None,
     ) -> None:
-
         if not force:
             raise MigrationError("Requires force to reverse migrations")
 

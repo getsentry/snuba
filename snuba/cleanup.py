@@ -16,7 +16,6 @@ def run_cleanup(
     database: str,
     dry_run: bool = True,
 ) -> int:
-
     table = storage.get_table_writer().get_schema().get_local_table_name()
 
     active_parts = get_active_partitions(clickhouse, storage, database, table)
@@ -28,7 +27,6 @@ def run_cleanup(
 def get_active_partitions(
     clickhouse: ClickhousePool, storage: WritableTableStorage, database: str, table: str
 ) -> Sequence[util.Part]:
-
     response = clickhouse.execute(
         """
         SELECT DISTINCT partition
@@ -44,7 +42,7 @@ def get_active_partitions(
     assert isinstance(schema, TableSchema)
     partition_format = schema.get_partition_format()
     assert partition_format is not None
-    return [util.decode_part_str(part, partition_format) for part, in response.results]
+    return [util.decode_part_str(part, partition_format) for (part,) in response.results]
 
 
 def current_time() -> datetime:

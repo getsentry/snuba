@@ -3,9 +3,8 @@ from unittest.mock import call, patch
 import pytest
 from clickhouse_driver import Client, errors
 
-from snuba.clickhouse.columns import Array
+from snuba.clickhouse.columns import Array, UInt
 from snuba.clickhouse.columns import SchemaModifiers as Modifier
-from snuba.clickhouse.columns import UInt
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages.factory import get_storage, get_writable_storage

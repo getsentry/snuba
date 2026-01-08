@@ -95,7 +95,6 @@ def test_down_file_exists_pod_healthy(snuba_api: FlaskClient) -> None:
         return_value=True,
     ):
         with mock.patch("snuba.utils.health_info.check_down_file_exists", return_value=True):
-
             response = snuba_api.get("/health")
             assert response.status_code == 200
 

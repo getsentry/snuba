@@ -153,9 +153,9 @@ def test_reverse_migration() -> None:
     # Reverse with --fake
     for migration_id in reversed(get_group_loader(MigrationGroup.EVENTS).get_migrations()):
         runner.reverse_migration(MigrationKey(MigrationGroup.EVENTS, migration_id), fake=True)
-    assert (
-        len(connection.execute("SHOW TABLES LIKE 'errors_local'").results) == 1
-    ), "Table still exists"
+    assert len(connection.execute("SHOW TABLES LIKE 'errors_local'").results) == 1, (
+        "Table still exists"
+    )
 
 
 @pytest.mark.custom_clickhouse_db
@@ -303,9 +303,9 @@ def test_reverse_all_for_group() -> None:
     runner.reverse_all(group=MigrationGroup.PROFILE_CHUNKS, force=True, include_system=True)
 
     assert len(connection.execute(sql).results) == total_profile_tables - initial_profile_tables
-    assert (
-        connection.execute("SHOW TABLES LIKE 'profile_chunks_local'").results == []
-    ), "'profile_chunks_local' table should be deleted"
+    assert connection.execute("SHOW TABLES LIKE 'profile_chunks_local'").results == [], (
+        "'profile_chunks_local' table should be deleted"
+    )
 
 
 @pytest.mark.custom_clickhouse_db
@@ -443,9 +443,9 @@ def test_no_schema_differences() -> None:
         table_name = schema.get_local_table_name()
         local_schema = get_local_schema(conn, table_name)
 
-        assert (
-            schema.get_column_differences(local_schema) == []
-        ), f"Schema mismatch: {table_name} does not match schema"
+        assert schema.get_column_differences(local_schema) == [], (
+            f"Schema mismatch: {table_name} does not match schema"
+        )
 
     importlib.reload(settings)
     importlib.reload(factory)

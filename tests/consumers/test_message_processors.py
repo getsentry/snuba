@@ -7,9 +7,9 @@ from typing import Type
 from unittest.mock import patch
 
 import pytest
-import rust_snuba
 import sentry_kafka_schemas
 
+import rust_snuba
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.processors.errors_processor import ErrorsProcessor

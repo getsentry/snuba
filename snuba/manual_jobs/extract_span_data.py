@@ -101,7 +101,7 @@ class ExtractSpanData(Job):
 
         query = f"""
         SELECT
-            {', '.join(scrubbed_columns)}
+            {", ".join(scrubbed_columns)}
         FROM {self._table_name}
         WHERE _sort_timestamp BETWEEN toDateTime('{self._start_timestamp}') AND toDateTime('{self._end_timestamp}')
         AND organization_id IN {self._organization_ids}

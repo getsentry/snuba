@@ -5,12 +5,18 @@ from typing import Any, Mapping, Optional, Sequence, Set, Union
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression, FunctionCall, Literal
 from snuba.query.matchers import Any as AnyPattern
-from snuba.query.matchers import AnyExpression, AnyOptionalString
+from snuba.query.matchers import (
+    AnyExpression,
+    AnyOptionalString,
+    Integer,
+    Or,
+    Param,
+    Pattern,
+    String,
+)
 from snuba.query.matchers import Column as ColumnPattern
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
-from snuba.query.matchers import Integer
 from snuba.query.matchers import Literal as LiteralPattern
-from snuba.query.matchers import Or, Param, Pattern, String
 from snuba.query.matchers import SubscriptableReference as SubscriptableReferencePattern
 
 

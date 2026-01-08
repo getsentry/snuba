@@ -29,9 +29,8 @@ from snuba.query.exceptions import InvalidExpressionException, InvalidQueryExcep
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.matchers import AnyExpression
+from snuba.query.matchers import AnyExpression, MatchResult, Or, Param, String
 from snuba.query.matchers import FunctionCall as FunctionCallMatcher
-from snuba.query.matchers import MatchResult, Or, Param, String
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass
 from snuba.utils.schemas import ColumnSet, Date, DateTime

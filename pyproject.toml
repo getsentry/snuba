@@ -105,7 +105,9 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = [
-    "B",    # flake8-bugbear
+    # "B",     flake8-bugbear
+    # was not actually being used in the codebase when we intended to.
+    # I will enable it as a follow up to apply to new files.
     "E",    # pycodestyle errors
     "F",    # pyflakes
     "W",    # pycodestyle warnings
@@ -118,7 +120,6 @@ ignore = [
     "E501",  # line too long (handled by formatter)
     "E402",  # module level import not at top of file
     "E712",  # comparison to True/False
-    "E704",  # multiple statements on one line
 ]
 
 [tool.mypy]

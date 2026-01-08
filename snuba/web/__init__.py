@@ -36,7 +36,6 @@ class QueryException(SerializableException):
     def from_args(
         cls, exception_type: str, message: str, extra: QueryExtraData
     ) -> "QueryException":
-
         return cls(
             exception_type=exception_type,
             message=message,

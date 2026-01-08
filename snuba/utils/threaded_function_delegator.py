@@ -52,7 +52,6 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
         return Result(function_id, result, execution_time)
 
     def __execute_callables(self, input: TInput) -> Iterator[Result[TResult]]:
-
         primary_function_id, secondary_function_ids = self.__selector_func(input)
 
         futures = [

@@ -25,9 +25,9 @@ from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
     Subscription,
     SubscriptionIdentifier,
+    SubscriptionWithMetadata,
 )
 from snuba.subscriptions.data import SubscriptionScheduler as SubscriptionSchedulerBase
-from snuba.subscriptions.data import SubscriptionWithMetadata
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend

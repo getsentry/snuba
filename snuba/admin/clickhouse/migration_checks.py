@@ -103,17 +103,17 @@ class StatusChecker(Checker):
                 "migration_id": migration_id,
                 "status": status,
             }
-        assert self.__all_migration_ids == list(
-            migration_statuses.keys()
-        ), "migration ids dont match"
+        assert self.__all_migration_ids == list(migration_statuses.keys()), (
+            "migration ids dont match"
+        )
         self.__migration_statuses = migration_statuses
 
     def _validate_key(self, migration_key: MigrationKey) -> None:
         group, migration_id = migration_key
         assert group == self.__group, f"Group {group.value} does not match {self.__group.value}"
-        assert (
-            migration_id in self.__all_migration_ids
-        ), f"{migration_id} is not part of {self.__group.value} group"
+        assert migration_id in self.__all_migration_ids, (
+            f"{migration_id} is not part of {self.__group.value} group"
+        )
 
     def can_run(self, migration_key: MigrationKey) -> RunResult:
         """

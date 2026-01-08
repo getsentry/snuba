@@ -1,4 +1,5 @@
 from redis.exceptions import RedisClusterException
+
 from snuba import redis
 
 

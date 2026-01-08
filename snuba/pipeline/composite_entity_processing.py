@@ -115,9 +115,9 @@ class CompositeDataSourceTransformer(
     def _visit_simple_query(
         self, data_source: ProcessableQuery[Entity]
     ) -> Union[ProcessableQuery[Table], CompositeQuery[Table], JoinClause[Table]]:
-        assert isinstance(
-            data_source, LogicalQuery
-        ), f"Only subqueries are allowed at query planning stage. {type(data_source)} found."
+        assert isinstance(data_source, LogicalQuery), (
+            f"Only subqueries are allowed at query planning stage. {type(data_source)} found."
+        )
         physical_query = run_entity_processing_executor(data_source, self.__settings)
         return physical_query
 
@@ -137,9 +137,9 @@ class JoinQueryVisitor(JoinVisitor[Mapping[str, ClickhouseQuery], Entity]):
         self.__settings = settings
 
     def visit_individual_node(self, node: IndividualNode[Entity]) -> Mapping[str, ClickhouseQuery]:
-        assert isinstance(
-            node.data_source, LogicalQuery
-        ), "Invalid composite query. All nodes must be subqueries."
+        assert isinstance(node.data_source, LogicalQuery), (
+            "Invalid composite query. All nodes must be subqueries."
+        )
         physical_query = run_entity_processing_executor(node.data_source, self.__settings)
         return {node.alias: physical_query}
 
@@ -168,9 +168,9 @@ class JoinDataSourceTransformer(
     def visit_individual_node(
         self, node: IndividualNode[Entity]
     ) -> Union[JoinClause[Table], IndividualNode[Table]]:
-        assert isinstance(
-            node.data_source, ProcessableQuery
-        ), "Invalid composite query. All nodes must be subqueries."
+        assert isinstance(node.data_source, ProcessableQuery), (
+            "Invalid composite query. All nodes must be subqueries."
+        )
 
         query = self.alias_to_query_mappings[node.alias]
         return IndividualNode(alias=node.alias, data_source=query)

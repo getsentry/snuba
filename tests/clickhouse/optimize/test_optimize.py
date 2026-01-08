@@ -294,7 +294,6 @@ class TestOptimizeFrequency:
         storage_key: StorageKey,
         current_time: datetime,
     ) -> None:
-
         storage = get_writable_storage(storage_key)
         cluster = storage.get_cluster()
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)

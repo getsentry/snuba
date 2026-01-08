@@ -803,7 +803,7 @@ test_cases = [
     ),
     pytest.param(
         f"""MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.event_id
-        WHERE {build_cond('e')} AND {build_cond('t')}""",
+        WHERE {build_cond("e")} AND {build_cond("t")}""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=IndividualNode(
@@ -870,7 +870,7 @@ test_cases = [
     ),
     pytest.param(
         f"""MATCH (e: events) -[contains]-> (t: transactions SAMPLE 0.5) SELECT 4-5, t.event_id
-        WHERE {build_cond('e')} AND {build_cond('t')}""",
+        WHERE {build_cond("e")} AND {build_cond("t")}""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=IndividualNode(
@@ -942,7 +942,7 @@ test_cases = [
             (e: events) -[contains]-> (t: transactions),
             (e: events) -[assigned]-> (ga: groupassignee)
         SELECT 4-5, ga.offset
-        WHERE {build_cond('e')} AND {build_cond('t')}""",
+        WHERE {build_cond("e")} AND {build_cond("t")}""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=JoinClause(
@@ -1031,7 +1031,7 @@ test_cases = [
             (e: events) -[bookmark]-> (gm: groupedmessage),
             (e: events) -[activity]-> (se: metrics_sets)
         SELECT 4-5, e.event_id, t.event_id, ga.offset, gm.offset, se.metric_id
-        WHERE {build_cond('e')} AND {build_cond('t')}
+        WHERE {build_cond("e")} AND {build_cond("t")}
         AND se.org_id = 1 AND se.project_id = 1
         AND se.timestamp >= toDateTime('2021-01-01') AND se.timestamp < toDateTime('2021-01-02')""",
         CompositeQuery(

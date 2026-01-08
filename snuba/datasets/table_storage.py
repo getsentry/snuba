@@ -121,9 +121,9 @@ class KafkaStreamLoader:
             bool(subscription_synchronization_timestamp),
             bool(subscription_delay_seconds),
         ]
-        assert all(subscription_values) or not any(
-            subscription_values
-        ), "provide all subscription config or none"
+        assert all(subscription_values) or not any(subscription_values), (
+            "provide all subscription config or none"
+        )
 
         self.__processor = processor
         self.__default_topic_spec = default_topic_spec
