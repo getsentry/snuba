@@ -1,4 +1,4 @@
-.PHONY: develop setup-git test install-python-dependencies install-py-dev
+.PHONY: develop setup-git test
 
 apply-migrations:
 	snuba migrations migrate --force
@@ -9,12 +9,11 @@ reset-python:
 	rm -rf .venv
 .PHONY: reset-python
 
-develop: install-python-dependencies install-brew-dev install-rs-dev setup-git
-
-setup-git:
-	mkdir -p .git/hooks && cd .git/hooks && ln -sf ../../config/hooks/* ./
-	pip install 'pre-commit==3.6.0'
-	pre-commit install --install-hooks
+develop:
+	devenv sync
+	@# devenv sync is meant to quickly install deps
+	@# building rust_snuba is left to maturin develop
+	make install-rs-dev
 
 test:
 	SNUBA_SETTINGS=test pytest -vv tests -v -m "not ci_only"
@@ -41,31 +40,13 @@ tests: test
 api-tests:
 	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
 
-backend-typing:
-	mypy snuba tests scripts --strict --config-file mypy.ini --exclude 'tests/datasets|tests/query'
-
-install-python-dependencies:
-	pip uninstall -qqy uwsgi  # pip doesn't do well with swapping drop-ins
-	pip install `grep ^-- requirements.txt` -r requirements-build.txt
-	pip install `grep ^-- requirements.txt` -e .
-	pip install `grep ^-- requirements.txt` -r requirements-test.txt
-.PHONY: install-python-dependencies
-
-# install-rs-dev/install-py-dev mimick sentry's naming conventions
 install-rs-dev:
 	@which cargo || (echo "!!! You need an installation of Rust in order to develop snuba. Go to https://rustup.rs to get one." && exit 1)
-	. scripts/rust-envvars && cd rust_snuba/ && maturin develop
+	. scripts/rust-envvars && cd rust_snuba/ && uvx maturin develop
 .PHONY: install-rs-dev
 
-install-py-dev: install-python-dependencies
-.PHONY: install-py-dev
-
-install-brew-dev:
-	brew bundle
-.PHONY: install-brew-dev
-
 snubadocs:
-	pip install -U -r ./docs-requirements.txt
+	uv pip install -U -r ./docs-requirements.txt
 	sphinx-build -W -b html docs/source docs/build
 
 build-admin:
@@ -82,16 +63,16 @@ test-frontend-admin:
 	cd snuba/admin && yarn install && yarn run test
 
 validate-configs:
-	python3 snuba/validate_configs.py
+	.venv/bin/python snuba/validate_configs.py
 
 generate-config-docs:
-	pip install -U -r ./docs-requirements.txt
-	python3 -m snuba.datasets.configuration.generate_config_docs
+	uv pip install -r ./docs-requirements.txt
+	.venv/bin/python -m snuba.datasets.configuration.generate_config_docs
 
 watch-rust-snuba:
 	which cargo-watch || cargo install cargo-watch
 	. scripts/rust-envvars && \
-		cd rust_snuba/ && cargo watch -s 'maturin develop'
+		cd rust_snuba/ && cargo watch -s "uvx maturin develop"
 .PHONY: watch-rust-snuba
 
 test-rust:
@@ -125,6 +106,7 @@ gocd:
 	cd ./gocd/templates && jb install && jb update
 	find . -type f \( -name '*.libsonnet' -o -name '*.jsonnet' \) -print0 | xargs -n 1 -0 jsonnetfmt -i
 	find . -type f \( -name '*.libsonnet' -o -name '*.jsonnet' \) -print0 | xargs -n 1 -0 jsonnet-lint -J ./gocd/templates/vendor
-	cd ./gocd/templates && jsonnet --ext-code output-files=true -J vendor -m ../generated-pipelines ./snuba.jsonnet
+	cd ./gocd/templates && jsonnet --ext-code output-files=true -J vendor -m ../generated-pipelines ./snuba-py.jsonnet
+	cd ./gocd/templates && jsonnet --ext-code output-files=true -J vendor -m ../generated-pipelines ./snuba-rs.jsonnet
 	cd ./gocd/generated-pipelines && find . -type f \( -name '*.yaml' \) -print0 | xargs -n 1 -0 yq -p json -o yaml -i
 .PHONY: gocd

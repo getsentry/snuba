@@ -3,21 +3,26 @@ import uuid
 import pytest
 
 from snuba import settings as snubasettings
+from snuba import state
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
+from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.query_pipeline import QueryPipelineResult
-from snuba.pipeline.stages.query_execution import ExecutionStage
+from snuba.pipeline.stages.query_execution import (
+    DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG,
+    MAX_QUERY_SIZE_BYTES_CONFIG,
+    ExecutionStage,
+)
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
     MAX_THRESHOLD,
     NO_SUGGESTION,
     NO_UNITS,
     AllocationPolicy,
-    AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -35,10 +40,11 @@ from snuba.querylog.query_metadata import (
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.schemas import UUID, String, UInt
+from snuba.web import QueryException
 
 
 class MockAllocationPolicy(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         # Define policy specific config definitions, these will be used along
         # with the default definitions of the base class. (is_enforced, is_active)
         return []
@@ -72,9 +78,7 @@ def get_fake_metadata() -> SnubaQueryMetadata:
         Request(
             uuid.uuid4(),
             {},
-            LogicalQuery(
-                from_clause=Entity(key=EntityKey.TRANSACTIONS, schema=ColumnSet([]))
-            ),
+            LogicalQuery(from_clause=Entity(key=EntityKey.TRANSACTIONS, schema=ColumnSet([]))),
             HTTPQuerySettings(),
             AttributionInfo(
                 get_app_id("blah"),
@@ -106,7 +110,7 @@ def ch_query() -> Query:
             storage_key=StorageKey.TRANSACTIONS,
             allocation_policies=[
                 MockAllocationPolicy(
-                    StorageKey("mystorage"),
+                    ResourceIdentifier(StorageKey("mystorage")),
                     required_tenant_types=["organization_id", "referrer"],
                     default_config_overrides={},
                 )
@@ -220,3 +224,61 @@ def test_turbo(ch_query: Query) -> None:
         and "avg(duration)" in res.data.result["data"][0]
     )
     assert ch_query.get_from_clause().sampling_rate == snubasettings.TURBO_SAMPLE_RATE
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_max_query_size_bytes(ch_query: Query) -> None:
+    attinfo = AttributionInfo(
+        get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
+    )
+    settings = HTTPQuerySettings()
+    timer = Timer("test")
+    metadata = get_fake_metadata()
+
+    state.set_config(MAX_QUERY_SIZE_BYTES_CONFIG, 1)
+
+    res = ExecutionStage(attinfo, query_metadata=metadata).execute(
+        QueryPipelineResult(
+            data=ch_query,
+            query_settings=settings,
+            timer=timer,
+            error=None,
+        )
+    )
+
+    assert res.data is None
+    assert isinstance(res.error, QueryException)
+    assert "which is too long for ClickHouse to process" in res.error.message
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_disable_max_query_size_check(ch_query: Query) -> None:
+    attinfo = AttributionInfo(
+        get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
+    )
+    settings = HTTPQuerySettings()
+    timer = Timer("test")
+    metadata = get_fake_metadata()
+    cluster_name = (
+        snubasettings.CLUSTERS[0]["cluster_name"]
+        if "cluster_name" in snubasettings.CLUSTERS[0]
+        else "test_cluster"
+    )
+
+    # Lowering this should make the query too big...
+    state.set_config(MAX_QUERY_SIZE_BYTES_CONFIG, 1)
+    # Unless we disable the check for this cluster.
+    state.set_config(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, cluster_name)
+
+    res = ExecutionStage(attinfo, query_metadata=metadata).execute(
+        QueryPipelineResult(
+            data=ch_query,
+            query_settings=settings,
+            timer=timer,
+            error=None,
+        )
+    )
+
+    assert res.data

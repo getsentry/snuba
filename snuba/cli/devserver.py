@@ -3,7 +3,6 @@ import sys
 from subprocess import call, list2cmdline
 
 import click
-from honcho.manager import Manager
 
 from snuba import settings
 
@@ -18,20 +17,18 @@ COMMON_RUST_CONSUMER_DEV_OPTIONS = [
 @click.command()
 @click.option("--bootstrap/--no-bootstrap", default=True)
 @click.option("--workers/--no-workers", default=True)
-@click.option(
-    "--log-level", default="info", help="Logging level to use for all processes"
-)
+@click.option("--log-level", default="info", help="Logging level to use for all processes")
 def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
     "Starts all Snuba processes for local development."
+
+    from honcho.manager import Manager
 
     os.environ["PYTHONUNBUFFERED"] = "1"
 
     if bootstrap:
         cmd = ["snuba", "bootstrap", "--force", "--no-migrate"]
-        if not workers:
-            cmd.append("--no-kafka")
         returncode = call(cmd)
-        if returncode > 0:
+        if returncode > 0 and workers:
             sys.exit(returncode)
 
         # Run migrations
@@ -103,36 +100,12 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
             ],
         ),
         (
-            "spans-consumer",
-            [
-                "snuba",
-                "rust-consumer",
-                "--storage=spans",
-                "--consumer-group=spans_group",
-                "--use-rust-processor",
-                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
-                f"--log-level={log_level}",
-            ],
-        ),
-        (
             "eap-items-consumer",
             [
                 "snuba",
                 "rust-consumer",
                 "--storage=eap_items",
                 "--consumer-group=eap_items_group",
-                "--use-rust-processor",
-                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
-                f"--log-level={log_level}",
-            ],
-        ),
-        (
-            "eap-items-span-consumer",
-            [
-                "snuba",
-                "rust-consumer",
-                "--storage=eap_items_span",
-                "--consumer-group=eap_items_span_group",
                 "--use-rust-processor",
                 *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 f"--log-level={log_level}",
@@ -193,31 +166,6 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                 ],
             ),
             (
-                "subscriptions-scheduler-eap-spans",
-                [
-                    "snuba",
-                    "subscriptions-scheduler",
-                    "--entity=eap_items_span",
-                    "--consumer-group=snuba-eap_spans-subscriptions-scheduler",
-                    "--followed-consumer-group=eap_items_span_group",
-                    "--auto-offset-reset=latest",
-                    f"--log-level={log_level}",
-                    "--schedule-ttl=10",
-                ],
-            ),
-            (
-                "subscriptions-executor-eap-spans",
-                [
-                    "snuba",
-                    "subscriptions-executor",
-                    "--dataset=events_analytics_platform",
-                    "--entity=eap_items_span",
-                    "--consumer-group=snuba-eap_spans-subscription-executor",
-                    "--auto-offset-reset=latest",
-                    f"--log-level={log_level}",
-                ],
-            ),
-            (
                 "subscriptions-scheduler-eap-items",
                 [
                     "snuba",
@@ -236,7 +184,7 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                     "snuba",
                     "subscriptions-executor",
                     "--dataset=events_analytics_platform",
-                    "--entity=eap_items_span",
+                    "--entity=eap_items",
                     "--consumer-group=snuba-eap_items-subscription-executor",
                     "--auto-offset-reset=latest",
                     f"--log-level={log_level}",
@@ -271,22 +219,6 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                     "--entity=transactions",
                     "--consumer-group=snuba-transactions-subscriptions-scheduler-executor",
                     "--followed-consumer-group=transactions_group",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    f"--log-level={log_level}",
-                    "--schedule-ttl=10",
-                    "--stale-threshold-seconds=900",
-                ],
-            ),
-            (
-                "subscriptions-scheduler-executor-eap-spans",
-                [
-                    "snuba",
-                    "subscriptions-scheduler-executor",
-                    "--dataset=events_analytics_platform",
-                    "--entity=eap_items_span",
-                    "--consumer-group=snuba-eap_spans-subscription-executor",
-                    "--followed-consumer-group=eap_items_span_group",
                     "--auto-offset-reset=latest",
                     "--no-strict-offset-reset",
                     f"--log-level={log_level}",

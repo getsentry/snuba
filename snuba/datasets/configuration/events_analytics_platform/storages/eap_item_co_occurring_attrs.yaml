@@ -25,27 +25,4 @@ schema:
   local_table_name: eap_item_co_occurring_attrs_1_local
   dist_table_name: eap_item_co_occurring_attrs_1_dist
   partition_format: [date]
-allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - referrer
-        - project_id
-      default_config_overrides:
-        is_enforced: 1
-  - name: ReferrerGuardRailPolicy
-    args:
-      required_tenant_types:
-        - referrer
-      default_config_overrides:
-        is_enforced: 1
-  - name: BytesScannedRejectingPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - project_id
-        - referrer
-      default_config_overrides:
-        is_active: 0
-        is_enforced: 0
+allocation_policies: []

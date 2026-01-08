@@ -29,20 +29,22 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.common import base_conditions_and, treeify_or_and_conditions
+from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
+    base_conditions_and,
+    treeify_or_and_conditions,
+)
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression_eap_items,
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    RoutingDecision,
 )
 
 
 def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
-    attribute_key = attribute_key_to_expression_eap_items(request.key)
+    attribute_key = attribute_key_to_expression(request.key)
 
     conditions: list[Expression] = [
-        f.has(
-            column("attributes_string"), getattr(attribute_key, "key", request.key.name)
-        ),
+        f.has(column("attributes_string"), getattr(attribute_key, "key", request.key.name)),
     ]
     if request.meta.trace_item_type:
         conditions.append(f.equals(column("item_type"), request.meta.trace_item_type))
@@ -91,13 +93,11 @@ def _build_query(
         schema=get_entity(entity_key).get_data_model(),
         sample=None,
     )
-    attr_value = attribute_key_to_expression_eap_items(request.key)
+    attr_value = attribute_key_to_expression(request.key)
     assert attr_value.alias
     inner_query = Query(
         from_clause=entity,
-        selected_columns=[
-            SelectedExpression(name=attr_value.alias, expression=attr_value)
-        ],
+        selected_columns=[SelectedExpression(name=attr_value.alias, expression=attr_value)],
         condition=_build_conditions(request),
         offset=0,
         limit=10000,
@@ -115,21 +115,22 @@ def _build_query(
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
         ],
         limit=request.limit,
-        offset=(
-            request.page_token.offset if request.page_token.HasField("offset") else 0
-        ),
+        offset=(request.page_token.offset if request.page_token.HasField("offset") else 0),
     )
     return res
 
 
 def _build_snuba_request(
     request: TraceItemAttributeValuesRequest,
+    routing_decision: RoutingDecision,
 ) -> SnubaRequest:
+    settings = HTTPQuerySettings()
+    settings.set_sampling_tier(routing_decision.tier)
     return SnubaRequest(
         id=uuid.uuid4(),
         original_body=MessageToDict(request),
         query=_build_query(request),
-        query_settings=HTTPQuerySettings(),
+        query_settings=settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
             team="eap",
@@ -159,9 +160,7 @@ class AttributeValuesRequest(
     def response_class(cls) -> Type[TraceItemAttributeValuesResponse]:
         return TraceItemAttributeValuesResponse
 
-    def _execute(
-        self, in_msg: TraceItemAttributeValuesRequest
-    ) -> TraceItemAttributeValuesResponse:
+    def _execute(self, in_msg: TraceItemAttributeValuesRequest) -> TraceItemAttributeValuesResponse:
         # if for some reason the item_id is the key, we can just return the value
         # item ids are unique
         if in_msg.key.name == "sentry.item_id" and in_msg.value_substring_match:
@@ -170,7 +169,7 @@ class AttributeValuesRequest(
                 page_token=None,
             )
         in_msg.limit = in_msg.limit or 1000
-        snuba_request = _build_snuba_request(in_msg)
+        snuba_request = _build_snuba_request(in_msg, self.routing_decision)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
@@ -190,9 +189,7 @@ class AttributeValuesRequest(
                 else PageToken(
                     filter_offset=TraceItemFilter(
                         comparison_filter=ComparisonFilter(
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_STRING, name="attr_value"
-                            ),
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="attr_value"),
                             op=ComparisonFilter.OP_GREATER_THAN,
                             value=AttributeValue(val_str=values[-1]),
                         )

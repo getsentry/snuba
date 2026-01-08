@@ -1,10 +1,22 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Mapping, MutableMapping, Sequence, Type
+from typing import (
+    Any,
+    Dict,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+)
+
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.bulk_delete_query import DeleteQueryMessage
-from snuba.web.delete_query import ConditionsType
+from snuba.lw_deletions.types import AttributeConditions, ConditionsBag
+from snuba.web.bulk_delete_query import DeleteQueryMessage, WireAttributeCondition
 
 
 class Formatter(ABC):
@@ -17,16 +29,12 @@ class Formatter(ABC):
     """
 
     @abstractmethod
-    def format(
-        self, messages: Sequence[DeleteQueryMessage]
-    ) -> Sequence[ConditionsType]:
+    def format(self, messages: Sequence[DeleteQueryMessage]) -> Sequence[ConditionsBag]:
         raise NotImplementedError
 
 
 class SearchIssuesFormatter(Formatter):
-    def format(
-        self, messages: Sequence[DeleteQueryMessage]
-    ) -> Sequence[ConditionsType]:
+    def format(self, messages: Sequence[DeleteQueryMessage]) -> Sequence[ConditionsBag]:
         """
         For the search issues storage we want the additional
         formatting step of combining group ids for messages
@@ -53,11 +61,55 @@ class SearchIssuesFormatter(Formatter):
             )
 
         return [
-            {"project_id": [project_id], "group_id": list(group_ids)}
+            ConditionsBag(
+                column_conditions={"project_id": [project_id], "group_id": list(group_ids)}
+            )
             for project_id, group_ids in mapping.items()
         ]
 
 
+def _deserialize_attribute_conditions(
+    data: Optional[Dict[str, WireAttributeCondition]],
+    item_type: Optional[int] = None,
+) -> Optional[AttributeConditions]:
+    if data is None:
+        return None
+    assert item_type is not None, "attribute_conditions cannot be deserialized without item_type"
+
+    attributes: Dict[str, Tuple[AttributeKey, List[Any]]] = {}
+
+    for key, wire_condition in data.items():
+        attr_key_type = wire_condition["attr_key_type"]
+        attr_key_name = wire_condition["attr_key_name"]
+        attr_values = list(wire_condition["attr_values"])
+        attr_key_enum = AttributeKey(
+            type=AttributeKey.Type.ValueType(attr_key_type), name=attr_key_name
+        )
+        attributes[key] = (attr_key_enum, attr_values)
+
+    return AttributeConditions(
+        item_type=item_type,
+        attributes=attributes,
+    )
+
+
+class EAPItemsFormatter(Formatter):
+    def format(self, messages: Sequence[DeleteQueryMessage]) -> Sequence[ConditionsBag]:
+        return [
+            ConditionsBag(
+                column_conditions=msg["conditions"],
+                attribute_conditions=_deserialize_attribute_conditions(
+                    msg.get("attribute_conditions"),
+                    msg.get("attribute_conditions_item_type"),
+                ),
+            )
+            for msg in messages
+        ]
+
+
 STORAGE_FORMATTER: Mapping[str, Type[Formatter]] = {
-    StorageKey.SEARCH_ISSUES.value: SearchIssuesFormatter
+    StorageKey.SEARCH_ISSUES.value: SearchIssuesFormatter,
+    # TODO: We will probably do something more sophisticated here in the future
+    # but it won't make much of a difference until we support delete by attribute
+    StorageKey.EAP_ITEMS.value: EAPItemsFormatter,
 }

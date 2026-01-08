@@ -28,6 +28,7 @@ fn clickhouse_task_runner(
             let batch_len = insert_batch.len();
             let (rows, empty_batch) = insert_batch.take();
             let encoded_rows = rows.into_encoded_rows();
+            let num_bytes = encoded_rows.len();
 
             let write_start = SystemTime::now();
 
@@ -45,7 +46,7 @@ fn clickhouse_task_runner(
                 tracing::debug!("performing write");
 
                 let response = client
-                    .send(encoded_rows)
+                    .send(encoded_rows, RetryConfig::default())
                     .await
                     .map_err(RunTaskError::Other)?;
 
@@ -58,8 +59,10 @@ fn clickhouse_task_runner(
             }
 
 
+            counter!("insertions.batch_write_bytes", num_bytes as i64);
             counter!("insertions.batch_write_msgs", batch_len as i64);
             empty_batch.record_message_latency();
+            empty_batch.emit_item_type_metrics();
 
             Ok(empty_message.replace(empty_batch))
         })
@@ -119,6 +122,22 @@ where
     }
 }
 
+pub struct RetryConfig {
+    initial_backoff_ms: f64,
+    max_retries: usize,
+    jitter_factor: f64, // between 0 and 1
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            initial_backoff_ms: 500.0,
+            max_retries: 4,
+            jitter_factor: 0.2,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct ClickhouseClient {
     client: Client,
@@ -161,27 +180,99 @@ impl ClickhouseClient {
         }
     }
 
-    pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
-        let res = self
-            .client
-            .post(&self.url)
-            .headers(self.headers.clone())
-            .query(&[("query", &self.query)])
-            .body(reqwest::Body::from(body))
-            .send()
-            .await?;
+    pub async fn send(&self, body: Vec<u8>, retry_config: RetryConfig) -> anyhow::Result<Response> {
+        // Convert to Bytes once for efficient cloning since sending the request
+        // moves the body into the request body.
+        let body_bytes = bytes::Bytes::from(body);
 
-        if res.status() != reqwest::StatusCode::OK {
-            anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
+        for attempt in 0..=retry_config.max_retries {
+            let res = self
+                .client
+                .post(&self.url)
+                .headers(self.headers.clone())
+                .query(&[("query", &self.query)])
+                .body(reqwest::Body::from(body_bytes.clone()))
+                .send()
+                .await;
+
+            match res {
+                Ok(response) => {
+                    if response.status() == reqwest::StatusCode::OK {
+                        return Ok(response);
+                    } else {
+                        let status = response.status().to_string();
+                        let error_text = response
+                            .text()
+                            .await
+                            .unwrap_or_else(|_| "unknown error".to_string());
+
+                        if attempt == retry_config.max_retries {
+                            counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "false");
+                            anyhow::bail!(
+                                "error writing to clickhouse after {} attempts: {}",
+                                retry_config.max_retries + 1,
+                                error_text
+                            );
+                        }
+
+                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "true");
+                        tracing::warn!(
+                            "ClickHouse write failed (attempt {}/{}): status={}, error={}",
+                            attempt + 1,
+                            retry_config.max_retries + 1,
+                            status,
+                            error_text
+                        );
+                    }
+                }
+                Err(e) => {
+                    if attempt == retry_config.max_retries {
+                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => "network_error", "retried" => "false");
+                        anyhow::bail!(
+                            "error writing to clickhouse after {} attempts: {}",
+                            retry_config.max_retries + 1,
+                            e
+                        );
+                    }
+                    counter!("rust_consumer.clickhouse_insert_error", 1, "status" => "network_error", "retried" => "true");
+
+                    tracing::warn!(
+                        "ClickHouse write failed (attempt {}/{}): {}",
+                        attempt + 1,
+                        retry_config.max_retries + 1,
+                        e
+                    );
+                }
+            }
+
+            // Calculate exponential backoff delay
+            if attempt < retry_config.max_retries {
+                let backoff_ms =
+                    retry_config.initial_backoff_ms * (2_u64.pow(attempt as u32) as f64);
+                // add/subtract up to 10% jitter (by default) to avoid every consumer retrying at the same time
+                // causing too many simultaneous queries
+                let jitter = rand::random::<f64>() * retry_config.jitter_factor
+                    - retry_config.jitter_factor / 2.0; // Random value between (-jitter_factor/2, jitter_factor/2)
+                let delay = Duration::from_millis((backoff_ms * (1.0 + jitter)).round() as u64);
+                tracing::debug!(
+                    "Retrying in {:?} (attempt {}/{})",
+                    delay,
+                    attempt + 1,
+                    retry_config.max_retries
+                );
+                tokio::time::sleep(delay).await;
+            }
         }
 
-        Ok(res)
+        unreachable!("Loop should always return or bail before reaching here");
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::time::Instant;
+
     #[tokio::test]
     async fn it_works() -> Result<(), reqwest::Error> {
         let config = ClickhouseConfig {
@@ -208,8 +299,49 @@ mod tests {
         assert!(client.url.contains("load_balancing"));
         assert!(client.url.contains("insert_distributed_sync"));
         println!("running test");
-        let res = client.send(b"[]".to_vec()).await;
+        let res = client.send(b"[]".to_vec(), RetryConfig::default()).await;
         println!("Response status {}", res.unwrap().status());
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_exponential_backoff() {
+        // Test that retry logic works by using a non-existent server
+        // This will trigger network errors that should be retried
+        let config = ClickhouseConfig {
+            host: "127.0.0.1".to_string(),
+            port: 9000,
+            secure: false,
+            http_port: 9999, // Use a port that's not listening
+            user: "default".to_string(),
+            password: "".to_string(),
+            database: "default".to_string(),
+        };
+
+        let client = ClickhouseClient::new(&config, "test_table");
+
+        let start_time = Instant::now();
+        let result = client
+            .send(
+                b"test data".to_vec(),
+                RetryConfig {
+                    initial_backoff_ms: 100.0,
+                    max_retries: 4,
+                    jitter_factor: 0.1,
+                },
+            )
+            .await;
+        let elapsed = start_time.elapsed();
+
+        // Should fail after all retries
+        assert!(result.is_err());
+
+        // Should have taken at least the sum of our backoff delays
+        // 90ms + 180ms + 360ms + 720ms = 1350ms minimum
+        assert!(elapsed >= Duration::from_millis(1350));
+
+        // Error message should mention the number of attempts
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("after 5 attempts"));
     }
 }

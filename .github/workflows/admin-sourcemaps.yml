@@ -10,12 +10,12 @@ jobs:
       SENTRY_AUTH_TOKEN: ${{ secrets.SNUBA_SENTRY_SOURCEMAP_KEY }}
       NODE_VERSION: 20.8.1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         name: Checkout code
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: 3.8
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{env.NODE_VERSION}}
       - name: Build admin sourcemaps

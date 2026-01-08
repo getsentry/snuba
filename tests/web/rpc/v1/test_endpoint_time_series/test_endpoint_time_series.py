@@ -75,16 +75,14 @@ def store_spans_timeseries(
     messages = []
     for secs in range(0, len_secs, period_secs):
         dt = start_datetime + timedelta(seconds=secs)
-        a = attributes | {
-            m.name: AnyValue(double_value=m.get_value(secs)) for m in metrics
-        }
+        a = attributes | {m.name: AnyValue(double_value=m.get_value(secs)) for m in metrics}
         messages.append(gen_item_message(dt, a))
     items_storage = get_storage(StorageKey("eap_items"))
 
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestTimeSeriesApi(BaseApiTest):
     def test_basic(self) -> None:
@@ -104,24 +102,18 @@ class TestTimeSeriesApi(BaseApiTest):
             aggregations=[
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_AVG,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_FLOAT, name="sentry.duration"
-                    ),
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="sentry.duration"),
                     label="p50",
                 ),
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_P95,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_FLOAT, name="sentry.duration"
-                    ),
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="sentry.duration"),
                     label="p90",
                 ),
             ],
             granularity_secs=60,
         )
-        response = self.app.post(
-            "/rpc/EndpointTimeSeries/v1", data=message.SerializeToString()
-        )
+        response = self.app.post("/rpc/EndpointTimeSeries/v1", data=message.SerializeToString())
         if response.status_code != 200:
             error = Error()
             error.ParseFromString(response.data)
@@ -143,17 +135,13 @@ class TestTimeSeriesApi(BaseApiTest):
             aggregations=[
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_COUNT,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_FLOAT, name="sentry.duration"
-                    ),
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="sentry.duration"),
                     label="count",
                 ),
             ],
             granularity_secs=60,
         )
-        response = self.app.post(
-            "/rpc/EndpointTimeSeries/v1", data=message.SerializeToString()
-        )
+        response = self.app.post("/rpc/EndpointTimeSeries/v1", data=message.SerializeToString())
         error = Error()
         if response.status_code != 200:
             error.ParseFromString(response.data)
@@ -170,9 +158,7 @@ class TestTimeSeriesApi(BaseApiTest):
             metrics=[DummyMetric("test_metric", get_value=lambda x: int(x % 2 == 0))],
         )
 
-        test_metric_attribute_key = AttributeKey(
-            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-        )
+        test_metric_attribute_key = AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric")
         test_metric_is_one_filter = TraceItemFilter(
             comparison_filter=ComparisonFilter(
                 key=test_metric_attribute_key,
@@ -188,9 +174,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             expressions=[
@@ -239,7 +223,7 @@ class TestTimeSeriesApi(BaseApiTest):
             label="sum",
             buckets=expected_buckets,
             data_points=[
-                DataPoint(data=150, data_present=True)
+                DataPoint(data=150, data_present=True, sample_count=150)
                 for _ in range(len(expected_buckets))
             ],
         )
@@ -280,9 +264,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
@@ -384,8 +366,7 @@ class TestTimeSeriesApi(BaseApiTest):
 
         response = EndpointTimeSeries().execute(message)
         expected_buckets = [
-            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
-            for secs in range(0, 60 * 30, 300)
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs) for secs in range(0, 60 * 30, 300)
         ]
 
         def sort_key(t: TimeSeries) -> tuple[str, str]:
@@ -464,8 +445,7 @@ class TestTimeSeriesApi(BaseApiTest):
 
         response = EndpointTimeSeries().execute(message)
         expected_buckets = [
-            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
-            for secs in range(0, 60 * 30, 300)
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs) for secs in range(0, 60 * 30, 300)
         ]
 
         assert response.result_timeseries == [
@@ -497,25 +477,19 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_FLOAT, name="sparse_metric"
-                    ),
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="sparse_metric"),
                     label="sum",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                 ),
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_AVG,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_FLOAT, name="sparse_metric"
-                    ),
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="sparse_metric"),
                     label="avg",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                 ),
@@ -574,9 +548,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 debug=True,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
@@ -599,18 +571,14 @@ class TestTimeSeriesApi(BaseApiTest):
                     filters=[
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_STRING, name="customer"
-                                ),
+                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="customer"),
                                 op=ComparisonFilter.OP_EQUALS,
                                 value=AttributeValue(val_str="bob"),
                             )
                         ),
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_STRING, name="customer"
-                                ),
+                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="customer"),
                                 op=ComparisonFilter.OP_IN,
                                 value=AttributeValue(
                                     val_str_array=StrArray(values=["bob", "alice"])
@@ -673,9 +641,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 debug=True,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
@@ -698,9 +664,7 @@ class TestTimeSeriesApi(BaseApiTest):
                     filters=[
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_STRING, name="customer"
-                                ),
+                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="customer"),
                                 op=ComparisonFilter.OP_EQUALS,
                                 value=AttributeValue(val_str="BoB"),
                                 ignore_case=True,
@@ -708,9 +672,7 @@ class TestTimeSeriesApi(BaseApiTest):
                         ),
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_STRING, name="customer"
-                                ),
+                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="customer"),
                                 op=ComparisonFilter.OP_IN,
                                 value=AttributeValue(
                                     val_str_array=StrArray(values=["BOB", "AlIcE"])
@@ -766,9 +728,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp()) + query_duration
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp()) + query_duration),
                 debug=True,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
@@ -786,9 +746,7 @@ class TestTimeSeriesApi(BaseApiTest):
         response = EndpointTimeSeries().execute(message)
         expected_buckets = [
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
-            for secs in range(
-                0, query_duration - query_offset + granularity_secs, granularity_secs
-            )
+            for secs in range(0, query_duration - query_offset + granularity_secs, granularity_secs)
         ]
         assert response.result_timeseries == [
             TimeSeries(
@@ -819,9 +777,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 1)),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration + 1)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration + 1)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
@@ -863,9 +819,7 @@ class TestTimeSeriesApi(BaseApiTest):
             aggregations=[
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_FLOAT, name="non_existent_metric"
-                    ),
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="non_existent_metric"),
                     label="sum",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                 ),
@@ -875,17 +829,14 @@ class TestTimeSeriesApi(BaseApiTest):
 
         response = EndpointTimeSeries().execute(message)
         expected_buckets = [
-            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
-            for secs in range(0, 60 * 30, 300)
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs) for secs in range(0, 60 * 30, 300)
         ]
 
         assert response.result_timeseries == [
             TimeSeries(
                 label="sum",
                 buckets=expected_buckets,
-                data_points=[
-                    DataPoint(data_present=False) for _ in range(len(expected_buckets))
-                ],
+                data_points=[DataPoint(data_present=False) for _ in range(len(expected_buckets))],
             )
         ]
 
@@ -906,16 +857,12 @@ class TestTimeSeriesApi(BaseApiTest):
             aggregations=[
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_AVG,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_FLOAT, name="sentry.duration"
-                    ),
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="sentry.duration"),
                     label="p50",
                 ),
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_P95,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_FLOAT, name="sentry.duration"
-                    ),
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="sentry.duration"),
                     label="p90",
                 ),
             ],
@@ -958,9 +905,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             expressions=[
@@ -970,9 +915,7 @@ class TestTimeSeriesApi(BaseApiTest):
                         left=Expression(
                             aggregation=AttributeAggregation(
                                 aggregate=Function.FUNCTION_SUM,
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                                ),
+                                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                                 label="sum",
                                 extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                             )
@@ -980,9 +923,7 @@ class TestTimeSeriesApi(BaseApiTest):
                         right=Expression(
                             aggregation=AttributeAggregation(
                                 aggregate=Function.FUNCTION_AVG,
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                                ),
+                                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                                 label="avg",
                                 extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                             )
@@ -1002,7 +943,7 @@ class TestTimeSeriesApi(BaseApiTest):
             label="avg",
             buckets=expected_buckets,
             data_points=[
-                DataPoint(data=1, data_present=True)
+                DataPoint(data=1, data_present=True, sample_count=300)
                 for _ in range(len(expected_buckets))
             ],
         )
@@ -1010,7 +951,7 @@ class TestTimeSeriesApi(BaseApiTest):
             label="sum",
             buckets=expected_buckets,
             data_points=[
-                DataPoint(data=300, data_present=True)
+                DataPoint(data=300, data_present=True, sample_count=300)
                 for _ in range(len(expected_buckets))
             ],
         )
@@ -1050,18 +991,14 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             expressions=[
                 Expression(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                         label="sum(test_metric)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
@@ -1093,9 +1030,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 for _ in range(len(expected_buckets))
             ],
         )
-        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
-            expected_timeseries
-        ]
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [expected_timeseries]
 
     def test_formula_default_value(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
@@ -1120,9 +1055,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration_secs)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration_secs)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             expressions=[
@@ -1164,18 +1097,21 @@ class TestTimeSeriesApi(BaseApiTest):
                 DataPoint(
                     data=2,
                     data_present=True,
+                    sample_count=600,
                 ),
                 DataPoint(
                     data=2,
                     data_present=True,
+                    sample_count=600,
                 ),
                 DataPoint(
                     data=2,
                     data_present=True,
+                    sample_count=600,
                 ),
-                DataPoint(data=-1.0, data_present=True),
-                DataPoint(data=-1.0, data_present=True),
-                DataPoint(data=-1.0, data_present=True),
+                DataPoint(data=-1.0, data_present=True, sample_count=600),
+                DataPoint(data=-1.0, data_present=True, sample_count=600),
+                DataPoint(data=-1.0, data_present=True, sample_count=600),
             ],
         )
         assert response.result_timeseries == [expected_timeseries]
@@ -1197,9 +1133,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             expressions=[
@@ -1209,9 +1143,7 @@ class TestTimeSeriesApi(BaseApiTest):
                         left=Expression(
                             aggregation=AttributeAggregation(
                                 aggregate=Function.FUNCTION_SUM,
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                                ),
+                                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                                 label="sum",
                                 extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                             )
@@ -1246,7 +1178,7 @@ class TestTimeSeriesApi(BaseApiTest):
             label="sum",
             buckets=expected_buckets,
             data_points=[
-                DataPoint(data=300, data_present=True)
+                DataPoint(data=300, data_present=True, sample_count=granularity_secs)
                 for _ in range(len(expected_buckets))
             ],
         )
@@ -1267,7 +1199,8 @@ class TestTimeSeriesApi(BaseApiTest):
             label="1 / 2",
             buckets=expected_buckets,
             data_points=[
-                DataPoint(data=0.5, data_present=True)
+                # literal division should have no samples
+                DataPoint(data=0.5, data_present=True, sample_count=0)
                 for _ in range(len(expected_buckets))
             ],
         )
@@ -1291,9 +1224,7 @@ class TestTimeSeriesApi(BaseApiTest):
         aggregations = [
             AttributeAggregation(
                 aggregate=Function.FUNCTION_SUM,
-                key=AttributeKey(
-                    type=AttributeKey.TYPE_FLOAT, name="test_preflight_metric"
-                ),
+                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_preflight_metric"),
                 label="sum",
                 extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
             ),
@@ -1306,9 +1237,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 downsampled_storage_config=DownsampledStorageConfig(
                     mode=DownsampledStorageConfig.MODE_PREFLIGHT
@@ -1325,9 +1254,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=aggregations,
@@ -1342,20 +1269,14 @@ class TestTimeSeriesApi(BaseApiTest):
         if preflight_response.result_timeseries == []:
             sum_of_preflight_metric = 0.0
         else:
-            sum_of_preflight_metric = (
-                preflight_response.result_timeseries[0].data_points[0].data
-            )
+            sum_of_preflight_metric = preflight_response.result_timeseries[0].data_points[0].data
 
         assert (
             sum_of_preflight_metric
-            < non_downsampled_tier_response.result_timeseries[0].data_points[0].data
-            / 10
+            < non_downsampled_tier_response.result_timeseries[0].data_points[0].data / 10
         )
-        assert (
-            preflight_response.meta.downsampled_storage_meta
-            == DownsampledStorageMeta(
-                can_go_to_higher_accuracy_tier=True,
-            )
+        assert preflight_response.meta.downsampled_storage_meta == DownsampledStorageMeta(
+            can_go_to_higher_accuracy_tier=True,
         )
 
     def test_best_effort_end_to_end(self) -> None:
@@ -1375,9 +1296,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 downsampled_storage_config=DownsampledStorageConfig(
                     mode=DownsampledStorageConfig.MODE_BEST_EFFORT
@@ -1409,9 +1328,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             expressions=[
@@ -1462,9 +1379,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             # this does:
@@ -1480,18 +1395,14 @@ class TestTimeSeriesApi(BaseApiTest):
                         left=Expression(
                             aggregation=AttributeAggregation(
                                 aggregate=Function.FUNCTION_SUM,
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_FLOAT, name="metric1"
-                                ),
+                                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="metric1"),
                                 label="part1",
                             )
                         ),
                         right=Expression(
                             aggregation=AttributeAggregation(
                                 aggregate=Function.FUNCTION_SUM,
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_FLOAT, name="metric1"
-                                ),
+                                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="metric1"),
                                 label="part2",
                             )
                         ),
@@ -1504,9 +1415,7 @@ class TestTimeSeriesApi(BaseApiTest):
                         left=Expression(
                             aggregation=AttributeAggregation(
                                 aggregate=Function.FUNCTION_SUM,
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_FLOAT, name="metric2"
-                                ),
+                                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="metric2"),
                                 label="part1",
                                 extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                             )
@@ -1514,9 +1423,7 @@ class TestTimeSeriesApi(BaseApiTest):
                         right=Expression(
                             aggregation=AttributeAggregation(
                                 aggregate=Function.FUNCTION_SUM,
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_FLOAT, name="metric2"
-                                ),
+                                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="metric2"),
                                 label="part2",
                             )
                         ),
@@ -1537,7 +1444,9 @@ class TestTimeSeriesApi(BaseApiTest):
                 buckets=expected_buckets,
                 data_points=[
                     DataPoint(
-                        data=granularity_secs * (metric1_value * 2), data_present=True
+                        data=granularity_secs * (metric1_value * 2),
+                        data_present=True,
+                        sample_count=granularity_secs,
                     )
                     for _ in range(len(expected_buckets))
                 ],
@@ -1547,15 +1456,15 @@ class TestTimeSeriesApi(BaseApiTest):
                 buckets=expected_buckets,
                 data_points=[
                     DataPoint(
-                        data=granularity_secs * (metric2_value * 2), data_present=True
+                        data=granularity_secs * (metric2_value * 2),
+                        data_present=True,
+                        sample_count=granularity_secs,
                     )
                     for _ in range(len(expected_buckets))
                 ],
             ),
         ]
-        assert (
-            sorted(res.result_timeseries, key=lambda e: e.label) == expected_timeseries
-        )
+        assert sorted(res.result_timeseries, key=lambda e: e.label) == expected_timeseries
 
     def test_agg_label_diff_from_expr_label(self) -> None:
         """
@@ -1579,18 +1488,14 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + query_duration)
-                ),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             expressions=[
                 Expression(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                         label="otherlabel",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
@@ -1643,9 +1548,7 @@ class TestTimeSeriesApi(BaseApiTest):
                         "type": "TYPE_STRING",
                     },
                     "op": "OP_GREATER_THAN_OR_EQUALS",
-                    "value": {
-                        "valStr": (BASE_TIME + timedelta(minutes=30)).isoformat()
-                    },
+                    "value": {"valStr": (BASE_TIME + timedelta(minutes=30)).isoformat()},
                 }
             },
             "granularitySecs": "60",
@@ -1666,6 +1569,143 @@ class TestTimeSeriesApi(BaseApiTest):
         message = ParseDict(query, TimeSeriesRequest())
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTimeSeries().execute(message)
+
+    def test_coalesce_attributes(self) -> None:
+        granularity_secs = 300
+        query_duration = 60 * 30
+
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[
+                DummyMetric(
+                    "ai.total_tokens.used",
+                    get_value=lambda x: 1,
+                ),
+            ],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    label="label",
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_INT,
+                            name="gen_ai.usage.total_tokens",
+                        ),
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+
+        assert response.result_timeseries == [
+            TimeSeries(
+                label="label",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=300, data_present=True, sample_count=300)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
+
+    def test_filter_coalesce_attributes(self) -> None:
+        granularity_secs = 300
+        query_duration = 60 * 30
+
+        # does not match the `url.path = "a"` filter
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("gen_ai.usage.total_tokens", get_value=lambda x: 1)],
+        )
+
+        # matches the `url.path = "a"` filter
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("gen_ai.usage.total_tokens", get_value=lambda x: 1)],
+            attributes={"url.path": AnyValue(string_value="a")},
+        )
+
+        # matches the `url.path = "a"` filter because it's coalesced using `http.target`
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("gen_ai.usage.total_tokens", get_value=lambda x: 1)],
+            attributes={"http.target": AnyValue(string_value="a")},
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    label="label",
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_INT,
+                            name="gen_ai.usage.total_tokens",
+                        ),
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="url.path"),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="a"),
+                )
+            ),
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+
+        assert response.result_timeseries == [
+            TimeSeries(
+                label="label",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=600, data_present=True, sample_count=600)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
 
 
 class TestUtils:
@@ -1707,15 +1747,13 @@ class TestUtils:
         ("start_ts", "end_ts", "granularity"),
         [
             (BASE_TIME, BASE_TIME + timedelta(hours=1), 1),
-            (BASE_TIME, BASE_TIME + timedelta(hours=24), 15),
+            (BASE_TIME, BASE_TIME + timedelta(hours=24 * 3), 15),
             (BASE_TIME, BASE_TIME + timedelta(hours=1), 0),
             (BASE_TIME + timedelta(hours=1), BASE_TIME, 0),
             (BASE_TIME, BASE_TIME + timedelta(hours=1), 3 * 3600),
         ],
     )
-    def test_bad_granularity(
-        self, start_ts: datetime, end_ts: datetime, granularity: int
-    ) -> None:
+    def test_bad_granularity(self, start_ts: datetime, end_ts: datetime, granularity: int) -> None:
         message = TimeSeriesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],

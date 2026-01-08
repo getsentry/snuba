@@ -5,6 +5,4 @@ name: events_analytics_platform
 entities:
   - spans_num_attrs
   - spans_str_attrs
-  - uptime_checks
   - eap_items
-  - eap_items_span

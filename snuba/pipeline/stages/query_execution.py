@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import textwrap
+from collections import defaultdict
 from dataclasses import replace
 from math import floor
 from typing import Any, MutableMapping, Optional
@@ -10,6 +11,7 @@ import sentry_sdk
 
 from snuba import environment
 from snuba import settings as snuba_settings
+from snuba import state
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -44,10 +46,13 @@ from snuba.web.db_query import db_query, update_query_metadata_and_stats
 metrics = MetricsWrapper(environment.metrics, "api")
 logger = logging.getLogger("snuba.pipeline.stages.query_execution")
 
+DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG = (
+    "ExecutionStage.disable_max_query_size_check_for_clusters"
+)
+MAX_QUERY_SIZE_BYTES_CONFIG = "ExecutionStage.max_query_size_bytes"
 
-class ExecutionStage(
-    QueryPipelineStage[ClickhouseQuery | CompositeQuery[Table], QueryResult]
-):
+
+class ExecutionStage(QueryPipelineStage[ClickhouseQuery | CompositeQuery[Table], QueryResult]):
     def __init__(
         self,
         attribution_info: AttributionInfo,
@@ -100,9 +105,7 @@ def _dry_run_query_runner(
     clickhouse_query: ClickhouseQuery | CompositeQuery[Table],
     cluster_name: str,
 ) -> QueryResult:
-    with sentry_sdk.start_span(
-        description="dryrun_create_query", op="function"
-    ) as span:
+    with sentry_sdk.start_span(description="dryrun_create_query", op="function") as span:
         formatted_query = format_query(clickhouse_query)
         span.set_data("query", formatted_query.structured())
 
@@ -148,26 +151,31 @@ def _run_and_apply_column_names(
         cluster_name,
     )
 
-    alias_name_mapping: MutableMapping[str, list[str]] = {}
+    alias_name_mapping: MutableMapping[str, list[str]] = defaultdict(list)
     for select_col in clickhouse_query.get_selected_columns():
         alias = select_col.expression.alias
         name = select_col.name
-        if alias is None or name is None:
-            logger.warning(
-                "Missing alias or name for selected expression",
-                extra={
-                    "selected_expression_name": name,
-                    "selected_expression_alias": alias,
-                },
-                exc_info=True,
-            )
-        elif alias in alias_name_mapping and name not in alias_name_mapping[alias]:
-            alias_name_mapping[alias].append(name)
-        else:
-            alias_name_mapping[alias] = [name]
+        if alias is None or name is None or name in alias_name_mapping[alias]:
+            continue
+        alias_name_mapping[alias].append(name)
 
     transform_column_names(result, alias_name_mapping)
     return result
+
+
+def _max_query_size_bytes() -> int:
+    return (
+        state.get_int_config(MAX_QUERY_SIZE_BYTES_CONFIG, MAX_QUERY_SIZE_BYTES)
+        or MAX_QUERY_SIZE_BYTES
+    )
+
+
+def _disable_max_query_size_check_for_clusters() -> set[str]:
+    return set(
+        (state.get_str_config(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, "") or "").split(
+            ","
+        )
+    )
 
 
 def _format_storage_query_and_run(
@@ -220,11 +228,16 @@ def _format_storage_query_and_run(
         "cluster_name": cluster_name,
     }
 
-    if query_size_bytes > MAX_QUERY_SIZE_BYTES:
+    if (
+        not cluster_name
+        or
+        # This will force to fallback on the ClickHouse limit.
+        cluster_name not in _disable_max_query_size_check_for_clusters()
+    ) and query_size_bytes > _max_query_size_bytes():
         cause = QueryTooLongException(
             f"After processing, query is {query_size_bytes} bytes, "
             "which is too long for ClickHouse to process. "
-            f"Max size is {MAX_QUERY_SIZE_BYTES} bytes."
+            f"Max size is {_max_query_size_bytes()} bytes."
         )
         stats = update_query_metadata_and_stats(
             query=clickhouse_query,
@@ -249,19 +262,23 @@ def _format_storage_query_and_run(
         span.set_tag("table", table_names)
 
         def execute() -> QueryResult:
-            return db_query(
-                clickhouse_query=clickhouse_query,
-                query_settings=query_settings,
-                attribution_info=attribution_info,
-                dataset_name=query_metadata.dataset,
-                formatted_query=formatted_query,
-                reader=reader,
-                timer=timer,
-                query_metadata_list=query_metadata.query_list,
-                stats=stats,
-                trace_id=span.trace_id,
-                robust=robust,
-            )
+            try:
+                return db_query(
+                    clickhouse_query=clickhouse_query,
+                    query_settings=query_settings,
+                    attribution_info=attribution_info,
+                    dataset_name=query_metadata.dataset,
+                    formatted_query=formatted_query,
+                    reader=reader,
+                    timer=timer,
+                    query_metadata_list=query_metadata.query_list,
+                    stats=stats,
+                    trace_id=span.trace_id,
+                    robust=robust,
+                )
+            except Exception as e:
+                sentry_sdk.set_context("snuba", {"request_id": query_metadata.request.id})
+                raise e
 
         if concurrent_queries_gauge is not None:
             with concurrent_queries_gauge:
@@ -282,10 +299,10 @@ def get_query_size_group(query_size_bytes: int) -> str:
     Eg. If the query size is equal to the max query size, this function
     returns "100%".
     """
-    if query_size_bytes == MAX_QUERY_SIZE_BYTES:
+    if query_size_bytes == _max_query_size_bytes():
         return "100%"
     else:
-        query_size_group = int(floor(query_size_bytes / MAX_QUERY_SIZE_BYTES * 10)) * 10
+        query_size_group = int(floor(query_size_bytes / _max_query_size_bytes() * 10)) * 10
         return f">={query_size_group}%"
 
 
@@ -298,10 +315,7 @@ def _apply_turbo_sampling_if_needed(
     into a query processor.
     """
     if isinstance(clickhouse_query, ClickhouseQuery):
-        if (
-            query_settings.get_turbo()
-            and not clickhouse_query.get_from_clause().sampling_rate
-        ):
+        if query_settings.get_turbo() and not clickhouse_query.get_from_clause().sampling_rate:
             clickhouse_query.set_from_clause(
                 replace(
                     clickhouse_query.get_from_clause(),

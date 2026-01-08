@@ -64,6 +64,10 @@ class QuerySettings(ABC):
     def get_apply_default_subscriptable_mapping(self) -> bool:
         pass
 
+    @abstractmethod
+    def get_skip_transform_order_by(self) -> bool:
+        pass
+
 
 # TODO: I don't like that there are two different classes for the same thing
 # this could probably be replaces with a `source` attribute on the class
@@ -85,6 +89,7 @@ class HTTPQuerySettings(QuerySettings):
         referrer: str = "unknown",
         asynchronous: bool = False,
         apply_default_subscriptable_mapping: bool = True,
+        skip_transform_order_by: bool = False,
     ) -> None:
         super().__init__()
         self.__tier = Tier.TIER_NO_TIER
@@ -99,6 +104,7 @@ class HTTPQuerySettings(QuerySettings):
         self.referrer = referrer
         self.__asynchronous = asynchronous
         self.__apply_default_subscriptable_mapping = apply_default_subscriptable_mapping
+        self.__skip_transform_order_by = skip_transform_order_by
 
     def get_turbo(self) -> bool:
         return self.__turbo
@@ -136,6 +142,12 @@ class HTTPQuerySettings(QuerySettings):
     def get_apply_default_subscriptable_mapping(self) -> bool:
         return self.__apply_default_subscriptable_mapping
 
+    def get_skip_transform_order_by(self) -> bool:
+        return self.__skip_transform_order_by
+
+    def set_skip_transform_order_by(self, value: bool) -> None:
+        self.__skip_transform_order_by = value
+
     """
     Tiers indicate which storage tier to direct the query to. This is used by the TimeSeriesEndpoint and the TraceItemTableEndpoint
     in EAP.
@@ -146,6 +158,15 @@ class HTTPQuerySettings(QuerySettings):
 
     def get_sampling_tier(self) -> Tier:
         return self.__tier
+
+
+class OutcomesQuerySettings(HTTPQuerySettings):
+    def __init__(self, use_daily: bool = False):
+        super().__init__()
+        self.__use_daily = use_daily
+
+    def get_use_daily(self) -> bool:
+        return self.__use_daily
 
 
 class SubscriptionQuerySettings(QuerySettings):
@@ -213,3 +234,6 @@ class SubscriptionQuerySettings(QuerySettings):
 
     def get_apply_default_subscriptable_mapping(self) -> bool:
         return True
+
+    def get_skip_transform_order_by(self) -> bool:
+        return False

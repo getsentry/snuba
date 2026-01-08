@@ -114,7 +114,7 @@ WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
 TEST_CASES = [
     pytest.param(
         "override_cluster",
-        "[100,1]",
+        1.0,
         {
             "query_node": [
                 "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
@@ -127,7 +127,7 @@ TEST_CASES = [
     ),
     pytest.param(
         "override_cluster",
-        "",
+        0.0,
         {
             "query_node": [
                 "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
@@ -135,17 +135,6 @@ TEST_CASES = [
             ]
         },
         id="Replacements through query node",
-    ),
-    pytest.param(
-        "override_cluster",
-        "[10]",
-        {
-            "query_node": [
-                "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
-                DIST_QUERY,
-            ]
-        },
-        id="Replacements through query node. Wrong project",
     ),
 ]
 
@@ -186,13 +175,13 @@ class DummyReplacement(Replacement):
 
 
 @pytest.mark.parametrize(
-    "override_fixture, write_node_replacements_projects, expected_queries", TEST_CASES
+    "override_fixture, write_node_replacements_global, expected_queries", TEST_CASES
 )
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_write_each_node(
     override_fixture: Callable[[bool], FakeClickhouseCluster],
-    write_node_replacements_projects: str,
+    write_node_replacements_global: float,
     expected_queries: Mapping[str, Sequence[str]],
     request: Any,
 ) -> None:
@@ -200,7 +189,7 @@ def test_write_each_node(
     Test the execution of replacement queries on both storage nodes and
     query nodes.
     """
-    set_config("write_node_replacements_projects", write_node_replacements_projects)
+    set_config("write_node_replacements_global", write_node_replacements_global)
     override_func = request.getfixturevalue(override_fixture)
     test_cluster = override_func(True)
 
@@ -218,14 +207,11 @@ def test_write_each_node(
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
-def test_failing_query(
-    override_cluster: Callable[[bool], FakeClickhouseCluster]
-) -> None:
+def test_failing_query(override_cluster: Callable[[bool], FakeClickhouseCluster]) -> None:
     """
     Test the execution of replacement queries on single node
     when the query fails.
     """
-    set_config("write_node_replacements_projects", "[1]")
     override_cluster(False)
 
     replacer = ReplacerWorker(
@@ -235,16 +221,12 @@ def test_failing_query(
     )
 
     with pytest.raises(ServerExplodedException):
-        replacer.flush_batch(
-            [(ReplacementMessageMetadata(0, 0, ""), DummyReplacement())]
-        )
+        replacer.flush_batch([(ReplacementMessageMetadata(0, 0, ""), DummyReplacement())])
 
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
-def test_load_balancing(
-    override_cluster: Callable[[bool], FakeClickhouseCluster]
-) -> None:
+def test_load_balancing(override_cluster: Callable[[bool], FakeClickhouseCluster]) -> None:
     """
     Test running two replacements in a row and verify the queries
     are properly load balanced on different nodes.
@@ -360,9 +342,7 @@ TEST_LOCAL_EXECUTOR = [
 ]
 
 
-@pytest.mark.parametrize(
-    "nodes, backup_connection, expected_queries", TEST_LOCAL_EXECUTOR
-)
+@pytest.mark.parametrize("nodes, backup_connection, expected_queries", TEST_LOCAL_EXECUTOR)
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_local_executor(

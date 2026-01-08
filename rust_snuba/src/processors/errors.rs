@@ -72,6 +72,7 @@ pub fn process_message_with_replacement(
                 rows: RowData::from_rows([row])?,
                 sentry_received_timestamp: None,
                 cogs_data: None,
+                item_type_metrics: None,
             }))
         }
         ("insert", None, _) => {
@@ -112,6 +113,8 @@ struct ErrorMessage {
     datetime: StringToIntDatetime64,
     event_id: Uuid,
     group_id: u64,
+    #[serde(default)]
+    group_first_seen: StringToIntDatetime64,
     message: String,
     primary_hash: String,
     project_id: u64,
@@ -370,6 +373,7 @@ struct ErrorRow {
     #[serde(rename = "exception_stacks.value")]
     exception_stacks_value: Vec<Option<String>>,
     group_id: u64,
+    group_first_seen: u32,
     http_method: Option<String>,
     http_referer: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -719,6 +723,7 @@ impl ErrorRow {
             flags_key,
             flags_value,
             group_id: from.group_id,
+            group_first_seen: (from.group_first_seen.0 / 1000) as u32,
             http_method: from_request.method.0,
             http_referer,
             ip_address_v4,

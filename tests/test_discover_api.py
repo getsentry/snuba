@@ -222,9 +222,7 @@ class TestDiscoverApi(BaseApiTest):
                 {
                     "dataset": "discover",
                     "project": self.project_id,
-                    "aggregations": [
-                        ["uniq", ["transaction_status"], "uniq_transaction_status"]
-                    ],
+                    "aggregations": [["uniq", ["transaction_status"], "uniq_transaction_status"]],
                     "conditions": [["type", "=", "error"]],
                     "groupby": ["type", "group_id"],
                     "limit": 1000,
@@ -275,9 +273,7 @@ class TestDiscoverApi(BaseApiTest):
 
         transaction = get_raw_transaction()
         del transaction["data"]["user"]["geo"]
-        write_unprocessed_events(
-            get_writable_storage(StorageKey.TRANSACTIONS), [transaction]
-        )
+        write_unprocessed_events(get_writable_storage(StorageKey.TRANSACTIONS), [transaction])
 
         response = self.post(
             json.dumps(
@@ -401,9 +397,7 @@ class TestDiscoverApi(BaseApiTest):
         )
         assert response.status_code == 200
         data = json.loads(response.data)
-        assert data["data"] == [
-            {"count": 1, "exception_stacks.type": "ArithmeticException"}
-        ]
+        assert data["data"] == [{"count": 1, "exception_stacks.type": "ArithmeticException"}]
 
     def test_tags_key_boolean_condition(self) -> None:
         response = self.post(
@@ -791,9 +785,7 @@ class TestDiscoverApi(BaseApiTest):
                 {
                     "dataset": "discover",
                     "project": self.project_id,
-                    "aggregations": [
-                        ["apdex(duration, 300)", None, "apdex_duration_300"]
-                    ],
+                    "aggregations": [["apdex(duration, 300)", None, "apdex_duration_300"]],
                     "groupby": ["project_id", "tags[foo]"],
                     "conditions": [],
                     "orderby": "apdex_duration_300",
@@ -1075,9 +1067,7 @@ class TestDiscoverApi(BaseApiTest):
                                                                     [
                                                                         [
                                                                             "arrayJoin",
-                                                                            [
-                                                                                "measurements.value"
-                                                                            ],
+                                                                            ["measurements.value"],
                                                                         ],
                                                                         100.0,
                                                                     ],
@@ -1458,9 +1448,7 @@ class TestDiscoverApi(BaseApiTest):
             == 1.0
         )
 
-    def test_zero_literal_caching(
-        self, disable_query_cache: Callable[..., Any]
-    ) -> None:
+    def test_zero_literal_caching(self) -> None:
         response = self.post(
             json.dumps(
                 {
@@ -1517,7 +1505,7 @@ class TestDiscoverApi(BaseApiTest):
         assert len(data["data"]) == 0
 
         assert data["sql"].startswith(
-            "SELECT (type AS _snuba_type), (arrayElement(tags.value, indexOf(tags.key, 'custom_tag')) AS `_snuba_tags[custom_tag]`), (release AS _snuba_release)"
+            "SELECT (type AS _snuba_type), (arrayElement(`tags.value`, indexOf(`tags.key`, 'custom_tag')) AS `_snuba_tags[custom_tag]`), (release AS _snuba_release)"
         )
 
     def test_exception_stack_column_boolean_condition_with_arrayjoin(self) -> None:
@@ -1562,9 +1550,7 @@ class TestDiscoverApi(BaseApiTest):
         )
         assert response.status_code == 200
         data = json.loads(response.data)
-        assert data["data"] == [
-            {"count": 1, "exception_stacks.type": "ArithmeticException"}
-        ]
+        assert data["data"] == [{"count": 1, "exception_stacks.type": "ArithmeticException"}]
 
     def test_exception_frames_column_boolean_condition_with_arrayjoin(self) -> None:
         response = self.post(
@@ -1851,9 +1837,7 @@ class TestDiscoverAPIEntitySelection(TestDiscoverApi):
     def setup_post(self, _build_snql_post_methods: Callable[..., Any]) -> None:
         orig_post = _build_snql_post_methods
 
-        def fixed_entity_post(
-            data: str, entity: str = "discover", referrer: str = "test"
-        ) -> Any:
+        def fixed_entity_post(data: str, entity: str = "discover", referrer: str = "test") -> Any:
             return orig_post(data, "discover", referrer)
 
         self.post = fixed_entity_post

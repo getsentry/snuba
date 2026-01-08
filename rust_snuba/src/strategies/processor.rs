@@ -19,6 +19,7 @@ use crate::types::{
     BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
     KafkaMessageMetadata, RowData,
 };
+use tokio::time::Instant;
 
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
@@ -48,21 +49,27 @@ pub fn make_rust_processor(
             }
         }
 
-        let payload = BytesInsertBatch::new(
-            transformed.rows,
-            Some(timestamp),
-            transformed.origin_timestamp,
-            transformed.sentry_received_timestamp,
-            CommitLogOffsets(BTreeMap::from([(
+        let mut payload = BytesInsertBatch::from_rows(transformed.rows)
+            .with_message_timestamp(timestamp)
+            .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                 partition.index,
                 CommitLogEntry {
                     offset,
                     orig_message_ts: timestamp,
                     received_p99: transformed.origin_timestamp.into_iter().collect(),
                 },
-            )])),
-            transformed.cogs_data.unwrap_or_default(),
-        );
+            )])))
+            .with_cogs_data(transformed.cogs_data.unwrap_or_default());
+
+        if let Some(ts) = transformed.origin_timestamp {
+            payload = payload.with_origin_timestamp(ts);
+        }
+        if let Some(ts) = transformed.sentry_received_timestamp {
+            payload = payload.with_sentry_received_timestamp(ts);
+        }
+        if let Some(metrics) = transformed.item_type_metrics {
+            payload = payload.with_item_type_metrics(metrics);
+        }
 
         Ok(Message::new_broker_message(
             payload, partition, offset, timestamp,
@@ -119,21 +126,29 @@ pub fn make_rust_processor_with_replacements(
 
         let payload = match transformed {
             InsertOrReplacement::Insert(transformed) => {
-                InsertOrReplacement::Insert(BytesInsertBatch::new(
-                    transformed.rows,
-                    Some(timestamp),
-                    transformed.origin_timestamp,
-                    transformed.sentry_received_timestamp,
-                    CommitLogOffsets(BTreeMap::from([(
+                let mut batch = BytesInsertBatch::from_rows(transformed.rows)
+                    .with_message_timestamp(timestamp)
+                    .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                         partition.index,
                         CommitLogEntry {
                             offset,
                             orig_message_ts: timestamp,
                             received_p99: transformed.origin_timestamp.into_iter().collect(),
                         },
-                    )])),
-                    transformed.cogs_data.unwrap_or_default(),
-                ))
+                    )])))
+                    .with_cogs_data(transformed.cogs_data.unwrap_or_default());
+
+                if let Some(ts) = transformed.origin_timestamp {
+                    batch = batch.with_origin_timestamp(ts);
+                }
+                if let Some(ts) = transformed.sentry_received_timestamp {
+                    batch = batch.with_sentry_received_timestamp(ts);
+                }
+                if let Some(metrics) = transformed.item_type_metrics {
+                    batch = batch.with_item_type_metrics(metrics);
+                }
+
+                InsertOrReplacement::Insert(batch)
             }
             InsertOrReplacement::Replacement(r) => InsertOrReplacement::Replacement(r),
         };
@@ -197,6 +212,7 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
         self,
         message: Message<KafkaPayload>,
     ) -> Result<Message<TNext>, RunTaskError<anyhow::Error>> {
+        let start_time = Instant::now();
         validate_schema(&message, &self.schema, self.enforce_schema)?;
 
         let msg = match message.inner_message {
@@ -220,7 +236,7 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
 
         record_message_stats(payload);
 
-        self.process_payload(msg).map_err(|error| {
+        let processed_message = self.process_payload(msg).map_err(|error| {
             counter!("invalid_message");
 
             sentry::with_scope(
@@ -237,7 +253,12 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
             );
 
             maybe_err
-        })
+        });
+
+        let elapsed = start_time.elapsed();
+        counter!("message_processing_time_ms", elapsed.as_millis() as i64);
+
+        processed_message
     }
 
     #[tracing::instrument(skip_all)]

@@ -1,16 +1,19 @@
+import logging
 import os
+import random
+import uuid
 from bisect import bisect_left
 from typing import Generic, List, Tuple, Type, cast, final
 
 import sentry_sdk
+from clickhouse_driver.errors import ErrorCodes as clickhouse_errors
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
-from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
-from snuba import environment, settings, state
-from snuba.query.allocation_policies import AllocationPolicyViolations
+from snuba import environment, state
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -22,12 +25,12 @@ from snuba.utils.registered_class import (
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import Tin, Tout
 from snuba.web.rpc.common.exceptions import (
-    BadSnubaRPCRequestException,
+    HighAccuracyQueryTimeoutException,
+    QueryTimeoutException,
+    RPCAllocationPolicyException,
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
-from snuba.web.rpc.storage_routing.defaults import get_default_routing_decision
-from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
@@ -45,6 +48,39 @@ _TIME_PERIOD_HOURS_BUCKETS = [
     90 * 24,
 ]
 _BUCKETS_COUNT = len(_TIME_PERIOD_HOURS_BUCKETS)
+
+
+def _should_log_rpc_request() -> bool:
+    """
+    Determine if this RPC request should be logged based on runtime configuration.
+    """
+    sample_rate = state.get_float_config("rpc_logging_sample_rate", 0)
+    if sample_rate is None:
+        sample_rate = 0
+
+    # If sample rate is 0, never log
+    if sample_rate <= 0.0:
+        return False
+
+    # If sample rate is 1, always log
+    if sample_rate >= 1.0:
+        return True
+
+    # Otherwise, use random sampling
+    return random.random() < sample_rate
+
+
+def _flush_logs() -> None:
+    """
+    Force flush all log handlers to ensure logs are written immediately.
+    This helps prevent data loss when containers are terminated.
+    """
+    try:
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+    except Exception:
+        # Silently ignore flush errors to avoid interfering with main logic
+        pass
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -79,9 +115,7 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
     ) -> "Type[TraceItemDataResolver[Tin, Tout]]":
         registry = getattr(cls, "_registry")
         try:
-            shape = registry.get_class_from_name(
-                f"{cls.endpoint_name()}__{trace_item_type}"
-            )
+            shape = registry.get_class_from_name(f"{cls.endpoint_name()}__{trace_item_type}")
         except InvalidConfigKeyError:
             shape = registry.get_class_from_name(
                 f"{cls.endpoint_name()}__{TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED}"
@@ -99,7 +133,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(self, metrics_backend: MetricsBackend | None = None) -> None:
         self._timer = Timer("endpoint_timing")
         self._metrics_backend = metrics_backend or environment.metrics
-        self.routing_decision = get_default_routing_decision(None)
 
     @classmethod
     def request_class(cls) -> Type[Tin]:
@@ -157,71 +190,81 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         span = scope.span
         if span is not None:
             span.description = self.config_key()
-        self.routing_decision.routing_context = RoutingContext(
-            timer=self._timer, in_msg=in_msg
+        self.routing_context = RoutingContext(
+            timer=self._timer,
+            in_msg=in_msg,
+            query_id=uuid.uuid4().hex,
         )
 
         self.__before_execute(in_msg)
-        error = None
+        error: Exception | None = None
+        meta = getattr(in_msg, "meta", RequestMeta())
         try:
             if self.routing_decision.can_run:
                 with sentry_sdk.start_span(op="execute") as span:
                     span.set_data("selected_tier", self.routing_decision.tier)
                     out = self._execute(in_msg)
             else:
-                raise AllocationPolicyViolations
+                raise RPCAllocationPolicyException(
+                    "Query cannot be run due to routing strategy deciding it cannot run, most likely due to allocation policies",
+                    self.routing_decision.to_log_dict(),
+                )
         except QueryException as e:
-            if (
-                "error_code" in e.extra["stats"]
-                and e.extra["stats"]["error_code"] == 241
-            ):
-                self.metrics.increment("OOM_query")
-                sentry_sdk.capture_exception(e)
-            if (
-                "error_code" in e.extra["stats"]
-                and e.extra["stats"]["error_code"] == 159
-            ):
-                tags = {"endpoint": str(self.__class__.__name__)}
-                if self._uses_storage_routing(in_msg):
-                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
-                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
-                    )
-                self.metrics.increment("timeout_query", 1, tags)
-                sentry_sdk.capture_exception(e)
-            if (
-                "error_code" in e.extra["stats"]
-                and e.extra["stats"]["error_code"] == 160
-            ):
-                tags = {"endpoint": str(self.__class__.__name__)}
-                if self._uses_storage_routing(in_msg):
-                    tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
-                        in_msg.meta.downsampled_storage_config.mode  # type: ignore
-                    )
-                self.metrics.increment("estimated_execution_timeout", 1, tags)
-                sentry_sdk.capture_exception(e)
             out = self.response_class()()
-            error = e
+            if (
+                "error_code" in e.extra["stats"]
+                and e.extra["stats"]["error_code"] == clickhouse_errors.TIMEOUT_EXCEEDED
+            ):
+                sampling_mode = DownsampledStorageConfig.MODE_NORMAL
+                tags = {"endpoint": str(self.__class__.__name__)}
+                if hasattr(in_msg, "meta"):
+                    if hasattr(meta, "referrer"):
+                        tags["referrer"] = meta.referrer
+                    if self._uses_storage_routing(in_msg):
+                        sampling_mode = meta.downsampled_storage_config.mode
+                tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(sampling_mode)
+                self.metrics.increment("timeout_query", 1, tags)
+                if sampling_mode == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY:
+                    error = HighAccuracyQueryTimeoutException(
+                        "High accuracy query timed out, you may be scanning too much data in one request. Try querying in normal mode to get results"
+                    )
+                else:
+                    error = QueryTimeoutException("Query timed out, this violates the EAP SLO")
+            else:
+                if (
+                    "error_code" in e.extra["stats"]
+                    and e.extra["stats"]["error_code"] == clickhouse_errors.MEMORY_LIMIT_EXCEEDED
+                ):
+                    self.metrics.increment("OOM_query")
+                    sentry_sdk.capture_exception(e)
+                if (
+                    "error_code" in e.extra["stats"]
+                    and e.extra["stats"]["error_code"] == clickhouse_errors.TOO_SLOW
+                ):
+                    tags = {"endpoint": str(self.__class__.__name__)}
+                    if self._uses_storage_routing(in_msg):
+                        tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
+                            meta.downsampled_storage_config.mode
+                        )
+                    self.metrics.increment("estimated_execution_timeout", 1, tags)
+                    sentry_sdk.capture_exception(e)
+                error = e
         except Exception as e:
             out = self.response_class()()
-            error = e  # type: ignore
+            error = e
         return self.__after_execute(in_msg, out, error)
 
     def __before_execute(self, in_msg: Tin) -> None:
+        # Generate request_id if not already present
+        meta = getattr(in_msg, "meta", None)
+        if meta is not None:
+            if not hasattr(meta, "request_id") or not meta.request_id:
+                meta.request_id = self.routing_context.query_id
+
         self._timer.update_tags(self.__extract_request_tags(in_msg))
 
-        # we're calling this function to get the cluster load info to emit metrics and to prevent dead code
-        # the result is currently not used in storage routing
-        # can turn off on Snuba Admin
-        if state.get_config("storage_routing.enable_get_cluster_loadinfo", True):
-            get_cluster_loadinfo()
-
-        selected_strategy = RoutingStrategySelector().select_routing_strategy(
-            self.routing_decision.routing_context
-        )
-        self.routing_decision.strategy = selected_strategy
-        self.routing_decision = selected_strategy.get_routing_decision(
-            self.routing_decision.routing_context
-        )
+        selected_strategy = RoutingStrategySelector().select_routing_strategy(self.routing_context)
+        self.routing_decision = selected_strategy.get_routing_decision(self.routing_context)
         self._timer.mark("rpc_start")
         self._before_execute(in_msg)
 
@@ -260,36 +303,42 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def _before_execute(self, in_msg: Tin) -> None:
         """Override this for any pre-processing/logging before the _execute method"""
-        pass
+        if _should_log_rpc_request():
+            request_id = "unknown"
+            if hasattr(in_msg, "meta") and hasattr(in_msg.meta, "request_id"):
+                request_id = in_msg.meta.request_id
+
+            # Log RPC request start
+            logging.info(
+                f"RPC request started - endpoint: {self.__class__.__name__}, request_id: {request_id}"
+            )
+
+            flush_logs = state.get_float_config("rpc_logging_flush_logs", 0)
+            if flush_logs and flush_logs > 0:
+                _flush_logs()
 
     def _execute(self, in_msg: Tin) -> Tout:
         raise NotImplementedError
 
-    def __after_execute(
-        self, in_msg: Tin, out_msg: Tout, error: Exception | None
-    ) -> Tout:
+    def __after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
         res = self._after_execute(in_msg, out_msg, error)
-        output_metrics_error = None
-        try:
-            self.routing_decision.strategy.output_metrics(self.routing_decision)
-        except Exception as e:
-            output_metrics_error = e
+        self.routing_decision.strategy.after_execute(self.routing_decision, error)
 
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            sentry_sdk.capture_exception(error)
-            if isinstance(error, BadSnubaRPCRequestException):
-                self.metrics.increment(
-                    "request_invalid",
-                    tags=self._timer.tags,
-                )
-            elif isinstance(error, AllocationPolicyViolations):
+            if isinstance(error, RPCAllocationPolicyException):
                 self.metrics.increment(
                     "request_rate_limited",
                     tags=self._timer.tags,
                 )
+            elif isinstance(error, RPCRequestException) and 400 <= error.status_code < 500:
+                self.metrics.increment(
+                    "request_invalid",
+                    tags=self._timer.tags,
+                )
             else:
+                sentry_sdk.capture_exception(error)
                 self.metrics.increment(
                     "request_error",
                     tags=self._timer.tags,
@@ -300,21 +349,23 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 "request_success",
                 tags=self._timer.tags,
             )
-
-        if output_metrics_error is not None:
-            self.metrics.increment("metrics_failure")
-            sentry_sdk.capture_message(
-                f"Error in routing strategy output metrics: {output_metrics_error}"
-            )
-            if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
-                raise output_metrics_error
-
         return res
 
-    def _after_execute(
-        self, in_msg: Tin, out_msg: Tout, error: Exception | None
-    ) -> Tout:
+    def _after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
         """Override this for any post-processing/logging after the _execute method"""
+        if _should_log_rpc_request():
+            request_id = "unknown"
+            if hasattr(in_msg, "meta") and hasattr(in_msg.meta, "request_id"):
+                request_id = in_msg.meta.request_id
+
+            status = "error" if error is not None else "success"
+            logging.info(
+                f"RPC request finished - endpoint: {self.__class__.__name__}, request_id: {request_id}, status: {status}"
+            )
+            flush_logs = state.get_float_config("rpc_logging_flush_logs", 0)
+            if flush_logs and flush_logs > 0:
+                _flush_logs()
+
         return out_msg
 
 
@@ -327,18 +378,14 @@ def list_all_endpoint_names() -> List[Tuple[str, str]]:
 
 
 _VERSIONS = ["v1"]
-_TO_IMPORT = {
-    p: os.path.join(os.path.dirname(os.path.realpath(__file__)), p) for p in _VERSIONS
-}
+_TO_IMPORT = {p: os.path.join(os.path.dirname(os.path.realpath(__file__)), p) for p in _VERSIONS}
 
 
 for v, module_path in _TO_IMPORT.items():
     import_submodules_in_directory(module_path, f"snuba.web.rpc.{v}")
 
 
-def run_rpc_handler(
-    name: str, version: str, data: bytes
-) -> ProtobufMessage | ErrorProto:
+def run_rpc_handler(name: str, version: str, data: bytes) -> ProtobufMessage | ErrorProto:
     try:
         endpoint = RPCEndpoint.get_from_name(name, version)()  # type: ignore
     except (AttributeError, InvalidConfigKeyError) as e:
