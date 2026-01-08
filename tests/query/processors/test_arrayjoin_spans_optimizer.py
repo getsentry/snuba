@@ -133,7 +133,9 @@ spans_op_group_tuple_filter_tests = [
             condition=binary_condition(
                 ConditionFunctions.EQ,
                 spans_op_group_col,
-                FunctionCall(None, "tuple", (Literal(None, "db"), Literal(None, "a" * 16))),
+                FunctionCall(
+                    None, "tuple", (Literal(None, "db"), Literal(None, "a" * 16))
+                ),
             ),
         ),
         {("db", "a" * 16)},
@@ -272,7 +274,10 @@ def test_get_multiple_columns_filters(
     Test the algorithm identifies conditions on the tuple (op, group) that can potentially
     be pre-filtered through arrayFilter.
     """
-    assert set(get_multiple_columns_filters(query, ("spans.op", "spans.group"))) == expected_result
+    assert (
+        set(get_multiple_columns_filters(query, ("spans.op", "spans.group")))
+        == expected_result
+    )
 
 
 def array_join_col(ops=None, groups=None, op_groups=None):
@@ -295,7 +300,9 @@ def array_join_col(ops=None, groups=None, op_groups=None):
             binary_condition(
                 ConditionFunctions.IN,
                 tupleElement(None, argument, Literal(None, 2)),
-                FunctionCall(None, "tuple", tuple(Literal(None, group) for group in groups)),
+                FunctionCall(
+                    None, "tuple", tuple(Literal(None, group) for group in groups)
+                ),
             )
         )
 
@@ -315,7 +322,9 @@ def array_join_col(ops=None, groups=None, op_groups=None):
                     None,
                     "tuple",
                     tuple(
-                        FunctionCall(None, "tuple", (Literal(None, op), Literal(None, group)))
+                        FunctionCall(
+                            None, "tuple", (Literal(None, op), Literal(None, group))
+                        )
                         for op, group in op_groups
                     ),
                 ),
@@ -329,7 +338,9 @@ def array_join_col(ops=None, groups=None, op_groups=None):
             Lambda(
                 None,
                 ("x", "y", "z"),
-                FunctionCall(None, "tuple", tuple(Argument(None, arg) for arg in ("x", "y", "z"))),
+                FunctionCall(
+                    None, "tuple", tuple(Argument(None, arg) for arg in ("x", "y", "z"))
+                ),
             ),
             Column(None, None, "spans.op"),
             Column(None, None, "spans.group"),
@@ -358,7 +369,9 @@ span_processor_tests = [
         id="no spans columns in select clause",
     ),
     pytest.param(
-        build_query(selected_columns=[spans_op_col, spans_group_col, spans_exclusive_time_col]),
+        build_query(
+            selected_columns=[spans_op_col, spans_group_col, spans_exclusive_time_col]
+        ),
         [
             SelectedExpression(
                 "spans_op", tupleElement("spans_op", array_join_col(), Literal(None, 1))
@@ -369,7 +382,9 @@ span_processor_tests = [
             ),
             SelectedExpression(
                 "spans_exclusive_time",
-                tupleElement("spans_exclusive_time", array_join_col(), Literal(None, 3)),
+                tupleElement(
+                    "spans_exclusive_time", array_join_col(), Literal(None, 3)
+                ),
             ),
         ],
         None,
@@ -391,11 +406,15 @@ span_processor_tests = [
             ),
             SelectedExpression(
                 "spans_group",
-                tupleElement("spans_group", array_join_col(ops=["db"]), Literal(None, 2)),
+                tupleElement(
+                    "spans_group", array_join_col(ops=["db"]), Literal(None, 2)
+                ),
             ),
             SelectedExpression(
                 "spans_exclusive_time",
-                tupleElement("spans_exclusive_time", array_join_col(ops=["db"]), Literal(None, 3)),
+                tupleElement(
+                    "spans_exclusive_time", array_join_col(ops=["db"]), Literal(None, 3)
+                ),
             ),
         ],
         binary_condition(
@@ -420,11 +439,15 @@ span_processor_tests = [
         [
             SelectedExpression(
                 "spans_op",
-                tupleElement("spans_op", array_join_col(ops=["db", "http"]), Literal(None, 1)),
+                tupleElement(
+                    "spans_op", array_join_col(ops=["db", "http"]), Literal(None, 1)
+                ),
             ),
             SelectedExpression(
                 "spans_group",
-                tupleElement("spans_group", array_join_col(ops=["db", "http"]), Literal(None, 2)),
+                tupleElement(
+                    "spans_group", array_join_col(ops=["db", "http"]), Literal(None, 2)
+                ),
             ),
             SelectedExpression(
                 "spans_exclusive_time",
@@ -443,7 +466,9 @@ span_processor_tests = [
                 FunctionCall(None, "has", (spans_ops, Literal(None, "http"))),
             ),
             in_condition(
-                tupleElement("spans_op", array_join_col(ops=["db", "http"]), Literal(None, 1)),
+                tupleElement(
+                    "spans_op", array_join_col(ops=["db", "http"]), Literal(None, 1)
+                ),
                 [Literal(None, "db"), Literal(None, "http")],
             ),
         ),
@@ -461,11 +486,15 @@ span_processor_tests = [
         [
             SelectedExpression(
                 "spans_op",
-                tupleElement("spans_op", array_join_col(groups=["a" * 16]), Literal(None, 1)),
+                tupleElement(
+                    "spans_op", array_join_col(groups=["a" * 16]), Literal(None, 1)
+                ),
             ),
             SelectedExpression(
                 "spans_group",
-                tupleElement("spans_group", array_join_col(groups=["a" * 16]), Literal(None, 2)),
+                tupleElement(
+                    "spans_group", array_join_col(groups=["a" * 16]), Literal(None, 2)
+                ),
             ),
             SelectedExpression(
                 "spans_exclusive_time",
@@ -481,7 +510,9 @@ span_processor_tests = [
             FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
             binary_condition(
                 ConditionFunctions.EQ,
-                tupleElement("spans_group", array_join_col(groups=["a" * 16]), Literal(None, 2)),
+                tupleElement(
+                    "spans_group", array_join_col(groups=["a" * 16]), Literal(None, 2)
+                ),
                 Literal(None, "a" * 16),
             ),
         ),
@@ -545,7 +576,9 @@ span_processor_tests = [
             condition=binary_condition(
                 ConditionFunctions.EQ,
                 spans_op_group_col,
-                FunctionCall(None, "tuple", (Literal(None, "db"), Literal(None, "a" * 16))),
+                FunctionCall(
+                    None, "tuple", (Literal(None, "db"), Literal(None, "a" * 16))
+                ),
             ),
         ),
         [
@@ -599,7 +632,9 @@ span_processor_tests = [
                         ),
                     ),
                 ),
-                FunctionCall(None, "tuple", (Literal(None, "db"), Literal(None, "a" * 16))),
+                FunctionCall(
+                    None, "tuple", (Literal(None, "db"), Literal(None, "a" * 16))
+                ),
             ),
         ),
         id="simple equals filter on op + group",
@@ -677,12 +712,16 @@ span_processor_tests = [
                     (
                         tupleElement(
                             "spans_op",
-                            array_join_col(op_groups=[("db", "a" * 16), ("http", "b" * 16)]),
+                            array_join_col(
+                                op_groups=[("db", "a" * 16), ("http", "b" * 16)]
+                            ),
                             Literal(None, 1),
                         ),
                         tupleElement(
                             "spans_group",
-                            array_join_col(op_groups=[("db", "a" * 16), ("http", "b" * 16)]),
+                            array_join_col(
+                                op_groups=[("db", "a" * 16), ("http", "b" * 16)]
+                            ),
                             Literal(None, 2),
                         ),
                     ),
@@ -719,9 +758,13 @@ def test_spans_processor(
     expected_conditions: Optional[Expression],
 ) -> None:
     query_settings = HTTPQuerySettings()
-    bloom_filter_processor = BloomFilterOptimizer("spans", ["op", "group"], ["exclusive_time"])
+    bloom_filter_processor = BloomFilterOptimizer(
+        "spans", ["op", "group"], ["exclusive_time"]
+    )
     bloom_filter_processor.process_query(query, query_settings)
-    array_join_processor = ArrayJoinOptimizer("spans", ["op", "group"], ["exclusive_time"])
+    array_join_processor = ArrayJoinOptimizer(
+        "spans", ["op", "group"], ["exclusive_time"]
+    )
     array_join_processor.process_query(query, query_settings)
     assert query.get_selected_columns() == expected_selected_columns
     assert query.get_condition() == expected_conditions

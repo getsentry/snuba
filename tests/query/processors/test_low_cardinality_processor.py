@@ -26,7 +26,9 @@ def test_low_cardinality_processor() -> None:
         ),
     )
 
-    LowCardinalityProcessor(["environment"]).process_query(unprocessed, HTTPQuerySettings())
+    LowCardinalityProcessor(["environment"]).process_query(
+        unprocessed, HTTPQuerySettings()
+    )
     assert expected.get_condition() == unprocessed.get_condition()
 
 
@@ -47,5 +49,7 @@ def test_low_cardinality_processor_with_tags() -> None:
         ),
     )
 
-    LowCardinalityProcessor(["tags[environment]"]).process_query(unprocessed, HTTPQuerySettings())
+    LowCardinalityProcessor(["tags[environment]"]).process_query(
+        unprocessed, HTTPQuerySettings()
+    )
     assert expected.get_condition() == unprocessed.get_condition()

@@ -240,7 +240,9 @@ TEST_CASES = [
     (
         CurriedFunctionCall(
             None,
-            FunctionCall(None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))),
+            FunctionCall(
+                None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))
+            ),
             (Literal(None, "hello"), Literal(None, "kitty")),
         ),
         """f1(
@@ -295,6 +297,8 @@ def test_format(test_expr, expected_str) -> None:
 
 @pytest.mark.parametrize("test_expr,_formatted_str", TEST_CASES)
 def test_functional_eq(test_expr, _formatted_str):
-    mangled_expr = test_expr.transform(lambda expr: replace(expr, alias=uuid.uuid4().hex))
+    mangled_expr = test_expr.transform(
+        lambda expr: replace(expr, alias=uuid.uuid4().hex)
+    )
     assert test_expr != mangled_expr
     assert mangled_expr.functional_eq(test_expr)

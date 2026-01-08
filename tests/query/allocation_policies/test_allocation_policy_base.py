@@ -64,7 +64,10 @@ def test_eq() -> None:
 def test_passthrough_allows_queries() -> None:
     DEFAULT_PASSTHROUGH_POLICY.set_config_value("max_threads", 420)
     assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}, "deadbeef").can_run
-    assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}, "deadbeef").max_threads == 420
+    assert (
+        DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}, "deadbeef").max_threads
+        == 420
+    )
 
 
 class RejectingEverythingAllocationPolicy(PassthroughPolicy):
@@ -118,7 +121,9 @@ class BadlyWrittenAllocationPolicy(PassthroughPolicy):
 
 class InvalidTenantAllocationPolicy(PassthroughPolicy):
     def _get_quota_allowance(self, tenant_ids: dict[str, str | int], query_id: str):
-        raise InvalidTenantsForAllocationPolicy.from_args(tenant_ids, self.__class__.__name__)
+        raise InvalidTenantsForAllocationPolicy.from_args(
+            tenant_ids, self.__class__.__name__
+        )
 
     def _update_quota_balance(
         self,
@@ -126,14 +131,16 @@ class InvalidTenantAllocationPolicy(PassthroughPolicy):
         query_id: str,
         result_or_error: QueryResultOrError,
     ):
-        raise InvalidTenantsForAllocationPolicy.from_args(tenant_ids, self.__class__.__name__)
+        raise InvalidTenantsForAllocationPolicy.from_args(
+            tenant_ids, self.__class__.__name__
+        )
 
 
 def test_passes_through_on_error() -> None:
     with pytest.raises(AttributeError):
-        BadlyWrittenAllocationPolicy(StorageKey("something"), [], {}).get_quota_allowance(
-            {}, query_id="deadbeef"
-        )
+        BadlyWrittenAllocationPolicy(
+            StorageKey("something"), [], {}
+        ).get_quota_allowance({}, query_id="deadbeef")
 
     with pytest.raises(ValueError):
         BadlyWrittenAllocationPolicy(StorageKey("something"), [], {}).update_quota_balance(None, None, None)  # type: ignore
@@ -146,7 +153,9 @@ def test_passes_through_on_error() -> None:
             .can_run
         )
 
-        BadlyWrittenAllocationPolicy(StorageKey("something"), [], {}).update_quota_balance(
+        BadlyWrittenAllocationPolicy(
+            StorageKey("something"), [], {}
+        ).update_quota_balance(
             None, None, None  # type: ignore
         )
 
@@ -186,7 +195,10 @@ def test_bad_config_keys() -> None:
 
     with pytest.raises(InvalidConfig) as err:
         policy.get_config_value("does_not_exist")
-    assert str(err.value) == "'does_not_exist' is not a valid config for PassthroughPolicy!"
+    assert (
+        str(err.value)
+        == "'does_not_exist' is not a valid config for PassthroughPolicy!"
+    )
 
 
 class SomeParametrizedConfigPolicy(AllocationPolicy):
@@ -257,8 +269,13 @@ def policy() -> AllocationPolicy:
 @pytest.mark.redis_db
 def test_config_validation(policy: AllocationPolicy) -> None:
     with pytest.raises(InvalidConfig) as err:
-        policy.set_config_value(config_key="my_config", value=10, params={"bad_param": 10})
-    assert str(err.value) == "'my_config' takes no params for SomeParametrizedConfigPolicy!"
+        policy.set_config_value(
+            config_key="my_config", value=10, params={"bad_param": 10}
+        )
+    assert (
+        str(err.value)
+        == "'my_config' takes no params for SomeParametrizedConfigPolicy!"
+    )
     with pytest.raises(InvalidConfig) as err:
         policy.set_config_value(config_key="my_config", value="lol")
     assert (
@@ -415,7 +432,9 @@ def test_default_config_override() -> None:
         StorageKey("some_storage"), [], {"my_param_config": 420, "is_enforced": 0}
     )
     assert (
-        policy.get_config_value("my_param_config", params={"org": 1, "ref": "a"}, validate=True)
+        policy.get_config_value(
+            "my_param_config", params={"org": 1, "ref": "a"}, validate=True
+        )
         == 420
     )
     assert policy.get_config_value("is_enforced") == 0
@@ -424,11 +443,17 @@ def test_default_config_override() -> None:
 @pytest.mark.redis_db
 def test_bad_defaults() -> None:
     with pytest.raises(ValueError):
-        SomeParametrizedConfigPolicy(StorageKey("some_storage"), [], {"is_enforced": "0"})
+        SomeParametrizedConfigPolicy(
+            StorageKey("some_storage"), [], {"is_enforced": "0"}
+        )
     with pytest.raises(ValueError):
-        SomeParametrizedConfigPolicy(StorageKey("some_storage"), [], {"is_active": False})
+        SomeParametrizedConfigPolicy(
+            StorageKey("some_storage"), [], {"is_active": False}
+        )
     with pytest.raises(ValueError):
-        SomeParametrizedConfigPolicy(StorageKey("some_storage"), [], {"my_param_config": False})
+        SomeParametrizedConfigPolicy(
+            StorageKey("some_storage"), [], {"my_param_config": False}
+        )
 
 
 @pytest.mark.redis_db
@@ -496,20 +521,29 @@ def test_is_not_enforced() -> None:
 
     assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
     throttle_policy.set_config_value(config_key="is_enforced", value=0)
-    assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == MAX_THREADS
+    assert (
+        throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads
+        == MAX_THREADS
+    )
 
     rejected_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_rejected"
     )
     assert len(rejected_metrics) == 2
-    assert rejected_metrics[0].tags["policy_class"] == "RejectingEverythingAllocationPolicy"
+    assert (
+        rejected_metrics[0].tags["policy_class"]
+        == "RejectingEverythingAllocationPolicy"
+    )
     assert rejected_metrics[0].tags["is_enforced"] == "True"
     assert rejected_metrics[1].tags["is_enforced"] == "False"
     throttled_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_throttled"
     )
     assert len(throttled_metrics) == 2, throttled_metrics
-    assert throttled_metrics[0].tags["policy_class"] == "ThrottleEverythingAllocationPolicy"
+    assert (
+        throttled_metrics[0].tags["policy_class"]
+        == "ThrottleEverythingAllocationPolicy"
+    )
     assert throttled_metrics[0].tags["is_enforced"] == "True"
     assert throttled_metrics[1].tags["is_enforced"] == "False"
 
@@ -534,7 +568,9 @@ def test_configs_with_delimiter_values() -> None:
 def test_cannot_use_escape_sequences() -> None:
     policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
     with pytest.raises(InvalidConfig):
-        policy.set_config_value("my_param_config", 5, {"ref": "a__dot_literal__.b.c", "org": 1})
+        policy.set_config_value(
+            "my_param_config", 5, {"ref": "a__dot_literal__.b.c", "org": 1}
+        )
 
 
 class TestComponentNameBackwardsCompatibility:
