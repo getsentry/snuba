@@ -38,7 +38,9 @@ _PASS_THROUGH_REFERRERS = set(
 
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e12)
-_RATE_LIMITER = RedisSlidingWindowRateLimiter(get_redis_client(RedisClientKey.RATE_LIMITER))
+_RATE_LIMITER = RedisSlidingWindowRateLimiter(
+    get_redis_client(RedisClientKey.RATE_LIMITER)
+)
 DEFAULT_OVERRIDE_LIMIT = -1
 PETABYTE = 10**12
 DEFAULT_BYTES_SCANNED_LIMIT = int(1.28 * PETABYTE)
@@ -123,7 +125,9 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             ),
         ]
 
-    def _are_tenant_ids_valid(self, tenant_ids: dict[str, str | int]) -> tuple[bool, str]:
+    def _are_tenant_ids_valid(
+        self, tenant_ids: dict[str, str | int]
+    ) -> tuple[bool, str]:
         if self.is_cross_org_query(tenant_ids):
             return True, "cross org query"
         if tenant_ids.get("referrer") is None:
@@ -208,7 +212,9 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 suggestion=PASS_THROUGH_REFERRERS_SUGGESTION,
             )
 
-        scan_limit = self.__get_scan_limit(customer_tenant_key, customer_tenant_value, referrer)
+        scan_limit = self.__get_scan_limit(
+            customer_tenant_key, customer_tenant_value, referrer
+        )
         throttle_threshold = max(
             1, int(scan_limit // self.get_config_value("bytes_throttle_divider"))
         )
@@ -238,7 +244,8 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         if granted_quota.granted <= 0:
             if self.get_config_value("limit_bytes_instead_of_rejecting"):
                 max_bytes_to_read = int(
-                    scan_limit / self.get_config_value("max_bytes_to_read_scan_limit_divider")
+                    scan_limit
+                    / self.get_config_value("max_bytes_to_read_scan_limit_divider")
                 )
                 explanation[
                     "reason"
@@ -252,13 +259,16 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
 
                 self.metrics.increment(
                     "bytes_scanned_limited",
-                    tags={"tenant": f"{customer_tenant_key}__{customer_tenant_value}__{referrer}"},
+                    tags={
+                        "tenant": f"{customer_tenant_key}__{customer_tenant_value}__{referrer}"
+                    },
                 )
                 return QuotaAllowance(
                     can_run=True,
                     max_threads=max(
                         1,
-                        self.max_threads // self.get_config_value("threads_throttle_divider"),
+                        self.max_threads
+                        // self.get_config_value("threads_throttle_divider"),
                     ),
                     max_bytes_to_read=max_bytes_to_read,
                     explanation=explanation,
@@ -283,7 +293,9 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
 
                 self.metrics.increment(
                     "bytes_scanned_rejection",
-                    tags={"tenant": f"{customer_tenant_key}__{customer_tenant_value}__{referrer}"},
+                    tags={
+                        "tenant": f"{customer_tenant_key}__{customer_tenant_value}__{referrer}"
+                    },
                 )
                 return QuotaAllowance(
                     can_run=False,
@@ -307,7 +319,8 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 can_run=True,
                 max_threads=max(
                     1,
-                    self.max_threads // self.get_config_value("threads_throttle_divider"),
+                    self.max_threads
+                    // self.get_config_value("threads_throttle_divider"),
                 ),
                 explanation={"reason": "within_limit but throttled"},
                 is_throttled=True,
@@ -336,9 +349,14 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         if result_or_error.error:
             if (
                 isinstance(result_or_error.error.__cause__, ClickhouseError)
-                and result_or_error.error.__cause__.code == errors.ErrorCodes.TIMEOUT_EXCEEDED
+                and result_or_error.error.__cause__.code
+                == errors.ErrorCodes.TIMEOUT_EXCEEDED
             ):
-                return int(self.get_config_value("clickhouse_timeout_bytes_scanned_penalization"))
+                return int(
+                    self.get_config_value(
+                        "clickhouse_timeout_bytes_scanned_penalization"
+                    )
+                )
             else:
                 return 0
         progress_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", None))  # type: ignore
@@ -370,7 +388,9 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             customer_tenant_key,
             customer_tenant_value,
         ) = self._get_customer_tenant_key_and_value(tenant_ids)
-        scan_limit = self.__get_scan_limit(customer_tenant_key, customer_tenant_value, referrer)
+        scan_limit = self.__get_scan_limit(
+            customer_tenant_key, customer_tenant_value, referrer
+        )
         # we can assume that the requested quota was granted (because it was)
         # we just need to update the quota with however many bytes were consumed
         _RATE_LIMITER.use_quotas(
