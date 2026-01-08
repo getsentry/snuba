@@ -289,6 +289,16 @@ mod tests {
     }
 
     #[test]
+    fn test_item_id_maintains_order() {
+        let item_id1 = Uuid::new_v7(uuid::Timestamp::from_rfc4122(0, 0));
+        let item_id2 = Uuid::new_v7(uuid::Timestamp::from_rfc4122(1, 0));
+        let eap_item1 = EAPItem::try_from(generate_trace_item(item_id1)).unwrap();
+        let eap_item2 = EAPItem::try_from(generate_trace_item(item_id2)).unwrap();
+
+        assert!(eap_item1.item_id < eap_item2.item_id);
+    }
+
+    #[test]
     fn test_downsampled_retention_days_default() {
         let item_id = Uuid::new_v4();
         let trace_item = generate_trace_item(item_id);
