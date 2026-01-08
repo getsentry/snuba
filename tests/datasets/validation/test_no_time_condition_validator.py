@@ -72,9 +72,7 @@ invalid_tests = [
 
 
 @pytest.mark.parametrize("key, condition", invalid_tests)  # type: ignore
-def test_no_time_based_validation_failure(
-    key: EntityKey, condition: Expression
-) -> None:
+def test_no_time_based_validation_failure(key: EntityKey, condition: Expression) -> None:
     entity = get_entity(key)
     query = LogicalQuery(
         QueryEntity(key, entity.get_data_model()),

@@ -503,9 +503,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             start=self.start_time,
             end=self.end_time,
             rollup=Rollup(interval=3600, totals=None, granularity=3600),
-            scope=MetricsScope(
-                org_ids=[1], project_ids=[11], use_case_id="transactions"
-            ),
+            scope=MetricsScope(org_ids=[1], project_ids=[11], use_case_id="transactions"),
             indexer_mappings={
                 "d:transactions/duration@millisecond": 123456,
                 " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~": 78910,
@@ -715,9 +713,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             ),
             start=self.start_time,
             end=self.end_time,
-            rollup=Rollup(
-                interval=None, totals=True, orderby=Direction.DESC, granularity=60
-            ),
+            rollup=Rollup(interval=None, totals=True, orderby=Direction.DESC, granularity=60),
             scope=MetricsScope(
                 org_ids=[self.org_id],
                 project_ids=self.project_ids,
@@ -1534,9 +1530,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             ),
             start=self.start_time,
             end=self.end_time,
-            rollup=Rollup(
-                interval=None, granularity=60, totals=True, orderby=Direction.DESC
-            ),
+            rollup=Rollup(interval=None, granularity=60, totals=True, orderby=Direction.DESC),
             scope=MetricsScope(
                 org_ids=[self.org_id],
                 project_ids=self.project_ids,
@@ -1770,9 +1764,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             ),
             start=self.start_time,
             end=self.end_time,
-            rollup=Rollup(
-                interval=None, totals=True, orderby=Direction.DESC, granularity=60
-            ),
+            rollup=Rollup(interval=None, totals=True, orderby=Direction.DESC, granularity=60),
             scope=MetricsScope(
                 org_ids=[self.org_id],
                 project_ids=self.project_ids,

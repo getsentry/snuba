@@ -32,9 +32,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.ModifyColumn(
                 storage_set=StorageSetKey.EVENTS_RO,
                 table_name="errors_dist_ro",
-                column=Column(
-                    "level", String(Modifiers(low_cardinality=True, nullable=True))
-                ),
+                column=Column("level", String(Modifiers(low_cardinality=True, nullable=True))),
                 target=operations.OperationTarget.DISTRIBUTED,
             ),
         ]

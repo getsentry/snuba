@@ -82,9 +82,7 @@ def check_migration_perms(f: Callable[..., Response]) -> Callable[..., Response]
                             jsonify({"error": "Group not allowed run policy"}), 403
                         )
                 elif action == "reverse":
-                    if not any(
-                        policy.can_reverse(migration_key) for policy in policies
-                    ):
+                    if not any(policy.can_reverse(migration_key) for policy in policies):
                         return make_response(
                             jsonify({"error": "Group not allowed reverse policy"}), 403
                         )

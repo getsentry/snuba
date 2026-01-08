@@ -42,9 +42,7 @@ class HandledFunctionsProcessor(LogicalQueryProcessor):
     def __init__(self, column: str):
         self.__column = column
 
-    def validate_parameters(
-        self, exp: FunctionCall, data_source: SimpleDataSource
-    ) -> None:
+    def validate_parameters(self, exp: FunctionCall, data_source: SimpleDataSource) -> None:
         validator = SignatureValidator([])
         try:
             validator.validate(exp.function_name, exp.parameters, data_source)
@@ -69,9 +67,7 @@ class HandledFunctionsProcessor(LogicalQueryProcessor):
                                 ("x",),
                                 binary_condition(
                                     BooleanFunctions.OR,
-                                    FunctionCall(
-                                        None, "isNull", (Argument(None, "x"),)
-                                    ),
+                                    FunctionCall(None, "isNull", (Argument(None, "x"),)),
                                     binary_condition(
                                         ConditionFunctions.NEQ,
                                         FunctionCall(
@@ -97,9 +93,7 @@ class HandledFunctionsProcessor(LogicalQueryProcessor):
                                 ("x",),
                                 binary_condition(
                                     BooleanFunctions.AND,
-                                    FunctionCall(
-                                        None, "isNotNull", (Argument(None, "x"),)
-                                    ),
+                                    FunctionCall(None, "isNotNull", (Argument(None, "x"),)),
                                     binary_condition(
                                         ConditionFunctions.EQ,
                                         FunctionCall(

@@ -61,9 +61,7 @@ def any_if_string(
     )
 
 
-def any_if_nullable_string(
-    column_name: str, low_cardinality: bool = False
-) -> Column[Modifiers]:
+def any_if_nullable_string(column_name: str, low_cardinality: bool = False) -> Column[Modifiers]:
     """Returns an aggregate anyIf function."""
     return any_if_string(column_name, nullable=True, low_cardinality=low_cardinality)
 
@@ -75,9 +73,7 @@ def sum(column_name: str) -> Column[Modifiers]:
 
 def count_nullable(column_name: str) -> Column[Modifiers]:
     """Returns an aggregate count function capable of accepting nullable integer values."""
-    return Column(
-        column_name, AggregateFunction("count", [UInt(64, Modifiers(nullable=True))])
-    )
+    return Column(column_name, AggregateFunction("count", [UInt(64, Modifiers(nullable=True))]))
 
 
 columns: List[Column[Modifiers]] = [
@@ -105,20 +101,14 @@ columns: List[Column[Modifiers]] = [
     Column("finished_at", AggregateFunction("maxIf", [DateTime(), UInt(8)])),
     Column("ip_address_v4", AggregateFunction("any", [IPv4(Modifiers(nullable=True))])),
     Column("ip_address_v6", AggregateFunction("any", [IPv6(Modifiers(nullable=True))])),
-    Column(
-        "is_archived", AggregateFunction("sum", [UInt(64, Modifiers(nullable=True))])
-    ),
-    Column(
-        "min_segment_id", AggregateFunction("min", [UInt(16, Modifiers(nullable=True))])
-    ),
+    Column("is_archived", AggregateFunction("sum", [UInt(64, Modifiers(nullable=True))])),
+    Column("min_segment_id", AggregateFunction("min", [UInt(16, Modifiers(nullable=True))])),
     any_if_nullable_string("os_name"),
     any_if_nullable_string("os_version"),
     any_if_string("platform", low_cardinality=False),
     any_if_nullable_string("sdk_name"),
     any_if_nullable_string("sdk_version"),
-    Column(
-        "started_at", AggregateFunction("min", [DateTime(Modifiers(nullable=True))])
-    ),
+    Column("started_at", AggregateFunction("min", [DateTime(Modifiers(nullable=True))])),
     any_if_nullable_string("user"),
     any_if_nullable_string("user_id"),
     any_if_nullable_string("user_name"),

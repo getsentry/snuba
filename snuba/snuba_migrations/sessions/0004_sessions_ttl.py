@@ -9,9 +9,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.ModifyTableTTL(
-                StorageSetKey.SESSIONS, "sessions_raw_local", "started", 30
-            ),
+            operations.ModifyTableTTL(StorageSetKey.SESSIONS, "sessions_raw_local", "started", 30),
             operations.ModifyTableTTL(
                 StorageSetKey.SESSIONS, "sessions_hourly_local", "started", 90
             ),

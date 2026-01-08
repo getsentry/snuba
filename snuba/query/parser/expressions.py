@@ -93,14 +93,10 @@ class ClickhouseVisitor(NodeVisitor):  # type: ignore
     ) -> HighPriTuple:
         return visit_high_pri_tuple(node, visited_children)
 
-    def visit_low_pri_op(
-        self, node: Node, visited_children: Iterable[Any]
-    ) -> LowPriOperator:
+    def visit_low_pri_op(self, node: Node, visited_children: Iterable[Any]) -> LowPriOperator:
         return visit_low_pri_op(node, visited_children)
 
-    def visit_high_pri_op(
-        self, node: Node, visited_children: Iterable[Any]
-    ) -> HighPriOperator:
+    def visit_high_pri_op(self, node: Node, visited_children: Iterable[Any]) -> HighPriOperator:
         return visit_high_pri_op(node, visited_children)
 
     def visit_arithmetic_term(
@@ -122,14 +118,10 @@ class ClickhouseVisitor(NodeVisitor):  # type: ignore
     ) -> Expression:
         return visit_high_pri_arithmetic(node, visited_children)
 
-    def visit_numeric_literal(
-        self, node: Node, visited_children: Iterable[Any]
-    ) -> Literal:
+    def visit_numeric_literal(self, node: Node, visited_children: Iterable[Any]) -> Literal:
         return visit_numeric_literal(node, visited_children)
 
-    def visit_quoted_literal(
-        self, node: Node, visited_children: Tuple[Node]
-    ) -> Literal:
+    def visit_quoted_literal(self, node: Node, visited_children: Tuple[Node]) -> Literal:
         return visit_quoted_literal(node, visited_children)
 
     def visit_parameter(
@@ -147,9 +139,7 @@ class ClickhouseVisitor(NodeVisitor):  # type: ignore
     def visit_function_call(
         self,
         node: Node,
-        visited_children: Tuple[
-            str, Any, List[Expression], Any, Union[Node, List[Expression]]
-        ],
+        visited_children: Tuple[str, Any, List[Expression], Any, Union[Node, List[Expression]]],
     ) -> Expression:
         return visit_function_call(node, visited_children)
 

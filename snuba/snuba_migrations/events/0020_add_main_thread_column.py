@@ -15,9 +15,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name=table_name,
-                column=Column(
-                    "exception_main_thread", UInt(8, Modifiers(nullable=True))
-                ),
+                column=Column("exception_main_thread", UInt(8, Modifiers(nullable=True))),
                 after="modules.version",
                 target=target,
             )

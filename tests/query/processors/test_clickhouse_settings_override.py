@@ -47,9 +47,7 @@ def test_apply_clickhouse_settings(
         selected_columns=[
             SelectedExpression(
                 name="_snuba_count_unique_sdk_version",
-                expression=FunctionCall(
-                    None, "uniq", (Column(None, None, "mismatched1"),)
-                ),
+                expression=FunctionCall(None, "uniq", (Column(None, None, "mismatched1"),)),
             )
         ],
     )
@@ -75,9 +73,7 @@ def test_per_query_settings() -> None:
         selected_columns=[
             SelectedExpression(
                 name="_snuba_count_unique_sdk_version",
-                expression=FunctionCall(
-                    None, "uniq", (Column(None, None, "mismatched1"),)
-                ),
+                expression=FunctionCall(None, "uniq", (Column(None, None, "mismatched1"),)),
             )
         ],
     )
@@ -121,9 +117,7 @@ def test_ignore_clickhouse_settings_overrides() -> None:
         selected_columns=[
             SelectedExpression(
                 name="_snuba_count_unique_sdk_version",
-                expression=FunctionCall(
-                    None, "uniq", (Column(None, None, "mismatched1"),)
-                ),
+                expression=FunctionCall(None, "uniq", (Column(None, None, "mismatched1"),)),
             )
         ],
     )

@@ -118,9 +118,7 @@ def test_replace_expression() -> None:
     expected_query = Query(
         Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[
-            SelectedExpression(
-                "alias", FunctionCall("alias", "tag", (Literal(None, "f1"),))
-            )
+            SelectedExpression("alias", FunctionCall("alias", "tag", (Literal(None, "f1"),)))
         ],
         array_join=None,
         condition=binary_condition(
@@ -144,9 +142,7 @@ def test_replace_expression() -> None:
     assert query.get_having() == expected_query.get_having()
     assert query.get_orderby() == expected_query.get_orderby()
 
-    assert list(query.get_all_expressions()) == list(
-        expected_query.get_all_expressions()
-    )
+    assert list(query.get_all_expressions()) == list(expected_query.get_all_expressions())
 
 
 def test_get_all_columns_legacy() -> None:
@@ -335,9 +331,7 @@ VALIDATION_TESTS = [
 
 
 @pytest.mark.parametrize("query_body, expected_result", VALIDATION_TESTS)
-def test_alias_validation(
-    query_body: MutableMapping[str, Any], expected_result: bool
-) -> None:
+def test_alias_validation(query_body: MutableMapping[str, Any], expected_result: bool) -> None:
     events = get_dataset("events")
     request = json_to_snql(query_body, "events")
     request.validate()

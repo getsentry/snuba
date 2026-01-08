@@ -143,9 +143,7 @@ tests = [
                                                         ),
                                                         Literal(
                                                             None,
-                                                            datetime(
-                                                                2023, 11, 23, 18, 30
-                                                            ),
+                                                            datetime(2023, 11, 23, 18, 30),
                                                         ),
                                                     ),
                                                 ),
@@ -259,9 +257,7 @@ tests = [
                         column("project_id", None, "_snuba_project_id"),
                         f.tuple(literal(11)),
                     ),
-                    in_cond(
-                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                    ),
+                    in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                 ),
             ),
             and_cond(
@@ -270,17 +266,11 @@ tests = [
                         column("use_case_id", None, "_snuba_use_case_id"),
                         literal("transactions"),
                     ),
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
+                    f.equals(column("granularity", None, "_snuba_granularity"), literal(60)),
                 ),
                 and_cond(
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
-                    in_cond(
-                        tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))
-                    ),
+                    f.equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
+                    in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
                 ),
             ),
         ),
@@ -400,9 +390,7 @@ query_tests = [
                                                             ),
                                                             Literal(
                                                                 None,
-                                                                datetime(
-                                                                    2021, 1, 1, 0, 0
-                                                                ),
+                                                                datetime(2021, 1, 1, 0, 0),
                                                             ),
                                                         ),
                                                     ),

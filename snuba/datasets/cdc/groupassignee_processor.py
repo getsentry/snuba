@@ -43,12 +43,8 @@ class GroupAssigneeRow(CdcMessageRow):
             group_id=raw_data["group_id"],
             record_content=GroupAssigneeRecord(
                 date_added=parse_postgres_datetime(raw_data["date_added"]),
-                user_id=int(raw_data["user_id"])
-                if raw_data["user_id"] is not None
-                else None,
-                team_id=int(raw_data["team_id"])
-                if raw_data["team_id"] is not None
-                else None,
+                user_id=int(raw_data["user_id"]) if raw_data["user_id"] is not None else None,
+                team_id=int(raw_data["team_id"]) if raw_data["team_id"] is not None else None,
             ),
         )
 

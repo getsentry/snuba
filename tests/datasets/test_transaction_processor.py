@@ -221,9 +221,7 @@ class TransactionEvent:
         start_timestamp = datetime.utcfromtimestamp(self.start_timestamp)
         finish_timestamp = datetime.utcfromtimestamp(self.timestamp)
 
-        spans = sorted(
-            [(self.op, int("a" * 16, 16), 1.2345), ("http", int("b" * 16, 16), 0.1234)]
-        )
+        spans = sorted([(self.op, int("a" * 16, 16), 1.2345), ("http", int("b" * 16, 16), 0.1234)])
 
         ret = {
             "deleted": 0,
@@ -240,9 +238,7 @@ class TransactionEvent:
             "start_ms": int(start_timestamp.microsecond / 1000),
             "finish_ts": finish_timestamp,
             "finish_ms": int(finish_timestamp.microsecond / 1000),
-            "duration": int(
-                (finish_timestamp - start_timestamp).total_seconds() * 1000
-            ),
+            "duration": int((finish_timestamp - start_timestamp).total_seconds() * 1000),
             "platform": self.platform,
             "environment": self.environment,
             "release": self.release,
@@ -334,9 +330,7 @@ class TestTransactionsProcessor:
             op="navigation",
             timestamp=finish,
             start_timestamp=start,
-            received=(
-                datetime.now(tz=timezone.utc) - timedelta(seconds=15)
-            ).timestamp(),
+            received=(datetime.now(tz=timezone.utc) - timedelta(seconds=15)).timestamp(),
             platform="python",
             dist="",
             user_name="me",
@@ -369,9 +363,7 @@ class TestTransactionsProcessor:
         # Force an invalid event
         payload[2]["data"]["type"] = "error"
 
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
         processor = TransactionsMessageProcessor()
         assert processor.process_message(payload, meta) is None
 
@@ -381,9 +373,7 @@ class TestTransactionsProcessor:
         # Force an invalid event
         del payload[2]["data"]["contexts"]
 
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
         processor = TransactionsMessageProcessor()
         assert processor.process_message(payload, meta) is None
 
@@ -393,9 +383,7 @@ class TestTransactionsProcessor:
 
         message = self.__get_transaction_event()
 
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
         assert TransactionsMessageProcessor().process_message(
             message.serialize(), meta
         ) == InsertBatch([message.build_result(meta)], ANY)
@@ -407,9 +395,7 @@ class TestTransactionsProcessor:
         set_config("max_spans_per_transaction", 1)
 
         message = self.__get_transaction_event()
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
 
         payload = message.serialize()
 
@@ -421,9 +407,9 @@ class TestTransactionsProcessor:
         result["spans.exclusive_time"] = [0]
         result["spans.exclusive_time_32"] = [1.2345]
 
-        assert TransactionsMessageProcessor().process_message(
-            payload, meta
-        ) == InsertBatch([result], ANY)
+        assert TransactionsMessageProcessor().process_message(payload, meta) == InsertBatch(
+            [result], ANY
+        )
         settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context
 
     def test_missing_transaction_source(self) -> None:
@@ -436,9 +422,7 @@ class TestTransactionsProcessor:
         # Remove transaction_info
         del payload_wo_transaction_info[2]["data"]["transaction_info"]
 
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
         actual_message = TransactionsMessageProcessor().process_message(
             payload_wo_transaction_info, meta
         )
@@ -447,12 +431,8 @@ class TestTransactionsProcessor:
         # Remove transaction_info.source
         del payload_wo_source[2]["data"]["transaction_info"]["source"]
 
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
-        actual_message = TransactionsMessageProcessor().process_message(
-            payload_wo_source, meta
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
+        actual_message = TransactionsMessageProcessor().process_message(payload_wo_source, meta)
         assert actual_message.rows[0]["transaction_source"] == ""
 
     def test_app_ctx_none(self) -> None:
@@ -462,9 +442,7 @@ class TestTransactionsProcessor:
         message = self.__get_transaction_event()
         message.has_app_ctx = False
 
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
         assert TransactionsMessageProcessor().process_message(
             message.serialize(), meta
         ) == InsertBatch([message.build_result(meta)], ANY)
@@ -478,14 +456,10 @@ class TestTransactionsProcessor:
         message = self.__get_transaction_event()
         payload = message.serialize()
 
-        payload[2]["data"]["tags"].append(
-            ["replayId", "d2731f8ed8934c6fa5253e450915aa12"]
-        )
+        payload[2]["data"]["tags"].append(["replayId", "d2731f8ed8934c6fa5253e450915aa12"])
         del payload[2]["data"]["contexts"]["replay"]
 
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
         result = message.build_result(meta)
 
         # when the replay_id is sent as a tag instead of a context,
@@ -495,9 +469,9 @@ class TestTransactionsProcessor:
         result["tags.key"].insert(1, "replayId")
         result["tags.value"].insert(1, "d2731f8ed8934c6fa5253e450915aa12")
 
-        assert TransactionsMessageProcessor().process_message(
-            payload, meta
-        ) == InsertBatch([result], ANY)
+        assert TransactionsMessageProcessor().process_message(payload, meta) == InsertBatch(
+            [result], ANY
+        )
 
     def test_replay_id_as_tag_and_context(self) -> None:
         """
@@ -509,13 +483,9 @@ class TestTransactionsProcessor:
         message = self.__get_transaction_event()
         payload = message.serialize()
 
-        payload[2]["data"]["tags"].append(
-            ["replayId", "d2731f8ed8934c6fa5253e450915aa12"]
-        )
+        payload[2]["data"]["tags"].append(["replayId", "d2731f8ed8934c6fa5253e450915aa12"])
 
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
         result = message.build_result(meta)
 
         # when the replay_id is sent as a tag instead of a context,
@@ -525,9 +495,9 @@ class TestTransactionsProcessor:
         result["tags.key"].insert(1, "replayId")
         result["tags.value"].insert(1, "d2731f8ed8934c6fa5253e450915aa12")
 
-        assert TransactionsMessageProcessor().process_message(
-            payload, meta
-        ) == InsertBatch([result], ANY)
+        assert TransactionsMessageProcessor().process_message(payload, meta) == InsertBatch(
+            [result], ANY
+        )
 
     def test_replay_id_as_invalid_tag(self) -> None:
         """
@@ -541,9 +511,7 @@ class TestTransactionsProcessor:
         del payload[2]["data"]["contexts"]["replay"]
         payload[2]["data"]["tags"].append(["replayId", "I_AM_NOT_A_UUID"])
 
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
         result = message.build_result(meta)
 
         del result["replay_id"]
@@ -552,9 +520,9 @@ class TestTransactionsProcessor:
         result["tags.key"].insert(1, "replayId")
         result["tags.value"].insert(1, "I_AM_NOT_A_UUID")
 
-        assert TransactionsMessageProcessor().process_message(
-            payload, meta
-        ) == InsertBatch([result], ANY)
+        assert TransactionsMessageProcessor().process_message(payload, meta) == InsertBatch(
+            [result], ANY
+        )
 
     def test_trace_data_is_none(self) -> None:
         """
@@ -566,9 +534,7 @@ class TestTransactionsProcessor:
         # Force an invalid event
         payload[2]["data"]["contexts"]["trace"]["data"] = None
 
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
 
         result = message.build_result(meta)
 

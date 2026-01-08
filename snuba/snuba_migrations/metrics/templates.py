@@ -434,9 +434,7 @@ def get_forward_migrations_dist(
             storage_set=StorageSetKey.METRICS,
             table_name=dist_table_name,
             columns=[*COMMON_AGGR_COLUMNS, *aggregation_col_schema],
-            engine=table_engines.Distributed(
-                local_table_name=local_table_name, sharding_key=None
-            ),
+            engine=table_engines.Distributed(local_table_name=local_table_name, sharding_key=None),
         ),
         operations.AddColumn(
             storage_set=StorageSetKey.METRICS,

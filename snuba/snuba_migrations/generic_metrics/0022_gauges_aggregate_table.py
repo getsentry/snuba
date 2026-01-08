@@ -31,9 +31,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("project_id", UInt(64)),
         Column("metric_id", UInt(64)),
         Column("granularity", UInt(8)),
-        Column(
-            "rounded_timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))
-        ),
+        Column("rounded_timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
         Column("last_timestamp", AggregateFunction("max", [DateTime()])),
         Column("retention_days", UInt(16)),
         Column(

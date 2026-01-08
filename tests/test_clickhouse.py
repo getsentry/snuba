@@ -14,10 +14,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 
 def test_flattened() -> None:
     columns = (
-        get_writable_storage(StorageKey("errors"))
-        .get_table_writer()
-        .get_schema()
-        .get_columns()
+        get_writable_storage(StorageKey("errors")).get_table_writer().get_schema().get_columns()
     )
 
     # columns = enforce_table_writer(self.dataset).get_schema().get_columns()
@@ -26,9 +23,7 @@ def test_flattened() -> None:
     assert columns["group_id"].base_name is None
     assert columns["group_id"].flattened == "group_id"
 
-    assert columns["exception_frames.in_app"].type == Array(
-        UInt(8, Modifier(nullable=True))
-    )
+    assert columns["exception_frames.in_app"].type == Array(UInt(8, Modifier(nullable=True)))
     assert columns["exception_frames.in_app"].name == "in_app"
     assert columns["exception_frames.in_app"].base_name == "exception_frames"
     assert columns["exception_frames.in_app"].flattened == "exception_frames.in_app"
@@ -68,9 +63,7 @@ def test_reconnect(FakeClient: Client) -> None:
 @pytest.mark.clickhouse_db
 def test_capture_trace() -> None:
     storage = get_storage(StorageKey.ERRORS)
-    clickhouse = storage.get_cluster().get_query_connection(
-        ClickhouseClientSettings.QUERY
-    )
+    clickhouse = storage.get_cluster().get_query_connection(ClickhouseClientSettings.QUERY)
 
     data = clickhouse.execute(
         "SELECT count() FROM errors_local", with_column_types=True, capture_trace=True

@@ -10,12 +10,8 @@ buckets = 40
 def get_hashed_attributes_column_expression() -> str:
     column_expressions = []
     for i in range(buckets):
-        hashed_keys_string = (
-            f"arrayMap(k -> cityHash64(k), mapKeys(attributes_string_{i}))"
-        )
-        hashed_keys_float = (
-            f"arrayMap(k -> cityHash64(k), mapKeys(attributes_float_{i}))"
-        )
+        hashed_keys_string = f"arrayMap(k -> cityHash64(k), mapKeys(attributes_string_{i}))"
+        hashed_keys_float = f"arrayMap(k -> cityHash64(k), mapKeys(attributes_float_{i}))"
         column_expressions.append(hashed_keys_string)
         column_expressions.append(hashed_keys_float)
 

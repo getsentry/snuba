@@ -40,9 +40,7 @@ def is_set_message(message: Mapping[str, Any]) -> bool:
 
 
 def is_distribution_message(message: Mapping[str, Any]) -> bool:
-    return (
-        message["type"] is not None and message["type"] == InputType.DISTRIBUTION.value
-    )
+    return message["type"] is not None and message["type"] == InputType.DISTRIBUTION.value
 
 
 def is_counter_message(message: Mapping[str, Any]) -> bool:
@@ -104,9 +102,7 @@ def value_for_gauge_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
     }
 
 
-def apply_aggregation_option(
-    settings: MutableMapping[str, Any], option: AggregationOption
-) -> None:
+def apply_aggregation_option(settings: MutableMapping[str, Any], option: AggregationOption) -> None:
     if option is AggregationOption.TEN_SECOND:
         settings["granularities"].append(GRANULARITY_TEN_SECONDS)
     elif option is AggregationOption.HIST:

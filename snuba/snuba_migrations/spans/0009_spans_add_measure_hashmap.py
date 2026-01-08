@@ -39,9 +39,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 column=Column(
                     "_measurements_hash_map",
-                    Array(
-                        UInt(64), Modifiers(materialized=MEASUREMENTS_HASH_MAP_COLUMN)
-                    ),
+                    Array(UInt(64), Modifiers(materialized=MEASUREMENTS_HASH_MAP_COLUMN)),
                 ),
                 target=OperationTarget.LOCAL,
             ),
@@ -50,9 +48,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=dist_table_name,
                 column=Column(
                     "_measurements_hash_map",
-                    Array(
-                        UInt(64), Modifiers(materialized=MEASUREMENTS_HASH_MAP_COLUMN)
-                    ),
+                    Array(UInt(64), Modifiers(materialized=MEASUREMENTS_HASH_MAP_COLUMN)),
                 ),
                 target=OperationTarget.DISTRIBUTED,
             ),

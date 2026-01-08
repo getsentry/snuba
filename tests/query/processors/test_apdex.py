@@ -22,9 +22,7 @@ def test_apdex_format_expressions() -> None:
             SelectedExpression(name=None, expression=Column(None, None, "column2")),
             SelectedExpression(
                 "perf",
-                FunctionCall(
-                    "perf", "apdex", (Column(None, None, "column1"), Literal(None, 300))
-                ),
+                FunctionCall("perf", "apdex", (Column(None, None, "column1"), Literal(None, 300))),
             ),
         ],
     )
@@ -62,9 +60,7 @@ def test_apdex_format_expressions() -> None:
                                         binary_condition(
                                             ConditionFunctions.LTE,
                                             Column(None, None, "column1"),
-                                            multiply(
-                                                Literal(None, 300), Literal(None, 4)
-                                            ),
+                                            multiply(Literal(None, 300), Literal(None, 4)),
                                         ),
                                     ),
                                 ),
@@ -86,9 +82,7 @@ def test_apdex_format_expressions() -> None:
     ApdexProcessor().process_query(unprocessed, HTTPQuerySettings())
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
-    ret = unprocessed.get_selected_columns()[1].expression.accept(
-        ClickhouseExpressionFormatter()
-    )
+    ret = unprocessed.get_selected_columns()[1].expression.accept(ClickhouseExpressionFormatter())
     assert ret == (
         "(divide(plus(countIf(lessOrEquals(column1, 300)), "
         "divide(countIf(greater(column1, 300) AND "

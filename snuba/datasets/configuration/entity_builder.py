@@ -31,9 +31,7 @@ class InvalidEntityConfigException(Exception):
     pass
 
 
-def _build_entity_validators(
-    config_validators: list[dict[str, Any]]
-) -> Sequence[QueryValidator]:
+def _build_entity_validators(config_validators: list[dict[str, Any]]) -> Sequence[QueryValidator]:
     return [
         QueryValidator.get_from_name(qv_config["validator"])(**qv_config["args"])
         for qv_config in config_validators
@@ -56,9 +54,7 @@ def _build_entity_translation_mappers(
 ) -> TranslationMappers:
     columns_mappers: list[ColumnMapper] = (
         [
-            ColumnMapper.get_from_name(col_config["mapper"])(
-                **col_config.get("args", {})
-            )
+            ColumnMapper.get_from_name(col_config["mapper"])(**col_config.get("args", {}))
             for col_config in config_translation_mappers["columns"]
         ]
         if "columns" in config_translation_mappers
@@ -66,9 +62,7 @@ def _build_entity_translation_mappers(
     )
     function_mappers: list[FunctionCallMapper] = (
         [
-            FunctionCallMapper.get_from_name(fm_config["mapper"])(
-                **fm_config.get("args", {})
-            )
+            FunctionCallMapper.get_from_name(fm_config["mapper"])(**fm_config.get("args", {}))
             for fm_config in config_translation_mappers["functions"]
         ]
         if "functions" in config_translation_mappers
@@ -102,22 +96,18 @@ def _build_entity_translation_mappers(
     )
 
 
-def _build_storage_selector(
-    config_storage_selector: dict[str, Any]
-) -> QueryStorageSelector:
+def _build_storage_selector(config_storage_selector: dict[str, Any]) -> QueryStorageSelector:
     return QueryStorageSelector.get_from_name(config_storage_selector["selector"])(
         **config_storage_selector["args"] if config_storage_selector.get("args") else {}
     )
 
 
 def _build_subscription_processors(
-    config: dict[str, Any]
+    config: dict[str, Any],
 ) -> Optional[Sequence[EntitySubscriptionProcessor]]:
     if "subscription_processors" in config:
         processors: Sequence[EntitySubscriptionProcessor] = [
-            EntitySubscriptionProcessor.get_from_name(pro_config["processor"])(
-                **pro_config["args"]
-            )
+            EntitySubscriptionProcessor.get_from_name(pro_config["processor"])(**pro_config["args"])
             for pro_config in config["subscription_processors"]
         ]
         return processors
@@ -125,13 +115,11 @@ def _build_subscription_processors(
 
 
 def _build_subscription_validators(
-    config: dict[str, Any]
+    config: dict[str, Any],
 ) -> Optional[Sequence[EntitySubscriptionValidator]]:
     if "subscription_validators" in config:
         validators: Sequence[EntitySubscriptionValidator] = [
-            EntitySubscriptionValidator.get_from_name(val_config["validator"])(
-                **val_config["args"]
-            )
+            EntitySubscriptionValidator.get_from_name(val_config["validator"])(**val_config["args"])
             for val_config in config["subscription_validators"]
         ]
         return validators
@@ -139,19 +127,19 @@ def _build_subscription_validators(
 
 
 def _build_storage_connections(
-    config_storages: list[dict[str, Any]]
+    config_storages: list[dict[str, Any]],
 ) -> List[EntityStorageConnection]:
     return [
         EntityStorageConnection(
             storage=get_storage(StorageKey(storage_connection["storage"])),
-            translation_mappers=_build_entity_translation_mappers(
-                storage_connection["translation_mappers"]
-            )
-            if "translation_mappers" in storage_connection
-            else TranslationMappers(),
-            is_writable=storage_connection["is_writable"]
-            if "is_writable" in storage_connection
-            else False,
+            translation_mappers=(
+                _build_entity_translation_mappers(storage_connection["translation_mappers"])
+                if "translation_mappers" in storage_connection
+                else TranslationMappers()
+            ),
+            is_writable=(
+                storage_connection["is_writable"] if "is_writable" in storage_connection else False
+            ),
         )
         for storage_connection in config_storages
     ]
@@ -170,9 +158,7 @@ def _build_join_relationships(config: dict[str, Any]) -> dict[str, JoinRelations
             equivalences.append(ColumnEquivalence(pair[0], pair[1]))
 
         if obj["join_type"] not in ("inner", "left"):
-            raise InvalidEntityConfigException(
-                f"{obj['join_type']} is not a valid join type"
-            )
+            raise InvalidEntityConfigException(f"{obj['join_type']} is not a valid join type")
 
         join_type = JoinType.LEFT if obj["join_type"] == "left" else JoinType.INNER
         join = JoinRelationship(

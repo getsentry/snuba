@@ -24,9 +24,7 @@ from snuba.query.joins.subquery_generator import (
 
 
 class MetricsSubqueriesInitializer(SubqueriesInitializer):
-    def visit_join_clause(
-        self, node: JoinClause[Entity]
-    ) -> Mapping[str, SubqueryDraft]:
+    def visit_join_clause(self, node: JoinClause[Entity]) -> Mapping[str, SubqueryDraft]:
         combined = {**node.left_node.accept(self), **node.right_node.accept(self)}
         return combined
 
@@ -99,9 +97,7 @@ def _process_root_groupby(
     and pushes down the subexpressions.
     """
     subexpressions = expression.accept(BranchCutter(alias_generator))
-    return _push_down_groupby_branches(
-        query, subexpressions, subqueries, alias_generator
-    )
+    return _push_down_groupby_branches(query, subexpressions, subqueries, alias_generator)
 
 
 def _push_down_groupby_branches(
@@ -218,9 +214,7 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
             selected_columns.append(
                 SelectedExpression(
                     name=s.name,
-                    expression=_process_aggregate_value(
-                        s.expression, subqueries, alias_generator
-                    ),
+                    expression=_process_aggregate_value(s.expression, subqueries, alias_generator),
                 )
             )
         else:

@@ -134,9 +134,7 @@ class InsertBatchWriter:
 
         write_start = time.time()
         self.__writer.write(
-            itertools.chain.from_iterable(
-                message.payload.rows for message in self.__messages
-            )
+            itertools.chain.from_iterable(message.payload.rows for message in self.__messages)
         )
         write_finish = time.time()
 
@@ -157,18 +155,14 @@ class InsertBatchWriter:
 
             sentry_received_timestamp = message.payload.sentry_received_timestamp
             if sentry_received_timestamp is not None:
-                sentry_received_latency = (
-                    write_finish - sentry_received_timestamp.timestamp()
-                )
+                sentry_received_latency = write_finish - sentry_received_timestamp.timestamp()
                 sentry_received_latency_recorder.record(sentry_received_latency)
 
         if snuba_latency_recorder.max_ms:
             self.__metrics.timing("max_latency_ms", snuba_latency_recorder.max_ms)
             self.__metrics.timing("latency_ms", snuba_latency_recorder.avg_ms)
         if end_to_end_latency_recorder.max_ms:
-            self.__metrics.timing(
-                "max_end_to_end_latency_ms", end_to_end_latency_recorder.max_ms
-            )
+            self.__metrics.timing("max_end_to_end_latency_ms", end_to_end_latency_recorder.max_ms)
             self.__metrics.timing(
                 "end_to_end_latency_ms",
                 end_to_end_latency_recorder.avg_ms,
@@ -250,15 +244,11 @@ class ProcessedMessageBatchWriter:
         self.__replacement_batch_writer = replacement_batch_writer
         self.__commit_log_config = commit_log_config
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
-        self.__received_timestamps: MutableMapping[
-            Partition, List[float]
-        ] = defaultdict(list)
+        self.__received_timestamps: MutableMapping[Partition, List[float]] = defaultdict(list)
 
         self.__closed = False
 
-    def submit(
-        self, message: Message[Union[None, BytesInsertBatch, ReplacementBatch]]
-    ) -> None:
+    def submit(self, message: Message[Union[None, BytesInsertBatch, ReplacementBatch]]) -> None:
         assert not self.__closed
 
         if message.payload is None:
@@ -277,9 +267,7 @@ class ProcessedMessageBatchWriter:
         elif isinstance(message.payload, ReplacementBatch):
             if self.__replacement_batch_writer is None:
                 raise TypeError("writer not configured to support replacements")
-            self.__replacement_batch_writer.submit(
-                cast(Message[ReplacementBatch], message)
-            )
+            self.__replacement_batch_writer.submit(cast(Message[ReplacementBatch], message))
         else:
             raise TypeError("unexpected payload type")
 
@@ -310,9 +298,7 @@ class ProcessedMessageBatchWriter:
                 received_timestamps = self.__received_timestamps.pop(partition, [])
                 received_timestamps.sort()
                 if len(received_timestamps):
-                    received_p99 = received_timestamps[
-                        int(len(received_timestamps) * 0.99)
-                    ]
+                    received_p99 = received_timestamps[int(len(received_timestamps) * 0.99)]
                 else:
                     received_p99 = None
 
@@ -347,9 +333,7 @@ def get_values_row_encoder(storage_key: StorageKey) -> ValuesRowEncoder:
 
     if storage_key not in values_row_encoders:
         table_writer = get_writable_storage(storage_key).get_table_writer()
-        values_row_encoders[storage_key] = ValuesRowEncoder(
-            table_writer.get_writeable_columns()
-        )
+        values_row_encoders[storage_key] = ValuesRowEncoder(table_writer.get_writeable_columns())
 
     return values_row_encoders[storage_key]
 
@@ -407,11 +391,7 @@ class MultistorageCollector:
         self.__commit_log_config = commit_log_config
         self.__messages: MutableMapping[
             StorageKey,
-            List[
-                Message[
-                    Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
-                ]
-            ],
+            List[Message[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]],
         ] = defaultdict(list)
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
 
@@ -504,8 +484,7 @@ def process_message(
     )
 
     validate_sample_rate = (
-        state.get_float_config(f"validate_schema_{snuba_logical_topic.name}", 1.0)
-        or 0.0
+        state.get_float_config(f"validate_schema_{snuba_logical_topic.name}", 1.0) or 0.0
     )
 
     assert isinstance(message.value, BrokerValue)
@@ -518,9 +497,7 @@ def process_message(
 
         if should_validate:
             with sentry_sdk.push_scope() as scope:
-                scope.add_attachment(
-                    bytes=message.payload.value, filename="message.txt"
-                )
+                scope.add_attachment(bytes=message.payload.value, filename="message.txt")
                 scope.set_tag("snuba_logical_topic", snuba_logical_topic.name)
 
                 try:
@@ -542,9 +519,7 @@ def process_message(
                         sentry_sdk.set_tag("invalid_message_schema", "true")
                         logger.warning(err, exc_info=True)
                     if enforce_schema:
-                        raise Exception(
-                            f"Validation Error - {snuba_logical_topic.value}"
-                        ) from err
+                        raise Exception(f"Validation Error - {snuba_logical_topic.value}") from err
 
             # TODO: this is not the most efficient place to emit a metric, but
             # as long as should_validate is behind a sample rate it should be

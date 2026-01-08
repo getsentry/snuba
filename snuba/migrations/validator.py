@@ -68,9 +68,7 @@ def _validate_add_col_or_create_table(
             )
 
 
-def _validate_drop_col(
-    dist_op: SqlOperation, local_ops: Sequence[SqlOperation]
-) -> None:
+def _validate_drop_col(dist_op: SqlOperation, local_ops: Sequence[SqlOperation]) -> None:
     if isinstance(dist_op, (DropColumn)):
         if any(_conflicts_ops(local_op, dist_op) for local_op in local_ops):
             raise InvalidMigrationOrderError(
@@ -103,12 +101,8 @@ def _validate_order_new(
     """
     for ops in [forward_ops, backwards_ops]:
         for i, op in enumerate(ops):
-            local_ops_before = [
-                op for op in ops[:i] if op.target != OperationTarget.DISTRIBUTED
-            ]
-            dist_ops_before = [
-                op for op in ops[:i] if op.target != OperationTarget.LOCAL
-            ]
+            local_ops_before = [op for op in ops[:i] if op.target != OperationTarget.DISTRIBUTED]
+            dist_ops_before = [op for op in ops[:i] if op.target != OperationTarget.LOCAL]
             if isinstance(op, (CreateTable, AddColumn)):
                 if op.target == OperationTarget.LOCAL:
                     _validate_add_col_or_create_table(op, dist_ops_before)
@@ -143,9 +137,7 @@ def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
         _validate_order_new(forward_ops, backward_ops)
 
 
-def conflicts_create_table_op(
-    local_create: CreateTable, dist_create: CreateTable
-) -> bool:
+def conflicts_create_table_op(local_create: CreateTable, dist_create: CreateTable) -> bool:
     """
     Returns True if create table operation and local create table operation
     target same underlying local table.
@@ -171,10 +163,7 @@ def conflicts_add_column_op(local_add: AddColumn, dist_add: AddColumn) -> bool:
     Returns True if distributed add column operation and local add column operation
     target the same column and same underlying local table.
     """
-    if (
-        local_add.column != dist_add.column
-        or local_add._storage_set != dist_add._storage_set
-    ):
+    if local_add.column != dist_add.column or local_add._storage_set != dist_add._storage_set:
         return False
     try:
         if local_add.table_name == _get_local_table_name(dist_add):
@@ -227,9 +216,7 @@ def _get_local_table_name(dist_op: Union[CreateTable, AddColumn, DropColumn]) ->
         f"SELECT engine_full FROM system.tables WHERE name = '{dist_table_name}' AND database = '{clickhouse.database}'"
     ).results
     if not engine:
-        raise DistributedEngineParseError(
-            f"No engine found for table {dist_table_name}"
-        )
+        raise DistributedEngineParseError(f"No engine found for table {dist_table_name}")
     engine_str = engine[0][0]
     return _extract_local_table_name(engine_str)
 

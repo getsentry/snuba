@@ -66,6 +66,4 @@ class Job(ABC, metaclass=RegisteredClass):
         raise NotImplementedError
 
 
-import_submodules_in_directory(
-    os.path.dirname(os.path.realpath(__file__)), "snuba.manual_jobs"
-)
+import_submodules_in_directory(os.path.dirname(os.path.realpath(__file__)), "snuba.manual_jobs")

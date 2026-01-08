@@ -14,9 +14,7 @@ def build_query(tag_key: Literal) -> Query:
         selected_columns=[
             SelectedExpression(
                 "tags[10]",
-                SubscriptableReference(
-                    "_snuba_tags[10]", Column(None, None, "tags"), tag_key
-                ),
+                SubscriptableReference("_snuba_tags[10]", Column(None, None, "tags"), tag_key),
             )
         ],
     )

@@ -98,9 +98,7 @@ class EntityRequiredColumnValidator(QueryValidator):
         required_str_columns: Sequence[str] | None = None,
     ) -> None:
         self.required_columns = set(required_filter_columns)
-        self.required_str_columns = (
-            set(required_str_columns) if required_str_columns else set()
-        )
+        self.required_str_columns = set(required_str_columns) if required_str_columns else set()
 
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
         condition = query.get_condition()
@@ -126,9 +124,7 @@ class EntityRequiredColumnValidator(QueryValidator):
                     missing.add(col)
 
         if missing:
-            raise InvalidQueryException(
-                f"missing required conditions for {', '.join(missing)}"
-            )
+            raise InvalidQueryException(f"missing required conditions for {', '.join(missing)}")
 
 
 class EntityContainsColumnsValidator(QueryValidator):
@@ -265,9 +261,7 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
                     key=None,
                 )
             else:
-                raise InvalidQueryException(
-                    "Unhandled column type in group by validation"
-                )
+                raise InvalidQueryException("Unhandled column type in group by validation")
 
             found = any(match.match(cond) for cond in top_level)
 
@@ -295,9 +289,7 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
 
         for field in self.disallowed_aggregations:
             if getattr(query, f"get_{field}")():
-                raise InvalidQueryException(
-                    f"invalid clause {field} in subscription query"
-                )
+                raise InvalidQueryException(f"invalid clause {field} in subscription query")
 
         if (
             "groupby" not in self.disallowed_aggregations
@@ -319,9 +311,7 @@ class GranularityValidator(QueryValidator):
             if self.required:
                 raise InvalidQueryException("Granularity is missing")
         elif granularity < self.minimum or (granularity % self.minimum) != 0:
-            raise InvalidQueryException(
-                f"granularity must be multiple of {self.minimum}"
-            )
+            raise InvalidQueryException(f"granularity must be multiple of {self.minimum}")
 
 
 class TagConditionValidator(QueryValidator):
@@ -365,15 +355,11 @@ class TagConditionValidator(QueryValidator):
                 rhs = match.expression("rhs")
                 if isinstance(rhs, Literal):
                     if not isinstance(rhs.value, str):
-                        raise InvalidQueryException(
-                            f"{error_prefix} {rhs.value} must be a string"
-                        )
+                        raise InvalidQueryException(f"{error_prefix} {rhs.value} must be a string")
                 elif isinstance(rhs, FunctionCall):
                     # The rhs is guaranteed to be an array function because of the match
                     for param in rhs.parameters:
-                        if isinstance(param, Literal) and not isinstance(
-                            param.value, str
-                        ):
+                        if isinstance(param, Literal) and not isinstance(param.value, str):
                             raise InvalidQueryException(
                                 f"{error_prefix} array literal {param.value} must be a string"
                             )
@@ -510,18 +496,12 @@ class IllegalAggregateInConditionValidator(QueryValidator):
                 (Param("lhs", AnyExpression()), Param("rhs", AnyExpression())),
             ).match(expression)
             if match is not None:
-                matches.extend(
-                    find_illegal_aggregate_functions(match.expression("lhs"))
-                )
-                matches.extend(
-                    find_illegal_aggregate_functions(match.expression("rhs"))
-                )
+                matches.extend(find_illegal_aggregate_functions(match.expression("lhs")))
+                matches.extend(find_illegal_aggregate_functions(match.expression("rhs")))
             return matches
 
         conditions = query.get_condition()
         if conditions:
             matches = find_illegal_aggregate_functions(conditions)
             if len(matches) > 0:
-                raise InvalidQueryException(
-                    "Aggregate function found in WHERE clause of query"
-                )
+                raise InvalidQueryException("Aggregate function found in WHERE clause of query")

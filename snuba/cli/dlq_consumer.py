@@ -126,10 +126,7 @@ def dlq_consumer(
     while not shutdown_requested:
         instruction = load_instruction()
 
-        if (
-            instruction is None
-            or instruction.status != DlqInstructionStatus.NOT_STARTED
-        ):
+        if instruction is None or instruction.status != DlqInstructionStatus.NOT_STARTED:
             time.sleep(2.0)
             continue
 

@@ -13,18 +13,14 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     blocking = False
 
-    def __forward_migrations(
-        self, table_name: str
-    ) -> Sequence[operations.SqlOperation]:
+    def __forward_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name=table_name,
                 column=Column(
                     "type",
-                    String(
-                        Modifiers(low_cardinality=True, materialized="'transaction'")
-                    ),
+                    String(Modifiers(low_cardinality=True, materialized="'transaction'")),
                 ),
                 after="deleted",
             ),
@@ -33,9 +29,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                 table_name=table_name,
                 column=Column(
                     "message",
-                    String(
-                        Modifiers(low_cardinality=True, materialized="transaction_name")
-                    ),
+                    String(Modifiers(low_cardinality=True, materialized="transaction_name")),
                 ),
                 after="type",
             ),
@@ -44,25 +38,19 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                 table_name=table_name,
                 column=Column(
                     "title",
-                    String(
-                        Modifiers(low_cardinality=True, materialized="transaction_name")
-                    ),
+                    String(Modifiers(low_cardinality=True, materialized="transaction_name")),
                 ),
                 after="message",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name=table_name,
-                column=Column(
-                    "timestamp", DateTime(Modifiers(materialized="finish_ts"))
-                ),
+                column=Column("timestamp", DateTime(Modifiers(materialized="finish_ts"))),
                 after=("type" if table_name == "transactions_local" else "title"),
             ),
         ]
 
-    def __backwards_migrations(
-        self, table_name: str
-    ) -> Sequence[operations.SqlOperation]:
+    def __backwards_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(StorageSetKey.TRANSACTIONS, table_name, "type"),
             operations.DropColumn(StorageSetKey.TRANSACTIONS, table_name, "message"),

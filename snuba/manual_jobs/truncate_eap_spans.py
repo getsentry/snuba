@@ -4,9 +4,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.manual_jobs import Job, JobLogger, JobSpec
 
-STATEMENT = (
-    "TRUNCATE TABLE eap_spans_2_local ON CLUSTER 'snuba-events-analytics-platform'"
-)
+STATEMENT = "TRUNCATE TABLE eap_spans_2_local ON CLUSTER 'snuba-events-analytics-platform'"
 
 
 class TruncateEAPSpans(Job):

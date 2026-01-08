@@ -175,9 +175,7 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
             if len(exp.parameters) == 1:
                 raw_parameters += ","
             parameters = f", ({raw_parameters})"
-        return (
-            f"CurriedFunctionCall({repr(exp.alias)}, {internal_function}{parameters})"
-        )
+        return f"CurriedFunctionCall({repr(exp.alias)}, {internal_function}{parameters})"
 
     def visit_argument(self, exp: Argument) -> str:
         return repr(exp)
@@ -197,12 +195,7 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
 
 
 def ast_repr(
-    exp: (
-        Expression
-        | LimitBy
-        | Sequence[Expression | SelectedExpression | OrderBy]
-        | None
-    ),
+    exp: Expression | LimitBy | Sequence[Expression | SelectedExpression | OrderBy] | None,
     visitor: DSLMapperVisitor,
 ) -> str:
     if not exp:

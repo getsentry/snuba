@@ -32,9 +32,7 @@ from snuba.processor import InsertBatch, ReplacementBatch
     ],
 )
 @patch("snuba.settings.DISCARD_OLD_EVENTS", False)
-def test_message_processors(
-    topic: str, processor: Type[DatasetMessageProcessor]
-) -> None:
+def test_message_processors(topic: str, processor: Type[DatasetMessageProcessor]) -> None:
     """
     Tests the output of Python and Rust message processors is the same
     """
@@ -74,8 +72,7 @@ def test_message_processors(
 
         if python_processed_message is None:
             assert rust_processed_message is None or (
-                isinstance(rust_processed_message, InsertBatch)
-                and not rust_processed_message.rows
+                isinstance(rust_processed_message, InsertBatch) and not rust_processed_message.rows
             )
         elif isinstance(python_processed_message, ReplacementBatch):
             assert isinstance(rust_processed_message, ReplacementBatch)

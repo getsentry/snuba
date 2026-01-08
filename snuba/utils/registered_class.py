@@ -84,9 +84,7 @@ class RegisteredClass(ABCMeta):
     def __new__(cls, name: str, bases: Tuple[Type[Any]], dct: Dict[str, Any]) -> Any:
         res = super().__new__(cls, name, bases, dct)
         if not hasattr(res, "config_key"):
-            raise NoConfigKeyError(
-                "RegisteredClass(es) must define the `config-key` property"
-            )
+            raise NoConfigKeyError("RegisteredClass(es) must define the `config-key` property")
         if not hasattr(res, "_registry"):
             setattr(res, "_registry", _ClassRegistry())
         else:
@@ -100,10 +98,7 @@ class RegisteredClass(ABCMeta):
         )
 
     def all_classes(self) -> Sequence[Type[Any]]:
-        return [
-            cast(Type[Any], rclass)
-            for rclass in getattr(self, "_registry").all_classes()
-        ]
+        return [cast(Type[Any], rclass) for rclass in getattr(self, "_registry").all_classes()]
 
     def all_names(self) -> Sequence[str]:
         return list(getattr(self, "_registry").all_names())
@@ -112,9 +107,7 @@ class RegisteredClass(ABCMeta):
 TModule = object
 
 
-def import_submodules_in_directory(
-    directory_path: str, package_root: str
-) -> list[TModule]:
+def import_submodules_in_directory(directory_path: str, package_root: str) -> list[TModule]:
     """Given a directory path, import all the modules in that directory.
     This is meant to be used in concert with RegisteredClass(es) as a RegisteredClass
     needs to be imported to be registered.

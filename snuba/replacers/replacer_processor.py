@@ -81,9 +81,7 @@ class ReplacerProcessor(ABC, Generic[R], metaclass=RegisteredClass):
         return cast("ReplacerProcessor[R]", cls.class_from_name(name))
 
     @abstractmethod
-    def process_message(
-        self, message: ReplacementMessage[Mapping[str, Any]]
-    ) -> Optional[R]:
+    def process_message(self, message: ReplacementMessage[Mapping[str, Any]]) -> Optional[R]:
         """
         Processes one message from the topic.
         """

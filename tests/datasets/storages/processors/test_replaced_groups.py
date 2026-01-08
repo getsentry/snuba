@@ -139,25 +139,20 @@ def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> No
     )
 
     query_settings = HTTPQuerySettings()
-    PostReplacementConsistencyEnforcer(
-        "project_id", ReplacerState.ERRORS
-    ).process_query(query, query_settings)
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+        query, query_settings
+    )
 
     assert query.get_condition() == build_in("project_id", [2])
     assert query.get_from_clause().final
     assert (
-        query_settings.get_clickhouse_settings()[
-            "do_not_merge_across_partitions_select_final"
-        ]
-        == 1
+        query_settings.get_clickhouse_settings()["do_not_merge_across_partitions_select_final"] == 1
     )
 
 
 @pytest.mark.redis_db
 def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) -> None:
-    PostReplacementConsistencyEnforcer("project_id", None).process_query(
-        query, HTTPQuerySettings()
-    )
+    PostReplacementConsistencyEnforcer("project_id", None).process_query(query, HTTPQuerySettings())
 
     assert query.get_condition() == build_in("project_id", [2])
     assert not query.get_from_clause().final
@@ -171,16 +166,16 @@ def test_remove_final_subscriptions(query: ClickhouseQuery) -> None:
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
-    PostReplacementConsistencyEnforcer(
-        "project_id", ReplacerState.ERRORS
-    ).process_query(query, SubscriptionQuerySettings())
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+        query, SubscriptionQuerySettings()
+    )
     assert query.get_condition() == build_in("project_id", [2])
     assert query.get_from_clause().final
 
     state.set_config("skip_final_subscriptions_projects", "[2,3,4]")
-    PostReplacementConsistencyEnforcer(
-        "project_id", ReplacerState.ERRORS
-    ).process_query(query, SubscriptionQuerySettings())
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+        query, SubscriptionQuerySettings()
+    )
     assert not query.get_from_clause().final
 
 
@@ -194,9 +189,9 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
-    PostReplacementConsistencyEnforcer(
-        "project_id", ReplacerState.ERRORS
-    ).process_query(query, HTTPQuerySettings())
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+        query, HTTPQuerySettings()
+    )
 
     assert query.get_condition() == build_and(
         FunctionCall(
@@ -230,9 +225,9 @@ def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
-    PostReplacementConsistencyEnforcer(
-        "project_id", ReplacerState.ERRORS
-    ).process_query(query, HTTPQuerySettings())
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+        query, HTTPQuerySettings()
+    )
 
     assert query.get_condition() == build_in("project_id", [2])
     assert query.get_from_clause().final

@@ -97,9 +97,7 @@ class ExtractSpanData(Job):
                     f"mapApply((k, v) -> (if(k in {self._allowed_keys}, k, BLAKE3(concat(sipHash128Reference(organization_id), k))), BLAKE3(concat(sipHash128Reference(organization_id), v))), {col}) AS {col}_scrubbed"
                 )
             else:
-                scrubbed_columns.append(
-                    f"BLAKE3(concat(salt, {col})) AS {col}_scrubbed"
-                )
+                scrubbed_columns.append(f"BLAKE3(concat(salt, {col})) AS {col}_scrubbed")
 
         query = f"""
         SELECT
@@ -127,6 +125,4 @@ class ExtractSpanData(Job):
 
         logger.info("Executing query")
         connection.execute(query=query)
-        logger.info(
-            f"Data written to GCS bucket: {self._gcp_bucket_name}/{self._output_file_path}"
-        )
+        logger.info(f"Data written to GCS bucket: {self._gcp_bucket_name}/{self._output_file_path}")

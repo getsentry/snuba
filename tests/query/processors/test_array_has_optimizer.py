@@ -89,9 +89,7 @@ array_has_tests = [
                         None,
                         "equals",
                         (
-                            FunctionCall(
-                                None, "has", (spans_groups, Literal(None, "a" * 16))
-                            ),
+                            FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
                             Literal(None, 1),
                         ),
                     ),
@@ -122,9 +120,7 @@ array_has_tests = [
                         None,
                         "equals",
                         (
-                            FunctionCall(
-                                None, "has", (spans_groups, Literal(None, "a" * 16))
-                            ),
+                            FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
                             Literal(None, 0),
                         ),
                     ),
@@ -145,9 +141,7 @@ array_has_tests = [
                     None,
                     "equals",
                     (
-                        FunctionCall(
-                            None, "has", (spans_groups, Literal(None, "a" * 16))
-                        ),
+                        FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
                         Literal(None, 0),
                     ),
                 ),
@@ -171,9 +165,7 @@ array_has_tests = [
                         None,
                         "equals",
                         (
-                            FunctionCall(
-                                None, "has", (spans_groups, Literal(None, "a" * 16))
-                            ),
+                            FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
                             Literal(None, 0),
                         ),
                     ),
@@ -187,9 +179,7 @@ array_has_tests = [
                     None,
                     "equals",
                     (
-                        FunctionCall(
-                            None, "has", (spans_groups, Literal(None, "a" * 16))
-                        ),
+                        FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
                         Literal(None, 0),
                     ),
                 ),

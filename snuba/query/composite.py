@@ -115,9 +115,7 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
     def _get_expressions_impl(self) -> Iterable[Expression]:
         return []
 
-    def _transform_expressions_impl(
-        self, func: Callable[[Expression], Expression]
-    ) -> None:
+    def _transform_expressions_impl(self, func: Callable[[Expression], Expression]) -> None:
         pass
 
     def _transform_impl(self, visitor: ExpressionVisitor[Expression]) -> None:

@@ -53,10 +53,6 @@ def test_timer_send_metrics() -> None:
     overridden_tags = {"foo": "bar", "blue": "dog"}
     assert backend.calls == [
         Timing("timer", (10.0 + 10.0) * 1000, {"key": "value", **set_tags}),
-        Timing(
-            "timer.thing1", 10.0 * 1000, {"mark-key": "mark-value", **overridden_tags}
-        ),
-        Timing(
-            "timer.thing2", 10.0 * 1000, {"mark-key": "mark-value", **overridden_tags}
-        ),
+        Timing("timer.thing1", 10.0 * 1000, {"mark-key": "mark-value", **overridden_tags}),
+        Timing("timer.thing2", 10.0 * 1000, {"mark-key": "mark-value", **overridden_tags}),
     ]

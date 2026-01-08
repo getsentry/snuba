@@ -121,9 +121,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
             if on_revoke is not None:
                 on_revoke(partitions)
 
-        self.__consumer.subscribe(
-            topics, on_assign=on_assign, on_revoke=revocation_callback
-        )
+        self.__consumer.subscribe(topics, on_assign=on_assign, on_revoke=revocation_callback)
 
     def unsubscribe(self) -> None:
         self.__consumer.unsubscribe()
@@ -272,9 +270,7 @@ class SchedulerBuilder:
         assert mode is not None
         self.__mode = mode
 
-        synchronization_timestamp = (
-            stream_loader.get_subscription_sychronization_timestamp()
-        )
+        synchronization_timestamp = stream_loader.get_subscription_sychronization_timestamp()
         assert synchronization_timestamp is not None
         self.__synchronization_timestamp = synchronization_timestamp
 
@@ -299,9 +295,7 @@ class SchedulerBuilder:
     def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
             self.__build_tick_consumer(),
-            Topic(
-                self.__commit_log_topic_spec.get_physical_topic_name(self.__slice_id)
-            ),
+            Topic(self.__commit_log_topic_spec.get_physical_topic_name(self.__slice_id)),
             self.__build_strategy_factory(),
             ONCE_PER_SECOND,
         )
@@ -373,9 +367,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         self.__schedulers = {
             index: SubscriptionScheduler(
                 entity_key,
-                RedisSubscriptionDataStore(
-                    redis_client, entity_key, PartitionId(index)
-                ),
+                RedisSubscriptionDataStore(redis_client, entity_key, PartitionId(index)),
                 partition_id=PartitionId(index),
                 cache_ttl=timedelta(seconds=schedule_ttl),
                 metrics=self.__metrics,

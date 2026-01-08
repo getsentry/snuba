@@ -19,14 +19,10 @@ MATERIALIZATION_VERSION = 4
 timestamp = int(datetime.now(timezone.utc).timestamp())
 # expects that test is run in utc local time
 intermediate_timestamp = datetime.utcfromtimestamp(timestamp)
-expected_timestamp = int(
-    intermediate_timestamp.replace(tzinfo=timezone.utc).timestamp()
-)
+expected_timestamp = int(intermediate_timestamp.replace(tzinfo=timezone.utc).timestamp())
 
 sentry_received_timestamp = datetime.now(timezone.utc).timestamp()
-expected_sentry_received_timestamp = datetime.utcfromtimestamp(
-    sentry_received_timestamp
-)
+expected_sentry_received_timestamp = datetime.utcfromtimestamp(sentry_received_timestamp)
 
 MAPPING_META_COMMON = {
     "c": {
@@ -239,8 +235,7 @@ def test_generic_metrics_sets_processor(
         InsertBatch(expected_output, None, ANY) if expected_output is not None else None
     )
     assert (
-        GenericSetsMetricsProcessor().process_message(message, meta)
-        == expected_polymorphic_result
+        GenericSetsMetricsProcessor().process_message(message, meta) == expected_polymorphic_result
     )
 
 

@@ -30,9 +30,7 @@ class UpdateMigrationStatus(Job):
         super().__init__(job_spec)
 
     def __validate_job_params(self, params: Optional[Mapping[Any, Any]]) -> None:
-        assert (
-            params is not None
-        ), "group, migration_id, old_status, new_status parameters required"
+        assert params is not None, "group, migration_id, old_status, new_status parameters required"
         assert params["group"], "group required"
         assert params["migration_id"], "migration_id required"
         assert params["new_status"], "new_status required"
@@ -54,12 +52,8 @@ class UpdateMigrationStatus(Job):
 
     def execute(self, logger: JobLogger) -> None:
         migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
-        table_name = (
-            LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME
-        )
-        connection = migrations_cluster.get_query_connection(
-            ClickhouseClientSettings.MIGRATE
-        )
+        table_name = LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME
+        connection = migrations_cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
         existing_row = connection.execute(
             self._select_query(table_name),

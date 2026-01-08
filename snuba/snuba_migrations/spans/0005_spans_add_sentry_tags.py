@@ -28,17 +28,13 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=storage_set_name,
                 table_name=local_table_name,
-                column=Column(
-                    "sentry_tags", Nested([("key", String()), ("value", String())])
-                ),
+                column=Column("sentry_tags", Nested([("key", String()), ("value", String())])),
                 target=OperationTarget.LOCAL,
             ),
             operations.AddColumn(
                 storage_set=storage_set_name,
                 table_name=dist_table_name,
-                column=Column(
-                    "sentry_tags", Nested([("key", String()), ("value", String())])
-                ),
+                column=Column("sentry_tags", Nested([("key", String()), ("value", String())])),
                 target=OperationTarget.DISTRIBUTED,
             ),
             # sentry_tags_hash_map columns
@@ -47,9 +43,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 column=Column(
                     "_sentry_tags_hash_map",
-                    Array(
-                        UInt(64), Modifiers(materialized=SENTRY_TAGS_HASH_MAP_COLUMN)
-                    ),
+                    Array(UInt(64), Modifiers(materialized=SENTRY_TAGS_HASH_MAP_COLUMN)),
                 ),
                 target=OperationTarget.LOCAL,
             ),
@@ -58,9 +52,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=dist_table_name,
                 column=Column(
                     "_sentry_tags_hash_map",
-                    Array(
-                        UInt(64), Modifiers(materialized=SENTRY_TAGS_HASH_MAP_COLUMN)
-                    ),
+                    Array(UInt(64), Modifiers(materialized=SENTRY_TAGS_HASH_MAP_COLUMN)),
                 ),
                 target=OperationTarget.DISTRIBUTED,
             ),

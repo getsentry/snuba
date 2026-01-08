@@ -114,9 +114,7 @@ TValue = TypeVar("TValue")
 
 
 def _as_dict_safe(
-    value: Union[
-        None, Iterable[Optional[Tuple[Optional[TKey], TValue]]], Dict[TKey, TValue]
-    ],
+    value: Union[None, Iterable[Optional[Tuple[Optional[TKey], TValue]]], Dict[TKey, TValue]],
 ) -> MutableMapping[TKey, TValue]:
     if value is None:
         return {}
@@ -210,9 +208,7 @@ def _ensure_valid_ip(
             # Looking into ip_address code, it can either return one of the
             # two or raise. Anyway, if we received anything else the places where
             # we use this method would fail.
-            if not isinstance(
-                ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)
-            ):
+            if not isinstance(ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
                 return None
             return ip_address
         except ValueError:

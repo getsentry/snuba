@@ -39,9 +39,7 @@ def group_created() -> GroupAttributesSnapshot:
 
 
 class TestGroupAttributesMessageProcessor:
-    KAFKA_META = KafkaMessageMetadata(
-        offset=0, partition=0, timestamp=datetime(1970, 1, 1)
-    )
+    KAFKA_META = KafkaMessageMetadata(offset=0, partition=0, timestamp=datetime(1970, 1, 1))
 
     processor = GroupAttributesMessageProcessor()
 

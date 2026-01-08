@@ -32,11 +32,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         ops: List[operations.SqlOperation] = []
 
         for column, _ in reversed(new_columns):
-            ops.append(
-                operations.DropColumn(
-                    StorageSetKey.REPLAYS, "replays_local", column.name
-                )
-            )
+            ops.append(operations.DropColumn(StorageSetKey.REPLAYS, "replays_local", column.name))
 
         return ops
 
@@ -59,10 +55,6 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         ops: List[operations.SqlOperation] = []
 
         for column, _ in reversed(new_columns):
-            ops.append(
-                operations.DropColumn(
-                    StorageSetKey.REPLAYS, "replays_dist", column.name
-                )
-            )
+            ops.append(operations.DropColumn(StorageSetKey.REPLAYS, "replays_dist", column.name))
 
         return ops

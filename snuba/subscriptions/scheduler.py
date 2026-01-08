@@ -190,19 +190,12 @@ class TaskBuilderModeState:
             else TaskBuilderMode.JITTERED
         )
 
-    def get_current_mode(
-        self, subscription: Subscription, timestamp: int
-    ) -> TaskBuilderMode:
+    def get_current_mode(self, subscription: Subscription, timestamp: int) -> TaskBuilderMode:
         general_mode = TaskBuilderMode(
-            state.get_config(
-                "subscription_primary_task_builder", TaskBuilderMode.JITTERED
-            )
+            state.get_config("subscription_primary_task_builder", TaskBuilderMode.JITTERED)
         )
 
-        if (
-            general_mode == TaskBuilderMode.IMMEDIATE
-            or general_mode == TaskBuilderMode.JITTERED
-        ):
+        if general_mode == TaskBuilderMode.IMMEDIATE or general_mode == TaskBuilderMode.JITTERED:
             return general_mode
 
         resolution = subscription.data.resolution_sec
@@ -213,11 +206,7 @@ class TaskBuilderModeState:
             self.__state[resolution] = self.get_final_mode(general_mode)
 
         current_state = self.__state.get(resolution)
-        return (
-            current_state
-            if current_state is not None
-            else self.get_start_mode(general_mode)
-        )
+        return current_state if current_state is not None else self.get_start_mode(general_mode)
 
 
 class DelegateTaskBuilder(TaskBuilder):
@@ -252,13 +241,9 @@ class DelegateTaskBuilder(TaskBuilder):
         primary_builder = self.__rollout_state.get_current_mode(subscription, timestamp)
 
         if primary_builder == TaskBuilderMode.JITTERED:
-            return self.__jittered_builder.get_task(
-                subscription_with_metadata, timestamp
-            )
+            return self.__jittered_builder.get_task(subscription_with_metadata, timestamp)
         else:
-            return self.__immediate_builder.get_task(
-                subscription_with_metadata, timestamp
-            )
+            return self.__immediate_builder.get_task(subscription_with_metadata, timestamp)
 
     def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
         def add_tag(tags: Tags, builder_type: str) -> Tags:
@@ -269,13 +254,11 @@ class DelegateTaskBuilder(TaskBuilder):
 
         immediate_metrics = self.__immediate_builder.reset_metrics()
         immediate_tagged = [
-            (metric[0], metric[1], add_tag(metric[2], "immediate"))
-            for metric in immediate_metrics
+            (metric[0], metric[1], add_tag(metric[2], "immediate")) for metric in immediate_metrics
         ]
         jittered_metrics = self.__jittered_builder.reset_metrics()
         jittered_tagged = [
-            (metric[0], metric[1], add_tag(metric[2], "jittered"))
-            for metric in jittered_metrics
+            (metric[0], metric[1], add_tag(metric[2], "jittered")) for metric in jittered_metrics
         ]
 
         return [
@@ -354,9 +337,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         This function is called for every tick.
         """
         general_mode = TaskBuilderMode(
-            state.get_config(
-                "subscription_primary_task_builder", TaskBuilderMode.JITTERED
-            )
+            state.get_config("subscription_primary_task_builder", TaskBuilderMode.JITTERED)
         )
         if general_mode == TaskBuilderMode.JITTERED:
             self.__builder: TaskBuilder = self.__jittered_builder
@@ -369,10 +350,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
     def __get_subscriptions(self) -> MutableSequence[Subscription]:
         current_time = datetime.now()
 
-        if (
-            self.__last_refresh is None
-            or (current_time - self.__last_refresh) > self.__cache_ttl
-        ):
+        if self.__last_refresh is None or (current_time - self.__last_refresh) > self.__cache_ttl:
             self.__subscriptions = [
                 Subscription(SubscriptionIdentifier(self.__partition_id, uuid), data)
                 for uuid, data in self.__store.all()
@@ -410,9 +388,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         ):
             for subscription in subscriptions:
                 task = self.__builder.get_task(
-                    SubscriptionWithMetadata(
-                        self.__entity_key, subscription, tick.offsets.upper
-                    ),
+                    SubscriptionWithMetadata(self.__entity_key, subscription, tick.offsets.upper),
                     timestamp,
                 )
                 if task is not None:

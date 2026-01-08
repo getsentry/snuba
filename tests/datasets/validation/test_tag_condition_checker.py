@@ -25,13 +25,9 @@ reset_dataset_factory()
 tests = [
     pytest.param(
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
             ],
             condition=binary_condition(
                 "equals",
@@ -44,13 +40,9 @@ tests = [
     ),
     pytest.param(
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
             ],
             condition=binary_condition(
                 "equals",
@@ -62,20 +54,14 @@ tests = [
                 Literal(None, 419),
             ),
         ),
-        InvalidQueryException(
-            "invalid tag condition on 'tags[count]': 419 must be a string"
-        ),
+        InvalidQueryException("invalid tag condition on 'tags[count]': 419 must be a string"),
         id="comparing to non-string literal fails",
     ),
     pytest.param(
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
             ],
             condition=binary_condition(
                 "in",
@@ -104,13 +90,9 @@ tests = [
     ),
     pytest.param(
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
             ],
             condition=binary_condition(
                 "in",
@@ -149,9 +131,7 @@ tests = [
 
 
 @pytest.mark.parametrize("query, exception", tests)
-def test_subscription_clauses_validation(
-    query: LogicalQuery, exception: Exception | None
-) -> None:
+def test_subscription_clauses_validation(query: LogicalQuery, exception: Exception | None) -> None:
     validator = TagConditionValidator()
 
     if exception is not None:

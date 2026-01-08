@@ -87,13 +87,9 @@ class GroupedMessageRow(CdcMessageRow):
                 last_seen=postgres_date_to_clickhouse(row["last_seen"]),
                 first_seen=postgres_date_to_clickhouse(row["first_seen"]),
                 active_at=(
-                    postgres_date_to_clickhouse(row["active_at"])
-                    if row["active_at"]
-                    else None
+                    postgres_date_to_clickhouse(row["active_at"]) if row["active_at"] else None
                 ),
-                first_release_id=int(row["first_release_id"])
-                if row["first_release_id"]
-                else None,
+                first_release_id=int(row["first_release_id"]) if row["first_release_id"] else None,
             ),
         )
 

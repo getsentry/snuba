@@ -41,9 +41,7 @@ class SubscriptionCreator:
             self.__partitioner.build_partition_id(data),
             uuid1(),
         )
-        RedisSubscriptionDataStore(
-            redis_client, self.entity_key, identifier.partition
-        ).create(
+        RedisSubscriptionDataStore(redis_client, self.entity_key, identifier.partition).create(
             identifier.uuid,
             data,
         )
@@ -64,6 +62,6 @@ class SubscriptionDeleter:
         self.partition = partition
 
     def delete(self, subscription_id: UUID) -> None:
-        RedisSubscriptionDataStore(
-            redis_client, self.entity_key, self.partition
-        ).delete(subscription_id)
+        RedisSubscriptionDataStore(redis_client, self.entity_key, self.partition).delete(
+            subscription_id
+        )

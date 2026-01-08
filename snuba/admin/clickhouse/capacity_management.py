@@ -10,11 +10,8 @@ def get_storages_with_allocation_policies() -> list[str]:
 
     storages = [
         storage
-        for storage_key in sorted(
-            get_all_storage_keys(), key=lambda storage_key: storage_key.value
-        )
-        if (storage := get_storage(storage_key)).get_storage_set_key()
-        not in DEV_STORAGE_SETS
+        for storage_key in sorted(get_all_storage_keys(), key=lambda storage_key: storage_key.value)
+        if (storage := get_storage(storage_key)).get_storage_set_key() not in DEV_STORAGE_SETS
         or settings.ENABLE_DEV_FEATURES
     ]
 

@@ -143,11 +143,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         ]
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name="errors_local"
-            )
-        ]
+        return [operations.DropTable(storage_set=StorageSetKey.EVENTS, table_name="errors_local")]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
@@ -182,10 +178,6 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name="errors_dist"
-            ),
-            operations.DropTable(
-                storage_set=StorageSetKey.EVENTS_RO, table_name="errors_dist_ro"
-            ),
+            operations.DropTable(storage_set=StorageSetKey.EVENTS, table_name="errors_dist"),
+            operations.DropTable(storage_set=StorageSetKey.EVENTS_RO, table_name="errors_dist_ro"),
         ]

@@ -20,9 +20,7 @@ columns: List[Column[Modifiers]] = [
     Column("device_locale", String(Modifiers(low_cardinality=True))),
     Column("device_manufacturer", String(Modifiers(low_cardinality=True))),
     Column("device_model", String(Modifiers(low_cardinality=True))),
-    Column(
-        "device_os_build_number", String(Modifiers(low_cardinality=True, nullable=True))
-    ),
+    Column("device_os_build_number", String(Modifiers(low_cardinality=True, nullable=True))),
     Column("device_os_name", String(Modifiers(low_cardinality=True))),
     Column("device_os_version", String(Modifiers(low_cardinality=True))),
     Column("duration_ns", UInt(64)),

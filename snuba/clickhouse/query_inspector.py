@@ -70,10 +70,7 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
         if condition is None:
             return False
         for c in condition:
-            if (
-                isinstance(c, FunctionCallExpr)
-                and c.function_name == BooleanFunctions.OR
-            ):
+            if isinstance(c, FunctionCallExpr) and c.function_name == BooleanFunctions.OR:
                 return True
         return False
 
@@ -100,9 +97,7 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
 
     def _visit_simple_query(self, data_source: ProcessableQuery[Table]) -> None:
         time_range = _get_date_range(data_source)
-        if time_range and (
-            self.__max_time_range is None or time_range > self.__max_time_range
-        ):
+        if time_range and (self.__max_time_range is None or time_range > self.__max_time_range):
             self.__max_time_range = time_range
 
         self.__has_complex_conditions = (

@@ -66,17 +66,13 @@ AND end_timestamp < toDateTime('{end_datetime}')"""
     def execute(self, logger: JobLogger) -> None:
         cluster = get_cluster(StorageSetKey.SPANS)
         storage_node = cluster.get_local_nodes()[0]
-        connection = cluster.get_node_connection(
-            ClickhouseClientSettings.CLEANUP, storage_node
-        )
+        connection = cluster.get_node_connection(ClickhouseClientSettings.CLEANUP, storage_node)
         if not cluster.is_single_node():
             cluster_name = cluster.get_clickhouse_cluster_name()
         else:
             cluster_name = None
         query = self._get_query(cluster_name)
         logger.info("Executing query: {query}")
-        result = connection.execute(
-            query=query, settings={"mutations_sync": self._mutations_sync}
-        )
+        result = connection.execute(query=query, settings={"mutations_sync": self._mutations_sync})
         logger.info("complete")
         logger.info(repr(result))

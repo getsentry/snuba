@@ -192,8 +192,7 @@ def generate_span_branch(
                 subspans, subduration = create_transaction(
                     trace_id=trace_id,
                     project_id=project_id + 1,
-                    start_timestamp=start_timestamp
-                    + datetime.timedelta(milliseconds=duration),
+                    start_timestamp=start_timestamp + datetime.timedelta(milliseconds=duration),
                     parent_span_id=span["span_id"],
                     prefix=prefix + " ",
                     add_datetimes=add_datetimes,
@@ -207,8 +206,7 @@ def generate_span_branch(
                 subspans, subduration = generate_span_branch(
                     trace_id=trace_id,
                     project_id=project_id,
-                    start_timestamp=start_timestamp
-                    + datetime.timedelta(milliseconds=duration),
+                    start_timestamp=start_timestamp + datetime.timedelta(milliseconds=duration),
                     transaction_name=transaction_name,
                     parent_span_id=span["span_id"],
                     span_count=span_count,
@@ -273,9 +271,7 @@ def create_transaction(
 
 def create_trace(add_datetimes: bool) -> list[dict[str, Any]]:
     trace_id = uuid.uuid4().hex
-    spans, _ = create_transaction(
-        trace_id, 1, datetime.datetime.now(), add_datetimes=add_datetimes
-    )
+    spans, _ = create_transaction(trace_id, 1, datetime.datetime.now(), add_datetimes=add_datetimes)
     return spans
 
 
@@ -416,13 +412,9 @@ def main(
         producer, to_close = create_file_producer(file)  # type: ignore
     elif output == "kafka":
         if not kafka_host:
-            raise ValueError(
-                "--kafka-host/-k must be specified when using kafka output."
-            )
+            raise ValueError("--kafka-host/-k must be specified when using kafka output.")
         if not kafka_topic:
-            raise ValueError(
-                "--kafka-topic/-t must be specified when using kafka output."
-            )
+            raise ValueError("--kafka-topic/-t must be specified when using kafka output.")
         producer, to_close = create_kafka_producer(kafka_host, kafka_topic)  # type: ignore
     else:
         raise ValueError(f"Unknown output type: {output}")

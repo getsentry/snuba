@@ -24,9 +24,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         )
 
     if locals.get("DEFAULT_STORAGE_BROKERS"):
-        raise ValueError(
-            "DEFAULT_STORAGE_BROKERS is deprecated. Use KAFKA_BROKER_CONFIG instead."
-        )
+        raise ValueError("DEFAULT_STORAGE_BROKERS is deprecated. Use KAFKA_BROKER_CONFIG instead.")
 
     # Validate cluster configuration
     from snuba.clusters.storage_sets import StorageSetKey

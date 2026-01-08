@@ -55,7 +55,5 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropColumn(
-                StorageSetKey.TRANSACTIONS, "transactions_dist", "_tags_hash_map"
-            )
+            operations.DropColumn(StorageSetKey.TRANSACTIONS, "transactions_dist", "_tags_hash_map")
         ]

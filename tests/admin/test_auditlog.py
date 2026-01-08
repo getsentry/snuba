@@ -24,7 +24,5 @@ def test_audit_log(mock_slack_client: Mock) -> None:
     assert "timestamp" in log
 
     assert client.post_message.call_count == 0
-    audit_log.record(
-        "meredith@sentry.io", AuditLogAction.UPDATED_OPTION, data=data, notify=True
-    )
+    audit_log.record("meredith@sentry.io", AuditLogAction.UPDATED_OPTION, data=data, notify=True)
     assert client.post_message.call_count == 1

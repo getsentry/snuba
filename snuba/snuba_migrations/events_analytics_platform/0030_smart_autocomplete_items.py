@@ -23,9 +23,7 @@ columns: List[Column[Modifiers]] = [
         Array(
             UInt(64),
             Modifiers(
-                materialized=get_array_vals_hash(
-                    "arrayConcat(attributes_string, attributes_float)"
-                )
+                materialized=get_array_vals_hash("arrayConcat(attributes_string, attributes_float)")
             ),
         ),
     ),
@@ -45,12 +43,8 @@ columns: List[Column[Modifiers]] = [
 ]
 
 
-_attr_num_names = ", ".join(
-    [f"mapKeys(attributes_float_{i})" for i in range(num_attr_buckets)]
-)
-_attr_str_names = ", ".join(
-    [f"mapKeys(attributes_string_{i})" for i in range(num_attr_buckets)]
-)
+_attr_num_names = ", ".join([f"mapKeys(attributes_float_{i})" for i in range(num_attr_buckets)])
+_attr_str_names = ", ".join([f"mapKeys(attributes_string_{i})" for i in range(num_attr_buckets)])
 
 
 MV_QUERY = f"""

@@ -52,9 +52,7 @@ class BasicFunctionsProcessor(LogicalQueryProcessor):
                 if exp.internal_function.function_name == "top":
                     return replace(
                         exp,
-                        internal_function=replace(
-                            exp.internal_function, function_name="topK"
-                        ),
+                        internal_function=replace(exp.internal_function, function_name="topK"),
                     )
             return exp
 

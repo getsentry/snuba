@@ -14,9 +14,7 @@ def execute_entity_processors(query: EntityQuery, settings: QuerySettings) -> No
     entity = get_entity(query.get_from_clause().key)
 
     for processor in entity.get_query_processors():
-        with sentry_sdk.start_span(
-            description=type(processor).__name__, op="processor"
-        ):
+        with sentry_sdk.start_span(description=type(processor).__name__, op="processor"):
             if settings.get_dry_run():
                 with explain_meta.with_query_differ(
                     "entity_processor", type(processor).__name__, query

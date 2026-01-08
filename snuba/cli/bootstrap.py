@@ -72,9 +72,7 @@ def bootstrap(
                 client.list_topics(timeout=1)
                 break
             except KafkaException as err:
-                logger.debug(
-                    "Connection to Kafka failed (attempt %d)", attempts, exc_info=err
-                )
+                logger.debug("Connection to Kafka failed (attempt %d)", attempts, exc_info=err)
                 attempts += 1
                 if attempts == 60:
                     raise

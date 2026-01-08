@@ -31,9 +31,7 @@ TEST_CASES = [
             groupby=[Column("column1", None, "column1")],
             condition=binary_condition(
                 "equals",
-                FunctionCall(
-                    "group_id", "f", (Column("something", None, "something"),)
-                ),
+                FunctionCall("group_id", "f", (Column("something", None, "something"),)),
                 Literal(None, 1),
             ),
         ),
@@ -45,9 +43,7 @@ TEST_CASES = [
             groupby=[Column("column1", None, "column1")],
             condition=binary_condition(
                 "equals",
-                FunctionCall(
-                    "group_id", "f", (Column("something", None, "something"),)
-                ),
+                FunctionCall("group_id", "f", (Column("something", None, "something"),)),
                 Literal(None, 1),
             ),
         ),
@@ -80,9 +76,7 @@ TEST_CASES = [
                         "f_call_impl",
                         (
                             Literal(None, "literal1"),
-                            FunctionCall(
-                                None, "inner_call", (Column("param2", None, "param2"),)
-                            ),
+                            FunctionCall(None, "inner_call", (Column("param2", None, "param2"),)),
                             Literal(None, 420),
                         ),
                     ),

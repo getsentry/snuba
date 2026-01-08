@@ -54,9 +54,7 @@ class CompositeQueryProcessor(ABC):
     """
 
     @abstractmethod
-    def process_query(
-        self, query: CompositeQuery[Table], query_settings: QuerySettings
-    ) -> None:
+    def process_query(self, query: CompositeQuery[Table], query_settings: QuerySettings) -> None:
         raise NotImplementedError
 
 

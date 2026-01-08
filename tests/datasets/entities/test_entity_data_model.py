@@ -24,9 +24,7 @@ def test_entity_data_model() -> None:
     assert event_id_col.name == "event_id"
     assert event_id_col.type == FixedString(32)
 
-    assert entity_data_model.get("tags[asdf]") == FlattenedColumn(
-        None, "tags[asdf]", String()
-    )
+    assert entity_data_model.get("tags[asdf]") == FlattenedColumn(None, "tags[asdf]", String())
     assert entity_data_model.get("asdf") is None
     assert entity_data_model.get("tags[asd   f]") is None
     assert entity_data_model.get("asdf[gkrurrtsjhfkjgh]") is None

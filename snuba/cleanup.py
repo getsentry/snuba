@@ -54,7 +54,8 @@ def current_time() -> datetime:
 
 def filter_stale_partitions(parts: Sequence[util.Part]) -> Sequence[util.Part]:
     """
-    Filter partitions down to ones that are out of the retention window based on the current time."""
+    Filter partitions down to ones that are out of the retention window based on the current time.
+    """
 
     def midnight(a_date: datetime) -> datetime:
         return datetime(a_date.year, a_date.month, a_date.day)

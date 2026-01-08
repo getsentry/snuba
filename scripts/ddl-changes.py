@@ -39,18 +39,13 @@ def _main() -> None:
             migration_key = MigrationKey(migration_group, migration_id)
             print(f"-- forward migration {migration_group.value} :" f" {migration_id}")
             runner.run_migration(migration_key, dry_run=True)
-            print(
-                f"-- end forward migration {migration_group.value} :" f" {migration_id}"
-            )
+            print(f"-- end forward migration {migration_group.value} :" f" {migration_id}")
 
             print("\n\n\n")
             migration_key = MigrationKey(migration_group, migration_id)
             print(f"-- backward migration {migration_group.value} :" f" {migration_id}")
             runner.reverse_migration(migration_key, dry_run=True)
-            print(
-                f"-- end backward migration {migration_group.value} :"
-                f" {migration_id}"
-            )
+            print(f"-- end backward migration {migration_group.value} :" f" {migration_id}")
 
 
 if __name__ == "__main__":

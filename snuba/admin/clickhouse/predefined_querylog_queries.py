@@ -293,7 +293,8 @@ class BytesScannedForReferrerByOrganization(QuerylogQuery):
 
 class MostThrottledOrgs(QuerylogQuery):
     """Orgs with the highest ratios of throttled queries. This isn't perfect, it just shows how many queries an Allocation Policy has set to
-    not 10 max threads (ie throttled to 1 thread) for some reason. How many threads ClickHouse would've run the query with given max 10 threads is still unknown."""
+    not 10 max threads (ie throttled to 1 thread) for some reason. How many threads ClickHouse would've run the query with given max 10 threads is still unknown.
+    """
 
     sql = """
     SELECT organization, throttled_queries, total_queries, divide(throttled_queries, total_queries) as ratio

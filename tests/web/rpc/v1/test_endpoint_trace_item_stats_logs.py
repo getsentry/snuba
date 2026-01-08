@@ -85,9 +85,6 @@ class TestTraceItemStatsForLogs(BaseApiTest):
             buckets=[AttributeDistribution.Bucket(label="info", value=60)],
         )
         assert actual[1].attribute_name == "sentry.body"
-        assert sorted(
-            actual[1].buckets, key=lambda x: int(x.label[len("hello world ") :])
-        ) == [
-            AttributeDistribution.Bucket(label=f"hello world {i}", value=1)
-            for i in range(60)
+        assert sorted(actual[1].buckets, key=lambda x: int(x.label[len("hello world ") :])) == [
+            AttributeDistribution.Bucket(label=f"hello world {i}", value=1) for i in range(60)
         ]

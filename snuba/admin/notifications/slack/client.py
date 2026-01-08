@@ -7,9 +7,7 @@ logger = structlog.get_logger().bind(module=__name__)
 
 
 class SlackClient(object):
-    def __init__(
-        self, channel_id: Optional[str] = None, token: Optional[str] = None
-    ) -> None:
+    def __init__(self, channel_id: Optional[str] = None, token: Optional[str] = None) -> None:
         self.__channel_id = channel_id
         self.__token = token
 

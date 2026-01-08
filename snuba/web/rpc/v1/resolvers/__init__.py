@@ -27,9 +27,7 @@ from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.web.rpc import TraceItemDataResolver
 
 
-class ResolverTraceItemTable(
-    TraceItemDataResolver[TraceItemTableRequest, TraceItemTableResponse]
-):
+class ResolverTraceItemTable(TraceItemDataResolver[TraceItemTableRequest, TraceItemTableResponse]):
     @classmethod
     def endpoint_name(cls) -> str:
         return "TraceItemTable"
@@ -42,9 +40,7 @@ class ResolverTimeSeries(TraceItemDataResolver[TimeSeriesRequest, TimeSeriesResp
 
 
 class ResolverAttributeNames(
-    TraceItemDataResolver[
-        TraceItemAttributeNamesRequest, TraceItemAttributeNamesResponse
-    ]
+    TraceItemDataResolver[TraceItemAttributeNamesRequest, TraceItemAttributeNamesResponse]
 ):
     @classmethod
     def endpoint_name(cls) -> str:
@@ -52,9 +48,7 @@ class ResolverAttributeNames(
 
 
 class ResolverAttributeValues(
-    TraceItemDataResolver[
-        TraceItemAttributeValuesRequest, TraceItemAttributeValuesResponse
-    ]
+    TraceItemDataResolver[TraceItemAttributeValuesRequest, TraceItemAttributeValuesResponse]
 ):
     @classmethod
     def endpoint_name(cls) -> str:
@@ -72,9 +66,7 @@ class ResolverGetTrace(
         return "GetTrace"
 
 
-class ResolverTraceItemStats(
-    TraceItemDataResolver[TraceItemStatsRequest, TraceItemStatsResponse]
-):
+class ResolverTraceItemStats(TraceItemDataResolver[TraceItemStatsRequest, TraceItemStatsResponse]):
     @classmethod
     def endpoint_name(cls) -> str:
         return "TraceItemStats"

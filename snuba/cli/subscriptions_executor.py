@@ -116,9 +116,7 @@ def subscriptions_executor(
     if slice_id:
         metrics_tags["slice_id"] = str(slice_id)
 
-    metrics = MetricsWrapper(
-        environment.metrics, "subscriptions.executor", tags=metrics_tags
-    )
+    metrics = MetricsWrapper(environment.metrics, "subscriptions.executor", tags=metrics_tags)
 
     configure_metrics(StreamMetricsAdapter(metrics))
 

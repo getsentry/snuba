@@ -29,9 +29,7 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
             dataset.name: dataset
             for dataset in [
                 build_dataset_from_config(config_file)
-                for config_file in glob(
-                    settings.DATASET_CONFIG_FILES_GLOB, recursive=True
-                )
+                for config_file in glob(settings.DATASET_CONFIG_FILES_GLOB, recursive=True)
             ]
         }
 
@@ -39,17 +37,11 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
         self._name_map = {v.__class__: k for k, v in self._dataset_map.items()}
 
     def all_names(self) -> list[str]:
-        return [
-            name
-            for name in self._dataset_map.keys()
-            if name not in settings.DISABLED_DATASETS
-        ]
+        return [name for name in self._dataset_map.keys() if name not in settings.DISABLED_DATASETS]
 
     def get(self, name: str) -> Dataset:
         if name in settings.DISABLED_DATASETS:
-            raise InvalidDatasetError(
-                f"dataset {name!r} is disabled in this environment"
-            )
+            raise InvalidDatasetError(f"dataset {name!r} is disabled in this environment")
         try:
             return self._dataset_map[name]
         except KeyError as error:

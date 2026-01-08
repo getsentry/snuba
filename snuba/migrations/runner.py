@@ -70,22 +70,16 @@ class Runner:
     def __init__(self) -> None:
         self.__migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
         self.__table_name = (
-            LOCAL_TABLE_NAME
-            if self.__migrations_cluster.is_single_node()
-            else DIST_TABLE_NAME
+            LOCAL_TABLE_NAME if self.__migrations_cluster.is_single_node() else DIST_TABLE_NAME
         )
 
         self.__connection = self.__migrations_cluster.get_query_connection(
             ClickhouseClientSettings.MIGRATE
         )
 
-        self.__status: MutableMapping[
-            MigrationKey, Tuple[Status, Optional[datetime]]
-        ] = {}
+        self.__status: MutableMapping[MigrationKey, Tuple[Status, Optional[datetime]]] = {}
 
-    def get_status(
-        self, migration_key: MigrationKey
-    ) -> Tuple[Status, Optional[datetime]]:
+    def get_status(self, migration_key: MigrationKey) -> Tuple[Status, Optional[datetime]]:
         """
         Returns the status and timestamp of a migration.
         """
@@ -142,9 +136,7 @@ class Runner:
         migrations: List[Tuple[MigrationGroup, List[MigrationDetails]]] = []
 
         if groups:
-            migration_groups: Sequence[MigrationGroup] = [
-                MigrationGroup(group) for group in groups
-            ]
+            migration_groups: Sequence[MigrationGroup] = [MigrationGroup(group) for group in groups]
         else:
             migration_groups = get_active_migration_groups()
 
@@ -174,15 +166,13 @@ class Runner:
                 )
 
             if include_nonexistent:
-                non_existing_migrations = clickhouse_group_migrations.get(
-                    group, set()
-                ).difference(set(migration_ids))
+                non_existing_migrations = clickhouse_group_migrations.get(group, set()).difference(
+                    set(migration_ids)
+                )
                 for migration_id in non_existing_migrations:
                     migration_key = MigrationKey(group, migration_id)
                     group_migrations.append(
-                        MigrationDetails(
-                            migration_id, get_status(migration_key), False, False
-                        )
+                        MigrationDetails(migration_id, get_status(migration_key), False, False)
                     )
 
             migrations.append((group, group_migrations))
@@ -284,9 +274,7 @@ class Runner:
             raise MigrationError("Could not find migration in group")
 
         if dry_run:
-            self._run_migration_impl(
-                migration_key, dry_run=True, check_dangerous=check_dangerous
-            )
+            self._run_migration_impl(migration_key, dry_run=True, check_dangerous=check_dangerous)
             return
 
         migration_status = self._get_migration_status()
@@ -305,9 +293,7 @@ class Runner:
         if fake:
             self._update_migration_status(migration_key, Status.COMPLETED)
         else:
-            self._run_migration_impl(
-                migration_key, force=force, check_dangerous=check_dangerous
-            )
+            self._run_migration_impl(migration_key, force=force, check_dangerous=check_dangerous)
 
     def _run_migration_impl(
         self,
@@ -372,9 +358,7 @@ class Runner:
             raise MigrationError("You cannot reverse a migration that has not been run")
 
         if get_status(migration_key) == Status.COMPLETED and not force and not fake:
-            raise MigrationError(
-                "You must use force to revert an already completed migration"
-            )
+            raise MigrationError("You must use force to revert an already completed migration")
 
         for m in group_migrations[group_migrations.index(migration_id) + 1 :]:
             if get_status(MigrationKey(migration_group, m)) != Status.NOT_STARTED:
@@ -405,11 +389,7 @@ class Runner:
             else (
                 get_active_migration_groups()
                 if include_system
-                else [
-                    g
-                    for g in get_active_migration_groups()
-                    if g != MigrationGroup.SYSTEM
-                ]
+                else [g for g in get_active_migration_groups() if g != MigrationGroup.SYSTEM]
             )
         )
         completed_migrations = self._get_completed_migrations(groups)
@@ -518,9 +498,7 @@ class Runner:
 
         return migrations
 
-    def _get_pending_migrations_for_group(
-        self, group: MigrationGroup
-    ) -> List[MigrationKey]:
+    def _get_pending_migrations_for_group(self, group: MigrationGroup) -> List[MigrationKey]:
         """
         Gets pending migrations list for a specific group
         """
@@ -541,16 +519,12 @@ class Runner:
                 group_migrations.append(migration_key)
             elif status == Status.COMPLETED and len(group_migrations):
                 # We should never have a completed migration after a pending one for that group
-                missing_migrations = ", ".join(
-                    [m.migration_id for m in group_migrations]
-                )
+                missing_migrations = ", ".join([m.migration_id for m in group_migrations])
                 raise InvalidMigrationState(f"Missing migrations: {missing_migrations}")
 
         return group_migrations
 
-    def _get_completed_migrations(
-        self, groups: Sequence[MigrationGroup]
-    ) -> List[MigrationKey]:
+    def _get_completed_migrations(self, groups: Sequence[MigrationGroup]) -> List[MigrationKey]:
         """
         Get a list of completed migrations for a list of groups
         """
@@ -579,9 +553,7 @@ class Runner:
         group_migrations.reverse()
         return group_migrations
 
-    def _update_migration_status(
-        self, migration_key: MigrationKey, status: Status
-    ) -> None:
+    def _update_migration_status(self, migration_key: MigrationKey, status: Status) -> None:
         self.__status = {}
         next_version = self._get_next_version(migration_key)
 
@@ -621,14 +593,7 @@ class Runner:
 
         migration_groups = (
             "("
-            + (
-                ", ".join(
-                    [
-                        escape_string(group.value)
-                        for group in get_active_migration_groups()
-                    ]
-                )
-            )
+            + (", ".join([escape_string(group.value) for group in get_active_migration_groups()]))
             + ")"
         )
 
@@ -637,9 +602,7 @@ class Runner:
                 f"SELECT group, migration_id, status FROM {self.__table_name} FINAL WHERE group IN {migration_groups}"
             ).results:
                 group_name, migration_id, status_name = row
-                data[MigrationKey(MigrationGroup(group_name), migration_id)] = Status(
-                    status_name
-                )
+                data[MigrationKey(MigrationGroup(group_name), migration_id)] = Status(status_name)
         except ClickhouseError as e:
             # If the table wasn't created yet, no migrations have started.
             if e.code != errors.ErrorCodes.UNKNOWN_TABLE:
