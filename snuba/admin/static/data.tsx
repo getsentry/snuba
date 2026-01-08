@@ -3,6 +3,7 @@ import AutoReplacementsBypassProjects from "SnubaAdmin/auto_replacements_bypass_
 import AuditLog from "SnubaAdmin/runtime_config/auditlog";
 import ClickhouseMigrations from "SnubaAdmin/clickhouse_migrations";
 import ClickhouseQueries from "SnubaAdmin/clickhouse_queries";
+import CopyTables from "SnubaAdmin/copy_tables";
 import TracingQueries from "SnubaAdmin/tracing";
 import SnQLToSQL from "SnubaAdmin/snql_to_sql";
 import Kafka from "SnubaAdmin/kafka";
@@ -52,6 +53,11 @@ const NAV_ITEMS = [
     id: "system-queries",
     display: "🏚️ System Queries",
     component: ClickhouseQueries,
+  },
+  {
+    id: "copy-tables",
+    display: "📋 Copy Tables",
+    component: CopyTables,
   },
   {
     id: "clickhouse-migrations",
