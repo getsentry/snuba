@@ -284,42 +284,45 @@ class TestEndpointTraceItemTableRequest:
         message_wrapper = TraceItemTableRequestWrapper(message)
         message_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
 
-        assert message.aggregation_filter == AggregationFilter(  # same filter on both sides of the and
-            and_filter=AggregationAndFilter(
-                filters=[
-                    AggregationFilter(
-                        comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
-                            "column_3"
-                        )
-                    ),
-                    AggregationFilter(
-                        and_filter=AggregationAndFilter(
-                            filters=[
-                                AggregationFilter(
-                                    or_filter=AggregationOrFilter(
-                                        filters=[
-                                            AggregationFilter(
-                                                comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
-                                                    "column_4"
-                                                )
-                                            ),
-                                            AggregationFilter(
-                                                comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
-                                                    "column_5"
-                                                )
-                                            ),
-                                        ]
-                                    )
-                                ),
-                                AggregationFilter(
-                                    comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
-                                        "column_6"
-                                    )
-                                ),
-                            ]
-                        )
-                    ),
-                ]
+        assert (
+            message.aggregation_filter
+            == AggregationFilter(  # same filter on both sides of the and
+                and_filter=AggregationAndFilter(
+                    filters=[
+                        AggregationFilter(
+                            comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
+                                "column_3"
+                            )
+                        ),
+                        AggregationFilter(
+                            and_filter=AggregationAndFilter(
+                                filters=[
+                                    AggregationFilter(
+                                        or_filter=AggregationOrFilter(
+                                            filters=[
+                                                AggregationFilter(
+                                                    comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
+                                                        "column_4"
+                                                    )
+                                                ),
+                                                AggregationFilter(
+                                                    comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
+                                                        "column_5"
+                                                    )
+                                                ),
+                                            ]
+                                        )
+                                    ),
+                                    AggregationFilter(
+                                        comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
+                                            "column_6"
+                                        )
+                                    ),
+                                ]
+                            )
+                        ),
+                    ]
+                )
             )
         )
 

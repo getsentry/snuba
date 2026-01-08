@@ -26,9 +26,9 @@ from snuba.clickhouse.columns import (
     Map,
     SimpleAggregateFunction,
     String,
+    UInt,
 )
 from snuba.clickhouse.columns import Tuple as TupleCol
-from snuba.clickhouse.columns import UInt
 from snuba.migrations.columns import MigrationModifiers
 
 grammar = Grammar(

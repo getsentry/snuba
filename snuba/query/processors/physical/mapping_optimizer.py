@@ -22,9 +22,8 @@ from snuba.query.conditions import (
 from snuba.query.expressions import Column, Expression
 from snuba.query.expressions import FunctionCall as FunctionExpr
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query.matchers import Any, AnyOptionalString
+from snuba.query.matchers import Any, AnyOptionalString, FunctionCall, Literal, Or, Param, String
 from snuba.query.matchers import Column as ColumnMatcher
-from snuba.query.matchers import FunctionCall, Literal, Or, Param, String
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config

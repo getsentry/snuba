@@ -7,7 +7,6 @@ from snuba.query.allocation_policies import PassthroughPolicy
 
 
 def get_storages_with_allocation_policies() -> list[str]:
-
     storages = [
         storage
         for storage_key in sorted(get_all_storage_keys(), key=lambda storage_key: storage_key.value)

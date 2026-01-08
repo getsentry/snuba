@@ -85,7 +85,6 @@ class HealthInfo:
 
 
 def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
-
     start = time.time()
     down_file_exists = check_down_file_exists()
 

@@ -69,8 +69,8 @@ class DirectoryLoader(GroupLoader, ABC):
                 """
                 raise ValueError(
                     f"""Duplicate migration number for the following files:
-    {os.path.join(migration_folder,last)}.py
-    {os.path.join(migration_folder,fname)}.py"""
+    {os.path.join(migration_folder, last)}.py
+    {os.path.join(migration_folder, fname)}.py"""
                 )
             last = fname
 

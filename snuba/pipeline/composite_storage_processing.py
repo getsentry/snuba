@@ -124,9 +124,9 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeQueryPlan, Table]):
         )
 
     def _visit_simple_query(self, data_source: ProcessableQuery[Table]) -> CompositeQueryPlan:
-        assert isinstance(
-            data_source, ProcessableQuery
-        ), f"Only subqueries are allowed at query planning stage. {type(data_source)} found."
+        assert isinstance(data_source, ProcessableQuery), (
+            f"Only subqueries are allowed at query planning stage. {type(data_source)} found."
+        )
         query_plan = build_best_plan(data_source, self.__settings)
         return CompositeQueryPlan(
             translated_source=query_plan.query,
@@ -160,9 +160,9 @@ class JoinPlansBuilder(JoinVisitor[Mapping[str, ClickhouseQueryPlan], Table]):
     def visit_individual_node(
         self, node: IndividualNode[Table]
     ) -> Mapping[str, ClickhouseQueryPlan]:
-        assert isinstance(
-            node.data_source, ClickhouseQuery
-        ), "Invalid composite query. All nodes must be subqueries."
+        assert isinstance(node.data_source, ClickhouseQuery), (
+            "Invalid composite query. All nodes must be subqueries."
+        )
 
         plan = build_best_plan(node.data_source, self.__settings)
 
@@ -208,9 +208,9 @@ class JoinDataSourcePlanner(JoinVisitor[JoinDataSourcePlan, Table]):
         self.__plans = plans
 
     def visit_individual_node(self, node: IndividualNode[Table]) -> JoinDataSourcePlan:
-        assert isinstance(
-            node.data_source, ProcessableQuery
-        ), "Invalid composite query. All nodes must be subqueries."
+        assert isinstance(node.data_source, ProcessableQuery), (
+            "Invalid composite query. All nodes must be subqueries."
+        )
 
         sub_query_plan = self.__plans[node.alias]
         return JoinDataSourcePlan(
@@ -288,9 +288,9 @@ class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table
         self.visit(data_source.get_from_clause())
 
     def visit_individual_node(self, node: IndividualNode[Table]) -> None:
-        assert isinstance(
-            node.data_source, ClickhouseQuery
-        ), "Invalid join structure. Only subqueries are allowed at this stage."
+        assert isinstance(node.data_source, ClickhouseQuery), (
+            "Invalid join structure. Only subqueries are allowed at this stage."
+        )
         self.__process_simple_query(node.data_source, self.__aliased_processors[node.alias])
 
     def visit_join_clause(self, node: JoinClause[Table]) -> None:

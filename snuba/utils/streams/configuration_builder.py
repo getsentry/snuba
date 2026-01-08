@@ -16,7 +16,6 @@ from snuba.utils.streams.types import KafkaBrokerConfig
 def _get_default_topic_configuration(
     topic: Optional[Topic], slice_id: Optional[int] = None
 ) -> Mapping[str, Any]:
-
     if topic is not None:
         if slice_id is not None:
             return settings.SLICED_KAFKA_BROKER_CONFIG.get(

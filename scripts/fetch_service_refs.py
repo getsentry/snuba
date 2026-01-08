@@ -62,7 +62,6 @@ def main(pipeline_name: str = "deploy-snuba-us", repo: str = "snuba") -> int:
             # Look at the most recent passing pipeline,
             # and get its deployment revision for the main material.
             if pipeline_passed(pipeline):
-
                 for r in pipeline["build_cause"]["material_revisions"]:
                     # example material description format... `in` is good enough
                     # 'URL: git@github.com:getsentry/devinfra-example-service.git, Branch: main'

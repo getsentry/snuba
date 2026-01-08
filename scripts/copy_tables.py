@@ -52,9 +52,9 @@ def verify_zk_replica_path(
 
     built_replica_path = f"{create_table_path}/replicas/{source_replica}"
 
-    assert (
-        built_replica_path == replica_path
-    ), f"{built_replica_path} should match zk path: {replica_path}"
+    assert built_replica_path == replica_path, (
+        f"{built_replica_path} should match zk path: {replica_path}"
+    )
     print(f"...zookeeper replica paths verified for table: {table} ! :)")
 
 

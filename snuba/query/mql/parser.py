@@ -1173,9 +1173,7 @@ def populate_query_from_mql_context(
                     function_name=function_name,
                     alias=alias,
                     parameters=parameters,
-                ) if (
-                    function_name in extrapolatable_functions
-                ):
+                ) if function_name in extrapolatable_functions:
                     return FunctionCall(
                         function_name=function_name + "_weighted",
                         alias=alias,

@@ -31,7 +31,6 @@ def build_blocks(data: Any, action: AuditLogAction, timestamp: str, user: str) -
 
 
 def build_configurable_component_changed_text(data: Any, action: AuditLogAction) -> Optional[str]:
-
     base = f"*Resource {data['resource_identifier']} Configurable Component {data['configurable_component_class_name']} Changed:*"
 
     if action == AuditLogAction.CONFIGURABLE_COMPONENT_DELETE:

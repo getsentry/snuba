@@ -318,9 +318,9 @@ class ReplacerWorker:
         self.metrics = metrics
         self.__processing_time_counter = Counter(consumer_group)
         processor = storage.get_table_writer().get_replacer_processor()
-        assert (
-            processor
-        ), f"This storage writer does not support replacements {storage.get_storage_key().value}"
+        assert processor, (
+            f"This storage writer does not support replacements {storage.get_storage_key().value}"
+        )
         self.__replacer_processor = processor
         self.__database_name = storage.get_cluster().get_database()
 

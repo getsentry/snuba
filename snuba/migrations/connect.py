@@ -203,7 +203,7 @@ def get_column_states() -> ColumnStatesMapType:
 
             conn = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
             column_types = conn.execute(
-                "SELECT table, name, type FROM system.columns " f"WHERE database='{conn.database}'",
+                f"SELECT table, name, type FROM system.columns WHERE database='{conn.database}'",
             ).results
 
             for row in column_types:

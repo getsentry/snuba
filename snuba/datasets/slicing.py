@@ -23,12 +23,12 @@ def map_logical_partition_to_slice(storage_set: StorageSetKey, logical_partition
     """
     from snuba.settings import LOGICAL_PARTITION_MAPPING
 
-    assert is_storage_set_sliced(
-        storage_set
-    ), f"cannot retrieve slice of non-sliced storage set {storage_set}"
-    assert (
-        storage_set.value in LOGICAL_PARTITION_MAPPING
-    ), f"logical partition mapping missing for storage set {storage_set}"
+    assert is_storage_set_sliced(storage_set), (
+        f"cannot retrieve slice of non-sliced storage set {storage_set}"
+    )
+    assert storage_set.value in LOGICAL_PARTITION_MAPPING, (
+        f"logical partition mapping missing for storage set {storage_set}"
+    )
 
     return LOGICAL_PARTITION_MAPPING[storage_set.value][logical_partition]
 

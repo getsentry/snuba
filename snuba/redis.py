@@ -5,11 +5,11 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Iterable, Mapping, TypeVar, Union, cast
 
+from redis.cluster import ClusterNode, RedisCluster
+from redis.exceptions import RedisClusterException
 from sentry_redis_tools.failover_redis import FailoverRedis
 from sentry_redis_tools.retrying_cluster import RetryingRedisCluster
 
-from redis.cluster import ClusterNode, RedisCluster
-from redis.exceptions import RedisClusterException
 from snuba import settings
 from snuba.utils.serializable_exception import SerializableException
 

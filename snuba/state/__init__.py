@@ -18,9 +18,8 @@ from typing import (
 )
 
 import simplejson as json
-from confluent_kafka import KafkaError
+from confluent_kafka import KafkaError, Producer
 from confluent_kafka import Message as KafkaMessage
-from confluent_kafka import Producer
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba import environment, settings

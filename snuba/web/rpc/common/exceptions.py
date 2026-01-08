@@ -32,7 +32,6 @@ class QueryTimeoutException(RPCRequestException):
 
 
 class RPCAllocationPolicyException(RPCRequestException):
-
     def __init__(
         self,
         message: str,
@@ -52,7 +51,6 @@ class RPCAllocationPolicyException(RPCRequestException):
 
 
 def convert_rpc_exception_to_proto(exc: Union[RPCRequestException, QueryException]) -> ErrorProto:
-
     if isinstance(exc, RPCRequestException):
         s = struct_pb2.Struct()
         s.update(exc.details)

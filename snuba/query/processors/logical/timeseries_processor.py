@@ -5,11 +5,10 @@ from snuba.query.dsl import multiply
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.matchers import Any
+from snuba.query.matchers import Any, Or, Param, String
 from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
-from snuba.query.matchers import Or, Param, String
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.util import parse_datetime

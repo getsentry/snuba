@@ -483,7 +483,6 @@ ENTITY_TRANSLATION_MAPPERS = {
         "functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "curried_functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "subscriptables": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
-        "columns": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
     },
     "additionalProperties": False,
 }
@@ -892,3 +891,5 @@ V1_ALL_SCHEMAS = {
     "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
     "migration_group": V1_MIGRATION_GROUP_SCHEMA,
 }
+
+hello = "k"

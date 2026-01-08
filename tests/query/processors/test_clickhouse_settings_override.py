@@ -3,9 +3,8 @@ from typing import Any, MutableMapping
 import pytest
 
 from snuba import state
-from snuba.clickhouse.columns import ColumnSet, DateTime
+from snuba.clickhouse.columns import ColumnSet, DateTime, String
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
-from snuba.clickhouse.columns import String
 from snuba.clickhouse.query import Query
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression

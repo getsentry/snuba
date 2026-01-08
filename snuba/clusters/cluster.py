@@ -471,9 +471,9 @@ _registered_storage_sets = [
 
 _unique_registered_storage_sets = set(_registered_storage_sets)
 
-assert len(_registered_storage_sets) == len(
-    _unique_registered_storage_sets
-), "Storage set registered to more than one cluster"
+assert len(_registered_storage_sets) == len(_unique_registered_storage_sets), (
+    "Storage set registered to more than one cluster"
+)
 
 _STORAGE_SET_CLUSTER_MAP: Dict[StorageSetKey, ClickhouseCluster] = {
     storage_set: cluster for cluster in CLUSTERS for storage_set in cluster.get_storage_set_keys()
@@ -539,9 +539,9 @@ def get_cluster(
     SLICED_CLUSTERS, then an UndefinedClickhouseCluster Exception
     will be raised.
     """
-    assert (
-        storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
-    ), f"Storage set {storage_set_key} is disabled"
+    assert storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES, (
+        f"Storage set {storage_set_key} is disabled"
+    )
 
     if slice_id is not None:
         part_storage_set_cluster_map = _get_sliced_storage_set_cluster_map()

@@ -1,8 +1,9 @@
 import importlib.metadata
 import shutil
 
-from devenv import constants
 from devenv.lib import brew, config, proc, uv
+
+from devenv import constants
 
 
 def check_minimum_version(minimum_version: str) -> bool:

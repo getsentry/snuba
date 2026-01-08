@@ -10,11 +10,9 @@ from snuba.query.conditions import (
     is_in_condition_pattern,
 )
 from snuba.query.dsl import arrayJoin, tupleElement
-from snuba.query.expressions import Argument
+from snuba.query.expressions import Argument, Expression, Lambda
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
-from snuba.query.expressions import Lambda
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, Column, FunctionCall, Literal, Or, Param, String
 from snuba.query.processors.physical import ClickhouseQueryProcessor

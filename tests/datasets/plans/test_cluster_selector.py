@@ -129,21 +129,21 @@ mega_cluster_test_data = [
         1,
         None,
         False,
-        id="no " "override configured",
+        id="no override configured",
     ),
     pytest.param(
         StorageSetKey("generic_metrics_distributions"),
         1,
         "[1]",
         True,
-        id="" "override configured",
+        id="override configured",
     ),
     pytest.param(
         StorageSetKey("generic_metrics_distributions"),
         1,
         "[100]",
         False,
-        id="" "override configured for different partition",
+        id="override configured for different partition",
     ),
     pytest.param(
         StorageSetKey("generic_metrics_distributions"),
@@ -156,7 +156,7 @@ mega_cluster_test_data = [
 
 
 @pytest.mark.parametrize(
-    "storage_set, logical_partition, override_config, " "expected",
+    "storage_set, logical_partition, override_config, expected",
     mega_cluster_test_data,
 )
 @pytest.mark.redis_db

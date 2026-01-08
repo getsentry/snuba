@@ -810,9 +810,9 @@ class ColumnValidator:
     def _valid_tuple(self, tuple_column: Tuple[AnyType], value: tuple[Any]) -> bool:
         if not isinstance(value, tuple):
             return False
-        assert len(value) == len(
-            tuple_column.types
-        ), "number of tuple arg types and actual values don't match"
+        assert len(value) == len(tuple_column.types), (
+            "number of tuple arg types and actual values don't match"
+        )
         for i, el in enumerate(value):
             is_valid_func = self.type_validation_function(tuple_column.types[i])
             if is_valid_func(el):

@@ -152,6 +152,6 @@ def test_delete_query_with_rejecting_allocation_policy() -> None:
         cause = excinfo.value.__cause__
         assert isinstance(cause, AllocationPolicyViolations)
         assert "RejectPolicy" in cause.violations
-        assert (
-            update_called
-        ), "update_quota_balance should have been called even though the query was rejected but was not"
+        assert update_called, (
+            "update_quota_balance should have been called even though the query was rejected but was not"
+        )

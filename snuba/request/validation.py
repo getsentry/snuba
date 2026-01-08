@@ -108,7 +108,6 @@ def build_request(
     referrer: str,
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Request:
-
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
             dataset_name = get_dataset_name(dataset)

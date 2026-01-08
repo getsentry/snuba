@@ -11,7 +11,6 @@ class MandatoryConditionApplier(ClickhouseQueryProcessor):
     """
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-
         mandatory_conditions = query.get_from_clause().mandatory_conditions
 
         if len(mandatory_conditions) > 0:

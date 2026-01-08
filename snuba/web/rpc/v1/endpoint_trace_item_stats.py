@@ -45,7 +45,6 @@ class EndpointTraceItemStats(RPCEndpoint[TraceItemStatsRequest, TraceItemStatsRe
         )
 
     def _execute(self, in_msg: TraceItemStatsRequest) -> TraceItemStatsResponse:
-
         if not in_msg.stats_types:
             raise BadSnubaRPCRequestException("Please specify at least one stats type.")
 

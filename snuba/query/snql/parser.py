@@ -70,11 +70,10 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.matchers import Any as AnyMatch
-from snuba.query.matchers import AnyExpression, AnyOptionalString
+from snuba.query.matchers import AnyExpression, AnyOptionalString, Or, Param
 from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
-from snuba.query.matchers import Or, Param
 from snuba.query.matchers import String as StringMatch
 from snuba.query.parser import (
     apply_column_aliases,

@@ -21,9 +21,11 @@ from snuba.clickhouse.columns import (
     Map,
     Nested,
     ReadOnly,
+    SimpleAggregateFunction,
+    String,
+    UInt,
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifier
-from snuba.clickhouse.columns import SimpleAggregateFunction, String, UInt
 from snuba.utils.schemas import JSON
 
 TEST_CASES = [

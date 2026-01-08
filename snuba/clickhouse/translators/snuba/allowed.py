@@ -15,10 +15,9 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.matchers import Any
+from snuba.query.matchers import Any, Or
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
-from snuba.query.matchers import Or
 from snuba.query.matchers import String as StringMatch
 from snuba.util import qualified_column
 from snuba.utils.registered_class import RegisteredClass
@@ -201,7 +200,6 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
         expression: FunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCall]:
-
         # HACK: Quick fix to avoid this function dropping important conditions from the query
         logical_functions = {"and", "or", "xor"}
 

@@ -112,7 +112,6 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
-
         if partitions:
             self.__metrics_tags["min_partition"] = str(min(x.index for x in partitions))
         else:
