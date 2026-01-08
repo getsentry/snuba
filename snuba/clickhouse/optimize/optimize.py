@@ -326,9 +326,9 @@ def optimize_partition_runner(
         partitions_to_optimize = deque(partitions)
         partitions_remaining = len(partitions)
         tags = _get_metrics_tags(table, clickhouse_host)
-        metrics.gauge("partitions_left_to_optimize", partitions_remaining, tags=tags)
 
         while partitions_to_optimize:
+            metrics.gauge("partitions_left_to_optimize", partitions_remaining, tags=tags)
             configured_num_threads = get_num_threads(default_parallel_threads)
             schedule = scheduler.get_next_schedule(partitions_to_optimize)
             logger.info(
@@ -356,7 +356,6 @@ def optimize_partition_runner(
             for future in completed_futures:
                 future.result()
                 partitions_remaining -= 1
-            metrics.gauge("partitions_left_to_optimize", partitions_remaining, tags=tags)
 
 
 def optimize_partitions(
