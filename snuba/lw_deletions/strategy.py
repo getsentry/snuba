@@ -38,7 +38,7 @@ TPayload = TypeVar("TPayload")
 
 import logging
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class LWDeleteQueryException(Exception):
