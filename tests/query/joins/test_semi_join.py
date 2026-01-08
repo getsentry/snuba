@@ -74,9 +74,7 @@ TEST_CASES = [
                             "_snuba_group_id",
                             Column("_snuba_group_id", None, "group_id"),
                         ),
-                        SelectedExpression(
-                            "_snuba_col1", Column("_snuba_col1", None, "something")
-                        ),
+                        SelectedExpression("_snuba_col1", Column("_snuba_col1", None, "something")),
                     ]
                 ),
                 clickhouse_groups_node(
@@ -84,9 +82,7 @@ TEST_CASES = [
                 ),
             ),
             selected_columns=[
-                SelectedExpression(
-                    "something", Column("_snuba_col1", "ev", "_snuba_col1")
-                )
+                SelectedExpression("something", Column("_snuba_col1", "ev", "_snuba_col1"))
             ],
         ),
         {"gr": JoinModifier.ANY},
@@ -105,19 +101,13 @@ TEST_CASES = [
                 ),
                 clickhouse_groups_node(
                     [
-                        SelectedExpression(
-                            "_snuba_id", Column("_snuba_id", None, "id")
-                        ),
-                        SelectedExpression(
-                            "_snuba_col1", Column("_snuba_col1", None, "something")
-                        ),
+                        SelectedExpression("_snuba_id", Column("_snuba_id", None, "id")),
+                        SelectedExpression("_snuba_col1", Column("_snuba_col1", None, "something")),
                     ]
                 ),
             ),
             selected_columns=[
-                SelectedExpression(
-                    "group_id", Column("_snuba_col1", "gr", "_snuba_col1")
-                )
+                SelectedExpression("group_id", Column("_snuba_col1", "gr", "_snuba_col1"))
             ],
         ),
         {"gr": None},
@@ -137,9 +127,7 @@ TEST_CASES = [
                     ),
                     clickhouse_groups_node(
                         [
-                            SelectedExpression(
-                                "_snuba_id", Column("_snuba_id", None, "id")
-                            ),
+                            SelectedExpression("_snuba_id", Column("_snuba_id", None, "id")),
                             SelectedExpression(
                                 "_snuba_col1", Column("_snuba_col1", None, "something")
                             ),
@@ -152,9 +140,7 @@ TEST_CASES = [
                             "_snuba_group_id",
                             Column("_snuba_group_id", None, "group_id"),
                         ),
-                        SelectedExpression(
-                            "_snuba_col1", Column("_snuba_col1", None, "something")
-                        ),
+                        SelectedExpression("_snuba_col1", Column("_snuba_col1", None, "something")),
                     ]
                 ),
                 keys=[
@@ -166,9 +152,7 @@ TEST_CASES = [
                 join_type=JoinType.INNER,
             ),
             selected_columns=[
-                SelectedExpression(
-                    "group_id", Column("_snuba_col1", "gr", "_snuba_col1")
-                )
+                SelectedExpression("group_id", Column("_snuba_col1", "gr", "_snuba_col1"))
             ],
         ),
         {"gr": None, "as": JoinModifier.ANY},
@@ -188,9 +172,7 @@ TEST_CASES = [
                     ),
                     clickhouse_groups_node(
                         [
-                            SelectedExpression(
-                                "_snuba_id", Column("_snuba_id", None, "id")
-                            ),
+                            SelectedExpression("_snuba_id", Column("_snuba_id", None, "id")),
                             SelectedExpression(
                                 "_snuba_col1", Column("_snuba_col1", None, "something")
                             ),
@@ -203,9 +185,7 @@ TEST_CASES = [
                             "_snuba_group_id",
                             Column("_snuba_group_id", None, "group_id"),
                         ),
-                        SelectedExpression(
-                            "_snuba_col1", Column("_snuba_col1", None, "something")
-                        ),
+                        SelectedExpression("_snuba_col1", Column("_snuba_col1", None, "something")),
                     ]
                 ),
                 keys=[
@@ -240,6 +220,4 @@ def test_subquery_generator(
             assert_transformation(clause.left_node, expected)
 
     SemiJoinOptimizer().process_query(query, HTTPQuerySettings())
-    assert_transformation(
-        cast(JoinClause[Table], query.get_from_clause()), expected_semi_join
-    )
+    assert_transformation(cast(JoinClause[Table], query.get_from_clause()), expected_semi_join)

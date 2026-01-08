@@ -102,11 +102,7 @@ class CompositeQueryPlan(NamedTuple):
         Mapping[str, Sequence[ClickhouseQueryProcessor]],
     ]:
         return (
-            (
-                self.root_processors.db_processors
-                if self.root_processors is not None
-                else []
-            ),
+            (self.root_processors.db_processors if self.root_processors is not None else []),
             (
                 {
                     alias: subquery.db_processors
@@ -124,11 +120,7 @@ class CompositeQueryPlan(NamedTuple):
         Mapping[str, Sequence[ClickhouseQueryProcessor]],
     ]:
         return (
-            (
-                self.root_processors.plan_processors
-                if self.root_processors is not None
-                else []
-            ),
+            (self.root_processors.plan_processors if self.root_processors is not None else []),
             (
                 {
                     alias: subquery.plan_processors

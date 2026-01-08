@@ -71,9 +71,7 @@ class TableSchema(Schema):
         # table name we need to load the cluster. The storage
         # initialization needs to work whether or not the cluster can
         # be loaded (as the cluster could be in DEV mode).
-        return TableSource(
-            self.get_table_name(), self.__columns, self.__mandatory_conditions
-        )
+        return TableSource(self.get_table_name(), self.__columns, self.__mandatory_conditions)
 
     def get_local_table_name(self) -> str:
         """

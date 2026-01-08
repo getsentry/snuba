@@ -73,7 +73,5 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropTable(
-                storage_set=StorageSetKey.METRICS, table_name=self.dist_table_name
-            )
+            operations.DropTable(storage_set=StorageSetKey.METRICS, table_name=self.dist_table_name)
         ]

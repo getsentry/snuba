@@ -49,9 +49,7 @@ OPERATOR_TO_FUNCTION: Mapping[str, str] = {
 }
 
 
-FUNCTION_TO_OPERATOR: Mapping[str, str] = {
-    func: op for op, func in OPERATOR_TO_FUNCTION.items()
-}
+FUNCTION_TO_OPERATOR: Mapping[str, str] = {func: op for op, func in OPERATOR_TO_FUNCTION.items()}
 
 
 class BooleanFunctions:
@@ -70,20 +68,18 @@ UNARY_OPERATORS = [
 ]
 
 
-BINARY_OPERATORS = [
-    opr for opr in FUNCTION_TO_OPERATOR if opr not in (set(UNARY_OPERATORS))
-] + [BooleanFunctions.AND, BooleanFunctions.OR, BooleanFunctions.NOT]
+BINARY_OPERATORS = [opr for opr in FUNCTION_TO_OPERATOR if opr not in (set(UNARY_OPERATORS))] + [
+    BooleanFunctions.AND,
+    BooleanFunctions.OR,
+    BooleanFunctions.NOT,
+]
 
 
-def __set_condition(
-    function: str, lhs: Expression, rhs: Sequence[Literal]
-) -> Expression:
+def __set_condition(function: str, lhs: Expression, rhs: Sequence[Literal]) -> Expression:
     return binary_condition(function, lhs, literals_tuple(None, rhs))
 
 
-def __set_condition_pattern(
-    lhs: Pattern[Expression], operator: str
-) -> FunctionCallPattern:
+def __set_condition_pattern(lhs: Pattern[Expression], operator: str) -> FunctionCallPattern:
     return FunctionCallPattern(
         String(operator),
         (
@@ -152,9 +148,7 @@ def is_not_in_condition_pattern(lhs: Pattern[Expression]) -> FunctionCallPattern
     return __set_condition_pattern(lhs, ConditionFunctions.NOT_IN)
 
 
-def binary_condition(
-    function_name: str, lhs: Expression, rhs: Expression
-) -> FunctionCall:
+def binary_condition(function_name: str, lhs: Expression, rhs: Expression) -> FunctionCall:
     """This function is deprecated please use snuba.query.dsl.binary_condition"""
     from snuba.query.dsl import binary_condition as dsl_binary_condition
 
@@ -253,9 +247,7 @@ TOP_LEVEL_CONDITIONS = {
 }
 
 
-def _get_first_level_conditions(
-    condition: Expression, function: str
-) -> Sequence[Expression]:
+def _get_first_level_conditions(condition: Expression, function: str) -> Sequence[Expression]:
     """
     Utility function to implement several conditions related
     functionalities that were trivial with the legacy query
@@ -314,9 +306,7 @@ CONDITION_MATCH = Or(
             Or([String(op) for op in BINARY_OPERATORS]),
             (AnyExpression(), AnyExpression()),
         ),
-        FunctionCallPattern(
-            Or([String(op) for op in UNARY_OPERATORS]), (AnyExpression(),)
-        ),
+        FunctionCallPattern(Or([String(op) for op in UNARY_OPERATORS]), (AnyExpression(),)),
     ]
 )
 

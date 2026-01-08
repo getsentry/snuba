@@ -49,9 +49,7 @@ def policy() -> ConcurrentRateLimitAllocationPolicy:
 @pytest.mark.redis_db
 def test_rate_limit_concurrent(policy: ConcurrentRateLimitAllocationPolicy) -> None:
     for i in range(MAX_CONCURRENT_QUERIES):
-        policy.get_quota_allowance(
-            tenant_ids={"organization_id": 123}, query_id=f"abc{i}"
-        )
+        policy.get_quota_allowance(tenant_ids={"organization_id": 123}, query_id=f"abc{i}")
 
     quota_allowance = policy.get_quota_allowance(
         tenant_ids={"organization_id": 123}, query_id=f"abc{MAX_CONCURRENT_QUERIES}"
@@ -103,9 +101,7 @@ def test_rate_limit_concurrent_complete_query(
 ) -> None:
     # submit the max concurrent queries
     for i in range(MAX_CONCURRENT_QUERIES):
-        policy.get_quota_allowance(
-            tenant_ids={"organization_id": 123}, query_id=f"abc{i}"
-        )
+        policy.get_quota_allowance(tenant_ids={"organization_id": 123}, query_id=f"abc{i}")
 
     # cant submit anymore
     quota_allowance = policy.get_quota_allowance(
@@ -139,9 +135,7 @@ def test_update_quota_balance(policy: ConcurrentRateLimitAllocationPolicy) -> No
     # when a query is finished (in whatever state), it is no longer counted as a concurrent query
 
     for i in range(MAX_CONCURRENT_QUERIES):
-        policy.get_quota_allowance(
-            tenant_ids={"organization_id": 123}, query_id=f"abc{i}"
-        )
+        policy.get_quota_allowance(tenant_ids={"organization_id": 123}, query_id=f"abc{i}")
 
     for i in range(MAX_CONCURRENT_QUERIES):
         policy.update_quota_balance(
@@ -303,9 +297,7 @@ def test_override_isolation(
             query_id="uniq_string_2",
         )
     except Exception:
-        pytest.fail(
-            "overridden query was finished, another one should have been able to run"
-        )
+        pytest.fail("overridden query was finished, another one should have been able to run")
 
     # finish a non-overidden query
     policy.update_quota_balance(

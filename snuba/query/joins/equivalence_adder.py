@@ -52,8 +52,7 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
             raise InvalidQueryException("Storage queries do not support joins")
     # from now on we know we are dealing with entities
     alias_to_entity = {
-        alias: entity_from_node(node)
-        for alias, node in from_clause.get_alias_node_map().items()
+        alias: entity_from_node(node) for alias, node in from_clause.get_alias_node_map().items()
     }
     entity_to_alias: MutableMapping[EntityKey, Set[str]] = {}
     for alias, entity in alias_to_entity.items():
@@ -106,9 +105,7 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
                     )
                     conditions_to_add.append(sub_condition.transform(replacer))
 
-    query.set_ast_condition(
-        combine_and_conditions([*and_components, *conditions_to_add])
-    )
+    query.set_ast_condition(combine_and_conditions([*and_components, *conditions_to_add]))
 
 
 def _classify_single_column_condition(

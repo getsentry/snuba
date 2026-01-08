@@ -28,9 +28,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropColumn(
-                StorageSetKey.EVENTS, "errors_local", "hierarchical_hashes"
-            ),
+            operations.DropColumn(StorageSetKey.EVENTS, "errors_local", "hierarchical_hashes"),
         ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
@@ -45,7 +43,5 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropColumn(
-                StorageSetKey.EVENTS, "errors_dist", "hierarchical_hashes"
-            ),
+            operations.DropColumn(StorageSetKey.EVENTS, "errors_dist", "hierarchical_hashes"),
         ]

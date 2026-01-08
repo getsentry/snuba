@@ -65,13 +65,9 @@ test_cases = [
                 selected_columns=[
                     SelectedExpression(
                         "4-5",
-                        FunctionCall(
-                            "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                        ),
+                        FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                     ),
-                    SelectedExpression(
-                        "trace_id", Column("_snuba_trace_id", None, "trace_id")
-                    ),
+                    SelectedExpression("trace_id", Column("_snuba_trace_id", None, "trace_id")),
                 ],
                 granularity=60,
                 condition=required_condition,
@@ -87,9 +83,7 @@ test_cases = [
             Query(
                 QueryStorage(key=StorageKey("eap_items")),
                 selected_columns=[
-                    SelectedExpression(
-                        "trace_id", Column("_snuba_trace_id", None, "trace_id")
-                    ),
+                    SelectedExpression("trace_id", Column("_snuba_trace_id", None, "trace_id")),
                 ],
                 granularity=None,
                 condition=and_cond(
@@ -111,9 +105,7 @@ test_cases = [
             Query(
                 QueryStorage(key=StorageKey("eap_items"), sample=0.1),
                 selected_columns=[
-                    SelectedExpression(
-                        "trace_id", Column("_snuba_trace_id", None, "trace_id")
-                    ),
+                    SelectedExpression("trace_id", Column("_snuba_trace_id", None, "trace_id")),
                 ],
                 granularity=None,
                 condition=and_cond(
@@ -148,9 +140,7 @@ test_cases = [
             from_clause=Query(
                 QueryStorage(key=StorageKey("eap_items")),
                 selected_columns=[
-                    SelectedExpression(
-                        "trace_id", Column("_snuba_trace_id", None, "trace_id")
-                    ),
+                    SelectedExpression("trace_id", Column("_snuba_trace_id", None, "trace_id")),
                     SelectedExpression(
                         "duration_ms", Column("_snuba_duration_ms", None, "duration_ms")
                     ),
@@ -171,9 +161,7 @@ test_cases = [
             Query(
                 QueryStorage(key=StorageKey("eap_items")),
                 selected_columns=[
-                    SelectedExpression(
-                        "trace_id", Column("_snuba_trace_id", None, "trace_id")
-                    ),
+                    SelectedExpression("trace_id", Column("_snuba_trace_id", None, "trace_id")),
                     SelectedExpression(
                         "duration", Column("_snuba_duration_ms", None, "duration_ms")
                     ),

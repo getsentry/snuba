@@ -28,9 +28,7 @@ class DummyVisitor(ExpressionVisitor[Iterable[Expression]]):
         self.__visited_nodes.append(exp)
         return [exp]
 
-    def visit_subscriptable_reference(
-        self, exp: SubscriptableReference
-    ) -> List[Expression]:
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> List[Expression]:
         self.__visited_nodes.append(exp)
         return [exp, *exp.column.accept(self), *exp.key.accept(self)]
 

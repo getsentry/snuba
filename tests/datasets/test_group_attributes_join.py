@@ -152,9 +152,7 @@ class TestEventsGroupAttributes(BaseApiTest):
         # make sure we're explicitly applying FINAL when querying on group_attributes table
         # so deduplication happens when we join the entity from events -> group_attributes
         assert right_node.data_source.get_from_clause().final
-        assert right_node.data_source.get_from_clause().table_name.startswith(
-            "group_attributes"
-        )
+        assert right_node.data_source.get_from_clause().table_name.startswith("group_attributes")
 
         return self.app.post(
             "/events/snql",
@@ -229,9 +227,7 @@ class TestEventsGroupAttributes(BaseApiTest):
         # make sure we're explicitly applying FINAL when querying on group_attributes table
         # so deduplication happens when we join the entity from events -> group_attributes
         assert right_node.data_source.get_from_clause().final
-        assert right_node.data_source.get_from_clause().table_name.startswith(
-            "group_attributes"
-        )
+        assert right_node.data_source.get_from_clause().table_name.startswith("group_attributes")
 
         return self.app.post(
             "/events/snql",
@@ -260,9 +256,7 @@ class TestEventsGroupAttributes(BaseApiTest):
                 "g.group_first_seen": _convert_clickhouse_datetime_str(
                     self.initial_group_attributes["group_first_seen"]
                 ),
-                "g.group_num_comments": self.initial_group_attributes[
-                    "group_num_comments"
-                ],
+                "g.group_num_comments": self.initial_group_attributes["group_num_comments"],
                 "g.assignee_user_id": self.initial_group_attributes["assignee_user_id"],
                 "g.assignee_team_id": self.initial_group_attributes["assignee_team_id"],
                 "g.owner_suspect_commit_user_id": self.initial_group_attributes[
@@ -299,9 +293,7 @@ class TestEventsGroupAttributes(BaseApiTest):
                 "g.group_first_seen": _convert_clickhouse_datetime_str(
                     self.initial_group_attributes["group_first_seen"]
                 ),
-                "g.group_num_comments": self.initial_group_attributes[
-                    "group_num_comments"
-                ],
+                "g.group_num_comments": self.initial_group_attributes["group_num_comments"],
                 "g.assignee_user_id": self.initial_group_attributes["assignee_user_id"],
                 "g.assignee_team_id": self.initial_group_attributes["assignee_team_id"],
                 "g.owner_suspect_commit_user_id": self.initial_group_attributes[
@@ -366,9 +358,7 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
         self.occurrence = self.get_search_issue_occurrence(self.base_time)
         self.project_id = self.occurrence["project_id"]
 
-        self.search_issues_storage = get_entity(
-            EntityKey.SEARCH_ISSUES
-        ).get_writable_storage()
+        self.search_issues_storage = get_entity(EntityKey.SEARCH_ISSUES).get_writable_storage()
         write_unprocessed_events(self.search_issues_storage, [self.occurrence])
 
         self.initial_group_attributes = {
@@ -458,9 +448,7 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
             assert isinstance(left_node, IndividualNode)
             assert isinstance(left_node.data_source.get_from_clause(), Table)
             assert not left_node.data_source.get_from_clause().final
-            assert left_node.data_source.get_from_clause().table_name.startswith(
-                "search_issues"
-            )
+            assert left_node.data_source.get_from_clause().table_name.startswith("search_issues")
             right_node = clickhouse_query.get_from_clause().right_node
             assert isinstance(right_node.data_source.get_from_clause(), Table)
             # make sure we're explicitly applying FINAL when querying on group_attributes table
@@ -509,17 +497,13 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
         assert isinstance(left_node, IndividualNode)
         assert isinstance(left_node.data_source.get_from_clause(), Table)
         assert not left_node.data_source.get_from_clause().final
-        assert left_node.data_source.get_from_clause().table_name.startswith(
-            "search_issues"
-        )
+        assert left_node.data_source.get_from_clause().table_name.startswith("search_issues")
         right_node = clickhouse_query.get_from_clause().right_node
         assert isinstance(right_node.data_source.get_from_clause(), Table)
         # make sure we're explicitly applying FINAL when querying on group_attributes table
         # so deduplication happens when we join the entity from events -> group_attributes
         assert right_node.data_source.get_from_clause().final
-        assert right_node.data_source.get_from_clause().table_name.startswith(
-            "group_attributes"
-        )
+        assert right_node.data_source.get_from_clause().table_name.startswith("group_attributes")
 
         return self.app.post(
             "/search_issues/snql",
@@ -541,18 +525,14 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
         assert (
             data["data"][0].items()
             == {
-                "s.occurrence_id": uuid.UUID(
-                    self.occurrence["occurrence_data"]["id"]
-                ).hex,
+                "s.occurrence_id": uuid.UUID(self.occurrence["occurrence_data"]["id"]).hex,
                 "g.group_id": self.initial_group_attributes["group_id"],
                 "g.group_status": self.initial_group_attributes["group_status"],
                 "g.group_substatus": self.initial_group_attributes["group_substatus"],
                 "g.group_first_seen": _convert_clickhouse_datetime_str(
                     self.initial_group_attributes["group_first_seen"]
                 ),
-                "g.group_num_comments": self.initial_group_attributes[
-                    "group_num_comments"
-                ],
+                "g.group_num_comments": self.initial_group_attributes["group_num_comments"],
                 "g.assignee_user_id": self.initial_group_attributes["assignee_user_id"],
                 "g.assignee_team_id": self.initial_group_attributes["assignee_team_id"],
                 "g.owner_suspect_commit_user_id": self.initial_group_attributes[
@@ -585,9 +565,7 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
         assert (
             data_after["data"][0].items()
             == {
-                "s.occurrence_id": uuid.UUID(
-                    self.occurrence["occurrence_data"]["id"]
-                ).hex,
+                "s.occurrence_id": uuid.UUID(self.occurrence["occurrence_data"]["id"]).hex,
                 # values joined from group_attributes below should be 'null' since we 'deleted' the
                 # existing group_attributes row that joins to the events but the projected values seems to
                 # take on some defaults that are non-null since the columns themselves are not nullable

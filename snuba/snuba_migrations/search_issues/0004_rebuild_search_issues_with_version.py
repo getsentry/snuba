@@ -37,9 +37,7 @@ columns: List[Column[Modifiers]] = [
     Column("client_timestamp", DateTime()),
     Column("tags", Nested([("key", String()), ("value", String())])),
     Column("user", String(Modifiers(nullable=True))),
-    Column(
-        "user_hash", UInt(64, Modifiers(nullable=True, materialized="cityHash64(user)"))
-    ),
+    Column("user_hash", UInt(64, Modifiers(nullable=True, materialized="cityHash64(user)"))),
     Column("user_id", String(Modifiers(nullable=True))),
     Column("user_name", String(Modifiers(nullable=True))),
     Column("user_email", String(Modifiers(nullable=True))),

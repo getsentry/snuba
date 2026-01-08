@@ -42,9 +42,7 @@ def get_object_ids_in_condition(condition: Expression, object_column: str) -> Se
     if match is not None:
         return {match.integer("object_id")}
 
-    match = is_in_condition_pattern(Column(column_name=String(object_column))).match(
-        condition
-    )
+    match = is_in_condition_pattern(Column(column_name=String(object_column))).match(condition)
     if match is not None:
         objects = match.expression("sequence")
         assert isinstance(objects, FunctionCallExpr)
@@ -62,12 +60,8 @@ def get_object_ids_in_condition(condition: Expression, object_column: str) -> Se
         (Param("lhs", AnyExpression()), Param("rhs", AnyExpression())),
     ).match(condition)
     if match is not None:
-        lhs_objects = get_object_ids_in_condition(
-            match.expression("lhs"), object_column
-        )
-        rhs_objects = get_object_ids_in_condition(
-            match.expression("rhs"), object_column
-        )
+        lhs_objects = get_object_ids_in_condition(match.expression("lhs"), object_column)
+        rhs_objects = get_object_ids_in_condition(match.expression("rhs"), object_column)
         if not lhs_objects:
             return rhs_objects
         elif not rhs_objects:

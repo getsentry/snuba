@@ -71,9 +71,7 @@ class SubqueryDraft:
                     )
                 ),
                 condition=(
-                    combine_and_conditions(self.__conditions)
-                    if self.__conditions
-                    else None
+                    combine_and_conditions(self.__conditions) if self.__conditions else None
                 ),
                 groupby=self.__groupby,
                 granularity=self.__granularity,
@@ -96,16 +94,12 @@ class SubqueriesInitializer(JoinVisitor[Mapping[str, SubqueryDraft], Entity]):
     to the selected clause of the subqueries as well.
     """
 
-    def visit_individual_node(
-        self, node: IndividualNode[Entity]
-    ) -> Mapping[str, SubqueryDraft]:
+    def visit_individual_node(self, node: IndividualNode[Entity]) -> Mapping[str, SubqueryDraft]:
         entity = node.data_source
         assert isinstance(entity, Entity)
         return {node.alias: SubqueryDraft(entity)}
 
-    def visit_join_clause(
-        self, node: JoinClause[Entity]
-    ) -> Mapping[str, SubqueryDraft]:
+    def visit_join_clause(self, node: JoinClause[Entity]) -> Mapping[str, SubqueryDraft]:
         combined = {**node.left_node.accept(self), **node.right_node.accept(self)}
         for condition in node.keys:
             combined[condition.left.table_alias].add_select_expression(
@@ -145,9 +139,7 @@ class SubqueriesReplacer(JoinVisitor[JoinNode[Entity], Entity]):
     def __init__(self, subqueries: Mapping[str, SubqueryDraft]) -> None:
         self.__subqueries = subqueries
 
-    def visit_individual_node(
-        self, node: IndividualNode[Entity]
-    ) -> IndividualNode[Entity]:
+    def visit_individual_node(self, node: IndividualNode[Entity]) -> IndividualNode[Entity]:
         return IndividualNode(node.alias, self.__subqueries[node.alias].build_query())
 
     def visit_join_clause(self, node: JoinClause[Entity]) -> JoinClause[Entity]:
@@ -166,12 +158,8 @@ class SubqueriesReplacer(JoinVisitor[JoinNode[Entity], Entity]):
         right = self.visit_individual_node(node.right_node)
         keys = [
             JoinCondition(
-                left=JoinConditionExpression(
-                    k.left.table_alias, aliasify_column(k.left.column)
-                ),
-                right=JoinConditionExpression(
-                    k.right.table_alias, aliasify_column(k.right.column)
-                ),
+                left=JoinConditionExpression(k.left.table_alias, aliasify_column(k.left.column)),
+                right=JoinConditionExpression(k.right.table_alias, aliasify_column(k.right.column)),
             )
             for k in node.keys
         ]
@@ -273,9 +261,7 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
 
     array_join = query.get_arrayjoin()
     if array_join is not None:
-        query.set_arrayjoin(
-            [_process_root(el, subqueries, alias_generator) for el in array_join]
-        )
+        query.set_arrayjoin([_process_root(el, subqueries, alias_generator) for el in array_join])
 
     ast_condition = query.get_condition()
     if ast_condition is not None:
@@ -328,9 +314,7 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
         [
             replace(
                 orderby,
-                expression=_process_root(
-                    orderby.expression, subqueries, alias_generator
-                ),
+                expression=_process_root(orderby.expression, subqueries, alias_generator),
             )
             for orderby in query.get_orderby()
         ]

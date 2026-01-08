@@ -74,9 +74,7 @@ class NullColumnCaster(ClickhouseQueryProcessor):
             table_storage = get_storage(StorageKey(table_storage_key))
             for col in table_storage.get_schema().get_columns():
                 col_is_nullable = _col_is_nullable(col)
-                other_storage_column_is_nullable = col_name_to_nullable.get(
-                    col.name, None
-                )
+                other_storage_column_is_nullable = col_name_to_nullable.get(col.name, None)
                 if (
                     other_storage_column_is_nullable is not None
                     and other_storage_column_is_nullable != col_is_nullable
@@ -136,10 +134,7 @@ class NullColumnCaster(ClickhouseQueryProcessor):
         def transform_aggregate_functions_with_mismatched_nullable_parameters(
             exp: Expression,
         ) -> Expression:
-            if (
-                isinstance(exp, FunctionCall)
-                and exp.function_name in AGGREGATION_FUNCTIONS
-            ):
+            if isinstance(exp, FunctionCall) and exp.function_name in AGGREGATION_FUNCTIONS:
                 return exp.transform(cast_column_to_nullable)
             return exp
 

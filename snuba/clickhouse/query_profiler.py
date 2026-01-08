@@ -30,9 +30,7 @@ def _get_all_columns(all_columns: Mapping[str, Set[ColumnExpr]]) -> Columnset:
 
 
 def _get_columns_from_expression(expression: Expression, table_name: str) -> Columnset:
-    return {
-        f"{table_name}.{c.column_name}" for c in expression if isinstance(c, ColumnExpr)
-    }
+    return {f"{table_name}.{c.column_name}" for c in expression if isinstance(c, ColumnExpr)}
 
 
 def _list_columns(expressions: Mapping[str, Set[Expression]]) -> Columnset:
@@ -51,9 +49,7 @@ def _flatten_col_set(nested_sets: Iterable[Set[str]]) -> Columnset:
     return ret
 
 
-def _list_columns_in_condition(
-    condition_expression: Mapping[str, Expression]
-) -> Columnset:
+def _list_columns_in_condition(condition_expression: Mapping[str, Expression]) -> Columnset:
     return _flatten_col_set(
         [
             {c for c in _get_columns_from_expression(expression, table_name)}

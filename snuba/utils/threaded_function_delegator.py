@@ -36,9 +36,7 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
         self,
         callables: Mapping[str, Callable[[], TResult]],
         selector_func: Callable[[TInput], Tuple[str, List[str]]],
-        callback_func: Optional[
-            Callable[[Optional[Result[TResult]], List[Result[TResult]]], None]
-        ],
+        callback_func: Optional[Callable[[Optional[Result[TResult]], List[Result[TResult]]], None]],
         ignore_secondary_exceptions: bool = False,
     ) -> None:
         self.__callables = callables

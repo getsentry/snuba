@@ -132,9 +132,7 @@ test_expressions = [
                 Lambda(
                     None,
                     ("x", "y"),
-                    FunctionCall(
-                        None, "testFunc", (Argument(None, "x"), Argument(None, "y"))
-                    ),
+                    FunctionCall(None, "testFunc", (Argument(None, "x"), Argument(None, "y"))),
                 ),
                 Column(None, None, "test"),
             ),
@@ -179,17 +177,13 @@ test_expressions = [
                     Literal(None, 4),
                 ),
             ),
-            binary_condition(
-                ConditionFunctions.EQ, Column(None, None, "c5"), Literal(None, 5)
-            ),
+            binary_condition(ConditionFunctions.EQ, Column(None, None, "c5"), Literal(None, 5)),
         ),
         "(equals(c1, 1) AND equals(c2, 2) OR equals(c3, 3) OR equals(c4, 4)) AND equals(c5, 5)",
         "(equals(c1, -1337) AND equals(c2, -1337) OR equals(c3, -1337) OR equals(c4, -1337)) AND equals(c5, -1337)",
     ),  # Formatting infix expressions
     (
-        FunctionCall(
-            "_snuba_tags[some_pii]", "f0", (Column(None, "table1", "param1"),)
-        ),
+        FunctionCall("_snuba_tags[some_pii]", "f0", (Column(None, "table1", "param1"),)),
         "(f0(table1.param1) AS `_snuba_tags[some_pii]`)",
         "(f0(table1.param1) AS `_snuba_tags[$A]`)",
     ),
@@ -228,9 +222,7 @@ test_expressions = [
 ]
 
 
-@pytest.mark.parametrize(
-    "expression, expected_clickhouse, expected_anonymized", test_expressions
-)
+@pytest.mark.parametrize("expression, expected_clickhouse, expected_anonymized", test_expressions)
 def test_format_expressions(
     expression: Expression, expected_clickhouse: str, expected_anonymized: str
 ) -> None:

@@ -47,8 +47,7 @@ def fix_order_by(_logger: logging.Logger) -> None:
 
     # There shouldn't be any data in the table yet
     assert (
-        clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results[0][0]
-        == 0
+        clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results[0][0] == 0
     ), f"{TABLE_NAME} is not empty"
 
     new_order_by = f"ORDER BY ({new_primary_key})"

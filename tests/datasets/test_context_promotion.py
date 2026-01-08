@@ -39,9 +39,7 @@ span_id_as_uint64 = int(span_id_hex, 16)
     ],
 )
 @pytest.mark.clickhouse_db
-def test_span_id_promotion(
-    entity_name: str, dataset_name: str, expected_table_name: str
-) -> None:
+def test_span_id_promotion(entity_name: str, dataset_name: str, expected_table_name: str) -> None:
     """In order to save space in the contexts column and provide faster query
     performance, we promote span_id to a proper column and don't store it in the
     actual contexts object in the DB.
@@ -104,9 +102,7 @@ def test_span_id_promotion(
         SelectedExpression(
             name="contexts[trace.span_id]",
             # the select converts the span_id into a lowecase hex string
-            expression=HexIntColumnProcessor(columns="span_id")._process_expressions(
-                column
-            ),
+            expression=HexIntColumnProcessor(columns="span_id")._process_expressions(column),
         )
     ]
 
@@ -116,9 +112,7 @@ def test_span_id_promotion(
             super().__init__()
 
         def visit_function_call(self, exp: FunctionCall) -> None:
-            if exp.function_name == "equals" and exp.parameters[0] == Column(
-                None, None, "span_id"
-            ):
+            if exp.function_name == "equals" and exp.parameters[0] == Column(None, None, "span_id"):
                 self.found_span_condition = True
                 # and here we can see that the hex string the client queried us with
                 # has been converted to the correct uint64

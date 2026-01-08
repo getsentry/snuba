@@ -20,9 +20,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return (
-            get_forward_view_migration_local(
-                **get_migration_args_for_sets(granularity=60 * 60)
-            ),
+            get_forward_view_migration_local(**get_migration_args_for_sets(granularity=60 * 60)),
         )
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:

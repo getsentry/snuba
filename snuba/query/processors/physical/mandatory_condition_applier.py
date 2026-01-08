@@ -5,7 +5,6 @@ from snuba.query.query_settings import QuerySettings
 
 
 class MandatoryConditionApplier(ClickhouseQueryProcessor):
-
     """
     Obtains mandatory conditions from a Query object’s underlying storage
     and applies them to the query.

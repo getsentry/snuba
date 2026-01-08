@@ -89,9 +89,7 @@ for column_type_name, column_type in column_types:
 
 def get_mv_expr(sampling_weight: int, with_hash_map_columns: bool = True) -> str:
     column_names = [
-        c.name
-        for c in base_columns
-        if c.name not in {"sampling_weight", "sampling_factor"}
+        c.name for c in base_columns if c.name not in {"sampling_weight", "sampling_factor"}
     ]
     if with_hash_map_columns:
         column_names.extend([c.name for c in hash_map_columns])

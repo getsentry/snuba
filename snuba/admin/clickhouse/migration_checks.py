@@ -95,9 +95,7 @@ class StatusChecker(Checker):
         migrations: Sequence[MigrationDetails],
     ) -> None:
         self.__group = migration_group
-        self.__all_migration_ids: Sequence[str] = get_group_loader(
-            migration_group
-        ).get_migrations()
+        self.__all_migration_ids: Sequence[str] = get_group_loader(migration_group).get_migrations()
 
         migration_statuses = {}
         for migration_id, status, _, _ in migrations:
@@ -112,9 +110,7 @@ class StatusChecker(Checker):
 
     def _validate_key(self, migration_key: MigrationKey) -> None:
         group, migration_id = migration_key
-        assert (
-            group == self.__group
-        ), f"Group {group.value} does not match {self.__group.value}"
+        assert group == self.__group, f"Group {group.value} does not match {self.__group.value}"
         assert (
             migration_id in self.__all_migration_ids
         ), f"{migration_id} is not part of {self.__group.value} group"
@@ -197,9 +193,7 @@ def run_migration_checks_and_policies(
             return run_result, reverse_result
 
         for details in migrations:
-            run_result, reverse_result = do_checking(
-                MigrationKey(group, details.migration_id)
-            )
+            run_result, reverse_result = do_checking(MigrationKey(group, details.migration_id))
             migration_ids.append(
                 MigrationData(
                     migration_id=details.migration_id,
@@ -208,9 +202,7 @@ def run_migration_checks_and_policies(
                     can_run=run_result.allowed,
                     can_reverse=reverse_result.allowed,
                     run_reason=run_result.reason.value if run_result.reason else "",
-                    reverse_reason=reverse_result.reason.value
-                    if reverse_result.reason
-                    else "",
+                    reverse_reason=reverse_result.reason.value if reverse_result.reason else "",
                 )
             )
 

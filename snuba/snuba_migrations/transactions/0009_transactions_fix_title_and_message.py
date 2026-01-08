@@ -14,9 +14,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     blocking = False
 
-    def __forward_migrations(
-        self, table_name: str
-    ) -> Sequence[operations.SqlOperation]:
+    def __forward_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
         return [
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
@@ -36,18 +34,14 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
             ),
         ]
 
-    def __backward_migrations(
-        self, table_name: str
-    ) -> Sequence[operations.SqlOperation]:
+    def __backward_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
         return [
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name=table_name,
                 column=Column(
                     "title",
-                    String(
-                        Modifiers(low_cardinality=True, materialized="transaction_name")
-                    ),
+                    String(Modifiers(low_cardinality=True, materialized="transaction_name")),
                 ),
             ),
             operations.ModifyColumn(
@@ -55,9 +49,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                 table_name=table_name,
                 column=Column(
                     "message",
-                    String(
-                        Modifiers(low_cardinality=True, materialized="transaction_name")
-                    ),
+                    String(Modifiers(low_cardinality=True, materialized="transaction_name")),
                 ),
             ),
         ]

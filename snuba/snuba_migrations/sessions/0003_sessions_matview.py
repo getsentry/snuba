@@ -35,9 +35,7 @@ aggregate_columns: Sequence[Column[Modifiers]] = [
     Column("sessions_crashed", AggregateFunction("countIf", [UUID(), UInt(8)])),
     Column("sessions_crashed_preaggr", AggregateFunction("sumIf", [UInt(32), UInt(8)])),
     Column("sessions_abnormal", AggregateFunction("countIf", [UUID(), UInt(8)])),
-    Column(
-        "sessions_abnormal_preaggr", AggregateFunction("sumIf", [UInt(32), UInt(8)])
-    ),
+    Column("sessions_abnormal_preaggr", AggregateFunction("sumIf", [UInt(32), UInt(8)])),
     Column("sessions_errored", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
     Column("sessions_errored_preaggr", AggregateFunction("sumIf", [UInt(32), UInt(8)])),
     # users:

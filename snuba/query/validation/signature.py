@@ -128,9 +128,7 @@ class Literal(ParamType):
     expressions can be passed as arguments in certain functions.
     """
 
-    def __init__(
-        self, types: Set[AllowedScalarTypes], allow_nullable: bool = False
-    ) -> None:
+    def __init__(self, types: Set[AllowedScalarTypes], allow_nullable: bool = False) -> None:
         self.__valid_types = types
         if allow_nullable:
             self.__valid_types.add(type(None))
@@ -179,9 +177,7 @@ class SignatureValidator(FunctionCallValidator):
             if self.__enforce:
                 raise exception
             else:
-                logger.warning(
-                    f"Query validation exception. Validator: {self}", exc_info=True
-                )
+                logger.warning(f"Query validation exception. Validator: {self}", exc_info=True)
 
     def __validate_impl(
         self, func_name: str, parameters: Sequence[Expression], data_source: DataSource

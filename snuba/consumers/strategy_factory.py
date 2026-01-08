@@ -88,12 +88,8 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         self.__max_insert_batch_time = max_insert_batch_time or max_batch_time
 
         if processes is None:
-            assert (
-                input_block_size is None
-            ), "input block size cannot be used without processes"
-            assert (
-                output_block_size is None
-            ), "output block size cannot be used without processes"
+            assert input_block_size is None, "input block size cannot be used without processes"
+            assert output_block_size is None, "output block size cannot be used without processes"
 
         self.__processes = processes
         self.__input_block_size = input_block_size
@@ -170,14 +166,10 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             )
 
         if self.__prefilter is not None:
-            strategy = FilterStep(
-                self.__should_accept, strategy, commit_policy=ONCE_PER_SECOND
-            )
+            strategy = FilterStep(self.__should_accept, strategy, commit_policy=ONCE_PER_SECOND)
 
         if self.__max_messages_to_process is not None:
-            strategy = ExitAfterNMessages(
-                strategy, self.__max_messages_to_process, 10.0
-            )
+            strategy = ExitAfterNMessages(strategy, self.__max_messages_to_process, 10.0)
 
         if self.__health_check_file is not None:
             strategy = Healthcheck(self.__health_check_file, strategy)

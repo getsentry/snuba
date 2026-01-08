@@ -21,7 +21,7 @@ def _indent_str_list(str_list: List[str], levels: int) -> List[str]:
 
 
 def format_query(
-    query: Union[ProcessableQuery[SimpleDataSource], CompositeQuery[SimpleDataSource]]
+    query: Union[ProcessableQuery[SimpleDataSource], CompositeQuery[SimpleDataSource]],
 ) -> List[str]:
     """
     Formats a query as a list of strings with each element being a new line
@@ -33,28 +33,20 @@ def format_query(
     eformatter = StringifyVisitor(level=0, initial_indent=1)
 
     selects = ",\n".join(
-        [
-            f"{e.expression.accept(eformatter)} |> {e.name}"
-            for e in query.get_selected_columns()
-        ]
+        [f"{e.expression.accept(eformatter)} |> {e.name}" for e in query.get_selected_columns()]
     )
     select_str = f"SELECT\n{selects}" if selects else ""
 
     from_strs = [
         "FROM",
-        *_indent_str_list(
-            TracingQueryFormatter().visit(query.get_from_clause()), levels=1
-        ),
+        *_indent_str_list(TracingQueryFormatter().visit(query.get_from_clause()), levels=1),
     ]
 
     groupbys = ",\n".join([e.accept(eformatter) for e in query.get_groupby()])
     groupby_str = f"GROUPBY\n{groupbys}" if groupbys else ""
 
     orderbys = ",\n".join(
-        [
-            f"{e.expression.accept(eformatter)} {e.direction.value}"
-            for e in query.get_orderby()
-        ]
+        [f"{e.expression.accept(eformatter)} {e.direction.value}" for e in query.get_orderby()]
     )
     orderby_str = f"ORDER_BY\n{orderbys}" if orderbys else ""
 
@@ -115,28 +107,20 @@ class TracingQueryFormatter(
         # Entity and Table define their sampling rates with slightly different
         # terms and renaming it would introduce a lot of code changes down the line
         # so we use this dynamic workaround
-        sample_val = getattr(
-            data_source, "sample", getattr(data_source, "sampling_rate", None)
-        )
+        sample_val = getattr(data_source, "sample", getattr(data_source, "sampling_rate", None))
         sample_str = f" SAMPLE {sample_val}" if sample_val is not None else ""
         return [f"{data_source.human_readable_id}{sample_str}"]
 
     def _visit_join(self, data_source: JoinClause[SimpleDataSource]) -> List[str]:
         return self.visit_join_clause(data_source)
 
-    def _visit_simple_query(
-        self, data_source: ProcessableQuery[SimpleDataSource]
-    ) -> List[str]:
+    def _visit_simple_query(self, data_source: ProcessableQuery[SimpleDataSource]) -> List[str]:
         return format_query(data_source)
 
-    def _visit_composite_query(
-        self, data_source: CompositeQuery[SimpleDataSource]
-    ) -> List[str]:
+    def _visit_composite_query(self, data_source: CompositeQuery[SimpleDataSource]) -> List[str]:
         return format_query(data_source)
 
-    def visit_individual_node(
-        self, node: IndividualNode[SimpleDataSource]
-    ) -> List[str]:
+    def visit_individual_node(self, node: IndividualNode[SimpleDataSource]) -> List[str]:
         return [f"{self.visit(node.data_source)} AS `{node.alias}`"]
 
     def visit_join_clause(self, node: JoinClause[SimpleDataSource]) -> List[str]:

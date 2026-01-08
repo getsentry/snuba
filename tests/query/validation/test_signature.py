@@ -113,9 +113,7 @@ test_cases = [
 ]
 
 
-@pytest.mark.parametrize(
-    "expressions, expected_types, extra_param, should_raise", test_cases
-)
+@pytest.mark.parametrize("expressions, expected_types, extra_param, should_raise", test_cases)
 def test_like_validator(
     expressions: Sequence[Expression],
     expected_types: Sequence[ParamType],

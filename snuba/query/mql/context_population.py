@@ -49,9 +49,7 @@ def start_end_time_condition(
     return combine_and_conditions(filters)
 
 
-def scope_conditions(
-    mql_context: MQLContext, table_name: str | None = None
-) -> Expression:
+def scope_conditions(mql_context: MQLContext, table_name: str | None = None) -> Expression:
     filters = []
     filters.append(
         binary_condition(
@@ -60,10 +58,7 @@ def scope_conditions(
             FunctionCall(
                 None,
                 "tuple",
-                tuple(
-                    Literal(None, project_id)
-                    for project_id in mql_context.scope.project_ids
-                ),
+                tuple(Literal(None, project_id) for project_id in mql_context.scope.project_ids),
             ),
         )
     )
@@ -74,9 +69,7 @@ def scope_conditions(
             FunctionCall(
                 None,
                 "tuple",
-                tuple(
-                    Literal(None, int(org_id)) for org_id in mql_context.scope.org_ids
-                ),
+                tuple(Literal(None, int(org_id)) for org_id in mql_context.scope.org_ids),
             ),
         )
     )
@@ -122,8 +115,7 @@ def rollup_expressions(
     if rollup.interval is not None and rollup.orderby is not None:
         raise ParsingException("orderby is not supported when interval is specified")
     if rollup.interval and (
-        rollup.interval < GRANULARITIES_AVAILABLE[0]
-        or rollup.interval < rollup.granularity
+        rollup.interval < GRANULARITIES_AVAILABLE[0] or rollup.interval < rollup.granularity
     ):
         raise ParsingException(
             f"interval {rollup.interval} must be greater than or equal to granularity {rollup.granularity}"
@@ -153,9 +145,7 @@ def rollup_expressions(
         selected_time = SelectedExpression("time", time_expression)
         orderby = OrderBy(OrderByDirection.ASC, time_expression)
     elif rollup.orderby is not None:
-        direction = (
-            OrderByDirection.ASC if rollup.orderby == "ASC" else OrderByDirection.DESC
-        )
+        direction = OrderByDirection.ASC if rollup.orderby == "ASC" else OrderByDirection.DESC
         orderby = OrderBy(direction, Column(None, None, AGGREGATE_ALIAS))
 
     return granularity_condition, with_totals, orderby, selected_time

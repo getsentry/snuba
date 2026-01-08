@@ -29,9 +29,7 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             entity.entity_key: entity
             for entity in [
                 build_entity_from_config(config_file)
-                for config_file in glob(
-                    settings.ENTITY_CONFIG_FILES_GLOB, recursive=True
-                )
+                for config_file in glob(settings.ENTITY_CONFIG_FILES_GLOB, recursive=True)
             ]
         }
 

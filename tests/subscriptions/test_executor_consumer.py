@@ -150,9 +150,7 @@ def test_executor_consumer() -> None:
 
     scheduled_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
     assert scheduled_topic_spec is not None
-    tasks_producer = KafkaProducer(
-        build_kafka_producer_configuration(scheduled_topic_spec.topic)
-    )
+    tasks_producer = KafkaProducer(build_kafka_producer_configuration(scheduled_topic_spec.topic))
 
     scheduled_topic = Topic(scheduled_topic_spec.topic_name)
     tasks_producer.produce(scheduled_topic, payload=encoded_task).result()
@@ -249,9 +247,7 @@ def test_execute_query_strategy() -> None:
     assert isinstance(message.value, BrokerValue)
     assert next_step.submit.call_args[0][0].committable == message.committable
 
-    result = json.loads(next_step.submit.call_args[0][0].payload.value)["payload"][
-        "result"
-    ]
+    result = json.loads(next_step.submit.call_args[0][0].payload.value)["payload"]["result"]
 
     assert result["data"] == [{"count()": 0}]
     assert result["meta"] == [{"name": "count()", "type": "UInt64"}]
@@ -341,14 +337,8 @@ def test_skip_execution_for_entity() -> None:
     strategy.close()
     strategy.join()
 
-    assert (
-        Increment("skipped_execution", 1, {"entity": "metrics_sets"})
-        not in metrics.calls
-    )
-    assert (
-        Increment("skipped_execution", 1, {"entity": "metrics_counters"})
-        in metrics.calls
-    )
+    assert Increment("skipped_execution", 1, {"entity": "metrics_sets"}) not in metrics.calls
+    assert Increment("skipped_execution", 1, {"entity": "metrics_counters"}) in metrics.calls
 
 
 @pytest.mark.clickhouse_db
@@ -381,10 +371,7 @@ def test_execute_and_produce_result() -> None:
     strategy.submit(message)
 
     # Eventually a message should be produced and offsets committed
-    while (
-        broker_storage.consume(Partition(result_topic, 0), 0) is None
-        or commit.call_count == 0
-    ):
+    while broker_storage.consume(Partition(result_topic, 0), 0) is None or commit.call_count == 0:
         strategy.poll()
 
     produced_message = broker_storage.consume(Partition(result_topic, 0), 0)

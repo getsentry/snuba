@@ -162,11 +162,7 @@ test_cases = [
                     FunctionCall(
                         "alias",
                         "f",
-                        (
-                            Column(
-                                alias=None, table_name=None, column_name="users_crashed"
-                            ),
-                        ),
+                        (Column(alias=None, table_name=None, column_name="users_crashed"),),
                     ),
                 ),
             ],
@@ -284,9 +280,7 @@ test_cases = [
                         "testF",
                         (
                             Column(alias=None, table_name=None, column_name="platform"),
-                            Column(
-                                alias=None, table_name=None, column_name="tags_value"
-                            ),
+                            Column(alias=None, table_name=None, column_name="tags_value"),
                         ),
                     ),
                 ),

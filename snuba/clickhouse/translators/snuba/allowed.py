@@ -27,9 +27,7 @@ TExpIn = TypeVar("TExpIn")
 TExpOut = TypeVar("TExpOut")
 
 
-class SnubaClickhouseMapper(
-    ExpressionMapper[TExpIn, TExpOut, SnubaClickhouseStrictTranslator]
-):
+class SnubaClickhouseMapper(ExpressionMapper[TExpIn, TExpOut, SnubaClickhouseStrictTranslator]):
     pass
 
 
@@ -50,9 +48,7 @@ class LiteralMapper(SnubaClickhouseMapper[Literal, Literal]):
 ValidColumnMappings = Union[Column, Literal, FunctionCall, CurriedFunctionCall]
 
 
-class ColumnMapper(
-    SnubaClickhouseMapper[Column, ValidColumnMappings], metaclass=RegisteredClass
-):
+class ColumnMapper(SnubaClickhouseMapper[Column, ValidColumnMappings], metaclass=RegisteredClass):
     """
     Columns can be translated into other Columns, or Literals (if a Snuba
     column has a hardcoded value on a storage like the event type on
@@ -93,9 +89,7 @@ class FunctionCallMapper(
 
 
 class CurriedFunctionCallMapper(
-    SnubaClickhouseMapper[
-        CurriedFunctionCall, Union[CurriedFunctionCall, FunctionCall]
-    ],
+    SnubaClickhouseMapper[CurriedFunctionCall, Union[CurriedFunctionCall, FunctionCall]],
     metaclass=RegisteredClass,
 ):
     @classmethod
@@ -161,9 +155,7 @@ class DefaultNoneColumnMapper(ColumnMapper):
             return identity(
                 Literal(None, None),
                 expression.alias
-                or qualified_column(
-                    expression.column_name, expression.table_name or ""
-                ),
+                or qualified_column(expression.column_name, expression.table_name or ""),
             )
         else:
             return None

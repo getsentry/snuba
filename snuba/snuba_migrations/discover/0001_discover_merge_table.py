@@ -51,9 +51,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                 storage_set=StorageSetKey.DISCOVER,
                 table_name="discover_local",
                 columns=columns,
-                engine=table_engines.Merge(
-                    table_name_regex="^errors_local$|^transactions_local$"
-                ),
+                engine=table_engines.Merge(table_name_regex="^errors_local$|^transactions_local$"),
             ),
         ]
 
@@ -80,7 +78,5 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropTable(
-                storage_set=StorageSetKey.DISCOVER, table_name="discover_dist"
-            )
+            operations.DropTable(storage_set=StorageSetKey.DISCOVER, table_name="discover_dist")
         ]
