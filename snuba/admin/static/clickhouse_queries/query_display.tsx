@@ -67,6 +67,25 @@ function QueryDisplay(props: {
     });
   }
 
+  function setClusterlessHost(value: boolean) {
+    setQuery((prevQuery) => {
+      return {
+        ...prevQuery,
+        clusterless: value,
+      };
+    });
+  }
+
+  function selectHostIp(hostStringIP: string) {
+    setQuery((prevQuery) => {
+      return {
+        ...prevQuery,
+        host: hostStringIP,
+        port: 9000,
+      };
+    });
+  }
+
   function selectHost(hostString: string) {
     const [host, portAsString] = hostString.split(":");
 
@@ -177,7 +196,7 @@ function QueryDisplay(props: {
     <div>
       <form style={query.sudo ? sudoForm : standardForm}>
         <h2>Construct a ClickHouse System Query</h2>
-        <div>
+        <div style={switchStyle}>
           <Switch
             checked={query.sudo}
             onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
@@ -188,6 +207,17 @@ function QueryDisplay(props: {
             size="xl"
           />
         </div>
+        <div style={switchStyle}>
+          <Switch
+            checked={query.clusterless}
+            onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
+              setClusterlessHost(evt.currentTarget.checked)
+            }
+            onLabel="Manual Host Entry"
+            offLabel="Auto Populate Nodes"
+            size="xl"
+          />
+        </div>
         <QueryEditor
           onQueryUpdate={(sql) => {
             updateQuerySql(sql);
@@ -195,23 +225,42 @@ function QueryDisplay(props: {
           predefinedQueryOptions={props.predefinedQueryOptions}
         />
         <div style={executeActionsStyle}>
-          <div>
-            <CustomSelect
-              value={query.storage || ""}
-              onChange={selectStorage}
-              name="storage"
-              options={nodeData.map((storage) => storage.storage_name)}
-            />
-            <CustomSelect
-              disabled={!query.storage}
-              value={
-                query.host && query.port ? `${query.host}:${query.port}` : ""
-              }
-              onChange={selectHost}
-              name="Host"
-              options={getHosts(nodeData)}
-            />
-          </div>
+          {query.clusterless ?
+            (<div style={hostSelectStyle}>
+              <CustomSelect
+                value={query.storage || ""}
+                onChange={selectStorage}
+                name="storage"
+                options={nodeData.map((storage) => storage.storage_name)}
+              />
+              <input
+                style={inputStyle}
+                id="clusterless"
+                value={query.host || ""}
+                onChange={(evt) => selectHostIp(evt.target.value)}
+                name="host"
+                placeholder="enter host ip..."
+                type="text"
+              />
+            </div>) : (
+              <div style={hostSelectStyle}>
+                <CustomSelect
+                  value={query.storage || ""}
+                  onChange={selectStorage}
+                  name="storage"
+                  options={nodeData.map((storage) => storage.storage_name)}
+                />
+                <CustomSelect
+                  disabled={!query.storage}
+                  value={
+                    query.host && query.port ? `${query.host}:${query.port}` : ""
+                  }
+                  onChange={selectHost}
+                  name="Host"
+                  options={getHosts(nodeData)}
+                />
+              </div>
+            )}
           <div>
             <ExecuteButton
               onError={handleQueryError}
@@ -264,6 +313,25 @@ const sudoForm = {
 };
 
 const standardForm = {};
+
+const switchStyle = {
+  margin: '8px 0px',
+};
+
+const hostSelectStyle = {
+  width: '20em',
+  height: '4em',
+  margin: '8px 0px',
+  display: 'flex',
+  flexDirection: 'column' as const,
+  justifyContent: 'space-between',
+  // padding: "4px 20px",
+}
+
+const inputStyle = {
+  fontSize: 16,
+  minHeight: '2.25rem',
+}
 
 const executeActionsStyle = {
   display: "flex",

@@ -1,5 +1,6 @@
+import json
 from datetime import datetime, timedelta, timezone
-from typing import Callable, TypeVar, cast
+from typing import Any, Callable, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
@@ -10,6 +11,10 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba import settings, state
+from snuba.protos.common import MalformedAttributeException
+from snuba.protos.common import (
+    attribute_key_to_expression as _attribute_key_to_expression,
+)
 from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
@@ -25,8 +30,46 @@ from snuba.query.dsl import (
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
+
+def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
+    """Convert an AttributeKey proto to a Snuba Expression.
+
+    This is a wrapper around the proto-layer function that converts
+    MalformedAttributeException to BadSnubaRPCRequestException for
+    HTTP-aware code paths.
+
+    Raises:
+        BadSnubaRPCRequestException: If the attribute key is invalid or malformed.
+    """
+    try:
+        return _attribute_key_to_expression(attr_key)
+    except MalformedAttributeException as e:
+        raise BadSnubaRPCRequestException(str(e)) from e
+
+
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
+
+BUCKET_COUNT = 40
+
+
+def transform_array_value(value: dict[str, str]) -> Any:
+    for t, v in value.items():
+        if t == "Int":
+            return int(v)
+        if t == "Double":
+            return float(v)
+        if t in {"String", "Bool"}:
+            return v
+    raise BadSnubaRPCRequestException(f"array value type unknown: {type(v)}")
+
+
+def process_arrays(raw: str) -> dict[str, list[Any]]:
+    parsed = json.loads(raw) or {}
+    arrays = {}
+    for key, values in parsed.items():
+        arrays[key] = [transform_array_value(v) for v in values]
+    return arrays
 
 
 def _check_non_string_values_cannot_ignore_case(

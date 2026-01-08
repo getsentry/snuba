@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::timer;
+use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -47,23 +48,39 @@ impl CogsData {
     }
 }
 
+/// Returns the friendly name for a TraceItemType, e.g. "span" instead of "TRACE_ITEM_TYPE_SPAN".
+fn item_type_name(item_type: TraceItemType) -> String {
+    item_type
+        .as_str_name()
+        .strip_prefix("TRACE_ITEM_TYPE_")
+        .unwrap_or(item_type.as_str_name())
+        .to_lowercase()
+}
+
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct ItemTypeMetrics {
-    pub counts: BTreeMap<u8, u64>, // item_type: count
+    pub counts: BTreeMap<TraceItemType, u64>,
+    pub bytes_processed: BTreeMap<TraceItemType, usize>,
 }
 
 impl ItemTypeMetrics {
     pub fn new() -> Self {
         Self {
             counts: BTreeMap::new(),
+            bytes_processed: BTreeMap::new(),
         }
     }
 
-    pub fn record_item(&mut self, item_type: u8) {
+    pub fn record_item(&mut self, item_type: TraceItemType, size_bytes: usize) {
         self.counts
             .entry(item_type)
             .and_modify(|count| *count += 1)
             .or_insert(1);
+
+        self.bytes_processed
+            .entry(item_type)
+            .and_modify(|bytes| *bytes += size_bytes)
+            .or_insert(size_bytes);
     }
 
     pub fn merge(&mut self, other: ItemTypeMetrics) {
@@ -72,6 +89,13 @@ impl ItemTypeMetrics {
                 .entry(item_type)
                 .and_modify(|curr| *curr += count)
                 .or_insert(count);
+        }
+
+        for (item_type, size) in other.bytes_processed {
+            self.bytes_processed
+                .entry(item_type)
+                .and_modify(|curr| *curr += size)
+                .or_insert(size);
         }
     }
 }
@@ -360,6 +384,26 @@ impl<R> BytesInsertBatch<R> {
         self.sentry_received_timestamp
             .send_metric(write_time, "sentry_received_latency");
     }
+
+    pub fn emit_item_type_metrics(&self) {
+        use sentry_arroyo::counter;
+
+        for (item_type, count) in &self.item_type_metrics.counts {
+            counter!(
+                "insertions.item_type_count",
+                *count,
+                "item_type" => item_type_name(*item_type)
+            );
+        }
+
+        for (item_type, size) in &self.item_type_metrics.bytes_processed {
+            counter!(
+                "insertions.item_bytes_processed",
+                *size as u64,
+                "item_type" => item_type_name(*item_type)
+            );
+        }
+    }
 }
 
 impl BytesInsertBatch<RowData> {
@@ -460,5 +504,33 @@ mod tests {
         let now = Utc.timestamp_opt(65, 0).unwrap();
         assert_eq!(accumulator.max_value_ms(now), 4000);
         assert_eq!(accumulator.avg_value_ms(now), 3000);
+    }
+
+    #[test]
+    fn test_item_type_metrics_merge() {
+        let mut metrics1 = ItemTypeMetrics::new();
+        metrics1.record_item(TraceItemType::Span, 100);
+        metrics1.record_item(TraceItemType::Span, 150);
+        metrics1.record_item(TraceItemType::Log, 200);
+
+        let mut metrics2 = ItemTypeMetrics::new();
+        metrics2.record_item(TraceItemType::Span, 50);
+        metrics2.record_item(TraceItemType::Log, 75);
+
+        metrics1.merge(metrics2);
+
+        // Verify counts are merged correctly
+        assert_eq!(metrics1.counts.get(&TraceItemType::Span), Some(&3));
+        assert_eq!(metrics1.counts.get(&TraceItemType::Log), Some(&2));
+
+        // Verify bytes_processed are merged correctly
+        assert_eq!(
+            metrics1.bytes_processed.get(&TraceItemType::Span),
+            Some(&300)
+        ); // 100 + 150 + 50
+        assert_eq!(
+            metrics1.bytes_processed.get(&TraceItemType::Log),
+            Some(&275)
+        ); // 200 + 75
     }
 }

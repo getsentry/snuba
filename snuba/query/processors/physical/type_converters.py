@@ -123,7 +123,11 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
         )
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        query.transform_expressions(self._process_expressions, skip_transform_condition=True)
+        query.transform_expressions(
+            self._process_expressions,
+            skip_transform_condition=True,
+            skip_transform_order_by=query_settings.get_skip_transform_order_by(),
+        )
 
         condition = query.get_condition()
         if condition is not None:

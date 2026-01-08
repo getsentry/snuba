@@ -42,6 +42,7 @@ from snuba.state import get_config
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
@@ -54,9 +55,6 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
     convert_trace_filters_to_trace_item_filter_with_type,
     get_trace_ids_for_cross_item_query,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000

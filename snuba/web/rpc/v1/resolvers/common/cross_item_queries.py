@@ -1,6 +1,7 @@
 import uuid
 from typing import Any, Literal, overload
 
+import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from proto import Message  # type: ignore
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
@@ -25,14 +26,12 @@ from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.debug_info import setup_trace_query_settings
-from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression,
-)
 
 
 def convert_trace_filters_to_trace_item_filter_with_type(
@@ -173,6 +172,12 @@ def get_trace_ids_for_cross_item_query(
     trace_ids: list[str] = []
     for row in results.result.get("data", []):
         trace_ids.append(list(row.values())[0])
+
+    sentry_sdk.update_current_span(
+        attributes={
+            "cross_item_query_trace_ids_count": len(trace_ids),
+        }
+    )
 
     if return_query_results:
         return trace_ids, [results]

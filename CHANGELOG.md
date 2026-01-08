@@ -1,5 +1,107 @@
 # Changelog
 
+## 25.12.1
+
+### New Features ✨
+
+- feat(deletes): add EAP deletes allowlist for launch by @onewland in [#7591](https://github.com/getsentry/snuba/pull/7591)
+
+- feat(eap): record bytes ingested by item type by @onewland in [#7604](https://github.com/getsentry/snuba/pull/7604)
+
+### Bug Fixes 🐛
+
+- fix notHandled errors for search issues and transactions by @volokluev in [#7599](https://github.com/getsentry/snuba/pull/7599)
+
+### Build / dependencies / internal 🔧
+
+- chore(eap): Try to understand the number of trace IDs we're fetching by @phacops in [#7603](https://github.com/getsentry/snuba/pull/7603)
+
+- chore(snuba): take new_datadog out of metrics config by @volokluev in [#7598](https://github.com/getsentry/snuba/pull/7598)
+
+### Other
+
+- ref(admin): allow system queries on nodes sans clusters by @MeredithAnya in [#7605](https://github.com/getsentry/snuba/pull/7605)
+- Update distribution metric naming convention by @volokluev in [#7602](https://github.com/getsentry/snuba/pull/7602)
+- cleanup: emit item type in metrics as string by @onewland in [#7588](https://github.com/getsentry/snuba/pull/7588)
+- cleanup: remove stale docker-compose by @onewland in [#7597](https://github.com/getsentry/snuba/pull/7597)
+- meta: Bump new development version in [8e2624b3](https://github.com/getsentry/snuba/commit/8e2624b36b1ea55f6f1645bff0c8017fb0192664)
+- ref(eap): kill snuba.web.rpc.v1.resolvers.R_eap_items.common.common by @onewland in [#7590](https://github.com/getsentry/snuba/pull/7590)
+
+## 25.12.0
+
+### New Features ✨
+
+- feat(deletes): support item attribute conditions in API and consumer by @onewland in [#7570](https://github.com/getsentry/snuba/pull/7570)
+
+#### Eap
+
+- feat(eap): Allow arrays to be queried from EAP by @phacops in [#7551](https://github.com/getsentry/snuba/pull/7551)
+- feat(eap): emit item type counts by @onewland in [#7548](https://github.com/getsentry/snuba/pull/7548)
+
+- feat(oncall): don't send transient cache set errors to sentry, emit metric by @volokluev in [#7560](https://github.com/getsentry/snuba/pull/7560)
+
+- feat(self-hosted): Manually run post release script by @hubertdeng123 in [#7563](https://github.com/getsentry/snuba/pull/7563)
+
+- feat: support attribute allowlist in traceitemstats by @kylemumma in [#7568](https://github.com/getsentry/snuba/pull/7568)
+
+### Bug Fixes 🐛
+
+- fix(image): Ensure we install dev dependencies by @hubertdeng123 in [#7578](https://github.com/getsentry/snuba/pull/7578)
+
+- fix: Remove "performance" code owners by @gggritso in [#7584](https://github.com/getsentry/snuba/pull/7584)
+
+### Build / dependencies / internal 🔧
+
+#### Deps
+
+- chore(deps): bump actions/create-github-app-token from 2.1.4 to 2.2.0 by @dependabot in [#7550](https://github.com/getsentry/snuba/pull/7550)
+- chore(deps): bump actions/dependency-review-action from 4.8.1 to 4.8.2 by @dependabot in [#7539](https://github.com/getsentry/snuba/pull/7539)
+- chore(deps): bump actions/checkout from 5 to 6 by @dependabot in [#7549](https://github.com/getsentry/snuba/pull/7549)
+
+- chore(gocd): remove outcomes-billing consumer from python deploys by @onewland in [#7564](https://github.com/getsentry/snuba/pull/7564)
+
+- ci: leaner snuba image by @aldy505 in [#7542](https://github.com/getsentry/snuba/pull/7542)
+
+### Other
+
+- ref(eap): fix outcomes based routing retention downsampling by @MeredithAnya in [#7592](https://github.com/getsentry/snuba/pull/7592)
+- ref: bump sentry-arroyo to 2.35.0 by @getsentry-bot in [#7583](https://github.com/getsentry/snuba/pull/7583)
+- Change new_datadog timing to send distribution metrics by @volokluev in [#7582](https://github.com/getsentry/snuba/pull/7582)
+- Double write metrics to new datadog by @volokluev in [#7555](https://github.com/getsentry/snuba/pull/7555)
+- ref: remove build_target for GAR image by @aldy505 in [#7571](https://github.com/getsentry/snuba/pull/7571)
+- ref(redis): increase changes limit from 25 to 100 by @MeredithAnya in [#7572](https://github.com/getsentry/snuba/pull/7572)
+- ref: bump sentry-protos to 0.4.8 by @getsentry-bot in [#7569](https://github.com/getsentry/snuba/pull/7569)
+- ref: bump sentry-arroyo to 2.34.0 by @getsentry-bot in [#7567](https://github.com/getsentry/snuba/pull/7567)
+- dep: bump granian to 2.6 by @gi0baro in [#7565](https://github.com/getsentry/snuba/pull/7565)
+
+## 25.11.1
+
+### Build / dependencies / internal 🔧
+
+- ref: bump sentry-protos to 0.4.7 by @getsentry-bot in [#7559](https://github.com/getsentry/snuba/pull/7559)
+- chore: enable trace pagination support by default by @kylemumma in [#7558](https://github.com/getsentry/snuba/pull/7558)
+- ref: bump sentry-protos to 0.4.6 by @getsentry-bot in [#7553](https://github.com/getsentry/snuba/pull/7553)
+- ref(consumer): change BytesInsertBatch to support builder pattern by @onewland in [#7479](https://github.com/getsentry/snuba/pull/7479)
+
+### New Features ✨
+
+- feat(eap): record item type counts in batches by @onewland in [#7481](https://github.com/getsentry/snuba/pull/7481)
+- feat(processor): Handle casted columns in UUID column processor by @Zylphrex in [#7552](https://github.com/getsentry/snuba/pull/7552)
+
+### Bug Fixes 🐛
+
+- fix: subscription executors should not crash when there are too many concurrent queries by @xurui-c in [#7547](https://github.com/getsentry/snuba/pull/7547)
+- fix(gocd): fix gocd filters for rs/py deploys by @onewland in [#7545](https://github.com/getsentry/snuba/pull/7545)
+
+### Other
+
+- ref(runtime-config): update write_node_replacements_global default by @MeredithAnya in [#7556](https://github.com/getsentry/snuba/pull/7556)
+- feat(query-pipeline): Add configs to customize maximum size of a query by @phacops in [#7546](https://github.com/getsentry/snuba/pull/7546)
+- ref(runtime-config): remove *_matview_version by @MeredithAnya in [#7543](https://github.com/getsentry/snuba/pull/7543)
+- ref(runtime-config): remove use_split by @MeredithAnya in [#7540](https://github.com/getsentry/snuba/pull/7540)
+- meta: Bump new development version in [2fdaba59](https://github.com/getsentry/snuba/commit/2fdaba59535e35903816147913647ed3d4fe60dd)
+- ref(runtime-config): remove use_readthrough_query_cache by @MeredithAnya in [#7541](https://github.com/getsentry/snuba/pull/7541)
+
 ## 25.11.0
 
 ### Various fixes & improvements

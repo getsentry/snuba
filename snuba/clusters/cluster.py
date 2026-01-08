@@ -331,9 +331,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             local_node = self.get_local_nodes()[0]
             self.__deleter = NativeDriverReader(
                 cache_partition_id=f"{self.__cache_partition_id}_deletes",
-                client=self.get_node_connection(
-                    ClickhouseClientSettings.DELETE, local_node
-                ),
+                client=self.get_node_connection(ClickhouseClientSettings.DELETE, local_node),
                 query_settings_prefix=self.__query_settings_prefix,
             )
         return self.__deleter
@@ -407,9 +405,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
                 "This is likely a configuration error. Returning empty list."
             )
             return []
-        assert (
-            self.__distributed_cluster_name is not None
-        ), "distributed_cluster_name must be set"
+        assert self.__distributed_cluster_name is not None, "distributed_cluster_name must be set"
         return self.__get_cluster_nodes(self.__distributed_cluster_name)
 
     def get_connection_id(self) -> ConnectionId:
@@ -460,9 +456,7 @@ CLUSTERS = [
         single_node=cluster["single_node"],
         cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
         distributed_cluster_name=(
-            cluster["distributed_cluster_name"]
-            if "distributed_cluster_name" in cluster
-            else None
+            cluster["distributed_cluster_name"] if "distributed_cluster_name" in cluster else None
         ),
         cache_partition_id=cluster.get("cache_partition_id"),
         query_settings_prefix=cluster.get("query_settings_prefix"),
@@ -472,9 +466,7 @@ CLUSTERS = [
 ]
 
 _registered_storage_sets = [
-    storage_set
-    for cluster in CLUSTERS
-    for storage_set in cluster.get_storage_set_keys()
+    storage_set for cluster in CLUSTERS for storage_set in cluster.get_storage_set_keys()
 ]
 
 _unique_registered_storage_sets = set(_registered_storage_sets)
@@ -484,9 +476,7 @@ assert len(_registered_storage_sets) == len(
 ), "Storage set registered to more than one cluster"
 
 _STORAGE_SET_CLUSTER_MAP: Dict[StorageSetKey, ClickhouseCluster] = {
-    storage_set: cluster
-    for cluster in CLUSTERS
-    for storage_set in cluster.get_storage_set_keys()
+    storage_set: cluster for cluster in CLUSTERS for storage_set in cluster.get_storage_set_keys()
 }
 
 
@@ -505,15 +495,11 @@ def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
         secure=cluster.get("secure", False),
         ca_certs=cluster.get("ca_certs", None),
         verify=cluster.get("verify", False),
-        storage_sets={
-            storage_tuple[0] for storage_tuple in cluster["storage_set_slices"]
-        },
+        storage_sets={storage_tuple[0] for storage_tuple in cluster["storage_set_slices"]},
         single_node=cluster["single_node"],
         cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
         distributed_cluster_name=(
-            cluster["distributed_cluster_name"]
-            if "distributed_cluster_name" in cluster
-            else None
+            cluster["distributed_cluster_name"] if "distributed_cluster_name" in cluster else None
         ),
         cache_partition_id=cluster.get("cache_partition_id"),
         query_settings_prefix=cluster.get("query_settings_prefix"),
@@ -523,9 +509,7 @@ def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
 _SLICED_STORAGE_SET_CLUSTER_MAP: Dict[Tuple[StorageSetKey, int], ClickhouseCluster] = {}
 
 
-def _get_sliced_storage_set_cluster_map() -> (
-    Dict[Tuple[StorageSetKey, int], ClickhouseCluster]
-):
+def _get_sliced_storage_set_cluster_map() -> Dict[Tuple[StorageSetKey, int], ClickhouseCluster]:
     if len(_SLICED_STORAGE_SET_CLUSTER_MAP) == 0:
         for cluster in settings.SLICED_CLUSTERS:
             for storage_set_tuple in cluster["storage_set_slices"]:

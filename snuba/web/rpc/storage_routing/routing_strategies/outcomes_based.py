@@ -158,8 +158,8 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
-        thirty_days_ago_ts = int((datetime.now(tz=UTC) - timedelta(days=30)).timestamp())
-        older_than_thirty_days = thirty_days_ago_ts > in_msg_meta.start_timestamp.seconds
+        thirty_one_days_ago_ts = int((datetime.now(tz=UTC) - timedelta(days=31)).timestamp())
+        older_than_thirty_days = thirty_one_days_ago_ts > in_msg_meta.start_timestamp.seconds
 
         if (
             state.get_int_config("enable_long_term_retention_downsampling", 0)

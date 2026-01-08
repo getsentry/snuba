@@ -131,6 +131,9 @@ DOGSTATSD_SAMPLING_RATES = {
 }
 DDM_METRICS_SAMPLE_RATE = float(os.environ.get("SNUBA_DDM_METRICS_SAMPLE_RATE", 0.01))
 
+NEW_DOGSTATSD_HOST: str | None = os.environ.get("SNUBA_NEW_STATSD_HOST") or None
+NEW_DOGSTATSD_PORT: int | None = int(os.environ.get("SNUBA_NEW_STATSD_PORT") or 0) or None
+
 CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")
 CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASSWORD", "")
 
@@ -456,7 +459,7 @@ MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
 SNQL_DISABLED_DATASETS: set[str] = set([])
 
 ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS: int = 0  # 0 means no limit
-ENABLE_TRACE_PAGINATION_DEFAULT = 0
+ENABLE_TRACE_PAGINATION_DEFAULT = 1
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

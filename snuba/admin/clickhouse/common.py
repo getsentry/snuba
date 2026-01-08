@@ -25,9 +25,7 @@ class InvalidStorageError(SerializableException):
     pass
 
 
-def is_valid_node(
-    host: str, port: int, cluster: ClickhouseCluster, storage_name: str
-) -> bool:
+def is_valid_node(host: str, port: int, cluster: ClickhouseCluster, storage_name: str) -> bool:
     nodes = [
         cluster.get_query_node(),
     ]
@@ -164,6 +162,35 @@ def get_sudo_node_connection(
     cluster = storage.get_cluster()
     database = cluster.get_database()
     _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
+
+    (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
+    connection = ClickhousePool(
+        clickhouse_host,
+        clickhouse_port,
+        clickhouse_user,
+        clickhouse_password,
+        database,
+        max_pool_size=2,
+        client_settings=client_settings.value.settings,
+    )
+    NODE_CONNECTIONS[key] = connection
+    return connection
+
+
+def get_clusterless_node_connection(
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    client_settings: ClickhouseClientSettings,
+) -> ClickhousePool:
+    storage = _get_storage(storage_name)
+
+    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless"
+    if key in NODE_CONNECTIONS:
+        return NODE_CONNECTIONS[key]
+
+    cluster = storage.get_cluster()
+    database = cluster.get_database()
 
     (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
     connection = ClickhousePool(

@@ -12,7 +12,11 @@ from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
     GetTraceResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    Array,
+    AttributeKey,
+    AttributeValue,
+)
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AndFilter,
     ComparisonFilter,
@@ -40,6 +44,8 @@ from snuba.settings import (
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
+    process_arrays,
     project_id_and_org_conditions,
     timestamp_in_range_condition,
     treeify_or_and_conditions,
@@ -49,15 +55,14 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression,
-)
 
 NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
     "organization_id",
     "project_id",
     "trace_id",
     "sampling_factor",
+    "attributes_bool",
+    "attributes_int",
 ]
 APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY = "EndpointGetTrace.apply_final_rollout_percentage"
 
@@ -204,7 +209,7 @@ def _build_query(
     else:
         selected_columns += [
             SelectedExpression(
-                name=("attributes_string"),
+                name="attributes_string",
                 expression=FunctionCall(
                     ("attributes_string"),
                     "mapConcat",
@@ -212,11 +217,19 @@ def _build_query(
                 ),
             ),
             SelectedExpression(
-                name=("attributes_float"),
+                name="attributes_float",
                 expression=FunctionCall(
                     ("attributes_float"),
                     "mapConcat",
                     tuple(column(f"attributes_float_{i}") for i in range(40)),
+                ),
+            ),
+            SelectedExpression(
+                name="attributes_array",
+                expression=FunctionCall(
+                    "attributes_array",
+                    "toJSONString",
+                    (column("attributes_array"),),
                 ),
             ),
         ]
@@ -363,16 +376,51 @@ def _build_snuba_request(
     )
 
 
+def convert_to_attribute_value(value: Any) -> AttributeValue:
+    if isinstance(value, bool):
+        return AttributeValue(
+            val_bool=value,
+        )
+    elif isinstance(value, int):
+        return AttributeValue(
+            val_int=value,
+        )
+    elif isinstance(value, float):
+        return AttributeValue(
+            val_double=value,
+        )
+    elif isinstance(value, str):
+        return AttributeValue(
+            val_str=value,
+        )
+    elif isinstance(value, list):
+        return AttributeValue(
+            val_array=Array(values=[convert_to_attribute_value(v) for v in value])
+        )
+    elif isinstance(value, datetime):
+        return AttributeValue(
+            val_double=value.timestamp(),
+        )
+    else:
+        raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
+
+
 def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeValue]:
-    if isinstance(value, int):
+    if isinstance(value, bool):
+        return (
+            AttributeKey(
+                name=key,
+                type=AttributeKey.Type.TYPE_BOOLEAN,
+            ),
+            convert_to_attribute_value(value),
+        )
+    elif isinstance(value, int):
         return (
             AttributeKey(
                 name=key,
                 type=AttributeKey.Type.TYPE_INT,
             ),
-            AttributeValue(
-                val_int=value,
-            ),
+            convert_to_attribute_value(value),
         )
     elif isinstance(value, float):
         return (
@@ -380,9 +428,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
                 name=key,
                 type=AttributeKey.Type.TYPE_DOUBLE,
             ),
-            AttributeValue(
-                val_double=value,
-            ),
+            convert_to_attribute_value(value),
         )
     elif isinstance(value, str):
         return (
@@ -390,9 +436,12 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
                 name=key,
                 type=AttributeKey.Type.TYPE_STRING,
             ),
-            AttributeValue(
-                val_str=value,
-            ),
+            convert_to_attribute_value(value),
+        )
+    elif isinstance(value, list):
+        return (
+            AttributeKey(name=key, type=AttributeKey.Type.TYPE_ARRAY),
+            convert_to_attribute_value(value),
         )
     elif isinstance(value, datetime):
         return (
@@ -400,9 +449,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
                 name=key,
                 type=AttributeKey.Type.TYPE_DOUBLE,
             ),
-            AttributeValue(
-                val_double=value.timestamp(),
-            ),
+            convert_to_attribute_value(value),
         )
     else:
         raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
@@ -433,6 +480,11 @@ def _process_results(
     for row in data:
         id = row.pop("id")
         ts = row.pop("timestamp")
+        arrays = row.pop("attributes_array", "{}") or "{}"
+        # We want to merge these values after to overwrite potential floats
+        # with the same name.
+        booleans = row.pop("attributes_bool", {}) or {}
+        integers = row.pop("attributes_int", {}) or {}
         last_seen_timestamp_precise = float(ts)
         last_seen_id = id
 
@@ -441,29 +493,37 @@ def _process_results(
         # then transform to nanoseconds
         timestamp.FromNanoseconds(int(ts * 1e6) * 1000)
 
-        attributes: list[GetTraceResponse.Item.Attribute] = []
+        attributes: dict[str, GetTraceResponse.Item.Attribute] = {}
 
         def add_attribute(key: str, value: Any) -> None:
             attribute_key, attribute_value = _value_to_attribute(key, value)
-            attributes.append(
-                GetTraceResponse.Item.Attribute(
-                    key=attribute_key,
-                    value=attribute_value,
-                )
+            attributes[key] = GetTraceResponse.Item.Attribute(
+                key=attribute_key,
+                value=attribute_value,
             )
 
-        for key, value in row.items():
-            if isinstance(value, dict):
-                for k, v in value.items():
-                    add_attribute(k, v)
+        for row_key, row_value in row.items():
+            if isinstance(row_value, dict):
+                for column_key, column_value in row_value.items():
+                    add_attribute(column_key, column_value)
             else:
-                add_attribute(key, value)
+                add_attribute(row_key, row_value)
+
+        attributes_array = process_arrays(arrays)
+        for array_key, array_value in attributes_array.items():
+            add_attribute(array_key, array_value)
+
+        for bool_key, bool_value in booleans.items():
+            add_attribute(bool_key, bool_value)
+
+        for int_key, int_value in integers.items():
+            add_attribute(int_key, int_value)
 
         item = GetTraceResponse.Item(
             id=id,
             timestamp=timestamp,
             attributes=sorted(
-                attributes,
+                attributes.values(),
                 key=attrgetter("key.name"),
             ),
         )

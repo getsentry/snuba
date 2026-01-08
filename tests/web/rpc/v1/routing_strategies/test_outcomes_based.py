@@ -90,9 +90,25 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
         1,
     )
     strategy = OutcomesBasedRoutingStrategy()
+    end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    start_time = end_time - timedelta(hours=720)  # 30 days
+    request = TraceItemTableRequest(meta=_get_request_meta(start=start_time, end=end_time))
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+    )
+
+    routing_decision = strategy.get_routing_decision(context)
+    assert routing_decision.tier == Tier.TIER_1
+    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.can_run
 
     # request that queries last 50 days of data
-    request = TraceItemTableRequest(meta=_get_request_meta(hour_interval=1200))  # 50 days
+    start_time = end_time - timedelta(hours=1200)  # 50 days
+    request = TraceItemTableRequest(meta=_get_request_meta(start=start_time, end=end_time))
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
     context = RoutingContext(
         in_msg=request,
