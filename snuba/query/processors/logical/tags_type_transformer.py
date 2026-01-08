@@ -23,8 +23,6 @@ class TagsTypeTransformer(LogicalQueryProcessor):
                     "Expected a string key containing an integer in subscriptable.",
                 )
 
-            return SubscriptableReference(
-                exp.alias, exp.column, Literal(None, int(key.value))
-            )
+            return SubscriptableReference(exp.alias, exp.column, Literal(None, int(key.value)))
 
         query.transform_expressions(transform_expression)

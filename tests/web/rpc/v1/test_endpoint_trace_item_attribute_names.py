@@ -20,9 +20,7 @@ from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
 
-BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(
-    hours=3
-)
+BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(hours=3)
 
 # the number of spans generated as test data to be used by the tests
 TOTAL_GENERATED_SPANS = 3
@@ -79,12 +77,8 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
             ),
             limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_STRING,
@@ -107,12 +101,8 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
             ),
             limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_FLOAT,
@@ -136,12 +126,8 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
             ),
             limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_DOUBLE,
@@ -165,12 +151,8 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
             ),
             limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_STRING,
@@ -195,12 +177,8 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
             ),
             type=AttributeKey.Type.TYPE_STRING,
             value_substring_match="this_definitely_doesnt_exist_93710",
@@ -216,12 +194,8 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
                 debug=True,
             ),
             limit=1000,
@@ -238,12 +212,8 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
             ),
             limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             intersecting_attributes_filter=TraceItemFilter(

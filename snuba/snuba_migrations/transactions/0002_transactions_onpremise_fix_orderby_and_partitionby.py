@@ -29,9 +29,7 @@ def forwards(logger: logging.Logger) -> None:
 
     new_sampling_key = "cityHash64(span_id)"
     new_partition_key = "(retention_days, toMonday(finish_ts))"
-    new_primary_key = (
-        "project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id)"
-    )
+    new_primary_key = "project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id)"
 
     ((curr_sampling_key, curr_partition_key, curr_primary_key),) = clickhouse.execute(
         f"SELECT sampling_key, partition_key, primary_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
@@ -56,9 +54,7 @@ def forwards(logger: logging.Logger) -> None:
         f"SHOW CREATE TABLE {database}.{TABLE_NAME}"
     ).results
 
-    new_create_table_statement = curr_create_table_statement.replace(
-        TABLE_NAME, TABLE_NAME_NEW
-    )
+    new_create_table_statement = curr_create_table_statement.replace(TABLE_NAME, TABLE_NAME_NEW)
 
     # Insert sample clause before TTL
     if sampling_key_needs_update:

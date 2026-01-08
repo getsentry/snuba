@@ -28,17 +28,13 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column(
-                    "sdk_name", String(Modifiers(low_cardinality=True, default="''"))
-                ),
+                column=Column("sdk_name", String(Modifiers(low_cardinality=True, default="''"))),
                 after="dist",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column(
-                    "sdk_version", String(Modifiers(low_cardinality=True, default="''"))
-                ),
+                column=Column("sdk_version", String(Modifiers(low_cardinality=True, default="''"))),
                 after="sdk_name",
             ),
             operations.AddColumn(
@@ -65,46 +61,34 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column(
-                    "user_hash", UInt(64, Modifiers(materialized="cityHash64(user)"))
-                ),
+                column=Column("user_hash", UInt(64, Modifiers(materialized="cityHash64(user)"))),
                 after="user",
             ),
             # The following columns were originally created as non low cardinality strings
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column(
-                    "transaction_name", String(Modifiers(low_cardinality=True))
-                ),
+                column=Column("transaction_name", String(Modifiers(low_cardinality=True))),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column(
-                    "release", String(Modifiers(nullable=True, low_cardinality=True))
-                ),
+                column=Column("release", String(Modifiers(nullable=True, low_cardinality=True))),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column(
-                    "dist", String(Modifiers(nullable=True, low_cardinality=True))
-                ),
+                column=Column("dist", String(Modifiers(nullable=True, low_cardinality=True))),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column(
-                    "sdk_name", String(Modifiers(low_cardinality=True, default="''"))
-                ),
+                column=Column("sdk_name", String(Modifiers(low_cardinality=True, default="''"))),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column(
-                    "sdk_version", String(Modifiers(low_cardinality=True, default="''"))
-                ),
+                column=Column("sdk_version", String(Modifiers(low_cardinality=True, default="''"))),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,

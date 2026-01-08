@@ -43,9 +43,7 @@ TESTS = [
         },
         binary_condition(
             BooleanFunctions.AND,
-            in_condition(
-                Column("_snuba_project_id", None, "project_id"), [Literal(None, 1)]
-            ),
+            in_condition(Column("_snuba_project_id", None, "project_id"), [Literal(None, 1)]),
             binary_condition(
                 BooleanFunctions.AND,
                 binary_condition(
@@ -86,9 +84,7 @@ def test_build_request(body: Dict[str, Any], condition: Expression) -> None:
         selected_columns=[
             SelectedExpression(
                 name="time",
-                expression=Column(
-                    alias="_snuba_time", table_name=None, column_name="time"
-                ),
+                expression=Column(alias="_snuba_time", table_name=None, column_name="time"),
             ),
             SelectedExpression("count", FunctionCall("_snuba_count", "count", tuple())),
         ],

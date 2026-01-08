@@ -50,9 +50,7 @@ class ProfileEvent:
 
 class TestProfilesProcessor:
     def test_missing_profile_id(self) -> None:
-        meta = KafkaMessageMetadata(
-            offset=1, partition=0, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=0, timestamp=datetime(1970, 1, 1))
         message = ProfileEvent(
             android_api_level=None,
             architecture="aarch64",
@@ -87,9 +85,7 @@ class TestProfilesProcessor:
             processor.process_message(payload, meta)
 
     def test_valid_message(self) -> None:
-        meta = KafkaMessageMetadata(
-            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=0, partition=0, timestamp=datetime(1970, 1, 1))
         message = ProfileEvent(
             android_api_level=None,
             architecture="aarch64",

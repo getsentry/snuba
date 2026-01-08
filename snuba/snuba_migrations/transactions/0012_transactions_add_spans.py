@@ -30,9 +30,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column(
-                    "spans.op", Array(String(Modifiers(low_cardinality=True)))
-                ),
+                column=Column("spans.op", Array(String(Modifiers(low_cardinality=True)))),
                 ttl_month=("finish_ts", 1),
             ),
             operations.ModifyColumn(
@@ -77,9 +75,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                 table_name="transactions_local",
                 index_name="bf_spans_op",
             ),
-            operations.DropColumn(
-                StorageSetKey.TRANSACTIONS, "transactions_local", "spans"
-            ),
+            operations.DropColumn(StorageSetKey.TRANSACTIONS, "transactions_local", "spans"),
         ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
@@ -102,8 +98,4 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         ]
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropColumn(
-                StorageSetKey.TRANSACTIONS, "transactions_dist", "spans"
-            )
-        ]
+        return [operations.DropColumn(StorageSetKey.TRANSACTIONS, "transactions_dist", "spans")]

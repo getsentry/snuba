@@ -99,9 +99,7 @@ class TestEndpointTraceItemTableRequest:
         message = TraceItemTableRequest(
             meta=_UNIMPORTANT_REQUEST_META,
             columns=[
-                Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="doesntmatter")
-                ),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="doesntmatter")),
                 _build_sum_attribute_aggregation_column_with_name("column_1"),
                 _build_sum_attribute_aggregation_column_with_name("column_2"),
                 Column(
@@ -122,15 +120,11 @@ class TestEndpointTraceItemTableRequest:
                                     ),
                                     label="sum(add_1) + sum(add_2)",
                                 ),
-                                right=_build_sum_attribute_aggregation_column_with_name(
-                                    "mult_2"
-                                ),
+                                right=_build_sum_attribute_aggregation_column_with_name("mult_2"),
                             ),
                             label="(sum(add_1) + sum(add_2)) * sum(mult_2)",
                         ),
-                        right=_build_sum_attribute_aggregation_column_with_name(
-                            "divide_2"
-                        ),
+                        right=_build_sum_attribute_aggregation_column_with_name("divide_2"),
                     ),
                     label="((sum(add_1) + sum(add_2)) * sum(mult_2)) / sum(divide_2)",
                 ),
@@ -143,9 +137,7 @@ class TestEndpointTraceItemTableRequest:
         message_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
 
         assert message.columns == [
-            Column(
-                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="doesntmatter")
-            ),
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="doesntmatter")),
             _build_sum_attribute_conditional_aggregation_column_with_name("column_1"),
             _build_sum_attribute_conditional_aggregation_column_with_name("column_2"),
             Column(
@@ -172,9 +164,7 @@ class TestEndpointTraceItemTableRequest:
                         ),
                         label="(sum(add_1) + sum(add_2)) * sum(mult_2)",
                     ),
-                    right=_build_sum_attribute_conditional_aggregation_column_with_name(
-                        "divide_2"
-                    ),
+                    right=_build_sum_attribute_conditional_aggregation_column_with_name("divide_2"),
                 ),
                 label="((sum(add_1) + sum(add_2)) * sum(mult_2)) / sum(divide_2)",
             ),
@@ -192,9 +182,7 @@ class TestEndpointTraceItemTableRequest:
                     column=Column(
                         formula=Column.BinaryFormula(
                             op=Column.BinaryFormula.OP_DIVIDE,
-                            left=_build_sum_attribute_aggregation_column_with_name(
-                                "column_1"
-                            ),
+                            left=_build_sum_attribute_aggregation_column_with_name("column_1"),
                             right=Column(
                                 formula=Column.BinaryFormula(
                                     op=Column.BinaryFormula.OP_ADD,
@@ -221,9 +209,7 @@ class TestEndpointTraceItemTableRequest:
 
         assert message.order_by == [
             TraceItemTableRequest.OrderBy(
-                column=_build_sum_attribute_conditional_aggregation_column_with_name(
-                    "column_1"
-                )
+                column=_build_sum_attribute_conditional_aggregation_column_with_name("column_1")
             ),
             TraceItemTableRequest.OrderBy(
                 column=Column(
@@ -298,45 +284,42 @@ class TestEndpointTraceItemTableRequest:
         message_wrapper = TraceItemTableRequestWrapper(message)
         message_wrapper.accept(aggregation_to_conditional_aggregation_visitor)
 
-        assert (
-            message.aggregation_filter
-            == AggregationFilter(  # same filter on both sides of the and
-                and_filter=AggregationAndFilter(
-                    filters=[
-                        AggregationFilter(
-                            comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
-                                "column_3"
-                            )
-                        ),
-                        AggregationFilter(
-                            and_filter=AggregationAndFilter(
-                                filters=[
-                                    AggregationFilter(
-                                        or_filter=AggregationOrFilter(
-                                            filters=[
-                                                AggregationFilter(
-                                                    comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
-                                                        "column_4"
-                                                    )
-                                                ),
-                                                AggregationFilter(
-                                                    comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
-                                                        "column_5"
-                                                    )
-                                                ),
-                                            ]
-                                        )
-                                    ),
-                                    AggregationFilter(
-                                        comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
-                                            "column_6"
-                                        )
-                                    ),
-                                ]
-                            )
-                        ),
-                    ]
-                )
+        assert message.aggregation_filter == AggregationFilter(  # same filter on both sides of the and
+            and_filter=AggregationAndFilter(
+                filters=[
+                    AggregationFilter(
+                        comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
+                            "column_3"
+                        )
+                    ),
+                    AggregationFilter(
+                        and_filter=AggregationAndFilter(
+                            filters=[
+                                AggregationFilter(
+                                    or_filter=AggregationOrFilter(
+                                        filters=[
+                                            AggregationFilter(
+                                                comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
+                                                    "column_4"
+                                                )
+                                            ),
+                                            AggregationFilter(
+                                                comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
+                                                    "column_5"
+                                                )
+                                            ),
+                                        ]
+                                    )
+                                ),
+                                AggregationFilter(
+                                    comparison_filter=_build_avg_conditional_aggregation_comparison_filter_with_name(
+                                        "column_6"
+                                    )
+                                ),
+                            ]
+                        )
+                    ),
+                ]
             )
         )
 
@@ -358,9 +341,7 @@ class TestEndpointTraceItemTableRequest:
                 ),
             ],
             aggregation_filter=AggregationFilter(
-                comparison_filter=_build_avg_aggregation_comparison_filter_with_name(
-                    "column_5"
-                )
+                comparison_filter=_build_avg_aggregation_comparison_filter_with_name("column_5")
             ),
         )
         aggregation_to_conditional_aggregation_visitor = (
@@ -375,14 +356,10 @@ class TestEndpointTraceItemTableRequest:
         ]
         assert message.order_by == [
             TraceItemTableRequest.OrderBy(
-                column=_build_sum_attribute_conditional_aggregation_column_with_name(
-                    "column_3"
-                )
+                column=_build_sum_attribute_conditional_aggregation_column_with_name("column_3")
             ),
             TraceItemTableRequest.OrderBy(
-                column=_build_sum_attribute_conditional_aggregation_column_with_name(
-                    "column_4"
-                )
+                column=_build_sum_attribute_conditional_aggregation_column_with_name("column_4")
             ),
         ]
         assert message.aggregation_filter == AggregationFilter(
@@ -418,9 +395,7 @@ class TestTimeSeriesRequest:
             meta=_UNIMPORTANT_REQUEST_META,
             expressions=[
                 Expression(
-                    aggregation=_build_sum_attribute_aggregation_with_label(
-                        "doenstmatter1"
-                    )
+                    aggregation=_build_sum_attribute_aggregation_with_label("doenstmatter1")
                 ),
                 Expression(
                     formula=Expression.BinaryFormula(

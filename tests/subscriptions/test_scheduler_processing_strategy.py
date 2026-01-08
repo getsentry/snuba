@@ -40,9 +40,7 @@ def test_tick_buffer_immediate() -> None:
     next_step = mock.Mock()
     metrics = TestingMetricsBackend()
 
-    strategy = TickBuffer(
-        SchedulingWatermarkMode.PARTITION, 2, None, next_step, metrics
-    )
+    strategy = TickBuffer(SchedulingWatermarkMode.PARTITION, 2, None, next_step, metrics)
 
     topic = Topic("messages")
     partition = Partition(topic, 0)
@@ -521,17 +519,11 @@ def test_scheduled_subscription_queue() -> None:
     queue.append(tick_message, deque(futures))
 
     assert len(queue) == 2
-    assert queue.peek() == TickSubscription(
-        tick_message, futures[0], offset_to_commit=None
-    )
-    assert queue.popleft() == TickSubscription(
-        tick_message, futures[0], offset_to_commit=None
-    )
+    assert queue.peek() == TickSubscription(tick_message, futures[0], offset_to_commit=None)
+    assert queue.popleft() == TickSubscription(tick_message, futures[0], offset_to_commit=None)
     assert len(queue) == 1
 
-    assert queue.popleft() == TickSubscription(
-        tick_message, futures[1], offset_to_commit=1
-    )
+    assert queue.popleft() == TickSubscription(tick_message, futures[1], offset_to_commit=1)
     assert len(queue) == 0
 
 

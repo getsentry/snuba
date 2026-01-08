@@ -36,9 +36,7 @@ def get_default_kafka_configuration(
 ) -> KafkaBrokerConfig:
     default_topic_config = _get_default_topic_configuration(topic, slice_id)
 
-    return build_kafka_configuration(
-        default_topic_config, bootstrap_servers, override_params
-    )
+    return build_kafka_configuration(default_topic_config, bootstrap_servers, override_params)
 
 
 def build_kafka_consumer_configuration(

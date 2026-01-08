@@ -26,7 +26,9 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
         query_trace: TraceOutput object to update with profile events
         storage: Storage identifier
     """
-    profile_events_raw_sql = "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
+    profile_events_raw_sql = (
+        "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
+    )
 
     for query_trace_data in parse_trace_for_query_ids(query_trace):
         sql = profile_events_raw_sql.format(query_trace_data.query_id)
@@ -65,9 +67,7 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
 
         if system_query_result is not None and len(system_query_result.results) > 0:
             query_trace.profile_events_meta.append(system_query_result.meta)
-            query_trace.profile_events_profile = cast(
-                Dict[str, int], system_query_result.profile
-            )
+            query_trace.profile_events_profile = cast(Dict[str, int], system_query_result.profile)
             columns = system_query_result.meta
             if columns:
                 res = {}

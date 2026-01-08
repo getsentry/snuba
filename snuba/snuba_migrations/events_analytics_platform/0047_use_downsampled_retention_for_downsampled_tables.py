@@ -78,11 +78,7 @@ columns.extend(
 
 def generate_old_materialized_view_expression(sampling_weight: int) -> str:
     column_names_str = ", ".join(
-        [
-            c.name
-            for c in columns
-            if c.name != "sampling_weight" and c.name != "sampling_factor"
-        ]
+        [c.name for c in columns if c.name != "sampling_weight" and c.name != "sampling_factor"]
     )
     return f"SELECT {column_names_str}, sampling_weight * {sampling_weight} AS sampling_weight, sampling_factor / {sampling_weight} AS sampling_factor FROM eap_items_1_local WHERE (cityHash64(item_id + {sampling_weight})  % {sampling_weight}) = 0"
 
@@ -117,9 +113,7 @@ class Migration(migration.ClickhouseNodeMigration):
                         columns=columns,
                         destination_table_name=local_table_name,
                         target=OperationTarget.LOCAL,
-                        query=generate_new_materialized_view_expression(
-                            sampling_weight
-                        ),
+                        query=generate_new_materialized_view_expression(sampling_weight),
                     ),
                     operations.DropTable(
                         storage_set=storage_set_key,
@@ -145,9 +139,7 @@ class Migration(migration.ClickhouseNodeMigration):
                         columns=columns,
                         destination_table_name=local_table_name,
                         target=OperationTarget.LOCAL,
-                        query=generate_old_materialized_view_expression(
-                            sampling_weight
-                        ),
+                        query=generate_old_materialized_view_expression(sampling_weight),
                     ),
                     operations.DropTable(
                         storage_set=storage_set_key,

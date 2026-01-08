@@ -80,9 +80,7 @@ class Migration(migration.CodeMigration):
         clickhouse_version = migration_utilities.get_clickhouse_version_for_storage_set(
             self.storage_set, clickhouse
         )
-        if migration_utilities.supports_setting(
-            clickhouse_version, "allow_nullable_key"
-        ):
+        if migration_utilities.supports_setting(clickhouse_version, "allow_nullable_key"):
             table_settings["allow_nullable_key"] = 1
 
         return operations.CreateTable(

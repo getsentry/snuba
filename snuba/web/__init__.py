@@ -70,9 +70,7 @@ class QueryResult:
         return self.extra.get("stats", {}).get("quota_allowance", {})
 
 
-def transform_column_names(
-    result: QueryResult, mapping: Mapping[str, list[str]]
-) -> None:
+def transform_column_names(result: QueryResult, mapping: Mapping[str, list[str]]) -> None:
     """
     Replaces the column names in a ResultSet object in place.
     """

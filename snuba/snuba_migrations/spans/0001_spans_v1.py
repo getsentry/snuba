@@ -41,9 +41,7 @@ columns: List[Column[Modifiers]] = [
     Column("tags", Nested([("key", String()), ("value", String())])),
     Column(
         "measurements",
-        Nested(
-            [("key", String(Modifiers(low_cardinality=True))), ("value", Float(64))]
-        ),
+        Nested([("key", String(Modifiers(low_cardinality=True))), ("value", Float(64))]),
     ),
     Column("partition", UInt(16)),
     Column("offset", UInt(64)),

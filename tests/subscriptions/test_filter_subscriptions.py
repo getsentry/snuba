@@ -36,16 +36,12 @@ def build_subscription(resolution: timedelta, org_id: int) -> Subscription:
 
 @pytest.fixture
 def expected_subs() -> MutableSequence[Subscription]:
-    return [
-        build_subscription(timedelta(minutes=1), 2) for count in range(randint(1, 50))
-    ]
+    return [build_subscription(timedelta(minutes=1), 2) for count in range(randint(1, 50))]
 
 
 @pytest.fixture
 def extra_subs() -> MutableSequence[Subscription]:
-    return [
-        build_subscription(timedelta(minutes=3), 1) for count in range(randint(1, 50))
-    ]
+    return [build_subscription(timedelta(minutes=3), 1) for count in range(randint(1, 50))]
 
 
 @patch("snuba.settings.SLICED_STORAGE_SETS", {"events": 3})

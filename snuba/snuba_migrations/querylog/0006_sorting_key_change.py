@@ -24,9 +24,7 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
         f"SELECT sampling_key, sorting_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
     ).results
 
-    new_create_table_statement = curr_create_table_statement.replace(
-        TABLE_NAME, TABLE_NAME_NEW
-    )
+    new_create_table_statement = curr_create_table_statement.replace(TABLE_NAME, TABLE_NAME_NEW)
 
     # Switch the sorting key
     if curr_sorting_key != new_sorting_key:
@@ -71,9 +69,7 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
         clickhouse.execute(insert_op.format_sql())
 
     # Ensure each table has the same number of rows before deleting the old one
-    [(new_row_count,)] = clickhouse.execute(
-        f"SELECT count() FROM {TABLE_NAME_NEW}"
-    ).results
+    [(new_row_count,)] = clickhouse.execute(f"SELECT count() FROM {TABLE_NAME_NEW}").results
     assert row_count == new_row_count
 
     clickhouse.execute(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
