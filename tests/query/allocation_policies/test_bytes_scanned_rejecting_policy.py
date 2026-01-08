@@ -34,7 +34,9 @@ def _configure_policy(policy: AllocationPolicy) -> None:
     policy.set_config_value("is_enforced", 1)
     policy.set_config_value("max_threads", MAX_THREAD_NUMBER)
     policy.set_config_value("project_referrer_scan_limit", PROJECT_REFERRER_SCAN_LIMIT)
-    policy.set_config_value("organization_referrer_scan_limit", ORGANIZATION_REFERRER_SCAN_LIMIT)
+    policy.set_config_value(
+        "organization_referrer_scan_limit", ORGANIZATION_REFERRER_SCAN_LIMIT
+    )
 
 
 @pytest.mark.parametrize(
@@ -120,7 +122,11 @@ def test_cross_org_query(policy: BytesScannedRejectingPolicy) -> None:
         QUERY_ID,
         QueryResultOrError(
             query_result=QueryResult(
-                result={"profile": {"progress_bytes": ORGANIZATION_REFERRER_SCAN_LIMIT * 100}},
+                result={
+                    "profile": {
+                        "progress_bytes": ORGANIZATION_REFERRER_SCAN_LIMIT * 100
+                    }
+                },
                 extra={"stats": {}, "sql": "", "experiments": {}},
             ),
             error=None,
@@ -220,15 +226,21 @@ def test_penalize_timeout(policy: BytesScannedRejectingPolicy) -> None:
 
     assert allowance.can_run
     # regular query exception is thrown, should not affect quota
-    policy.update_quota_balance(tenant_ids, QUERY_ID, QueryResultOrError(None, QueryException()))
+    policy.update_quota_balance(
+        tenant_ids, QUERY_ID, QueryResultOrError(None, QueryException())
+    )
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     assert allowance.can_run
 
     # timneout exception is thrown, the penalization is greater than the quota, therefore
     # next query should be rejected
     timeout_exception = QueryException()
-    timeout_exception.__cause__ = ClickhouseError(code=errors.ErrorCodes.TIMEOUT_EXCEEDED)
-    policy.update_quota_balance(tenant_ids, QUERY_ID, QueryResultOrError(None, timeout_exception))
+    timeout_exception.__cause__ = ClickhouseError(
+        code=errors.ErrorCodes.TIMEOUT_EXCEEDED
+    )
+    policy.update_quota_balance(
+        tenant_ids, QUERY_ID, QueryResultOrError(None, timeout_exception)
+    )
 
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     assert not allowance.can_run and allowance.max_threads == 0
@@ -323,4 +335,6 @@ def test_limit_bytes_read(
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     assert allowance.is_throttled
     assert allowance.max_threads == MAX_THREAD_NUMBER // threads_throttle_divider
-    assert allowance.max_bytes_to_read == int(scan_limit / max_bytes_to_read_scan_limit_divider)
+    assert allowance.max_bytes_to_read == int(
+        scan_limit / max_bytes_to_read_scan_limit_divider
+    )

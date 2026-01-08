@@ -46,7 +46,9 @@ def time_expression(
         "toStartOfInterval",
         (
             Column("_snuba_timestamp", table_alias, "timestamp"),
-            FunctionCall(None, "toIntervalSecond", (Literal(None, to_interval_seconds),)),
+            FunctionCall(
+                None, "toIntervalSecond", (Literal(None, to_interval_seconds),)
+            ),
             Literal(None, "Universal"),
         ),
     )
@@ -57,7 +59,9 @@ def subscriptable_expression(
 ) -> SubscriptableReference:
     return SubscriptableReference(
         alias=f"_snuba_tags_raw[{tag_key}]",
-        column=Column(alias="_snuba_tags_raw", table_name=table_alias, column_name="tags_raw"),
+        column=Column(
+            alias="_snuba_tags_raw", table_name=table_alias, column_name="tags_raw"
+        ),
         key=Literal(alias=None, value=tag_key),
     )
 
@@ -125,7 +129,9 @@ mql_context = {
 }
 
 
-def timeseries(agg: str, metric_id: int, condition: FunctionCall | None = None) -> FunctionCall:
+def timeseries(
+    agg: str, metric_id: int, condition: FunctionCall | None = None
+) -> FunctionCall:
     metric_condition = FunctionCall(
         None,
         "equals",
@@ -227,7 +233,9 @@ def test_simple_formula() -> None:
     metric_condition1 = metric_id_condition(123456, "d0")
     metric_condition2 = metric_id_condition(123456, "d1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("d0")
+        + condition("d1")
+        + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -310,8 +318,12 @@ def test_bracket_on_formula() -> None:
                 ),
                 keys=[
                     JoinCondition(
-                        left=JoinConditionExpression(table_alias="d3", column="d3.time"),
-                        right=JoinConditionExpression(table_alias="d2", column="d2.time"),
+                        left=JoinConditionExpression(
+                            table_alias="d3", column="d3.time"
+                        ),
+                        right=JoinConditionExpression(
+                            table_alias="d2", column="d2.time"
+                        ),
                     )
                 ],
                 join_type=JoinType.INNER,
@@ -454,8 +466,12 @@ def test_multiple_filter_same_groupby_formula() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="tags_raw[222222]"),
-                right=JoinConditionExpression(table_alias="d0", column="tags_raw[222222]"),
+                left=JoinConditionExpression(
+                    table_alias="d1", column="tags_raw[222222]"
+                ),
+                right=JoinConditionExpression(
+                    table_alias="d0", column="tags_raw[222222]"
+                ),
             ),
             JoinCondition(
                 left=JoinConditionExpression(table_alias="d1", column="d1.time"),
@@ -474,8 +490,12 @@ def test_multiple_filter_same_groupby_formula() -> None:
     )
     tag_condition3 = binary_condition(
         "or",
-        binary_condition("equals", tag_column("transaction", "d1"), Literal(None, "prod")),
-        binary_condition("equals", tag_column("status_code", "d1"), Literal(None, "400")),
+        binary_condition(
+            "equals", tag_column("transaction", "d1"), Literal(None, "prod")
+        ),
+        binary_condition(
+            "equals", tag_column("status_code", "d1"), Literal(None, "400")
+        ),
     )
     metric_condition1 = metric_id_condition(123456, "d0")
     metric_condition2 = metric_id_condition(123456, "d1")
@@ -784,8 +804,12 @@ def test_groupby() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="tags_raw[333333]"),
-                right=JoinConditionExpression(table_alias="d0", column="tags_raw[333333]"),
+                left=JoinConditionExpression(
+                    table_alias="d1", column="tags_raw[333333]"
+                ),
+                right=JoinConditionExpression(
+                    table_alias="d0", column="tags_raw[333333]"
+                ),
             ),
             JoinCondition(
                 left=JoinConditionExpression(table_alias="d1", column="d1.time"),
@@ -802,7 +826,9 @@ def test_groupby() -> None:
     metric_condition1 = metric_id_condition(123456, "d0")
     metric_condition2 = metric_id_condition(123456, "d1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("d0")
+        + condition("d1")
+        + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -885,8 +911,12 @@ def test_groupby_with_totals() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="tags_raw[333333]"),
-                right=JoinConditionExpression(table_alias="d0", column="tags_raw[333333]"),
+                left=JoinConditionExpression(
+                    table_alias="d1", column="tags_raw[333333]"
+                ),
+                right=JoinConditionExpression(
+                    table_alias="d0", column="tags_raw[333333]"
+                ),
             )
         ],
         join_type=JoinType.INNER,
@@ -899,7 +929,9 @@ def test_groupby_with_totals() -> None:
     metric_condition1 = metric_id_condition(123456, "d0")
     metric_condition2 = metric_id_condition(123456, "d1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("d0")
+        + condition("d1")
+        + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -989,7 +1021,9 @@ def test_onesided_groupby() -> None:
     metric_condition1 = metric_id_condition(123456, "d0")
     metric_condition2 = metric_id_condition(123456, "d1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("d0")
+        + condition("d1")
+        + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -1271,7 +1305,9 @@ def test_curried_aggregate_formula() -> None:
     metric_condition1 = metric_id_condition(123456, "d0")
     metric_condition2 = metric_id_condition(123456, "d1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("d0")
+        + condition("d1")
+        + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -1350,7 +1386,9 @@ def test_formula_no_groupby_no_interval_with_totals() -> None:
     metric_condition1 = metric_id_condition(123456, "d0")
     metric_condition2 = metric_id_condition(123456, "d1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("d0")
+        + condition("d1")
+        + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -1415,7 +1453,9 @@ def test_formula_onesided_groupby_no_interval_with_totals() -> None:
     metric_condition1 = metric_id_condition(123456, "d0")
     metric_condition2 = metric_id_condition(123456, "d1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("d0")
+        + condition("d1")
+        + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -1455,7 +1495,9 @@ def test_formula_extrapolation_with_nested_functions() -> None:
                 None,
                 "apdex",
                 (
-                    FunctionCall(None, "avg_weighted", (Column("_snuba_value", "d0", "value"),)),
+                    FunctionCall(
+                        None, "avg_weighted", (Column("_snuba_value", "d0", "value"),)
+                    ),
                     Literal(None, 123.0),
                 ),
             ),
@@ -1539,6 +1581,8 @@ def test_formula_extrapolation_with_nested_functions() -> None:
         "c:transactions/duration@millisecond"
     ] = 123456
 
-    query = parse_mql_query(str(query_body), mql_context_with_extrapolation, generic_metrics)
+    query = parse_mql_query(
+        str(query_body), mql_context_with_extrapolation, generic_metrics
+    )
     eq, reason = query.equals(expected)
     assert eq, reason

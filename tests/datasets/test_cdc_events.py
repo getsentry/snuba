@@ -100,8 +100,12 @@ class TestCdcEvents(BaseApiTest):
 
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
-    @pytest.mark.parametrize("relationship, operator, expected_rows", TEST_GROUP_JOIN_PARAMS)
-    def test_groups_join(self, relationship: str, operator: str, expected_rows: int) -> None:
+    @pytest.mark.parametrize(
+        "relationship, operator, expected_rows", TEST_GROUP_JOIN_PARAMS
+    )
+    def test_groups_join(
+        self, relationship: str, operator: str, expected_rows: int
+    ) -> None:
         query_template = (
             "MATCH %(relationship)s "
             "SELECT e.event_id WHERE "
@@ -137,8 +141,12 @@ class TestCdcEvents(BaseApiTest):
 
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
-    @pytest.mark.parametrize("relationship, operator, expected_rows", TEST_ASSIGNEE_JOIN_PARAMS)
-    def test_assignee_join(self, relationship: str, operator: str, expected_rows: int) -> None:
+    @pytest.mark.parametrize(
+        "relationship, operator, expected_rows", TEST_ASSIGNEE_JOIN_PARAMS
+    )
+    def test_assignee_join(
+        self, relationship: str, operator: str, expected_rows: int
+    ) -> None:
         query_template = (
             "MATCH %(relationship)s "
             "SELECT e.event_id WHERE "

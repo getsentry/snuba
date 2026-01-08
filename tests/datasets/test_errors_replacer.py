@@ -54,9 +54,9 @@ class BaseTest:
 
         # Total query time range is 24h before to 24h after now to account
         # for local machine time zones
-        self.from_time = datetime.now().replace(minute=0, second=0, microsecond=0) - timedelta(
-            days=1
-        )
+        self.from_time = datetime.now().replace(
+            minute=0, second=0, microsecond=0
+        ) - timedelta(days=1)
 
         self.to_time = self.from_time + timedelta(days=2)
 
@@ -111,7 +111,9 @@ class TestReplacer(BaseTest):
         args = {
             "project": [project_id],
             "selected_columns": ["group_id"],
-            "conditions": [["event_id", "=", str(uuid.UUID(event_id)).replace("-", "")]],
+            "conditions": [
+                ["event_id", "=", str(uuid.UUID(event_id)).replace("-", "")]
+            ],
             "from_date": self.from_time.isoformat(),
             "to_date": self.to_time.isoformat(),
             "tenant_ids": {"referrer": "r", "organization_id": 1234},
@@ -347,7 +349,9 @@ class TestReplacer(BaseTest):
                                 "previous_group_id": 1,
                                 "new_group_id": 2,
                                 "hashes": ["a" * 32],
-                                "datetime": datetime.utcnow().strftime(PAYLOAD_DATETIME_FORMAT),
+                                "datetime": datetime.utcnow().strftime(
+                                    PAYLOAD_DATETIME_FORMAT
+                                ),
                             },
                         )
                     ).encode("utf-8"),
@@ -437,7 +441,9 @@ class TestReplacer(BaseTest):
                                 "previous_group_id": 1,
                                 "new_group_id": 2,
                                 "hashes": ["a" * 32],
-                                "datetime": datetime.utcnow().strftime(PAYLOAD_DATETIME_FORMAT),
+                                "datetime": datetime.utcnow().strftime(
+                                    PAYLOAD_DATETIME_FORMAT
+                                ),
                             },
                         )
                     ).encode("utf-8"),
@@ -590,7 +596,9 @@ class TestReplacerProcess(BaseTest):
 
         assert replacement.get_query_time_flags() == errors_replacer.NeedsFinal()
 
-    @pytest.mark.parametrize("old_primary_hash", ["e3d704f3542b44a621ebed70dc0efe13", False, None])
+    @pytest.mark.parametrize(
+        "old_primary_hash", ["e3d704f3542b44a621ebed70dc0efe13", False, None]
+    )
     def test_tombstone_events_process(self, old_primary_hash) -> None:
         timestamp = datetime.now()
         message_kwargs = {
@@ -609,7 +617,9 @@ class TestReplacerProcess(BaseTest):
         _, replacement = meta_and_replacement
 
         old_primary_condition = (
-            " AND primary_hash = 'e3d704f3-542b-44a6-21eb-ed70dc0efe13'" if old_primary_hash else ""
+            " AND primary_hash = 'e3d704f3-542b-44a6-21eb-ed70dc0efe13'"
+            if old_primary_hash
+            else ""
         )
 
         query_args = {
@@ -749,7 +759,9 @@ class TestReplacerProcess(BaseTest):
             % query_args
         )
 
-        assert replacement.get_query_time_flags() == errors_replacer.ExcludeGroups([1, 2])
+        assert replacement.get_query_time_flags() == errors_replacer.ExcludeGroups(
+            [1, 2]
+        )
 
     def test_unmerge_process(self) -> None:
         timestamp = datetime.now()
@@ -892,7 +904,9 @@ class TestReplacerProcess(BaseTest):
         _, replacement = meta_and_replacement
         assert replacement is not None
 
-        set_config("replacements_bypass_projects", f"[{self.project_id + 1},{self.project_id}]")
+        set_config(
+            "replacements_bypass_projects", f"[{self.project_id + 1},{self.project_id}]"
+        )
         meta_and_replacement = self.replacer.process_message(self._wrap(message))
         assert meta_and_replacement is None
         delete_config("replacements_bypass_projects")

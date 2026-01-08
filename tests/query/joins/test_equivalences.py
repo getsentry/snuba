@@ -28,7 +28,9 @@ TEST_CASES = [
     pytest.param(
         JoinClause(
             IndividualNode("ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
-            IndividualNode("gr", EntitySource(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None)),
+            IndividualNode(
+                "gr", EntitySource(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None)
+            ),
             [
                 JoinCondition(
                     JoinConditionExpression("ev", "group_id"),
@@ -57,8 +59,12 @@ TEST_CASES = [
     pytest.param(
         JoinClause(
             JoinClause(
-                IndividualNode("ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
-                IndividualNode("as", EntitySource(EntityKey.GROUPASSIGNEE, GROUPS_ASSIGNEE, None)),
+                IndividualNode(
+                    "ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)
+                ),
+                IndividualNode(
+                    "as", EntitySource(EntityKey.GROUPASSIGNEE, GROUPS_ASSIGNEE, None)
+                ),
                 [
                     JoinCondition(
                         JoinConditionExpression("ev", "group_id"),
@@ -68,7 +74,9 @@ TEST_CASES = [
                 JoinType.INNER,
                 None,
             ),
-            IndividualNode("gr", EntitySource(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None)),
+            IndividualNode(
+                "gr", EntitySource(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None)
+            ),
             [
                 JoinCondition(
                     JoinConditionExpression("ev", "group_id"),
@@ -109,8 +117,12 @@ TEST_CASES = [
     pytest.param(
         JoinClause(
             JoinClause(
-                IndividualNode("ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
-                IndividualNode("gr", EntitySource(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None)),
+                IndividualNode(
+                    "ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)
+                ),
+                IndividualNode(
+                    "gr", EntitySource(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None)
+                ),
                 [
                     JoinCondition(
                         JoinConditionExpression("ev", "group_id"),
@@ -120,7 +132,9 @@ TEST_CASES = [
                 JoinType.INNER,
                 None,
             ),
-            IndividualNode("as", EntitySource(EntityKey.GROUPASSIGNEE, GROUPS_ASSIGNEE, None)),
+            IndividualNode(
+                "as", EntitySource(EntityKey.GROUPASSIGNEE, GROUPS_ASSIGNEE, None)
+            ),
             [
                 JoinCondition(
                     JoinConditionExpression("gr", "user_id"),
@@ -162,7 +176,9 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize("join, graph", TEST_CASES)
-def test_find_equivalences(join: JoinClause[EntitySource], graph: EquivalenceGraph) -> None:
+def test_find_equivalences(
+    join: JoinClause[EntitySource], graph: EquivalenceGraph
+) -> None:
     override_entity_map(EntityKey.EVENTS, Events())
     override_entity_map(EntityKey.GROUPEDMESSAGE, GroupedMessage())
     override_entity_map(EntityKey.GROUPASSIGNEE, GroupAssignee())

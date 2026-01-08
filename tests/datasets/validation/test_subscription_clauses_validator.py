@@ -23,9 +23,13 @@ from snuba.query.validation.validators import SubscriptionAllowedClausesValidato
 tests = [
     pytest.param(
         LogicalQuery(
-            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
-                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
+                SelectedExpression(
+                    "time", Column("_snuba_timestamp", None, "timestamp")
+                ),
             ],
             condition=binary_condition(
                 "equals",
@@ -88,7 +92,9 @@ tests = [
     ),
     pytest.param(
         LogicalQuery(
-            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
             ],
@@ -139,7 +145,9 @@ invalid_tests = [
     ),
     pytest.param(
         LogicalQuery(
-            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
             ],
@@ -158,7 +166,9 @@ invalid_tests = [
     ),
     pytest.param(
         LogicalQuery(
-            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
             ],
@@ -167,7 +177,11 @@ invalid_tests = [
                 Column("_snuba_project_id", None, "project_id"),
                 Literal(None, 1),
             ),
-            order_by=[OrderBy(OrderByDirection.ASC, Column("_snuba_timestamp", None, "timestamp"))],
+            order_by=[
+                OrderBy(
+                    OrderByDirection.ASC, Column("_snuba_timestamp", None, "timestamp")
+                )
+            ],
         ),
         id="no orderby clauses",
     ),

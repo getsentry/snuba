@@ -66,7 +66,9 @@ TEST_QUERIES = [
                         identity(
                             equals(
                                 # alias of the tuple of internal function is removed (it is not useful)
-                                tupleElement(None, some_tuple(alias="ayyy"), Literal(None, 1)),
+                                tupleElement(
+                                    None, some_tuple(alias="ayyy"), Literal(None, 1)
+                                ),
                                 Literal(None, 300),
                             )
                         )
@@ -81,7 +83,9 @@ TEST_QUERIES = [
                         identity(
                             equals(
                                 # alias of the tuple of internal function is removed (it is not useful)
-                                tupleElement(None, some_tuple(alias=None), Literal(None, 1)),
+                                tupleElement(
+                                    None, some_tuple(alias=None), Literal(None, 1)
+                                ),
                                 Literal(None, 300),
                             )
                         )
@@ -94,7 +98,9 @@ TEST_QUERIES = [
     pytest.param(
         build_query(
             selected_columns=[
-                CurriedFunctionCall(None, some_tuple(alias="foo"), (Literal(None, "4"),))
+                CurriedFunctionCall(
+                    None, some_tuple(alias="foo"), (Literal(None, "4"),)
+                )
             ]
         ),
         build_query(
