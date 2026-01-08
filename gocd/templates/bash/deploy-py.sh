@@ -20,6 +20,7 @@ eval $(regions-project-env-vars --region="${SENTRY_REGION}")
   --container-name="genmetrics-sets-subs-executor" \
   --container-name="genmetrics-sets-subs-scheduler" \
   --container-name="group-attributes-consumer" \
+  --container-name="lw-deletions-eap-items-consumer" \
   --container-name="lw-deletions-search-issues-consumer" \
   --container-name="metrics-counters-subscriptions-scheduler" \
   --container-name="metrics-sets-subscriptions-scheduler" \

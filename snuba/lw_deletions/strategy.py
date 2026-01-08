@@ -38,7 +38,7 @@ TPayload = TypeVar("TPayload")
 
 import logging
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class LWDeleteQueryException(Exception):
@@ -82,6 +82,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             str_config = get_str_config("org_ids_delete_allowlist", "")
             assert str_config
             org_ids_delete_allowlist = set([int(org_id) for org_id in str_config.split(",")])
+            logger.info(f"query conditions: {conditions}, allowlist: {org_ids_delete_allowlist}")
             return org_ids_delete_allowlist.issuperset(query_org_ids)
 
     def submit(self, message: Message[ValuesBatch[KafkaPayload]]) -> None:

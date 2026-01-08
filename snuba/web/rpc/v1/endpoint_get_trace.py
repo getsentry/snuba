@@ -1,4 +1,3 @@
-import json
 import random
 import uuid
 from datetime import datetime
@@ -46,6 +45,7 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
+    process_arrays,
     project_id_and_org_conditions,
     timestamp_in_range_condition,
     treeify_or_and_conditions,
@@ -465,25 +465,6 @@ ProcessedResults = NamedTuple(
 )
 
 
-def _transform_array_value(value: dict[str, str]) -> Any:
-    for t, v in value.items():
-        if t == "Int":
-            return int(v)
-        if t == "Double":
-            return float(v)
-        if t in {"String", "Bool"}:
-            return v
-    raise BadSnubaRPCRequestException(f"array value type unknown: {type(v)}")
-
-
-def _process_arrays(raw: str) -> dict[str, list[Any]]:
-    parsed = json.loads(raw) or {}
-    arrays = {}
-    for key, values in parsed.items():
-        arrays[key] = [_transform_array_value(v) for v in values]
-    return arrays
-
-
 def _process_results(
     data: Iterable[Dict[str, Any]],
 ) -> ProcessedResults:
@@ -528,7 +509,7 @@ def _process_results(
             else:
                 add_attribute(row_key, row_value)
 
-        attributes_array = _process_arrays(arrays)
+        attributes_array = process_arrays(arrays)
         for array_key, array_value in attributes_array.items():
             add_attribute(array_key, array_value)
 

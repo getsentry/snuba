@@ -66,14 +66,14 @@ jobs:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
 
-      - uses: getsentry/action-setup-venv@v3.0.0
+      - uses: getsentry/action-setup-venv@5a80476d175edf56cb205b08bc58986fa99d1725 # v3.2.0
         with:
-          python-version: 3.11.11
+
           cache-dependency-path: uv.lock
           # NOTE: can't pass --only-dev yet since we're missing some mypy stub packages
           install-cmd: uv sync --frozen --active
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml', 'uv.lock') }}
@@ -144,9 +144,9 @@ jobs:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
 
-      - uses: getsentry/action-setup-venv@v3.0.0
+      - uses: getsentry/action-setup-venv@5a80476d175edf56cb205b08bc58986fa99d1725 # v3.2.0
         with:
-          python-version: 3.11.11
+
           cache-dependency-path: uv.lock
           install-cmd: uv sync --frozen --active
 
@@ -187,7 +187,7 @@ jobs:
       # otherwise third-party contributors would have to provide a working,
       # authenticated GHCR, which seems impossible to ensure in the general
       # case.
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: snuba-ci
           path: /tmp/snuba-ci.tar
@@ -212,7 +212,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: snuba-ci
           path: /tmp
@@ -289,7 +289,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: snuba-ci
           path: /tmp
@@ -394,7 +394,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: snuba-ci
           path: /tmp
