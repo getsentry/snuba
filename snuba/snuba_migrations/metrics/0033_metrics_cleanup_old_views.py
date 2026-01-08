@@ -13,7 +13,9 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropTable(storage_set=StorageSetKey.METRICS, table_name=table_name)
+            operations.DropTable(
+                storage_set=StorageSetKey.METRICS, table_name=table_name
+            )
             for table_name in [
                 "metrics_counters_consolidated_mv_local",
                 "metrics_counters_mv_10s_local",

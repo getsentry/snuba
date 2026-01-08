@@ -41,7 +41,9 @@ columns_codecs: List[Column[Modifiers]] = [
     Column("tags.value", Array(String(Modifiers(codecs=["ZSTD(1)"])))),
     Column(
         "_tags_hash_map",
-        Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN, codecs=["ZSTD(1)"])),
+        Array(
+            UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN, codecs=["ZSTD(1)"])
+        ),
     ),
     Column("sentry_tags.key", Array(String(Modifiers(codecs=["ZSTD(1)"])))),
     Column("sentry_tags.value", Array((String(Modifiers(codecs=["ZSTD(1)"]))))),
@@ -87,7 +89,9 @@ columns_no_codecs: List[Column[Modifiers]] = [
     Column("segment_id", UInt(64)),
     Column("tags.key", Array(String())),
     Column("tags.value", Array(String())),
-    Column("_tags_hash_map", Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN))),
+    Column(
+        "_tags_hash_map", Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN))
+    ),
     Column("sentry_tags.key", Array(String())),
     Column("sentry_tags.value", Array((String()))),
     Column(

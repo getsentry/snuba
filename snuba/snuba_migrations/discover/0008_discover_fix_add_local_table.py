@@ -58,7 +58,9 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.DISCOVER,
                 table_name=self.local_table_name,
                 columns=columns,
-                engine=table_engines.Merge(table_name_regex="^errors_local$|^transactions_local$"),
+                engine=table_engines.Merge(
+                    table_name_regex="^errors_local$|^transactions_local$"
+                ),
                 target=OperationTarget.LOCAL,
             ),
         ]

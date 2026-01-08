@@ -23,14 +23,18 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=storage_set_name,
                 table_name=local_table_name,
-                column=Column("profile_id", UUID(Modifiers(nullable=True, codecs=["ZSTD(1)"]))),
+                column=Column(
+                    "profile_id", UUID(Modifiers(nullable=True, codecs=["ZSTD(1)"]))
+                ),
                 target=OperationTarget.LOCAL,
                 after="span_id",
             ),
             operations.AddColumn(
                 storage_set=storage_set_name,
                 table_name=dist_table_name,
-                column=Column("profile_id", UUID(Modifiers(nullable=True, codecs=["ZSTD(1)"]))),
+                column=Column(
+                    "profile_id", UUID(Modifiers(nullable=True, codecs=["ZSTD(1)"]))
+                ),
                 target=OperationTarget.DISTRIBUTED,
                 after="span_id",
             ),

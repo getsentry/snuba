@@ -31,7 +31,9 @@ def forward_ops() -> Iterator[operations.SqlOperation]:
             operations.AddColumn(
                 storage_set=storage_set,
                 table_name=table_name,
-                column=Column("flags", Nested([("key", String()), ("value", String())])),
+                column=Column(
+                    "flags", Nested([("key", String()), ("value", String())])
+                ),
                 after="_tags_hash_map",
                 target=target,
             ),

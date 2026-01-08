@@ -44,9 +44,15 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropColumn(StorageSetKey.OUTCOMES, "outcomes_raw_local", "quantity"),
-            operations.DropColumn(StorageSetKey.OUTCOMES, "outcomes_raw_local", "category"),
-            operations.DropColumn(StorageSetKey.OUTCOMES, "outcomes_hourly_local", "quantity"),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_raw_local", "quantity"
+            ),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_raw_local", "category"
+            ),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_hourly_local", "quantity"
+            ),
             operations.RunSql(
                 storage_set=StorageSetKey.OUTCOMES,
                 statement="""
@@ -54,7 +60,9 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                     MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp);
                 """,
             ),
-            operations.DropColumn(StorageSetKey.OUTCOMES, "outcomes_hourly_local", "category"),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_hourly_local", "category"
+            ),
         ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
@@ -87,8 +95,16 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropColumn(StorageSetKey.OUTCOMES, "outcomes_raw_dist", "quantity"),
-            operations.DropColumn(StorageSetKey.OUTCOMES, "outcomes_raw_dist", "category"),
-            operations.DropColumn(StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "quantity"),
-            operations.DropColumn(StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "category"),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_raw_dist", "quantity"
+            ),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_raw_dist", "category"
+            ),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "quantity"
+            ),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "category"
+            ),
         ]

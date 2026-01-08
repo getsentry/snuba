@@ -24,7 +24,9 @@ raw_columns: Sequence[Column[Modifiers]] = [
     Column("trace_ids", Array(UUID())),
     Column(
         "_trace_ids_hashed",
-        Array(UInt(64), Modifiers(materialized="arrayMap(t -> cityHash64(t), trace_ids)")),
+        Array(
+            UInt(64), Modifiers(materialized="arrayMap(t -> cityHash64(t), trace_ids)")
+        ),
     ),
     Column("title", String()),
     ### columns used by other sentry events
@@ -104,5 +106,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropTable(storage_set=StorageSetKey.REPLAYS, table_name="replays_dist"),
+            operations.DropTable(
+                storage_set=StorageSetKey.REPLAYS, table_name="replays_dist"
+            ),
         ]

@@ -20,21 +20,27 @@ class Migration(ClickhouseNodeMigration):
             AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
-                column=Column("group_first_seen", DateTime(MigrationModifiers(nullable=True))),
+                column=Column(
+                    "group_first_seen", DateTime(MigrationModifiers(nullable=True))
+                ),
                 after="sample_weight",
                 target=OperationTarget.LOCAL,
             ),
             AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist",
-                column=Column("group_first_seen", DateTime(MigrationModifiers(nullable=True))),
+                column=Column(
+                    "group_first_seen", DateTime(MigrationModifiers(nullable=True))
+                ),
                 after="sample_weight",
                 target=OperationTarget.DISTRIBUTED,
             ),
             AddColumn(
                 storage_set=StorageSetKey.EVENTS_RO,
                 table_name="errors_dist_ro",
-                column=Column("group_first_seen", DateTime(MigrationModifiers(nullable=True))),
+                column=Column(
+                    "group_first_seen", DateTime(MigrationModifiers(nullable=True))
+                ),
                 after="sample_weight",
                 target=OperationTarget.DISTRIBUTED,
             ),
