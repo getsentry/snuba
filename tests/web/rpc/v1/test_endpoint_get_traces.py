@@ -874,6 +874,54 @@ class TestGetTraces(BaseApiTest):
         assert len(response.traces) == 1
         assert response.traces[0].attributes[0].value.val_double == _BASE_TIME.timestamp()
 
+    def test_subquery_optimization_cross_event_query(self) -> None:
+        """Test that subquery optimization works for cross-event queries."""
+        from snuba.state import set_config
+
+        # Enable subquery optimization via runtime config
+        set_config("use_subquery_optimization_for_traces", True)
+
+        try:
+            # Use existing test data creation function
+            trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
+            write_cross_item_data_to_storage(all_items)
+
+            filters = [
+                trace_filter(
+                    comparison_filter("span.attr1", "val1"),
+                    TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                trace_filter(
+                    comparison_filter("log.attr2", "val2"),
+                    TraceItemType.TRACE_ITEM_TYPE_LOG,
+                ),
+            ]
+
+            message = GetTracesRequest(
+                meta=create_request_meta(start_time, end_time),
+                attributes=[
+                    TraceAttribute(key=TraceAttribute.Key.KEY_TRACE_ID),
+                ],
+                filters=filters,
+            )
+
+            # This should now use the subquery optimization
+            response = EndpointGetTraces().execute(message)
+
+            # Verify we get the expected results (same as the original cross-event test)
+            assert len(response.traces) >= 1
+
+            returned_trace_ids = set()
+            for trace in response.traces:
+                returned_trace_ids.add(trace.attributes[0].value.val_str)
+
+            # At least one trace should be returned
+            assert len(returned_trace_ids) >= 1
+
+        finally:
+            # Clean up - disable the optimization
+            set_config("use_subquery_optimization_for_traces", False)
+
 
 def generate_spans(spans_data: list[bytes]) -> list[TraceItem]:
     spans: list[TraceItem] = []
