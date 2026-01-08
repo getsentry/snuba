@@ -261,7 +261,7 @@ class ClickhousePool(object):
                 # Still need to return something to the pool to maintain pool size
                 # Use None as a placeholder for a broken connection
                 try:
-                     self.pool.put(None, block=False)
+                    self.pool.put(None, block=False)
                 except Exception:
                     # If even putting None fails, just pass - pool is likely full
                     pass
