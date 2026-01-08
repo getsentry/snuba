@@ -28,7 +28,7 @@ expression: snapshot_payload
     },
     "client_sample_rate": 1.0,
     "downsampled_retention_days": 90,
-    "item_id": 140754042156678400000000000000000000000.0,
+    "item_id": 161943667041147340000000000000000000000.0,
     "item_type": 1,
     "organization_id": 1,
     "project_id": 1,
