@@ -19,9 +19,11 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import AndFilter, TraceItemFil
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
+from snuba.clickhouse.formatter.nodes import FormattedQuery, StringNode
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.datasets.storages.factory import get_storage
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -39,6 +41,7 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.state import get_config
+from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
@@ -454,6 +457,106 @@ def _validate_order_by(in_msg: GetTracesRequest) -> None:
         )
 
 
+def _get_subquery_sql(request: GetTracesRequest, trace_ids_query: Query, timer: Timer) -> str:
+    """
+    Extract SQL from a trace IDs query using dry run.
+    """
+    settings = HTTPQuerySettings(dry_run=True)
+    if request.meta.debug:
+        settings = setup_trace_query_settings()
+        settings = HTTPQuerySettings(
+            debug=settings.get_debug(),
+            dry_run=True,
+            turbo=settings.get_turbo(),
+            consistent=settings.get_consistent(),
+        )
+
+    results = run_query(
+        dataset=PluggableDataset(name="eap", all_entities=[]),
+        request=_build_snuba_request(request, trace_ids_query, query_settings=settings),
+        timer=timer,
+    )
+
+    return results.extra["sql"]
+
+
+def _build_cross_item_query(
+    request: GetTracesRequest,
+    trace_filters: list,  # type: ignore
+) -> Query:
+    """
+    Build the cross-item query similar to get_trace_ids_for_cross_item_query.
+    """
+    filter_expressions = []
+    for trace_filter in trace_filters:
+        assert hasattr(trace_filter, "fitler")
+        filter_expressions.append(
+            and_cond(
+                f.equals(column("item_type"), trace_filter.item_type),
+                trace_item_filters_to_expression(
+                    trace_filter.filter,
+                    attribute_key_to_expression,
+                ),
+            )
+        )
+
+    if len(filter_expressions) > 1:
+        trace_item_filters_and_expression = and_cond(
+            *[f.greater(f.countIf(expression), 0) for expression in filter_expressions]
+        )
+        trace_item_filters_or_expression = or_cond(*filter_expressions)
+    else:
+        trace_item_filters_and_expression = f.greater(f.countIf(filter_expressions[0]), 0)
+        trace_item_filters_or_expression = filter_expressions[0]
+
+    entity = Entity(
+        key=EntityKey("eap_items"),
+        schema=get_entity(EntityKey("eap_items")).get_data_model(),
+        sample=None,
+    )
+
+    query = Query(
+        from_clause=entity,
+        selected_columns=[
+            SelectedExpression(
+                name="trace_id",
+                expression=column("trace_id"),
+            )
+        ],
+        condition=base_conditions_and(
+            request.meta,
+            trace_item_filters_or_expression,
+        ),
+        groupby=[
+            column("trace_id"),
+        ],
+        having=trace_item_filters_and_expression,
+    )
+
+    treeify_or_and_conditions(query)
+    return query
+
+
+def _execute_direct_sql(sql: str, timer: Timer) -> Any:
+    """
+    Execute SQL directly using the ClickHouse client.
+    """
+    from snuba.datasets.storages.storage_key import StorageKey
+
+    # Get the cluster from the EAP storage
+    storage = get_storage(StorageKey("eap_items"))
+    cluster = storage.get_cluster()
+    reader = cluster.get_reader()
+
+    # Create FormattedQuery from SQL string
+    formatted_query = FormattedQuery(content=[StringNode(value=sql)])
+
+    # Execute the query
+    result = reader.execute(formatted_query)
+
+    return result
+
+
 class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     @classmethod
     def version(cls) -> str:
@@ -498,9 +601,90 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
         # Get metadata for those traces.
         assert isinstance(trace_ids, list), "trace_ids should be a list at this point"
-        traces, metadata_query_result = self._get_metadata_for_traces(
-            request=in_msg, trace_ids=trace_ids
-        )
+
+        # Use subquery optimization for large trace ID lists
+        # Check if subquery optimization is enabled via runtime config
+        use_subquery_optimization = get_config("use_subquery_optimization_for_traces", False)
+        if use_subquery_optimization:
+            # We need to reconstruct the trace_ids_query for the subquery approach
+            if self._is_cross_event_query(in_msg.filters):
+                # For cross-item queries, reconstruct the cross-item query
+                trace_filters = convert_trace_filters_to_trace_item_filter_with_type(
+                    list(in_msg.filters)
+                )
+                trace_ids_query = _build_cross_item_query(in_msg, trace_filters)
+
+                traces, metadata_query_result = self._get_metadata_for_traces_with_subquery(
+                    request=in_msg, trace_ids_query=trace_ids_query
+                )
+            else:
+                # For single-item queries, we can reconstruct the trace_ids_query
+                if in_msg.filters:
+                    item_type = in_msg.filters[0].item_type
+                elif in_msg.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
+                    item_type = in_msg.meta.trace_item_type
+                else:
+                    item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
+
+                trace_item_filters_expression = trace_item_filters_to_expression(
+                    TraceItemFilter(
+                        and_filter=AndFilter(
+                            filters=[f.filter for f in in_msg.filters],
+                        ),
+                    ),
+                    attribute_key_to_expression,
+                )
+                selected_columns: list[SelectedExpression] = [
+                    SelectedExpression(
+                        name="trace_id",
+                        expression=f.distinct(
+                            column("trace_id"),
+                        ),
+                    )
+                ]
+                entity = Entity(
+                    key=EntityKey("eap_items"),
+                    schema=get_entity(EntityKey("eap_items")).get_data_model(),
+                    sample=None,
+                )
+                trace_ids_query = Query(
+                    from_clause=entity,
+                    selected_columns=selected_columns,
+                    condition=base_conditions_and(
+                        in_msg.meta,
+                        trace_item_filters_expression,
+                        f.equals(column("item_type"), item_type),
+                    ),
+                    order_by=[
+                        OrderBy(
+                            direction=OrderByDirection.DESC,
+                            expression=column("organization_id"),
+                        ),
+                        OrderBy(
+                            direction=OrderByDirection.DESC,
+                            expression=column("project_id"),
+                        ),
+                        OrderBy(
+                            direction=OrderByDirection.DESC,
+                            expression=column("item_type"),
+                        ),
+                        OrderBy(
+                            direction=OrderByDirection.DESC,
+                            expression=column("timestamp"),
+                        ),
+                    ],
+                    limit=in_msg.limit if in_msg.limit > 0 else _DEFAULT_ROW_LIMIT,
+                    offset=in_msg.page_token.offset,
+                )
+                treeify_or_and_conditions(trace_ids_query)
+
+                traces, metadata_query_result = self._get_metadata_for_traces_with_subquery(
+                    request=in_msg, trace_ids_query=trace_ids_query
+                )
+        else:
+            traces, metadata_query_result = self._get_metadata_for_traces(
+                request=in_msg, trace_ids=trace_ids
+            )
         query_results.append(metadata_query_result)
 
         response_meta = extract_response_meta(
@@ -735,3 +919,158 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         )
 
         return _convert_results(request, results.result.get("data", [])), results
+
+    def _get_metadata_for_traces_with_subquery(
+        self,
+        request: GetTracesRequest,
+        trace_ids_query: Query,
+    ) -> tuple[list[GetTracesResponse.Trace], Any]:
+        """
+        Optimized version that uses a subquery to avoid large IN clauses.
+        """
+        # Get the subquery SQL for trace IDs
+        subquery_sql = _get_subquery_sql(request, trace_ids_query, self._timer)
+
+        # Build metadata query similar to the original method but with a placeholder
+        filter_expressions_by_item_type = self._get_trace_item_filter_expressions(request.filters)
+        trace_item_filters_expression = None
+        item_type = None
+        if request.meta.trace_item_type in filter_expressions_by_item_type:
+            trace_item_filters_expression = filter_expressions_by_item_type[
+                request.meta.trace_item_type
+            ]
+            item_type = request.meta.trace_item_type
+        elif len(filter_expressions_by_item_type) == 1:
+            trace_item_filters_expression = next(iter(filter_expressions_by_item_type.values()))
+            item_type = next(iter(filter_expressions_by_item_type.keys()))
+        elif len(filter_expressions_by_item_type) > 1:
+            trace_item_filters_expression = or_cond(
+                *[expression for expression in filter_expressions_by_item_type.values()]
+            )
+        else:
+            item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
+
+        selected_columns: list[SelectedExpression] = []
+        start_timestamp_requested = False
+        for trace_attribute in request.attributes:
+            if trace_attribute.key == TraceAttribute.Key.KEY_START_TIMESTAMP:
+                start_timestamp_requested = True
+            selected_columns.append(
+                SelectedExpression(
+                    name=_ATTRIBUTES[trace_attribute.key][0],
+                    expression=_attribute_to_expression(
+                        trace_attribute,
+                        trace_item_filters_expression,
+                        request_meta=request.meta,
+                    ),
+                )
+            )
+
+        # Add start_timestamp if not requested but needed for ordering
+        if not start_timestamp_requested:
+            trace_attribute = TraceAttribute(key=TraceAttribute.Key.KEY_START_TIMESTAMP)
+            selected_columns.append(
+                SelectedExpression(
+                    name=_ATTRIBUTES[trace_attribute.key][0],
+                    expression=_attribute_to_expression(
+                        trace_attribute,
+                        trace_item_filters_expression,
+                        request_meta=request.meta,
+                    ),
+                )
+            )
+
+        entity = Entity(
+            key=EntityKey("eap_items"),
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
+            sample=None,
+        )
+
+        # Use placeholder for trace IDs instead of actual list
+        # Use a valid UUID format that we can replace later
+        placeholder_trace_ids = ["00000000-0000-0000-0000-000000000000"]
+
+        if item_type:
+            condition = base_conditions_and(
+                request.meta,
+                in_cond(
+                    column("trace_id"),
+                    literals_array(None, [literal(trace_id) for trace_id in placeholder_trace_ids]),
+                ),
+                f.equals(column("item_type"), item_type),
+            )
+        else:
+            condition = base_conditions_and(
+                request.meta,
+                in_cond(
+                    column("trace_id"),
+                    literals_array(None, [literal(trace_id) for trace_id in placeholder_trace_ids]),
+                ),
+            )
+
+        query = Query(
+            from_clause=entity,
+            selected_columns=selected_columns,
+            condition=condition,
+            groupby=[
+                _attribute_to_expression(
+                    TraceAttribute(
+                        key=TraceAttribute.Key.KEY_TRACE_ID,
+                    ),
+                    None,
+                    request_meta=request.meta,
+                ),
+            ],
+            order_by=[
+                OrderBy(
+                    direction=OrderByDirection.DESC,
+                    expression=column("trace_start_timestamp"),
+                ),
+            ],
+        )
+
+        treeify_or_and_conditions(query)
+
+        # Get the metadata query SQL using dry run
+        settings = HTTPQuerySettings(dry_run=True)
+        if request.meta.debug:
+            settings = setup_trace_query_settings()
+            settings = HTTPQuerySettings(
+                debug=settings.get_debug(),
+                dry_run=True,
+                turbo=settings.get_turbo(),
+                consistent=settings.get_consistent(),
+            )
+
+        metadata_result = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=_build_snuba_request(request, query, query_settings=settings),
+            timer=self._timer,
+        )
+
+        metadata_sql = metadata_result.extra["sql"]
+
+        # Replace the IN clause with subquery using the subquery
+        # Find the ClickHouse format pattern and replace with IN subquery
+        placeholder_pattern = "in(trace_id, ['00000000-0000-0000-0000-000000000000'])"
+
+        # Use IN clause with subquery instead of placeholder
+        # Both queries use hex format for trace_id comparison
+        # Replace the placeholder IN clause with the subquery directly
+        in_subquery_clause = f"replaceAll(toString(trace_id), '-', '') IN ({subquery_sql})"
+        final_sql = metadata_sql.replace(placeholder_pattern, in_subquery_clause)
+
+        # Execute the final combined SQL directly
+        direct_result = _execute_direct_sql(final_sql, self._timer)
+
+        # Fix column names in the result to match what _convert_results expects
+        # The query returns "hex_trace_id" but _convert_results expects "trace_id"
+        if "data" in direct_result:
+            for row in direct_result["data"]:
+                if "hex_trace_id" in row:
+                    row["trace_id"] = row["hex_trace_id"]
+
+        # Convert result to the expected format
+        traces = _convert_results(request, direct_result.get("data", []))
+
+        return traces, metadata_result
