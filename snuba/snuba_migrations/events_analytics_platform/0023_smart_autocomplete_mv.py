@@ -19,7 +19,9 @@ _TYPES: dict[str, ColumnType[Any]] = {
 }
 
 
-_attr_columns = [Column(f"attrs_{type_name}", type_spec) for type_name, type_spec in _TYPES.items()]
+_attr_columns = [
+    Column(f"attrs_{type_name}", type_spec) for type_name, type_spec in _TYPES.items()
+]
 
 
 columns: List[Column[Modifiers]] = [

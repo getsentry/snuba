@@ -13,7 +13,9 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropTable(storage_set=StorageSetKey.METRICS, table_name=table_name)
+            operations.DropTable(
+                storage_set=StorageSetKey.METRICS, table_name=table_name
+            )
             for table_name in [
                 "metrics_buckets_local",
                 "metrics_counters_buckets_local",
@@ -30,7 +32,9 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropTable(storage_set=StorageSetKey.METRICS, table_name=table_name)
+            operations.DropTable(
+                storage_set=StorageSetKey.METRICS, table_name=table_name
+            )
             for table_name in [
                 "metrics_buckets_dist",
                 "metrics_counters_buckets_dist",

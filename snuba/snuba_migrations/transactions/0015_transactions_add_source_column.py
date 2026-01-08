@@ -15,7 +15,9 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     blocking = False
 
-    def __forward_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
+    def __forward_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
@@ -28,9 +30,13 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
             ),
         ]
 
-    def __backwards_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
+    def __backwards_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropColumn(StorageSetKey.TRANSACTIONS, table_name, "transaction_source"),
+            operations.DropColumn(
+                StorageSetKey.TRANSACTIONS, table_name, "transaction_source"
+            ),
         ]
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:

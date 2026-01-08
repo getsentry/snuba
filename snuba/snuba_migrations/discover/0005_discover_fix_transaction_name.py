@@ -13,16 +13,22 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     blocking = False
 
-    def __forward_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
+    def __forward_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             operations.ModifyColumn(
                 storage_set=StorageSetKey.DISCOVER,
                 table_name=table_name,
-                column=Column("transaction_name", String(Modifiers(low_cardinality=True))),
+                column=Column(
+                    "transaction_name", String(Modifiers(low_cardinality=True))
+                ),
             ),
         ]
 
-    def __backwards_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
+    def __backwards_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             operations.ModifyColumn(
                 storage_set=StorageSetKey.DISCOVER,

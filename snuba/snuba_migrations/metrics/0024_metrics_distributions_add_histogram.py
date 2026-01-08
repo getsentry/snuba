@@ -18,7 +18,9 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
     raw_table_name = "metrics_raw_v2_local"
 
-    def __forward_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
+    def __forward_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.METRICS,
@@ -31,7 +33,9 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
             )
         ]
 
-    def __backward_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
+    def __backward_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             # operations.DropColumn(
             #     storage_set=StorageSetKey.METRICS,

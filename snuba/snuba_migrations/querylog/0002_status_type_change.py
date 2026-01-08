@@ -14,7 +14,9 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     blocking = True
 
-    def __forward_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
+    def __forward_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             operations.ModifyColumn(
                 StorageSetKey.QUERYLOG,
@@ -31,8 +33,12 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
             ),
         ]
 
-    def __backwards_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
-        status_type = Enum[Modifiers]([("success", 0), ("error", 1), ("rate-limited", 2)])
+    def __backwards_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
+        status_type = Enum[Modifiers](
+            [("success", 0), ("error", 1), ("rate-limited", 2)]
+        )
         return [
             operations.ModifyColumn(
                 StorageSetKey.QUERYLOG,

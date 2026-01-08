@@ -25,13 +25,17 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.METRICS,
-                table_name=get_polymorphic_mv_variant_name("distributions", self.mv_version),
+                table_name=get_polymorphic_mv_variant_name(
+                    "distributions", self.mv_version
+                ),
             ),
             get_forward_view_migration_polymorphic_table_v3(
                 source_table_name=self.raw_table_name,
                 table_name=self.dist_table_name,
                 aggregation_col_schema=COL_SCHEMA_DISTRIBUTIONS_V2,
-                mv_name=get_polymorphic_mv_variant_name("distributions", self.mv_version),
+                mv_name=get_polymorphic_mv_variant_name(
+                    "distributions", self.mv_version
+                ),
                 aggregation_states=(
                     "quantilesState(0.5, 0.75, 0.9, 0.95, 0.99)((arrayJoin(distribution_values) AS values_rows)) as percentiles, "
                     "minState(values_rows) as min, "

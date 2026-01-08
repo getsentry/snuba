@@ -34,8 +34,12 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropColumn(StorageSetKey.TRANSACTIONS, "transactions_local", "http_method"),
-            operations.DropColumn(StorageSetKey.TRANSACTIONS, "transactions_local", "http_referer"),
+            operations.DropColumn(
+                StorageSetKey.TRANSACTIONS, "transactions_local", "http_method"
+            ),
+            operations.DropColumn(
+                StorageSetKey.TRANSACTIONS, "transactions_local", "http_referer"
+            ),
         ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
@@ -59,6 +63,10 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropColumn(StorageSetKey.TRANSACTIONS, "transactions_dist", "http_method"),
-            operations.DropColumn(StorageSetKey.TRANSACTIONS, "transactions_dist", "http_referer"),
+            operations.DropColumn(
+                StorageSetKey.TRANSACTIONS, "transactions_dist", "http_method"
+            ),
+            operations.DropColumn(
+                StorageSetKey.TRANSACTIONS, "transactions_dist", "http_referer"
+            ),
         ]
