@@ -43,8 +43,8 @@ schemars = { version = "0.8.16", features = ["uuid1"] }
 sentry = { version = "0.32.0", features = ["anyhow", "tracing"] }
 sentry-kafka-schemas = "2.0.2"
 sentry_protos = "0.4.8"
-sentry_arroyo = { version = "2.35.0", features = ["ssl"] }
-sentry_usage_accountant = { version = "0.1.0", features = ["kafka"] }
+sentry_arroyo = { version = "2.37.0", features = ["ssl"] }
+sentry_usage_accountant = { version = "0.1.2", features = ["kafka"] }
 seq-macro = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
