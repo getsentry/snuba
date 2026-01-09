@@ -168,6 +168,8 @@ COPY ./rust_snuba/ ./rust_snuba/
 # re-"install" rust for the testing image
 COPY --from=build_rust_snuba /root/.cargo/ /root/.cargo/
 COPY --from=build_rust_snuba /root/.rustup/ /root/.rustup/
+# remove documentation from the image
+RUN rm -rf /root/.rustup/toolchains/*/share/doc
 
 COPY --from=build_rust_snuba /usr/src/snuba/rust_snuba/target/wheels/ /tmp/rust_wheels/
 RUN set -ex; \
