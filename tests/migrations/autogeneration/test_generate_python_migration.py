@@ -1,8 +1,8 @@
+import ast
 from typing import Any
 
 import pytest
 import yaml
-from black import Mode, format_str
 
 from snuba.migrations.autogeneration.diff import generate_python_migration
 
@@ -150,7 +150,7 @@ class Migration(ClickhouseNodeMigration):
     migration = generate_python_migration(
         mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols)
     )
-    assert format_str(migration, mode=Mode()) == format_str(expected_migration, mode=Mode())
+    assert ast.dump(ast.parse(migration)) == ast.dump(ast.parse(expected_migration))
 
 
 def test_modify_column() -> None:
