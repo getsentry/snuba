@@ -13,11 +13,11 @@ from snuba import state
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.batching import BatchStepCustom
+from snuba.lw_deletions.bulk_delete_query import DeleteQueryMessage
 from snuba.lw_deletions.formatters import SearchIssuesFormatter
 from snuba.lw_deletions.strategy import FormatQuery, increment_by
 from snuba.lw_deletions.types import ConditionsType
 from snuba.utils.streams.topics import Topic as SnubaTopic
-from snuba.web.bulk_delete_query import DeleteQueryMessage
 
 ROWS_CONDITIONS = {
     5: {"project_id": [1], "group_id": [1, 2, 3, 4]},

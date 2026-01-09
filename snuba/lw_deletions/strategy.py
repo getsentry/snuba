@@ -19,6 +19,15 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
+from snuba.lw_deletions.bulk_delete_query import (
+    construct_or_conditions,
+    construct_query,
+)
+from snuba.lw_deletions.delete_query import (
+    TooManyOngoingMutationsError,
+    _execute_query,
+    _num_ongoing_mutations,
+)
 from snuba.lw_deletions.formatters import Formatter
 from snuba.lw_deletions.types import ConditionsBag
 from snuba.query.allocation_policies import AllocationPolicyViolations
@@ -26,13 +35,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import get_int_config, get_str_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.web import QueryException
-from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
 from snuba.web.constants import LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
-from snuba.web.delete_query import (
-    TooManyOngoingMutationsError,
-    _execute_query,
-    _num_ongoing_mutations,
-)
 
 TPayload = TypeVar("TPayload")
 

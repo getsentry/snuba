@@ -3,13 +3,16 @@ from typing import Sequence, Type
 import pytest
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
+from snuba.lw_deletions.bulk_delete_query import (
+    DeleteQueryMessage,
+    WireAttributeCondition,
+)
 from snuba.lw_deletions.formatters import (
     EAPItemsFormatter,
     Formatter,
     SearchIssuesFormatter,
 )
 from snuba.lw_deletions.types import ConditionsBag, ConditionsType
-from snuba.web.bulk_delete_query import DeleteQueryMessage, WireAttributeCondition
 
 
 def create_delete_query_message(

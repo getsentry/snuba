@@ -19,11 +19,11 @@ from snuba.datasets.deletion_settings import MAX_ROWS_TO_DELETE_DEFAULT
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
+from snuba.lw_deletions.bulk_delete_query import STORAGE_TOPIC
 from snuba.lw_deletions.formatters import STORAGE_FORMATTER
 from snuba.lw_deletions.strategy import LWDeletionsConsumerStrategyFactory
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
-from snuba.web.bulk_delete_query import STORAGE_TOPIC
 
 # A longer batch time for deletes is reasonable
 # since we want fewer mutations
@@ -126,9 +126,7 @@ def lw_deletions_consumer(
             "consumer_group": consumer_group,
             "storage": storage,
         }
-        metrics = MetricsWrapper(
-            environment.metrics, "lw_deletions_consumer", tags=metrics_tags
-        )
+        metrics = MetricsWrapper(environment.metrics, "lw_deletions_consumer", tags=metrics_tags)
         configure_metrics(StreamMetricsAdapter(metrics), force=True)
         consumer_config = resolve_consumer_config(
             storage_names=[storage],

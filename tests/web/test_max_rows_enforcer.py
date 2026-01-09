@@ -12,11 +12,11 @@ from snuba.datasets.deletion_settings import DeletionSettings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.lw_deletions.delete_query import _enforce_max_rows
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import and_cond, column, equals, literal
 from snuba.query.exceptions import TooManyDeleteRowsException
 from snuba.state import set_config
-from snuba.web.delete_query import _enforce_max_rows
 from tests.base import BaseApiTest
 from tests.datasets.configuration.utils import ConfigurationTest
 from tests.helpers import write_unprocessed_events

@@ -104,7 +104,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             headers={"referer": "test"},
         )
 
-    @patch("snuba.web.bulk_delete_query.produce_delete_query")
+    @patch("snuba.lw_deletions.bulk_delete_query.produce_delete_query")
     def test_simple_delete(self, mock_produce_delete: Mock) -> None:
         set_config("read_through_cache.short_circuit", 1)
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
