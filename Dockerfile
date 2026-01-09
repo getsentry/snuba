@@ -101,7 +101,8 @@ COPY --from=build_rust_snuba_deps /usr/src/snuba/rust_snuba/target/ ./rust_snuba
 COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
     cd ./rust_snuba/; \
-    uvx maturin build --release --compatibility linux --locked
+    uvx maturin build --release --compatibility linux --locked; \
+    rm -rf /root/.rustup/toolchains/*/share/doc
 
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
