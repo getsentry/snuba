@@ -1,0 +1,276 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>Snuba Data Model &#8212; Snuba 26.1.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Snuba Data Slicing (under development)" href="slicing.html" />
+    <link rel="prev" title="Snuba Architecture Overview" href="overview.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="snuba-data-model">
+<h1>Snuba Data Model<a class="headerlink" href="#snuba-data-model" title="Permalink to this heading">¶</a></h1>
+<p>This section explains how data is organized in Snuba and how user facing
+data is mapped to the underlying database (Clickhouse in this case).</p>
+<p>The Snuba data model is divided horizontally into a <strong>logical model</strong> and
+a <strong>physical model</strong>. The logical data model is what is visible to the Snuba
+clients through the Snuba query language. Elements in this model may or may
+not map 1:1 to tables in the database. The physical model, instead, maps 1:1
+to database concepts (like tables and views).</p>
+<p>The reasoning behind this division is that it allows Snuba to expose a
+stable interface through the logical data model and perform complex mapping
+internally to execute a query on different tables (part of the physical
+model) to improve performance in a way that is transparent to the client.</p>
+<p>The rest of this section outlines the concepts that compose the two models
+and how they are connected to each other.</p>
+<p>The main concepts, described below are dataset, entity and storage.</p>
+<img alt="../_images/datamodel.png" src="../_images/datamodel.png" />
+<section id="datasets">
+<h2>Datasets<a class="headerlink" href="#datasets" title="Permalink to this heading">¶</a></h2>
+<p>A Dataset is a name space over Snuba data. It provides its own schema and
+it is independent from other datasets both in terms of logical model and
+physical model.</p>
+<p>Examples of datasets are, discover, outcomes, sessions. There is no
+relationship between them.</p>
+<p>A Dataset can be seen as a container for the components that define its
+abstract data model and its concrete data model that are described below.</p>
+<p>In term of query language, every Snuba query targets one and only one
+Dataset, and the Dataset can provide extensions to the query language.</p>
+</section>
+<section id="entities-and-entity-types">
+<h2>Entities and Entity Types<a class="headerlink" href="#entities-and-entity-types" title="Permalink to this heading">¶</a></h2>
+<p>The fundamental block of the logical data model Snuba exposes to the client
+is the Entity. In the logical model an entity represents an instance of an
+abstract concept (like a transaction or an error). In practice an <em>Entity</em>
+corresponds to a row in a table in the database.  The <em>Entity Type</em> is the
+class of the Entity (like Error**s** or Transaction**s**).</p>
+<p>The logical data model is composed by a set of <em>Entity Types</em> and by their
+relationships.</p>
+<p>Each <em>Entity Type</em> has a schema which is defined by a list of fields with
+their associated abstract data types. The schemas of all the <em>Entity Types</em>
+of a Dataset (there can be several) compose the logical data model that is
+visible to the Snuba client and against which Snuba Queries are validated.
+No lower level concept is supposed to be exposed.</p>
+<p>Entity Types are unequivocally contained in a Dataset. An Entity Type cannot
+be present in multiple Datasets.</p>
+<section id="relationships-between-entity-types">
+<h3>Relationships between Entity Types<a class="headerlink" href="#relationships-between-entity-types" title="Permalink to this heading">¶</a></h3>
+<p>Entity Types in a Dataset are logically related. There are two types of
+relationships we support:</p>
+<ul class="simple">
+<li><p>Entity Set Relationship. This mimics foreign keys. This relationship is
+meant to allow joins between Entity Types. It only supports one-to-one
+and one-to-many relationships at this point in time.</p></li>
+<li><p>Inheritance Relationship. This mimics nominal subtyping. A group of Entity
+Types can share a parent Entity Type. Subtypes inherit the schema from the
+parent type. Semantically the parent Entity Type must represent the union
+of all the Entities whose type inherit from it. It also must be possible
+to query the parent Entity Type. This cannot be just a logical relationship.</p></li>
+</ul>
+</section>
+<section id="entity-type-and-consistency">
+<h3>Entity Type and consistency<a class="headerlink" href="#entity-type-and-consistency" title="Permalink to this heading">¶</a></h3>
+<p>The Entity Type is the largest unit where Snuba <strong>can</strong> provide some strong
+data consistency guarantees. Specifically it is possible to query an Entity
+Type expecting Serializable Consistency (please don’t use that. Seriously,
+if you think you need that, you probably don’t). This does not extend to
+any query that spans multiple Entity Types where, at best, we will have
+eventual consistency.</p>
+<p>This also has an impact on Subscription queries. These can only work on one
+Entity Type at a time since, otherwise, they would require consistency between
+Entity Types, which we do not support.</p>
+<div class="admonition attention">
+<p class="admonition-title">Attention</p>
+<p>To be precise the unit of consistency (depending on the Entity Type)
+can be even smaller and depend on how the data ingestion topics
+are partitioned (project_id for example), the Entity Type is the
+maximum Snuba allows. More details are (ok, will be) provided in
+the Ingestion section of this guide.</p>
+</div>
+</section>
+</section>
+<section id="storage">
+<h2>Storage<a class="headerlink" href="#storage" title="Permalink to this heading">¶</a></h2>
+<p>Storages represent and define the physical data model of a Dataset. Each
+Storage represent is materialized in a physical database concept like a table
+or a materialized view. As a consequence each Storage has a schema defined
+by fields with their types that reflects the physical schema of the DB
+table/view the Storage maps to and it is able to provide all the details to
+generate DDL statements to build the tables on the database.</p>
+<p>Storages are able to map the logical concepts in the logical model discussed
+above to the physical concept of the database, thus each Storage needs to be
+related with an Entity Type. Specifically:</p>
+<ul class="simple">
+<li><p>Each Entity Type must be backed by least one Readable Storage (a Storage we
+can run query on), but can be backed by multiple Storages (for example a
+pre-aggregate materialized view). Multiple Storages per Entity Type are meant
+to allow query optimizations.</p></li>
+<li><p>Each Entity Type must be backed by one and only one Writable
+Storage that is used to ingest data and fill in the database tables.</p></li>
+<li><p>Each Storage is backing exclusively one Entity Type.</p></li>
+</ul>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Permalink to this heading">¶</a></h2>
+<p>This section provides some examples of how the Snuba data model can represent
+some real world models.</p>
+<p>These case studies are not necessarily reflecting the current Sentry production
+model nor they are part of the same deployment. They have to be considered as
+examples taken in isolation.</p>
+<section id="single-entity-dataset">
+<h3>Single Entity Dataset<a class="headerlink" href="#single-entity-dataset" title="Permalink to this heading">¶</a></h3>
+<p>This looks like the Outcomes dataset used by Sentry.  This actually does not
+reflect Outcomes as of April 2020. It is though the design Outcomes should
+move towards.</p>
+<img alt="../_images/singleentity.png" src="../_images/singleentity.png" />
+<p>This Dataset has one Entity Type only which represent an individual Outcome
+ingested by the Dataset. Querying raw Outcomes is painfully slow so we have
+two Storages. One is the Raw storage that reflects the data we ingest and a
+materialized view that computes hourly aggregations that are much more efficient
+to query. The Query Planner would pick the storage depending if the query
+can be executed on the aggregated data or not.</p>
+</section>
+<section id="multi-entity-type-dataset">
+<h3>Multi Entity Type Dataset<a class="headerlink" href="#multi-entity-type-dataset" title="Permalink to this heading">¶</a></h3>
+<p>The canonical example of this Dataset is the Discover dataset.</p>
+<img alt="../_images/multientity.png" src="../_images/multientity.png" />
+<p>This has three Entity Types. Errors, Transaction and they both inherit from
+Events. These form the logical data model, thus querying the Events Entity
+Type gives the union of Transactions and Errors but it only allows common
+fields between the two to be present in the query.</p>
+<p>The Errors Entity Type is backed by two Storages for performance reasons.
+One is the main Errors Storage that is used to ingest data, the other is a
+read only view that is putting less load on Clickhosue when querying but
+that offers lower consistency guarantees. Transactions only have one storage
+and there is a Merge Table to serve Events (which is essentially a view over
+the union of the two tables).</p>
+</section>
+<section id="joining-entity-types">
+<h3>Joining Entity types<a class="headerlink" href="#joining-entity-types" title="Permalink to this heading">¶</a></h3>
+<p>This is a simple example of a dataset that includes multiple Entity Types
+that can be joined together in a query.</p>
+<img alt="../_images/joins.png" src="../_images/joins.png" />
+<p>GroupedMessage and GroupAssingee can be part of a left join query with Errors.
+The rest is similar with what was discussed in the previous examples.</p>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/snuba.svg" alt="Logo"/>
+            </a></p>
+<h1 class="logo"><a href="../index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getstarted.html">Getting started with Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="overview.html#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="queryprocessing.html">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration/overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../query/overview.html">Querying Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/snql.html">The SnQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/mql.html">The MQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migrations/modes.html">Snuba Migration Modes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/environment.html">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/schema_design.html">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html">Profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#regular-transaction-profiling">Regular transaction profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#on-demand-profiling">On-demand profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="overview.html" title="previous chapter">Snuba Architecture Overview</a></li>
+      <li>Next: <a href="slicing.html" title="next chapter">Snuba Data Slicing (under development)</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.1.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/architecture/datamodel.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

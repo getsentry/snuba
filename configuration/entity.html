@@ -1,0 +1,222 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>Entity Schema &#8212; Snuba 26.1.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Entity Subscription Schema" href="entity_subscription.html" />
+    <link rel="prev" title="Dataset Schema" href="dataset.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="entity-schema">
+<h1>Entity Schema<a class="headerlink" href="#entity-schema" title="Permalink to this heading">¶</a></h1>
+<section id="properties">
+<h2>Properties<a class="headerlink" href="#properties" title="Permalink to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>version</strong>: Version of schema.</p></li>
+<li><p><strong>kind</strong>: Component kind.</p></li>
+<li><p><strong>schema</strong> <em>(array)</em>: Objects (or nested objects) representing columns containg a name, type and args.</p></li>
+<li><p><strong>name</strong> <em>(string)</em>: Name of the entity.</p></li>
+<li><p><strong>storages</strong> <em>(array)</em>: An array of storages and their associated translation mappers.</p>
+<ul>
+<li><p><strong>storage</strong> <em>(string)</em>: Name of a readable or writable storage class which provides an abstraction to read from a table or a view in ClickHouse.</p></li>
+<li><p><strong>is_writable</strong> <em>(boolean)</em>: Marks the storage is a writable one.</p></li>
+<li><p><strong>translation_mappers</strong> <em>(object)</em>: Represents the set of rules used to translates different expression types.</p>
+<ul>
+<li><p><strong>columns</strong> <em>(array)</em></p>
+<ul>
+<li><p><strong>mapper</strong> <em>(string)</em>: Mapper class name.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate Mapper class.</p></li>
+</ul>
+</li>
+<li><p><strong>functions</strong> <em>(array)</em></p>
+<ul>
+<li><p><strong>mapper</strong> <em>(string)</em>: Mapper class name.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate Mapper class.</p></li>
+</ul>
+</li>
+<li><p><strong>curried_functions</strong> <em>(array)</em></p>
+<ul>
+<li><p><strong>mapper</strong> <em>(string)</em>: Mapper class name.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate Mapper class.</p></li>
+</ul>
+</li>
+<li><p><strong>subscriptables</strong> <em>(array)</em></p>
+<ul>
+<li><p><strong>mapper</strong> <em>(string)</em>: Mapper class name.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate Mapper class.</p></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>join_relationships</strong> <em>(object)</em></p>
+<ul>
+<li><p><strong>^.*$</strong> <em>(object)</em>: The join relationship. The key for this relationship is how the relationship is specified in queries (MATCH x -[key]-&gt; y).</p>
+<ul>
+<li><p><strong>rhs_entity</strong> <em>(string)</em>: The entity key of the rhs entity to join with.</p></li>
+<li><p><strong>columns</strong> <em>(array)</em>: A sequence of tuples of columns to join on, in the form (left, right).</p></li>
+<li><p><strong>join_type</strong> <em>(string)</em>: The type of join that can be performed (either ‘left’ or ‘inner’.</p></li>
+<li><p><strong>equivalences</strong> <em>(array)</em>: Tracking columns in the two entities that are not part of the join key but are still equivalent.</p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>storage_selector</strong> <em>(object)</em>:</p>
+<ul>
+<li><p><strong>selector</strong> <em>(string)</em>: QueryStorageSelector class name.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate QueryStorageSelector class.</p></li>
+</ul>
+</li>
+<li><p><strong>query_processors</strong> <em>(array)</em>: Represents a transformation applied to the ClickHouse query.</p>
+<ul>
+<li><p><strong>processor</strong> <em>(string)</em>: Name of LogicalQueryProcessor class config key. Responsible for the transformation applied to a query.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate QueryProcessor class.</p></li>
+</ul>
+</li>
+<li><p><strong>validators</strong> <em>(array)</em>: The validation logic used on the ClickHouse query.</p>
+<ul>
+<li><p><strong>validator</strong> <em>(string)</em>: Validator class name.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate Validator class.</p></li>
+</ul>
+</li>
+<li><p><strong>validate_data_model</strong> <em>([‘string’, ‘null’])</em>: The level at which mismatched functions and columns when querying the entity should be logged.</p></li>
+<li><p><strong>required_time_column</strong> <em>([‘string’, ‘null’])</em>: The name of the required time column specifed in schema.</p></li>
+<li><p><strong>partition_key_column_name</strong> <em>([‘string’, ‘null’])</em>: The column name, if this entity is partitioned, to select slice.</p></li>
+<li><p><strong>subscription_processors</strong> <em>(array)</em></p>
+<ul>
+<li><p><strong>processor</strong> <em>(string)</em>: Entity Subscription Processor class name.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate Entity Subscription Processor class.</p></li>
+</ul>
+</li>
+<li><p><strong>subscription_validators</strong> <em>(array)</em></p>
+<ul>
+<li><p><strong>validator</strong> <em>(string)</em>: Entity Subscription Validator class name.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate Entity Subscription Validator class.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/snuba.svg" alt="Logo"/>
+            </a></p>
+<h1 class="logo"><a href="../index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getstarted.html">Getting started with Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/datamodel.html">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/queryprocessing.html">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../query/overview.html">Querying Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/snql.html">The SnQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/mql.html">The MQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migrations/modes.html">Snuba Migration Modes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/environment.html">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/schema_design.html">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html">Profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#regular-transaction-profiling">Regular transaction profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#on-demand-profiling">On-demand profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="overview.html">Dataset Configuration</a><ul>
+      <li>Previous: <a href="dataset.html" title="previous chapter">Dataset Schema</a></li>
+      <li>Next: <a href="entity_subscription.html" title="next chapter">Entity Subscription Schema</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.1.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/configuration/entity.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

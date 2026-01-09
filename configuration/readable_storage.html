@@ -1,0 +1,203 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>Readable Storage Schema &#8212; Snuba 26.1.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Writable Storage Schema" href="writable_storage.html" />
+    <link rel="prev" title="Migration Group Schema" href="migration_group.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="readable-storage-schema">
+<h1>Readable Storage Schema<a class="headerlink" href="#readable-storage-schema" title="Permalink to this heading">¶</a></h1>
+<section id="properties">
+<h2>Properties<a class="headerlink" href="#properties" title="Permalink to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>version</strong>: Version of schema.</p></li>
+<li><p><strong>kind</strong>: Component kind.</p></li>
+<li><p><strong>name</strong> <em>(string)</em>: Name of the readable storage.</p></li>
+<li><p><strong>storage</strong> <em>(object)</em>:</p>
+<ul>
+<li><p><strong>key</strong> <em>(string)</em>: A unique key identifier for the storage.</p></li>
+<li><p><strong>set_key</strong> <em>(string)</em>: A unique key identifier for a collection of storages located in the same cluster.</p></li>
+</ul>
+</li>
+<li><p><strong>readiness_state</strong> <em>(string)</em>: The readiness state defines the availability of the storage in various environments. Internally, this label is used to determine which environments this storage is released in. There for four different readiness states: limited, deprecrate, partial, and complete. Different environments support a set of these readiness_states . If this is a new storage, start with limited which only exposes the storage to CI and local development. Must be one of: [‘limited’, ‘deprecate’, ‘partial’, ‘complete’, ‘experimental’].</p></li>
+<li><p><strong>schema</strong> <em>(object)</em>:</p>
+<ul>
+<li><p><strong>columns</strong> <em>(array)</em>: Objects (or nested objects) representing columns containg a name, type and args.</p></li>
+<li><p><strong>local_table_name</strong> <em>(string)</em>: The local table name in a single-node ClickHouse.</p></li>
+<li><p><strong>dist_table_name</strong> <em>(string)</em>: The distributed table name in distributed ClickHouse.</p></li>
+<li><p><strong>not_deleted_mandatory_condition</strong> <em>(string)</em>: The name of the column flagging a deletion, eg deleted column in Errors. Defining this column here will ensure any query served by this storage explicitly filters out any ‘deleted’ rows. Should only be used for storages supporting deletion replacement.</p></li>
+<li><p><strong>partition_format</strong> <em>(array)</em>: The format of the partitions in Clickhouse. Used in the cleanup job.</p></li>
+</ul>
+</li>
+<li><p><strong>query_processors</strong> <em>(array)</em></p>
+<ul>
+<li><p><strong>processor</strong> <em>(string)</em>: Name of ClickhouseQueryProcessor class config key. Responsible for the transformation applied to a query.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate QueryProcessor class.</p></li>
+</ul>
+</li>
+<li><p><strong>deletion_settings</strong> <em>(object)</em>:</p>
+<ul>
+<li><p><strong>is_enabled</strong> <em>(integer)</em></p></li>
+<li><p><strong>tables</strong> <em>(array)</em>: Names of the tables to delete from.</p></li>
+<li><p><strong>allowed_columns</strong> <em>(array)</em>: Columns allowed in WHERE clause.</p></li>
+<li><p><strong>max_rows_to_delete</strong> <em>(integer)</em></p></li>
+<li><p><strong>bulk_delete_only</strong> <em>(boolean)</em></p></li>
+<li><p><strong>allowed_attributes_by_item_type</strong> <em>(object)</em>: Mapping of item_type to list of allowed attributes for deletion. Can contain additional properties.</p>
+<ul>
+<li><p><strong>Additional Properties</strong> <em>(array)</em></p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>deletion_processors</strong> <em>(array)</em></p>
+<ul>
+<li><p><strong>processor</strong> <em>(string)</em>: This processor should validate the query against the storage.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate DeletionProcessor class.</p></li>
+</ul>
+</li>
+<li><p><strong>mandatory_condition_checkers</strong> <em>(array)</em></p>
+<ul>
+<li><p><strong>condition</strong> <em>(string)</em>: Name of ConditionChecker class config key. Responsible for running final checks on a query to ensure that transformations haven’t impacted/removed conditions required for security reasons.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate ConditionChecker class.</p></li>
+</ul>
+</li>
+<li><p><strong>allocation_policies</strong> <em>(array)</em></p>
+<ul>
+<li><p><strong>name</strong> <em>(string)</em>: Name of the AllocationPolicy used for allocating read resources per query on this storage.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate AllocationPolicy class.</p></li>
+</ul>
+</li>
+<li><p><strong>delete_allocation_policies</strong> <em>(array)</em></p>
+<ul>
+<li><p><strong>name</strong> <em>(string)</em>: Name of the AllocationPolicy used for allocating read resources per query on this storage.</p></li>
+<li><p><strong>args</strong> <em>(object)</em>: Key/value mappings required to instantiate AllocationPolicy class.</p></li>
+</ul>
+</li>
+<li><p><strong>required_time_column</strong> <em>([‘string’, ‘null’])</em>: The name of the required time column specifed in schema.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/snuba.svg" alt="Logo"/>
+            </a></p>
+<h1 class="logo"><a href="../index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getstarted.html">Getting started with Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/datamodel.html">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/queryprocessing.html">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../query/overview.html">Querying Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/snql.html">The SnQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/mql.html">The MQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migrations/modes.html">Snuba Migration Modes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/environment.html">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/schema_design.html">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html">Profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#regular-transaction-profiling">Regular transaction profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#on-demand-profiling">On-demand profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="overview.html">Dataset Configuration</a><ul>
+      <li>Previous: <a href="migration_group.html" title="previous chapter">Migration Group Schema</a></li>
+      <li>Next: <a href="writable_storage.html" title="next chapter">Writable Storage Schema</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.1.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/configuration/readable_storage.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

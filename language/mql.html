@@ -1,0 +1,218 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>The MQL query language &#8212; Snuba 26.1.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Snuba Migration Modes" href="../migrations/modes.html" />
+    <link rel="prev" title="The SnQL query language" href="snql.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="the-mql-query-language">
+<h1>The MQL query language<a class="headerlink" href="#the-mql-query-language" title="Permalink to this heading">¶</a></h1>
+<p>This document describes the Metrics Query Language (MQL). For more details on
+how to actually send a query to Snuba see <a class="reference internal" href="../query/overview.html"><span class="doc">Querying Snuba</span></a>. The full grammar
+can be found in the <code class="docutils literal notranslate"><span class="pre">snuba-sdk</span></code> <a class="reference external" href="https://github.com/getsentry/snuba-sdk/blob/main/snuba_sdk/mql/mql.py">repository</a>.</p>
+<p>Queries are composed at their core of timeseries, which are aggregate functions on a metric:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">aggregate</span> <span class="p">(</span> <span class="n">metric_name</span> <span class="o">/</span> <span class="n">mri</span> <span class="p">)</span>
+
+<span class="n">e</span><span class="o">.</span><span class="n">g</span><span class="o">.</span>
+
+<span class="nb">sum</span><span class="p">(</span><span class="n">transaction</span><span class="o">.</span><span class="n">duration</span><span class="p">)</span>
+<span class="n">quantiles</span><span class="p">(</span><span class="mf">0.99</span><span class="p">)(</span><span class="n">d</span><span class="p">:</span><span class="n">sessions</span><span class="o">/</span><span class="n">duration</span><span class="nd">@second</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Timeseries can also be filtered and grouped by tags:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">aggregate</span> <span class="p">(</span> <span class="n">metric_name</span> <span class="p">)</span> <span class="p">{</span> <span class="n">tagkey</span><span class="p">:</span><span class="n">tagvalue</span> <span class="p">}</span> <span class="n">by</span> <span class="n">tagkey</span>
+
+<span class="n">e</span><span class="o">.</span><span class="n">g</span><span class="o">.</span>
+
+<span class="nb">sum</span><span class="p">(</span><span class="n">transaction</span><span class="o">.</span><span class="n">duration</span><span class="p">){</span><span class="n">environment</span><span class="p">:</span><span class="n">prod</span><span class="p">}</span> <span class="n">by</span> <span class="n">status_code</span>
+</pre></div>
+</div>
+<p>These timeseries can then be combined with arithmetic operations or referenced in custom functions:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">timeseries</span> <span class="n">arithmetic_op</span> <span class="n">timeseries</span>
+
+<span class="n">function_name</span> <span class="p">(</span> <span class="n">timeseries</span> <span class="o">/</span> <span class="n">parameter</span> <span class="p">(,</span> <span class="n">timeseries</span> <span class="o">/</span> <span class="n">parameter</span><span class="p">)</span><span class="o">*</span> <span class="p">)</span>
+
+<span class="n">e</span><span class="o">.</span><span class="n">g</span><span class="o">.</span>
+
+<span class="nb">sum</span><span class="p">(</span><span class="n">transaction</span><span class="o">.</span><span class="n">duration</span><span class="p">)</span> <span class="o">+</span> <span class="nb">max</span><span class="p">(</span><span class="n">transaction</span><span class="o">.</span><span class="n">measurements</span><span class="o">.</span><span class="n">fcp</span><span class="p">)</span>
+<span class="n">apdex</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">transaction</span><span class="o">.</span><span class="n">duration</span><span class="p">),</span> <span class="mi">300</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Formulas, functions and timeseries all support filters and grouping and can be combined in almost any way:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>count(transaction.duration){!status_code:200} / count(transaction.duration) # failure rate
+
+apdex(sum(transaction.duration) + sum(transaction.measurements.fcp), 300){environment:prod} by status_code
+</pre></div>
+</div>
+<p>However, there is information about the query that is not contained in the query string above. That’s why a MQL query
+to Snuba also contains a <code class="docutils literal notranslate"><span class="pre">mql_context</span></code> dictionary:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;mql&quot;</span><span class="p">:</span> <span class="s2">&quot;sum(transaction.duration)&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;mql_context&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;entity&quot;</span><span class="p">:</span> <span class="s2">&quot;generic_metrics_distributions&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;start&quot;</span><span class="p">:</span> <span class="s2">&quot;2023-01-02T03:04:05+00:00&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;end&quot;</span><span class="p">:</span> <span class="s2">&quot;2023-01-16T03:04:05+00:00&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;rollup&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;orderby&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;granularity&quot;</span><span class="p">:</span> <span class="mi">3600</span><span class="p">,</span>
+            <span class="s2">&quot;interval&quot;</span><span class="p">:</span> <span class="mi">3600</span><span class="p">,</span>
+            <span class="s2">&quot;with_totals&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="s2">&quot;scope&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;org_ids&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+            <span class="s2">&quot;project_ids&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">11</span><span class="p">],</span>
+            <span class="s2">&quot;use_case_id&quot;</span><span class="p">:</span> <span class="s2">&quot;transactions&quot;</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="s2">&quot;limit&quot;</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>
+        <span class="s2">&quot;offset&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+        <span class="s2">&quot;indexer_mappings&quot;</span><span class="p">:</span> <span class="p">{},</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The Snuba SDK provides convenience classes around the more complex fields.</p>
+<section id="start-end">
+<h2>start / end<a class="headerlink" href="#start-end" title="Permalink to this heading">¶</a></h2>
+<p>The start and end fields are ISO 8601 timestamps. They are required for all queries. In the SDK, a <code class="docutils literal notranslate"><span class="pre">MetricsQuery</span></code> object has a <code class="docutils literal notranslate"><span class="pre">start</span></code> and <code class="docutils literal notranslate"><span class="pre">end</span></code>
+field.</p>
+</section>
+<section id="limit-offset">
+<h2>limit / offset<a class="headerlink" href="#limit-offset" title="Permalink to this heading">¶</a></h2>
+<p>Specified in the <code class="docutils literal notranslate"><span class="pre">MetricsQuery</span></code> object with the <code class="docutils literal notranslate"><span class="pre">limit</span></code> and <code class="docutils literal notranslate"><span class="pre">offset</span></code> fields. These are optional and default to 1000 and 0 respectively.</p>
+</section>
+<section id="rollup">
+<h2>Rollup<a class="headerlink" href="#rollup" title="Permalink to this heading">¶</a></h2>
+<p>See <a class="reference external" href="https://github.com/getsentry/snuba-sdk/blob/main/snuba_sdk/timeseries.py">here</a> for the full object.</p>
+<p>The rollup object contains information about how the timeseries should be grouped. The <code class="docutils literal notranslate"><span class="pre">interval</span></code> field specifies what time interval the timeseries should be grouped by.
+The <code class="docutils literal notranslate"><span class="pre">total</span></code> field serves two purposes: if the <code class="docutils literal notranslate"><span class="pre">interval</span></code> is set, <code class="docutils literal notranslate"><span class="pre">total</span></code> determines whether a totals row should be provided alongside the timeseries.
+Otherwise, it means that instead of a timeseries, a single value should be returned (or one per tag value, if the query is grouped by a tag). In this case, <code class="docutils literal notranslate"><span class="pre">orderby</span></code> can be used
+to specify how the results should be ordered. <code class="docutils literal notranslate"><span class="pre">granularity</span></code> is inferred automatically from the start/end times and the interval, and aligns with the time buckets stored in Clickhouse.</p>
+</section>
+<section id="scope">
+<h2>Scope<a class="headerlink" href="#scope" title="Permalink to this heading">¶</a></h2>
+<p>The scope object contains information about the query that is not represented in tags. Currently that is project ID(s), organization ID(s) and use case ID.
+The use case ID is automatically inferred based on the MRI of the metrics in the query. Queries across use case IDs are not supported.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/snuba.svg" alt="Logo"/>
+            </a></p>
+<h1 class="logo"><a href="../index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getstarted.html">Getting started with Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/datamodel.html">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/queryprocessing.html">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration/overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../query/overview.html">Querying Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="snql.html">The SnQL query language</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">The MQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migrations/modes.html">Snuba Migration Modes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/environment.html">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/schema_design.html">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html">Profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#regular-transaction-profiling">Regular transaction profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#on-demand-profiling">On-demand profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="snql.html" title="previous chapter">The SnQL query language</a></li>
+      <li>Next: <a href="../migrations/modes.html" title="next chapter">Snuba Migration Modes</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.1.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/language/mql.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

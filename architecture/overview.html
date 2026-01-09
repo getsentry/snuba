@@ -1,0 +1,248 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>Snuba Architecture Overview &#8212; Snuba 26.1.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Snuba Data Model" href="datamodel.html" />
+    <link rel="prev" title="Getting started with Snuba" href="../getstarted.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="snuba-architecture-overview">
+<h1>Snuba Architecture Overview<a class="headerlink" href="#snuba-architecture-overview" title="Permalink to this heading">¶</a></h1>
+<p>Snuba is a time series oriented data store backed by
+<a class="reference external" href="https://clickhouse.tech/">Clickhouse</a>, which is a columnary storage
+distributed database well suited for the kind of queries Snuba serves.</p>
+<p>Data is fully stored in Clickhouse tables and materialized views,
+it is ingested through input streams (only Kafka topics today)
+and can be queried either through point in time queries or through
+streaming queries (subscriptions).</p>
+<img alt="../_images/overview.png" src="../_images/overview.png" />
+<section id="storage">
+<h2>Storage<a class="headerlink" href="#storage" title="Permalink to this heading">¶</a></h2>
+<p>Clickhouse was chosen as backing storage because it provides a good balance
+of the real time performance Snuba needs, its distributed and replicated
+nature, its flexibility in terms of storage engines and consistency guarantees.</p>
+<p>Snuba data is stored in Clickhouse tables and Clickhouse materialized views.
+Multiple Clickhouse <a class="reference external" href="https://clickhouse.tech/docs/en/engines/table-engines/">storage engines</a>
+are used depending on the goal of the table.</p>
+<p>Snuba data is organized in multiple Datasets which represent independent
+partitions of the data model. More details in the <a class="reference internal" href="datamodel.html"><span class="doc">Snuba Data Model</span></a>
+section.</p>
+</section>
+<section id="ingestion">
+<h2>Ingestion<a class="headerlink" href="#ingestion" title="Permalink to this heading">¶</a></h2>
+<p>Snuba does not provide an api endpoint to insert rows (except when running
+in debug mode). Data is loaded from multiple input streams, processed by
+a series of consumers and written to Clickhouse tables.</p>
+<p>A consumer consumes one or multiple topics and writes on one or multiple
+tables. No table is written onto by multiple consumers as of today. This
+allows some consistency guarantees discussed below.</p>
+<p>Data ingestion is most effective in batches (both for Kafka but especially
+for Clickhouse). Our consumers support batching and guarantee that one batch
+of events taken from Kafka is passed to Clickhouse at least once. By properly
+selecting the Clickhouse table engine to deduplicate rows we can achieve
+exactly once semantics if we accept eventual consistency.</p>
+</section>
+<section id="query">
+<h2>Query<a class="headerlink" href="#query" title="Permalink to this heading">¶</a></h2>
+<p>The simplest query system is point in time. Queries are expressed in a
+the SnQL language (<a class="reference internal" href="../language/snql.html"><span class="doc">The SnQL query language</span></a>) or MQL language (<a class="reference internal" href="../language/mql.html"><span class="doc">The MQL query language</span></a>) and are sent as post HTTP calls.
+The query engine processes the query (process described in
+<a class="reference internal" href="queryprocessing.html"><span class="doc">Snuba Query Processing</span></a>) and transforms it into a ClickHouse
+query.</p>
+<p>Streaming queries (done through the Subscription Engine) allow the client
+to receive query results in a push way. In this case an HTTP endpoint allows
+the client to register a streaming query. Then The Subscription Consumer consumes
+to the topic that is used to fill the relevant Clickhouse table for updates,
+periodically runs the query through the Query Engine and produces the result
+on the subscriptions Kafka topic.</p>
+</section>
+<section id="data-consistency">
+<h2>Data Consistency<a class="headerlink" href="#data-consistency" title="Permalink to this heading">¶</a></h2>
+<p>Different consistency models coexist in Snuba to provide different guarantees.</p>
+<p>By default Snuba is eventually consistent. When running a query, by default,
+there is no guarantee of monotonic reads since Clickhouse is multi-leader
+and a query can hit any replica and there is no guarantee the replicas will
+be up to date. Also, by default, there is no guarantee Clickhouse will have
+reached a consistent state on its own.</p>
+<p>It is possible to achieve strong consistency on specific query by forcing
+Clickhouse to reach consistency before the query is executed (FINAL keyword),
+and by forcing queries to hit the specific replica the consumer writes onto.
+This essentially uses Clickhouse as if it was a single leader system and it
+allows Sequential consistency.</p>
+</section>
+</section>
+<section id="snuba-within-a-sentry-deployment">
+<h1>Snuba within a Sentry Deployment<a class="headerlink" href="#snuba-within-a-sentry-deployment" title="Permalink to this heading">¶</a></h1>
+<p>This sections explains the role Snuba plays within a Sentry deployment showing
+the main data flows. If you are deploying Snuba stand alone, this won’t be
+useful for you.</p>
+<p>Legend:</p>
+<img alt="../_images/deployment_legend.png" src="../_images/deployment_legend.png" />
+<p>Deployments:</p>
+<p>Errors and transaction:</p>
+<img alt="../_images/errors_transactions_deployment.png" src="../_images/errors_transactions_deployment.png" />
+<p>Sessions:</p>
+<img alt="../_images/sessions_deployment.png" src="../_images/sessions_deployment.png" />
+<p>Outcomes:</p>
+<img alt="../_images/outcomes_deployment.png" src="../_images/outcomes_deployment.png" />
+<section id="errors-and-transactions-data-flow">
+<h2>Errors and Transactions data flow<a class="headerlink" href="#errors-and-transactions-data-flow" title="Permalink to this heading">¶</a></h2>
+<p>The main section at the top of the diagram illustrates the ingestion process
+for the <code class="docutils literal notranslate"><span class="pre">Events</span></code> and <code class="docutils literal notranslate"><span class="pre">Transactions</span></code> Entities. These two entities serve
+most issue/errors related features in Sentry and the whole Performance
+product.</p>
+<p>There is only one Kafka topic (<code class="docutils literal notranslate"><span class="pre">events</span></code>) shared between errors and transactions
+that feeds this pipeline. This topic contains both error messages and transaction
+messages.</p>
+<p>The Errors consumers consumes the <code class="docutils literal notranslate"><span class="pre">events</span></code> topic, writes messages in the Clickhouse
+<code class="docutils literal notranslate"><span class="pre">errors</span></code> table. Upon commit it also produces a record on the <code class="docutils literal notranslate"><span class="pre">snuba-commit-log</span></code>
+topic.</p>
+<p>Alerts on Errors are generated by the Errors Subscription Consumer. This is synchronized
+consumer that consumes both the main <code class="docutils literal notranslate"><span class="pre">events</span></code> topic and the <code class="docutils literal notranslate"><span class="pre">snuba-commit-log</span></code> topic
+so it can proceed in lockstep with the main consumer.</p>
+<p>The synchronized consumer then produces alerts by querying Clickhouse and produces
+the result on the result topic.</p>
+<p>An identical but independent pipeline exists for transactions.</p>
+<p>The Errors pipeline has an additional step: writing to the <code class="docutils literal notranslate"><span class="pre">replacements</span></code> topic.
+Errors mutations (merge/unmerge/reprocessing/etc.) are produced by Sentry on the
+<code class="docutils literal notranslate"><span class="pre">events</span></code> topic. They are then forwarded to the <code class="docutils literal notranslate"><span class="pre">replacements</span></code> topic by the
+Errors Consumer and executed by the Replacement Consumer.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">events</span></code> topic must be partitioned semantically by Sentry project id to
+allow in order processing of the events within a project. This, as of today, is a
+requirement for alerts and replacements.</p>
+</section>
+<section id="sessions-and-outcomes">
+<h2>Sessions and Outcomes<a class="headerlink" href="#sessions-and-outcomes" title="Permalink to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">Sessions</span></code> and <code class="docutils literal notranslate"><span class="pre">Outcomes</span></code> work in very similar and simpler way. Specifically
+<code class="docutils literal notranslate"><span class="pre">Sessions</span></code> power Release Health features, while <code class="docutils literal notranslate"><span class="pre">Outcomes</span></code> mainly provide
+data to the Sentry <code class="docutils literal notranslate"><span class="pre">stats</span></code> page.</p>
+<p>Both pipelines have their own Kafka topic, Kafka consumer and they write on their
+own table in Clickhouse.</p>
+</section>
+<section id="change-data-capture-pipeline">
+<h2>Change Data Capture pipeline<a class="headerlink" href="#change-data-capture-pipeline" title="Permalink to this heading">¶</a></h2>
+<p>This pipeline is still under construction. It consumes the <code class="docutils literal notranslate"><span class="pre">cdc</span></code> topic and fills
+two independent tables in Clickhouse.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/snuba.svg" alt="Logo"/>
+            </a></p>
+<h1 class="logo"><a href="../index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getstarted.html">Getting started with Snuba</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="datamodel.html">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="queryprocessing.html">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration/overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../query/overview.html">Querying Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/snql.html">The SnQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/mql.html">The MQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migrations/modes.html">Snuba Migration Modes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/environment.html">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/schema_design.html">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html">Profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#regular-transaction-profiling">Regular transaction profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#on-demand-profiling">On-demand profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="../getstarted.html" title="previous chapter">Getting started with Snuba</a></li>
+      <li>Next: <a href="datamodel.html" title="next chapter">Snuba Data Model</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.1.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/architecture/overview.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

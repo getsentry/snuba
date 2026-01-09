@@ -1,0 +1,280 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>ClickHouse Schema Design Best Practices &#8212; Snuba 26.1.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ClickHouse supported versions" href="supported_versions.html" />
+    <link rel="prev" title="ClickHouse Topology Best Practices" href="topology.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="clickhouse-schema-design-best-practices">
+<h1>ClickHouse Schema Design Best Practices<a class="headerlink" href="#clickhouse-schema-design-best-practices" title="Permalink to this heading">¶</a></h1>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>This is a work-in-progress document for collecting ClickHouse schema and querying
+best-practices based on experiences running ClickHouse at scale at Sentry.
+It is subject to change and if something doesn’t seem right please
+submit a PR to Snuba.</p>
+</div>
+<nav class="contents local" id="contents">
+<ul class="simple">
+<li><p><a class="reference internal" href="#columns-based-on-dictionary-data-tag-promotion" id="id2">Columns based on dictionary data (tag promotion)</a></p>
+<ul>
+<li><p><a class="reference internal" href="#selectivity-in-queries-and-indices" id="id3">Selectivity in queries and indices</a></p></li>
+<li><p><a class="reference internal" href="#bloom-filter-indexing-on-dictionary-like-columns" id="id4">Bloom filter indexing on dictionary-like columns</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#aggregate-tables-and-materialization" id="id5">Aggregate Tables and Materialization</a></p>
+<ul>
+<li><p><a class="reference internal" href="#schema-migrations-using-materialization-version" id="id6">Schema migrations using materialization_version</a></p></li>
+</ul>
+</li>
+</ul>
+</nav>
+<section id="columns-based-on-dictionary-data-tag-promotion">
+<h2><a class="toc-backref" href="#id2" role="doc-backlink">Columns based on dictionary data (tag promotion)</a><a class="headerlink" href="#columns-based-on-dictionary-data-tag-promotion" title="Permalink to this heading">¶</a></h2>
+<p>ClickHouse is a columnar datastore, and at run-time it loads columns on-demand
+based on the columns referenced in the query (both the columns <code class="docutils literal notranslate"><span class="pre">SELECT</span></code> ed
+and those part of the <code class="docutils literal notranslate"><span class="pre">WHERE</span></code> clause). The ability to store different columns independently
+and not load them for every row for every query is part of the performance advantage that
+ClickHouse provides over a traditional RDBMS (like PostgreSQL).</p>
+<p>Commonly, a data schema contains a flexible key:value pair mapping
+(canonically at Sentry: <code class="docutils literal notranslate"><span class="pre">tags</span></code> or <code class="docutils literal notranslate"><span class="pre">contexts</span></code>) and stores that
+data in a <code class="docutils literal notranslate"><span class="pre">Nested</span></code> column that contains two arrays where the first array contains the keys
+of the dictionary and the second array contains the values. To make queries faster,
+a column like this can be indexed with bloom filters as described in <a class="reference internal" href="#bloom"><span class="std std-ref">Bloom filter indexing on dictionary-like columns</span></a>. In general
+we construct this index across datasets for <code class="docutils literal notranslate"><span class="pre">tags</span></code> but not for other columns.</p>
+<p>This works well when your dataset and query design gives you the ability to
+filter for exact matches and a large number of rows will NOT be an exact match.
+Often, however, a ClickHouse query filters for rows that contain a substring match or regular
+expression match for a tag value of a given key. This makes bloom filter indexes
+not usable for the query and, depending on the other selectivity attributes of your query,
+can necessitate moving (or promoting) those relevant values for a given tag key to a new separate
+column <a class="footnote-reference brackets" href="#dupe" id="id1" role="doc-noteref"><span class="fn-bracket">[</span>1<span class="fn-bracket">]</span></a>.</p>
+<section id="selectivity-in-queries-and-indices">
+<span id="selectivity"></span><h3><a class="toc-backref" href="#id3" role="doc-backlink">Selectivity in queries and indices</a><a class="headerlink" href="#selectivity-in-queries-and-indices" title="Permalink to this heading">¶</a></h3>
+<p>Queries are much more efficient when they have the attribute of being low-selectivity on
+the table indexes – meaning the query conditions on indexed columns filter the dataset
+to a very small proportion of the overall number of rows. High selectivity
+can break the efficiency of the bloom-filter style index on dictionary columns
+(see <a class="reference internal" href="#bloom"><span class="std std-ref">Bloom filter indexing on dictionary-like columns</span></a>). In cases of high-selectivity queries, there is a negative performance impact on both
+bloom-filter indexed columns as well as promoted tag value columns (when searching for a <code class="docutils literal notranslate"><span class="pre">key=value</span></code>
+pair exact match). The promoted column can make the penalty a bit less severe because
+it does not load tag values from unrelated keys. Still, an effort should be made to avoid
+low-selectivity queries.</p>
+</section>
+<section id="bloom-filter-indexing-on-dictionary-like-columns">
+<span id="bloom"></span><h3><a class="toc-backref" href="#id4" role="doc-backlink">Bloom filter indexing on dictionary-like columns</a><a class="headerlink" href="#bloom-filter-indexing-on-dictionary-like-columns" title="Permalink to this heading">¶</a></h3>
+<p>To facilitate faster searching on dictionary columns, we tend to create bloom filter indices
+on a hashes of both the unique <code class="docutils literal notranslate"><span class="pre">key</span></code> values of each row as well as hashes of all the <code class="docutils literal notranslate"><span class="pre">key=value</span></code>
+pairs of each row. The <a class="reference external" href="https://en.wikipedia.org/wiki/Bloom_filter">bloom filter</a>  registers these
+in a stochastic data structure designed to quickly determine which elements do NOT exist in a set.
+So that it can model the entire unbounded keyspace in a fixed amount of memory, a bloom filter
+is designed to have false positives. This means that there is actually a performance <strong>penalty</strong>
+if the value is often present in the underlying set: First, the value must be tested
+against the bloom filter (which will always return “maybe present”), and after
+that operation occurs a full scan of the column must be performed.</p>
+<p>Due to their structure, bloom filters are only good for exact value searching. They
+cannot be used for “is user-value a prefix of column?” or “does column match regex?” style queries.
+Those styles of queries require a separate column to search.</p>
+<aside class="footnote-list brackets">
+<aside class="footnote brackets" id="dupe" role="note">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id1">1</a><span class="fn-bracket">]</span></span>
+<p>During migration from non-promoted to promoted, putting the data in both map and
+top-level column may be necessary so that queries of old rows can still access the
+attributes. After the table goes through a full TTL period and the API/storage definition
+is changed to serve the values from the top-level field, message processors should be changed
+to stop writing the data in duplicate places.</p>
+</aside>
+</aside>
+</section>
+</section>
+<section id="aggregate-tables-and-materialization">
+<h2><a class="toc-backref" href="#id5" role="doc-backlink">Aggregate Tables and Materialization</a><a class="headerlink" href="#aggregate-tables-and-materialization" title="Permalink to this heading">¶</a></h2>
+<p>A common use case for ClickHouse and Snuba is to ingest raw data and automatically
+roll it up to aggregate values (keyed by a custom set of dimensions). This lets
+a dataset owner simplify their write logic while getting the query benefits of
+rows that are pre-aggregated. This is done with what we’ll call a raw table
+(the table the consumer writes to), an aggregate table (the table the API reads from)
+and a materialized view (which describes how the data should be transformed from
+raw to aggregate).</p>
+<p><a class="reference external" href="https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/aggregatingmergetree#example-of-an-aggregated-materialized-view">Sample usage of a materialized view/aggregate table from the official ClickHouse Documentation</a>.
+Note that contrary to this example, the aggregate table definition in Snuba is
+always separate from the materialized view definition (which is just a ClickHouse SQL
+transformation, similar to a PostgreSQL trigger).</p>
+<p>In general, Snuba follows the naming conventions here:</p>
+<ul class="simple">
+<li><p>(<code class="docutils literal notranslate"><span class="pre">widgets_raw_local</span></code>, <code class="docutils literal notranslate"><span class="pre">widgets_raw_dist</span></code>) for the raw (local, distributed) tables</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">widgets_aggregation_mv</span></code> for the materialized view (this only exists on storage nodes)</p></li>
+<li><p>(<code class="docutils literal notranslate"><span class="pre">widgets_aggregated_local</span></code>, <code class="docutils literal notranslate"><span class="pre">widgets_aggregated_dist</span></code>) for the roll-up/aggregated (local, distributed) tables</p></li>
+</ul>
+<p>Materialized views are immutable so it’s normal to have multiple versions of
+<code class="docutils literal notranslate"><span class="pre">widgets_aggregation_mv</span></code> when behavior is updated, with suffixes like
+<code class="docutils literal notranslate"><span class="pre">widgets_aggregation_mv_v1</span></code>, <code class="docutils literal notranslate"><span class="pre">widgets_aggregation_mv_v2</span></code>, etc. Migration
+between materialized view versions are described in the next section but in general
+old materialized views should be discarded once they are no longer used.</p>
+<section id="schema-migrations-using-materialization-version">
+<h3><a class="toc-backref" href="#id6" role="doc-backlink">Schema migrations using materialization_version</a><a class="headerlink" href="#schema-migrations-using-materialization-version" title="Permalink to this heading">¶</a></h3>
+<p>As we discussed at the end of the prior section, materialized view logic cannot
+be updated in place. In order to continuously roll-up input data without data
+loss or duplication in the aggregate table, we control logic changes with a
+column on the raw table, <code class="docutils literal notranslate"><span class="pre">materialization_version</span></code>, and making the materialized
+view logic depend on specific values of that column. To update MV logic, you
+create a new materialized view that looks for the last used value of
+<code class="docutils literal notranslate"><span class="pre">materialization_version</span></code> plus one and then, after that’s been created in all
+relevant environments, update the consumer to write the new materialization_version
+to the raw column.</p>
+<p>Here is how this might look in practice:</p>
+<p>Context:</p>
+<ol class="arabic simple">
+<li><p>There is a raw table <code class="docutils literal notranslate"><span class="pre">click_events_raw_local</span></code>, that has a field named
+<code class="docutils literal notranslate"><span class="pre">click_duration</span></code>, of type Float64. A snuba consumer is setting this to 0 for
+certain types of click events.</p></li>
+<li><p>There is a materialized view <code class="docutils literal notranslate"><span class="pre">click_events_aggregation_mv</span></code> that is writing
+a <code class="docutils literal notranslate"><span class="pre">quantilesState()</span></code> value for a <code class="docutils literal notranslate"><span class="pre">click_duration</span></code> column in <code class="docutils literal notranslate"><span class="pre">click_events_aggregated_local</span></code>
+including those zero-values. This materialized view looks for the value of
+<code class="docutils literal notranslate"><span class="pre">materialization_version</span> <span class="pre">=</span> <span class="pre">0</span></code> in its WHERE condition.</p></li>
+<li><p>The query users are being surprised by p90, p95, and p99 values that are taking into
+account zero-duration click events which don’t make sense for the use case.</p></li>
+</ol>
+<p>To resolve this confusion, we don’t want to set quantilesState for <code class="docutils literal notranslate"><span class="pre">click_duration</span></code> if
+the incoming <code class="docutils literal notranslate"><span class="pre">click_duration</span></code> is 0.</p>
+<p>Steps to resolve the issue:</p>
+<ol class="arabic simple">
+<li><p>Create a new materialized view <code class="docutils literal notranslate"><span class="pre">click_events_aggregation_mv_v1</span></code> via the migration system. This new materialized
+view will use the WHERE clause or some kind of filtering to avoid setting quantilesState(0)
+in the write for the <code class="docutils literal notranslate"><span class="pre">click_duration</span></code> column. This new materialized will only operate on
+inputs in <code class="docutils literal notranslate"><span class="pre">click_events_raw_local</span></code> where <code class="docutils literal notranslate"><span class="pre">materialization_version</span> <span class="pre">=</span> <span class="pre">1</span></code></p></li>
+<li><p>Test that this fixes the issue in your local environment by changing your consumer to use
+<code class="docutils literal notranslate"><span class="pre">materialization_version</span> <span class="pre">=</span> <span class="pre">1</span></code>. It can make sense to control this via the settings file in
+(in <code class="docutils literal notranslate"><span class="pre">snuba/settings/__init.py__</span></code>)</p></li>
+<li><p>Run the migration in all relevant environments.</p></li>
+<li><p>Change the materialization_version setting mentioned above in a specific environment, to
+set <code class="docutils literal notranslate"><span class="pre">materialization_version</span> <span class="pre">=</span> <span class="pre">1</span></code> on write.</p></li>
+<li><p>Validate that the consumer is writing rows with the new materialization version, and that
+it produces the expected roll-up results.</p></li>
+<li><p>Write a migration to remove the now-unused materialized view (<code class="docutils literal notranslate"><span class="pre">click_events_aggregation_mv</span></code>).</p></li>
+</ol>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/snuba.svg" alt="Logo"/>
+            </a></p>
+<h1 class="logo"><a href="../index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getstarted.html">Getting started with Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/datamodel.html">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/queryprocessing.html">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration/overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../query/overview.html">Querying Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/snql.html">The SnQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/mql.html">The MQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migrations/modes.html">Snuba Migration Modes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/environment.html">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html">Profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#regular-transaction-profiling">Regular transaction profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#on-demand-profiling">On-demand profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="topology.html" title="previous chapter">ClickHouse Topology Best Practices</a></li>
+      <li>Next: <a href="supported_versions.html" title="next chapter">ClickHouse supported versions</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.1.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/clickhouse/schema_design.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

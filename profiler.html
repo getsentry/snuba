@@ -1,0 +1,159 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>Profiling &#8212; Snuba 26.1.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="ClickHouse supported versions" href="clickhouse/supported_versions.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="profiling">
+<h1>Profiling<a class="headerlink" href="#profiling" title="Permalink to this heading">¶</a></h1>
+<p>Snuba has two ways of using <a class="reference external" href="https://docs.sentry.io/product/profiling/">Sentry’s own profiling</a>: Profiles captured as part of
+regular transactions like API calls, and “on-demand” profiles.</p>
+</section>
+<section id="regular-transaction-profiling">
+<h1>Regular transaction profiling<a class="headerlink" href="#regular-transaction-profiling" title="Permalink to this heading">¶</a></h1>
+<p>Only enabled for a few deployments selectively via environment variables. Snuba
+admin is sampled at 100%, and some low-scale consumers also have a sample rate
+set.</p>
+</section>
+<section id="on-demand-profiling">
+<h1>On-demand profiling<a class="headerlink" href="#on-demand-profiling" title="Permalink to this heading">¶</a></h1>
+<p>For consumers who have <code class="docutils literal notranslate"><span class="pre">SNUBA_PROFILES_SAMPLE_RATE</span></code> set to a nonzero value,
+it is possible to capture a profile of the main thread for a fixed duration of
+time via runtime config.</p>
+<p>For example, if the deployment <code class="docutils literal notranslate"><span class="pre">snuba-querylog</span></code> misbehaves, you can pick a
+specific pod by <code class="docutils literal notranslate"><span class="pre">pod_name</span></code> like
+<code class="docutils literal notranslate"><span class="pre">snuba-querylog-consumer-production-6d95f9c8d9-4cqht</span></code> and enable profiling
+just for that one pod.</p>
+<p>Since profiling has unknown amount of overhead, pick only a few pods at a time
+to minimize the risk and size of a backlog.</p>
+<p>Once you have that <code class="docutils literal notranslate"><span class="pre">pod_name</span></code>, set the runtime config
+<code class="docutils literal notranslate"><span class="pre">ondemand_profiler_hostnames</span></code> to that value, without quotes. Separate
+multiple values by comma.</p>
+<p>To stop profiling and send the profile to Sentry, unset the value.</p>
+<p>You should see a warning message in Sentry saying “Starting ondemand profile
+for &lt;hostname&gt;”, and once you unset runtime config, a new profile with a
+transaction name of “ondemand profile: &lt;hostname&gt;”</p>
+<p>Profiles are capped to 30 second runtime, so if the runtime config is set
+forever, there will be profiles sent to Sentry every 30 seconds.</p>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/snuba.svg" alt="Logo"/>
+            </a></p>
+<h1 class="logo"><a href="index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="getstarted.html">Getting started with Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/overview.html">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/overview.html#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/datamodel.html">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/queryprocessing.html">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration/overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="query/overview.html">Querying Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="language/snql.html">The SnQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="language/mql.html">The MQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="migrations/modes.html">Snuba Migration Modes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="contributing/environment.html">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="clickhouse/topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="clickhouse/schema_design.html">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="clickhouse/supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#regular-transaction-profiling">Regular transaction profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#on-demand-profiling">On-demand profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="clickhouse/supported_versions.html" title="previous chapter">ClickHouse supported versions</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.1.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/profiler.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

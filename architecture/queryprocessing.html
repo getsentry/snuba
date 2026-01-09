@@ -1,0 +1,274 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>Snuba Query Processing &#8212; Snuba 26.1.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Snuba Consumers" href="consumer.html" />
+    <link rel="prev" title="Snuba Data Slicing (under development)" href="slicing.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="snuba-query-processing">
+<h1>Snuba Query Processing<a class="headerlink" href="#snuba-query-processing" title="Permalink to this heading">¶</a></h1>
+<p>Snuba has a query processing pipeline that starts with the parsing of the
+Snuba query language (legacy and SnQL) into an AST ands with a SQL query
+being executed on Clickhouse. Between these two phases, several passes on
+the AST to apply query processing transformations are executed.</p>
+<p>The processing pipeline has two main goals: optimize the query and prevent
+queries that would be dangerous for our infrastructure.</p>
+<p>As for the data model, the query processing pipeline is divided into a logical
+section where the product related processing is performed and a physical
+section which is focused on optimizing the query.</p>
+<p>The logical sections contains steps like the validation of the query to
+ensure it matches the data model or applying custom functions. The physical
+section includes steps like promoting tags and selecting a pre-aggregated
+view to serve the query.</p>
+<section id="query-processing-phases">
+<h2>Query Processing Phases<a class="headerlink" href="#query-processing-phases" title="Permalink to this heading">¶</a></h2>
+<p>This section gives an introduction and some pointers to code and examples
+for the phases discussed above.</p>
+<img alt="../_images/queryprocessing.png" src="../_images/queryprocessing.png" />
+<section id="legacy-and-snql-parsers">
+<h3>Legacy and SnQL Parsers<a class="headerlink" href="#legacy-and-snql-parsers" title="Permalink to this heading">¶</a></h3>
+<p>Snuba supports two languages, the legacy JSON based one and the new one named
+SnQL. With the exceptions of joins and composite queries which are not supported
+by the legacy language, the query processing pipeline does not change whether
+one or the other language is used.</p>
+<p>They both produce a logical query AST which is represented by
+<a class="reference external" href="https://github.com/getsentry/snuba/tree/master/snuba/query">this data structure</a>.</p>
+<p>The legacy parser is <a class="reference external" href="https://github.com/getsentry/snuba/blob/master/snuba/query/parser/__init__.py">here</a>,
+while the SnQL parser is <a class="reference external" href="https://github.com/getsentry/snuba/tree/master/snuba/query/snql">in this module</a>.</p>
+</section>
+<section id="query-validation">
+<h3>Query Validation<a class="headerlink" href="#query-validation" title="Permalink to this heading">¶</a></h3>
+<p>This phase ensures the query can be run (most of the times, we do not yet catch
+all possible invalid queries). The responsibility of this phase is to return an
+HTTP400 in case of an invalid query with a proper useful message to the user.</p>
+<p>This is divided in two sub-phases: general validation and entity specific
+validation.</p>
+<p>General validation is composed by a set of checks that are applied to each query
+right after the Query is produced by the parser. This happens
+<a class="reference external" href="https://github.com/getsentry/snuba/blob/master/snuba/query/parser/__init__.py#L91">in this function</a>.
+This includes validations like preventing alias shadowing and function signature
+validation.</p>
+<p>Each entity can provide some validation logic as well in the form of required
+columns. This happens <a class="reference external" href="https://github.com/getsentry/snuba/blob/master/snuba/datasets/entity.py#L46-L47">in this class</a>.
+This allows the query processing to reject queries that do not have a condition
+on project_id or that do not have a time range.</p>
+</section>
+<section id="logical-query-processors">
+<h3>Logical Query Processors<a class="headerlink" href="#logical-query-processors" title="Permalink to this heading">¶</a></h3>
+<p>Query processors are stateless transformations that receive a Query object (with
+its AST) and transform it in place. <a class="reference external" href="https://github.com/getsentry/snuba/blob/master/snuba/query/processors/__init__.py">This</a>
+is the interface to implement for logical processors. In the logical phase each
+entity provides the query processors to be applied in sequence.  Common use
+cases are custom functions like <a class="reference external" href="https://github.com/getsentry/snuba/blob/10b747da57d7d833374984d5eb31151393577911/snuba/query/processors/performance_expressions.py#L12-L20">apdex</a>,
+or time bucketing like the <a class="reference external" href="https://github.com/getsentry/snuba/blob/master/snuba/query/processors/timeseries_processor.py">time series processor</a>.</p>
+<p>Query processors are not supposed to depend on other processors to be executed
+before or after and should be independent from each other.</p>
+</section>
+<section id="storage-selector">
+<h3>Storage Selector<a class="headerlink" href="#storage-selector" title="Permalink to this heading">¶</a></h3>
+<p>As explained in <a class="reference internal" href="datamodel.html"><span class="doc">Snuba Data Model</span></a>, each Entity can define multiple Storages.
+Multiple storages represent multiple tables and materialized views can be defined
+for performance reasons as some can respond to some queries faster.</p>
+<p>At the end of the logical processing phase (which is entirely based on the entity)
+the storage selector can inspect the query and pick the appropriate storage for
+the query. Storage selectors are defined in the entity data model and implement
+this <a class="reference external" href="https://github.com/getsentry/snuba/blob/master/snuba/datasets/storage.py#L155-L165">interface</a>.
+An example is the Errors entity, which has two storages, one is for consistent
+queries (they are routed to the same nodes where events are written) and the
+other only includes replicas we do not write onto to serve most queries. This
+reduces the load on the nodes we write onto.</p>
+</section>
+<section id="query-translator">
+<h3>Query Translator<a class="headerlink" href="#query-translator" title="Permalink to this heading">¶</a></h3>
+<p>Different storages have different schemas (these reflect the schema of a
+clickhouse table or view). All of them are generally different from the entity
+model, the most notable example being the subscriptable expression used for
+tags <code class="docutils literal notranslate"><span class="pre">tags[abc]</span></code> that does not exist in clickhouse where accessing a tags
+looks like <code class="docutils literal notranslate"><span class="pre">tags.values[indexOf(tags.key,</span> <span class="pre">'abc')]</span></code> .</p>
+<p>After a storage has been selected, the query needs to be translated to the physical
+query. Translator is a rule based systems, rules are defined by the entity (for
+each storage) and are applied in sequence.</p>
+<p>Contrarily to query processors, translation rules do not have full context
+on the query and can only translate an individual expression. This allows us
+to compose translation rules easily and reuse them across entities.</p>
+<p><a class="reference external" href="https://github.com/getsentry/snuba/blob/master/snuba/datasets/entities/transactions.py#L33-L81">These</a>
+are the translation rules for the transactions entity.</p>
+</section>
+<section id="physical-query-processors">
+<h3>Physical Query Processors<a class="headerlink" href="#physical-query-processors" title="Permalink to this heading">¶</a></h3>
+<p>Physical query processors work in a very similar way compared to the Logical
+query processors. Their interface is very similar and the semantics is the same.
+The difference is that they operate on the physical query and, as such, they
+are mainly designed for optimizations. For example <a class="reference external" href="https://github.com/getsentry/snuba/blob/master/snuba/query/processors/mapping_optimizer.py">this processor</a>
+finds equality conditions on tags and replace them with the equivalent condition
+on a tags hashmap (where we have a bloom filter index) making the filtering
+operation faster.</p>
+</section>
+<section id="query-formatter">
+<h3>Query Formatter<a class="headerlink" href="#query-formatter" title="Permalink to this heading">¶</a></h3>
+<p>This component simply formats the query into the Clickhouse query string.</p>
+</section>
+</section>
+<section id="composite-query-processing">
+<h2>Composite Query Processing<a class="headerlink" href="#composite-query-processing" title="Permalink to this heading">¶</a></h2>
+<p>The discussion above is valid only for simple queries, composite ones
+(joins and queries that include subqueries follow a slightly different path).</p>
+<p>The simple query pipeline discussed above would not work on join queries or
+on queries that contain subqueries. In order to make that work, each step
+would have to take into account joined queries and subqueries, which would
+multiply the complexity of the process.</p>
+<p>To solve the issue we transform each join query into a join of multiple
+simple subqueries. Each subquery is a simple query that can be processed by
+the pipeline described above. This is also the preferred way to run Clickhouse
+joins as it allows us to apply filters before the join.</p>
+<img alt="../_images/compositeprocessing.png" src="../_images/compositeprocessing.png" />
+<p>The Query Processing Pipeline for this type of queries is composed of a few
+additional steps with respect to what was described above.</p>
+<section id="subquery-generator">
+<h3>Subquery Generator<a class="headerlink" href="#subquery-generator" title="Permalink to this heading">¶</a></h3>
+<p>This component takes a simple SnQL join query and create a subquery for each
+table in the join.</p>
+</section>
+<section id="expressions-push-down">
+<h3>Expressions Push Down<a class="headerlink" href="#expressions-push-down" title="Permalink to this heading">¶</a></h3>
+<p>The query generated at the previous step would be a valid join but incredibly
+inefficient. This step is basically a join optimizer that pushes down into
+subqueries all expressions that can be part of a subquery. This is a needed
+step independently from the subquery processing as the Clickhouse join engine
+does not do any expression push down and it would be up to Snuba to optimize
+the query.</p>
+</section>
+<section id="simple-query-processing-pipeline">
+<h3>Simple Query Processing Pipeline<a class="headerlink" href="#simple-query-processing-pipeline" title="Permalink to this heading">¶</a></h3>
+<p>This is the same pipeline discussed above from the logical query validation
+to the physical query processors.</p>
+</section>
+<section id="join-optimizations">
+<h3>Join Optimizations<a class="headerlink" href="#join-optimizations" title="Permalink to this heading">¶</a></h3>
+<p>At the end of the processing we can apply some optimizations to the overall
+composite query like turning a join into a Semi Join.</p>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/snuba.svg" alt="Logo"/>
+            </a></p>
+<h1 class="logo"><a href="../index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getstarted.html">Getting started with Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="overview.html#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="datamodel.html">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration/overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../query/overview.html">Querying Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/snql.html">The SnQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/mql.html">The MQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migrations/modes.html">Snuba Migration Modes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/environment.html">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/schema_design.html">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html">Profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#regular-transaction-profiling">Regular transaction profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html#on-demand-profiling">On-demand profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="slicing.html" title="previous chapter">Snuba Data Slicing (under development)</a></li>
+      <li>Next: <a href="consumer.html" title="next chapter">Snuba Consumers</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.1.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/architecture/queryprocessing.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
