@@ -226,10 +226,7 @@ def delete_from_storage(
         _validate_attribute_conditions(attribute_conditions, delete_settings)
 
         if not get_int_config("permit_delete_by_attribute", default=0):
-            logger.error(
-                "valid attribute_conditions passed to delete_from_storage, but delete will be ignored "
-                "as functionality is not yet launched (permit_delete_by_attribute=0)"
-            )
+            metrics.increment("delete_query.delete_ignored")
             return {}
 
     attr_info = _get_attribution_info(attribution_info)
