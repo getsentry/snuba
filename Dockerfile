@@ -101,7 +101,8 @@ COPY --from=build_rust_snuba_deps /usr/src/snuba/rust_snuba/target/ ./rust_snuba
 COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
     cd ./rust_snuba/; \
-    uvx maturin build --release --compatibility linux --locked
+    uvx maturin build --release --compatibility linux --locked; \
+    rm -rf /root/.rustup/toolchains/*/share/doc
 
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
@@ -168,8 +169,6 @@ COPY ./rust_snuba/ ./rust_snuba/
 # re-"install" rust for the testing image
 COPY --from=build_rust_snuba /root/.cargo/ /root/.cargo/
 COPY --from=build_rust_snuba /root/.rustup/ /root/.rustup/
-# remove documentation from the image
-RUN rm -rf /root/.rustup/toolchains/*/share/doc
 
 COPY --from=build_rust_snuba /usr/src/snuba/rust_snuba/target/wheels/ /tmp/rust_wheels/
 RUN set -ex; \
