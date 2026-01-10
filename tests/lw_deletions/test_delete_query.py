@@ -11,6 +11,7 @@ from snuba.clickhouse.query import Query
 from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.lw_deletions.delete_query import _execute_query
 from snuba.query.allocation_policies import (
     MAX_THRESHOLD,
     NO_SUGGESTION,
@@ -24,7 +25,6 @@ from snuba.query.data_source.simple import Table
 from snuba.query.dsl import and_cond, column, equals, literal
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.web import QueryException
-from snuba.web.delete_query import _execute_query
 
 
 @pytest.mark.clickhouse_db
@@ -113,7 +113,7 @@ def test_delete_query_with_rejecting_allocation_policy() -> None:
             return
 
     with mock.patch(
-        "snuba.web.delete_query._get_delete_allocation_policies",
+        "snuba.lw_deletions.delete_query._get_delete_allocation_policies",
         return_value=[
             RejectPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {})
         ],

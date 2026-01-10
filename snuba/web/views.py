@@ -52,6 +52,13 @@ from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionEr
 from snuba.datasets.factory import InvalidDatasetError, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import StorageNotAvailable, WritableTableStorage
+from snuba.lw_deletions.bulk_delete_query import (
+    delete_from_storage as bulk_delete_from_storage,
+)
+from snuba.lw_deletions.delete_query import (
+    DeletesNotEnabledError,
+    TooManyOngoingMutationsError,
+)
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
@@ -72,10 +79,8 @@ from snuba.utils.health_info import (
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
-from snuba.web.bulk_delete_query import delete_from_storage as bulk_delete_from_storage
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
-from snuba.web.delete_query import DeletesNotEnabledError, TooManyOngoingMutationsError
 from snuba.web.query import parse_and_run_query
 from snuba.web.rpc import run_rpc_handler
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow

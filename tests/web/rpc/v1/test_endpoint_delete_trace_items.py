@@ -119,7 +119,7 @@ class TestEndpointDeleteTrace(BaseApiTest):
 
         assert MessageToDict(response) == MessageToDict(expected_response)
 
-    @patch("snuba.web.bulk_delete_query.produce_delete_query")
+    @patch("snuba.lw_deletions.bulk_delete_query.produce_delete_query")
     def test_valid_trace_id_produces_bulk_delete_message(
         self, produce_delete_query_mock: Mock, setup_teardown: Any
     ) -> None:
@@ -183,8 +183,8 @@ class TestEndpointDeleteTrace(BaseApiTest):
             ],
         )
 
-        with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
-            with patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce:
+        with patch("snuba.lw_deletions.bulk_delete_query._enforce_max_rows", return_value=10):
+            with patch("snuba.lw_deletions.bulk_delete_query.produce_delete_query") as mock_produce:
                 EndpointDeleteTraceItems().execute(message)
 
                 # Verify produce_delete_query was called with attribute_conditions
@@ -221,8 +221,8 @@ class TestEndpointDeleteTrace(BaseApiTest):
             ],
         )
 
-        with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
-            with patch("snuba.web.bulk_delete_query.produce_delete_query"):
+        with patch("snuba.lw_deletions.bulk_delete_query._enforce_max_rows", return_value=10):
+            with patch("snuba.lw_deletions.bulk_delete_query.produce_delete_query"):
                 assert isinstance(
                     EndpointDeleteTraceItems().execute(message), DeleteTraceItemsResponse
                 )

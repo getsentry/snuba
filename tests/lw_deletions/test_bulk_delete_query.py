@@ -13,14 +13,14 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from snuba import settings
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.lw_deletions.bulk_delete_query import delete_from_storage
+from snuba.lw_deletions.delete_query import DeletesNotEnabledError
 from snuba.lw_deletions.types import AttributeConditions
 from snuba.query.exceptions import InvalidQueryException
 from snuba.state import set_config
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
-from snuba.web.bulk_delete_query import delete_from_storage
-from snuba.web.delete_query import DeletesNotEnabledError
 
 # TraceItemType values from sentry_protos
 TRACE_ITEM_TYPE_SPAN = 1
@@ -48,7 +48,7 @@ def get_attribution_info(tenant_ids: Optional[Mapping[str, int | str]] = None) -
     }
 
 
-@patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
+@patch("snuba.lw_deletions.bulk_delete_query._enforce_max_rows", return_value=10)
 def test_delete_success(mock_enforce_max_row: Mock) -> None:
     admin_client = AdminClient(get_default_kafka_configuration())
     create_topics(admin_client, [Topic.LW_DELETIONS_GENERIC_EVENTS])
@@ -107,8 +107,8 @@ def test_deletes_not_enabled_runtime_config() -> None:
 
 
 @pytest.mark.redis_db
-@patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
-@patch("snuba.web.bulk_delete_query.produce_delete_query")
+@patch("snuba.lw_deletions.bulk_delete_query._enforce_max_rows", return_value=10)
+@patch("snuba.lw_deletions.bulk_delete_query.produce_delete_query")
 def test_deletes_killswitch(mock_produce_query: Mock, mock_enforce_rows: Mock) -> None:
     storage = get_writable_storage(StorageKey("search_issues"))
     conditions = {"project_id": [1], "group_id": [1, 2, 3, 4]}
@@ -177,8 +177,8 @@ def test_attribute_conditions_valid_occurrence() -> None:
     attr_info = get_attribution_info()
 
     # Mock out _enforce_max_rows to avoid needing actual data
-    with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
-        with patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce:
+    with patch("snuba.lw_deletions.bulk_delete_query._enforce_max_rows", return_value=10):
+        with patch("snuba.lw_deletions.bulk_delete_query.produce_delete_query") as mock_produce:
             # Should not raise an exception, but should return empty dict since
             # functionality is not yet launched (permit_delete_by_attribute=0 by default)
             result = delete_from_storage(storage, conditions, attr_info, attribute_conditions)
@@ -225,8 +225,8 @@ def test_attribute_conditions_missing_item_type() -> None:
 
     # Since item_type is now in AttributeConditions, we need to test a different scenario
     # The validation now should pass, but we need to ensure item_type is also in conditions
-    with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
-        with patch("snuba.web.bulk_delete_query.produce_delete_query"):
+    with patch("snuba.lw_deletions.bulk_delete_query._enforce_max_rows", return_value=10):
+        with patch("snuba.lw_deletions.bulk_delete_query.produce_delete_query"):
             # This should now succeed since we're no longer checking conditions dict
             delete_from_storage(storage, conditions, attr_info, attribute_conditions)
 
@@ -268,8 +268,8 @@ def test_attribute_conditions_feature_flag_enabled() -> None:
 
     try:
         # Mock out _enforce_max_rows to avoid needing actual data
-        with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
-            with patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce:
+        with patch("snuba.lw_deletions.bulk_delete_query._enforce_max_rows", return_value=10):
+            with patch("snuba.lw_deletions.bulk_delete_query.produce_delete_query") as mock_produce:
                 # Should process normally and produce a message
                 result = delete_from_storage(storage, conditions, attr_info, attribute_conditions)
 

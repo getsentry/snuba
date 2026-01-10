@@ -15,6 +15,13 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.deletion_settings import DeletionSettings, get_trace_item_type_name
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.lw_deletions.delete_query import (
+    DeletesNotEnabledError,
+    _construct_condition,
+    _enforce_max_rows,
+    _get_attribution_info,
+    deletes_are_enabled,
+)
 from snuba.lw_deletions.types import AttributeConditions, ConditionsBag, ConditionsType
 from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Table
@@ -28,13 +35,6 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
-from snuba.web.delete_query import (
-    DeletesNotEnabledError,
-    _construct_condition,
-    _enforce_max_rows,
-    _get_attribution_info,
-    deletes_are_enabled,
-)
 
 metrics = MetricsWrapper(environment.metrics, "snuba.delete")
 logger = logging.getLogger(__name__)
@@ -226,7 +226,10 @@ def delete_from_storage(
         _validate_attribute_conditions(attribute_conditions, delete_settings)
 
         if not get_int_config("permit_delete_by_attribute", default=0):
-            metrics.increment("delete_query.delete_ignored")
+            logger.error(
+                "valid attribute_conditions passed to delete_from_storage, but delete will be ignored "
+                "as functionality is not yet launched (permit_delete_by_attribute=0)"
+            )
             return {}
 
     attr_info = _get_attribution_info(attribution_info)
