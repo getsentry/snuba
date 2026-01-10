@@ -22,12 +22,8 @@ test_data = [
             selected_columns=[],
             condition=binary_condition(
                 BooleanFunctions.AND,
-                binary_condition(
-                    "equals", Column(None, None, VALID_COLUMNS[0]), Literal(None, 1)
-                ),
-                binary_condition(
-                    "equals", Column(None, None, VALID_COLUMNS[1]), Literal(None, 1)
-                ),
+                binary_condition("equals", Column(None, None, VALID_COLUMNS[0]), Literal(None, 1)),
+                binary_condition("equals", Column(None, None, VALID_COLUMNS[1]), Literal(None, 1)),
             ),
         ),
         True,
@@ -39,12 +35,8 @@ test_data = [
             selected_columns=[],
             condition=binary_condition(
                 BooleanFunctions.AND,
-                binary_condition(
-                    "equals", Column(None, None, VALID_COLUMNS[0]), Literal(None, 1)
-                ),
-                binary_condition(
-                    "equals", Column(None, None, "event_id"), Literal(None, 1)
-                ),
+                binary_condition("equals", Column(None, None, VALID_COLUMNS[0]), Literal(None, 1)),
+                binary_condition("equals", Column(None, None, "event_id"), Literal(None, 1)),
             ),
         ),
         False,

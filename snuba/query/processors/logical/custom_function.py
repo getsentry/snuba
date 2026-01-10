@@ -21,16 +21,18 @@ from snuba.query.validation.signature import ParamType, SignatureValidator
 
 class InvalidCustomFunctionCall(InvalidExpressionException):
     def __str__(self) -> str:
-        return f"Invalid custom function call {self.extra_data.get('expression', '')}: {self.message}"
+        return (
+            f"Invalid custom function call {self.extra_data.get('expression', '')}: {self.message}"
+        )
 
 
-def replace_in_expression(
-    body: Expression, replace_lookup: Mapping[str, Expression]
-) -> Expression:
+def replace_in_expression(body: Expression, replace_lookup: Mapping[str, Expression]) -> Expression:
     ret = body.transform(
-        lambda exp: replace_lookup[exp.column_name]
-        if isinstance(exp, Column) and exp.column_name in replace_lookup
-        else exp
+        lambda exp: (
+            replace_lookup[exp.column_name]
+            if isinstance(exp, Column) and exp.column_name in replace_lookup
+            else exp
+        )
     )
     return ret
 
@@ -132,9 +134,7 @@ class _CustomFunction(LogicalQueryProcessor):
 
                 resolved_params = {
                     name: expression
-                    for (name, expression) in zip(
-                        self.__param_names, expression.parameters
-                    )
+                    for (name, expression) in zip(self.__param_names, expression.parameters)
                 }
 
                 ret = replace_in_expression(self.__body, resolved_params)
@@ -168,10 +168,7 @@ class FailureRateProcessor(LogicalQueryProcessor):
                 # We use and(notEquals...) here instead of in(tuple(...)) because it's possible to get an impossible query that sets transaction_status to NULL.
                 # Clickhouse returns an error if an expression such as NULL in (0, 1, 2) appears.
                 "divide(countIf(and(notEquals(transaction_status, ok), and(notEquals(transaction_status, cancelled), notEquals(transaction_status, unknown)))), count())",
-                [
-                    (code, SPAN_STATUS_NAME_TO_CODE[code])
-                    for code in ("ok", "cancelled", "unknown")
-                ],
+                [(code, SPAN_STATUS_NAME_TO_CODE[code]) for code in ("ok", "cancelled", "unknown")],
             ),
         )
 

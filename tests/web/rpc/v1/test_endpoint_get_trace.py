@@ -482,9 +482,7 @@ def get_span_id(span: TraceItem) -> str:
             byteorder="little",
             signed=False,
         )
-    )[
-        2:
-    ].rjust(16, "0")
+    )[2:].rjust(16, "0")
 
 
 @pytest.mark.clickhouse_db

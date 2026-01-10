@@ -106,9 +106,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         self.set_cycle = itertools.cycle(self.set_values)
         self.use_case_id = "performance"
         self.start_time = self.base_time
-        self.end_time = (
-            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
-        )
+        self.end_time = self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         self.generate_sets(self.default_tags, self.mapping_meta, self.set_cycle)
 
     def generate_sets(
@@ -135,8 +133,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     "retention_days": RETENTION_DAYS,
                     "mapping_meta": mapping_meta,
                     "use_case_id": self.use_case_id,
-                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                    + n,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp() + n,
                 },
                 KafkaMessageMetadata(0, 0, self.base_time),
             )
@@ -248,9 +245,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
 
         self.use_case_id = "performance"
         self.start_time = self.base_time
-        self.end_time = (
-            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
-        )
+        self.end_time = self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         self.hour_before_start_time = self.start_time - timedelta(hours=1)
         self.hour_after_start_time = self.start_time + timedelta(hours=1)
 
@@ -275,8 +270,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     "retention_days": RETENTION_DAYS,
                     "mapping_meta": self.mapping_meta,
                     "use_case_id": self.use_case_id,
-                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                    + n,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp() + n,
                 },
                 KafkaMessageMetadata(0, 0, self.base_time),
             )
@@ -445,9 +439,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         assert len(data["data"]) == 1, data
 
         aggregation = data["data"][0]
-        smallest_time_bucket = datetime.strptime(
-            aggregation["min_time"], "%Y-%m-%dT%H:%M:%S+00:00"
-        )
+        smallest_time_bucket = datetime.strptime(aggregation["min_time"], "%Y-%m-%dT%H:%M:%S+00:00")
         assert smallest_time_bucket.hour == 12
         assert smallest_time_bucket.minute == 0
 
@@ -510,9 +502,7 @@ class TestGenericMetricsApiCounters(BaseApiTest):
 
         self.use_case_id = "performance"
         self.start_time = self.base_time
-        self.end_time = (
-            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
-        )
+        self.end_time = self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         self.hour_before_start_time = self.start_time - timedelta(hours=1)
         self.hour_after_start_time = self.start_time + timedelta(hours=1)
         self.generate_counters()
@@ -536,8 +526,7 @@ class TestGenericMetricsApiCounters(BaseApiTest):
                     "retention_days": RETENTION_DAYS,
                     "mapping_meta": self.mapping_meta,
                     "use_case_id": self.use_case_id,
-                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                    + n,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp() + n,
                 },
                 KafkaMessageMetadata(0, 0, self.base_time),
             )
@@ -645,9 +634,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         self.sentry_received_timestamp = utc_yesterday_12_15()
 
         self.start_time = self.base_time
-        self.end_time = (
-            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
-        )
+        self.end_time = self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         self.hour_before_start_time = self.start_time - timedelta(hours=1)
         self.hour_after_start_time = self.start_time + timedelta(hours=1)
         self.mapping_meta = SHARED_MAPPING_META
@@ -787,9 +774,7 @@ class TestOrgGenericMetricsApiGauges(BaseApiTest):
         self.sentry_received_timestamp = utc_yesterday_12_15()
 
         self.start_time = self.base_time
-        self.end_time = (
-            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
-        )
+        self.end_time = self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         self.hour_before_start_time = self.start_time - timedelta(hours=1)
         self.hour_after_start_time = self.start_time + timedelta(hours=1)
         self.mapping_meta = SHARED_MAPPING_META

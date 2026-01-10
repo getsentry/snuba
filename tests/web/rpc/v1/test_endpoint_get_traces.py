@@ -744,9 +744,9 @@ class TestGetTraces(BaseApiTest):
 
         # Only the first 3 traces should match all filter conditions
         expected_trace_ids = set(trace_ids[:3])
-        assert (
-            returned_trace_ids == expected_trace_ids
-        ), f"Expected {expected_trace_ids}, got {returned_trace_ids}"
+        assert returned_trace_ids == expected_trace_ids, (
+            f"Expected {expected_trace_ids}, got {returned_trace_ids}"
+        )
 
     def test_cross_item_filtered_count_with_span_restriction(self) -> None:
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
@@ -780,9 +780,9 @@ class TestGetTraces(BaseApiTest):
         for trace in response.traces:
             count_attr = trace.attributes[0]
 
-            assert (
-                count_attr.value.val_int == 1
-            ), f"Expected count of 1 span per trace, got {count_attr.value.val_int}"
+            assert count_attr.value.val_int == 1, (
+                f"Expected count of 1 span per trace, got {count_attr.value.val_int}"
+            )
 
     def test_cross_item_filtered_count_without_restriction(self) -> None:
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
@@ -816,9 +816,9 @@ class TestGetTraces(BaseApiTest):
         assert len(response.traces) == 3
         for trace in response.traces:
             count_attr = trace.attributes[0]
-            assert (
-                count_attr.value.val_int == 2
-            ), f"Expected count of 2 items per trace (1 span + 1 log), got {count_attr.value.val_int}"
+            assert count_attr.value.val_int == 2, (
+                f"Expected count of 2 items per trace (1 span + 1 log), got {count_attr.value.val_int}"
+            )
 
     def test_multiple_item_types_start_timestamp(self) -> None:
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()

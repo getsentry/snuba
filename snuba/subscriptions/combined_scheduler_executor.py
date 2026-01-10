@@ -72,9 +72,7 @@ def build_scheduler_executor_consumer(
         result_topic_spec = stream_loader.get_subscription_result_topic_spec()
         assert result_topic_spec is not None
 
-        synchronization_timestamp = (
-            stream_loader.get_subscription_sychronization_timestamp()
-        )
+        synchronization_timestamp = stream_loader.get_subscription_sychronization_timestamp()
         assert synchronization_timestamp is not None
 
         delay_seconds = stream_loader.get_subscription_delay_seconds()
@@ -115,9 +113,7 @@ def build_scheduler_executor_consumer(
         followed_consumer_group=followed_consumer_group,
         metrics=metrics,
         synchronization_timestamp=synchronization_timestamp,
-        time_shift=(
-            timedelta(seconds=delay_seconds * -1) if delay_seconds is not None else None
-        ),
+        time_shift=(timedelta(seconds=delay_seconds * -1) if delay_seconds is not None else None),
     )
 
     factory = CombinedSchedulerExecutorFactory(
@@ -175,9 +171,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
             {
                 index: SubscriptionScheduler(
                     entity_key,
-                    RedisSubscriptionDataStore(
-                        redis_client, entity_key, PartitionId(index)
-                    ),
+                    RedisSubscriptionDataStore(redis_client, entity_key, PartitionId(index)),
                     partition_id=PartitionId(index),
                     cache_ttl=timedelta(seconds=schedule_ttl),
                     metrics=self.__metrics,
@@ -211,9 +205,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
             health_check_file,
         )
 
-        modes = {
-            self._get_entity_watermark_mode(entity_key) for entity_key in entity_keys
-        }
+        modes = {self._get_entity_watermark_mode(entity_key) for entity_key in entity_keys}
 
         mode = modes.pop()
 
@@ -221,9 +213,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
 
         self.__mode = mode
 
-    def _get_entity_watermark_mode(
-        self, entity_key: EntityKey
-    ) -> SchedulingWatermarkMode:
+    def _get_entity_watermark_mode(self, entity_key: EntityKey) -> SchedulingWatermarkMode:
         storage = get_entity(entity_key).get_writable_storage()
         assert storage is not None, "Entity does not have a writable storage"
         stream_loader = storage.get_table_writer().get_stream_loader()
@@ -236,9 +226,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[Tick]:
-        execute_step = self.__executor_factory.create_with_partitions(
-            commit, partitions
-        )
+        execute_step = self.__executor_factory.create_with_partitions(commit, partitions)
         return TickBuffer(
             self.__mode,
             self.__partitions,

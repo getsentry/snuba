@@ -141,9 +141,7 @@ def subscriptions_scheduler(
     if slice_id:
         metrics_tags["slice_id"] = str(slice_id)
 
-    metrics = MetricsWrapper(
-        environment.metrics, "subscriptions.scheduler", tags=metrics_tags
-    )
+    metrics = MetricsWrapper(environment.metrics, "subscriptions.scheduler", tags=metrics_tags)
 
     configure_metrics(StreamMetricsAdapter(metrics))
 
@@ -151,9 +149,7 @@ def subscriptions_scheduler(
 
     storage = get_entity(entity_key).get_writable_storage()
 
-    assert (
-        storage is not None
-    ), f"Entity {entity_name} does not have a writable storage by default."
+    assert storage is not None, f"Entity {entity_name} does not have a writable storage by default."
 
     if stale_threshold_seconds is not None:
         assert stale_threshold_seconds > 120, "stale_threshold_seconds must be 120"

@@ -33,9 +33,7 @@ class TestLegacyOutcomesApi(BaseApiTest):
 
         self.skew_minutes = 180
         self.skew = timedelta(minutes=self.skew_minutes)
-        self.base_time = (
-            datetime.utcnow().replace(minute=0, second=0, microsecond=0) - self.skew
-        )
+        self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - self.skew
         self.storage = get_writable_storage(StorageKey.OUTCOMES_RAW)
 
     @pytest.fixture(scope="class")
@@ -59,9 +57,7 @@ class TestLegacyOutcomesApi(BaseApiTest):
             message = {
                 "project_id": project_id,
                 "event_id": uuid.uuid4().hex,
-                "timestamp": (self.base_time + time_since_base).strftime(
-                    "%Y-%m-%dT%H:%M:%S.%fZ"
-                ),
+                "timestamp": (self.base_time + time_since_base).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                 "org_id": org_id,
                 "reason": None,
                 "key_id": 1,
@@ -181,9 +177,7 @@ class TestLegacyOutcomesApi(BaseApiTest):
             other_project_id,
         ]
 
-    def test_category_quantity_sum_querying(
-        self, get_project_id: Callable[[], int]
-    ) -> None:
+    def test_category_quantity_sum_querying(self, get_project_id: Callable[[], int]) -> None:
         project_id = get_project_id()
         self.generate_outcomes(
             org_id=1,
@@ -328,9 +322,7 @@ class TestOutcomesAPI(BaseApiTest):
             message = {
                 "project_id": project_id,
                 "event_id": uuid.uuid4().hex,
-                "timestamp": (self.base_time + time_since_base).strftime(
-                    "%Y-%m-%dT%H:%M:%S.%fZ"
-                ),
+                "timestamp": (self.base_time + time_since_base).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                 "org_id": org_id,
                 "reason": None,
                 "key_id": 1,
@@ -362,12 +354,12 @@ class TestOutcomesAPI(BaseApiTest):
     @pytest.fixture(autouse=True)
     def setup_teardown(self, clickhouse_db: None) -> None:
         self.skew = timedelta(minutes=180)
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) - timedelta(minutes=180)
-        self.next_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) + timedelta(minutes=180)
+        self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
+            minutes=180
+        )
+        self.next_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) + timedelta(
+            minutes=180
+        )
         self.storage = get_writable_storage(StorageKey.OUTCOMES_RAW)
 
     def test_virtual_time_column(self, get_project_id: Callable[[], int]) -> None:

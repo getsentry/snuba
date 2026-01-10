@@ -204,9 +204,7 @@ class StringifyVisitor(ExpressionVisitor[str]):
 
     def visit_column(self, exp: Column) -> str:
         column_str = (
-            f"{exp.table_name}.{exp.column_name}"
-            if exp.table_name
-            else f"{exp.column_name}"
+            f"{exp.table_name}.{exp.column_name}" if exp.table_name else f"{exp.column_name}"
         )
         return f"{self._get_line_prefix()}{column_str}{self._get_alias_str(exp)}"
 
@@ -335,10 +333,7 @@ class Column(Expression):
     def functional_eq(self, other: Expression) -> bool:
         if not isinstance(other, self.__class__):
             return False
-        return (
-            self.table_name == other.table_name
-            and self.column_name == other.column_name
-        )
+        return self.table_name == other.table_name and self.column_name == other.column_name
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
@@ -382,9 +377,7 @@ class SubscriptableReference(Expression):
     def functional_eq(self, other: Expression) -> bool:
         if not isinstance(other, self.__class__):
             return False
-        return self.column.functional_eq(other.column) and self.key.functional_eq(
-            other.key
-        )
+        return self.column.functional_eq(other.column) and self.key.functional_eq(other.key)
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)

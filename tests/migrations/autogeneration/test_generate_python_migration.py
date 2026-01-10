@@ -1,8 +1,8 @@
+import ast
 from typing import Any
 
 import pytest
 import yaml
-from black import Mode, format_str
 
 from snuba.migrations.autogeneration.diff import generate_python_migration
 
@@ -150,9 +150,7 @@ class Migration(ClickhouseNodeMigration):
     migration = generate_python_migration(
         mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols)
     )
-    assert format_str(migration, mode=Mode()) == format_str(
-        expected_migration, mode=Mode()
-    )
+    assert ast.dump(ast.parse(migration)) == ast.dump(ast.parse(expected_migration))
 
 
 def test_modify_column() -> None:
@@ -166,9 +164,7 @@ def test_modify_column() -> None:
         ValueError,
         match="Modification to columns in unsupported, column 'timestamp' was modified or reordered",
     ):
-        generate_python_migration(
-            mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols)
-        )
+        generate_python_migration(mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols))
 
 
 def test_reorder_columns() -> None:
@@ -184,9 +180,7 @@ def test_reorder_columns() -> None:
         ValueError,
         match="Modification to columns in unsupported, column 'timestamp' was modified or reordered",
     ):
-        generate_python_migration(
-            mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols)
-        )
+        generate_python_migration(mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols))
 
 
 def test_delete_column() -> None:
@@ -201,6 +195,4 @@ def test_delete_column() -> None:
         "{ name: newcol1, type: DateTime }",
     ]
     with pytest.raises(ValueError, match="Column removal is not supported"):
-        generate_python_migration(
-            mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols)
-        )
+        generate_python_migration(mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols))

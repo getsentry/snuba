@@ -40,6 +40,4 @@ def test_legacy_use() -> None:
         if isinstance(snuba_migration, migration.ClickhouseNodeMigrationLegacy):
             mark = int(migration_id.split("_")[0])
             if (group not in legacy_cutoff) or mark > int(legacy_cutoff[group]):
-                pytest.fail(
-                    f"Migration {migration_id} in group {group} is using legacy types"
-                )
+                pytest.fail(f"Migration {migration_id} in group {group} is using legacy types")

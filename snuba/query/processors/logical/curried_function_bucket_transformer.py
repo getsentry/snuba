@@ -30,9 +30,7 @@ class CurriedFunctionBucketTransformer(LogicalQueryProcessor):
             if not isinstance(exp, CurriedFunctionCall):
                 return exp
 
-            if not exp.internal_function.function_name.startswith(
-                self.curried_function
-            ):
+            if not exp.internal_function.function_name.startswith(self.curried_function):
                 return exp
 
             new_internal = FunctionCall(

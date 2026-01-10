@@ -17,10 +17,7 @@ class SliceOfMapOptimizer(ClickhouseQueryProcessor):
         if isinstance(exp, FunctionCall) and exp.function_name == "arraySlice":
             inner_exp = exp.parameters[0]
 
-            if (
-                isinstance(inner_exp, FunctionCall)
-                and inner_exp.function_name == "arrayMap"
-            ):
+            if isinstance(inner_exp, FunctionCall) and inner_exp.function_name == "arrayMap":
                 lambda_fn = inner_exp.parameters[0]
                 innermost_exp = inner_exp.parameters[1]
                 slice_args = exp.parameters[1:]

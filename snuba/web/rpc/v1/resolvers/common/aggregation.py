@@ -525,7 +525,7 @@ def _get_ci_count(
     z_value: float = Z_VALUE_P95,
     use_sampling_factor: bool = False,
 ) -> Expression:
-    """
+    r"""
     confidence interval = Z \cdot \sqrt{\sum_{i=1}^n w_i^2 - w_i}
 
           ┌───────────┐
@@ -575,7 +575,7 @@ def _get_ci_sum(
     z_value: float = Z_VALUE_P95,
     use_sampling_factor: bool = False,
 ) -> Expression:
-    """
+    r"""
     confidence interval = Z \cdot \sqrt{\sum_{i=1}^n x_i^2 \cdot (w_i^2 - w_i)}
 
           ┌─────────────────┐
@@ -622,7 +622,7 @@ def _get_ci_avg(
     use_sampling_factor: bool = False,
 ) -> Expression:
     """
-    confidence interval = (\\frac{t + err_t}{c - err_c} - \\frac{t - err_t}{c + err_c}) \cdot 0.5
+    confidence interval = (\\frac{t + err_t}{c - err_c} - \\frac{t - err_t}{c + err_c}) \\cdot 0.5
 
      t + err_t   t - err_t
     (───────── - ─────────) ⋅ 0.5

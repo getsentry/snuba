@@ -34,9 +34,7 @@ AND _sort_timestamp < toDateTime('{end_datetime}')"""
     def execute(self, logger: JobLogger) -> None:
         cluster = get_cluster(StorageSetKey.EVENTS_ANALYTICS_PLATFORM)
         storage_node = cluster.get_local_nodes()[0]
-        connection = cluster.get_node_connection(
-            ClickhouseClientSettings.CLEANUP, storage_node
-        )
+        connection = cluster.get_node_connection(ClickhouseClientSettings.CLEANUP, storage_node)
         if not cluster.is_single_node():
             cluster_name = cluster.get_clickhouse_cluster_name()
         else:

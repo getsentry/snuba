@@ -69,7 +69,6 @@ def replacer(
     queued_min_messages: int,
     log_level: Optional[str] = None,
 ) -> None:
-
     from arroyo import Topic, configure_metrics
     from arroyo.backends.kafka import KafkaConsumer
     from arroyo.commit import ONCE_PER_SECOND
@@ -89,9 +88,9 @@ def replacer(
 
     stream_loader = storage.get_table_writer().get_stream_loader()
     default_replacement_topic_spec = stream_loader.get_replacement_topic_spec()
-    assert (
-        default_replacement_topic_spec is not None
-    ), f"Storage {storage.get_storage_key().value} does not have a replacement topic."
+    assert default_replacement_topic_spec is not None, (
+        f"Storage {storage.get_storage_key().value} does not have a replacement topic."
+    )
     replacements_topic = replacements_topic or default_replacement_topic_spec.topic_name
 
     metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags)

@@ -59,10 +59,7 @@ class OptionalAttributeAggregationTransformer(LogicalQueryProcessor):
             return None
 
         def transform_aggregates_to_conditionals(exp: Expression) -> Expression:
-            if (
-                isinstance(exp, FunctionCall)
-                and exp.function_name in self._aggregation_names
-            ):
+            if isinstance(exp, FunctionCall) and exp.function_name in self._aggregation_names:
                 subscriptable_ref = find_subscriptable_reference(exp)
                 if subscriptable_ref:
                     return FunctionCall(
@@ -81,10 +78,7 @@ class OptionalAttributeAggregationTransformer(LogicalQueryProcessor):
                         ),
                     )
             elif isinstance(exp, CurriedFunctionCall):
-                if (
-                    exp.internal_function.function_name
-                    in self._curried_aggregation_names
-                ):
+                if exp.internal_function.function_name in self._curried_aggregation_names:
                     subscriptable_ref = find_subscriptable_reference(exp)
                     if subscriptable_ref:
                         return CurriedFunctionCall(

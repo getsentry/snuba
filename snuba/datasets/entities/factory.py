@@ -29,9 +29,7 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             entity.entity_key: entity
             for entity in [
                 build_entity_from_config(config_file)
-                for config_file in glob(
-                    settings.ENTITY_CONFIG_FILES_GLOB, recursive=True
-                )
+                for config_file in glob(settings.ENTITY_CONFIG_FILES_GLOB, recursive=True)
             ]
         }
 
@@ -97,9 +95,9 @@ def get_all_entity_names() -> Sequence[EntityKey]:
 def enforce_table_writer(entity: Entity) -> TableWriter:
     writable_storage = entity.get_writable_storage()
 
-    assert (
-        writable_storage is not None
-    ), f"Entity {_ent_factory().get_entity_name(entity)} does not have a writable storage."
+    assert writable_storage is not None, (
+        f"Entity {_ent_factory().get_entity_name(entity)} does not have a writable storage."
+    )
     return writable_storage.get_table_writer()
 
 

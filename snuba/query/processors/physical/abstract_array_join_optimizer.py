@@ -62,9 +62,7 @@ class AbstractArrayJoinOptimizer(ClickhouseQueryProcessor):
 
     def get_filtered_arrays(
         self, query: Query, all_column_names: Sequence[str]
-    ) -> Tuple[
-        Dict[str, Sequence[str]], Dict[Tuple[str, ...], Sequence[Tuple[str, ...]]]
-    ]:
+    ) -> Tuple[Dict[str, Sequence[str]], Dict[Tuple[str, ...], Sequence[Tuple[str, ...]]]]:
         # Check which array joins have been selected
         selected_array_joins = {
             column_name
@@ -80,9 +78,7 @@ class AbstractArrayJoinOptimizer(ClickhouseQueryProcessor):
         }
 
         single_filtered = {
-            column_name: filtered
-            for column_name, filtered in single_filtered.items()
-            if filtered
+            column_name: filtered for column_name, filtered in single_filtered.items() if filtered
         }
 
         # Look for all the filters on a tuple of more than one array joins
@@ -144,9 +140,7 @@ def skippable_condition_pattern(*column_names: str) -> Callable[[Expression], bo
                 String("has"),
                 (Column(column_name=String(column_name)), Literal(Any(str))),
             )
-            if all(
-                has_pattern.match(c) for c in get_first_level_or_conditions(conditions)
-            ):
+            if all(has_pattern.match(c) for c in get_first_level_or_conditions(conditions)):
                 return True
         return False
 
@@ -296,10 +290,7 @@ def tuple_literal_equal_condition_extractor(
             return set()
 
         function = match.expression("tuple")
-        if (
-            not isinstance(function, FunctionCallExpr)
-            or function.function_name != "tuple"
-        ):
+        if not isinstance(function, FunctionCallExpr) or function.function_name != "tuple":
             return set()
 
         parameters = tuple(

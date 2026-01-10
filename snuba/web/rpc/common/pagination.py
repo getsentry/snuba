@@ -23,7 +23,6 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import Tim
 
 
 class FlexibleTimeWindowPageWithFilters:
-
     _TIME_WINDOW_PREFIX = "sentry__time_window"
     _TIME_WINDOW_START_KEY = f"{_TIME_WINDOW_PREFIX}.start_timestamp"
     _TIME_WINDOW_END_KEY = f"{_TIME_WINDOW_PREFIX}.end_timestamp"

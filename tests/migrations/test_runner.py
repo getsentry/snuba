@@ -51,19 +51,17 @@ def temp_settings() -> Any:
 @pytest.mark.custom_clickhouse_db
 def test_get_status() -> None:
     runner = Runner()
-    assert runner.get_status(
-        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial")
-    ) == (Status.NOT_STARTED, None)
-    runner.run_migration(
-        MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True
+    assert runner.get_status(MigrationKey(MigrationGroup.EVENTS, "0001_events_initial")) == (
+        Status.NOT_STARTED,
+        None,
     )
-    assert runner.get_status(
-        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial")
-    ) == (Status.NOT_STARTED, None)
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True)
+    assert runner.get_status(MigrationKey(MigrationGroup.EVENTS, "0001_events_initial")) == (
+        Status.NOT_STARTED,
+        None,
+    )
     runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0001_events_initial"))
-    status = runner.get_status(
-        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial")
-    )
+    status = runner.get_status(MigrationKey(MigrationGroup.EVENTS, "0001_events_initial"))
     assert status[0] == Status.COMPLETED
     assert isinstance(status[1], datetime)
 
@@ -114,9 +112,7 @@ def test_show_all_for_groups() -> None:
 @pytest.mark.custom_clickhouse_db
 def test_run_migration() -> None:
     runner = Runner()
-    runner.run_migration(
-        MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True
-    )
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
@@ -134,9 +130,7 @@ def test_run_migration() -> None:
         runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
 
     # Running with --fake
-    runner.run_migration(
-        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial"), fake=True
-    )
+    runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0001_events_initial"), fake=True)
     assert connection.execute("SHOW TABLES LIKE 'sentry_local'").results == []
 
 
@@ -157,15 +151,11 @@ def test_reverse_migration() -> None:
         runner.reverse_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
 
     # Reverse with --fake
-    for migration_id in reversed(
-        get_group_loader(MigrationGroup.EVENTS).get_migrations()
-    ):
-        runner.reverse_migration(
-            MigrationKey(MigrationGroup.EVENTS, migration_id), fake=True
-        )
-    assert (
-        len(connection.execute("SHOW TABLES LIKE 'errors_local'").results) == 1
-    ), "Table still exists"
+    for migration_id in reversed(get_group_loader(MigrationGroup.EVENTS).get_migrations()):
+        runner.reverse_migration(MigrationKey(MigrationGroup.EVENTS, migration_id), fake=True)
+    assert len(connection.execute("SHOW TABLES LIKE 'errors_local'").results) == 1, (
+        "Table still exists"
+    )
 
 
 @pytest.mark.custom_clickhouse_db
@@ -173,9 +163,7 @@ def test_get_pending_migrations() -> None:
     runner = Runner()
     total_migrations = get_total_migration_count()
     assert len(runner._get_pending_migrations()) == total_migrations
-    runner.run_migration(
-        MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True
-    )
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True)
     assert len(runner._get_pending_migrations()) == total_migrations - 1
 
 
@@ -186,9 +174,7 @@ def test_get_pending_migrations_for_group() -> None:
     migration_group_count = len(get_group_loader(group).get_migrations())
     assert len(runner._get_pending_migrations_for_group(group)) == migration_group_count
 
-    runner.run_migration(
-        MigrationKey(MigrationGroup("system"), "0001_migrations"), force=True
-    )
+    runner.run_migration(MigrationKey(MigrationGroup("system"), "0001_migrations"), force=True)
     assert len(runner._get_pending_migrations_for_group(MigrationGroup.SYSTEM)) == 0
 
 
@@ -197,9 +183,7 @@ def test_run_all_with_group() -> None:
     runner = Runner()
     group = MigrationGroup.EVENTS
     event_migration_count = len(get_group_loader(group).get_migrations())
-    system_migration_count = len(
-        get_group_loader(MigrationGroup.SYSTEM).get_migrations()
-    )
+    system_migration_count = len(get_group_loader(MigrationGroup.SYSTEM).get_migrations())
 
     with pytest.raises(MigrationError):
         runner.run_all(force=False, group=group)
@@ -235,9 +219,7 @@ def test_run_and_reverse_all() -> None:
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
-    assert (
-        connection.execute("SHOW TABLES").results == []
-    ), "All tables should be deleted"
+    assert connection.execute("SHOW TABLES").results == [], "All tables should be deleted"
 
 
 @pytest.mark.custom_clickhouse_db
@@ -258,10 +240,7 @@ def test_run_all_using_through() -> None:
 
     group = MigrationGroup.GENERIC_METRICS
     all_generic_metrics = len(get_group_loader(group).get_migrations())
-    assert (
-        len(runner._get_pending_migrations_for_group(group=group))
-        == all_generic_metrics
-    )
+    assert len(runner._get_pending_migrations_for_group(group=group)) == all_generic_metrics
 
     with pytest.raises(MigrationError):
         # too many migrations id matches
@@ -272,9 +251,7 @@ def test_run_all_using_through() -> None:
         runner.run_all(force=True, group=group, through="9999")
 
     runner.run_all(force=True, group=group, through="0002")
-    assert len(runner._get_pending_migrations_for_group(group=group)) == (
-        all_generic_metrics - 2
-    )
+    assert len(runner._get_pending_migrations_for_group(group=group)) == (all_generic_metrics - 2)
 
     # Running with --fake
     # (generic_metric_sets_aggregation_mv was added in 0003)
@@ -282,12 +259,7 @@ def test_run_all_using_through() -> None:
     connection = get_cluster(StorageSetKey.GENERIC_METRICS_SETS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
-    assert (
-        connection.execute(
-            "SHOW TABLES LIKE 'generic_metric_sets_aggregation_mv'"
-        ).results
-        == []
-    )
+    assert connection.execute("SHOW TABLES LIKE 'generic_metric_sets_aggregation_mv'").results == []
 
 
 @pytest.mark.custom_clickhouse_db
@@ -299,16 +271,11 @@ def test_run_all_using_readiness() -> None:
 
     group = MigrationGroup.GENERIC_METRICS
     all_generic_metrics = len(get_group_loader(group).get_migrations())
-    assert (
-        len(runner._get_pending_migrations_for_group(group=group))
-        == all_generic_metrics
-    )
+    assert len(runner._get_pending_migrations_for_group(group=group)) == all_generic_metrics
 
     # using different readiness wont change anything
     runner.run_all(force=True, group=group, readiness_states=[ReadinessState.LIMITED])
-    assert len(runner._get_pending_migrations_for_group(group=group)) == (
-        all_generic_metrics
-    )
+    assert len(runner._get_pending_migrations_for_group(group=group)) == (all_generic_metrics)
 
     # using correct readiness state runs the migration
     runner.run_all(force=True, group=group, readiness_states=[ReadinessState.COMPLETE])
@@ -333,17 +300,12 @@ def test_reverse_all_for_group() -> None:
     runner.run_all(group=MigrationGroup.PROFILE_CHUNKS, force=True)
     total_profile_tables = len(connection.execute(sql).results)
 
-    runner.reverse_all(
-        group=MigrationGroup.PROFILE_CHUNKS, force=True, include_system=True
-    )
+    runner.reverse_all(group=MigrationGroup.PROFILE_CHUNKS, force=True, include_system=True)
 
-    assert (
-        len(connection.execute(sql).results)
-        == total_profile_tables - initial_profile_tables
+    assert len(connection.execute(sql).results) == total_profile_tables - initial_profile_tables
+    assert connection.execute("SHOW TABLES LIKE 'profile_chunks_local'").results == [], (
+        "'profile_chunks_local' table should be deleted"
     )
-    assert (
-        connection.execute("SHOW TABLES LIKE 'profile_chunks_local'").results == []
-    ), "'profile_chunks_local' table should be deleted"
 
 
 @pytest.mark.custom_clickhouse_db
@@ -385,9 +347,9 @@ def test_reverse_idempotency_all() -> None:
             from snuba.clusters.cluster import UndefinedClickhouseCluster
 
             try:
-                cluster_connection = get_cluster(
-                    StorageSetKey(group)
-                ).get_query_connection(ClickhouseClientSettings.MIGRATE)
+                cluster_connection = get_cluster(StorageSetKey(group)).get_query_connection(
+                    ClickhouseClientSettings.MIGRATE
+                )
 
                 before_state = cluster_connection.execute(
                     "SELECT create_table_query FROM system.tables"
@@ -421,20 +383,14 @@ def test_get_active_migration_groups(temp_settings: Any) -> None:
     temp_settings.SKIPPED_MIGRATION_GROUPS = {}
     temp_settings.SUPPORTED_STATES = {}
     active_groups = get_active_migration_groups()
-    assert (
-        MigrationGroup.SEARCH_ISSUES not in active_groups
-    )  # should be skipped by readiness_state
+    assert MigrationGroup.SEARCH_ISSUES not in active_groups  # should be skipped by readiness_state
 
 
 @pytest.mark.custom_clickhouse_db
 def test_reverse_in_progress() -> None:
     runner = Runner()
-    runner.run_migration(
-        MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True
-    )
-    migration_key = MigrationKey(
-        MigrationGroup.TEST_MIGRATION, "0001_create_test_table"
-    )
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True)
+    migration_key = MigrationKey(MigrationGroup.TEST_MIGRATION, "0001_create_test_table")
     runner.run_migration(migration_key)
     runner._update_migration_status(migration_key, Status.IN_PROGRESS)
 
@@ -456,9 +412,7 @@ def test_reverse_in_progress() -> None:
 @pytest.mark.custom_clickhouse_db
 def test_version() -> None:
     runner = Runner()
-    runner.run_migration(
-        MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True
-    )
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True)
     migration_key = MigrationKey(MigrationGroup.EVENTS, "test")
     assert runner._get_next_version(migration_key) == 1
     runner._update_migration_status(migration_key, Status.IN_PROGRESS)
@@ -476,9 +430,7 @@ def test_no_schema_differences() -> None:
 
     for storage_key in get_all_storage_keys():
         storage = get_storage(storage_key)
-        conn = storage.get_cluster().get_query_connection(
-            ClickhouseClientSettings.MIGRATE
-        )
+        conn = storage.get_cluster().get_query_connection(ClickhouseClientSettings.MIGRATE)
 
         schema = storage.get_schema()
 
@@ -491,9 +443,9 @@ def test_no_schema_differences() -> None:
         table_name = schema.get_local_table_name()
         local_schema = get_local_schema(conn, table_name)
 
-        assert (
-            schema.get_column_differences(local_schema) == []
-        ), f"Schema mismatch: {table_name} does not match schema"
+        assert schema.get_column_differences(local_schema) == [], (
+            f"Schema mismatch: {table_name} does not match schema"
+        )
 
     importlib.reload(settings)
     importlib.reload(factory)

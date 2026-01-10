@@ -52,9 +52,7 @@ class AggregationFilterWrapper(ProtoWrapper[AggregationFilter]):
         visitor.visit_AggregationFilterWrapper(self)
         aggregation_filter = self.underlying_proto
         if aggregation_filter.HasField("comparison_filter"):
-            AggregationComparisonFilterWrapper(
-                aggregation_filter.comparison_filter
-            ).accept(visitor)
+            AggregationComparisonFilterWrapper(aggregation_filter.comparison_filter).accept(visitor)
 
         if aggregation_filter.HasField("and_filter"):
             for agg_filter in aggregation_filter.and_filter.filters:
@@ -71,12 +69,8 @@ class TimeSeriesExpressionWrapper(ProtoWrapper[TimeSeriesExpression]):
 
         time_series_expression = self.underlying_proto
         if time_series_expression.HasField("formula"):
-            TimeSeriesExpressionWrapper(time_series_expression.formula.left).accept(
-                visitor
-            )
-            TimeSeriesExpressionWrapper(time_series_expression.formula.right).accept(
-                visitor
-            )
+            TimeSeriesExpressionWrapper(time_series_expression.formula.left).accept(visitor)
+            TimeSeriesExpressionWrapper(time_series_expression.formula.right).accept(visitor)
 
 
 class TraceItemTableRequestWrapper(ProtoWrapper[TraceItemTableRequest]):
@@ -88,9 +82,7 @@ class TraceItemTableRequestWrapper(ProtoWrapper[TraceItemTableRequest]):
         for ob in trace_item_table_request.order_by:
             ColumnWrapper(ob.column).accept(visitor)
         if trace_item_table_request.HasField("aggregation_filter"):
-            AggregationFilterWrapper(
-                trace_item_table_request.aggregation_filter
-            ).accept(visitor)
+            AggregationFilterWrapper(trace_item_table_request.aggregation_filter).accept(visitor)
 
 
 class TimeSeriesRequestWrapper(ProtoWrapper[TimeSeriesRequest]):
@@ -215,9 +207,7 @@ class GetExpressionAggregationsVisitor(ProtoVisitor):
 
     def __init__(self) -> None:
         super().__init__()
-        self.aggregations: list[
-            AttributeAggregation | AttributeConditionalAggregation
-        ] = []
+        self.aggregations: list[AttributeAggregation | AttributeConditionalAggregation] = []
 
     def visit_TimeSeriesExpressionWrapper(
         self, expression_wrapper: TimeSeriesExpressionWrapper
@@ -225,6 +215,4 @@ class GetExpressionAggregationsVisitor(ProtoVisitor):
         if expression_wrapper.underlying_proto.HasField("aggregation"):
             self.aggregations.append(expression_wrapper.underlying_proto.aggregation)
         elif expression_wrapper.underlying_proto.HasField("conditional_aggregation"):
-            self.aggregations.append(
-                expression_wrapper.underlying_proto.conditional_aggregation
-            )
+            self.aggregations.append(expression_wrapper.underlying_proto.conditional_aggregation)

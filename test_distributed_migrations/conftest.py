@@ -18,9 +18,7 @@ def pytest_configure() -> None:
     Set up the Sentry SDK to avoid errors hidden by configuration.
     Ensure the snuba_test database exists
     """
-    assert (
-        settings.TESTING
-    ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
+    assert settings.TESTING, "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
     print("setting up test cluster!")
 
@@ -52,12 +50,12 @@ def pytest_configure() -> None:
             http_port=cluster_node["http_port"],
             storage_sets=cluster_node["storage_sets"],
             single_node=cluster_node["single_node"],
-            cluster_name=cluster_node["cluster_name"]
-            if "cluster_name" in cluster_node
-            else None,
-            distributed_cluster_name=cluster_node["distributed_cluster_name"]
-            if "distributed_cluster_name" in cluster_node
-            else None,
+            cluster_name=cluster_node["cluster_name"] if "cluster_name" in cluster_node else None,
+            distributed_cluster_name=(
+                cluster_node["distributed_cluster_name"]
+                if "distributed_cluster_name" in cluster_node
+                else None
+            ),
             secure=cluster_node.get("secure", False),
             ca_certs=cluster_node.get("ca_certs", None),
             verify=cluster_node.get("verify", False),
@@ -66,9 +64,7 @@ def pytest_configure() -> None:
         database_name = cluster_node["database"]
 
         # create the test database
-        clickhouse_cluster.get_query_connection(
-            ClickhouseClientSettings.MIGRATE
-        ).execute(
+        clickhouse_cluster.get_query_connection(ClickhouseClientSettings.MIGRATE).execute(
             f"CREATE DATABASE IF NOT EXISTS {database_name} ON CLUSTER {clickhouse_cluster.get_clickhouse_cluster_name()};"
         )
 

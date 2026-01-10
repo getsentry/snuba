@@ -57,9 +57,7 @@ class TestGroupAttributesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     def setup_method(self, test_method: Callable[..., Any]) -> None:
         super().setup_method(test_method)
         initialize_snuba()
-        maybe_writable_storage = get_entity(
-            EntityKey.GROUP_ATTRIBUTES
-        ).get_writable_storage()
+        maybe_writable_storage = get_entity(EntityKey.GROUP_ATTRIBUTES).get_writable_storage()
         assert maybe_writable_storage is not None
 
         self.writable_storage = maybe_writable_storage

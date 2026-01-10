@@ -31,9 +31,7 @@ class ExplainStep:
     category: str  # The class of step e.g. "processor"
     type: ExplainType  # A value that tells the frontend what data the step has
     name: str  # The specific name for the step e.g. "TimeSeriesProcessor"
-    data: StepData = field(
-        default_factory=StepData
-    )  # Any extra information about the step
+    data: StepData = field(default_factory=StepData)  # Any extra information about the step
 
 
 @dataclass
@@ -46,18 +44,14 @@ class ExplainMeta:
 
 
 @contextmanager
-def with_query_differ(
-    category: str, name: str, query: Any
-) -> Generator[None, None, None]:
+def with_query_differ(category: str, name: str, query: Any) -> Generator[None, None, None]:
     original = str(query)
     yield
     transformed = str(query)
     add_transform_step(category, name, original, transformed)
 
 
-def add_transform_step(
-    category: str, name: str, original: str, transformed: str
-) -> None:
+def add_transform_step(category: str, name: str, original: str, transformed: str) -> None:
     diff = difflib.ndiff(original.split("\n"), transformed.split("\n"))
     diff_data = [str(df) for df in diff]
     step_data = TransformStepData(

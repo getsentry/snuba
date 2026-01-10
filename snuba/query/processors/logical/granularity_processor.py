@@ -74,19 +74,13 @@ class BaseGranularityProcessor(LogicalQueryProcessor):
         ).match(expression)
 
         if match is not None:
-            lhs_granularity = self.find_granularities_in_expression(
-                match.expression("lhs")
-            )
-            rhs_granularity = self.find_granularities_in_expression(
-                match.expression("rhs")
-            )
+            lhs_granularity = self.find_granularities_in_expression(match.expression("lhs"))
+            rhs_granularity = self.find_granularities_in_expression(match.expression("rhs"))
             matches.extend(rhs_granularity)
             matches.extend(lhs_granularity)
         return matches
 
-    def add_granularity_condition(
-        self, query: Query, selected_granularity: int
-    ) -> None:
+    def add_granularity_condition(self, query: Query, selected_granularity: int) -> None:
         query.add_condition_to_ast(
             binary_condition(
                 ConditionFunctions.EQ,
@@ -104,11 +98,7 @@ class BaseGranularityProcessor(LogicalQueryProcessor):
                 String(ConditionFunctions.EQ),
                 (
                     Column(column_name=String("granularity")),
-                    Literal(
-                        value=Param(
-                            "granularity", Integer(match.integer("granularity"))
-                        )
-                    ),
+                    Literal(value=Param("granularity", Integer(match.integer("granularity")))),
                 ),
             ).match(exp)
             if result is not None:
@@ -164,23 +154,15 @@ class GranularityProcessor(BaseGranularityProcessor):
         # 3. Process the query
         #   a. If granularity was found in GRANULARITY clause, simply just add a new condition.
         #   b. If found in WHERE clause, replace the old condition with the new one.
-        if (
-            requested_granularity
-            and requested_granularity > 0
-            and not granularities_in_condition
-        ):
-            selected_granularity = (
-                self.get_highest_common_available_granularity_multiple(
-                    requested_granularity
-                )
+        if requested_granularity and requested_granularity > 0 and not granularities_in_condition:
+            selected_granularity = self.get_highest_common_available_granularity_multiple(
+                requested_granularity
             )
             self.add_granularity_condition(query, selected_granularity)
         elif requested_granularity is None and len(granularities_in_condition) > 0:
             for match in granularities_in_condition:
-                selected_granularity = (
-                    self.get_highest_common_available_granularity_multiple(
-                        match.integer("granularity")
-                    )
+                selected_granularity = self.get_highest_common_available_granularity_multiple(
+                    match.integer("granularity")
                 )
                 self.replace_granularity_condition(
                     query,
@@ -250,12 +232,8 @@ class MappedGranularityProcessor(BaseGranularityProcessor):
         requested_granularity: int,
     ) -> int:
         # If the requested granularity is already mapped to the enum, then just return the value.
-        min_enum_granularity = min(
-            [mapping.enum_value for mapping in self._accepted_granularities]
-        )
-        max_enum_granularity = max(
-            [mapping.enum_value for mapping in self._accepted_granularities]
-        )
+        min_enum_granularity = min([mapping.enum_value for mapping in self._accepted_granularities])
+        max_enum_granularity = max([mapping.enum_value for mapping in self._accepted_granularities])
         if min_enum_granularity <= requested_granularity <= max_enum_granularity:
             return requested_granularity
 
@@ -289,23 +267,15 @@ class MappedGranularityProcessor(BaseGranularityProcessor):
         # 3. Process the query
         #   a. If granularity was found in GRANULARITY clause, simple just add a condition.
         #   b. If found in WHERE clause, replace the old condition and add a new one.
-        if (
-            requested_granularity
-            and requested_granularity > 0
-            and not granularities_in_condition
-        ):
-            selected_granularity = (
-                self.get_highest_common_available_granularity_multiple(
-                    requested_granularity
-                )
+        if requested_granularity and requested_granularity > 0 and not granularities_in_condition:
+            selected_granularity = self.get_highest_common_available_granularity_multiple(
+                requested_granularity
             )
             self.add_granularity_condition(query, selected_granularity)
         elif requested_granularity is None and len(granularities_in_condition) > 0:
             for match in granularities_in_condition:
-                selected_granularity = (
-                    self.get_highest_common_available_granularity_multiple(
-                        match.integer("granularity")
-                    )
+                selected_granularity = self.get_highest_common_available_granularity_multiple(
+                    match.integer("granularity")
                 )
                 self.replace_granularity_condition(query, match, selected_granularity)
         else:

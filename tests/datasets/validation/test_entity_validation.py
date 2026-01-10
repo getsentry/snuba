@@ -62,9 +62,7 @@ required_column_tests = [
             binary_condition(
                 "in",
                 Column("_snuba_timestamp", None, "timestamp"),
-                FunctionCall(
-                    None, "tuple", (Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),)
-                ),
+                FunctionCall(None, "tuple", (Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),)),
             ),
         ),
         id="filtering time with IN is allowed",
@@ -73,9 +71,7 @@ required_column_tests = [
 
 
 @pytest.mark.parametrize("key, condition", required_column_tests)
-def test_entity_required_column_validation(
-    key: EntityKey, condition: Optional[Expression]
-) -> None:
+def test_entity_required_column_validation(key: EntityKey, condition: Optional[Expression]) -> None:
     query = LogicalQuery(
         QueryEntity(key, get_entity(key).get_data_model()),
         selected_columns=[

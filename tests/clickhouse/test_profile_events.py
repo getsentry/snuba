@@ -22,9 +22,7 @@ def test_parse_trace_for_query_ids() -> None:
         "host2": MagicMock(query_id="query2"),
     }
 
-    with patch(
-        "snuba.admin.clickhouse.profile_events.hostname_resolves"
-    ) as mock_resolve:
+    with patch("snuba.admin.clickhouse.profile_events.hostname_resolves") as mock_resolve:
         mock_resolve.return_value = True
         result = parse_trace_for_query_ids(trace_output)
 
@@ -65,9 +63,7 @@ def test_gather_profile_events() -> None:
         "snuba.admin.clickhouse.profile_events.run_system_query_on_host_with_sql"
     ) as mock_query:
         mock_query.return_value = mock_system_query_result
-        with patch(
-            "snuba.admin.clickhouse.profile_events.hostname_resolves", return_value=True
-        ):
+        with patch("snuba.admin.clickhouse.profile_events.hostname_resolves", return_value=True):
             from flask import Flask
 
             app = Flask(__name__)
@@ -84,13 +80,8 @@ def test_gather_profile_events() -> None:
                     "test_user",
                 )
 
-                assert trace_output.profile_events_meta == [
-                    mock_system_query_result.meta
-                ]
-                assert (
-                    trace_output.profile_events_profile
-                    == mock_system_query_result.profile
-                )
+                assert trace_output.profile_events_meta == [mock_system_query_result.meta]
+                assert trace_output.profile_events_profile == mock_system_query_result.profile
                 assert trace_output.profile_events_results["host1"] == {
                     "column_names": ["column1"],
                     "rows": [json.dumps("profile_events")],
@@ -115,9 +106,7 @@ def test_gather_profile_events_retry_logic() -> None:
         "snuba.admin.clickhouse.profile_events.run_system_query_on_host_with_sql"
     ) as mock_query:
         mock_query.side_effect = [empty_result, empty_result, success_result]
-        with patch(
-            "snuba.admin.clickhouse.profile_events.hostname_resolves", return_value=True
-        ):
+        with patch("snuba.admin.clickhouse.profile_events.hostname_resolves", return_value=True):
             with patch("time.sleep") as mock_sleep:
                 from flask import Flask
 

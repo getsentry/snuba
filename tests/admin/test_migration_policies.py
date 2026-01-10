@@ -26,9 +26,7 @@ NON_BLOCKING_ROLE = Role(
     "non blocking",
     actions={ExecuteNonBlockingAction([MigrationResource("test_migration")])},
 )
-ALL_ROLE = Role(
-    "all", actions={ExecuteAllAction([MigrationResource("test_migration")])}
-)
+ALL_ROLE = Role("all", actions={ExecuteAllAction([MigrationResource("test_migration")])})
 
 
 @pytest.mark.parametrize(
@@ -44,9 +42,7 @@ ALL_ROLE = Role(
         ),
     ],
 )
-def test_get_group_policies(
-    roles: Sequence[Role], expected_policies: Set[MigrationPolicy]
-) -> None:
+def test_get_group_policies(roles: Sequence[Role], expected_policies: Set[MigrationPolicy]) -> None:
     user = AdminUser("meredith@sentry.io", "123", roles=roles)
     results = get_migration_group_policies(user)
     assert set(r.__class__ for r in results["test_migration"]) == set(

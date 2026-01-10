@@ -29,9 +29,7 @@ class CreateSubscriptionRequest(
     def response_class(cls) -> Type[CreateSubscriptionResponse]:
         return CreateSubscriptionResponse
 
-    def _execute(
-        self, in_msg: CreateSubscriptionRequestProto
-    ) -> CreateSubscriptionResponse:
+    def _execute(self, in_msg: CreateSubscriptionRequestProto) -> CreateSubscriptionResponse:
         from snuba.subscriptions.data import RPCSubscriptionData
         from snuba.subscriptions.subscription import SubscriptionCreator
 
@@ -43,15 +41,10 @@ class CreateSubscriptionRequest(
         dataset = PluggableDataset(name="eap", all_entities=[])
         entity_key = EntityKey("eap_items")
 
-        if (
-            in_msg.time_series_request.meta.trace_item_type
-            != TraceItemType.TRACE_ITEM_TYPE_SPAN
-        ):
+        if in_msg.time_series_request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_SPAN:
             entity_key = EntityKey("eap_items")
 
         subscription = RPCSubscriptionData.from_proto(in_msg, entity_key=entity_key)
-        identifier = SubscriptionCreator(dataset, entity_key).create(
-            subscription, self._timer
-        )
+        identifier = SubscriptionCreator(dataset, entity_key).create(subscription, self._timer)
 
         return CreateSubscriptionResponse(subscription_id=str(identifier))

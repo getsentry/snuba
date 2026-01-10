@@ -179,8 +179,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             # for GetTraces, there is no type specified so we assume spans because
             # that is necessary for traces anyways
             # if the type is specified and we don't know its outcome, route to Tier_1
-            in_msg_meta.trace_item_type
-            not in ITEM_TYPE_TO_OUTCOME_CATEGORY
+            in_msg_meta.trace_item_type not in ITEM_TYPE_TO_OUTCOME_CATEGORY
         ):
             return
 

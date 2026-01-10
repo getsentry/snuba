@@ -42,21 +42,19 @@ class TestApiCodes(BaseApiTest):
         super().setup_method(test_method)
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) - timedelta(minutes=180)
-        self.next_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) + timedelta(minutes=180)
+        self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
+            minutes=180
+        )
+        self.next_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) + timedelta(
+            minutes=180
+        )
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
     @patch("snuba.web.db_query.execute_query")
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
-    def test_correct_error_codes(
-        self, execute_mock: MagicMock, record_query: MagicMock
-    ) -> None:
+    def test_correct_error_codes(self, execute_mock: MagicMock, record_query: MagicMock) -> None:
         # pytest.param doesn't play well with patch so put the list here
         tests = [
             (

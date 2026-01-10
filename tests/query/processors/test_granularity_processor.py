@@ -234,9 +234,7 @@ def test_multiple_granularities_added_in_condition(
     )
 
     try:
-        GranularityProcessor().process_query(
-            query_with_multiple_conditions, HTTPQuerySettings()
-        )
+        GranularityProcessor().process_query(query_with_multiple_conditions, HTTPQuerySettings())
     except InvalidGranularityException:
         assert query_granularity[0] is None or query_granularity[1] is None
     else:

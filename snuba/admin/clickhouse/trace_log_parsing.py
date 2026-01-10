@@ -215,9 +215,7 @@ def summarize_trace_output(raw_trace_logs: str) -> TracingSummary:
 
     summary = TracingSummary({})
     query_node = parsed[0]["node_name"]
-    summary.query_summaries[query_node] = QuerySummary(
-        query_node, True, parsed[0]["query_id"]
-    )
+    summary.query_summaries[query_node] = QuerySummary(query_node, True, parsed[0]["query_id"])
     for line in parsed:
         if line["node_name"] not in summary.query_summaries:
             summary.query_summaries[line["node_name"]] = QuerySummary(
@@ -228,9 +226,7 @@ def summarize_trace_output(raw_trace_logs: str) -> TracingSummary:
         for line_type in line_types:
             parsed_line = line_type.from_log(line["log_content"])  # type: ignore
             if parsed_line is not None:
-                attr_name = (
-                    line_type.__name__.lower().replace("summary", "") + "_summaries"
-                )
+                attr_name = line_type.__name__.lower().replace("summary", "") + "_summaries"
                 if getattr(query_summary, attr_name) is None:
                     setattr(query_summary, attr_name, [parsed_line])
                 else:

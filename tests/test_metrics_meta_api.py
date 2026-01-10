@@ -96,8 +96,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
                         "metric_id": metric_id,
                         "retention_days": RETENTION_DAYS,
                         "use_case_id": self.use_case_id,
-                        "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                        + n,
+                        "sentry_received_timestamp": self.sentry_received_timestamp.timestamp() + n,
                     },
                     KafkaMessageMetadata(0, 0, self.sentry_received_timestamp),
                 )

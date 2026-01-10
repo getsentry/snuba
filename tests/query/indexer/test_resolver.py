@@ -94,9 +94,7 @@ metric_id_test_cases = [
                     "quantiles(0.5, 0.75)(transaction.user)",
                     CurriedFunctionCall(
                         "_snuba_aggregate_value",
-                        FunctionCall(
-                            None, "quantiles", (Literal(None, 0.5), Literal(None, 0.75))
-                        ),
+                        FunctionCall(None, "quantiles", (Literal(None, 0.5), Literal(None, 0.75))),
                         (Column("_snuba_value", None, "value"),),
                     ),
                 ),
@@ -127,9 +125,7 @@ metric_id_test_cases = [
                     "quantiles(0.5, 0.75)(transaction.user)",
                     CurriedFunctionCall(
                         "_snuba_aggregate_value",
-                        FunctionCall(
-                            None, "quantiles", (Literal(None, 0.5), Literal(None, 0.75))
-                        ),
+                        FunctionCall(None, "quantiles", (Literal(None, 0.5), Literal(None, 0.75))),
                         (Column("_snuba_value", None, "value"),),
                     ),
                 ),
@@ -292,9 +288,7 @@ tag_test_cases = [
                     "quantiles(0.5, 0.75)(transaction.user)",
                     CurriedFunctionCall(
                         "_snuba_aggregate_value",
-                        FunctionCall(
-                            None, "quantiles", (Literal(None, 0.5), Literal(None, 0.75))
-                        ),
+                        FunctionCall(None, "quantiles", (Literal(None, 0.5), Literal(None, 0.75))),
                         (Column("_snuba_value", None, "value"),),
                     ),
                 ),
@@ -316,9 +310,7 @@ tag_test_cases = [
                     "quantiles(0.5, 0.75)(transaction.user)",
                     CurriedFunctionCall(
                         "_snuba_aggregate_value",
-                        FunctionCall(
-                            None, "quantiles", (Literal(None, 0.5), Literal(None, 0.75))
-                        ),
+                        FunctionCall(None, "quantiles", (Literal(None, 0.5), Literal(None, 0.75))),
                         (Column("_snuba_value", None, "value"),),
                     ),
                 ),
@@ -534,9 +526,7 @@ tag_test_cases = [
                     Column(None, None, "event_type"),
                     Literal(None, "transaction"),
                 ),
-                binary_condition(
-                    "equals", Column(None, None, "transaction"), Literal(None, "t1")
-                ),
+                binary_condition("equals", Column(None, None, "transaction"), Literal(None, "t1")),
             ),
             granularity=60,
             limit=1000,
@@ -598,9 +588,7 @@ tag_test_cases = [
                     Column(None, None, "event_type"),
                     Literal(None, "transaction"),
                 ),
-                binary_condition(
-                    "equals", Column(None, None, "transaction"), Literal(None, "t1")
-                ),
+                binary_condition("equals", Column(None, None, "transaction"), Literal(None, "t1")),
             ),
             granularity=60,
             limit=1000,

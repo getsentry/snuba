@@ -74,9 +74,7 @@ class TestCleanup:
         current_time.return_value = base
 
         storage = get_writable_storage(storage_key)
-        clickhouse = storage.get_cluster().get_query_connection(
-            ClickhouseClientSettings.CLEANUP
-        )
+        clickhouse = storage.get_cluster().get_query_connection(ClickhouseClientSettings.CLEANUP)
 
         table = storage.get_table_writer().get_schema().get_local_table_name()
 
@@ -95,9 +93,7 @@ class TestCleanup:
 
         # -40 days, 90 retention
         three_weeks_ago = base - timedelta(days=7 * 3)
-        write_processed_messages(
-            storage, [create_event_row_for_date(three_weeks_ago, None)]
-        )
+        write_processed_messages(storage, [create_event_row_for_date(three_weeks_ago, None)])
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
         assert [(p.date, p.retention_days) for p in parts] == [
             (to_monday(three_weeks_ago), 90),
@@ -108,9 +104,7 @@ class TestCleanup:
 
         # -100 days, 90 retention
         thirteen_weeks_ago = base - timedelta(days=7 * 13)
-        write_processed_messages(
-            storage, [create_event_row_for_date(thirteen_weeks_ago, None)]
-        )
+        write_processed_messages(storage, [create_event_row_for_date(thirteen_weeks_ago, None)])
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
         assert [(p.date, p.retention_days) for p in parts] == [
             (to_monday(thirteen_weeks_ago), 90),
@@ -118,9 +112,7 @@ class TestCleanup:
             (to_monday(base), 90),
         ]
         stale = cleanup.filter_stale_partitions(parts)
-        assert [(p.date, p.retention_days) for p in stale] == [
-            (to_monday(thirteen_weeks_ago), 90)
-        ]
+        assert [(p.date, p.retention_days) for p in stale] == [(to_monday(thirteen_weeks_ago), 90)]
 
         # -1 week, 30 retention
         one_week_ago = base - timedelta(days=7)
@@ -136,15 +128,11 @@ class TestCleanup:
             ]
         )
         stale = cleanup.filter_stale_partitions(parts)
-        assert [(p.date, p.retention_days) for p in stale] == [
-            (to_monday(thirteen_weeks_ago), 90)
-        ]
+        assert [(p.date, p.retention_days) for p in stale] == [(to_monday(thirteen_weeks_ago), 90)]
 
         # -5 weeks, 30 retention
         five_weeks_ago = base - timedelta(days=7 * 5)
-        write_processed_messages(
-            storage, [create_event_row_for_date(five_weeks_ago, 30)]
-        )
+        write_processed_messages(storage, [create_event_row_for_date(five_weeks_ago, 30)])
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
         assert {(p.date, p.retention_days) for p in parts} == set(
             [
@@ -195,9 +183,7 @@ class TestCleanup:
             return datetime(rounded.year, rounded.month, rounded.day).astimezone(UTC)
 
         storage = get_writable_storage(storage_key)
-        clickhouse = storage.get_cluster().get_query_connection(
-            ClickhouseClientSettings.CLEANUP
-        )
+        clickhouse = storage.get_cluster().get_query_connection(ClickhouseClientSettings.CLEANUP)
 
         table = storage.get_table_writer().get_schema().get_local_table_name()
         database = storage.get_cluster().get_database()
@@ -215,8 +201,6 @@ class TestCleanup:
         write_processed_messages(storage, [create_event_row_for_date(timestamp, 90)])
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
 
-        assert [(p.date, p.retention_days) for p in parts] == [
-            (to_monday(timestamp), 90)
-        ]
+        assert [(p.date, p.retention_days) for p in parts] == [(to_monday(timestamp), 90)]
         stale = cleanup.filter_stale_partitions(parts)
         assert stale == []

@@ -112,14 +112,10 @@ class _LogicalDataSourceFinder(
         self.has_join = True
         return self.visit_join_clause(data_source)
 
-    def _visit_simple_query(
-        self, data_source: ProcessableQuery[LogicalDataSource]
-    ) -> None:
+    def _visit_simple_query(self, data_source: ProcessableQuery[LogicalDataSource]) -> None:
         self.visit(data_source.get_from_clause())
 
-    def _visit_composite_query(
-        self, data_source: CompositeQuery[LogicalDataSource]
-    ) -> None:
+    def _visit_composite_query(self, data_source: CompositeQuery[LogicalDataSource]) -> None:
         self.visit(data_source.get_from_clause())
 
     def visit_individual_node(self, node: IndividualNode[LogicalDataSource]) -> None:

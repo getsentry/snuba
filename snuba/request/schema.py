@@ -56,28 +56,22 @@ class RequestSchema:
             ]
         ):
             assert schema["type"] == "object", "subschema must be object"
-            assert (
-                schema["additionalProperties"] is False
-            ), "subschema must not allow additional properties"
+            assert schema["additionalProperties"] is False, (
+                "subschema must not allow additional properties"
+            )
             self.__composite_schema["required"].extend(schema.get("required", []))
 
             for property_name, property_schema in schema["properties"].items():
                 comp_schema = self.__composite_schema["properties"].get(property_name)
                 if comp_schema is not None and comp_schema != property_schema:
-                    raise BadRequestSchemaException(
-                        "subschema cannot redefine property"
-                    )
+                    raise BadRequestSchemaException("subschema cannot redefine property")
                 self.__composite_schema["properties"][property_name] = property_schema
 
-            for definition_name, definition_schema in schema.get(
-                "definitions", {}
-            ).items():
-                assert (
-                    definition_name not in self.__composite_schema["definitions"]
-                ), "subschema cannot redefine definition"
-                self.__composite_schema["definitions"][
-                    definition_name
-                ] = definition_schema
+            for definition_name, definition_schema in schema.get("definitions", {}).items():
+                assert definition_name not in self.__composite_schema["definitions"], (
+                    "subschema cannot redefine definition"
+                )
+                self.__composite_schema["definitions"][definition_name] = definition_schema
 
         self.__composite_schema["required"] = set(self.__composite_schema["required"])
 
@@ -102,9 +96,7 @@ class RequestSchema:
             raise JsonSchemaValidationException(str(error)) from error
 
         query_body = {
-            key: value.get(key)
-            for key in self.__query_schema["properties"].keys()
-            if key in value
+            key: value.get(key) for key in self.__query_schema["properties"].keys() if key in value
         }
         query_settings = {
             key: value.get(key)

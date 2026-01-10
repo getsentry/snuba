@@ -101,16 +101,16 @@ def build_executor_consumer(
     def get_topics_for_entity(
         entity_name: str,
     ) -> Tuple[KafkaTopicSpec, KafkaTopicSpec]:
-        assert (
-            entity_name in dataset_entity_names
-        ), f"Entity {entity_name} does not exist in dataset {dataset_name}"
+        assert entity_name in dataset_entity_names, (
+            f"Entity {entity_name} does not exist in dataset {dataset_name}"
+        )
 
         entity = get_entity(EntityKey(entity_name))
         storage = entity.get_writable_storage()
 
-        assert (
-            storage is not None
-        ), f"Entity {entity_name} does not have a writable storage by default."
+        assert storage is not None, (
+            f"Entity {entity_name} does not have a writable storage by default."
+        )
 
         stream_loader = storage.get_table_writer().get_stream_loader()
 
@@ -189,7 +189,6 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
-
         calculated_max_concurrent_queries = calculate_max_concurrent_queries(
             len(partitions),
             self.__total_partition_count,

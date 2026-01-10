@@ -67,19 +67,13 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT 4-5, event_id WHERE {added_condition} GRANULARITY 60",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression(
-                    "event_id", Column("_snuba_event_id", None, "event_id")
-                ),
+                SelectedExpression("event_id", Column("_snuba_event_id", None, "event_id")),
             ],
             granularity=60,
             condition=required_condition,
@@ -91,19 +85,13 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT 4-5, event_id WHERE {added_condition} TOTALS true",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression(
-                    "event_id", Column("_snuba_event_id", None, "event_id")
-                ),
+                SelectedExpression("event_id", Column("_snuba_event_id", None, "event_id")),
             ],
             condition=required_condition,
             totals=True,
@@ -123,13 +111,9 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression(
-                    "event_id", Column("_snuba_event_id", None, "event_id")
-                ),
+                SelectedExpression("event_id", Column("_snuba_event_id", None, "event_id")),
             ],
             condition=required_condition,
             sample=0.5,
@@ -141,23 +125,15 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT 4-5, event_id,title,release WHERE {added_condition} LIMIT 5 BY event_id,title,release",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression(
-                    "event_id", Column("_snuba_event_id", None, "event_id")
-                ),
+                SelectedExpression("event_id", Column("_snuba_event_id", None, "event_id")),
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
-                SelectedExpression(
-                    "release", Column("_snuba_release", None, "release")
-                ),
+                SelectedExpression("release", Column("_snuba_release", None, "release")),
             ],
             condition=required_condition,
             limitby=LimitBy(
@@ -176,19 +152,13 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT 4-5, group_id WHERE {added_condition} LIMIT 5 BY group_id",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression(
-                    "group_id", Column("_snuba_group_id", None, "group_id")
-                ),
+                SelectedExpression("group_id", Column("_snuba_group_id", None, "group_id")),
             ],
             condition=required_condition,
             limitby=LimitBy(5, [Column("_snuba_group_id", None, "group_id")]),
@@ -200,19 +170,13 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT 4-5, event_id WHERE {added_condition} LIMIT 5 OFFSET 3",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression(
-                    "event_id", Column("_snuba_event_id", None, "event_id")
-                ),
+                SelectedExpression("event_id", Column("_snuba_event_id", None, "event_id")),
             ],
             condition=required_condition,
             limit=5,
@@ -223,22 +187,16 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT 4-5, tags, arrayJoin(tags) AS x WHERE {added_condition} TOTALS true",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
                 SelectedExpression("tags", Column("_snuba_tags", None, "tags")),
                 SelectedExpression(
                     "x",
-                    FunctionCall(
-                        "_snuba_x", "arrayJoin", (Column("_snuba_tags", None, "tags"),)
-                    ),
+                    FunctionCall("_snuba_x", "arrayJoin", (Column("_snuba_tags", None, "tags"),)),
                 ),
             ],
             condition=required_condition,
@@ -251,15 +209,11 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT 4-5, 3* foo(partition) AS foo, partition WHERE {added_condition}",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
                 SelectedExpression(
                     "3* foo(partition) AS foo",
@@ -276,9 +230,7 @@ test_cases = [
                         ),
                     ),
                 ),
-                SelectedExpression(
-                    "partition", Column("_snuba_partition", None, "partition")
-                ),
+                SelectedExpression("partition", Column("_snuba_partition", None, "partition")),
             ],
             condition=required_condition,
             limit=1000,
@@ -292,15 +244,11 @@ test_cases = [
         WHERE platform NOT IN tuple('x', 'y') AND message IS NULL
         AND {added_condition}""",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
                 SelectedExpression(
                     "3*foo(partition) AS foo",
@@ -317,31 +265,23 @@ test_cases = [
                         ),
                     ),
                 ),
-                SelectedExpression(
-                    "partition", Column("_snuba_partition", None, "partition")
-                ),
+                SelectedExpression("partition", Column("_snuba_partition", None, "partition")),
             ],
             condition=binary_condition(
                 "and",
                 binary_condition(
                     "notIn",
                     Column("_snuba_platform", None, "platform"),
-                    FunctionCall(
-                        None, "tuple", (Literal(None, "x"), Literal(None, "y"))
-                    ),
+                    FunctionCall(None, "tuple", (Literal(None, "x"), Literal(None, "y"))),
                 ),
                 binary_condition(
                     "and",
                     binary_condition(
                         "and",
-                        unary_condition(
-                            "isNull", Column("_snuba_message", None, "message")
-                        ),
+                        unary_condition("isNull", Column("_snuba_message", None, "message")),
                         required_conditions[0],
                     ),
-                    binary_condition(
-                        "and", required_conditions[1], required_conditions[2]
-                    ),
+                    binary_condition("and", required_conditions[1], required_conditions[2]),
                 ),
             ),
             limit=1000,
@@ -352,9 +292,7 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT count() AS count BY tags[key], contexts[lcp.elementSize] WHERE contexts[lcp.elementSize] > 1 AND {added_condition}",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "tags[key]",
@@ -414,18 +352,12 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT (2*(4-5)+3), g(partition) AS goo, partition BY group_id, 2+7 WHERE {added_condition} ORDER BY offset DESC",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "group_id", Column("_snuba_group_id", None, "group_id")
-                ),
+                SelectedExpression("group_id", Column("_snuba_group_id", None, "group_id")),
                 SelectedExpression(
                     "2+7",
-                    FunctionCall(
-                        "_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))
-                    ),
+                    FunctionCall("_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))),
                 ),
                 SelectedExpression(
                     "(2*(4-5)+3)",
@@ -457,20 +389,14 @@ test_cases = [
                         (Column("_snuba_partition", None, "partition"),),
                     ),
                 ),
-                SelectedExpression(
-                    "partition", Column("_snuba_partition", None, "partition")
-                ),
+                SelectedExpression("partition", Column("_snuba_partition", None, "partition")),
             ],
             condition=required_condition,
             groupby=[
                 Column("_snuba_group_id", None, "group_id"),
-                FunctionCall(
-                    "_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))
-                ),
+                FunctionCall("_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))),
             ],
-            order_by=[
-                OrderBy(OrderByDirection.DESC, Column("_snuba_offset", None, "offset"))
-            ],
+            order_by=[OrderBy(OrderByDirection.DESC, Column("_snuba_offset", None, "offset"))],
             limit=1000,
             offset=0,
         ),
@@ -479,16 +405,12 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT (2*(4-5)+3), foo(partition) AS thing2, partition BY offset, 2+7 WHERE {added_condition} ORDER BY group_id DESC",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("offset", Column("_snuba_offset", None, "offset")),
                 SelectedExpression(
                     "2+7",
-                    FunctionCall(
-                        "_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))
-                    ),
+                    FunctionCall("_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))),
                 ),
                 SelectedExpression(
                     "(2*(4-5)+3)",
@@ -520,22 +442,14 @@ test_cases = [
                         (Column("_snuba_partition", None, "partition"),),
                     ),
                 ),
-                SelectedExpression(
-                    "partition", Column("_snuba_partition", None, "partition")
-                ),
+                SelectedExpression("partition", Column("_snuba_partition", None, "partition")),
             ],
             condition=required_condition,
             groupby=[
                 Column("_snuba_offset", None, "offset"),
-                FunctionCall(
-                    "_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))
-                ),
+                FunctionCall("_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))),
             ],
-            order_by=[
-                OrderBy(
-                    OrderByDirection.DESC, Column("_snuba_group_id", None, "group_id")
-                )
-            ],
+            order_by=[OrderBy(OrderByDirection.DESC, Column("_snuba_group_id", None, "group_id"))],
             limit=1000,
             offset=0,
         ),
@@ -544,9 +458,7 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT toDateTime('2020-01-01') AS now, 3*foo(partition) AS foo BY toDateTime('2020-01-01') AS now WHERE {added_condition}",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "now",
@@ -582,29 +494,21 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT event_id WHERE partition<3 AND offset=2 AND project_id=2 AND group_id=3 AND {added_condition}",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "event_id", Column("_snuba_event_id", None, "event_id")
-                )
+                SelectedExpression("event_id", Column("_snuba_event_id", None, "event_id"))
             ],
             condition=and_cond(
                 and_cond(
                     f.less(column("partition", None, "_snuba_partition"), literal(3)),
                     and_cond(
                         f.equals(column("offset", None, "_snuba_offset"), literal(2)),
-                        f.equals(
-                            column("project_id", None, "_snuba_project_id"), literal(2)
-                        ),
+                        f.equals(column("project_id", None, "_snuba_project_id"), literal(2)),
                     ),
                 ),
                 and_cond(
                     and_cond(
-                        f.equals(
-                            column("group_id", None, "_snuba_group_id"), literal(3)
-                        ),
+                        f.equals(column("group_id", None, "_snuba_group_id"), literal(3)),
                         required_conditions[0],
                     ),
                     and_cond(
@@ -621,13 +525,9 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT event_id WHERE ((partition<3 OR offset=retention_days) OR title=platform) AND {added_condition}",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "event_id", Column("_snuba_event_id", None, "event_id")
-                )
+                SelectedExpression("event_id", Column("_snuba_event_id", None, "event_id"))
             ],
             condition=and_cond(
                 and_cond(
@@ -662,13 +562,9 @@ test_cases = [
     pytest.param(
         f"MATCH (events) SELECT event_id WHERE (title!=platform OR partition<offset AND (location=gps(user_id,user_name,user_email) OR group_id>0)) AND {added_condition}",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "event_id", Column("_snuba_event_id", None, "event_id")
-                )
+                SelectedExpression("event_id", Column("_snuba_event_id", None, "event_id"))
             ],
             condition=and_cond(
                 and_cond(
@@ -714,13 +610,9 @@ test_cases = [
         AND timestamp>=toDateTime('2021-01-01')
         AND timestamp<toDateTime('2021-01-02')""",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "event_id", Column("_snuba_event_id", None, "event_id")
-                ),
+                SelectedExpression("event_id", Column("_snuba_event_id", None, "event_id")),
                 SelectedExpression(
                     "tags[test]",
                     SubscriptableReference(
@@ -761,15 +653,11 @@ test_cases = [
         SELECT 4-5,3*foo(partition) AS foo,partition
         WHERE {added_condition}""",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
                 SelectedExpression(
                     "3*foo(partition) AS foo",
@@ -786,9 +674,7 @@ test_cases = [
                         ),
                     ),
                 ),
-                SelectedExpression(
-                    "partition", Column("_snuba_partition", None, "partition")
-                ),
+                SelectedExpression("partition", Column("_snuba_partition", None, "partition")),
             ],
             condition=required_condition,
             limit=1000,
@@ -801,15 +687,11 @@ test_cases = [
         SELECT 4-5,3*foo(event_id) AS foo,event_id
         WHERE or(equals(arrayExists(exception_stacks.type, '=', 'RuntimeException'), 1), equals(arrayAll(modules.name, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1 AND {added_condition}""",
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
                 SelectedExpression(
                     "3*foo(event_id) AS foo",
@@ -826,9 +708,7 @@ test_cases = [
                         ),
                     ),
                 ),
-                SelectedExpression(
-                    "event_id", Column("_snuba_event_id", None, "event_id")
-                ),
+                SelectedExpression("event_id", Column("_snuba_event_id", None, "event_id")),
             ],
             condition=and_cond(
                 binary_condition(
@@ -855,9 +735,7 @@ test_cases = [
                                                         "equals",
                                                         (
                                                             Argument(None, "x"),
-                                                            Literal(
-                                                                None, "RuntimeException"
-                                                            ),
+                                                            Literal(None, "RuntimeException"),
                                                         ),
                                                     ),
                                                 ),
@@ -894,9 +772,7 @@ test_cases = [
                                                                 None,
                                                                 "tuple",
                                                                 (
-                                                                    Literal(
-                                                                        None, "Stack"
-                                                                    ),
+                                                                    Literal(None, "Stack"),
                                                                     Literal(
                                                                         None,
                                                                         "Arithmetic",
@@ -908,9 +784,7 @@ test_cases = [
                                                 ),
                                             ),
                                         ),
-                                        Column(
-                                            "_snuba_modules.name", None, "modules.name"
-                                        ),
+                                        Column("_snuba_modules.name", None, "modules.name"),
                                     ),
                                 ),
                                 Literal(None, 1),
@@ -929,7 +803,7 @@ test_cases = [
     ),
     pytest.param(
         f"""MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.event_id
-        WHERE {build_cond('e')} AND {build_cond('t')}""",
+        WHERE {build_cond("e")} AND {build_cond("t")}""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=IndividualNode(
@@ -957,19 +831,13 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression(
-                    "e.event_id", Column("_snuba_e.event_id", "e", "event_id")
-                ),
+                SelectedExpression("e.event_id", Column("_snuba_e.event_id", "e", "event_id")),
             ],
             condition=and_cond(
                 and_cond(
-                    f.equals(
-                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", "e", "_snuba_e.project_id"), literal(1)),
                     f.greaterOrEquals(
                         column("timestamp", "e", "_snuba_e.timestamp"),
                         literal(datetime.datetime(2021, 1, 1, 0, 0)),
@@ -981,9 +849,7 @@ test_cases = [
                             column("timestamp", "e", "_snuba_e.timestamp"),
                             literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
-                        f.equals(
-                            column("project_id", "t", "_snuba_t.project_id"), literal(1)
-                        ),
+                        f.equals(column("project_id", "t", "_snuba_t.project_id"), literal(1)),
                     ),
                     and_cond(
                         f.greaterOrEquals(
@@ -1004,7 +870,7 @@ test_cases = [
     ),
     pytest.param(
         f"""MATCH (e: events) -[contains]-> (t: transactions SAMPLE 0.5) SELECT 4-5, t.event_id
-        WHERE {build_cond('e')} AND {build_cond('t')}""",
+        WHERE {build_cond("e")} AND {build_cond("t")}""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=IndividualNode(
@@ -1033,19 +899,13 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression(
-                    "t.event_id", Column("_snuba_t.event_id", "t", "event_id")
-                ),
+                SelectedExpression("t.event_id", Column("_snuba_t.event_id", "t", "event_id")),
             ],
             condition=and_cond(
                 and_cond(
-                    f.equals(
-                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", "e", "_snuba_e.project_id"), literal(1)),
                     f.greaterOrEquals(
                         column("timestamp", "e", "_snuba_e.timestamp"),
                         literal(datetime.datetime(2021, 1, 1, 0, 0)),
@@ -1057,9 +917,7 @@ test_cases = [
                             column("timestamp", "e", "_snuba_e.timestamp"),
                             literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
-                        f.equals(
-                            column("project_id", "t", "_snuba_t.project_id"), literal(1)
-                        ),
+                        f.equals(column("project_id", "t", "_snuba_t.project_id"), literal(1)),
                     ),
                     and_cond(
                         f.greaterOrEquals(
@@ -1084,7 +942,7 @@ test_cases = [
             (e: events) -[contains]-> (t: transactions),
             (e: events) -[assigned]-> (ga: groupassignee)
         SELECT 4-5, ga.offset
-        WHERE {build_cond('e')} AND {build_cond('t')}""",
+        WHERE {build_cond("e")} AND {build_cond("t")}""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=JoinClause(
@@ -1128,19 +986,13 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression(
-                    "ga.offset", Column("_snuba_ga.offset", "ga", "offset")
-                ),
+                SelectedExpression("ga.offset", Column("_snuba_ga.offset", "ga", "offset")),
             ],
             condition=and_cond(
                 and_cond(
-                    f.equals(
-                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", "e", "_snuba_e.project_id"), literal(1)),
                     f.greaterOrEquals(
                         column("timestamp", "e", "_snuba_e.timestamp"),
                         literal(datetime.datetime(2021, 1, 1, 0, 0)),
@@ -1152,9 +1004,7 @@ test_cases = [
                             column("timestamp", "e", "_snuba_e.timestamp"),
                             literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
-                        f.equals(
-                            column("project_id", "t", "_snuba_t.project_id"), literal(1)
-                        ),
+                        f.equals(column("project_id", "t", "_snuba_t.project_id"), literal(1)),
                     ),
                     and_cond(
                         f.greaterOrEquals(
@@ -1181,7 +1031,7 @@ test_cases = [
             (e: events) -[bookmark]-> (gm: groupedmessage),
             (e: events) -[activity]-> (se: metrics_sets)
         SELECT 4-5, e.event_id, t.event_id, ga.offset, gm.offset, se.metric_id
-        WHERE {build_cond('e')} AND {build_cond('t')}
+        WHERE {build_cond("e")} AND {build_cond("t")}
         AND se.org_id = 1 AND se.project_id = 1
         AND se.timestamp >= toDateTime('2021-01-01') AND se.timestamp < toDateTime('2021-01-02')""",
         CompositeQuery(
@@ -1259,31 +1109,19 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression(
-                    "e.event_id", Column("_snuba_e.event_id", "e", "event_id")
-                ),
-                SelectedExpression(
-                    "t.event_id", Column("_snuba_t.event_id", "t", "event_id")
-                ),
-                SelectedExpression(
-                    "ga.offset", Column("_snuba_ga.offset", "ga", "offset")
-                ),
-                SelectedExpression(
-                    "gm.offset", Column("_snuba_gm.offset", "gm", "offset")
-                ),
+                SelectedExpression("e.event_id", Column("_snuba_e.event_id", "e", "event_id")),
+                SelectedExpression("t.event_id", Column("_snuba_t.event_id", "t", "event_id")),
+                SelectedExpression("ga.offset", Column("_snuba_ga.offset", "ga", "offset")),
+                SelectedExpression("gm.offset", Column("_snuba_gm.offset", "gm", "offset")),
                 SelectedExpression(
                     "se.metric_id", Column("_snuba_se.metric_id", "se", "metric_id")
                 ),
             ],
             condition=and_cond(
                 and_cond(
-                    f.equals(
-                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", "e", "_snuba_e.project_id"), literal(1)),
                     f.greaterOrEquals(
                         column("timestamp", "e", "_snuba_e.timestamp"),
                         literal(datetime.datetime(2021, 1, 1, 0, 0)),
@@ -1314,9 +1152,7 @@ test_cases = [
                     ),
                     and_cond(
                         and_cond(
-                            f.equals(
-                                column("org_id", "se", "_snuba_se.org_id"), literal(1)
-                            ),
+                            f.equals(column("org_id", "se", "_snuba_se.org_id"), literal(1)),
                             f.equals(
                                 column("project_id", "se", "_snuba_se.project_id"),
                                 literal(1),
@@ -1351,9 +1187,7 @@ test_cases = [
                 ),
                 selected_columns=[
                     SelectedExpression("title", Column("_snuba_title", None, "title")),
-                    SelectedExpression(
-                        "count", FunctionCall("_snuba_count", "count", tuple())
-                    ),
+                    SelectedExpression("count", FunctionCall("_snuba_count", "count", tuple())),
                 ],
                 groupby=[Column("_snuba_title", None, "title")],
                 condition=required_condition,
@@ -1390,12 +1224,8 @@ test_cases = [
                         get_entity(EntityKey.EVENTS).get_data_model(),
                     ),
                     selected_columns=[
-                        SelectedExpression(
-                            "title", Column("_snuba_title", None, "title")
-                        ),
-                        SelectedExpression(
-                            "count", FunctionCall("_snuba_count", "count", tuple())
-                        ),
+                        SelectedExpression("title", Column("_snuba_title", None, "title")),
+                        SelectedExpression("count", FunctionCall("_snuba_count", "count", tuple())),
                     ],
                     groupby=[Column("_snuba_title", None, "title")],
                     condition=required_condition,
@@ -1429,15 +1259,11 @@ test_cases = [
     pytest.param(
         f"""MATCH (events) SELECT 4-5,3*foo(event_id) AS foo,event_id WHERE title<'stuff\\' "\\" stuff' AND culprit='"💩\\" \t \\'\\'' AND {added_condition} """,
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
                 SelectedExpression(
                     "3*foo(event_id) AS foo",
@@ -1454,9 +1280,7 @@ test_cases = [
                         ),
                     ),
                 ),
-                SelectedExpression(
-                    "event_id", Column("_snuba_event_id", None, "event_id")
-                ),
+                SelectedExpression("event_id", Column("_snuba_event_id", None, "event_id")),
             ],
             condition=binary_condition(
                 "and",
@@ -1476,9 +1300,7 @@ test_cases = [
                         ),
                         required_conditions[0],
                     ),
-                    binary_condition(
-                        "and", required_conditions[1], required_conditions[2]
-                    ),
+                    binary_condition("and", required_conditions[1], required_conditions[2]),
                 ),
             ),
             limit=1000,

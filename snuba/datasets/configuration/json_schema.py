@@ -483,7 +483,6 @@ ENTITY_TRANSLATION_MAPPERS = {
         "functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "curried_functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "subscriptables": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
-        "columns": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
     },
     "additionalProperties": False,
 }

@@ -13,9 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_ondemand_profiler() -> None:
-    thread = threading.Thread(
-        target=_profiler_main, name="snuba ondemand profiler", daemon=True
-    )
+    thread = threading.Thread(target=_profiler_main, name="snuba ondemand profiler", daemon=True)
     thread.start()
 
 
@@ -33,9 +31,7 @@ def _profiler_main() -> None:
             logger.warning("starting ondemand profile for %s", own_hostname)
 
             with sentry_sdk.Hub.main:
-                open_transaction: Union[
-                    Transaction, NoOpSpan, None
-                ] = sentry_sdk.start_transaction(
+                open_transaction: Union[Transaction, NoOpSpan, None] = sentry_sdk.start_transaction(
                     name=f"ondemand profile: {own_hostname}", sampled=True
                 )
                 assert isinstance(open_transaction, Transaction)
@@ -50,9 +46,7 @@ def _profiler_main() -> None:
                 # Set main thread as active thread -- this current thread is
                 # fairly uninteresting to look at.
                 # The profile contains all threads anyway.
-                open_transaction._profile.active_thread_id = (
-                    threading.main_thread().ident
-                )
+                open_transaction._profile.active_thread_id = threading.main_thread().ident
 
                 open_transaction.__enter__()
                 transaction_start = time.time()
@@ -62,10 +56,7 @@ def _profiler_main() -> None:
 
         if current_transaction is not None:
             open_transaction, transaction_start = current_transaction
-            if (
-                own_hostname not in queried_hostnames
-                or time.time() - transaction_start >= 30
-            ):
+            if own_hostname not in queried_hostnames or time.time() - transaction_start >= 30:
                 logger.warning("stopping ondemand profile for %s", own_hostname)
                 with sentry_sdk.Hub.main:
                     open_transaction.__exit__(None, None, None)

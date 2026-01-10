@@ -97,15 +97,9 @@ class MappingColumnPromoter(ClickhouseQueryProcessor):
                 return exp
 
             if subscript.column_name in self.__specs:
-                promoted_col_name = self.__specs[subscript.column_name].get(
-                    subscript.key
-                )
+                promoted_col_name = self.__specs[subscript.column_name].get(subscript.key)
                 if promoted_col_name is not None:
-                    col_type = (
-                        query.get_from_clause()
-                        .get_columns()
-                        .get(promoted_col_name, None)
-                    )
+                    col_type = query.get_from_clause().get_columns().get(promoted_col_name, None)
                     col_type_name = str(col_type) if col_type else None
 
                     # We need to pass the content of the promoted column to a toString
@@ -117,9 +111,7 @@ class MappingColumnPromoter(ClickhouseQueryProcessor):
                         and "String" in col_type_name
                         and "FixedString" not in col_type_name
                     ):
-                        return Column(
-                            exp.alias, subscript.table_name, promoted_col_name
-                        )
+                        return Column(exp.alias, subscript.table_name, promoted_col_name)
                     else:
                         return FunctionCall(
                             exp.alias,

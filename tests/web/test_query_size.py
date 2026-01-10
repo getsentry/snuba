@@ -11,9 +11,7 @@ TEST_GROUPS = [
     pytest.param(TENTH_PLUS_ONE, ">=10%", id="Greater than or equal to 10%"),
     pytest.param(TENTH_PLUS_ONE * 5, ">=50%", id="Greater than or equal to 50%"),
     pytest.param(TENTH_PLUS_ONE * 8, ">=80%", id="Greater than or equal to 80%"),
-    pytest.param(
-        settings.MAX_QUERY_SIZE_BYTES, "100%", id="Greater than or equal to 100%"
-    ),
+    pytest.param(settings.MAX_QUERY_SIZE_BYTES, "100%", id="Greater than or equal to 100%"),
 ]
 
 

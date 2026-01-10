@@ -261,9 +261,7 @@ def resolve_consumer_config(
     )
 
 
-def resolve_storage_config(
-    storage_name: str, storage: WritableTableStorage
-) -> StorageConfig:
+def resolve_storage_config(storage_name: str, storage: WritableTableStorage) -> StorageConfig:
     cluster = storage.get_cluster()
     user, password = cluster.get_credentials()
     clickhouse_cluster = ClickhouseClusterConfig(
@@ -299,9 +297,7 @@ def validate_storages(storages: Sequence[WritableTableStorage]) -> None:
         len(
             set(
                 [
-                    storage.get_table_writer()
-                    .get_stream_loader()
-                    .get_default_topic_spec()
+                    storage.get_table_writer().get_stream_loader().get_default_topic_spec()
                     for storage in storages
                 ]
             )
@@ -313,9 +309,7 @@ def validate_storages(storages: Sequence[WritableTableStorage]) -> None:
         len(
             set(
                 [
-                    storage.get_table_writer()
-                    .get_stream_loader()
-                    .get_commit_log_topic_spec()
+                    storage.get_table_writer().get_stream_loader().get_commit_log_topic_spec()
                     for storage in storages
                 ]
             )
@@ -327,9 +321,7 @@ def validate_storages(storages: Sequence[WritableTableStorage]) -> None:
         len(
             set(
                 [
-                    storage.get_table_writer()
-                    .get_stream_loader()
-                    .get_replacement_topic_spec()
+                    storage.get_table_writer().get_stream_loader().get_replacement_topic_spec()
                     for storage in storages
                 ]
             )

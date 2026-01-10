@@ -24,9 +24,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         )
 
     if locals.get("DEFAULT_STORAGE_BROKERS"):
-        raise ValueError(
-            "DEFAULT_STORAGE_BROKERS is deprecated. Use KAFKA_BROKER_CONFIG instead."
-        )
+        raise ValueError("DEFAULT_STORAGE_BROKERS is deprecated. Use KAFKA_BROKER_CONFIG instead.")
 
     # Validate cluster configuration
     from snuba.clusters.storage_sets import StorageSetKey
@@ -45,9 +43,9 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
 
 def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
     for storage_set in locals["SLICED_STORAGE_SETS"]:
-        assert (
-            storage_set in locals["LOGICAL_PARTITION_MAPPING"]
-        ), "sliced mapping must be defined for sliced storage set {storage_set}"
+        assert storage_set in locals["LOGICAL_PARTITION_MAPPING"], (
+            "sliced mapping must be defined for sliced storage set {storage_set}"
+        )
 
         storage_set_mapping = locals["LOGICAL_PARTITION_MAPPING"][storage_set]
         defined_slice_count = locals["SLICED_STORAGE_SETS"][storage_set]
@@ -55,17 +53,17 @@ def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
         for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
             slice_id = storage_set_mapping.get(logical_part)
 
-            assert (
-                slice_id is not None
-            ), f"missing physical slice for storage set {storage_set}'s logical partition {logical_part}"
+            assert slice_id is not None, (
+                f"missing physical slice for storage set {storage_set}'s logical partition {logical_part}"
+            )
 
-            assert (
-                slice_id >= 0 and slice_id < defined_slice_count
-            ), slice_count_validation_msg.format(
-                storage_set, logical_part, slice_id, defined_slice_count
+            assert slice_id >= 0 and slice_id < defined_slice_count, (
+                slice_count_validation_msg.format(
+                    storage_set, logical_part, slice_id, defined_slice_count
+                )
             )
 
     for topic_tuple in locals["SLICED_KAFKA_TOPIC_MAP"]:
-        assert (
-            topic_tuple in locals["SLICED_KAFKA_BROKER_CONFIG"]
-        ), f"missing broker config definition for sliced Kafka topic {topic_tuple[0]} on slice {topic_tuple[1]}"
+        assert topic_tuple in locals["SLICED_KAFKA_BROKER_CONFIG"], (
+            f"missing broker config definition for sliced Kafka topic {topic_tuple[0]} on slice {topic_tuple[1]}"
+        )

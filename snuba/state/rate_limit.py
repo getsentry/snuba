@@ -8,9 +8,8 @@ from collections import ChainMap, namedtuple
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any
+from typing import Any, Iterator, MutableMapping, Optional, Sequence, Type
 from typing import ChainMap as TypingChainMap
-from typing import Iterator, MutableMapping, Optional, Sequence, Type
 
 from snuba import environment, state
 from snuba.redis import RedisClientKey, get_redis_client
@@ -189,7 +188,6 @@ def rate_limit_start_request(
     query_bucket = _get_bucket_key(rate_limit_prefix, rate_limit_params.bucket, bucket_shard)
 
     with rds.pipeline(transaction=False) as pipe:
-
         # cleanup old query timestamps past our retention window
         #
         # it is fine to only perform this cleanup for the shard of the current

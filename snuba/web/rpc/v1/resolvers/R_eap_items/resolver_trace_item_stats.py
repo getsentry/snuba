@@ -287,7 +287,7 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
                 result.heatmap.CopyFrom(res_heatmap)
             else:
                 raise BadSnubaRPCRequestException(
-                    f'Invalid stats type {requested_type.WhichOneof("type")}'
+                    f"Invalid stats type {requested_type.WhichOneof('type')}"
                 )
 
             results.append(result)

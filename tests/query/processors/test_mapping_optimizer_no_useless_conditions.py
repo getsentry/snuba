@@ -48,9 +48,7 @@ def tag_existence_expression(tag_name: str = "foo") -> FunctionCall:
     )
 
 
-def tag_equality_expression(
-    tag_name: str = "foo", tag_value: str = "bar"
-) -> FunctionCall:
+def tag_equality_expression(tag_name: str = "foo", tag_value: str = "bar") -> FunctionCall:
     return FunctionCall(
         None,
         "equals",
@@ -82,9 +80,7 @@ def tag_equality_expression(
     )
 
 
-def optimized_tag_expression(
-    tag_name: str = "foo", tag_value: str = "bar"
-) -> FunctionCall:
+def optimized_tag_expression(tag_name: str = "foo", tag_value: str = "bar") -> FunctionCall:
     return FunctionCall(
         None,
         "has",
@@ -269,12 +265,8 @@ def test_useless_has_condition(
 
     # change the existence expression to be a has(tags, 'my_tag') expression for boh queries
     # this allows reuse of the previous test cases
-    EmptyTagConditionProcessor("tags.key").process_query(
-        input_query, HTTPQuerySettings()
-    )
-    EmptyTagConditionProcessor("tags.key").process_query(
-        expected_query, HTTPQuerySettings()
-    )
+    EmptyTagConditionProcessor("tags.key").process_query(input_query, HTTPQuerySettings())
+    EmptyTagConditionProcessor("tags.key").process_query(expected_query, HTTPQuerySettings())
 
     MappingOptimizer(
         column_name="tags",
@@ -328,9 +320,7 @@ HAVING_SPECIAL_TEST_CASES = [
 
 
 @pytest.mark.parametrize("input_query, expected_query", HAVING_SPECIAL_TEST_CASES)
-def test_having_special_case(
-    input_query: ClickhouseQuery, expected_query: ClickhouseQuery
-) -> None:
+def test_having_special_case(input_query: ClickhouseQuery, expected_query: ClickhouseQuery) -> None:
     MappingOptimizer(
         column_name="tags",
         hash_map_name="_tags_hash_map",

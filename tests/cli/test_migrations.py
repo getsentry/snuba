@@ -7,9 +7,7 @@ from click.testing import CliRunner
 from snuba.cli.migrations import list, migrate, reverse, reverse_in_progress, run
 
 
-def _check_run(
-    runner: CliRunner, func: Command, args: Optional[Sequence[str]] = None
-) -> None:
+def _check_run(runner: CliRunner, func: Command, args: Optional[Sequence[str]] = None) -> None:
     result = runner.invoke(func, args)
     assert result.exit_code == 0
 

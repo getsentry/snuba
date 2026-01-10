@@ -39,11 +39,7 @@ tests = [
                 FunctionCall(
                     None,
                     "toUUID",
-                    (
-                        Literal(
-                            None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))
-                        ),
-                    ),
+                    (Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))),),
                 ),
             ),
         ),
@@ -75,9 +71,7 @@ tests = [
                                 None,
                                 "replaceAll",
                                 (
-                                    FunctionCall(
-                                        None, "toString", (Argument(None, "x"),)
-                                    ),
+                                    FunctionCall(None, "toString", (Argument(None, "x"),)),
                                     Literal(None, "-"),
                                     Literal(None, ""),
                                 ),

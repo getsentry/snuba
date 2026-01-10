@@ -8,9 +8,7 @@ from typing import Mapping, Optional, Sequence
 from clickhouse_driver import Client
 
 
-def _get_client(
-    host: str, port: int, user: str, password: str, database: str
-) -> Client:
+def _get_client(host: str, port: int, user: str, password: str, database: str) -> Client:
     return Client(
         host=host,
         port=port,
@@ -54,9 +52,9 @@ def verify_zk_replica_path(
 
     built_replica_path = f"{create_table_path}/replicas/{source_replica}"
 
-    assert (
-        built_replica_path == replica_path
-    ), f"{built_replica_path} should match zk path: {replica_path}"
+    assert built_replica_path == replica_path, (
+        f"{built_replica_path} should match zk path: {replica_path}"
+    )
     print(f"...zookeeper replica paths verified for table: {table} ! :)")
 
 
@@ -91,12 +89,8 @@ def verify_local_tables_exist_from_mv(
 
     all_tables = [result[0] for result in target_client.execute("SHOW TABLES")]
 
-    assert (
-        to_local_table in all_tables
-    ), f"{to_local_table} needs to be created before {table}"
-    assert (
-        from_local_table in all_tables
-    ), f"{from_local_table} needs to be created before {table}"
+    assert to_local_table in all_tables, f"{to_local_table} needs to be created before {table}"
+    assert from_local_table in all_tables, f"{from_local_table} needs to be created before {table}"
     print("...local tables found, mv check complete !\n")
 
 
@@ -148,9 +142,7 @@ def copy_tables(
 
         if engine == "MaterializedView":
             print("\nMaterialized View Check:")
-            verify_local_tables_exist_from_mv(
-                target_client, curr_create_table_statement, name
-            )
+            verify_local_tables_exist_from_mv(target_client, curr_create_table_statement, name)
 
         if engine.startswith("Replicated"):
             print("\nReplicated Table Check:")

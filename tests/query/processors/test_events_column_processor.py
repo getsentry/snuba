@@ -16,9 +16,7 @@ def test_events_column_format_expressions() -> None:
         Table("events", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[
             SelectedExpression("dr_claw", Column("dr_claw", None, "culprit")),
-            SelectedExpression(
-                "the_group_id", Column("the_group_id", None, "group_id")
-            ),
+            SelectedExpression("the_group_id", Column("the_group_id", None, "group_id")),
             SelectedExpression("the_message", Column("the_message", None, "message")),
         ],
     )

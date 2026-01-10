@@ -33,9 +33,7 @@ This mock logical partition : slice mapping should follow the pattern of
 3: 1
 ...
 """
-MOCK_LOGICAL_PART_MAPPING = {
-    "generic_metrics_distributions": {x: x % 2 for x in range(0, 256)}
-}
+MOCK_LOGICAL_PART_MAPPING = {"generic_metrics_distributions": {x: x % 2 for x in range(0, 256)}}
 
 SLICE_0_DATABASE_VALUE = "slice_0_db"
 SLICE_1_DATABASE_VALUE = "slice_1_db"
@@ -122,9 +120,7 @@ def test_column_based_partition_selector(
 
     assert cluster.get_database() == expected_slice_db
     if set_override:
-        delete_config(
-            f"{MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX}_generic_metrics_distributions"
-        )
+        delete_config(f"{MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX}_generic_metrics_distributions")
 
 
 mega_cluster_test_data = [
@@ -133,21 +129,21 @@ mega_cluster_test_data = [
         1,
         None,
         False,
-        id="no " "override configured",
+        id="no override configured",
     ),
     pytest.param(
         StorageSetKey("generic_metrics_distributions"),
         1,
         "[1]",
         True,
-        id="" "override configured",
+        id="override configured",
     ),
     pytest.param(
         StorageSetKey("generic_metrics_distributions"),
         1,
         "[100]",
         False,
-        id="" "override configured for different partition",
+        id="override configured for different partition",
     ),
     pytest.param(
         StorageSetKey("generic_metrics_distributions"),
@@ -160,7 +156,7 @@ mega_cluster_test_data = [
 
 
 @pytest.mark.parametrize(
-    "storage_set, logical_partition, override_config, " "expected",
+    "storage_set, logical_partition, override_config, expected",
     mega_cluster_test_data,
 )
 @pytest.mark.redis_db
@@ -171,9 +167,7 @@ def test_should_use_mega_cluster(
     expected: bool,
 ) -> None:
     if override_config:
-        set_config(
-            f"{MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX}_{storage_set.value}", override_config
-        )
+        set_config(f"{MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX}_{storage_set.value}", override_config)
     assert _should_use_mega_cluster(storage_set, logical_partition) == expected
     if override_config:
         delete_config(f"MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX_{storage_set}")

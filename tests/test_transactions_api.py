@@ -90,16 +90,12 @@ class TestTransactionsApi(BaseApiTest):
                                     "datetime": (
                                         self.base_time + timedelta(minutes=tick)
                                     ).isoformat(),
-                                    "platform": self.platforms[
-                                        (tock * p) % len(self.platforms)
-                                    ],
+                                    "platform": self.platforms[(tock * p) % len(self.platforms)],
                                     "retention_days": settings.DEFAULT_RETENTION_DAYS,
                                     "data": {
                                         # Project N sends every Nth (mod len(hashes)) hash (and platform)
                                         "received": calendar.timegm(
-                                            (
-                                                self.base_time + timedelta(minutes=tick)
-                                            ).timetuple()
+                                            (self.base_time + timedelta(minutes=tick)).timetuple()
                                         ),
                                         "type": "transaction",
                                         "transaction": "/api/do_things",
@@ -107,10 +103,7 @@ class TestTransactionsApi(BaseApiTest):
                                             (self.base_time + timedelta(minutes=tick))
                                         ),
                                         "timestamp": datetime.timestamp(
-                                            (
-                                                self.base_time
-                                                + timedelta(minutes=tick, seconds=1)
-                                            )
+                                            (self.base_time + timedelta(minutes=tick, seconds=1))
                                         ),
                                         "tags": {
                                             # Sentry
@@ -159,8 +152,7 @@ class TestTransactionsApi(BaseApiTest):
                                                 "data": {},
                                                 "timestamp": calendar.timegm(
                                                     (
-                                                        self.base_time
-                                                        + timedelta(minutes=tick)
+                                                        self.base_time + timedelta(minutes=tick)
                                                     ).timetuple()
                                                 ),
                                             }
@@ -227,16 +219,14 @@ class TestTransactionsApi(BaseApiTest):
                             "start_ts",
                             ">",
                             (
-                                self.base_time
-                                - timedelta(minutes=self.minutes, microseconds=9876)
+                                self.base_time - timedelta(minutes=self.minutes, microseconds=9876)
                             ).isoformat(),
                         ],
                         [
                             "start_ts",
                             "<",
                             (
-                                self.base_time
-                                + timedelta(minutes=self.minutes, microseconds=9876)
+                                self.base_time + timedelta(minutes=self.minutes, microseconds=9876)
                             ).isoformat(),
                         ],
                     ],
@@ -698,9 +688,7 @@ class TestTransactionsApi(BaseApiTest):
         records_by_limit_columns = defaultdict(list)
 
         for datum in parsed_data["data"]:
-            records_by_limit_columns[(datum["platform"], datum["environment"])].append(
-                datum
-            )
+            records_by_limit_columns[(datum["platform"], datum["environment"])].append(datum)
 
         for key in records_by_limit_columns.keys():
             assert len(records_by_limit_columns[key]) == LIMIT_BY_COUNT, key

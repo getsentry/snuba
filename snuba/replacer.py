@@ -318,9 +318,9 @@ class ReplacerWorker:
         self.metrics = metrics
         self.__processing_time_counter = Counter(consumer_group)
         processor = storage.get_table_writer().get_replacer_processor()
-        assert (
-            processor
-        ), f"This storage writer does not support replacements {storage.get_storage_key().value}"
+        assert processor, (
+            f"This storage writer does not support replacements {storage.get_storage_key().value}"
+        )
         self.__replacer_processor = processor
         self.__database_name = storage.get_cluster().get_database()
 
@@ -375,9 +375,7 @@ class ReplacerWorker:
         local_table_name = self.__replacer_processor.get_schema().get_local_table_name()
         cluster = self.__storage.get_cluster()
 
-        query_connection = cluster.get_query_connection(
-            ClickhouseClientSettings.REPLACE
-        )
+        query_connection = cluster.get_query_connection(ClickhouseClientSettings.REPLACE)
         write_every_node = replacement.should_write_every_node()
         query_node_executor = QueryNodeExecutor(
             runner=run_query,
@@ -436,9 +434,7 @@ class ReplacerWorker:
         else:
             raise InvalidMessageVersion("Unknown message format: " + str(seq_message))
 
-    def flush_batch(
-        self, batch: Sequence[Tuple[ReplacementMessageMetadata, Replacement]]
-    ) -> None:
+    def flush_batch(self, batch: Sequence[Tuple[ReplacementMessageMetadata, Replacement]]) -> None:
         need_optimize = False
         clickhouse_read = self.__storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.REPLACE
@@ -458,8 +454,7 @@ class ReplacerWorker:
                 count = 0
 
             need_optimize = (
-                self.__replacer_processor.pre_replacement(replacement, count)
-                or need_optimize
+                self.__replacer_processor.pre_replacement(replacement, count) or need_optimize
             )
 
             query_executor = self.__get_insert_executor(replacement)
@@ -469,9 +464,7 @@ class ReplacerWorker:
 
             self.__replacer_processor.post_replacement(replacement, count)
 
-            self._check_timing_and_write_to_redis(
-                message_metadata, start_time.timestamp()
-            )
+            self._check_timing_and_write_to_redis(message_metadata, start_time.timestamp())
 
             if isinstance(replacement, ErrorReplacement):
                 project_id = replacement.get_project_id()
@@ -486,9 +479,7 @@ class ReplacerWorker:
             num_dropped = run_optimize(
                 clickhouse_read, self.__storage, self.__database_name, before=today
             )
-            logger.info(
-                "Optimized %s partitions on %s" % (num_dropped, clickhouse_read.host)
-            )
+            logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_read.host))
 
     def _message_already_processed(self, metadata: ReplacementMessageMetadata) -> bool:
         """
@@ -556,9 +547,7 @@ class ReplacerWorker:
         )
         self.__last_offset_processed_per_partition[key] = message_metadata.offset
 
-    def _build_topic_group_index_key(
-        self, message_metadata: ReplacementMessageMetadata
-    ) -> str:
+    def _build_topic_group_index_key(self, message_metadata: ReplacementMessageMetadata) -> str:
         """
         Builds a unique key for a message being processed for a specific
         consumer group and partition.
@@ -588,9 +577,7 @@ class ReplacerWorker:
             start_time,
             end_time,
         )
-        projects_exceeding_limit = (
-            self.__processing_time_counter.get_projects_exceeding_limit()
-        )
+        projects_exceeding_limit = self.__processing_time_counter.get_projects_exceeding_limit()
         set_config_auto_replacements_bypass_projects(projects_exceeding_limit, end_time)
         logger.info(
             "projects_exceeding_limit = {}".format(

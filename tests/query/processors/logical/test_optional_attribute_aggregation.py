@@ -22,9 +22,7 @@ test_data = [
         Query(
             QueryEntity(EntityKey.EAP_ITEMS, ColumnSet([])),
             selected_columns=[
-                SelectedExpression(
-                    "p90(x)", cf.quantile(0.9)(attr_num["x"], alias="p90(x)")
-                ),
+                SelectedExpression("p90(x)", cf.quantile(0.9)(attr_num["x"], alias="p90(x)")),
             ],
         ),
         Query(
