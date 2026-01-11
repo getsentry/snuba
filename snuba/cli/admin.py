@@ -4,7 +4,7 @@ from typing import Optional
 import click
 
 from snuba.environment import setup_logging
-from snuba.utils import uwsgi
+from snuba.utils import server
 
 
 @click.command()
@@ -37,9 +37,10 @@ def admin(
     else:
         if log_level:
             os.environ["LOG_LEVEL"] = log_level
-        uwsgi.run(
+        server.serve(
             "snuba.admin.wsgi:application",
             f"{host}:{port}",
             processes=processes,
             threads=threads,
+            name="snuba-admin",
         )
