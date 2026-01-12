@@ -243,8 +243,8 @@ def _build_query(
             expression=column("item_type", alias="item_type"),
         ),
         SelectedExpression(
-            name="trace_id",
-            expression=column("trace_id", alias="trace_id"),
+            name="selected_trace_id",
+            expression=column("trace_id", alias="selected_trace_id"),
         ),
     ]
 
@@ -544,9 +544,9 @@ def _process_results(
         # Access pagination fields without removing them from the row so they can still be added as attributes if desired
 
         # Update last seen pagination values
-        last_seen_item_type = int(row.get("item_type", TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED))
+        last_seen_item_type = int(row.pop("item_type", TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED))
         last_seen_timestamp = row.get("integer_timestamp", None)
-        last_seen_trace_id = row.get("trace_id", "")
+        last_seen_trace_id = row.pop("selected_trace_id", "")
         last_seen_item_id = id
 
         timestamp = Timestamp()
@@ -717,7 +717,6 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             request=_build_snuba_request(in_msg, item, limit, page_token),
             timer=self._timer,
         )
-        breakpoint()
         processed_results = _process_results(
             results.result.get("data", []),
         )
