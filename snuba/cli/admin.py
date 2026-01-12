@@ -27,7 +27,7 @@ def admin(
     setup_logging(log_level)
 
     if debug:
-        if processes > 1 or threads > 1:
+        if processes > 1 or (threads or 1) > 1:
             raise click.ClickException("processes/threads can only be 1 in debug")
 
         from werkzeug.serving import WSGIRequestHandler
