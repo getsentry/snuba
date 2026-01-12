@@ -11,15 +11,17 @@ from snuba.utils import server
 @click.option("--bind", help="Address to listen on.")
 @click.option("--debug", is_flag=True)
 @click.option("--log-level", help="Logging level to use.")
-@click.option("--processes", default=1)
-@click.option("--threads", default=1)
+@click.option("--processes", type=click.IntRange(1), default=1)
+@click.option("--threads", type=click.IntRange(1))
+@click.option("--backlog", type=click.IntRange(128), default=128)
 def api(
     *,
     bind: Optional[str],
     debug: bool,
     log_level: Optional[str],
     processes: int,
-    threads: int,
+    threads: Optional[int],
+    backlog: int,
 ) -> None:
     from snuba import settings
 
@@ -54,5 +56,6 @@ def api(
             f"{host}:{port}",
             processes=processes,
             threads=threads,
+            backlog=backlog,
             name="snuba-api",
         )

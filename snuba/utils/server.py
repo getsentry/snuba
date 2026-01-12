@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from granian import Granian
 from granian.constants import Interfaces
 
@@ -8,7 +10,8 @@ def serve(
     module: str,
     bind: str,
     processes: int = 1,
-    threads: int = 1,
+    threads: Optional[int] = None,
+    backlog: int = 128,
     reload: bool = False,
     name: str | None = None,
     lifetime: int | None = None,
@@ -19,6 +22,7 @@ def serve(
         address=host,
         port=int(port),
         interface=Interfaces.WSGI,
+        backlog=backlog,
         workers=processes,
         workers_lifetime=lifetime,
         workers_kill_timeout=30,
