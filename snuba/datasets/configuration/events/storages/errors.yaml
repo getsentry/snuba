@@ -380,6 +380,11 @@ query_processors:
         - message
         - environment
         - project_id
+  - processor: ClickhouseSettingsOverride
+    args:
+      overwrite_existing: false
+      settings:
+        max_execution_time: 60
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 replacer_processor:
