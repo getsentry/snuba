@@ -235,7 +235,7 @@ def _build_query(
             ),
         ),
         SelectedExpression(
-            name="timestamp",
+            name="integer_timestamp",
             expression=f.toUnixTimestamp(column("timestamp"), alias="integer_timestamp"),
         ),
         SelectedExpression(
