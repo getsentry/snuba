@@ -5,6 +5,10 @@ on:
       - master
       - release/**
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   build-multiplatform:
     strategy:
