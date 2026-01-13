@@ -1,32 +1,16 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
-import { Box, Switch } from "@mantine/core";
-import { SQLEditor } from "SnubaAdmin/common/components/sql_editor";
-import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
+import { CustomSelect } from "SnubaAdmin/select";
 import { getHostsForStorage, getErrorDomElement } from "SnubaAdmin/utils/clickhouse_node_utils";
 
 import {
   ClickhouseNodeData,
-  QueryRequest,
   CopyTableRequest,
-  CopyTable,
   CopyTableResult,
   ShowTablesQueryState,
-  ShowTablesQueryResult,
 } from "SnubaAdmin/copy_tables/types";
 
-
-enum HostType {
-  source = "sourceHost",
-  target = "targetHost"
-}
-
-const COPY_TABLE_DEFAULT = {
-  table: "",
-  onCluster: false,
-  previewStatement: ""
-}
 
 function CopyTables(props: {
   api: Client;
@@ -36,11 +20,6 @@ function CopyTables(props: {
     sourceHost: {},
     targetHost: {}
   });
-  const [tableResult, setTableResults] = useState<ShowTablesQueryResult>({
-    sourceHost: {},
-    targetHost: {}
-  });
-  const [copyTable, setCopyTable] = useState<CopyTable>(COPY_TABLE_DEFAULT);
   const [copyTableResult, setCopyTableResult] = useState<CopyTableResult | null>(null);
 
   const [queryError, setQueryError] = useState<Error | null>(null);
@@ -100,62 +79,20 @@ function CopyTables(props: {
     });
   }
 
-  function selectTable(table: string) {
-    setCopyTable((prevCopyTable) => {
-      return {
-        ...prevCopyTable,
-        table: table
-      }
-    })
-  }
-
-  function setOnCluster(onCluster: boolean) {
-    setCopyTable((prevCopyTable) => {
-      return {
-        ...prevCopyTable,
-        onCluster: onCluster
-      }
-    })
-  }
-
-  function executeShowTable(hostType: HostType) {
-    const query = tableQueries[hostType]
-    return props.api
-      .executeSystemQuery(query as QueryRequest)
-      .then((result) => {
-        setQueryError(null);
-        setTableResults((previousResult) => {
-          previousResult[hostType] = result
-          return {
-            ...previousResult,
-          };
-        })
-      });
-  }
-
-  function executeCopyTableQuery(dryRun: boolean) {
+  function executeCopyTableQuery(shouldExecute: boolean) {
     const query = {
       storage: tableQueries.sourceHost.storage,
       source_host: tableQueries.sourceHost.host,
       source_port: tableQueries.sourceHost.port,
       target_host: tableQueries.targetHost.host,
       target_port: tableQueries.targetHost.port,
-      table_name: copyTable.table || "",
-      dry_run: dryRun,
-      on_cluster: copyTable.onCluster,
+      dry_run: !shouldExecute,
     }
     return props.api
       .executeCopyTable(query as CopyTableRequest)
       .then((result) => {
         setQueryError(null);
-        if (dryRun === true) {
-          setCopyTable({ ...copyTable, previewStatement: result.create_statement });
-          setCopyTableResult(null);
-        } else {
-          setCopyTable(COPY_TABLE_DEFAULT);
-          setCopyTableResult(result);
-
-        }
+        setCopyTableResult(result);
       });
   }
 
@@ -163,26 +100,10 @@ function CopyTables(props: {
     setQueryError(error);
   }
 
-
-  function showTableButton(hostType: HostType) {
-    return (
-      <div style={showTablesButton}>
-        <ExecuteButton
-          label="Show Tables"
-          onError={handleQueryError}
-          onClick={() => executeShowTable(hostType)}
-          disabled={
-            !tableQueries[hostType].host ||
-            !tableQueries[hostType].port
-          }
-        />
-      </div>)
-  }
-
   return (
     <div>
-      <form style={standardForm}>
-        <div style={executeActionsStyle}>
+      <form>
+        <div style={sectionStyle}>
           <div>
             <h3>Source Host</h3>
             <div style={hostSelectStyle}>
@@ -201,21 +122,8 @@ function CopyTables(props: {
                 name="host"
                 options={getHostsForStorage(nodeData, tableQueries.sourceHost.storage)}
               />
-              {showTableButton(HostType.source)}
             </div>
-
-            {tableResult.sourceHost && (
-              <div style={tableResultStyle}>
-                <Box my="md" id="source-host">
-                  <SQLEditor
-                    value={tableResult.sourceHost.rows?.join("\n") || ""}
-                    onChange={() => { }}
-                  />
-                </Box>
-              </div>
-            )}
           </div>
-
           <div>
             <h3>Target Host</h3>
             <div style={hostSelectStyle}>
@@ -224,91 +132,50 @@ function CopyTables(props: {
                 id="clusterless"
                 value={tableQueries.targetHost.host || ""}
                 onChange={(evt) => selectTargetHost(evt.target.value)}
-                name="host"
+                name="target-host"
                 placeholder="target host"
                 type="text"
               />
-              {showTableButton(HostType.target)}
             </div>
-            {tableResult.targetHost && (
-              <div style={tableResultStyle}>
-                <Box my="md" id="target-host">
-                  <SQLEditor
-                    value={tableResult.targetHost.rows?.join("\n") || ""}
-                    onChange={() => { }}
-                  />
-                </Box>
-              </div>
-            )}
           </div>
         </div>
       </form >
-      <div>
-        {getErrorDomElement(queryError, collapseOpened, setCollapseOpened)}
-      </div>
-      <div style={executeActionsStyle}>
+
+      <div style={sectionStyle}>
         <div>
-          <h3>Enter Table</h3>
           <div style={hostSelectStyle}>
-            <input
-              style={inputStyle}
-              id="tableinput"
-              value={copyTable.table || ""}
-              onChange={(evt) => selectTable(evt.target.value)}
-              name="host"
-              placeholder="table name"
-              type="text"
-            />
-            <Switch
-              checked={copyTable.onCluster}
-              onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
-                setOnCluster(evt.currentTarget.checked)
-              }
-              onLabel="ON CLUSTER"
-              offLabel="SINGLE HOST"
-              size="xl"
-            />
             <ExecuteButton
-              label="Preview Create Statement"
+              label=" DRY RUN"
               onError={handleQueryError}
-              onClick={() => executeCopyTableQuery(true)}
-              disabled={copyTable.table ? false : true}
+              onClick={() => executeCopyTableQuery(false)}
+              disabled={tableQueries.targetHost.host ? false : true}
             />
-          </div>
-          <div style={hostSelectStyle}>
             <ExecuteButton
               label=" ‼️ COPY TABLE ‼️ "
               onError={handleQueryError}
-              onClick={() => executeCopyTableQuery(false)}
-              disabled={copyTable.table ? false : true}
+              onClick={() => executeCopyTableQuery(true)}
+              disabled={tableQueries.targetHost.host ? false : true}
             />
           </div>
-        </div>
-        <div>
-          <div style={copyTableResultStyle}>
-            {copyTableResult && (
+          <div>
+            {getErrorDomElement(queryError, collapseOpened, setCollapseOpened)}
+          </div>
+          {copyTableResult && (
+            <div style={copyTableResultStyle}>
+              <h2>{copyTableResult.dry_run ? "Dry Ran with" : "Executed with"}</h2>
               <div>
-                <h2>Ran with</h2>
                 <p>Source Host: <code>{copyTableResult.source_host}</code></p>
                 <p>Target Host: <code>{copyTableResult.target_host}</code></p>
-                <p>Table: <code>{copyTableResult.table}</code></p>
-                <p>On Cluster: <code>{copyTableResult.on_cluster ? "True" : "False"}</code></p>
-                <p>Create Statement: <code>{copyTableResult.create_statement}</code></p>
-                <code>{copyTableResult.create_statement}</code>
+                <p>Cluster Name: <code>{copyTableResult.cluster_name}</code></p>
               </div>
-            )}
-            {copyTable?.previewStatement && (
-              <div>
-                <h2>Preview Create Statement:</h2>
-                <Box my="md">
-                  <SQLEditor
-                    value={copyTable?.previewStatement || ""}
-                    onChange={() => { }}
-                  />
-                </Box>
+              <p>Tables:</p>
+              <div style={tableListStyle}>
+                {copyTableResult.tables.split(',')?.map((val, inx) => (
+                  <div key={inx}><code>{val}</code></div>
+                ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div >
@@ -316,11 +183,14 @@ function CopyTables(props: {
 }
 
 
-const standardForm = {};
+const sectionStyle = {
+  display: "flex",
+  marginTop: 8,
+};
 
 const hostSelectStyle = {
   width: '30em',
-  height: '8em',
+  height: '4em',
   margin: '8px 0px',
   display: 'flex',
   flexDirection: 'column' as const,
@@ -328,40 +198,26 @@ const hostSelectStyle = {
   marginRight: 40,
 }
 
-const showTablesButton = {
-  margin: '8px 0px',
+const inputStyle = {
+  fontSize: 16,
+  minHeight: '2.25rem',
 }
 
-const tableResultStyle = {
-  display: 'flex',
-  justifyContent: 'justify-start',
-  width: '30em',
-  height: '10em',
-  marginRight: 40,
+const tableListStyle = {
+  marginLeft: 5,
   overflowY: "scroll" as const,
 
 }
 
 const copyTableResultStyle = {
   display: 'flex',
-  justifyContent: 'justify-start',
-  width: '50em',
+  justifyContent: 'space-between',
+  width: '60em',
   height: '40em',
   marginRight: 40,
   marginTop: 20,
   overflowY: "scroll" as const,
 
 }
-
-const inputStyle = {
-  fontSize: 16,
-  minHeight: '2.25rem',
-}
-
-const executeActionsStyle = {
-  display: "flex",
-  // justifyContent: "space-around",
-  marginTop: 8,
-};
 
 export default CopyTables;
