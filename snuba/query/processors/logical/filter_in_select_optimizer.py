@@ -5,6 +5,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
+    ArbitrarySQL,
     Argument,
     Column,
     CurriedFunctionCall,
@@ -58,9 +59,7 @@ class FindConditionalAggregateFunctionsVisitor(
     ) -> list[FunctionCall | CurriedFunctionCall]:
         return self._matches
 
-    def visit_function_call(
-        self, exp: FunctionCall
-    ) -> list[FunctionCall | CurriedFunctionCall]:
+    def visit_function_call(self, exp: FunctionCall) -> list[FunctionCall | CurriedFunctionCall]:
         if exp.function_name[-2:] == "If":
             self._matches.append(exp)
         else:
@@ -79,6 +78,9 @@ class FindConditionalAggregateFunctionsVisitor(
         return self._matches
 
     def visit_lambda(self, exp: Lambda) -> list[FunctionCall | CurriedFunctionCall]:
+        return self._matches
+
+    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> list[FunctionCall | CurriedFunctionCall]:
         return self._matches
 
 
@@ -103,9 +105,7 @@ class FilterInSelectOptimizer(LogicalQueryProcessor):
         try:
             new_condition = self.get_select_filter(query)
         except Exception:
-            logger.warning(
-                "Failed during optimization", exc_info=True, extra={"query": query}
-            )
+            logger.warning("Failed during optimization", exc_info=True, extra={"query": query})
             return
         if new_condition is not None:
             query.add_condition_to_ast(new_condition)
@@ -128,9 +128,7 @@ class FilterInSelectOptimizer(LogicalQueryProcessor):
         # find and grab all the conditional aggregate functions
         cond_agg_functions: list[FunctionCall | CurriedFunctionCall] = []
         for selected_exp in query.get_selected_columns():
-            found = selected_exp.expression.accept(
-                FindConditionalAggregateFunctionsVisitor()
-            )
+            found = selected_exp.expression.accept(FindConditionalAggregateFunctionsVisitor())
             cond_agg_functions += found
         if len(cond_agg_functions) == 0:
             return None
@@ -150,7 +148,5 @@ class FilterInSelectOptimizer(LogicalQueryProcessor):
             if new_condition is None:
                 new_condition = func.parameters[1]
             else:
-                new_condition = binary_condition(
-                    "or", new_condition, func.parameters[1]
-                )
+                new_condition = binary_condition("or", new_condition, func.parameters[1])
         return new_condition

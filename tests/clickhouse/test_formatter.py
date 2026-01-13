@@ -12,6 +12,7 @@ from snuba.query.conditions import (
     binary_condition,
 )
 from snuba.query.expressions import (
+    ArbitrarySQL,
     Argument,
     Column,
     CurriedFunctionCall,
@@ -132,9 +133,7 @@ test_expressions = [
                 Lambda(
                     None,
                     ("x", "y"),
-                    FunctionCall(
-                        None, "testFunc", (Argument(None, "x"), Argument(None, "y"))
-                    ),
+                    FunctionCall(None, "testFunc", (Argument(None, "x"), Argument(None, "y"))),
                 ),
                 Column(None, None, "test"),
             ),
@@ -179,17 +178,13 @@ test_expressions = [
                     Literal(None, 4),
                 ),
             ),
-            binary_condition(
-                ConditionFunctions.EQ, Column(None, None, "c5"), Literal(None, 5)
-            ),
+            binary_condition(ConditionFunctions.EQ, Column(None, None, "c5"), Literal(None, 5)),
         ),
         "(equals(c1, 1) AND equals(c2, 2) OR equals(c3, 3) OR equals(c4, 4)) AND equals(c5, 5)",
         "(equals(c1, -1337) AND equals(c2, -1337) OR equals(c3, -1337) OR equals(c4, -1337)) AND equals(c5, -1337)",
     ),  # Formatting infix expressions
     (
-        FunctionCall(
-            "_snuba_tags[some_pii]", "f0", (Column(None, "table1", "param1"),)
-        ),
+        FunctionCall("_snuba_tags[some_pii]", "f0", (Column(None, "table1", "param1"),)),
         "(f0(table1.param1) AS `_snuba_tags[some_pii]`)",
         "(f0(table1.param1) AS `_snuba_tags[$A]`)",
     ),
@@ -225,12 +220,41 @@ test_expressions = [
         "(tuple(table1.param1) AS single_tuple)",
         "(tuple(table1.param1) AS single_tuple)",
     ),
+    # ArbitrarySQL tests
+    (ArbitrarySQL(None, "COUNT(*)"), "COUNT(*)", "COUNT(*)"),  # Basic ArbitrarySQL without alias
+    (
+        ArbitrarySQL("my_count", "COUNT(DISTINCT user_id)"),
+        "(COUNT(DISTINCT user_id) AS my_count)",
+        "(COUNT(DISTINCT user_id) AS my_count)",
+    ),  # ArbitrarySQL with alias
+    (
+        ArbitrarySQL(None, "arrayReduce('sumIf', arr, cond)"),
+        "arrayReduce('sumIf', arr, cond)",
+        "arrayReduce('sumIf', arr, cond)",
+    ),  # ArbitrarySQL with ClickHouse-specific syntax
+    (
+        ArbitrarySQL(None, "field->'key'"),
+        "field->'key'",
+        "field->'key'",
+    ),  # ArbitrarySQL with special characters (not escaped)
+    (
+        FunctionCall(
+            None,
+            "if",
+            (
+                ArbitrarySQL(None, "condition > 0"),
+                Column(None, "t1", "col1"),
+                Literal(None, 0),
+            ),
+        ),
+        "if(condition > 0, t1.col1, 0)",
+        "if(condition > 0, t1.col1, -1337)",
+    ),  # ArbitrarySQL in function call
+    (ArbitrarySQL(None, ""), "", ""),  # Empty ArbitrarySQL (edge case)
 ]
 
 
-@pytest.mark.parametrize(
-    "expression, expected_clickhouse, expected_anonymized", test_expressions
-)
+@pytest.mark.parametrize("expression, expected_clickhouse, expected_anonymized", test_expressions)
 def test_format_expressions(
     expression: Expression, expected_clickhouse: str, expected_anonymized: str
 ) -> None:
@@ -300,3 +324,50 @@ test_escaped = [
 def test_escaping(expression: Expression, expected: str) -> None:
     visitor = ClickhouseExpressionFormatter()
     assert expression.accept(visitor) == expected
+
+
+def test_arbitrary_sql_formatting() -> None:
+    """Dedicated test for ArbitrarySQL formatting behavior"""
+
+    # Test basic pass-through
+    sql = "custom_function(arg1, arg2)"
+    exp = ArbitrarySQL(None, sql)
+    formatter = ClickhouseExpressionFormatter()
+    assert exp.accept(formatter) == sql
+
+    # Test with alias - first occurrence
+    exp_alias = ArbitrarySQL("result", sql)
+    assert exp_alias.accept(formatter) == f"({sql} AS result)"
+
+    # Test with alias - second occurrence (should return just alias)
+    pc = ParsingContext()
+    formatter_with_context = ClickhouseExpressionFormatter(pc)
+    exp1 = ArbitrarySQL("shared_alias", "expression1")
+    exp2 = ArbitrarySQL("shared_alias", "expression2")
+
+    result1 = exp1.accept(formatter_with_context)
+    result2 = exp2.accept(formatter_with_context)
+
+    assert result1 == "(expression1 AS shared_alias)"
+    assert result2 == "shared_alias"  # Reuses alias
+
+    # Test no escaping happens
+    sql_with_quotes = "SELECT 'test' FROM table"
+    exp_quotes = ArbitrarySQL(None, sql_with_quotes)
+    assert exp_quotes.accept(formatter) == sql_with_quotes
+
+
+def test_arbitrary_sql_in_complex_expression() -> None:
+    """Test ArbitrarySQL integrated into complex expression tree"""
+    # Build: f1(ArbitrarySQL, f2(column), literal)
+    arbitrary = ArbitrarySQL("arb_alias", "custom_calc()")
+    inner_func = FunctionCall("f2_alias", "f2", (Column(None, "t", "c"),))
+    literal = Literal(None, 100)
+    outer_func = FunctionCall(None, "f1", (arbitrary, inner_func, literal))
+
+    formatter = ClickhouseExpressionFormatter()
+    result = outer_func.accept(formatter)
+
+    # ArbitrarySQL should appear as-is with alias, inner func with alias
+    expected = "f1((custom_calc() AS arb_alias), (f2(t.c) AS f2_alias), 100)"
+    assert result == expected

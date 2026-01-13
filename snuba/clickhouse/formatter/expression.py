@@ -10,6 +10,7 @@ from snuba.query.conditions import (
     get_first_level_or_conditions,
 )
 from snuba.query.expressions import (
+    ArbitrarySQL,
     Argument,
     Column,
     CurriedFunctionCall,
@@ -178,6 +179,14 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
         parameters = [self.__escape_identifier_enforce(v) for v in exp.parameters]
         ret = f"{', '.join(parameters)} -> {exp.transformation.accept(self)}"
         return self._alias(ret, exp.alias)
+
+    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> str:
+        """
+        Format ArbitrarySQL by passing through the SQL content directly without
+        any escaping or validation. This is intentional as ArbitrarySQL is meant
+        for pre-validated SQL in query optimization scenarios.
+        """
+        return self._alias(exp.sql, exp.alias)
 
 
 class ClickhouseExpressionFormatter(ExpressionFormatterBase):

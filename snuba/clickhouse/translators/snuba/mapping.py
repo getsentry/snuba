@@ -25,6 +25,7 @@ from snuba.clickhouse.translators.snuba.defaults import (
 )
 from snuba.datasets.plans.translator.mapper import apply_mappers
 from snuba.query.expressions import (
+    ArbitrarySQL,
     Argument,
     Column,
     CurriedFunctionCall,
@@ -175,6 +176,11 @@ class SnubaClickhouseMappingTranslator(SnubaClickhouseStrictTranslator):
         ret = apply_mappers(exp, self.__translation_rules.lambdas, self)
         self.__cache[exp] = ret
         return ret
+
+    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> Expression:
+        # ArbitrarySQL is passed through unchanged during translation
+        # since it contains pre-formatted SQL that should not be modified
+        return exp
 
     def translate_function_strict(self, exp: FunctionCall) -> FunctionCall:
         """
