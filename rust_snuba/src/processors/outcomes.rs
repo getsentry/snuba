@@ -21,6 +21,8 @@ const CLIENT_DISCARD_REASONS: &[&str] = &[
     "cache_overflow",
     // an event was dropped by an event processor; may also be used for ignored exceptions / errors
     "event_processor",
+    // an event was dropped by an SDK ignore config (e.g. an `ignore_spans` deny list)
+    "ignored",
     // an event was dropped due to a lack of data in the event (eg: not enough samples in a profile)
     "insufficient_data",
     // an event was dropped due to an internal SDK error (eg: web worker crash)
