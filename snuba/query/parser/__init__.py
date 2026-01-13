@@ -5,10 +5,10 @@ from snuba import environment
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.expressions import (
-    ArbitrarySQL,
     Argument,
     Column,
     CurriedFunctionCall,
+    DangerousRawSQL,
     Expression,
     ExpressionVisitor,
     FunctionCall,
@@ -252,5 +252,5 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
             ),
         )
 
-    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> Expression:
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> Expression:
         return exp

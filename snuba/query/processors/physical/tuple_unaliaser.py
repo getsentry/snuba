@@ -2,10 +2,10 @@ from dataclasses import replace
 
 from snuba.clickhouse.query import Query
 from snuba.query.expressions import (
-    ArbitrarySQL,
     Argument,
     Column,
     CurriedFunctionCall,
+    DangerousRawSQL,
     Expression,
     ExpressionVisitor,
     FunctionCall,
@@ -59,7 +59,7 @@ class _TupleUnaliasVisitor(ExpressionVisitor[Expression]):
     def visit_argument(self, exp: Argument) -> Expression:
         return exp
 
-    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> Expression:
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> Expression:
         return exp
 
 

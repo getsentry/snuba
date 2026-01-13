@@ -5,10 +5,10 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
-    ArbitrarySQL,
     Argument,
     Column,
     CurriedFunctionCall,
+    DangerousRawSQL,
     ExpressionVisitor,
     FunctionCall,
     Lambda,
@@ -80,7 +80,9 @@ class FindConditionalAggregateFunctionsVisitor(
     def visit_lambda(self, exp: Lambda) -> list[FunctionCall | CurriedFunctionCall]:
         return self._matches
 
-    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> list[FunctionCall | CurriedFunctionCall]:
+    def visit_dangerous_raw_sql(
+        self, exp: DangerousRawSQL
+    ) -> list[FunctionCall | CurriedFunctionCall]:
         return self._matches
 
 

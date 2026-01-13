@@ -1,11 +1,11 @@
 from typing import Iterable, List
 
 from snuba.query.expressions import (
-    ArbitrarySQL,
     Argument,
     Column,
     ColumnVisitor,
     CurriedFunctionCall,
+    DangerousRawSQL,
     Expression,
     ExpressionVisitor,
     FunctionCall,
@@ -62,7 +62,7 @@ class DummyVisitor(ExpressionVisitor[Iterable[Expression]]):
         ret.extend(exp.transformation.accept(self))
         return ret
 
-    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> List[Expression]:
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> List[Expression]:
         self.__visited_nodes.append(exp)
         return [exp]
 
@@ -103,9 +103,9 @@ def test_visit_expression() -> None:
 
 
 def test_visit_arbitrary_sql() -> None:
-    """Test visitor pattern with ArbitrarySQL node"""
+    """Test visitor pattern with DangerousRawSQL node"""
     col = Column("al1", "t1", "c1")
-    arbitrary = ArbitrarySQL("al2", "custom_function()")
+    arbitrary = DangerousRawSQL("al2", "custom_function()")
     literal = Literal("al3", "test")
     func = FunctionCall("al4", "f1", (col, arbitrary, literal))
 
@@ -124,16 +124,16 @@ def test_visit_arbitrary_sql() -> None:
 
 
 def test_column_visitor_with_arbitrary_sql() -> None:
-    """Test that ColumnVisitor handles ArbitrarySQL correctly"""
+    """Test that ColumnVisitor handles DangerousRawSQL correctly"""
 
-    # Expression with both columns and ArbitrarySQL
+    # Expression with both columns and DangerousRawSQL
     col1 = Column(None, "t1", "column1")
-    arbitrary = ArbitrarySQL(None, "COUNT(*)")  # No extractable columns
+    arbitrary = DangerousRawSQL(None, "COUNT(*)")  # No extractable columns
     col2 = Column(None, "t1", "column2")
     func = FunctionCall(None, "func", (col1, arbitrary, col2))
 
     visitor = ColumnVisitor()
     columns = func.accept(visitor)
 
-    # Should extract only the actual columns, not from ArbitrarySQL
+    # Should extract only the actual columns, not from DangerousRawSQL
     assert columns == {"column1", "column2"}

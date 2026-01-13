@@ -15,10 +15,10 @@ from typing import (
 )
 
 from snuba.query.expressions import (
-    ArbitrarySQL,
     Argument,
     Column,
     CurriedFunctionCall,
+    DangerousRawSQL,
     Expression,
     ExpressionVisitor,
     FunctionCall,
@@ -297,7 +297,7 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
             main_expression=Lambda(exp.alias, exp.parameters, transformed.main_expression),
         )
 
-    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> SubExpression:
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> SubExpression:
         return UnclassifiedExpression(exp)
 
 

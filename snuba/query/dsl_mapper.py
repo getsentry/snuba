@@ -5,10 +5,10 @@ from snuba.query import LimitBy, OrderBy, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import (
-    ArbitrarySQL,
     Argument,
     Column,
     CurriedFunctionCall,
+    DangerousRawSQL,
     Expression,
     ExpressionVisitor,
     FunctionCall,
@@ -184,9 +184,9 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
     def visit_lambda(self, exp: Lambda) -> str:
         return repr(exp)
 
-    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> str:
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> str:
         alias_str = f", {repr(exp.alias)}" if exp.alias else ", None"
-        return f"ArbitrarySQL({alias_str}, {repr(exp.sql)})"
+        return f"DangerousRawSQL({alias_str}, {repr(exp.sql)})"
 
     def visit_selected_expression(self, exp: SelectedExpression) -> str:
         return f"SelectedExpression({repr(exp.name)}, {exp.expression.accept(self)})"

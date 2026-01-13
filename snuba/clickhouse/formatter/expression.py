@@ -10,10 +10,10 @@ from snuba.query.conditions import (
     get_first_level_or_conditions,
 )
 from snuba.query.expressions import (
-    ArbitrarySQL,
     Argument,
     Column,
     CurriedFunctionCall,
+    DangerousRawSQL,
     Expression,
     ExpressionVisitor,
     FunctionCall,
@@ -180,10 +180,10 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
         ret = f"{', '.join(parameters)} -> {exp.transformation.accept(self)}"
         return self._alias(ret, exp.alias)
 
-    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> str:
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> str:
         """
-        Format ArbitrarySQL by passing through the SQL content directly without
-        any escaping or validation. This is intentional as ArbitrarySQL is meant
+        Format DangerousRawSQL by passing through the SQL content directly without
+        any escaping or validation. This is intentional as DangerousRawSQL is meant
         for pre-validated SQL in query optimization scenarios.
         """
         return self._alias(exp.sql, exp.alias)

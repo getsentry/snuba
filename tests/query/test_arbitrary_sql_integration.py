@@ -1,18 +1,18 @@
 """
-Integration tests for ArbitrarySQL in full query contexts
+Integration tests for DangerousRawSQL in full query contexts
 """
 
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
-from snuba.query.expressions import ArbitrarySQL, Column, FunctionCall, Literal
+from snuba.query.expressions import Column, DangerousRawSQL, FunctionCall, Literal
 
 
 def test_arbitrary_sql_in_select() -> None:
-    """Test ArbitrarySQL used in SELECT clause"""
+    """Test DangerousRawSQL used in SELECT clause"""
     formatter = ClickhouseExpressionFormatter()
 
     expressions = [
         FunctionCall(None, "count", ()),
-        ArbitrarySQL("custom", "arrayReduce('sum', array)"),
+        DangerousRawSQL("custom", "arrayReduce('sum', array)"),
         Column(None, "t", "col"),
     ]
 
@@ -25,16 +25,18 @@ def test_arbitrary_sql_in_select() -> None:
 
 def test_arbitrary_sql_query_optimization_scenario() -> None:
     """
-    Test realistic query optimization scenario where ArbitrarySQL
+    Test realistic query optimization scenario where DangerousRawSQL
     would be used to inject optimized ClickHouse-specific SQL
     """
     formatter = ClickhouseExpressionFormatter()
 
     # Original: FunctionCall for aggregation
-    # Optimized: Replace with ArbitrarySQL using ClickHouse-specific syntax
+    # Optimized: Replace with DangerousRawSQL using ClickHouse-specific syntax
 
     # Simulating: arrayReduce('quantilesTiming(0.5, 0.95)', measurements)
-    optimized = ArbitrarySQL("quantiles", "arrayReduce('quantilesTiming(0.5, 0.95)', measurements)")
+    optimized = DangerousRawSQL(
+        "quantiles", "arrayReduce('quantilesTiming(0.5, 0.95)', measurements)"
+    )
 
     result = optimized.accept(formatter)
     expected = "(arrayReduce('quantilesTiming(0.5, 0.95)', measurements) AS quantiles)"
@@ -42,7 +44,7 @@ def test_arbitrary_sql_query_optimization_scenario() -> None:
 
 
 def test_arbitrary_sql_preserves_special_syntax() -> None:
-    """Test that ArbitrarySQL preserves ClickHouse-specific syntax"""
+    """Test that DangerousRawSQL preserves ClickHouse-specific syntax"""
     formatter = ClickhouseExpressionFormatter()
 
     # Test various ClickHouse-specific features
@@ -62,19 +64,19 @@ def test_arbitrary_sql_preserves_special_syntax() -> None:
     ]
 
     for sql in test_cases:
-        exp = ArbitrarySQL(None, sql)
+        exp = DangerousRawSQL(None, sql)
         result = exp.accept(formatter)
         assert result == sql, f"Failed for: {sql}"
 
 
 def test_arbitrary_sql_nested_in_expressions() -> None:
-    """Test ArbitrarySQL nested in complex expressions"""
+    """Test DangerousRawSQL nested in complex expressions"""
     formatter = ClickhouseExpressionFormatter()
 
-    # Nested ArbitrarySQL: if(ArbitrarySQL, column, ArbitrarySQL)
-    condition = ArbitrarySQL(None, "has(array, value)")
+    # Nested DangerousRawSQL: if(DangerousRawSQL, column, DangerousRawSQL)
+    condition = DangerousRawSQL(None, "has(array, value)")
     col = Column(None, "t", "col1")
-    default = ArbitrarySQL(None, "defaultValue()")
+    default = DangerousRawSQL(None, "defaultValue()")
 
     func = FunctionCall(None, "if", (condition, col, default))
     result = func.accept(formatter)
@@ -84,26 +86,26 @@ def test_arbitrary_sql_nested_in_expressions() -> None:
 
 
 def test_arbitrary_sql_with_multiline() -> None:
-    """Test that ArbitrarySQL preserves multiline SQL"""
+    """Test that DangerousRawSQL preserves multiline SQL"""
     formatter = ClickhouseExpressionFormatter()
 
     sql_multiline = """arrayFilter(
     x -> x > 0,
     arr
 )"""
-    exp = ArbitrarySQL(None, sql_multiline)
+    exp = DangerousRawSQL(None, sql_multiline)
     result = exp.accept(formatter)
 
     assert result == sql_multiline
 
 
 def test_arbitrary_sql_combination() -> None:
-    """Test combining multiple ArbitrarySQL expressions in one function"""
+    """Test combining multiple DangerousRawSQL expressions in one function"""
     formatter = ClickhouseExpressionFormatter()
 
-    # Create a complex expression combining ArbitrarySQL and regular expressions
-    arb1 = ArbitrarySQL(None, "custom_func1()")
-    arb2 = ArbitrarySQL("alias2", "custom_func2()")
+    # Create a complex expression combining DangerousRawSQL and regular expressions
+    arb1 = DangerousRawSQL(None, "custom_func1()")
+    arb2 = DangerousRawSQL("alias2", "custom_func2()")
     col = Column(None, "t", "col")
     literal = Literal(None, 100)
 
@@ -115,22 +117,22 @@ def test_arbitrary_sql_combination() -> None:
 
 
 def test_arbitrary_sql_empty_string() -> None:
-    """Test that empty ArbitrarySQL is handled correctly"""
+    """Test that empty DangerousRawSQL is handled correctly"""
     formatter = ClickhouseExpressionFormatter()
 
-    exp = ArbitrarySQL(None, "")
+    exp = DangerousRawSQL(None, "")
     result = exp.accept(formatter)
 
     assert result == ""
 
 
 def test_arbitrary_sql_with_quotes_and_escapes() -> None:
-    """Test ArbitrarySQL with quotes and escape sequences"""
+    """Test DangerousRawSQL with quotes and escape sequences"""
     formatter = ClickhouseExpressionFormatter()
 
     # SQL with single quotes, double quotes, and backslashes
     sql = r"replaceRegexpAll(col, '\\s+', ' ')"
-    exp = ArbitrarySQL(None, sql)
+    exp = DangerousRawSQL(None, sql)
     result = exp.accept(formatter)
 
     # Should be passed through unchanged (no escaping)

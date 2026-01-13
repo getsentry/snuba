@@ -129,7 +129,7 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
         raise NotImplementedError
 
     @abstractmethod
-    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> TVisited:
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> TVisited:
         raise NotImplementedError
 
 
@@ -163,7 +163,7 @@ class NoopVisitor(ExpressionVisitor[None]):
     def visit_lambda(self, exp: Lambda) -> None:
         return exp.transformation.accept(self)
 
-    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> None:
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> None:
         return None
 
 
@@ -261,9 +261,9 @@ class StringifyVisitor(ExpressionVisitor[str]):
         self.__level -= 1
         return f"{self._get_line_prefix()}({params_str}) ->\n{transformation_str}\n{self._get_line_prefix()}{self._get_alias_str(exp)}"
 
-    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> str:
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> str:
         sql_repr = repr(exp.sql)
-        return f"{self._get_line_prefix()}ArbitrarySQL({sql_repr}){self._get_alias_str(exp)}"
+        return f"{self._get_line_prefix()}DangerousRawSQL({sql_repr}){self._get_alias_str(exp)}"
 
 
 class ColumnVisitor(ExpressionVisitor[set[str]]):
@@ -296,7 +296,7 @@ class ColumnVisitor(ExpressionVisitor[set[str]]):
     def visit_lambda(self, exp: Lambda) -> set[str]:
         return exp.transformation.accept(self)
 
-    def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> set[str]:
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> set[str]:
         return self.columns
 
 
@@ -582,7 +582,7 @@ class Lambda(Expression):
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
-class ArbitrarySQL(Expression):
+class DangerousRawSQL(Expression):
     """
     Represents raw SQL that should be passed through directly to ClickHouse
     without any escaping or validation. This is intended for query optimization
@@ -601,7 +601,7 @@ class ArbitrarySQL(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visit_arbitrary_sql(self)
+        return visitor.visit_dangerous_raw_sql(self)
 
     def functional_eq(self, other: Expression) -> bool:
         if not isinstance(other, self.__class__):
