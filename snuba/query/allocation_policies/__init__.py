@@ -6,6 +6,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, cast
 
+import sentry_sdk
+
 from snuba import environment, settings
 from snuba.configs.configuration import (
     ConfigurableComponent,
@@ -448,71 +450,79 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     def get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        try:
-            if not self.is_active:
+        with sentry_sdk.start_span(
+            op="allocation_policy.get_quota_allowance", name=self.__class__.__name__
+        ) as span:
+            for t, tid in tenant_ids.items():
+                span.set_data(f"tenant_ids.{t}", str(tid))
+            try:
+                if not self.is_active:
+                    allowance = QuotaAllowance(
+                        can_run=True,
+                        max_threads=self.max_threads,
+                        explanation={},
+                        is_throttled=False,
+                        throttle_threshold=MAX_THRESHOLD,
+                        rejection_threshold=MAX_THRESHOLD,
+                        quota_used=0,
+                        quota_unit=NO_UNITS,
+                        suggestion=NO_SUGGESTION,
+                    )
+                else:
+                    allowance = self._get_quota_allowance(tenant_ids, query_id)
+            except InvalidTenantsForAllocationPolicy as e:
                 allowance = QuotaAllowance(
-                    can_run=True,
-                    max_threads=self.max_threads,
-                    explanation={},
+                    can_run=False,
+                    max_threads=0,
+                    explanation=cast(dict[str, Any], e.to_dict()),
                     is_throttled=False,
-                    throttle_threshold=MAX_THRESHOLD,
-                    rejection_threshold=MAX_THRESHOLD,
+                    throttle_threshold=0,
+                    rejection_threshold=0,
                     quota_used=0,
                     quota_unit=NO_UNITS,
                     suggestion=NO_SUGGESTION,
                 )
-            else:
-                allowance = self._get_quota_allowance(tenant_ids, query_id)
-        except InvalidTenantsForAllocationPolicy as e:
-            allowance = QuotaAllowance(
-                can_run=False,
-                max_threads=0,
-                explanation=cast(dict[str, Any], e.to_dict()),
-                is_throttled=False,
-                throttle_threshold=0,
-                rejection_threshold=0,
-                quota_used=0,
-                quota_unit=NO_UNITS,
-                suggestion=NO_SUGGESTION,
-            )
-        except Exception:
-            self.metrics.increment("fail_open", 1, tags={"method": "get_quota_allowance"})
-            logger.exception(
-                "Allocation policy failed to get quota allowance, this is a bug, fix it"
-            )
-            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
-                raise
-            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
-        if not allowance.can_run:
-            self.metrics.increment(
-                "db_request_rejected",
-                tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
-            )
-        elif allowance.max_threads < self.max_threads:
-            # NOTE: The elif is very intentional here. Don't count the throttling
-            # if the request was rejected.
-            self.metrics.increment(
-                "db_request_throttled",
-                tags={
-                    "referrer": str(tenant_ids.get("referrer", "no_referrer")),
-                    "max_threads": str(allowance.max_threads),
-                },
-            )
-        if not self.is_enforced:
-            return QuotaAllowance(
-                can_run=True,
-                max_threads=self.max_threads,
-                explanation={},
-                is_throttled=allowance.is_throttled,
-                throttle_threshold=allowance.throttle_threshold,
-                rejection_threshold=allowance.rejection_threshold,
-                quota_used=allowance.quota_used,
-                quota_unit=allowance.quota_unit,
-                suggestion=allowance.suggestion,
-            )
-        # make sure we always know which storage key we rejected a query from
-        allowance.explanation["storage_key"] = self._resource_identifier.value
-        return allowance
+            except Exception:
+                self.metrics.increment("fail_open", 1, tags={"method": "get_quota_allowance"})
+                logger.exception(
+                    "Allocation policy failed to get quota allowance, this is a bug, fix it"
+                )
+                if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
+                    raise
+                return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
+            if not allowance.can_run:
+                self.metrics.increment(
+                    "db_request_rejected",
+                    tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+                )
+            elif allowance.max_threads < self.max_threads:
+                # NOTE: The elif is very intentional here. Don't count the throttling
+                # if the request was rejected.
+                self.metrics.increment(
+                    "db_request_throttled",
+                    tags={
+                        "referrer": str(tenant_ids.get("referrer", "no_referrer")),
+                        "max_threads": str(allowance.max_threads),
+                    },
+                )
+                span.set_data("db_request_throttled", True)
+            if not self.is_enforced:
+                allowance = QuotaAllowance(
+                    can_run=True,
+                    max_threads=self.max_threads,
+                    explanation={},
+                    is_throttled=allowance.is_throttled,
+                    throttle_threshold=allowance.throttle_threshold,
+                    rejection_threshold=allowance.rejection_threshold,
+                    quota_used=allowance.quota_used,
+                    quota_unit=allowance.quota_unit,
+                    suggestion=allowance.suggestion,
+                )
+            # make sure we always know which storage key we rejected a query from
+            allowance.explanation["storage_key"] = self._resource_identifier.value
+            for k, v in allowance.to_dict().items():
+                span.set_data(f"quota_allowance.{k}", v)
+            return allowance
 
     @abstractmethod
     def _get_quota_allowance(
