@@ -288,10 +288,6 @@ TEST_CASES = [
     ),
     (ArbitrarySQL(None, "COUNT(*)"), "ArbitrarySQL('COUNT(*)')"),
     (ArbitrarySQL("alias", "SUM(col)"), "ArbitrarySQL('SUM(col)') AS `alias`"),
-    (
-        ArbitrarySQL(None, "SELECT * FROM very_long_table_name_that_exceeds_fifty_characters"),
-        "ArbitrarySQL('SELECT * FROM very_long_table_name_that_exce...)",
-    ),
 ]
 
 

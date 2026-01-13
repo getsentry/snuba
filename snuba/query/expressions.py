@@ -262,7 +262,7 @@ class StringifyVisitor(ExpressionVisitor[str]):
         return f"{self._get_line_prefix()}({params_str}) ->\n{transformation_str}\n{self._get_line_prefix()}{self._get_alias_str(exp)}"
 
     def visit_arbitrary_sql(self, exp: ArbitrarySQL) -> str:
-        sql_repr = repr(exp.sql) if len(exp.sql) <= 50 else repr(exp.sql[:47]) + "..."
+        sql_repr = repr(exp.sql)
         return f"{self._get_line_prefix()}ArbitrarySQL({sql_repr}){self._get_alias_str(exp)}"
 
 
