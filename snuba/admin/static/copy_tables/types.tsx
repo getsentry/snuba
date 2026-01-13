@@ -11,20 +11,15 @@ type ClickhouseNodeData = {
   query_node: ClickhouseNode;
 };
 
-type QueryRequest = {
+type CopyTableHost = {
   storage: string;
   host: string;
   port: number;
-  sql: string;
-  sudo: boolean;
-  clusterless?: boolean;
 };
 
-type QueryState = Partial<QueryRequest>;
-
-type ShowTablesQueryState = {
-  sourceHost: QueryState
-  targetHost: QueryState
+type CopyTableHostsState = {
+  sourceHost: Partial<CopyTableHost>
+  targetHost: Partial<CopyTableHost>
 }
 
 type CopyTableRequest = {
@@ -44,4 +39,4 @@ type CopyTableResult = {
   cluster_name: string
 }
 
-export { CopyTableRequest, ClickhouseNodeData, CopyTableResult, ShowTablesQueryState, };
+export { ClickhouseNodeData, CopyTableHostsState, CopyTableRequest, CopyTableResult };

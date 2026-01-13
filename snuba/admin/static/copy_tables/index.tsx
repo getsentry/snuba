@@ -8,7 +8,7 @@ import {
   ClickhouseNodeData,
   CopyTableRequest,
   CopyTableResult,
-  ShowTablesQueryState,
+  CopyTableHostsState,
 } from "SnubaAdmin/copy_tables/types";
 
 
@@ -16,14 +16,12 @@ function CopyTables(props: {
   api: Client;
 }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
-  const [tableQueries, setShowTablesQueries] = useState<ShowTablesQueryState>({
+  const [copyTableHosts, setCopyTableHosts] = useState<CopyTableHostsState>({
     sourceHost: {},
     targetHost: {}
   });
   const [copyTableResult, setCopyTableResult] = useState<CopyTableResult | null>(null);
-
   const [queryError, setQueryError] = useState<Error | null>(null);
-
   const [collapseOpened, setCollapseOpened] = useState(false);
 
   useEffect(() => {
@@ -33,32 +31,31 @@ function CopyTables(props: {
   }, []);
 
   function selectStorage(storage: string) {
-    setShowTablesQueries((showTablesQueries) => {
+    setCopyTableHosts((copyTableHosts) => {
       // clear old host port
-      delete showTablesQueries.sourceHost.host
-      delete showTablesQueries.sourceHost.port
-      delete showTablesQueries.targetHost.host
-      delete showTablesQueries.targetHost.port
+      delete copyTableHosts.sourceHost.host
+      delete copyTableHosts.sourceHost.port
+      delete copyTableHosts.targetHost.host
+      delete copyTableHosts.targetHost.port
 
-      showTablesQueries.sourceHost.storage = storage
-      showTablesQueries.targetHost.storage = storage
+      copyTableHosts.sourceHost.storage = storage
+      copyTableHosts.targetHost.storage = storage
 
       return {
-        ...showTablesQueries,
+        ...copyTableHosts,
       };
     });
   }
 
   function selectTargetHost(value: string) {
-    setShowTablesQueries((showTablesQueries) => {
+    setCopyTableHosts((copyTableHosts) => {
 
-      showTablesQueries.targetHost.sql = "SHOW tables"
-      showTablesQueries.targetHost.host = value
-      showTablesQueries.targetHost.port = 9000
+      copyTableHosts.targetHost.host = value
+      copyTableHosts.targetHost.port = 9000
 
 
       return {
-        ...showTablesQueries,
+        ...copyTableHosts,
       };
     });
   }
@@ -66,14 +63,13 @@ function CopyTables(props: {
   function selectSourceHost(hostString: string) {
     const [host, portAsString] = hostString.split(":");
 
-    setShowTablesQueries((showTablesQueries) => {
-      showTablesQueries.sourceHost.sql = "SHOW tables"
-      showTablesQueries.sourceHost.host = host
-      showTablesQueries.sourceHost.port = parseInt(portAsString, 10)
+    setCopyTableHosts((copyTableHosts) => {
+      copyTableHosts.sourceHost.host = host
+      copyTableHosts.sourceHost.port = parseInt(portAsString, 10)
 
 
       return {
-        ...showTablesQueries,
+        ...copyTableHosts,
 
       };
     });
@@ -81,11 +77,11 @@ function CopyTables(props: {
 
   function executeCopyTableQuery(shouldExecute: boolean) {
     const query = {
-      storage: tableQueries.sourceHost.storage,
-      source_host: tableQueries.sourceHost.host,
-      source_port: tableQueries.sourceHost.port,
-      target_host: tableQueries.targetHost.host,
-      target_port: tableQueries.targetHost.port,
+      storage: copyTableHosts.sourceHost.storage,
+      source_host: copyTableHosts.sourceHost.host,
+      source_port: copyTableHosts.sourceHost.port,
+      target_host: copyTableHosts.targetHost.host,
+      target_port: copyTableHosts.targetHost.port,
       dry_run: !shouldExecute,
     }
     return props.api
@@ -108,19 +104,19 @@ function CopyTables(props: {
             <h3>Source Host</h3>
             <div style={hostSelectStyle}>
               <CustomSelect
-                value={tableQueries.sourceHost.storage || ""}
+                value={copyTableHosts.sourceHost.storage || ""}
                 onChange={selectStorage}
                 name="storage"
                 options={nodeData.map((storage) => storage.storage_name)}
               />
               <CustomSelect
-                disabled={!tableQueries.sourceHost.storage}
+                disabled={!copyTableHosts.sourceHost.storage}
                 value={
-                  tableQueries.sourceHost.host && tableQueries.sourceHost.port ? `${tableQueries.sourceHost.host}:${tableQueries.sourceHost.port}` : ""
+                  copyTableHosts.sourceHost.host && copyTableHosts.sourceHost.port ? `${copyTableHosts.sourceHost.host}:${copyTableHosts.sourceHost.port}` : ""
                 }
                 onChange={selectSourceHost}
                 name="host"
-                options={getHostsForStorage(nodeData, tableQueries.sourceHost.storage)}
+                options={getHostsForStorage(nodeData, copyTableHosts.sourceHost.storage)}
               />
             </div>
           </div>
@@ -130,7 +126,7 @@ function CopyTables(props: {
               <input
                 style={inputStyle}
                 id="clusterless"
-                value={tableQueries.targetHost.host || ""}
+                value={copyTableHosts.targetHost.host || ""}
                 onChange={(evt) => selectTargetHost(evt.target.value)}
                 name="target-host"
                 placeholder="target host"
@@ -148,13 +144,13 @@ function CopyTables(props: {
               label=" DRY RUN"
               onError={handleQueryError}
               onClick={() => executeCopyTableQuery(false)}
-              disabled={tableQueries.targetHost.host ? false : true}
+              disabled={copyTableHosts.targetHost.host ? false : true}
             />
             <ExecuteButton
               label=" ‼️ COPY TABLE ‼️ "
               onError={handleQueryError}
               onClick={() => executeCopyTableQuery(true)}
-              disabled={tableQueries.targetHost.host ? false : true}
+              disabled={copyTableHosts.targetHost.host ? false : true}
             />
           </div>
           <div>
@@ -206,7 +202,6 @@ const inputStyle = {
 const tableListStyle = {
   marginLeft: 5,
   overflowY: "scroll" as const,
-
 }
 
 const copyTableResultStyle = {
@@ -217,7 +212,6 @@ const copyTableResultStyle = {
   marginRight: 40,
   marginTop: 20,
   overflowY: "scroll" as const,
-
 }
 
 export default CopyTables;
