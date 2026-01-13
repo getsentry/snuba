@@ -256,7 +256,6 @@ def _build_query(
                     expression=(attribute_key_to_expression(attribute_key)),
                 )
             )
-        # Ensure trace_id is available for pagination when attributes are explicitly requested
     else:
         selected_columns += [
             SelectedExpression(

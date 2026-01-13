@@ -540,7 +540,7 @@ class TestGetTracePagination(BaseApiTest):
             for group in response.item_groups:
                 for item in group.items:
                     curr_response_len += 1
-                    # assert item.id not in items_received
+                    assert item.id not in items_received
                     items_received.add(item.id)
             assert curr_response_len <= mylimit
             if curr_response_len < mylimit:
