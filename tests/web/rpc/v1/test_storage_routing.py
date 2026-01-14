@@ -310,7 +310,7 @@ def test_metrics_output() -> None:
                 "ConcurrentRateLimitAllocationPolicy": {
                     "can_run": True,
                     "max_threads": 10,
-                    "explanation": {},
+                    "explanation": {"storage_key": "EAP"},
                     "is_throttled": False,
                     "throttle_threshold": AnyInt(22),
                     "rejection_threshold": AnyInt(22),
@@ -322,7 +322,7 @@ def test_metrics_output() -> None:
                 "ReferrerGuardRailPolicy": {
                     "can_run": True,
                     "max_threads": 10,
-                    "explanation": {},
+                    "explanation": {"storage_key": "EAP"},
                     "is_throttled": False,
                     "throttle_threshold": AnyInt(1000000000000),
                     "rejection_threshold": AnyInt(1000000000000),
@@ -334,7 +334,7 @@ def test_metrics_output() -> None:
                 "BytesScannedRejectingPolicy": {
                     "can_run": True,
                     "max_threads": 10,
-                    "explanation": {},
+                    "explanation": {"storage_key": "EAP"},
                     "is_throttled": False,
                     "throttle_threshold": AnyInt(1000000000000),
                     "rejection_threshold": AnyInt(1000000000000),
