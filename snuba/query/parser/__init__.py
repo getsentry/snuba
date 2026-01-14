@@ -8,6 +8,7 @@ from snuba.query.expressions import (
     Argument,
     Column,
     CurriedFunctionCall,
+    DangerousRawSQL,
     Expression,
     ExpressionVisitor,
     FunctionCall,
@@ -36,10 +37,7 @@ def validate_aliases(query: Union[CompositeQuery[LogicalDataSource], Query]) -> 
                 # happening.
                 metrics.increment("empty_alias")
 
-            if (
-                exp.alias in all_declared_aliases
-                and exp != all_declared_aliases[exp.alias]
-            ):
+            if exp.alias in all_declared_aliases and exp != all_declared_aliases[exp.alias]:
                 raise AliasShadowingException(
                     (
                         f"Shadowing aliases detected for alias: {exp.alias}. "
@@ -51,9 +49,7 @@ def validate_aliases(query: Union[CompositeQuery[LogicalDataSource], Query]) -> 
                 all_declared_aliases[exp.alias] = exp
 
 
-def parse_subscriptables(
-    query: Union[CompositeQuery[LogicalDataSource], Query]
-) -> None:
+def parse_subscriptables(query: Union[CompositeQuery[LogicalDataSource], Query]) -> None:
     """
     Turns columns formatted as tags[asd] into SubscriptableReference.
     """
@@ -77,9 +73,7 @@ def parse_subscriptables(
     query.transform_expressions(transform)
 
 
-def apply_column_aliases(
-    query: Union[CompositeQuery[LogicalDataSource], Query]
-) -> None:
+def apply_column_aliases(query: Union[CompositeQuery[LogicalDataSource], Query]) -> None:
     """
     Applies an alias to all the columns in the query equal to the column
     name unless a column already has one or the alias is already defined.
@@ -92,11 +86,7 @@ def apply_column_aliases(
     current_aliases = {exp.alias for exp in query.get_all_expressions() if exp.alias}
 
     def apply_aliases(exp: Expression) -> Expression:
-        if (
-            not isinstance(exp, Column)
-            or exp.alias
-            or exp.column_name in current_aliases
-        ):
+        if not isinstance(exp, Column) or exp.alias or exp.column_name in current_aliases:
             return exp
         else:
             return replace(exp, alias=exp.column_name)
@@ -119,9 +109,7 @@ def expand_aliases(query: Union[CompositeQuery[LogicalDataSource], Query]) -> No
         exp.alias: exp for exp in query.get_all_expressions() if exp.alias is not None
     }
     fully_resolved_aliases = {
-        alias: exp.accept(
-            AliasExpanderVisitor(aliased_expressions, [], expand_nested=True)
-        )
+        alias: exp.accept(AliasExpanderVisitor(aliased_expressions, [], expand_nested=True))
         for alias, exp in aliased_expressions.items()
     }
 
@@ -194,11 +182,7 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
             return self.__alias_lookup_table[name]
 
     def __append_alias(self, alias: Optional[str]) -> Sequence[str]:
-        return (
-            [*self.__visited_stack, alias]
-            if alias is not None
-            else self.__visited_stack
-        )
+        return [*self.__visited_stack, alias] if alias is not None else self.__visited_stack
 
     def visit_subscriptable_reference(self, exp: SubscriptableReference) -> Expression:
         expanded_column = exp.column.accept(
@@ -267,3 +251,6 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
                 )
             ),
         )
+
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> Expression:
+        return exp
