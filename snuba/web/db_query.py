@@ -478,7 +478,8 @@ def _raw_query(
             status = get_query_status_from_error_codes(error_code)
             if error_code == ErrorCodes.TOO_MANY_BYTES:
                 calculated_cause = RateLimitExceeded(
-                    "Query scanned more than the allocated amount of bytes"
+                    "Query scanned more than the allocated amount of bytes",
+                    quota_allowance=stats["quota_allowance"],
                 )
 
             with configure_scope() as scope:

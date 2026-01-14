@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from types import TracebackType
 from typing import Any
 from typing import ChainMap as TypingChainMap
-from typing import Iterator, MutableMapping, Optional, Sequence, Type
+from typing import Iterator, MutableMapping, Optional, Sequence, Type, cast
 
 from snuba import environment, state
 from snuba.redis import RedisClientKey, get_redis_client
@@ -74,6 +74,10 @@ class RateLimitExceeded(SerializableException):
     Exception thrown when the rate limit is exceeded. scope and name are
     additional parameters which are provided when the exception is raised.
     """
+
+    @property
+    def quota_allowance(self) -> dict[str, Any]:
+        return cast(dict[str, Any], self.extra_data.get("quota_allowance", {}))
 
 
 @dataclass(frozen=True)
