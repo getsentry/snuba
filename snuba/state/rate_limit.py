@@ -8,9 +8,9 @@ from collections import ChainMap, namedtuple
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, cast
+from typing import Any
 from typing import ChainMap as TypingChainMap
-from typing import Iterator, MutableMapping, Optional, Sequence, Type
+from typing import Iterator, MutableMapping, Optional, Sequence, Type, cast
 
 from snuba import environment, state
 from snuba.redis import RedisClientKey, get_redis_client
