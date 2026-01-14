@@ -5,6 +5,7 @@ from snuba.query.expressions import (
     Argument,
     Column,
     CurriedFunctionCall,
+    DangerousRawSQL,
     Expression,
     ExpressionVisitor,
     FunctionCall,
@@ -56,6 +57,9 @@ class _TupleUnaliasVisitor(ExpressionVisitor[Expression]):
         return res
 
     def visit_argument(self, exp: Argument) -> Expression:
+        return exp
+
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> Expression:
         return exp
 
 

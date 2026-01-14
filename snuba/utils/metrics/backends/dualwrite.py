@@ -29,11 +29,6 @@ class SentryDatadogMetricsBackend(MetricsBackend):
             return bool(random.random() < settings.DDM_METRICS_SAMPLE_RATE)
         return False
 
-    def _write_timings_as_histograms(self) -> bool:
-        from snuba import state
-
-        return str(state.get_config("write_timings_as_histograms", "1")) == "1"
-
     def increment(
         self,
         name: str,
@@ -64,12 +59,10 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         unit: str | None = None,
     ) -> None:
         # Note (Volo) 12/15/2025: timing metrics were originally written to veneur which
-        # would then calculate percentiles. datadog now supports direct aggregations of percentiles
-        # we keep the veneur timing metric to maintain historical data, this should be removed by
-        # 02/15/2026 once we have enough historical data already
+        # would then calculate percentiles. These would be saved as histograms in datadog
+        # datadog now supports direct aggregations of percentiles using distribution metrics
+        # so we send our timings using a distribution metric
         self.datadog.distribution(f"{name}.distribution", value, tags, unit)
-        if self._write_timings_as_histograms():
-            self.datadog.timing(name, value, tags, unit)
         if self._use_sentry():
             self.sentry.timing(name, value, tags, unit)
 
