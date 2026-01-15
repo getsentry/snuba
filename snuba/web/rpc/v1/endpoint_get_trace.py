@@ -310,19 +310,25 @@ def _build_query(
                     # (item_type = page_token.last_seen_item_type AND timestamp > page_token.last_seen_timestamp)
                     and_cond(
                         f.equals(column("item_type"), literal(page_token.last_seen_item_type)),
-                        f.greater(column("timestamp"), literal(page_token.last_seen_timestamp)),
+                        f.greater(
+                            column("integer_timestamp"), literal(page_token.last_seen_timestamp)
+                        ),
                     ),
                     or_cond(
                         # (item_type = page_token.last_seen_item_type AND timestamp = page_token.last_seen_timestamp AND trace_id > page_token.last_seen_trace_id)
                         and_cond(
                             f.equals(column("item_type"), literal(page_token.last_seen_item_type)),
-                            f.equals(column("timestamp"), literal(page_token.last_seen_timestamp)),
+                            f.equals(
+                                column("integer_timestamp"), literal(page_token.last_seen_timestamp)
+                            ),
                             f.greater(column("trace_id"), literal(page_token.last_seen_trace_id)),
                         ),
                         # (item_type = page_token.last_seen_item_type AND timestamp = page_token.last_seen_timestamp AND trace_id = page_token.last_seen_trace_id AND item_id > page_token.last_seen_item_id)
                         and_cond(
                             f.equals(column("item_type"), literal(page_token.last_seen_item_type)),
-                            f.equals(column("timestamp"), literal(page_token.last_seen_timestamp)),
+                            f.equals(
+                                column("integer_timestamp"), literal(page_token.last_seen_timestamp)
+                            ),
                             f.equals(column("trace_id"), literal(page_token.last_seen_trace_id)),
                             f.greater(
                                 f.reinterpretAsUInt128(f.reverse(f.unhex(column("item_id")))),

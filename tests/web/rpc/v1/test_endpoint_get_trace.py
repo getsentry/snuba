@@ -533,7 +533,7 @@ class TestGetTracePagination(BaseApiTest):
                 ),
             ],
         )
-        items_received = set[str]()
+        items_received = []
         while True:
             response = EndpointGetTrace().execute(message)
             curr_response_len = 0
@@ -541,7 +541,7 @@ class TestGetTracePagination(BaseApiTest):
                 for item in group.items:
                     curr_response_len += 1
                     assert item.id not in items_received
-                    items_received.add(item.id)
+                    items_received.append(item.id)
             assert curr_response_len <= mylimit
             if curr_response_len < mylimit:
                 assert response.page_token.end_pagination == True
@@ -602,7 +602,7 @@ class TestGetTracePagination(BaseApiTest):
                     ),
                 ],
             )
-            items_received = set[str]()
+            items_received = []
             while True:
                 response = EndpointGetTrace().execute(message)
                 curr_response_len = 0
@@ -610,7 +610,7 @@ class TestGetTracePagination(BaseApiTest):
                     for item in group.items:
                         curr_response_len += 1
                         assert item.id not in items_received
-                        items_received.add(item.id)
+                        items_received.append(item.id)
                 assert curr_response_len <= configmax
                 if curr_response_len < configmax:
                     assert response.page_token.end_pagination == True
