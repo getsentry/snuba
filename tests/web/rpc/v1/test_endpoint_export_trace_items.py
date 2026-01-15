@@ -8,7 +8,6 @@ from sentry_protos.snuba.v1.endpoint_trace_items_pb2 import ExportTraceItemsRequ
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem
 
-from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web import QueryResult
@@ -99,7 +98,6 @@ class TestExportTraceItems(BaseApiTest):
         assert response.trace_items == []
 
     def test_with_pagination(self, setup_teardown: Any) -> None:
-        state.set_config("export_trace_items_default_page_size", 20)
 
         response = None
         message = ExportTraceItemsRequest(
@@ -113,6 +111,7 @@ class TestExportTraceItems(BaseApiTest):
                     seconds=int((BASE_TIME + timedelta(seconds=_SPAN_COUNT)).timestamp())
                 ),
             ),
+            limit=20,
         )
         items: list[TraceItem] = []
         while True:
