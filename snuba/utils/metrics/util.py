@@ -1,8 +1,8 @@
-import _strptime  # NOQA fixes _strptime deferred import issue
 import inspect
 from functools import partial, wraps
 from typing import Any, Callable, Mapping, Optional, TypeVar, cast
 
+import _strptime  # NOQA fixes _strptime deferred import issue
 import sentry_sdk
 
 from snuba import settings
