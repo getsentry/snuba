@@ -700,7 +700,12 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         else:
             serialized_page_token = page_token.to_protobuf()
         for group in item_groups:
-            print("item_type", group.item_type, "timestamp & item_id", [(item.timestamp, item.id) for item in group.items])
+            print(
+                "item_type",
+                group.item_type,
+                "timestamp & item_id",
+                [(item.timestamp, item.id) for item in group.items],
+            )
         return GetTraceResponse(
             item_groups=item_groups,
             meta=response_meta,
