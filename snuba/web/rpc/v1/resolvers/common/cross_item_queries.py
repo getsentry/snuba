@@ -198,7 +198,6 @@ def get_trace_ids_sql_for_cross_item_query(
     returns the SQL string instead of executing it. Uses dry_run mode to get the SQL
     without actually querying ClickHouse.
     """
-    # Hacky conversion due to protobuf ugliness
     converted_trace_filters = [trace_filter for trace_filter in trace_filters]
     if isinstance(trace_filters[0], GetTracesRequest.TraceFilter):
         converted_trace_filters = [
