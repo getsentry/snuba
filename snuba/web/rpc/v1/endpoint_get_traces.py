@@ -38,7 +38,6 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.state import get_config
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
@@ -613,8 +612,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
         treeify_or_and_conditions(query)
         settings = setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
-        if get_config("enable_trace_sampling", False):
-            settings.set_sampling_tier(self.routing_decision.tier)
+        settings.set_sampling_tier(self.routing_decision.tier)
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=_build_snuba_request(request, query, query_settings=settings),
