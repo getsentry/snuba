@@ -24,14 +24,14 @@ columns: List[Column[Modifiers]] = [
             UInt(64),
             Modifiers(
                 materialized=get_array_vals_hash(
-                    "arrayConcat(attributes_string, attributes_float, bool_attribute_keys)"
+                    "arrayDistinct(arrayConcat(attributes_string, attributes_float, attributes_bool))"
                 )
             ),
         ),
     ),
     Column("attributes_string", Array(String())),
-    Column("bool_attribute_keys", Array(String())),
     Column("attributes_float", Array(String())),
+    Column("attributes_bool", Array(String())),
     # a hash of all the attribute keys of the item in sorted order
     # this lets us deduplicate rows with merges
     Column(
@@ -39,7 +39,7 @@ columns: List[Column[Modifiers]] = [
         UInt(
             64,
             Modifiers(
-                materialized="cityHash64(arraySort(arrayConcat(attributes_string, attributes_float, bool_attribute_keys)))"
+                materialized="cityHash64(arraySort(arrayDistinct(arrayConcat(attributes_string, attributes_float, attributes_bool))))"
             ),
         ),
     ),
@@ -80,7 +80,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,
-                column=Column("bool_attribute_keys", Array(String())),
+                column=Column("attributes_bool", Array(String())),
                 after="attributes_float",
                 target=OperationTarget.LOCAL,
             )
@@ -91,7 +91,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=self.storage_set_key,
                 table_name=self.dist_table_name,
-                column=Column("bool_attribute_keys", Array(String())),
+                column=Column("attributes_bool", Array(String())),
                 after="attributes_float",
                 target=OperationTarget.DISTRIBUTED,
             )
@@ -194,7 +194,7 @@ FROM eap_items_1_local
             operations.DropColumn(
                 storage_set=self.storage_set_key,
                 table_name=self.dist_table_name,
-                column_name="bool_attribute_keys",
+                column_name="attributes_bool",
                 target=OperationTarget.DISTRIBUTED,
             )
         )
@@ -204,7 +204,7 @@ FROM eap_items_1_local
             operations.DropColumn(
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,
-                column_name="bool_attribute_keys",
+                column_name="attributes_bool",
                 target=OperationTarget.LOCAL,
             )
         )
