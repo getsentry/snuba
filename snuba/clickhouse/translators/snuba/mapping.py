@@ -28,6 +28,7 @@ from snuba.query.expressions import (
     Argument,
     Column,
     CurriedFunctionCall,
+    DangerousRawSQL,
     FunctionCall,
     Lambda,
     Literal,
@@ -175,6 +176,11 @@ class SnubaClickhouseMappingTranslator(SnubaClickhouseStrictTranslator):
         ret = apply_mappers(exp, self.__translation_rules.lambdas, self)
         self.__cache[exp] = ret
         return ret
+
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> Expression:
+        # DangerousRawSQL is passed through unchanged during translation
+        # since it contains pre-formatted SQL that should not be modified
+        return exp
 
     def translate_function_strict(self, exp: FunctionCall) -> FunctionCall:
         """

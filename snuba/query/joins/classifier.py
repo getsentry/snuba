@@ -18,6 +18,7 @@ from snuba.query.expressions import (
     Argument,
     Column,
     CurriedFunctionCall,
+    DangerousRawSQL,
     Expression,
     ExpressionVisitor,
     FunctionCall,
@@ -127,9 +128,7 @@ class UnclassifiedExpression(SubExpression):
     """
 
     def cut_branch(self, alias_generator: AliasGenerator) -> MainQueryExpression:
-        return MainQueryExpression(
-            main_expression=self.main_expression, cut_branches={}
-        )
+        return MainQueryExpression(main_expression=self.main_expression, cut_branches={})
 
 
 def _merge_subexpressions(
@@ -158,9 +157,7 @@ def _merge_subexpressions(
         if not subqueries:
             # All parameters are not classified. This function is also
             # not classified.
-            return UnclassifiedExpression(
-                builder([v.main_expression for v in sub_expressions])
-            )
+            return UnclassifiedExpression(builder([v.main_expression for v in sub_expressions]))
         else:
             # All parameters are either not classified or in a single
             # subquery. This function is also referencing that subquery
@@ -228,16 +225,10 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
         return UnclassifiedExpression(exp)
 
     def visit_column(self, exp: Column) -> SubExpression:
-        assert (
-            exp.table_name
-        ), f"Invalid column expression in join: {exp}. Missing table alias"
-        return SubqueryExpression(
-            Column(exp.alias, None, exp.column_name), exp.table_name
-        )
+        assert exp.table_name, f"Invalid column expression in join: {exp}. Missing table alias"
+        return SubqueryExpression(Column(exp.alias, None, exp.column_name), exp.table_name)
 
-    def visit_subscriptable_reference(
-        self, exp: SubscriptableReference
-    ) -> SubExpression:
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> SubExpression:
         assert (
             exp.column.table_name
         ), f"Invalid column expression in join: {exp}. Missing table alias"
@@ -303,10 +294,11 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
         transformed = exp.transformation.accept(self)
         return replace(
             transformed,
-            main_expression=Lambda(
-                exp.alias, exp.parameters, transformed.main_expression
-            ),
+            main_expression=Lambda(exp.alias, exp.parameters, transformed.main_expression),
         )
+
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> SubExpression:
+        return UnclassifiedExpression(exp)
 
 
 class AggregateBranchCutter(BranchCutter):

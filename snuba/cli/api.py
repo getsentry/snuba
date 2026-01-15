@@ -4,22 +4,24 @@ from typing import Optional, Union
 import click
 
 from snuba.environment import setup_logging
-from snuba.utils import uwsgi
+from snuba.utils import server
 
 
 @click.command()
 @click.option("--bind", help="Address to listen on.")
 @click.option("--debug", is_flag=True)
 @click.option("--log-level", help="Logging level to use.")
-@click.option("--processes", default=1)
-@click.option("--threads", default=1)
+@click.option("--processes", type=click.IntRange(1), default=1)
+@click.option("--threads", type=click.IntRange(1))
+@click.option("--backlog", type=click.IntRange(128), default=128)
 def api(
     *,
     bind: Optional[str],
     debug: bool,
     log_level: Optional[str],
     processes: int,
-    threads: int,
+    threads: Optional[int],
+    backlog: int,
 ) -> None:
     from snuba import settings
 
@@ -34,7 +36,7 @@ def api(
         host, port = settings.HOST, settings.PORT
 
     if debug:
-        if processes > 1 or threads > 1:
+        if processes > 1 or (threads or 1) > 1:
             raise click.ClickException("processes/threads can only be 1 in debug")
 
         from werkzeug.serving import WSGIRequestHandler
@@ -49,9 +51,11 @@ def api(
         if log_level:
             os.environ["LOG_LEVEL"] = log_level
 
-        uwsgi.run(
+        server.serve(
             "snuba.web.wsgi:application",
             f"{host}:{port}",
             processes=processes,
             threads=threads,
+            backlog=backlog,
+            name="snuba-api",
         )
