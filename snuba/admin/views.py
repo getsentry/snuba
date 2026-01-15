@@ -70,6 +70,11 @@ from snuba.consumers.dlq import (
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.lw_deletions.delete_query import (
+    DeletesNotEnabledError,
+    delete_from_storage,
+    deletes_are_enabled,
+)
 from snuba.manual_jobs.runner import (
     list_job_specs,
     list_job_specs_with_status,
@@ -90,11 +95,6 @@ from snuba.request.schema import RequestSchema
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.registered_class import InvalidConfigKeyError
-from snuba.web.delete_query import (
-    DeletesNotEnabledError,
-    delete_from_storage,
-    deletes_are_enabled,
-)
 from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names, run_rpc_handler
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
