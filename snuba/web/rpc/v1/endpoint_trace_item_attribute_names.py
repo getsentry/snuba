@@ -214,6 +214,19 @@ def get_co_occurring_attributes(
         ),
         column("attributes_float"),
     )
+
+    bool_array = f.arrayMap(
+        Lambda(
+            None,
+            ("x",),
+            f.tuple(
+                "TYPE_BOOLEAN",
+                column("x"),
+            ),
+        ),
+        column("attributes_bool"),
+    )
+
     array_func = None
     if request.type == AttributeKey.Type.TYPE_STRING:
         array_func = string_array
@@ -221,11 +234,12 @@ def get_co_occurring_attributes(
         AttributeKey.Type.TYPE_FLOAT,
         AttributeKey.Type.TYPE_DOUBLE,
         AttributeKey.Type.TYPE_INT,
-        AttributeKey.Type.TYPE_BOOLEAN,
     ):
         array_func = double_array
+    elif request.type == AttributeKey.Type.TYPE_BOOLEAN:
+        array_func = bool_array
     else:
-        array_func = f.arrayConcat(string_array, double_array)
+        array_func = f.arrayConcat(string_array, double_array, bool_array)
 
     attr_filter = not_cond(
         in_cond(
