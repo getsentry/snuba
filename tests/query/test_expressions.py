@@ -241,9 +241,7 @@ TEST_CASES = [
     (
         CurriedFunctionCall(
             None,
-            FunctionCall(
-                None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))
-            ),
+            FunctionCall(None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))),
             (Literal(None, "hello"), Literal(None, "kitty")),
         ),
         """f1(
