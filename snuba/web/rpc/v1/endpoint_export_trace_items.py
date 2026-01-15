@@ -405,10 +405,14 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
         return ExportTraceItemsResponse
 
     def _execute(self, in_msg: ExportTraceItemsRequest) -> ExportTraceItemsResponse:
-        limit = (
+        default_page_size = (
             state.get_int_config("export_trace_items_default_page_size", _DEFAULT_PAGE_SIZE)
             or _DEFAULT_PAGE_SIZE
         )
+        if in_msg.limit > 0:
+            limit = min(in_msg.limit, default_page_size)
+        else:
+            limit = default_page_size
         page_token = ExportTraceItemsPageToken.from_protobuf(in_msg.page_token)
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),

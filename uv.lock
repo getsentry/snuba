@@ -214,23 +214,13 @@ wheels = [
 
 [[package]]
 name = "datadog"
-version = "0.21.0"
+version = "0.52.1"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
-    { name = "decorator", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "requests", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-    { name = "simplejson", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/datadog-0.21.0-py3-none-any.whl", hash = "sha256:4a8c16d99e878d6b9fbf1a81bc9debd4ae4937500b7b5091d4660150df0046e9" },
-]
-
-[[package]]
-name = "decorator"
-version = "5.1.1"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/decorator-5.1.1-py3-none-any.whl", hash = "sha256:b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/datadog-0.52.1-py2.py3-none-any.whl", hash = "sha256:b8c92cd761618ee062f114171067e4c400d48c9f0dad16cb285042439d9d5d4e" },
 ]
 
 [[package]]
@@ -1104,7 +1094,7 @@ wheels = [
 
 [[package]]
 name = "sentry-protos"
-version = "0.4.9"
+version = "0.4.12"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "grpc-stubs", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1112,7 +1102,7 @@ dependencies = [
     { name = "protobuf", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_protos-0.4.9-py3-none-any.whl", hash = "sha256:cdf9582e28b7c0b9c3defac510e07c61172991402e316993a4770a924c644d18" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_protos-0.4.12-py3-none-any.whl", hash = "sha256:e97693c9f59729e27869bdc47a0ca8bac448de781a7492f00363e39ac0b1a4bb" },
 ]
 
 [[package]]
@@ -1219,7 +1209,7 @@ wheels = [
 
 [[package]]
 name = "snuba"
-version = "25.12.0.dev0"
+version = "26.1.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "blinker", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1299,7 +1289,7 @@ requires-dist = [
     { name = "click", specifier = ">=8.1.7" },
     { name = "clickhouse-driver", specifier = ">=0.2.9" },
     { name = "confluent-kafka", specifier = ">=2.7.0" },
-    { name = "datadog", specifier = ">=0.21.0" },
+    { name = "datadog", specifier = ">=0.49.1" },
     { name = "devservices", specifier = ">=1.2.1" },
     { name = "fastjsonschema", specifier = ">=2.16.2" },
     { name = "flask", specifier = ">=2.2.5" },
@@ -1324,7 +1314,7 @@ requires-dist = [
     { name = "sentry-arroyo", specifier = ">=2.35.0" },
     { name = "sentry-conventions", specifier = ">=0.3.0" },
     { name = "sentry-kafka-schemas", specifier = ">=2.1.2" },
-    { name = "sentry-protos", specifier = ">=0.4.9" },
+    { name = "sentry-protos", specifier = ">=0.4.12" },
     { name = "sentry-redis-tools", specifier = ">=0.5.1" },
     { name = "sentry-relay", specifier = ">=0.9.19" },
     { name = "sentry-sdk", specifier = ">=2.35.0" },
