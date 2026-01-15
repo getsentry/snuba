@@ -1132,14 +1132,14 @@ wheels = [
 
 [[package]]
 name = "sentry-sdk"
-version = "2.35.0"
+version = "2.49.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "certifi", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "urllib3", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_sdk-2.35.0-py2.py3-none-any.whl", hash = "sha256:6e0c29b9a5d34de8575ffb04d289a987ff3053cf2c98ede445bea995e3830263" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_sdk-2.49.0-py2.py3-none-any.whl", hash = "sha256:6ea78499133874445a20fe9c826c9e960070abeb7ae0cdf930314ab16bb97aa0" },
 ]
 
 [[package]]
@@ -1317,7 +1317,7 @@ requires-dist = [
     { name = "sentry-protos", specifier = ">=0.4.12" },
     { name = "sentry-redis-tools", specifier = ">=0.5.1" },
     { name = "sentry-relay", specifier = ">=0.9.19" },
-    { name = "sentry-sdk", specifier = ">=2.35.0" },
+    { name = "sentry-sdk", specifier = ">=2.49.0" },
     { name = "sentry-usage-accountant", specifier = ">=0.0.11" },
     { name = "simplejson", specifier = ">=3.17.6" },
     { name = "snuba-sdk", specifier = ">=3.0.39" },

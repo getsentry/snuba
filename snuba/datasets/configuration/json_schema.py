@@ -859,17 +859,17 @@ V1_MIGRATION_GROUP_SCHEMA = {
 }
 
 if settings.VALIDATE_DATASET_YAMLS_ON_STARTUP:
-    with sentry_sdk.start_span(op="compile", description="Storage Validators"):
+    with sentry_sdk.start_span(op="compile", name="Storage Validators"):
         STORAGE_VALIDATORS = {
             "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
             "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
             "cdc_storage": fastjsonschema.compile(V1_CDC_STORAGE_SCHEMA),
         }
 
-    with sentry_sdk.start_span(op="compile", description="Entity Validators"):
+    with sentry_sdk.start_span(op="compile", name="Entity Validators"):
         ENTITY_VALIDATORS = {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
 
-    with sentry_sdk.start_span(op="compile", description="Dataset Validators"):
+    with sentry_sdk.start_span(op="compile", name="Dataset Validators"):
         DATASET_VALIDATORS = {"dataset": fastjsonschema.compile(V1_DATASET_SCHEMA)}
 else:
     STORAGE_VALIDATORS = {}

@@ -151,7 +151,7 @@ class ClickhousePool(object):
                         )
 
                     def query_execute() -> Any:
-                        with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
+                        with sentry_sdk.start_span(name=query, op="db.clickhouse") as span:
                             span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
                             span.set_data("query_id", query_id)
                             span.set_data("settings", settings)

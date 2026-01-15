@@ -232,7 +232,7 @@ def health() -> Response:
 
 
 def parse_request_body(http_request: Request) -> Dict[str, Any]:
-    with sentry_sdk.start_span(description="parse_request_body", op="parse"):
+    with sentry_sdk.start_span(name="parse_request_body", op="parse"):
         metrics.timing("http_request_body_length", len(http_request.data))
         try:
             body = json.loads(http_request.data)

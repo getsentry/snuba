@@ -248,10 +248,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         if isinstance(alias, list):
             # Validate that we are parsing an expression that is
             # 'quoted_aliased_literal' -> "backtick alias backtick"
-            if not (
-                len(alias) == 3
-                and alias[0].expr_name == alias[2].expr_name == "backtick"
-            ):
+            if not (len(alias) == 3 and alias[0].expr_name == alias[2].expr_name == "backtick"):
                 raise ParsingException(f"Error parsing quoted alias: {alias}")
             extracted_alias = alias[1].text
         else:
@@ -331,9 +328,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         elif isinstance(match, RelationshipTuple):
             join_clause = build_join_clause([match])
             return join_clause
-        if isinstance(match, list) and all(
-            isinstance(m, RelationshipTuple) for m in match
-        ):
+        if isinstance(match, list) and all(isinstance(m, RelationshipTuple) for m in match):
             join_clause = build_join_clause(match)
             return join_clause
 
@@ -343,9 +338,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_entity_single(
         self,
         node: Node,
-        visited_children: Tuple[
-            Any, Any, EntityKey, Union[Optional[float], Node], Any, Any
-        ],
+        visited_children: Tuple[Any, Any, EntityKey, Union[Optional[float], Node], Any, Any],
     ) -> QueryEntity:
         _, _, name, sample, _, _ = visited_children
         if isinstance(sample, Node):
@@ -377,9 +370,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         if isinstance(sample, Node):
             sample = None
 
-        return IndividualNode(
-            alias, QueryEntity(name, get_entity(name).get_data_model(), sample)
-        )
+        return IndividualNode(alias, QueryEntity(name, get_entity(name).get_data_model(), sample))
 
     def visit_entity_alias(self, node: Node, visited_children: Tuple[Any]) -> str:
         return str(node.text)
@@ -390,9 +381,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         except Exception:
             raise ParsingException(f"{node.text} is not a valid entity name")
 
-    def visit_storage_name(
-        self, node: Node, visited_children: Tuple[Any]
-    ) -> StorageKey:
+    def visit_storage_name(self, node: Node, visited_children: Tuple[Any]) -> StorageKey:
         try:
             return StorageKey(node.text)
         except Exception:
@@ -443,9 +432,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
         return RelationshipTuple(lhs, relationship, rhs, data)
 
-    def visit_relationship_link(
-        self, node: Node, visited_children: Tuple[Any, Node, Any]
-    ) -> str:
+    def visit_relationship_link(self, node: Node, visited_children: Tuple[Any, Node, Any]) -> str:
         _, relationship, _ = visited_children
         return str(relationship.text)
 
@@ -462,9 +449,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
         return visit_column_name(node, visited_children)
 
-    def visit_subscriptable(
-        self, node: Node, visited_children: Iterable[Any]
-    ) -> Column:
+    def visit_subscriptable(self, node: Node, visited_children: Iterable[Any]) -> Column:
         return visit_column_name(node, visited_children)
 
     def visit_tag_column(self, node: Node, visited_children: Iterable[Any]) -> Column:
@@ -481,9 +466,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         _, and_string, exp = visited_children
         return AndTuple(and_string.text, exp)
 
-    def visit_or_tuple(
-        self, node: Node, visited_children: Tuple[Any, Node, Expression]
-    ) -> OrTuple:
+    def visit_or_tuple(self, node: Node, visited_children: Tuple[Any, Node, Expression]) -> OrTuple:
         _, or_string, exp = visited_children
         return OrTuple(or_string.text, exp)
 
@@ -509,14 +492,10 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     ) -> HighPriTuple:
         return visit_high_pri_tuple(node, visited_children)
 
-    def visit_low_pri_op(
-        self, node: Node, visited_children: Iterable[Any]
-    ) -> LowPriOperator:
+    def visit_low_pri_op(self, node: Node, visited_children: Iterable[Any]) -> LowPriOperator:
         return visit_low_pri_op(node, visited_children)
 
-    def visit_high_pri_op(
-        self, node: Node, visited_children: Iterable[Any]
-    ) -> HighPriOperator:
+    def visit_high_pri_op(self, node: Node, visited_children: Iterable[Any]) -> HighPriOperator:
         return visit_high_pri_op(node, visited_children)
 
     def visit_arithmetic_term(
@@ -538,32 +517,22 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     ) -> Expression:
         return visit_high_pri_arithmetic(node, visited_children)
 
-    def visit_numeric_literal(
-        self, node: Node, visited_children: Iterable[Any]
-    ) -> Literal:
+    def visit_numeric_literal(self, node: Node, visited_children: Iterable[Any]) -> Literal:
         return visit_numeric_literal(node, visited_children)
 
-    def visit_integer_literal(
-        self, node: Node, visited_children: Iterable[Any]
-    ) -> Literal:
+    def visit_integer_literal(self, node: Node, visited_children: Iterable[Any]) -> Literal:
         return Literal(None, int(node.text))
 
-    def visit_boolean_literal(
-        self, node: Node, visited_children: Iterable[Any]
-    ) -> Literal:
+    def visit_boolean_literal(self, node: Node, visited_children: Iterable[Any]) -> Literal:
         if node.text.lower() == "true":
             return Literal(None, True)
 
         return Literal(None, False)
 
-    def visit_null_literal(
-        self, node: Node, visited_children: Iterable[Any]
-    ) -> Literal:
+    def visit_null_literal(self, node: Node, visited_children: Iterable[Any]) -> Literal:
         return Literal(None, None)
 
-    def visit_quoted_literal(
-        self, node: Node, visited_children: Tuple[Node]
-    ) -> Literal:
+    def visit_quoted_literal(self, node: Node, visited_children: Tuple[Node]) -> Literal:
         return visit_quoted_literal(node, visited_children)
 
     def visit_where_clause(
@@ -661,9 +630,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
                 for p in left_order_list:
                     ret.append(p)
 
-        direction = (
-            OrderByDirection.ASC if order.text == "ASC" else OrderByDirection.DESC
-        )
+        direction = OrderByDirection.ASC if order.text == "ASC" else OrderByDirection.DESC
         ret.append(OrderBy(direction, right_order))
 
         return ret
@@ -673,9 +640,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     ) -> OrderBy:
         column, _, order, _, _, _ = visited_children
 
-        direction = (
-            OrderByDirection.ASC if order.text == "ASC" else OrderByDirection.DESC
-        )
+        direction = OrderByDirection.ASC if order.text == "ASC" else OrderByDirection.DESC
         return OrderBy(direction, column)
 
     def visit_sample_clause(
@@ -913,9 +878,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         column, _, _, _, alias = visited_children
         return SelectedExpression(self.__extract_alias_from_match(alias), column)
 
-    def visit_identifier(
-        self, node: Node, visited_children: Tuple[Any, Node, Any]
-    ) -> Argument:
+    def visit_identifier(self, node: Node, visited_children: Tuple[Any, Node, Any]) -> Argument:
         return Argument(None, visited_children[1].text)
 
     def visit_lambda(
@@ -943,9 +906,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
                 if isinstance(other, Argument):
                     parameters.append(other.name)
                 elif isinstance(other, list):
-                    parameters.extend(
-                        [o.name for o in other if isinstance(o, Argument)]
-                    )
+                    parameters.extend([o.name for o in other if isinstance(o, Argument)])
 
         return Lambda(None, tuple(parameters), functionCall)
 
@@ -977,9 +938,7 @@ def parse_snql_query_initial(
         idx = e.column()
         prefix = line[max(0, idx - 3) : idx]
         suffix = line[idx : (idx + 10)]
-        raise ParsingException(
-            f"Parsing error on line {e.line()} at '{prefix}{suffix}'"
-        )
+        raise ParsingException(f"Parsing error on line {e.line()} at '{prefix}{suffix}'")
     except Exception as e:
         message = str(e)
         if "\n" in message:
@@ -993,9 +952,7 @@ def parse_snql_query_initial(
     if limit is None:
         parsed.set_limit(1000)
     elif limit > MAX_LIMIT:
-        raise ParsingException(
-            "queries cannot have a limit higher than 10000", should_report=False
-        )
+        raise ParsingException("queries cannot have a limit higher than 10000", should_report=False)
 
     if parsed.get_offset() is None:
         parsed.set_offset(0)
@@ -1003,9 +960,7 @@ def parse_snql_query_initial(
     return parsed
 
 
-def _qualify_columns(
-    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
-) -> None:
+def _qualify_columns(query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]) -> None:
     """
     All columns in a join query should be qualified with the entity alias, e.g. e.event_id
     Take those aliases and put them in the table name. This has to be done in a post
@@ -1026,9 +981,7 @@ def _qualify_columns(
 
         parts = exp.column_name.split(".", 1)
         if len(parts) != 2 or parts[0] not in aliases:
-            raise ParsingException(
-                f"column {exp.column_name} must be qualified in a join query"
-            )
+            raise ParsingException(f"column {exp.column_name} must be qualified in a join query")
 
         return Column(exp.alias, parts[0], parts[1])
 
@@ -1070,9 +1023,7 @@ DATETIME_MATCH = FunctionCallMatch(
 )
 
 
-def _parse_datetime_literals(
-    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
-) -> None:
+def _parse_datetime_literals(query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]) -> None:
     def parse(exp: Expression) -> Expression:
         result = DATETIME_MATCH.match(exp)
         if result is not None:
@@ -1151,9 +1102,7 @@ def _transform_array_condition(array_columns: Set[str], exp: Expression) -> Expr
     if not isinstance(lhs, Column):
         return exp
 
-    aliased_name = (
-        f"{lhs.table_name + '.' if lhs.table_name is not None else ''}{lhs.column_name}"
-    )
+    aliased_name = f"{lhs.table_name + '.' if lhs.table_name is not None else ''}{lhs.column_name}"
     if aliased_name not in array_columns:
         return exp
 
@@ -1209,10 +1158,7 @@ def _unpack_array_conditions(
         if isinstance(column.type, Array):
             aliased_base_name = f"{entity_alias}{column.base_name}"
             aliased_flattened = f"{entity_alias}{column.flattened}"
-            if (
-                aliased_base_name in array_join_columns
-                or aliased_flattened in array_join_columns
-            ):
+            if aliased_base_name in array_join_columns or aliased_flattened in array_join_columns:
                 continue
 
             array_columns.add(aliased_base_name)
@@ -1225,9 +1171,7 @@ def _unpack_array_conditions(
         )
 
 
-def _array_column_conditions(
-    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
-) -> None:
+def _array_column_conditions(query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]) -> None:
     """
     Find conditions on array columns, and if those columns are not in the array join,
     convert them to the appropriate higher order function.
@@ -1244,9 +1188,7 @@ def _array_column_conditions(
         alias_map = from_clause.get_alias_node_map()
         for alias, node in alias_map.items():
             if isinstance(node.data_source, QueryEntity):  # mypy
-                _unpack_array_conditions(
-                    cast(LogicalQuery, query), node.data_source.schema, alias
-                )
+                _unpack_array_conditions(cast(LogicalQuery, query), node.data_source.schema, alias)
 
 
 def _mangle_query_aliases(
@@ -1325,12 +1267,8 @@ def _replace_time_condition(
     ]
 ) -> None:
     condition = query.get_condition()
-    top_level = (
-        get_first_level_and_conditions(condition) if condition is not None else []
-    )
-    max_days, date_align = state.get_configs(
-        [("max_days", None), ("date_align_seconds", 1)]
-    )
+    top_level = get_first_level_and_conditions(condition) if condition is not None else []
+    max_days, date_align = state.get_configs([("max_days", None), ("date_align_seconds", 1)])
     assert isinstance(date_align, int)
     if max_days is not None:
         max_days = int(max_days)
@@ -1402,9 +1340,7 @@ def _align_max_days_date_align(
     from_date, from_exp = lower
     to_date, to_exp = upper
 
-    from_date = from_date - timedelta(
-        seconds=(from_date - from_date.min).seconds % date_align
-    )
+    from_date = from_date - timedelta(seconds=(from_date - from_date.min).seconds % date_align)
     to_date = to_date - timedelta(seconds=(to_date - to_date.min).seconds % date_align)
     if from_date > to_date:
         raise ParsingException(
@@ -1424,9 +1360,7 @@ def _align_max_days_date_align(
                 parameters=(from_exp.parameters[0], Literal(None, from_date)),
             )
         elif exp == to_exp:
-            return replace(
-                exp, parameters=(to_exp.parameters[0], Literal(None, to_date))
-            )
+            return replace(exp, parameters=(to_exp.parameters[0], Literal(None, to_date)))
 
         return exp
 
@@ -1450,9 +1384,7 @@ def _select_entity_for_dataset(
                 assert isinstance(query, LogicalQuery)
                 selected_entity_key = select_discover_entity(query)
                 selected_entity = get_entity(selected_entity_key)
-                query_entity = QueryEntity(
-                    selected_entity_key, selected_entity.get_data_model()
-                )
+                query_entity = QueryEntity(selected_entity_key, selected_entity.get_data_model())
                 query.set_from_clause(query_entity)
 
                 # XXX: This exists only to ensure that the generated SQL matches legacy queries.
@@ -1480,25 +1412,21 @@ def _select_entity_for_dataset(
 
                 condition = query.get_condition()
                 if condition is not None:
-                    query.set_ast_condition(
-                        condition.transform(replace_time_condition_aliases)
-                    )
+                    query.set_ast_condition(condition.transform(replace_time_condition_aliases))
 
     return selector
 
 
 def _post_process(
     query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
-    funcs: Sequence[
-        Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]
-    ],
+    funcs: Sequence[Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]],
     settings: QuerySettings | None = None,
 ) -> None:
     for func in funcs:
         # custom processors can be partials instead of functions but partials don't
         # have the __name__ attribute set automatically (and we don't set it manually)
         description = getattr(func, "__name__", "custom")
-        with sentry_sdk.start_span(op="processor", description=description):
+        with sentry_sdk.start_span(op="processor", name=description):
             if settings and settings.get_dry_run():
                 with explain_meta.with_query_differ("snql_parsing", description, query):
                     func(query)
@@ -1540,7 +1468,7 @@ def parse_snql_query(
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
 ) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
-    with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
+    with sentry_sdk.start_span(op="parser", name="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
 
     if settings and settings.get_dry_run():
@@ -1550,7 +1478,7 @@ def parse_snql_query(
         # NOTE (volo): The anonymizer that runs after this function call chokes on
         # OR and AND clauses with multiple parameters so we have to treeify them
         # before we run the anonymizer and the rest of the post processors
-        with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
+        with sentry_sdk.start_span(op="processor", name="treeify_conditions"):
             _post_process(query, [_treeify_or_and_conditions], settings)
 
         timer = Timer("snql_pipeline")
@@ -1595,22 +1523,22 @@ class PostProcessAndValidateQuery(
         query, dataset, custom_processing = pipe_input.data
         settings = pipe_input.query_settings
 
-        with sentry_sdk.start_span(op="processor", description="post_processors"):
+        with sentry_sdk.start_span(op="processor", name="post_processors"):
             _post_process(
                 query,
                 POST_PROCESSORS,
                 settings,
             )
         # Custom processing to tweak the AST before validation
-        with sentry_sdk.start_span(op="processor", description="custom_processing"):
+        with sentry_sdk.start_span(op="processor", name="custom_processing"):
             if custom_processing is not None:
                 _post_process(query, custom_processing, settings)
         # Time based processing
-        with sentry_sdk.start_span(op="processor", description="time_based_processing"):
+        with sentry_sdk.start_span(op="processor", name="time_based_processing"):
             _post_process(query, [_replace_time_condition], settings)
         _post_process(query, [_select_entity_for_dataset(dataset)], settings)
         # Validating
-        with sentry_sdk.start_span(op="validate", description="expression_validators"):
+        with sentry_sdk.start_span(op="validate", name="expression_validators"):
             _post_process(query, VALIDATORS)
 
         return query

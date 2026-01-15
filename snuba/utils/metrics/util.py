@@ -70,7 +70,7 @@ def with_span(op: str = "function") -> Callable[[F], F]:
 
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            with sentry_sdk.start_span(description=func.__name__, op=op) as span:
+            with sentry_sdk.start_span(name=func.__name__, op=op) as span:
                 span.set_data("filename", filename)
                 return func(*args, **kwargs)
 
