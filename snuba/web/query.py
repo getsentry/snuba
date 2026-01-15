@@ -91,9 +91,7 @@ def run_query(
             request_id=request.id,
             body=request.original_body,
             dataset=get_dataset_name(dataset),
-            organization=int(
-                request.attribution_info.tenant_ids.get("organization_id", 0)
-            ),
+            organization=int(request.attribution_info.tenant_ids.get("organization_id", 0)),
             timer=timer,
             request_status=request_status,
             referrer=request.attribution_info.referrer,
@@ -145,7 +143,7 @@ def parse_and_run_query(
         referrer (str): legacy param, you probably don't need to provide this. It should be in the tenant_ids of the body
     """
 
-    with sentry_sdk.start_span(description="build_schema", op="validate"):
+    with sentry_sdk.start_span(name="build_schema", op="validate"):
         schema = RequestSchema.build(HTTPQuerySettings, is_mql)
 
     # NOTE(Volo): dataset is not necessary for queries because storages can be queried directly

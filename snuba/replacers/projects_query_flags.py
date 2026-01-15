@@ -129,17 +129,15 @@ class ProjectsQueryFlags:
 
         try:
             with redis_client.pipeline() as p:
-                with sentry_sdk.start_span(op="function", description="build_redis_pipeline"):
+                with sentry_sdk.start_span(op="function", name="build_redis_pipeline"):
                     cls._query_redis(s_project_ids, state_name, p)
 
-                with sentry_sdk.start_span(
-                    op="function", description="execute_redis_pipeline"
-                ) as span:
+                with sentry_sdk.start_span(op="function", name="execute_redis_pipeline") as span:
                     results = p.execute()
                     # getting size of str(results) since sys.getsizeof() doesn't count recursively
                     span.set_tag("results_size", sys.getsizeof(str(results)))
 
-            with sentry_sdk.start_span(op="function", description="process_redis_results") as span:
+            with sentry_sdk.start_span(op="function", name="process_redis_results") as span:
                 flags = cls._process_redis_results(results, len(s_project_ids))
                 span.set_tag("projects", s_project_ids)
                 span.set_tag("exclude_groups", flags.group_ids_to_exclude)

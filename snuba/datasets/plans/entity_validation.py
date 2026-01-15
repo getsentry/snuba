@@ -28,9 +28,7 @@ def _validate_query(query: Query) -> None:
             v.validate(exp, query.get_from_clause())
 
 
-def _validate_entities_with_query(
-    query: Union[CompositeQuery[QueryEntity], EntityQuery]
-) -> None:
+def _validate_entities_with_query(query: Union[CompositeQuery[QueryEntity], EntityQuery]) -> None:
     """
     Applies all validator defined on the entities in the query
     """
@@ -73,11 +71,9 @@ def run_entity_validators(
     """
     for validator_func in VALIDATORS:
         description = getattr(validator_func, "__name__", "custom")
-        with sentry_sdk.start_span(op="validator", description=description):
+        with sentry_sdk.start_span(op="validator", name=description):
             if settings and settings.get_dry_run():
-                with explain_meta.with_query_differ(
-                    "entity_validator", description, query
-                ):
+                with explain_meta.with_query_differ("entity_validator", description, query):
                     validator_func(query)
             else:
                 validator_func(query)

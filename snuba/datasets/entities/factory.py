@@ -18,7 +18,7 @@ from snuba.utils.serializable_exception import SerializableException
 
 class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
     def __init__(self) -> None:
-        with sentry_sdk.start_span(op="initialize", description="Entity Factory"):
+        with sentry_sdk.start_span(op="initialize", name="Entity Factory"):
             initialize_storage_factory()
             self._entity_map: dict[EntityKey, PluggableEntity] = {}
             self._name_map: dict[Type[Entity], EntityKey] = {}
@@ -29,9 +29,7 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             entity.entity_key: entity
             for entity in [
                 build_entity_from_config(config_file)
-                for config_file in glob(
-                    settings.ENTITY_CONFIG_FILES_GLOB, recursive=True
-                )
+                for config_file in glob(settings.ENTITY_CONFIG_FILES_GLOB, recursive=True)
             ]
         }
 

@@ -43,8 +43,7 @@ class Parser(Protocol):
         settings: QuerySettings,
         dataset: Dataset,
         custom_processing: Optional[CustomProcessors] = ...,
-    ) -> Union[Query, CompositeQuery[LogicalDataSource]]:
-        ...
+    ) -> Union[Query, CompositeQuery[LogicalDataSource]]: ...
 
 
 def parse_snql_query(
@@ -53,9 +52,7 @@ def parse_snql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Union[Query, CompositeQuery[LogicalDataSource]]:
-    return _parse_snql_query(
-        request_parts.query["query"], dataset, custom_processing, settings
-    )
+    return _parse_snql_query(request_parts.query["query"], dataset, custom_processing, settings)
 
 
 def parse_mql_query(
@@ -95,10 +92,7 @@ def update_attribution_info(
     attribution_info["referrer"] = referrer
     attribution_info["tenant_ids"] = request_parts.attribution_info["tenant_ids"]
 
-    if (
-        "project_id" not in attribution_info["tenant_ids"]
-        and query_project_id is not None
-    ):
+    if "project_id" not in attribution_info["tenant_ids"] and query_project_id is not None:
         attribution_info["tenant_ids"]["project_id"] = query_project_id
 
     return attribution_info
@@ -115,7 +109,7 @@ def build_request(
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Request:
 
-    with sentry_sdk.start_span(description="build_request", op="validate") as span:
+    with sentry_sdk.start_span(name="build_request", op="validate") as span:
         try:
             dataset_name = get_dataset_name(dataset)
             if state.get_config(
@@ -168,11 +162,7 @@ def build_request(
             category="query_info",
             level="info",
             message="snuba_query_raw",
-            data={
-                "query": textwrap.wrap(
-                    repr(request.original_body), 100, break_long_words=False
-                )
-            },
+            data={"query": textwrap.wrap(repr(request.original_body), 100, break_long_words=False)},
         )
         sentry_sdk.add_breadcrumb(
             category="query_info",
@@ -232,9 +222,7 @@ def _get_project_id(query: Query | CompositeQuery[LogicalDataSource]) -> int | N
 def _get_attribution_info(
     request_parts: RequestParts, referrer: str, query_project_id: int | None
 ) -> AttributionInfo:
-    return AttributionInfo(
-        **update_attribution_info(request_parts, referrer, query_project_id)
-    )
+    return AttributionInfo(**update_attribution_info(request_parts, referrer, query_project_id))
 
 
 def _build_request(
