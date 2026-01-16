@@ -598,7 +598,7 @@ def _process_results(
 
         # Update last seen pagination values
         last_seen_item_type = int(row.pop("item_type", TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED))
-        last_seen_project_id = int(row.pop("project_id", 0) or 0)
+        last_seen_project_id = int(row.get("project_id", 0) or 0)
         last_seen_timestamp = row.pop("integer_timestamp", None)
         last_seen_trace_id = row.pop("selected_trace_id", "")
         last_seen_item_id = id
