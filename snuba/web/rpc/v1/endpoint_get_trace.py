@@ -265,8 +265,8 @@ def _build_query(
             expression=column("trace_id", alias="selected_trace_id"),
         ),
         SelectedExpression(
-            name="project_id",
-            expression=column("project_id", alias="project_id"),
+            name="selected_project_id",
+            expression=column("project_id", alias="selected_project_id"),
         ),
     ]
 
@@ -305,16 +305,18 @@ def _build_query(
                 ),
             ),
         ]
-        # Add normalized columns, skipping project_id to avoid duplicate selection
-        for col_name in NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS:
-            if col_name == "project_id":
-                continue
-            selected_columns.append(
-                SelectedExpression(
+        selected_columns.extend(
+            map(
+                lambda col_name: SelectedExpression(
                     name=col_name,
-                    expression=column(col_name, alias=f"selected_{col_name}"),
-                )
+                    expression=column(
+                        col_name,
+                        alias=f"selected_{col_name}",
+                    ),
+                ),
+                (NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS),
             )
+        )
 
     entity = Entity(
         key=EntityKey("eap_items"),
@@ -325,18 +327,21 @@ def _build_query(
         [
             or_cond(
                 # (project_id > page_token.last_seen_project_id)
-                f.greater(column("project_id"), literal(page_token.last_seen_project_id)),
+                f.greater(column("selected_project_id"), literal(page_token.last_seen_project_id)),
                 or_cond(
                     # (project_id = last_seen_project_id AND item_type > last_seen_item_type)
                     and_cond(
-                        f.equals(column("project_id"), literal(page_token.last_seen_project_id)),
+                        f.equals(
+                            column("selected_project_id"), literal(page_token.last_seen_project_id)
+                        ),
                         f.greater(column("item_type"), literal(page_token.last_seen_item_type)),
                     ),
                     or_cond(
                         # (project_id = last AND item_type = last AND integer_timestamp > last_seen_timestamp)
                         and_cond(
                             f.equals(
-                                column("project_id"), literal(page_token.last_seen_project_id)
+                                column("selected_project_id"),
+                                literal(page_token.last_seen_project_id),
                             ),
                             f.equals(column("item_type"), literal(page_token.last_seen_item_type)),
                             f.greater(
@@ -347,7 +352,8 @@ def _build_query(
                             # (... AND integer_timestamp = last AND trace_id > last_seen_trace_id)
                             and_cond(
                                 f.equals(
-                                    column("project_id"), literal(page_token.last_seen_project_id)
+                                    column("selected_project_id"),
+                                    literal(page_token.last_seen_project_id),
                                 ),
                                 f.equals(
                                     column("item_type"), literal(page_token.last_seen_item_type)
@@ -363,7 +369,8 @@ def _build_query(
                             # (... AND trace_id = last AND item_id > last_seen_item_id)
                             and_cond(
                                 f.equals(
-                                    column("project_id"), literal(page_token.last_seen_project_id)
+                                    column("selected_project_id"),
+                                    literal(page_token.last_seen_project_id),
                                 ),
                                 f.equals(
                                     column("item_type"), literal(page_token.last_seen_item_type)
@@ -598,7 +605,7 @@ def _process_results(
 
         # Update last seen pagination values
         last_seen_item_type = int(row.pop("item_type", TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED))
-        last_seen_project_id = int(row.get("project_id", 0) or 0)
+        last_seen_project_id = int(row.pop("selected_project_id", 0) or 0)
         last_seen_timestamp = row.pop("integer_timestamp", None)
         last_seen_trace_id = row.pop("selected_trace_id", "")
         last_seen_item_id = id
