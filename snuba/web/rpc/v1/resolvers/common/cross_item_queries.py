@@ -33,6 +33,8 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import setup_trace_query_settings
 
+_TRACE_LIMIT = 10000
+
 
 def convert_trace_filters_to_trace_item_filter_with_type(
     trace_filters: list[GetTracesRequest.TraceFilter],
@@ -247,6 +249,7 @@ def get_trace_ids_sql_for_cross_item_query(
             column("trace_id"),
         ],
         having=trace_item_filters_and_expression,
+        limit=_TRACE_LIMIT,
     )
 
     treeify_or_and_conditions(query)
