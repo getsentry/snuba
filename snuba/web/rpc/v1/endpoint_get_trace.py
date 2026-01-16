@@ -84,6 +84,7 @@ class EndpointGetTracePageToken:
     def __init__(
         self,
         last_item_index: int,
+        last_seen_project_id: int,
         last_seen_item_type: int,
         last_seen_timestamp: float,
         last_seen_trace_id: str,
@@ -97,6 +98,7 @@ class EndpointGetTracePageToken:
         last_seen_item_id: id of the last seen item (hex string), used for filter sorting,
         """
         self.last_item_index = last_item_index
+        self.last_seen_project_id = last_seen_project_id
         self.last_seen_item_type = last_seen_item_type
         self.last_seen_timestamp = last_seen_timestamp
         self.last_seen_trace_id = last_seen_trace_id
@@ -107,7 +109,7 @@ class EndpointGetTracePageToken:
         if page_token == PageToken():
             return None
         filters = page_token.filter_offset.and_filter.filters
-        if len(filters) != 5:
+        if len(filters) != 6:
             raise ValueError("Invalid page token")
         if not (
             filters[0].comparison_filter.key.name == "last_item_index"
@@ -116,31 +118,38 @@ class EndpointGetTracePageToken:
             raise ValueError("Invalid last item inex")
         last_item_index = filters[0].comparison_filter.value.val_int
         if not (
-            filters[1].comparison_filter.key.name == "last_seen_item_type"
+            filters[1].comparison_filter.key.name == "last_seen_project_id"
             and filters[1].comparison_filter.key.type == AttributeKey.Type.TYPE_INT
         ):
-            raise ValueError("Invalid item type")
-        last_seen_item_type = filters[1].comparison_filter.value.val_int
+            raise ValueError("Invalid project id")
+        last_seen_project_id = filters[1].comparison_filter.value.val_int
         if not (
-            filters[2].comparison_filter.key.name == "last_seen_timestamp"
-            and filters[2].comparison_filter.key.type == AttributeKey.Type.TYPE_DOUBLE
+            filters[2].comparison_filter.key.name == "last_seen_item_type"
+            and filters[2].comparison_filter.key.type == AttributeKey.Type.TYPE_INT
+        ):
+            raise ValueError("Invalid item type")
+        last_seen_item_type = filters[2].comparison_filter.value.val_int
+        if not (
+            filters[3].comparison_filter.key.name == "last_seen_timestamp"
+            and filters[3].comparison_filter.key.type == AttributeKey.Type.TYPE_DOUBLE
         ):
             raise ValueError("Invalid timestamp")
-        last_seen_timestamp = filters[2].comparison_filter.value.val_double
+        last_seen_timestamp = filters[3].comparison_filter.value.val_double
         if not (
-            filters[3].comparison_filter.key.name == "last_seen_trace_id"
-            and filters[3].comparison_filter.key.type == AttributeKey.Type.TYPE_STRING
-        ):
-            raise ValueError("Invalid trace id")
-        last_seen_trace_id = filters[3].comparison_filter.value.val_str
-        if not (
-            filters[4].comparison_filter.key.name == "last_seen_item_id"
+            filters[4].comparison_filter.key.name == "last_seen_trace_id"
             and filters[4].comparison_filter.key.type == AttributeKey.Type.TYPE_STRING
         ):
+            raise ValueError("Invalid trace id")
+        last_seen_trace_id = filters[4].comparison_filter.value.val_str
+        if not (
+            filters[5].comparison_filter.key.name == "last_seen_item_id"
+            and filters[5].comparison_filter.key.type == AttributeKey.Type.TYPE_STRING
+        ):
             raise ValueError("Invalid item id")
-        last_seen_item_id = filters[4].comparison_filter.value.val_str
+        last_seen_item_id = filters[5].comparison_filter.value.val_str
         return cls(
             last_item_index,
+            last_seen_project_id,
             last_seen_item_type,
             last_seen_timestamp,
             last_seen_trace_id,
@@ -158,6 +167,15 @@ class EndpointGetTracePageToken:
                             ),
                             op=ComparisonFilter.OP_EQUALS,
                             value=AttributeValue(val_int=self.last_item_index),
+                        )
+                    ),
+                    TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(
+                                name="last_seen_project_id", type=AttributeKey.Type.TYPE_INT
+                            ),
+                            op=ComparisonFilter.OP_EQUALS,
+                            value=AttributeValue(val_int=self.last_seen_project_id),
                         )
                     ),
                     TraceItemFilter(
@@ -246,6 +264,10 @@ def _build_query(
             name="selected_trace_id",
             expression=column("trace_id", alias="selected_trace_id"),
         ),
+        SelectedExpression(
+            name="project_id",
+            expression=column("project_id", alias="project_id"),
+        ),
     ]
 
     if len(item.attributes) > 0:
@@ -283,18 +305,16 @@ def _build_query(
                 ),
             ),
         ]
-        selected_columns.extend(
-            map(
-                lambda col_name: SelectedExpression(
+        # Add normalized columns, skipping project_id to avoid duplicate selection
+        for col_name in NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS:
+            if col_name == "project_id":
+                continue
+            selected_columns.append(
+                SelectedExpression(
                     name=col_name,
-                    expression=column(
-                        col_name,
-                        alias=f"selected_{col_name}",
-                    ),
-                ),
-                (NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS),
+                    expression=column(col_name, alias=f"selected_{col_name}"),
+                )
             )
-        )
 
     entity = Entity(
         key=EntityKey("eap_items"),
@@ -304,35 +324,61 @@ def _build_query(
     page_token_filter = (
         [
             or_cond(
-                # (item_type > page_token.last_seen_item_type)
-                f.greater(column("item_type"), literal(page_token.last_seen_item_type)),
+                # (project_id > page_token.last_seen_project_id)
+                f.greater(column("project_id"), literal(page_token.last_seen_project_id)),
                 or_cond(
-                    # (item_type = page_token.last_seen_item_type AND timestamp > page_token.last_seen_timestamp)
+                    # (project_id = last_seen_project_id AND item_type > last_seen_item_type)
                     and_cond(
-                        f.equals(column("item_type"), literal(page_token.last_seen_item_type)),
-                        f.greater(
-                            column("integer_timestamp"), literal(page_token.last_seen_timestamp)
-                        ),
+                        f.equals(column("project_id"), literal(page_token.last_seen_project_id)),
+                        f.greater(column("item_type"), literal(page_token.last_seen_item_type)),
                     ),
                     or_cond(
-                        # (item_type = page_token.last_seen_item_type AND timestamp = page_token.last_seen_timestamp AND trace_id > page_token.last_seen_trace_id)
+                        # (project_id = last AND item_type = last AND integer_timestamp > last_seen_timestamp)
                         and_cond(
-                            f.equals(column("item_type"), literal(page_token.last_seen_item_type)),
                             f.equals(
-                                column("integer_timestamp"), literal(page_token.last_seen_timestamp)
+                                column("project_id"), literal(page_token.last_seen_project_id)
                             ),
-                            f.greater(column("trace_id"), literal(page_token.last_seen_trace_id)),
-                        ),
-                        # (item_type = page_token.last_seen_item_type AND timestamp = page_token.last_seen_timestamp AND trace_id = page_token.last_seen_trace_id AND item_id > page_token.last_seen_item_id)
-                        and_cond(
                             f.equals(column("item_type"), literal(page_token.last_seen_item_type)),
-                            f.equals(
-                                column("integer_timestamp"), literal(page_token.last_seen_timestamp)
-                            ),
-                            f.equals(column("trace_id"), literal(page_token.last_seen_trace_id)),
                             f.greater(
-                                f.reinterpretAsUInt128(f.reverse(f.unhex(column("item_id")))),
-                                literal(page_token.last_seen_item_id),
+                                column("integer_timestamp"), literal(page_token.last_seen_timestamp)
+                            ),
+                        ),
+                        or_cond(
+                            # (... AND integer_timestamp = last AND trace_id > last_seen_trace_id)
+                            and_cond(
+                                f.equals(
+                                    column("project_id"), literal(page_token.last_seen_project_id)
+                                ),
+                                f.equals(
+                                    column("item_type"), literal(page_token.last_seen_item_type)
+                                ),
+                                f.equals(
+                                    column("integer_timestamp"),
+                                    literal(page_token.last_seen_timestamp),
+                                ),
+                                f.greater(
+                                    column("trace_id"), literal(page_token.last_seen_trace_id)
+                                ),
+                            ),
+                            # (... AND trace_id = last AND item_id > last_seen_item_id)
+                            and_cond(
+                                f.equals(
+                                    column("project_id"), literal(page_token.last_seen_project_id)
+                                ),
+                                f.equals(
+                                    column("item_type"), literal(page_token.last_seen_item_type)
+                                ),
+                                f.equals(
+                                    column("integer_timestamp"),
+                                    literal(page_token.last_seen_timestamp),
+                                ),
+                                f.equals(
+                                    column("trace_id"), literal(page_token.last_seen_trace_id)
+                                ),
+                                f.greater(
+                                    f.reinterpretAsUInt128(f.reverse(f.unhex(column("item_id")))),
+                                    literal(page_token.last_seen_item_id),
+                                ),
                             ),
                         ),
                     ),
@@ -516,6 +562,7 @@ ProcessedResults = NamedTuple(
     "ProcessedResults",
     [
         ("items", list[GetTraceResponse.Item]),
+        ("last_seen_project_id", int),
         ("last_seen_item_type", int),
         ("last_seen_timestamp", float),
         ("last_seen_trace_id", str),
@@ -534,6 +581,7 @@ def _process_results(
     """
     items: list[GetTraceResponse.Item] = []
     last_seen_item_type = int(TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED)
+    last_seen_project_id = 0
     last_seen_timestamp = 0.0
     last_seen_trace_id = ""
     last_seen_item_id = ""
@@ -550,6 +598,7 @@ def _process_results(
 
         # Update last seen pagination values
         last_seen_item_type = int(row.pop("item_type", TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED))
+        last_seen_project_id = int(row.pop("project_id", 0) or 0)
         last_seen_timestamp = row.pop("integer_timestamp", None)
         last_seen_trace_id = row.pop("selected_trace_id", "")
         last_seen_item_id = id
@@ -597,6 +646,7 @@ def _process_results(
 
     return ProcessedResults(
         items=items,
+        last_seen_project_id=last_seen_project_id,
         last_seen_item_type=last_seen_item_type,
         last_seen_timestamp=last_seen_timestamp,
         last_seen_trace_id=last_seen_trace_id,
@@ -665,6 +715,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             (
                 item_group,
                 query_result,
+                last_seen_project_id,
                 last_seen_item_type,
                 last_seen_timestamp,
                 last_seen_trace_id,
@@ -684,6 +735,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
                 # create a page token, we have reached the limit
                 page_token = EndpointGetTracePageToken(
                     i,
+                    last_seen_project_id,
                     last_seen_item_type,
                     last_seen_timestamp,
                     last_seen_trace_id,
@@ -716,7 +768,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         item: GetTraceRequest.TraceItem,
         limit: int | None,
         page_token: EndpointGetTracePageToken | None,
-    ) -> tuple[GetTraceResponse.ItemGroup, Any, int, float, str, str]:
+    ) -> tuple[GetTraceResponse.ItemGroup, Any, int, int, float, str, str]:
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=_build_snuba_request(in_msg, item, limit, page_token),
@@ -726,6 +778,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             results.result.get("data", []),
         )
         items = processed_results.items
+        last_seen_project_id = processed_results.last_seen_project_id
         last_seen_item_type = processed_results.last_seen_item_type
         last_seen_timestamp = processed_results.last_seen_timestamp
         last_seen_trace_id = processed_results.last_seen_trace_id
@@ -736,6 +789,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
                 items=items,
             ),
             results,
+            last_seen_project_id,
             last_seen_item_type,
             last_seen_timestamp,
             last_seen_trace_id,
