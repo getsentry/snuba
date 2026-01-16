@@ -14,6 +14,7 @@ from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba import environment, state
+from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -327,7 +328,14 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            if isinstance(error, RPCAllocationPolicyException):
+            # Check if this is an allocation policy violation (either direct or as cause)
+            # This matches the before_send filter in snuba/environment.py to ensure
+            # metrics are consistent with what Sentry receives
+            is_allocation_violation = isinstance(error, RPCAllocationPolicyException) or isinstance(
+                getattr(error, "__cause__", None), AllocationPolicyViolations
+            )
+
+            if is_allocation_violation:
                 self.metrics.increment(
                     "request_rate_limited",
                     tags=self._timer.tags,
