@@ -62,7 +62,7 @@ class TestAttributeKeyToExpression:
         ) == f.cast(
             SubscriptableReference(
                 alias=None,
-                column=column("attributes_float"),
+                column=column("attributes_bool"),
                 key=literal("derp"),
             ),
             "Nullable(Boolean)",
