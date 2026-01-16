@@ -92,6 +92,7 @@ class EndpointGetTracePageToken:
     ):
         """
         last_item_index: the index of the last item in GetTraceRequest.items that was being processed
+        last_seen_project_id: project id of the last seen item, used for filter sorting,
         last_seen_item_type: item type of the last seen item, used for filter sorting,
         last_seen_timestamp: non-precise timestamp of the last seen item (seconds),
         last_seen_trace_id: trace id of the last seen item, used for filter sorting,
@@ -601,9 +602,7 @@ def _process_results(
         # with the same name.
         booleans = row.pop("attributes_bool", {}) or {}
         integers = row.pop("attributes_int", {}) or {}
-        # Access pagination fields without removing them from the row so they can still be added as attributes if desired
 
-        # Update last seen pagination values
         last_seen_item_type = int(row.pop("item_type", TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED))
         last_seen_project_id = int(row.pop("selected_project_id", 0) or 0)
         last_seen_timestamp = row.pop("integer_timestamp", None)
