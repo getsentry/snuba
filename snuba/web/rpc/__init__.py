@@ -328,13 +328,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
-            # Check if this is an allocation policy violation (either direct or as cause)
-            # This matches the before_send filter in snuba/environment.py to ensure
-            # metrics are consistent with what Sentry receives
             is_allocation_violation = isinstance(error, RPCAllocationPolicyException) or isinstance(
                 getattr(error, "__cause__", None), AllocationPolicyViolations
             )
-
             if is_allocation_violation:
                 self.metrics.increment(
                     "request_rate_limited",
