@@ -159,9 +159,7 @@ def test_in_condition() -> None:
     )
     assert is_in_condition(in_condition)
 
-    match = is_in_condition_pattern(ColumnPattern(None, String("tags_key"))).match(
-        in_condition
-    )
+    match = is_in_condition_pattern(ColumnPattern(None, String("tags_key"))).match(in_condition)
     assert match is not None
     assert match.expression("sequence") == literals_tuple(
         None, [Literal(None, "t1"), Literal(None, "t2")]
@@ -177,9 +175,7 @@ def test_in_condition_with_array() -> None:
     )
     assert is_in_condition(in_condition)
 
-    match = is_in_condition_pattern(ColumnPattern(None, String("tags_key"))).match(
-        in_condition
-    )
+    match = is_in_condition_pattern(ColumnPattern(None, String("tags_key"))).match(in_condition)
     assert match is not None
     assert match.expression("sequence") == literals_array(
         None, [Literal(None, "t1"), Literal(None, "t2")]
@@ -212,9 +208,7 @@ def test_is_x_condition_functions() -> None:
     assert is_any_binary_condition(eq_condition, ConditionFunctions.EQ)
     assert not is_any_binary_condition(eq_condition, ConditionFunctions.NEQ)
 
-    un_condition = unary_condition(
-        ConditionFunctions.IS_NOT_NULL, Column(None, None, "test")
-    )
+    un_condition = unary_condition(ConditionFunctions.IS_NOT_NULL, Column(None, None, "test"))
     assert is_unary_condition(un_condition, ConditionFunctions.IS_NOT_NULL)
     assert not is_unary_condition(un_condition, ConditionFunctions.IS_NULL)
     assert not is_unary_condition(eq_condition, ConditionFunctions.IS_NOT_NULL)
@@ -251,9 +245,7 @@ def test_first_level_conditions() -> None:
 
     cond = binary_condition(
         BooleanFunctions.AND,
-        FunctionCall(
-            None, "equals", (FunctionCall(None, "and", (c1, c2)), Literal(None, 1))
-        ),
+        FunctionCall(None, "equals", (FunctionCall(None, "and", (c1, c2)), Literal(None, 1))),
         c3,
     )
     assert get_first_level_and_conditions(cond) == [c1, c2, c3]
@@ -270,9 +262,7 @@ def test_first_level_conditions() -> None:
 
     cond = binary_condition(
         ConditionFunctions.EQ,
-        binary_condition(
-            BooleanFunctions.OR, c1, binary_condition(BooleanFunctions.AND, c2, c3)
-        ),
+        binary_condition(BooleanFunctions.OR, c1, binary_condition(BooleanFunctions.AND, c2, c3)),
         Literal(None, 1),
     )
     assert get_first_level_or_conditions(cond) == [
@@ -291,14 +281,7 @@ def test_binary_match() -> None:
     lhs = ColumnPattern(String("table1"), String("column1"))
     rhs = LiteralPattern(String("test"))
 
-    assert (
-        condition_pattern({ConditionFunctions.EQ}, lhs, rhs, True).match(c1) is not None
-    )
-    assert (
-        condition_pattern({ConditionFunctions.EQ}, lhs, rhs, False).match(c1)
-        is not None
-    )
-    assert (
-        condition_pattern({ConditionFunctions.EQ}, rhs, lhs, True).match(c1) is not None
-    )
+    assert condition_pattern({ConditionFunctions.EQ}, lhs, rhs, True).match(c1) is not None
+    assert condition_pattern({ConditionFunctions.EQ}, lhs, rhs, False).match(c1) is not None
+    assert condition_pattern({ConditionFunctions.EQ}, rhs, lhs, True).match(c1) is not None
     assert condition_pattern({ConditionFunctions.EQ}, rhs, lhs, False).match(c1) is None

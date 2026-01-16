@@ -33,15 +33,9 @@ class GroupAttributesMessageProcessor(DatasetMessageProcessor):
                     "group_num_comments": message["num_comments"],
                     "assignee_user_id": message["assignee_user_id"],
                     "assignee_team_id": message["assignee_team_id"],
-                    "owner_suspect_commit_user_id": message[
-                        "owner_suspect_commit_user_id"
-                    ],
-                    "owner_ownership_rule_user_id": message[
-                        "owner_ownership_rule_user_id"
-                    ],
-                    "owner_ownership_rule_team_id": message[
-                        "owner_ownership_rule_team_id"
-                    ],
+                    "owner_suspect_commit_user_id": message["owner_suspect_commit_user_id"],
+                    "owner_ownership_rule_user_id": message["owner_ownership_rule_user_id"],
+                    "owner_ownership_rule_team_id": message["owner_ownership_rule_team_id"],
                     "owner_codeowners_user_id": message["owner_codeowners_user_id"],
                     "owner_codeowners_team_id": message["owner_codeowners_team_id"],
                     "deleted": 1 if message["group_deleted"] else 0,

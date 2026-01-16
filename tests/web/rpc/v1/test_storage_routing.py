@@ -41,13 +41,11 @@ RANDOM_REQUEST_ID = str(uuid.uuid4())
 
 
 class AnyInt(int):
-
     def __eq__(self, other: object) -> bool:
         return isinstance(other, int) or isinstance(other, self.__class__)
 
 
 class AnyFloat(float):
-
     def __eq__(self, other: object) -> bool:
         return isinstance(other, int) or isinstance(other, self.__class__)
 
@@ -405,7 +403,6 @@ def test_strategy_exceeds_time_budget() -> None:
             return_value=get_query_result(12000),
         ),
     ):
-
         state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
         EndpointTimeSeries().execute(_get_in_msg())
         recorded_payload = record_query.mock_calls[0].args[0]
@@ -437,7 +434,6 @@ def test_outcomes_based_routing_metrics_sampled_too_low() -> None:
             return_value=get_query_result(900),
         ),
     ):
-
         state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
         EndpointTimeSeries().execute(_get_in_msg())
         recorded_payload = record_query.mock_calls[0].args[0]

@@ -17,9 +17,7 @@ def test_get_group_id() -> None:
 
 
 def test_check_transitive_membership() -> None:
-    http = HttpMock(
-        "tests/admin/data/mock_responses/check_transitive_membership_200.json"
-    )
+    http = HttpMock("tests/admin/data/mock_responses/check_transitive_membership_200.json")
     service = build("cloudidentity", "v1", http=http, developerKey="api_key")
     api_client = CloudIdentityAPI(service=service)
     assert api_client._check_transitive_membership(
@@ -31,6 +29,4 @@ def test_check_group_membership() -> None:
     http = HttpMock("tests/admin/data/mock_responses/group_lookup_403.json")
     service = build("cloudidentity", "v1", http=http, developerKey="api_key")
     api_client = CloudIdentityAPI(service=service)
-    assert not api_client.check_group_membership(
-        group_email="group_email", member="member"
-    )
+    assert not api_client.check_group_membership(group_email="group_email", member="member")

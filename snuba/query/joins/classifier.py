@@ -229,9 +229,9 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
         return SubqueryExpression(Column(exp.alias, None, exp.column_name), exp.table_name)
 
     def visit_subscriptable_reference(self, exp: SubscriptableReference) -> SubExpression:
-        assert (
-            exp.column.table_name
-        ), f"Invalid column expression in join: {exp}. Missing table alias"
+        assert exp.column.table_name, (
+            f"Invalid column expression in join: {exp}. Missing table alias"
+        )
         return SubqueryExpression(
             main_expression=SubscriptableReference(
                 exp.alias,

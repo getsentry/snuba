@@ -115,9 +115,7 @@ def test_status_checker_errors() -> None:
     _, migrations = runner.show_all(["querylog"])[0]
     checker = StatusChecker(group, migrations)
 
-    with pytest.raises(
-        AssertionError, match="0666_wrong_migration is not part of querylog group"
-    ):
+    with pytest.raises(AssertionError, match="0666_wrong_migration is not part of querylog group"):
         checker.can_run(MigrationKey(group, migration_id))
 
     with pytest.raises(AssertionError, match="Group events does not match querylog"):
@@ -167,9 +165,7 @@ def test_run_migration_checks_and_policies(
         RunResult(True) if status_result[0] else RunResult(False, RunReason.ALREADY_RUN)
     )
     checker.can_reverse.return_value = (
-        ReverseResult(True)
-        if status_result[1]
-        else ReverseResult(False, ReverseReason.NOT_RUN_YET)
+        ReverseResult(True) if status_result[1] else ReverseResult(False, ReverseReason.NOT_RUN_YET)
     )
 
     checks = run_migration_checks_and_policies({"events": {mock_policy}}, mock_runner)

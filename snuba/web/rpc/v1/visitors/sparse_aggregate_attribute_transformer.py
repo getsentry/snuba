@@ -51,8 +51,7 @@ class SparseAggregateAttributeTransformer:
             filter_to_add = TraceItemFilter(
                 or_filter=OrFilter(
                     filters=[
-                        TraceItemFilter(exists_filter=ExistsFilter(key=key))
-                        for key in agg_keys
+                        TraceItemFilter(exists_filter=ExistsFilter(key=key)) for key in agg_keys
                     ]
                 )
             )

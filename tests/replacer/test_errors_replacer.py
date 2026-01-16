@@ -26,9 +26,7 @@ def test_merge_replacement_with_first_seen() -> None:
         "project_id": 100,
         "previous_group_ids": [2, 3],
         "new_group_id": 1,
-        "new_group_first_seen": first_seen_dt.strftime(
-            settings.PAYLOAD_DATETIME_FORMAT
-        ),
+        "new_group_first_seen": first_seen_dt.strftime(settings.PAYLOAD_DATETIME_FORMAT),
         "datetime": now_dt.strftime(settings.PAYLOAD_DATETIME_FORMAT),
     }
 
@@ -41,10 +39,7 @@ def test_merge_replacement_with_first_seen() -> None:
     columns = [
         FlattenedColumn(None, c.name, c.type)
         for c in (
-            get_entity(EntityKey.SEARCH_ISSUES)
-            .get_all_storages()[0]
-            .get_schema()
-            .get_columns()
+            get_entity(EntityKey.SEARCH_ISSUES).get_all_storages()[0].get_schema().get_columns()
         ).columns
         if c.name in {"organization_id", "group_id", "event_id", "group_first_seen"}
     ]
@@ -91,10 +86,7 @@ def test_merge_replacement_without_first_seen() -> None:
     columns = [
         FlattenedColumn(None, c.name, c.type)
         for c in (
-            get_entity(EntityKey.SEARCH_ISSUES)
-            .get_all_storages()[0]
-            .get_schema()
-            .get_columns()
+            get_entity(EntityKey.SEARCH_ISSUES).get_all_storages()[0].get_schema().get_columns()
         ).columns
         if c.name in {"organization_id", "group_id", "event_id", "group_first_seen"}
     ]

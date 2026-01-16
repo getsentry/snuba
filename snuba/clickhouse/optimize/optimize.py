@@ -375,7 +375,7 @@ def optimize_partitions(
     for partition in partitions:
         if cutoff_time is not None and datetime.now(UTC) > cutoff_time:
             logger.info(
-                f"Optimize job is running past provided cutoff time" f" {cutoff_time}. Cancelling.",
+                f"Optimize job is running past provided cutoff time {cutoff_time}. Cancelling.",
             )
             return
 

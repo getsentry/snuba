@@ -11,7 +11,6 @@ from snuba.utils.streams.topics import Topic as SnubaTopic
 
 
 def test_get_physical_topic_name(monkeypatch) -> None:  # type: ignore
-
     monkeypatch.setitem(
         SLICED_KAFKA_TOPIC_MAP, ("ingest-replay-events", 2), "ingest-replay-events-2"
     )

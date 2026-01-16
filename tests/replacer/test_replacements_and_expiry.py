@@ -28,9 +28,7 @@ class TestState:
     def test_project_does_not_expire_within_expiry(self) -> None:
         set_config_auto_replacements_bypass_projects([1], self.proj1_add_time)
         assert set(
-            get_config_auto_replacements_bypass_projects(
-                self.proj1_expiry - timedelta(minutes=1)
-            )
+            get_config_auto_replacements_bypass_projects(self.proj1_expiry - timedelta(minutes=1))
         ) == set([1])
 
     @pytest.mark.redis_db
@@ -50,14 +48,10 @@ class TestState:
         set_config_auto_replacements_bypass_projects([1], self.proj1_add_time)
         set_config_auto_replacements_bypass_projects([2], self.proj2_add_time)
         assert set(
-            get_config_auto_replacements_bypass_projects(
-                self.proj1_expiry - timedelta(minutes=1)
-            )
+            get_config_auto_replacements_bypass_projects(self.proj1_expiry - timedelta(minutes=1))
         ) == set([1, 2])
         assert set(
-            get_config_auto_replacements_bypass_projects(
-                self.proj1_expiry + timedelta(minutes=1)
-            )
+            get_config_auto_replacements_bypass_projects(self.proj1_expiry + timedelta(minutes=1))
         ) == set([2])
 
     @pytest.mark.redis_db
@@ -87,15 +81,11 @@ class TestState:
         set_config_auto_replacements_bypass_projects([2], self.proj2_add_time)
         # project 1 expires after 5 minutes
         assert set(
-            get_config_auto_replacements_bypass_projects(
-                self.proj1_add_time + timedelta(minutes=6)
-            )
+            get_config_auto_replacements_bypass_projects(self.proj1_add_time + timedelta(minutes=6))
         ) == set([2])
         # project 2 expires at 10 minutes
         assert set(
-            get_config_auto_replacements_bypass_projects(
-                self.proj2_add_time + timedelta(minutes=9)
-            )
+            get_config_auto_replacements_bypass_projects(self.proj2_add_time + timedelta(minutes=9))
         ) == set([2])
         assert set(
             get_config_auto_replacements_bypass_projects(

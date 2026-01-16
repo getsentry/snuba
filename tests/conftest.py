@@ -176,9 +176,9 @@ def _build_migrations_cache() -> None:
                 # tables are created before materialized views that depend on them
                 all_tables = mv_tables + non_mv_tables
                 for table_name, create_table_query in all_tables:
-                    MIGRATIONS_CACHE.setdefault((cluster, node), {})[
-                        table_name
-                    ] = create_table_query
+                    MIGRATIONS_CACHE.setdefault((cluster, node), {})[table_name] = (
+                        create_table_query
+                    )
 
 
 def _clear_db() -> None:

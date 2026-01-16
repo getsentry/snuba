@@ -116,8 +116,9 @@ def test_failures(query_body: str, message: str) -> None:
     events = get_dataset("events")
     events_entity = get_entity(EntityKey.EVENTS)
 
-    with pytest.raises(ParsingException, match=re.escape(message)), mock.patch.object(
-        events_entity, "get_join_relationship", events_mock
+    with (
+        pytest.raises(ParsingException, match=re.escape(message)),
+        mock.patch.object(events_entity, "get_join_relationship", events_mock),
     ):
         parse_snql_query(query_body, events)
 

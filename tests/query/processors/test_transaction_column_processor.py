@@ -16,9 +16,7 @@ def test_event_id_column_format_expressions() -> None:
             SelectedExpression(
                 "transaction.duration", Column("transaction.duration", None, "duration")
             ),
-            SelectedExpression(
-                "the_event_id", Column("the_event_id", None, "event_id")
-            ),
+            SelectedExpression("the_event_id", Column("the_event_id", None, "event_id")),
         ],
     )
     expected = Query(

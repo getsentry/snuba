@@ -38,7 +38,6 @@ from snuba.admin.notifications.slack.utils import build_blocks
     ],
 )
 def test_build_blocks(data: dict[str, Any], action: AuditLogAction, expected: str) -> None:
-
     res = build_blocks(
         data,
         action,

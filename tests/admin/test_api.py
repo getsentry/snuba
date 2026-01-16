@@ -751,7 +751,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         )
         assert {
             "default": -1,
-            "description": "Number of bytes a specific org can scan in a 10 minute " "window.",
+            "description": "Number of bytes a specific org can scan in a 10 minute window.",
             "name": "org_limit_bytes_scanned_override",
             "params": {"org_id": 1},
             "type": "int",
@@ -781,7 +781,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         assert response.json is not None and len(response.json) == 5
         assert {
             "default": -1,
-            "description": "Number of bytes a specific org can scan in a 10 minute " "window.",
+            "description": "Number of bytes a specific org can scan in a 10 minute window.",
             "name": "org_limit_bytes_scanned_override",
             "params": {"org_id": 1},
             "type": "int",
@@ -793,7 +793,6 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
-
     auditlog_records = []
 
     def mock_record(user: Any, action: Any, data: Any, notify: Any) -> None:
@@ -807,7 +806,6 @@ def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
         ),
         mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record),
     ):
-
         # Set a routing strategy config
         response = admin_api.post(
             "/set_configurable_component_configuration",
@@ -894,7 +892,6 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
         ),
         mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record),
     ):
-
         # Set an allocation policy config for the strategy
         response = admin_api.post(
             "/set_configurable_component_configuration",

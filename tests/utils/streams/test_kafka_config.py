@@ -14,16 +14,11 @@ def teardown_function() -> None:
 
 def test_default_config() -> None:
     broker_config = get_default_kafka_configuration()
-    assert (
-        broker_config["bootstrap.servers"]
-        == settings.BROKER_CONFIG["bootstrap.servers"]
-    )
+    assert broker_config["bootstrap.servers"] == settings.BROKER_CONFIG["bootstrap.servers"]
 
 
 def test_default_config_cli_bootstrap_servers() -> None:
-    broker_config = get_default_kafka_configuration(
-        bootstrap_servers=["cli.server:9092"]
-    )
+    broker_config = get_default_kafka_configuration(bootstrap_servers=["cli.server:9092"])
     assert broker_config["bootstrap.servers"] == "cli.server:9092"
     broker_config = get_default_kafka_configuration(
         bootstrap_servers=["cli.server:9092", "cli2.server:9092"]
@@ -48,9 +43,7 @@ def test_kafka_broker_config() -> None:
         "bootstrap.servers": default_broker,
     }
 
-    settings.KAFKA_BROKER_CONFIG = {
-        Topic.EVENTS.value: {"bootstrap.servers": events_broker}
-    }
+    settings.KAFKA_BROKER_CONFIG = {Topic.EVENTS.value: {"bootstrap.servers": events_broker}}
 
     events_broker_config = get_default_kafka_configuration(Topic.EVENTS)
     assert events_broker_config["bootstrap.servers"] == events_broker
@@ -68,9 +61,7 @@ def test_get_default_topic_configuration() -> None:
         "bootstrap.servers": default_broker,
     }
 
-    settings.KAFKA_BROKER_CONFIG = {
-        Topic.EVENTS.value: {"bootstrap.servers": events_broker}
-    }
+    settings.KAFKA_BROKER_CONFIG = {Topic.EVENTS.value: {"bootstrap.servers": events_broker}}
     settings.SLICED_KAFKA_BROKER_CONFIG = {
         (Topic.TRANSACTIONS.value, 0): {"bootstrap.servers": transactions_broker},
         (Topic.TRANSACTIONS.value, 1): {"bootstrap.servers": sliced_broker},

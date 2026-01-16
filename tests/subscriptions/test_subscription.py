@@ -47,9 +47,7 @@ TESTS_CREATE = [
     pytest.param(
         SnQLSubscriptionData(
             project_id=123,
-            query=(
-                "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')"
-            ),
+            query=("MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')"),
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity=get_entity(EntityKey.EVENTS),
@@ -63,9 +61,7 @@ TESTS_INVALID = [
     pytest.param(
         SnQLSubscriptionData(
             project_id=123,
-            query=(
-                "MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a') "
-            ),
+            query=("MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a') "),
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity=get_entity(EntityKey.EVENTS),
@@ -295,9 +291,7 @@ class TestMetricsCountersSubscriptionCreator:
 
     @pytest.mark.parametrize("subscription", TESTS_INVALID_METRICS)
     @pytest.mark.clickhouse_db
-    def test_missing_conditions_for_groupby_clause(
-        self, subscription: SubscriptionData
-    ) -> None:
+    def test_missing_conditions_for_groupby_clause(self, subscription: SubscriptionData) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.METRICS_COUNTERS)
         with raises(InvalidQueryException):
             creator.create(
@@ -332,9 +326,7 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
             == subscription
         )
 
-        SubscriptionDeleter(self.entity_key, identifier.partition).delete(
-            identifier.uuid
-        )
+        SubscriptionDeleter(self.entity_key, identifier.partition).delete(identifier.uuid)
         assert (
             RedisSubscriptionDataStore(
                 get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
@@ -368,9 +360,7 @@ class TestRPCSubscriptionCreator:
                     aggregations=[
                         AttributeAggregation(
                             aggregate=Function.FUNCTION_SUM,
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                            ),
+                            key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                             label="sum",
                             extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         ),

@@ -109,17 +109,13 @@ class MetricsScope:
 
     def validate(self) -> None:
         def list_type(vals: Sequence[Any], type_classes: Sequence[Any]) -> bool:
-            return isinstance(vals, list) and all(
-                isinstance(v, tuple(type_classes)) for v in vals
-            )
+            return isinstance(vals, list) and all(isinstance(v, tuple(type_classes)) for v in vals)
 
         if not list_type(self.org_ids, (int,)):
             raise ParsingException("MQL context: org_ids must be a list of integers")
 
         if not list_type(self.project_ids, (int,)):
-            raise ParsingException(
-                "MQL context: project_ids must be a list of integers"
-            )
+            raise ParsingException("MQL context: project_ids must be a list of integers")
 
         if self.use_case_id is not None and not isinstance(self.use_case_id, str):
             raise ParsingException("MQL context: use_case_id must be a str")

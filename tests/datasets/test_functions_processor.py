@@ -63,9 +63,7 @@ class ProfileFunctionsEvent:
 
 class TestFunctionsProcessor:
     def test_process_message_functions(self) -> None:
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
 
         now = int(datetime.now(timezone.utc).timestamp())
         message = ProfileFunctionsEvent(
