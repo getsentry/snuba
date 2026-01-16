@@ -78,12 +78,10 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         self, routing_context: RoutingContext
     ) -> list[TraceItemType.ValueType]:
         """
-        If the message meta has an item type, then return the item_type there as a list of one
-
-
-
         if the in msg has TraceFilter(s) set, iterate through the TraceFilter object and find all the item types
-        mentioned in the entire filter, append them all to a set, return as a list
+        mentioned in the entire filter
+
+        If the message meta has an item type, then return the item_type there
 
         How it can happen:
             TraceItemTableRequest has `trace_filters` field
@@ -152,7 +150,12 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                     column("category"),
                     f.array(
                         *[
-                            ITEM_TYPE_TO_OUTCOME_CATEGORY[trace_item_type]
+                            ITEM_TYPE_TO_OUTCOME_CATEGORY.get(
+                                trace_item_type,
+                                ITEM_TYPE_TO_OUTCOME_CATEGORY[
+                                    TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+                                ],
+                            )
                             for trace_item_type in self.get_item_types_in_query(routing_context)
                         ]
                     ),
