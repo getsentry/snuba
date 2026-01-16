@@ -132,6 +132,7 @@ def get_trace_ids_for_cross_item_query(
             column("trace_id"),
         ],
         having=trace_item_filters_and_expression,
+        limit=_TRACE_LIMIT,
     )
 
     treeify_or_and_conditions(query)
