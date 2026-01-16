@@ -36,6 +36,7 @@ _SPANS = [
         start_timestamp=BASE_TIME + timedelta(seconds=i),
         trace_id=_SPANS_TRACE_IDS[i],
         item_id=_SPANS_ITEM_IDS[i],
+        project_id=i % 3 + 1,
     )
     for i in range(_SPAN_COUNT)  # 2 minutes
 ]
@@ -45,6 +46,7 @@ _LOGS = [
         trace_id=_LOGS_TRACE_IDS[i],
         type=TraceItemType.TRACE_ITEM_TYPE_LOG,
         item_id=_LOGS_ITEM_IDS[i],
+        project_id=i % 3 + 1,
     )
     for i in range(_LOG_COUNT)
 ]

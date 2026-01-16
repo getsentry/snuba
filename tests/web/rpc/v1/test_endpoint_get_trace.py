@@ -66,6 +66,7 @@ _SPANS = [
             ),
             "sentry.is_segment": AnyValue(bool_value=i == 0),
         },
+        project_id=i % 3 + 1,
     )
     for i in range(_SPAN_COUNT)
 ]
@@ -79,6 +80,7 @@ _LOGS = [
             byteorder="little",
             signed=False,
         ),
+        project_id=i % 3 + 1,
     )
     for i in range(10)
 ]
