@@ -56,8 +56,8 @@ SELECT
     toMonday(timestamp) AS date,
     retention_days as retention_days,
     arrayConcat({_attr_str_names}) AS attributes_string,
-    mapKeys(attributes_bool) AS bool_attribute_keys,
-    arrayFilter(x -> NOT has(bool_attribute_keys, x), arrayConcat({_attr_num_names})) AS attributes_float
+    mapKeys(attributes_bool) AS attributes_bool,
+    arrayConcat({_attr_num_names}) AS attributes_float
 FROM eap_items_1_local
 """
 
