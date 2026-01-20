@@ -503,8 +503,14 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
     def _execute(self, in_msg: GetTracesRequest) -> GetTracesResponse:
         _validate_order_by(in_msg)
+
+        # Feature flag: Use cross-item query path for all queries (single-item and cross-item)
+        use_cross_item_path = self._is_cross_event_query(in_msg.filters) or state.get_config(
+            "use_cross_item_path_for_single_item_queries", False
+        )
+
         # Feature flag: Use subquery optimization for cross-item queries
-        if self._is_cross_event_query(in_msg.filters) and state.get_config(
+        if use_cross_item_path and state.get_config(
             "enable_cross_item_subquery_optimization", True
         ):
             return self._execute_with_subquery_optimization(in_msg)
@@ -513,7 +519,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         query_results: list[Any] = []
 
         # Get a dict of trace IDs and timestamps.
-        if self._is_cross_event_query(in_msg.filters):
+        if use_cross_item_path:
             trace_ids, trace_ids_query_results = get_trace_ids_for_cross_item_query(
                 in_msg,
                 in_msg.meta,

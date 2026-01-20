@@ -1,7 +1,7 @@
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 
 import pytest
 from google.protobuf.json_format import MessageToDict
@@ -100,7 +100,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-class TestGetTraces(BaseApiTest):
+class TestEndpointGetTraces(BaseApiTest):
     def test_without_data(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
@@ -910,3 +910,18 @@ def trace_filter(
         item_type=item_type,
         filter=filter,
     )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestEndpointGetTracesCrossItem(TestEndpointGetTraces):
+    """Run all tests with use_cross_item_path_for_single_item_queries enabled."""
+
+    def setup_method(self, test_method: Callable[..., Any]) -> None:
+        super().setup_method(test_method)
+        """Enable the feature flag before each test."""
+        state.set_config("use_cross_item_path_for_single_item_queries", True)
+
+    def teardown_method(self) -> None:
+        """Clean up the feature flag after each test."""
+        state.set_config("use_cross_item_path_for_single_item_queries", False)
