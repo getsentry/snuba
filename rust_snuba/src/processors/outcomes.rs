@@ -27,6 +27,8 @@ const CLIENT_DISCARD_REASONS: &[&str] = &[
     "insufficient_data",
     // an event was dropped due to an internal SDK error (eg: web worker crash)
     "internal_sdk_error",
+    // an event was dropped due to an invalid payload
+    "invalid",
     // events were dropped because of network errors and were not retried.
     "network_error",
     // a SDK internal queue (eg: transport queue) overflowed
