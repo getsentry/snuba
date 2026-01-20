@@ -16,7 +16,7 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.query import SelectedExpression
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, or_cond
@@ -32,6 +32,8 @@ from snuba.web.rpc.common.common import (
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.debug_info import setup_trace_query_settings
+
+_TRACE_LIMIT = 10000
 
 
 def convert_trace_filters_to_trace_item_filter_with_type(
@@ -130,6 +132,8 @@ def get_trace_ids_for_cross_item_query(
             column("trace_id"),
         ],
         having=trace_item_filters_and_expression,
+        order_by=[OrderBy(OrderByDirection.ASC, column("trace_id"))],
+        limit=_TRACE_LIMIT,
     )
 
     treeify_or_and_conditions(query)
@@ -247,6 +251,8 @@ def get_trace_ids_sql_for_cross_item_query(
             column("trace_id"),
         ],
         having=trace_item_filters_and_expression,
+        order_by=[OrderBy(OrderByDirection.ASC, column("trace_id"))],
+        limit=_TRACE_LIMIT,
     )
 
     treeify_or_and_conditions(query)
