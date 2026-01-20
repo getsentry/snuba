@@ -26,8 +26,7 @@ def build_query(
             allocation_policies=[DEFAULT_PASSTHROUGH_POLICY],
         ),
         selected_columns=[
-            SelectedExpression(name=s.alias, expression=s)
-            for s in selected_columns or []
+            SelectedExpression(name=s.alias, expression=s) for s in selected_columns or []
         ],
         condition=condition,
         having=having,
@@ -35,9 +34,7 @@ def build_query(
 
 
 def column(name: str, no_alias: bool = False) -> Column:
-    return Column(
-        alias=name if not no_alias else None, table_name=None, column_name=name
-    )
+    return Column(alias=name if not no_alias else None, table_name=None, column_name=name)
 
 
 def nested_expression(column: str, key: str | int) -> FunctionCall:

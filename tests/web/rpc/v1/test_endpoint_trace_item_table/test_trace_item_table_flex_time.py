@@ -159,7 +159,6 @@ def _generate_table_request(
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestTraceItemTableFlexTime:
-
     def test_reject_request_without_order_by(self, eap: Any) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(

@@ -33,9 +33,8 @@ from snuba.protos.common import NORMALIZED_COLUMNS_EAP_ITEMS
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond
+from snuba.query.dsl import and_cond, in_cond, literal, literals_array, or_cond
 from snuba.query.dsl import column as snuba_column
-from snuba.query.dsl import in_cond, literal, literals_array, or_cond
 from snuba.query.expressions import Expression, SubscriptableReference
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings

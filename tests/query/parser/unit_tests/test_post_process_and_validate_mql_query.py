@@ -31,9 +31,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -42,9 +40,7 @@ test_cases = [
                             f.sumIf(
                                 column("value"),
                                 and_cond(
-                                    f.equals(
-                                        column("tags_raw[222222]"), literal("200")
-                                    ),
+                                    f.equals(column("tags_raw[222222]"), literal("200")),
                                     f.equals(column("metric_id"), literal(123456)),
                                 ),
                             ),
@@ -73,9 +69,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -187,9 +181,7 @@ test_cases = [
                 ),
                 and_cond(
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -239,9 +231,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -252,9 +242,7 @@ test_cases = [
                                 f.sumIf(
                                     column("value"),
                                     and_cond(
-                                        f.equals(
-                                            column("tags_raw[222222]"), literal("200")
-                                        ),
+                                        f.equals(column("tags_raw[222222]"), literal("200")),
                                         f.equals(column("metric_id"), literal(123456)),
                                     ),
                                 ),
@@ -284,9 +272,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -401,9 +387,7 @@ test_cases = [
                 ),
                 and_cond(
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -453,9 +437,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -464,9 +446,7 @@ test_cases = [
                             f.sumIf(
                                 column("value"),
                                 and_cond(
-                                    f.equals(
-                                        column("tags_raw[222222]"), literal("200")
-                                    ),
+                                    f.equals(column("tags_raw[222222]"), literal("200")),
                                     f.equals(column("metric_id"), literal(123456)),
                                 ),
                             ),
@@ -498,9 +478,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -614,9 +592,7 @@ test_cases = [
                 ),
                 and_cond(
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -667,9 +643,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -681,9 +655,7 @@ test_cases = [
                                 (
                                     column("value"),
                                     and_cond(
-                                        f.equals(
-                                            column("tags_raw[222222]"), literal("200")
-                                        ),
+                                        f.equals(column("tags_raw[222222]"), literal("200")),
                                         f.equals(column("metric_id"), literal(123456)),
                                     ),
                                 ),
@@ -716,9 +688,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -781,9 +751,7 @@ test_cases = [
                                     and_cond(
                                         f.equals(tags_raw["222222"], literal("200")),
                                         f.equals(
-                                            column(
-                                                "metric_id", None, "_snuba_metric_id"
-                                            ),
+                                            column("metric_id", None, "_snuba_metric_id"),
                                             literal(123456),
                                         ),
                                     ),
@@ -841,9 +809,7 @@ test_cases = [
                 ),
                 and_cond(
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -894,9 +860,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -943,9 +907,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -1081,9 +1043,7 @@ test_cases = [
                 ),
                 and_cond(
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -1133,9 +1093,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1144,18 +1102,14 @@ test_cases = [
                             f.sumIf(
                                 column("value"),
                                 and_cond(
-                                    f.equals(
-                                        column("tags_raw[222222]"), literal("200")
-                                    ),
+                                    f.equals(column("tags_raw[222222]"), literal("200")),
                                     f.equals(column("metric_id"), literal(123456)),
                                 ),
                             ),
                             f.maxIf(
                                 column("value"),
                                 and_cond(
-                                    f.equals(
-                                        column("tags_raw[222222]"), literal("200")
-                                    ),
+                                    f.equals(column("tags_raw[222222]"), literal("200")),
                                     f.equals(column("metric_id"), literal(123456)),
                                 ),
                             ),
@@ -1180,9 +1134,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -1300,9 +1252,7 @@ test_cases = [
                 ),
                 and_cond(
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -1352,9 +1302,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1363,18 +1311,14 @@ test_cases = [
                             f.sumIf(
                                 column("value"),
                                 and_cond(
-                                    f.equals(
-                                        column("tags_raw[222222]"), literal("200")
-                                    ),
+                                    f.equals(column("tags_raw[222222]"), literal("200")),
                                     f.equals(column("metric_id"), literal(123456)),
                                 ),
                             ),
                             f.maxIf(
                                 column("value"),
                                 and_cond(
-                                    f.equals(
-                                        column("tags_raw[222222]"), literal("200")
-                                    ),
+                                    f.equals(column("tags_raw[222222]"), literal("200")),
                                     f.equals(column("metric_id"), literal(123456)),
                                 ),
                             ),
@@ -1402,9 +1346,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -1524,9 +1466,7 @@ test_cases = [
                 ),
                 and_cond(
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -1577,9 +1517,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1617,9 +1555,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -1728,9 +1664,7 @@ test_cases = [
                 ),
                 and_cond(
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -1780,9 +1714,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1817,9 +1749,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -1925,9 +1855,7 @@ test_cases = [
                 ),
                 and_cond(
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -1977,9 +1905,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2010,9 +1936,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -2106,9 +2030,7 @@ test_cases = [
                         ),
                     ),
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -2131,9 +2053,7 @@ test_cases = [
                             column("metric_id", None, "_snuba_metric_id"),
                             literal(123456),
                         ),
-                        in_cond(
-                            tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))
-                        ),
+                        in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
                     ),
                 ),
             ),
@@ -2171,9 +2091,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2189,9 +2107,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -2255,9 +2171,7 @@ test_cases = [
                         ),
                     ),
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -2280,9 +2194,7 @@ test_cases = [
                             column("metric_id", None, "_snuba_metric_id"),
                             literal(123456),
                         ),
-                        in_cond(
-                            tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))
-                        ),
+                        in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
                     ),
                 ),
             ),
@@ -2309,9 +2221,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2327,9 +2237,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -2376,17 +2284,13 @@ test_cases = [
             array_join=None,
             condition=and_cond(
                 and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
+                    f.equals(column("granularity", None, "_snuba_granularity"), literal(60)),
                     and_cond(
                         in_cond(
                             column("project_id", None, "_snuba_project_id"),
                             f.tuple(literal(1)),
                         ),
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                     ),
                 ),
                 and_cond(
@@ -2458,9 +2362,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -2481,9 +2383,7 @@ test_cases = [
                                         column("tags_raw[888888]"),
                                         f.tuple(literal("dist1"), literal("dist2")),
                                     ),
-                                    f.equals(
-                                        column("tags_raw[777777]"), literal("bar")
-                                    ),
+                                    f.equals(column("tags_raw[777777]"), literal("bar")),
                                 ),
                             ),
                         ),
@@ -2519,9 +2419,7 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    column("granularity", None, "_snuba_granularity"), literal(3600)
-                ),
+                f.equals(column("granularity", None, "_snuba_granularity"), literal(3600)),
                 and_cond(
                     and_cond(
                         and_cond(
@@ -2581,9 +2479,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2618,9 +2514,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -2719,9 +2613,7 @@ test_cases = [
                         ),
                     ),
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -2744,9 +2636,7 @@ test_cases = [
                             column("metric_id", None, "_snuba_metric_id"),
                             literal(123456),
                         ),
-                        in_cond(
-                            tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))
-                        ),
+                        in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
                     ),
                 ),
             ),
@@ -2866,9 +2756,7 @@ test_cases = [
                         ),
                     ),
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("sessions"),
@@ -2918,9 +2806,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2948,9 +2834,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -3044,9 +2928,7 @@ test_cases = [
                         ),
                     ),
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -3111,9 +2993,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -3133,9 +3013,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -3200,9 +3078,7 @@ test_cases = [
                         ),
                     ),
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("transactions"),
@@ -3225,9 +3101,7 @@ test_cases = [
                             column("metric_id", None, "_snuba_metric_id"),
                             literal(123456),
                         ),
-                        in_cond(
-                            tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))
-                        ),
+                        in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
                     ),
                 ),
             ),
@@ -3278,9 +3152,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id"), literal("transactions")),
                             ),
                         ),
                         and_cond(
@@ -3334,17 +3206,13 @@ test_cases = [
             array_join=None,
             condition=and_cond(
                 and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(3600)
-                    ),
+                    f.equals(column("granularity", None, "_snuba_granularity"), literal(3600)),
                     and_cond(
                         in_cond(
                             column("project_id", None, "_snuba_project_id"),
                             f.tuple(literal(1)),
                         ),
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                     ),
                 ),
                 and_cond(
@@ -3385,9 +3253,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -3426,9 +3292,7 @@ test_cases = [
                                     ),
                                     f.equals(
                                         column("tags_raw[333333]"),
-                                        literal(
-                                            "sentry.tasks.store.save_event_transaction"
-                                        ),
+                                        literal("sentry.tasks.store.save_event_transaction"),
                                     ),
                                 ),
                             ),
@@ -3463,9 +3327,7 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    column("granularity", None, "_snuba_granularity"), literal(60)
-                ),
+                f.equals(column("granularity", None, "_snuba_granularity"), literal(60)),
                 and_cond(
                     and_cond(
                         and_cond(
@@ -3525,9 +3387,7 @@ test_cases = [
             Query(
                 from_clause=Entity(
                     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(
-                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
-                    ).get_data_model(),
+                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -3539,9 +3399,7 @@ test_cases = [
                                     and_cond(
                                         f.equals(
                                             column("tags_raw[9223372036854776020]"),
-                                            literal(
-                                                "getsentry.tasks.calculate_spike_projections"
-                                            ),
+                                            literal("getsentry.tasks.calculate_spike_projections"),
                                         ),
                                         f.equals(
                                             column("metric_id"),
@@ -3573,9 +3431,7 @@ test_cases = [
                             in_cond(column("project_id"), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id"), literal("'transactions'")
-                                ),
+                                f.equals(column("use_case_id"), literal("'transactions'")),
                             ),
                         ),
                         and_cond(
@@ -3634,9 +3490,7 @@ test_cases = [
                                 and_cond(
                                     f.equals(
                                         tags_raw["9223372036854776020"],
-                                        literal(
-                                            "getsentry.tasks.calculate_spike_projections"
-                                        ),
+                                        literal("getsentry.tasks.calculate_spike_projections"),
                                     ),
                                     f.equals(
                                         column("metric_id", None, "_snuba_metric_id"),
@@ -3686,9 +3540,7 @@ test_cases = [
                 ),
                 and_cond(
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", None, "_snuba_use_case_id"),
                             literal("'transactions'"),

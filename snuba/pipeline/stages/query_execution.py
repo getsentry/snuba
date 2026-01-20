@@ -9,9 +9,8 @@ from typing import Any, MutableMapping, Optional
 
 import sentry_sdk
 
-from snuba import environment
+from snuba import environment, state
 from snuba import settings as snuba_settings
-from snuba import state
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery

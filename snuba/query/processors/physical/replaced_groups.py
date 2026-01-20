@@ -66,10 +66,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
         for denied_project_id_string in (
             get_config("post_replacement_consistency_projects_denylist") or "[]"
         )[1:-1].split(","):
-            if (
-                denied_project_id_string
-                and int(denied_project_id_string) in project_ids
-            ):
+            if denied_project_id_string and int(denied_project_id_string) in project_ids:
                 metrics.increment(name=CONSISTENCY_DENYLIST_METRIC)
                 self._set_query_final(query, True)
                 return
@@ -104,9 +101,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
                 settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
             )
             assert isinstance(max_group_ids_exclude, int)
-            groups_to_exclude = self._groups_to_exclude(
-                query, flags.group_ids_to_exclude
-            )
+            groups_to_exclude = self._groups_to_exclude(query, flags.group_ids_to_exclude)
             if (
                 len(flags.group_ids_to_exclude) > 2 * max_group_ids_exclude
                 or len(groups_to_exclude) > max_group_ids_exclude
@@ -134,9 +129,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
             and self.__replacer_state_name is not None
             and self.__replacer_state_name == ReplacerState.ERRORS
         ):
-            query_settings.push_clickhouse_setting(
-                "do_not_merge_across_partitions_select_final", 1
-            )
+            query_settings.push_clickhouse_setting("do_not_merge_across_partitions_select_final", 1)
 
         self._set_query_final(query, set_final)
 
@@ -146,9 +139,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
         """
         Initialize tags dictionary for DataDog metrics.
         """
-        tags = {
-            replacement_type: "True" for replacement_type in flags.replacement_types
-        }
+        tags = {replacement_type: "True" for replacement_type in flags.replacement_types}
         tags["referrer"] = query_settings.referrer
         return tags
 
@@ -173,14 +164,10 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
         """
         query_from, _ = get_time_range(query, "timestamp")
         return (
-            latest_replacement_time > query_from
-            if latest_replacement_time and query_from
-            else True
+            latest_replacement_time > query_from if latest_replacement_time and query_from else True
         )
 
-    def _groups_to_exclude(
-        self, query: Query, group_ids_to_exclude: Set[int]
-    ) -> Set[int]:
+    def _groups_to_exclude(self, query: Query, group_ids_to_exclude: Set[int]) -> Set[int]:
         """
         Given a Query and the group ids to exclude for any project
         this query touches, returns the intersection of the group ids

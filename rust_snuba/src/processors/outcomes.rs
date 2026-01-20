@@ -17,6 +17,8 @@ const CLIENT_DISCARD_REASONS: &[&str] = &[
     "backpressure",
     // an event was dropped in the `before_send` lifecycle method
     "before_send",
+    // an SDK internal buffer (eg. breadcrumbs buffer) overflowed
+    "buffer_overflow",
     // a SDK internal cache (eg: offline event cache) overflowed
     "cache_overflow",
     // an event was dropped by an event processor; may also be used for ignored exceptions / errors
@@ -37,8 +39,6 @@ const CLIENT_DISCARD_REASONS: &[&str] = &[
     "sample_rate",
     // an event was dropped because of an error when sending it (eg: 400 response)
     "send_error",
-    // an SDK internal buffer (eg. breadcrumbs buffer) overflowed
-    "buffer_overflow",
 ];
 
 pub fn process_message(
@@ -125,5 +125,13 @@ mod tests {
         let expected = b"{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":3,\"reason\":null,\"event_id\":null}\n";
 
         assert_eq!(result.rows.into_encoded_rows(), expected);
+    }
+
+    #[test]
+    fn test_client_discard_reasons_sorted() {
+        // CLIENT_DISCARD_REASONS must be sorted for binary_search to work correctly
+        let mut sorted = CLIENT_DISCARD_REASONS.to_vec();
+        sorted.sort();
+        assert_eq!(CLIENT_DISCARD_REASONS, sorted.as_slice());
     }
 }

@@ -148,9 +148,7 @@ def test_drop_column() -> None:
 
 def test_modify_column() -> None:
     assert (
-        ModifyColumn(
-            StorageSetKey.EVENTS, "test_table", Column("test", String())
-        ).format_sql()
+        ModifyColumn(StorageSetKey.EVENTS, "test_table", Column("test", String())).format_sql()
         == "ALTER TABLE test_table MODIFY COLUMN test String;"
     )
 
@@ -179,18 +177,14 @@ def test_drop_index() -> None:
 
 def test_drop_index_async() -> None:
     assert (
-        DropIndex(
-            StorageSetKey.EVENTS, "test_table", "index_1", run_async=True
-        ).format_sql()
+        DropIndex(StorageSetKey.EVENTS, "test_table", "index_1", run_async=True).format_sql()
         == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1 SETTINGS mutations_sync=0;"
     )
 
 
 def test_drop_indices() -> None:
     assert (
-        DropIndices(
-            StorageSetKey.EVENTS, "test_table", ["index_1", "index_2"]
-        ).format_sql()
+        DropIndices(StorageSetKey.EVENTS, "test_table", ["index_1", "index_2"]).format_sql()
         == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1, DROP INDEX IF EXISTS index_2;"
     )
 
@@ -374,10 +368,7 @@ def test_new_drop_column() -> None:
         target=OperationTarget.LOCAL,
     )
 
-    assert (
-        local_op.format_sql()
-        == "ALTER TABLE test_table DROP COLUMN IF EXISTS test_column;"
-    )
+    assert local_op.format_sql() == "ALTER TABLE test_table DROP COLUMN IF EXISTS test_column;"
 
     dist_op = DropColumn(
         StorageSetKey.EVENTS,
@@ -385,10 +376,7 @@ def test_new_drop_column() -> None:
         "test_column",
         target=OperationTarget.DISTRIBUTED,
     )
-    assert (
-        dist_op.format_sql()
-        == "ALTER TABLE test_dist_table DROP COLUMN IF EXISTS test_column;"
-    )
+    assert dist_op.format_sql() == "ALTER TABLE test_dist_table DROP COLUMN IF EXISTS test_column;"
 
 
 def test_refactored_migration() -> None:
@@ -463,9 +451,7 @@ def test_reset_settings() -> None:
 @pytest.mark.custom_clickhouse_db
 def test_missing_nodes_for_operation(mock_get_local_nodes: Mock) -> None:
     with pytest.raises(OperationMissingNodes):
-        TruncateTable(
-            StorageSetKey.EVENTS, "blah_table", target=OperationTarget.LOCAL
-        ).get_nodes()
+        TruncateTable(StorageSetKey.EVENTS, "blah_table", target=OperationTarget.LOCAL).get_nodes()
 
     cluster = get_cluster(StorageSetKey.EVENTS)
     if cluster.is_single_node():

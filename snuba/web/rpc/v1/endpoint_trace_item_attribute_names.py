@@ -370,7 +370,6 @@ class EndpointTraceItemAttributeNames(
         )
 
     def _execute(self, in_msg: TraceItemAttributeNamesRequest) -> TraceItemAttributeNamesResponse:
-
         snuba_request = get_co_occurring_attributes(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),

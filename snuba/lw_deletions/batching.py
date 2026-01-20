@@ -46,10 +46,7 @@ class ReduceRowsBuffer(Generic[TPayload, TResult]):
 
     @property
     def is_ready(self) -> bool:
-        return (
-            self._buffer_size >= self.max_batch_size
-            or time.time() >= self._buffer_until
-        )
+        return self._buffer_size >= self.max_batch_size or time.time() >= self._buffer_until
 
     def append(self, message: BaseValue[TPayload]) -> None:
         """
@@ -128,20 +125,18 @@ class BatchStepCustom(ProcessingStrategy[Union[FilteredPayload, TStrategyPayload
             result.append(value)
             return result
 
-        self.__reduce_step: ReduceCustom[
-            TStrategyPayload, ValuesBatch[TStrategyPayload]
-        ] = ReduceCustom(
-            max_batch_size,
-            max_batch_time,
-            accumulator,
-            lambda: [],
-            next_step,
-            increment_by,
+        self.__reduce_step: ReduceCustom[TStrategyPayload, ValuesBatch[TStrategyPayload]] = (
+            ReduceCustom(
+                max_batch_size,
+                max_batch_time,
+                accumulator,
+                lambda: [],
+                next_step,
+                increment_by,
+            )
         )
 
-    def submit(
-        self, message: Message[Union[FilteredPayload, TStrategyPayload]]
-    ) -> None:
+    def submit(self, message: Message[Union[FilteredPayload, TStrategyPayload]]) -> None:
         self.__reduce_step.submit(message)
 
     def poll(self) -> None:

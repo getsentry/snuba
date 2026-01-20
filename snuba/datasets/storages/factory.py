@@ -116,11 +116,7 @@ def get_all_storage_keys(
     all_storage_keys = _storage_factory().get_all_storage_keys()
     if readiness_states is None:
         return all_storage_keys
-    return [
-        s
-        for s in all_storage_keys
-        if get_storage(s).get_readiness_state() in readiness_states
-    ]
+    return [s for s in all_storage_keys if get_storage(s).get_readiness_state() in readiness_states]
 
 
 def get_config_built_storages() -> dict[StorageKey, Storage]:

@@ -65,14 +65,10 @@ def test_query_with_curried_function() -> None:
                 divide(
                     CurriedFunctionCall(
                         alias=None,
-                        internal_function=FunctionCall(
-                            None, "quantilesIf", (Literal(None, 0.5),)
-                        ),
+                        internal_function=FunctionCall(None, "quantilesIf", (Literal(None, 0.5),)),
                         parameters=(
                             Column(None, None, "value"),
-                            and_cond(
-                                _equals("metric_id", 1), _equals("status_code", 200)
-                            ),
+                            and_cond(_equals("metric_id", 1), _equals("status_code", 200)),
                         ),
                     ),
                     _cond_agg("sumIf", _equals("metric_id", 1)),

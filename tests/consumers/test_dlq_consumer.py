@@ -30,9 +30,7 @@ def test_dlq_consumer_cli() -> None:
     create_topics(admin_client, [SnubaTopic.DEAD_LETTER_QUERYLOG])
     topic = Topic(SnubaTopic.DEAD_LETTER_QUERYLOG.value)
 
-    producer = KafkaProducer(
-        build_kafka_producer_configuration(SnubaTopic.DEAD_LETTER_QUERYLOG)
-    )
+    producer = KafkaProducer(build_kafka_producer_configuration(SnubaTopic.DEAD_LETTER_QUERYLOG))
 
     instruction = DlqInstruction(
         DlqReplayPolicy.REINSERT_DLQ,

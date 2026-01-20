@@ -192,9 +192,9 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
                 self.__expand_nested,
             )
         )
-        assert isinstance(
-            expanded_column, Column
-        ), "A subscriptable column cannot be resolved to anything other than a column"
+        assert isinstance(expanded_column, Column), (
+            "A subscriptable column cannot be resolved to anything other than a column"
+        )
         return replace(
             exp,
             column=expanded_column,

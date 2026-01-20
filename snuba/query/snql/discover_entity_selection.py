@@ -9,9 +9,10 @@ from snuba.clickhouse.columns import (
     FixedString,
     Float,
     Nested,
+    String,
+    UInt,
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
-from snuba.clickhouse.columns import String, UInt
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query.conditions import (
     BINARY_OPERATORS,
@@ -150,9 +151,7 @@ TRANSACTION_FUNCTIONS = FunctionCallMatch(
     Or([StringMatch("apdex"), StringMatch("failure_rate")]), None
 )
 
-EVENT_FUNCTIONS = FunctionCallMatch(
-    Or([StringMatch("isHandled"), StringMatch("notHandled")]), None
-)
+EVENT_FUNCTIONS = FunctionCallMatch(Or([StringMatch("isHandled"), StringMatch("notHandled")]), None)
 
 
 def match_query_to_entity(
@@ -257,18 +256,14 @@ def _track_bad_query(
         if transactions_only_columns.get(schema_col_name):
             transaction_columns.add(schema_col_name)
 
-    event_mismatch = (
-        event_columns and selected_entity == EntityKey.DISCOVER_TRANSACTIONS
-    )
+    event_mismatch = event_columns and selected_entity == EntityKey.DISCOVER_TRANSACTIONS
     transaction_mismatch = transaction_columns and selected_entity in [
         EntityKey.DISCOVER_EVENTS,
         EntityKey.DISCOVER,
     ]
 
     if event_mismatch or transaction_mismatch:
-        missing_columns = ",".join(
-            sorted(event_columns if event_mismatch else transaction_columns)
-        )
+        missing_columns = ",".join(sorted(event_columns if event_mismatch else transaction_columns))
         selected_entity_str = (
             str(selected_entity.value)
             if isinstance(selected_entity, EntityKey)
