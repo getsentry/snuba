@@ -224,7 +224,7 @@ def get_co_occurring_attributes(
                 column("x"),
             ),
         ),
-        column("bool_attribute_keys"),
+        column("attributes_bool"),
     )
 
     array_func = None
