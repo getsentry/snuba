@@ -29,6 +29,7 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.common import (
+    ITEM_TYPE_FULL_RETENTION,
     ITEM_TYPE_TO_OUTCOME_CATEGORY,
     Outcome,
 )
@@ -164,6 +165,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         if (
             state.get_int_config("enable_long_term_retention_downsampling", 0)
             and older_than_thirty_days
+            and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION
         ):
             routing_decision.tier = Tier.TIER_8
 
