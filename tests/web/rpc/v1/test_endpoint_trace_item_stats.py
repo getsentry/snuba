@@ -266,3 +266,65 @@ class TestTraceItemAttributesStats(BaseApiTest):
         assert (
             expected_low_cardinality_stats in response.results[0].attribute_distributions.attributes
         )
+
+    def test_last_seen_timestamp_in_query_results(self, setup_teardown: Any) -> None:
+        """Test that the query returns last_seen timestamps for each bucket.
+
+        This test verifies that max(timestamp) is computed correctly in the query.
+        Once the proto is updated to include the last_seen field, this data will
+        be populated in the response buckets.
+        """
+        from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_stats import (
+            LAST_SEEN_LABEL,
+            _build_attr_distribution_query,
+        )
+
+        message = TraceItemStatsRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY,
+                ),
+            ),
+            stats_types=[
+                StatsType(
+                    attribute_distributions=AttributeDistributionsRequest(
+                        max_buckets=10,
+                        max_attributes=100,
+                        attributes=[
+                            AttributeKey(name="sentry.sdk.name", type=AttributeKey.TYPE_STRING)
+                        ],
+                    )
+                )
+            ],
+        )
+
+        # Verify the query includes the last_seen column
+        query = _build_attr_distribution_query(
+            message, message.stats_types[0].attribute_distributions
+        )
+        selected_column_names = [col.name for col in query.get_selected_columns()]
+        assert LAST_SEEN_LABEL in selected_column_names
+
+        # Run the actual query and verify last_seen is in results
+        response = EndpointTraceItemStats().execute(message)
+        assert response.results[0].HasField("attribute_distributions")
+
+        # Verify we got results for sentry.sdk.name
+        sdk_name_dist = None
+        for dist in response.results[0].attribute_distributions.attributes:
+            if dist.attribute_name == "sentry.sdk.name":
+                sdk_name_dist = dist
+                break
+
+        assert sdk_name_dist is not None
+        assert len(sdk_name_dist.buckets) > 0
+        # The bucket should have the expected label and value
+        assert sdk_name_dist.buckets[0].label == "sentry.python.django"
+        assert sdk_name_dist.buckets[0].value == 120

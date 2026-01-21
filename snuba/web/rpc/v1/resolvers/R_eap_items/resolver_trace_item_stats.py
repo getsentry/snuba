@@ -1,8 +1,10 @@
 import uuid
 from collections import OrderedDict
+from datetime import datetime
 from typing import Any, Dict, Iterable, Tuple
 
 from google.protobuf.json_format import MessageToDict
+from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     AttributeDistribution,
     AttributeDistributions,
@@ -24,6 +26,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import arrayJoin, column, count, if_cond, literal, tupleElement
 from snuba.query.expressions import Expression, FunctionCall
+from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -52,6 +55,7 @@ MAX_BUCKETS = 100
 DEFAULT_BUCKETS = 10
 
 COUNT_LABEL = "count()"
+LAST_SEEN_LABEL = "last_seen"
 
 EAP_ITEMS_ENTITY = Entity(
     key=EntityKey("eap_items"),
@@ -74,8 +78,16 @@ def _transform_attr_distribution_results(
         default = AttributeDistribution(
             attribute_name=attr_key,
         )
+        last_seen_ts = Timestamp()
+        last_seen_value = row.get(LAST_SEEN_LABEL)
+        if isinstance(last_seen_value, datetime):
+            last_seen_ts.FromDatetime(last_seen_value)
         res.setdefault((attr_key, COUNT_LABEL), default).buckets.append(
-            AttributeDistribution.Bucket(label=attr_value, value=row[COUNT_LABEL])
+            AttributeDistribution.Bucket(
+                label=attr_value,
+                value=row[COUNT_LABEL],
+                last_seen=last_seen_ts,  # type: ignore[call-arg]
+            )
         )
 
     return list(res.values())
@@ -197,6 +209,14 @@ def _build_attr_distribution_query(
         SelectedExpression(
             name=COUNT_LABEL,
             expression=count(alias="_count"),
+        ),
+        SelectedExpression(
+            name=LAST_SEEN_LABEL,
+            expression=FunctionCallExpr(
+                alias="_last_seen",
+                function_name="max",
+                parameters=(column("timestamp"),),
+            ),
         ),
     ]
 
