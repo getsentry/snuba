@@ -1,7 +1,7 @@
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 from google.protobuf.json_format import MessageToDict
@@ -34,6 +34,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (
     comparison_filter,
@@ -917,11 +918,7 @@ def trace_filter(
 class TestEndpointGetTracesCrossItem(TestEndpointGetTraces):
     """Run all tests with use_cross_item_path_for_single_item_queries enabled."""
 
-    def setup_method(self, test_method: Callable[..., Any]) -> None:
-        super().setup_method(test_method)
-        """Enable the feature flag before each test."""
-        state.set_config("use_cross_item_path_for_single_item_queries", True)
-
-    def teardown_method(self) -> None:
-        """Clean up the feature flag after each test."""
-        state.set_config("use_cross_item_path_for_single_item_queries", False)
+    @pytest.fixture(autouse=True)
+    def use_cross_item_path(self, setup_teardown: Any, snuba_set_config: SnubaSetConfig) -> None:
+        """Enable the feature flag for cross-item path for all tests in this class."""
+        snuba_set_config("use_cross_item_path_for_single_item_queries", 1)
