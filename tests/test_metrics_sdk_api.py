@@ -108,9 +108,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
 
         self.indexer_mappings = {}
         for mapping in self.mapping_meta.values():
-            self.indexer_mappings.update(
-                {str(v): intstr(k) for k, v in mapping.items()}
-            )
+            self.indexer_mappings.update({str(v): intstr(k) for k, v in mapping.items()})
 
         self.indexer_mappings.update(
             {"transaction.duration": COUNTERS_MRI, COUNTERS_MRI: self.metric_id}
@@ -118,9 +116,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         # This is a little confusing, but these values are the ones that should be used in the tests
         # Depending on the dataset, the values could be raw strings or indexed ints, so handle those cases
         if tag_value_indexed:
-            self.tags: list[tuple[str, str | int]] = [
-                (k, v) for k, v in self.default_tags.items()
-            ]
+            self.tags: list[tuple[str, str | int]] = [(k, v) for k, v in self.default_tags.items()]
         else:
             mapping = {}
             for v in self.mapping_meta.values():
@@ -293,9 +289,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
             data["totals"]["aggregate_value"] > 180
         )  # Should be more than the number of data points
 
-    def test_tag_key_value(
-        self, test_entity: str, test_dataset: str, tag_column: str
-    ) -> None:
+    def test_tag_key_value(self, test_entity: str, test_dataset: str, tag_column: str) -> None:
         query = (
             Query(Entity(test_entity))
             .set_select([Column("tags.key"), Column("tags.raw_value")])
@@ -380,7 +374,5 @@ class TestMetricsSdkApiCounters(TestGenericMetricsSdkApiCounters):
         return True
 
     @pytest.mark.skip("tags.raw_value not in metrics")
-    def test_tag_key_value(
-        self, test_entity: str, test_dataset: str, tag_column: str
-    ) -> None:
+    def test_tag_key_value(self, test_entity: str, test_dataset: str, tag_column: str) -> None:
         pass

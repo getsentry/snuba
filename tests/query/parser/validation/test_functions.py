@@ -118,9 +118,7 @@ def test_invalid_function_name(expression: FunctionCall, should_raise: bool) -> 
 
 @pytest.mark.parametrize("expression, should_raise", test_expressions)
 @pytest.mark.redis_db
-def test_allowed_functions_validator(
-    expression: FunctionCall, should_raise: bool
-) -> None:
+def test_allowed_functions_validator(expression: FunctionCall, should_raise: bool) -> None:
     data_source = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
     state.set_config("function-validator.enabled", True)
 

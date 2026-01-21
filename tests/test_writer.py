@@ -19,18 +19,16 @@ class TestHTTPBatchWriter:
 
     @pytest.mark.clickhouse_db
     def test_empty_batch(self) -> None:
-        enforce_table_writer(self.entity).get_batch_writer(metrics=self.metrics).write(
-            []
-        )
+        enforce_table_writer(self.entity).get_batch_writer(metrics=self.metrics).write([])
 
     @pytest.mark.clickhouse_db
     def test_error_handling(self) -> None:
         table_writer = enforce_table_writer(self.entity)
 
         with pytest.raises(ClickhouseWriterError) as error:
-            table_writer.get_batch_writer(
-                table_name="invalid", metrics=self.metrics
-            ).write([rapidjson.dumps({"x": "y"}).encode("utf-8")])
+            table_writer.get_batch_writer(table_name="invalid", metrics=self.metrics).write(
+                [rapidjson.dumps({"x": "y"}).encode("utf-8")]
+            )
 
         assert error.value.code == 60
 

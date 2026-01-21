@@ -4,9 +4,8 @@ from threading import Thread
 from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence, TypedDict
 
 import rapidjson
-from confluent_kafka import KafkaError
+from confluent_kafka import KafkaError, Producer
 from confluent_kafka import Message as KafkaMessage
-from confluent_kafka import Producer
 
 from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo

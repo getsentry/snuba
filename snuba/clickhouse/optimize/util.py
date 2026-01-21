@@ -20,6 +20,4 @@ class MergeInfo:
 
 
 def get_num_threads(default_parallel_threads: int) -> int:
-    return typing.cast(
-        int, get_config(_OPTIMIZE_PARALLEL_THREADS_KEY, default_parallel_threads)
-    )
+    return typing.cast(int, get_config(_OPTIMIZE_PARALLEL_THREADS_KEY, default_parallel_threads))

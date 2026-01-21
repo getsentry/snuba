@@ -7,14 +7,14 @@ from typing import Any, Callable, Dict, Iterable, Optional
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1.endpoint_time_series_pb2 import DataPoint
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
-    Expression as ProtoExpression,
-)
-from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
+    DataPoint,
     TimeSeries,
     TimeSeriesRequest,
     TimeSeriesResponse,
+)
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
+    Expression as ProtoExpression,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (

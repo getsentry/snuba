@@ -45,9 +45,7 @@ class Action(ABC, Generic[TResource]):
     """
 
     @abstractmethod
-    def validated_resources(
-        self, resources: Sequence[TResource]
-    ) -> Sequence[TResource]:
+    def validated_resources(self, resources: Sequence[TResource]) -> Sequence[TResource]:
         """
         A resource is considered valid if the action can be
         taken on the resource.
@@ -65,9 +63,7 @@ class ToolAction(Action[ToolResource]):
     def __init__(self, resources: Sequence[ToolResource]) -> None:
         self._resources = self.validated_resources(resources)
 
-    def validated_resources(
-        self, resources: Sequence[ToolResource]
-    ) -> Sequence[ToolResource]:
+    def validated_resources(self, resources: Sequence[ToolResource]) -> Sequence[ToolResource]:
         return resources
 
 
@@ -123,10 +119,7 @@ class ExecuteSudoSystemQuery(ToolAction):
 
 
 MIGRATIONS_RESOURCES = {
-    **{
-        group.value: MigrationResource(group.value)
-        for group in get_active_migration_groups()
-    },
+    **{group.value: MigrationResource(group.value) for group in get_active_migration_groups()},
     **{group: MigrationResource(group) for group in settings.SKIPPED_MIGRATION_GROUPS},
 }
 

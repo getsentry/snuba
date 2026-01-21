@@ -140,13 +140,9 @@ def get_cluster_loadinfo(
             .execute(concurrent_queries_query)
             .results[0][0]
         )
-        load_info = LoadInfo(
-            cluster_load=cluster_load, concurrent_queries=concurrent_queries
-        )
+        load_info = LoadInfo(cluster_load=cluster_load, concurrent_queries=concurrent_queries)
 
-        metrics.gauge(
-            "cluster_load", load_info.cluster_load, tags={"cluster_name": cluster_name}
-        )
+        metrics.gauge("cluster_load", load_info.cluster_load, tags={"cluster_name": cluster_name})
         metrics.gauge(
             "concurrent_queries",
             load_info.concurrent_queries,
@@ -155,8 +151,6 @@ def get_cluster_loadinfo(
         return load_info
 
     except Exception as e:
-        metrics.increment(
-            "get_cluster_loadinfo_failure", tags={"cluster_name": cluster_name}
-        )
+        metrics.increment("get_cluster_loadinfo_failure", tags={"cluster_name": cluster_name})
         sentry_sdk.capture_exception(e)
         return LoadInfo(cluster_load=-1.0, concurrent_queries=-1)

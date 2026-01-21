@@ -25,27 +25,19 @@ class _MultiplexingRedisLogger(JobLogger):
 
     def debug(self, line: str) -> None:
         self.logger.debug(line)
-        _push_job_log_line(
-            self.job_id, line=self._make_redis_log_line(line, level="DEBUG")
-        )
+        _push_job_log_line(self.job_id, line=self._make_redis_log_line(line, level="DEBUG"))
 
     def info(self, line: str) -> None:
         self.logger.info(line)
-        _push_job_log_line(
-            self.job_id, line=self._make_redis_log_line(line, level="INFO")
-        )
+        _push_job_log_line(self.job_id, line=self._make_redis_log_line(line, level="INFO"))
 
     def warning(self, line: str) -> None:
         self.logger.warning(line)
-        _push_job_log_line(
-            self.job_id, line=self._make_redis_log_line(line, level="WARNING")
-        )
+        _push_job_log_line(self.job_id, line=self._make_redis_log_line(line, level="WARNING"))
 
     def warn(self, line: str) -> None:
         self.warning(line)
 
     def error(self, line: str) -> None:
         self.logger.error(line)
-        _push_job_log_line(
-            self.job_id, line=self._make_redis_log_line(line, level="ERROR")
-        )
+        _push_job_log_line(self.job_id, line=self._make_redis_log_line(line, level="ERROR"))

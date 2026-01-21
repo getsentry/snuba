@@ -30,9 +30,7 @@ class UpdateMigrationStatus(Job):
         super().__init__(job_spec)
 
     def __validate_job_params(self, params: Optional[Mapping[Any, Any]]) -> None:
-        assert (
-            params is not None
-        ), "group, migration_id, old_status, new_status parameters required"
+        assert params is not None, "group, migration_id, old_status, new_status parameters required"
         assert params["group"], "group required"
         assert params["migration_id"], "migration_id required"
         assert params["new_status"], "new_status required"
@@ -54,26 +52,22 @@ class UpdateMigrationStatus(Job):
 
     def execute(self, logger: JobLogger) -> None:
         migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
-        table_name = (
-            LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME
-        )
-        connection = migrations_cluster.get_query_connection(
-            ClickhouseClientSettings.MIGRATE
-        )
+        table_name = LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME
+        connection = migrations_cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
         existing_row = connection.execute(
             self._select_query(table_name),
             {"migration_id": self._migration_id, "group": self._group},
         )
-        assert (
-            existing_row and len(existing_row.results) > 0
-        ), f"cannot find row with group {self._group}, ID {self._migration_id} in table {table_name}: no update to be performed"
+        assert existing_row and len(existing_row.results) > 0, (
+            f"cannot find row with group {self._group}, ID {self._migration_id} in table {table_name}: no update to be performed"
+        )
         version = existing_row.results[0][1]
         status = existing_row.results[0][0]
 
-        assert (
-            status == self._old_status
-        ), f"actual status {status} does not match expected {self._old_status}, aborting"
+        assert status == self._old_status, (
+            f"actual status {status} does not match expected {self._old_status}, aborting"
+        )
 
         query = self._insert_query(table_name)
         row_data = [

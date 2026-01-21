@@ -126,9 +126,7 @@ def get_equivalent_columns(
     same connected component
     """
 
-    def traverse_graph(
-        node: QualifiedCol, visited_nodes: Set[QualifiedCol]
-    ) -> Set[QualifiedCol]:
+    def traverse_graph(node: QualifiedCol, visited_nodes: Set[QualifiedCol]) -> Set[QualifiedCol]:
         """
         Traverse the whole connected component in with a depth first
         algorithm starting from the node provided.
@@ -140,9 +138,7 @@ def get_equivalent_columns(
             visited_nodes = traverse_graph(n, visited_nodes)
         return visited_nodes
 
-    entities_in_join = {
-        entity_from_node(node) for node in join.get_alias_node_map().values()
-    }
+    entities_in_join = {entity_from_node(node) for node in join.get_alias_node_map().values()}
     adjacency_sets = join.accept(EquivalenceExtractor(entities_in_join))
     connected_components: MutableMapping[QualifiedCol, Set[QualifiedCol]] = {}
 

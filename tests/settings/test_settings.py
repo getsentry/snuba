@@ -52,9 +52,7 @@ def test_topics_sync_in_settings_validator() -> None:
     try:
         validate_settings(all_settings)
     except InvalidTopicError:
-        pytest.fail(
-            "Defined Kafka Topics are not in sync with topic names in validator"
-        )
+        pytest.fail("Defined Kafka Topics are not in sync with topic names in validator")
     # Restore the default settings Kafka topic map
     finally:
         all_settings["KAFKA_TOPIC_MAP"] = default_map
