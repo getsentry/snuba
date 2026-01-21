@@ -52,6 +52,7 @@ def populate_eap_spans_storage(num_rows: int) -> None:
             attributes[f"a_tag_{i:03}"] = AnyValue(string_value="blah")
             attributes[f"c_tag_{i:03}"] = AnyValue(string_value="blah")
             attributes[f"b_measurement_{i:03}"] = AnyValue(double_value=10)
+            attributes[f"d_bool_{i:03}"] = AnyValue(bool_value=i % 2 == 0)
         return gen_item_message(
             start_timestamp=BASE_TIME + timedelta(minutes=id),
             attributes=attributes,
@@ -233,4 +234,29 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 name="c_tag_000", type=AttributeKey.Type.TYPE_STRING
             ),
         ]
+        assert res.attributes == expected
+
+    def test_simple_boolean(self) -> None:
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=TOTAL_GENERATED_ATTR_PER_TYPE,
+            type=AttributeKey.Type.TYPE_BOOLEAN,
+            value_substring_match="d_bool",
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        expected = []
+        for i in range(TOTAL_GENERATED_ATTR_PER_TYPE):
+            expected.append(
+                TraceItemAttributeNamesResponse.Attribute(
+                    name=f"d_bool_{str(i).zfill(3)}",
+                    type=AttributeKey.Type.TYPE_BOOLEAN,
+                )
+            )
         assert res.attributes == expected
