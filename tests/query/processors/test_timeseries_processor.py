@@ -206,9 +206,7 @@ def test_timeseries_format_expressions(
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()
     assert expected.get_condition() == unprocessed.get_condition()
 
-    ret = unprocessed.get_selected_columns()[1].expression.accept(
-        ClickhouseExpressionFormatter()
-    )
+    ret = unprocessed.get_selected_columns()[1].expression.accept(ClickhouseExpressionFormatter())
     assert ret == formatted_column
     if condition:
         query_condition = unprocessed.get_condition()

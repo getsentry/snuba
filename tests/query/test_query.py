@@ -39,9 +39,7 @@ def test_query_data_source() -> None:
     query = Query(
         Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[
-            SelectedExpression(
-                "col1", Column(alias="col1", table_name=None, column_name="col1")
-            ),
+            SelectedExpression("col1", Column(alias="col1", table_name=None, column_name="col1")),
             SelectedExpression(
                 "some_func",
                 FunctionCall(
@@ -50,9 +48,7 @@ def test_query_data_source() -> None:
                     (Column(alias="col1", table_name=None, column_name="col1"),),
                 ),
             ),
-            SelectedExpression(
-                None, Column(alias="col2", table_name=None, column_name="col2")
-            ),
+            SelectedExpression(None, Column(alias="col2", table_name=None, column_name="col2")),
         ],
     )
     assert query.get_columns() == ColumnSet(

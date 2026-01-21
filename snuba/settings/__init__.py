@@ -14,6 +14,7 @@ from typing import (
 )
 
 from snuba.settings.validation import validate_settings
+from snuba.utils.metrics.addr_config import get_statsd_addr
 
 # All settings must be uppercased, have a default value and cannot start with _.
 # The Rust consumer relies on this to create a JSON file from the evaluated settings
@@ -118,17 +119,20 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "profile_chunks",
         },
         "single_node": True,
+        "cluster_name": "test_cluster",
     },
 ]
 
 # Dogstatsd Options
-DOGSTATSD_HOST: str | None = os.environ.get("SNUBA_STATSD_HOST") or None
-DOGSTATSD_PORT: int | None = int(os.environ.get("SNUBA_STATSD_PORT") or 0) or None
+DOGSTATSD_HOST, DOGSTATSD_PORT = get_statsd_addr()
 DOGSTATSD_SAMPLING_RATES = {
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
 }
 DDM_METRICS_SAMPLE_RATE = float(os.environ.get("SNUBA_DDM_METRICS_SAMPLE_RATE", 0.01))
+
+NEW_DOGSTATSD_HOST: str | None = os.environ.get("SNUBA_NEW_STATSD_HOST") or None
+NEW_DOGSTATSD_PORT: int | None = int(os.environ.get("SNUBA_NEW_STATSD_PORT") or 0) or None
 
 CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")
 CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASSWORD", "")
@@ -453,6 +457,9 @@ VALIDATE_DATASET_YAMLS_ON_STARTUP = False
 
 MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
 SNQL_DISABLED_DATASETS: set[str] = set([])
+
+ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS: int = 0  # 0 means no limit
+ENABLE_TRACE_PAGINATION_DEFAULT = 1
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

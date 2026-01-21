@@ -62,6 +62,7 @@ fn clickhouse_task_runner(
             counter!("insertions.batch_write_bytes", num_bytes as i64);
             counter!("insertions.batch_write_msgs", batch_len as i64);
             empty_batch.record_message_latency();
+            empty_batch.emit_item_type_metrics();
 
             Ok(empty_message.replace(empty_batch))
         })

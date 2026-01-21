@@ -9,10 +9,15 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.translators.snuba.mapping import SnubaClickhouseMappingTranslator
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.lw_deletions.types import ConditionsBag, ConditionsType
+from snuba.protos.common import attribute_key_to_expression
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
     AllocationPolicy,
@@ -35,8 +40,6 @@ from snuba.utils.metrics.util import with_span
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.web import QueryException, QueryExtraData, QueryResult
 from snuba.web.db_query import _apply_allocation_policies_quota
-
-ConditionsType = Mapping[str, Sequence[str | int | float]]
 
 
 class DeletesNotEnabledError(Exception):
@@ -109,6 +112,20 @@ def delete_from_storage(
     return results
 
 
+def _preprocess_for_items(storage: WritableTableStorage, where_clause: Expression) -> Expression:
+    if storage.get_storage_key() != StorageKey.EAP_ITEMS:
+        return where_clause
+
+    entity = get_entity(EntityKey.EAP_ITEMS)
+    for storage_connection in entity.get_all_storage_connections():
+        if storage_connection.storage.get_storage_key() == StorageKey.EAP_ITEMS:
+            translation_mappers = storage_connection.translation_mappers
+            translator = SnubaClickhouseMappingTranslator(translation_mappers)
+            return where_clause.accept(translator)
+
+    return where_clause
+
+
 def _delete_from_table(
     storage: WritableTableStorage,
     table: str,
@@ -117,6 +134,7 @@ def _delete_from_table(
 ) -> Result:
     cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
     on_cluster = literal(cluster_name) if cluster_name else None
+    where_clause = _construct_condition(storage, ConditionsBag(column_conditions=conditions))
     query = Query(
         from_clause=Table(
             table,
@@ -124,7 +142,7 @@ def _delete_from_table(
             storage_key=storage.get_storage_key(),
             allocation_policies=storage.get_delete_allocation_policies(),
         ),
-        condition=_construct_condition(conditions),
+        condition=where_clause,
         on_cluster=on_cluster,
         is_delete=True,
     )
@@ -280,7 +298,7 @@ def _execute_query(
     formatted_query = format_query(query)
     allocation_policies = _get_delete_allocation_policies(storage)
     query_id = uuid.uuid4().hex
-    clickhouse_settings: MutableMapping[str, Any] = {"query_id": query_id}
+    query_settings.push_clickhouse_setting("query_id", query_id)
     result = None
     error = None
 
@@ -299,7 +317,11 @@ def _execute_query(
             allocation_policies,
             query_id,
         )
-        result = storage.get_cluster().get_deleter().execute(formatted_query, clickhouse_settings)
+        result = (
+            storage.get_cluster()
+            .get_deleter()
+            .execute(formatted_query, query_settings.get_clickhouse_settings())
+        )
     except AllocationPolicyViolations as e:
         error = QueryException.from_args(
             AllocationPolicyViolations.__name__,
@@ -347,7 +369,11 @@ def _execute_query(
         raise error or Exception("No error or result when running query, this should never happen")
 
 
-def _construct_condition(columns: ConditionsType) -> Expression:
+def _construct_condition(
+    storage: WritableTableStorage, conditions_bag: ConditionsBag
+) -> Expression:
+    columns = conditions_bag.column_conditions
+    attr_conditions = conditions_bag.attribute_conditions
     and_conditions = []
     for col, values in columns.items():
         if len(values) == 1:
@@ -358,4 +384,19 @@ def _construct_condition(columns: ConditionsType) -> Expression:
 
         and_conditions.append(exp)
 
-    return combine_and_conditions(and_conditions)
+    if attr_conditions:
+        for attr_key, attr_values in attr_conditions.attributes.values():
+            virtual_column = attribute_key_to_expression(attr_key)
+
+            if len(attr_values) == 1:
+                exp = equals(virtual_column, literal(attr_values[0]))
+            else:
+                literal_values = [literal(v) for v in attr_values]
+                exp = in_cond(
+                    virtual_column,
+                    literals_tuple(alias=None, literals=literal_values),
+                )
+            and_conditions.append(exp)
+
+    where_clause = combine_and_conditions(and_conditions)
+    return _preprocess_for_items(storage, where_clause)

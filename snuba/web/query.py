@@ -91,9 +91,7 @@ def run_query(
             request_id=request.id,
             body=request.original_body,
             dataset=get_dataset_name(dataset),
-            organization=int(
-                request.attribution_info.tenant_ids.get("organization_id", 0)
-            ),
+            organization=int(request.attribution_info.tenant_ids.get("organization_id", 0)),
             timer=timer,
             request_status=request_status,
             referrer=request.attribution_info.referrer,

@@ -176,9 +176,9 @@ def _build_migrations_cache() -> None:
                 # tables are created before materialized views that depend on them
                 all_tables = mv_tables + non_mv_tables
                 for table_name, create_table_query in all_tables:
-                    MIGRATIONS_CACHE.setdefault((cluster, node), {})[
-                        table_name
-                    ] = create_table_query
+                    MIGRATIONS_CACHE.setdefault((cluster, node), {})[table_name] = (
+                        create_table_query
+                    )
 
 
 def _clear_db() -> None:
@@ -315,9 +315,3 @@ def snuba_set_config(request: pytest.FixtureRequest) -> SnubaSetConfig:
         state.set_config(key, value)
 
     return set_config
-
-
-@pytest.fixture
-def disable_query_cache(snuba_set_config: SnubaSetConfig, redis_db: None) -> None:
-    snuba_set_config("use_cache", False)
-    snuba_set_config("use_readthrough_query_cache", 0)

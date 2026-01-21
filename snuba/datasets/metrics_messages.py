@@ -40,9 +40,7 @@ def is_set_message(message: Mapping[str, Any]) -> bool:
 
 
 def is_distribution_message(message: Mapping[str, Any]) -> bool:
-    return (
-        message["type"] is not None and message["type"] == InputType.DISTRIBUTION.value
-    )
+    return message["type"] is not None and message["type"] == InputType.DISTRIBUTION.value
 
 
 def is_counter_message(message: Mapping[str, Any]) -> bool:
@@ -65,18 +63,18 @@ def values_for_distribution_message(message: Mapping[str, Any]) -> Mapping[str, 
     values = message["value"]
     assert isinstance(values, Iterable), "expected iterable of values for distribution"
     for value in values:
-        assert isinstance(
-            value, (int, float)
-        ), f"{ILLEGAL_VALUE_IN_DIST} {INT_FLOAT_EXPECTED}: {value}"
+        assert isinstance(value, (int, float)), (
+            f"{ILLEGAL_VALUE_IN_DIST} {INT_FLOAT_EXPECTED}: {value}"
+        )
 
     return {"metric_type": OutputType.DIST.value, "distribution_values": values}
 
 
 def value_for_counter_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
     value = message["value"]
-    assert isinstance(
-        value, (int, float)
-    ), f"{ILLEGAL_VALUE_IN_COUNTER} {INT_FLOAT_EXPECTED}: {value}"
+    assert isinstance(value, (int, float)), (
+        f"{ILLEGAL_VALUE_IN_COUNTER} {INT_FLOAT_EXPECTED}: {value}"
+    )
 
     value = float(value)
     return {"metric_type": OutputType.COUNTER.value, "count_value": value}
@@ -87,9 +85,9 @@ def value_for_gauge_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
     assert isinstance(values, Mapping), "expected mapping for gauges"
 
     for k in values:
-        assert isinstance(
-            values[k], (int, float)
-        ), f"{ILLEGAL_VALUE_IN_GAUGE} {INT_FLOAT_EXPECTED}: {values}"
+        assert isinstance(values[k], (int, float)), (
+            f"{ILLEGAL_VALUE_IN_GAUGE} {INT_FLOAT_EXPECTED}: {values}"
+        )
 
     # Build the nested values structure Clickhouse expects
     # Also, the current Kafka schemas are strict enough to
@@ -104,9 +102,7 @@ def value_for_gauge_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
     }
 
 
-def apply_aggregation_option(
-    settings: MutableMapping[str, Any], option: AggregationOption
-) -> None:
+def apply_aggregation_option(settings: MutableMapping[str, Any], option: AggregationOption) -> None:
     if option is AggregationOption.TEN_SECOND:
         settings["granularities"].append(GRANULARITY_TEN_SECONDS)
     elif option is AggregationOption.HIST:

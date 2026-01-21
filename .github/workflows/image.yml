@@ -21,9 +21,8 @@ jobs:
       packages: write
     if: github.repository_owner == 'getsentry'
     steps:
-    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-    - uses: getsentry/action-build-and-push-images@f6e4a98f7ed028edcfb1159f3a2905b30e51f1fd
+    - uses: actions/checkout@v6
+    - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
       with:
         image_name: 'snuba'
         platforms: linux/${{ matrix.platform }}
@@ -41,8 +40,8 @@ jobs:
       id-token: write
     if: ${{ github.ref_name == 'master' }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: getsentry/action-build-and-push-images@f6e4a98f7ed028edcfb1159f3a2905b30e51f1fd
+      - uses: actions/checkout@v6
+      - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
         with:
           image_name: 'snuba'
           platforms: linux/amd64
@@ -69,7 +68,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+        uses: docker/setup-buildx-action@v3
 
       - name: Create multiplatform manifests
         run: |

@@ -7,14 +7,14 @@ from typing import Any, Callable, Dict, Iterable, Optional
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1.endpoint_time_series_pb2 import DataPoint
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
-    Expression as ProtoExpression,
-)
-from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
+    DataPoint,
     TimeSeries,
     TimeSeriesRequest,
     TimeSeriesResponse,
+)
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
+    Expression as ProtoExpression,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
@@ -39,6 +39,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
+    attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
@@ -65,9 +66,6 @@ from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
 )
 from snuba.web.rpc.v1.resolvers.common.formula_reliability import (
     FormulaReliabilityCalculator,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression,
 )
 
 OP_TO_EXPR = {
@@ -200,9 +198,13 @@ def _convert_result_timeseries(
     frc = FormulaReliabilityCalculator(request, data, time_buckets)
     for timeseries in result_timeseries.values():
         if timeseries.label in frc:
-            reliabilities = frc.get(timeseries.label)
+            extrapolation_contexts = frc.get(timeseries.label)
+
             for i in range(len(timeseries.data_points)):
-                timeseries.data_points[i].reliability = reliabilities[i]
+                context = extrapolation_contexts[i]
+                timeseries.data_points[i].avg_sampling_rate = context.average_sample_rate
+                timeseries.data_points[i].sample_count = context.sample_count
+                timeseries.data_points[i].reliability = context.reliability
     _remove_non_requested_expressions(request.expressions, result_timeseries)
 
     return result_timeseries.values()

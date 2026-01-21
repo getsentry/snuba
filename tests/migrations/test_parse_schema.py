@@ -18,9 +18,9 @@ from snuba.clickhouse.columns import (
     IPv4,
     IPv6,
     String,
+    UInt,
 )
 from snuba.clickhouse.columns import Tuple as TupleCol
-from snuba.clickhouse.columns import UInt
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.parse_schema import _get_column
 

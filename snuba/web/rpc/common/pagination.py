@@ -18,11 +18,11 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression
+from snuba.web.rpc.common.common import attribute_key_to_expression
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import TimeWindow
 
 
 class FlexibleTimeWindowPageWithFilters:
-
     _TIME_WINDOW_PREFIX = "sentry__time_window"
     _TIME_WINDOW_START_KEY = f"{_TIME_WINDOW_PREFIX}.start_timestamp"
     _TIME_WINDOW_END_KEY = f"{_TIME_WINDOW_PREFIX}.end_timestamp"
@@ -116,10 +116,6 @@ class FlexibleTimeWindowPageWithFilters:
         time_window: TimeWindow,
         query_results: list[TraceItemColumnValues],
     ) -> "FlexibleTimeWindowPageWithFilters":
-        from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-            attribute_key_to_expression,
-        )
-
         filters = []
         # encode the window
         filters.append(

@@ -483,7 +483,6 @@ ENTITY_TRANSLATION_MAPPERS = {
         "functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "curried_functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "subscriptables": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
-        "columns": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
     },
     "additionalProperties": False,
 }
@@ -615,6 +614,14 @@ DELETION_SETTINGS_SCHEMA = {
             "type": "integer",
         },
         "bulk_delete_only": {"type": "boolean"},
+        "allowed_attributes_by_item_type": {
+            "type": "object",
+            "description": "Mapping of item_type to list of allowed attributes for deletion.",
+            "additionalProperties": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+        },
     },
     "required": ["is_enabled", "tables"],
     "additionalProperties": False,

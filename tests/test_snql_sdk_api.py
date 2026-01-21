@@ -42,15 +42,15 @@ class TestSDKSnQLApi(BaseApiTest):
         self.project_id = self.event["project_id"]
         self.org_id = self.event["organization_id"]
         self.skew = timedelta(minutes=180)
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) - timedelta(minutes=180)
+        self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
+            minutes=180
+        )
         events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
         assert events_storage is not None
         write_unprocessed_events(events_storage, [self.event])
-        self.next_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) + timedelta(minutes=180)
+        self.next_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) + timedelta(
+            minutes=180
+        )
         write_unprocessed_events(
             get_writable_storage(StorageKey.TRANSACTIONS),
             [get_raw_transaction()],
@@ -149,13 +149,7 @@ class TestSDKSnQLApi(BaseApiTest):
         query = (
             Query(inner_query)
             .set_select([Function("avg", [Column("count")], "avg_count")])
-            .set_orderby(
-                [
-                    OrderBy(
-                        Function("avg", [Column("count")], "avg_count"), Direction.ASC
-                    )
-                ]
-            )
+            .set_orderby([OrderBy(Function("avg", [Column("count")], "avg_count"), Direction.ASC)])
             .set_limit(1000)
         )
 
@@ -273,9 +267,7 @@ class TestSDKSnQLApi(BaseApiTest):
                     Condition(Column("project_id", gm), Op.EQ, self.project_id),
                     Condition(Column("timestamp", ev), Op.GTE, self.base_time),
                     Condition(Column("timestamp", ev), Op.LT, self.next_time),
-                    Condition(
-                        Column("exception_stacks.type", ev), Op.LIKE, "Arithmetic%"
-                    ),
+                    Condition(Column("exception_stacks.type", ev), Op.LIKE, "Arithmetic%"),
                 ]
             )
         )
@@ -392,9 +384,7 @@ class TestSDKSnQLApi(BaseApiTest):
                     Condition(Column("project_id"), Op.IN, (self.project_id,)),
                 ]
             )
-            .set_orderby(
-                [OrderBy(Column("array_spans_exclusive_time"), Direction.DESC)]
-            )
+            .set_orderby([OrderBy(Column("array_spans_exclusive_time"), Direction.DESC)])
             .set_limit(10)
         )
 
@@ -455,8 +445,6 @@ class TestSDKSnQLApi(BaseApiTest):
             app_id="default",
             tenant_ids={"referrer": "r", "organization_id": 123},
         )
-        response = self.post(
-            "/generic_metrics/snql", data=json.dumps(request.to_dict())
-        )
+        response = self.post("/generic_metrics/snql", data=json.dumps(request.to_dict()))
         resp = json.loads(response.data)
         assert response.status_code == 200, resp

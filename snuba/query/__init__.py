@@ -156,9 +156,7 @@ class Query(DataSource, ABC):
     def get_selected_columns(self) -> Sequence[SelectedExpression]:
         return self.__selected_columns
 
-    def set_ast_selected_columns(
-        self, selected_columns: Sequence[SelectedExpression]
-    ) -> None:
+    def set_ast_selected_columns(self, selected_columns: Sequence[SelectedExpression]) -> None:
         self.__selected_columns = selected_columns
 
     def get_groupby(self) -> Sequence[Expression]:
@@ -177,9 +175,7 @@ class Query(DataSource, ABC):
         if not self.__condition:
             self.__condition = condition
         else:
-            self.__condition = binary_condition(
-                BooleanFunctions.AND, condition, self.__condition
-            )
+            self.__condition = binary_condition(BooleanFunctions.AND, condition, self.__condition)
 
     def get_arrayjoin(self) -> Optional[Sequence[Expression]]:
         return self.__array_join
@@ -263,24 +259,18 @@ class Query(DataSource, ABC):
         deduplicate any of the expressions found.
         """
         return chain(
-            chain.from_iterable(
-                map(lambda selected: selected.expression, self.__selected_columns)
-            ),
+            chain.from_iterable(map(lambda selected: selected.expression, self.__selected_columns)),
             self.__array_join or [],
             self.__condition or [],
             chain.from_iterable(self.__groupby),
             self.__having or [],
-            chain.from_iterable(
-                map(lambda orderby: orderby.expression, self.__order_by)
-            ),
+            chain.from_iterable(map(lambda orderby: orderby.expression, self.__order_by)),
             self.__limitby.columns if self.__limitby else [],
             self._get_expressions_impl(),
         )
 
     @abstractmethod
-    def _transform_expressions_impl(
-        self, func: Callable[[Expression], Expression]
-    ) -> None:
+    def _transform_expressions_impl(self, func: Callable[[Expression], Expression]) -> None:
         """
         Applies the transformation function to all the nodes added to the
         query by the children of this class.
@@ -295,6 +285,7 @@ class Query(DataSource, ABC):
         func: Callable[[Expression], Expression],
         skip_transform_condition: bool = False,
         skip_array_join: bool = False,
+        skip_transform_order_by: bool = False,
     ) -> None:
         """
         Transforms in place the current query object by applying a transformation
@@ -315,9 +306,7 @@ class Query(DataSource, ABC):
 
         self.__selected_columns = list(
             map(
-                lambda selected: replace(
-                    selected, expression=selected.expression.transform(func)
-                ),
+                lambda selected: replace(selected, expression=selected.expression.transform(func)),
                 self.__selected_columns,
             )
         )
@@ -328,19 +317,16 @@ class Query(DataSource, ABC):
                 ]
 
         if not skip_transform_condition:
-            self.__condition = (
-                self.__condition.transform(func) if self.__condition else None
-            )
+            self.__condition = self.__condition.transform(func) if self.__condition else None
         self.__groupby = transform_expression_list(self.__groupby)
         self.__having = self.__having.transform(func) if self.__having else None
-        self.__order_by = list(
-            map(
-                lambda clause: replace(
-                    clause, expression=clause.expression.transform(func)
-                ),
-                self.__order_by,
+        if not skip_transform_order_by:
+            self.__order_by = list(
+                map(
+                    lambda clause: replace(clause, expression=clause.expression.transform(func)),
+                    self.__order_by,
+                )
             )
-        )
 
         if self.__limitby is not None:
             self.__limitby = LimitBy(
@@ -371,16 +357,12 @@ class Query(DataSource, ABC):
 
         self.__selected_columns = list(
             map(
-                lambda selected: replace(
-                    selected, expression=selected.expression.accept(visitor)
-                ),
+                lambda selected: replace(selected, expression=selected.expression.accept(visitor)),
                 self.__selected_columns,
             )
         )
         if self.__array_join is not None:
-            self.__array_join = [
-                join_element.accept(visitor) for join_element in self.__array_join
-            ]
+            self.__array_join = [join_element.accept(visitor) for join_element in self.__array_join]
         if self.__condition is not None:
             self.__condition = self.__condition.accept(visitor)
         self.__groupby = [e.accept(visitor) for e in (self.__groupby or [])]
@@ -388,9 +370,7 @@ class Query(DataSource, ABC):
             self.__having = self.__having.accept(visitor)
         self.__order_by = list(
             map(
-                lambda clause: replace(
-                    clause, expression=clause.expression.accept(visitor)
-                ),
+                lambda clause: replace(clause, expression=clause.expression.accept(visitor)),
                 self.__order_by,
             )
         )
@@ -410,9 +390,7 @@ class Query(DataSource, ABC):
         return ret
 
     def get_all_ast_referenced_columns(self) -> Set[Column]:
-        return self.__get_all_ast_referenced_expressions(
-            self.get_all_expressions(), Column
-        )
+        return self.__get_all_ast_referenced_expressions(self.get_all_expressions(), Column)
 
     def get_all_ast_referenced_subscripts(self) -> Set[SubscriptableReference]:
         return self.__get_all_ast_referenced_expressions(
@@ -448,9 +426,7 @@ class Query(DataSource, ABC):
             if e.alias:
                 if isinstance(e, Column):
                     qualified_col_name = (
-                        e.column_name
-                        if not e.table_name
-                        else f"{e.table_name}.{e.column_name}"
+                        e.column_name if not e.table_name else f"{e.table_name}.{e.column_name}"
                     )
                     referenced_symbols.add(qualified_col_name)
                     if e.alias != qualified_col_name:

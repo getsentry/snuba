@@ -39,8 +39,6 @@ from snuba.clickhouse.native import ClickhouseResult
         ),
     ],
 )
-def test_stringify_result(
-    result: ClickhouseResult, expected_result: ClickhouseResult
-) -> None:
+def test_stringify_result(result: ClickhouseResult, expected_result: ClickhouseResult) -> None:
     stringified_result = _stringify_result(result)
     assert stringified_result == expected_result

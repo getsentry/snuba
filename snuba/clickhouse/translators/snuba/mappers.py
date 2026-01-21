@@ -11,10 +11,14 @@ from snuba.clickhouse.translators.snuba.allowed import (
 )
 from snuba.query.dsl import arrayElement
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import CurriedFunctionCall, Expression
+from snuba.query.expressions import (
+    CurriedFunctionCall,
+    Expression,
+    OptionalScalarType,
+    SubscriptableReference,
+)
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query.expressions import OptionalScalarType, SubscriptableReference
 from snuba.query.matchers import (
     Any,
     AnyOptionalString,
@@ -122,9 +126,7 @@ class ColumnToFunctionOnColumn(ColumnToExpression):
         return FunctionCallExpr(
             alias=expression.alias,
             function_name=self.to_function_name,
-            parameters=(
-                ColumnExpr(None, expression.table_name, self.to_function_column),
-            ),
+            parameters=(ColumnExpr(None, expression.table_name, self.to_function_column),),
         )
 
 
@@ -330,9 +332,7 @@ def build_nullable_mapping_expr(
                 "has",
                 (ColumnExpr(None, table_name, f"{col_name}.key"), mapping_key),
             ),
-            build_mapping_expr(
-                None, table_name, col_name, mapping_key, value_subcolumn_name
-            ),
+            build_mapping_expr(None, table_name, col_name, mapping_key, value_subcolumn_name),
             LiteralExpr(None, None),
         ),
     )
@@ -382,9 +382,7 @@ class FunctionNameMapper(FunctionCallMapper):
         return FunctionCallExpr(
             alias=expression.alias,
             function_name=self.to_name,
-            parameters=tuple(
-                exp.accept(children_translator) for exp in expression.parameters
-            ),
+            parameters=tuple(exp.accept(children_translator) for exp in expression.parameters),
         )
 
 

@@ -36,9 +36,9 @@ class BaseSubscriptionTest:
         self.entity = get_entity(EntityKey.EVENTS)
         self.entity_key = get_entity_name(self.entity)
 
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) - timedelta(minutes=self.minutes)
+        self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
+            minutes=self.minutes
+        )
 
         events_storage = get_writable_storage(StorageKey.ERRORS)
 
@@ -102,9 +102,7 @@ class BaseSubscriptionTest:
             gen_item_message(self.base_time + timedelta(minutes=tick))
             for tick in range(self.minutes)
         ]
-        extra_messages = [
-            gen_item_message(self.base_time - timedelta(hours=4)) for _ in range(2)
-        ]
+        extra_messages = [gen_item_message(self.base_time - timedelta(hours=4)) for _ in range(2)]
         write_raw_unprocessed_events(items_storage, extra_messages + messages)
 
 

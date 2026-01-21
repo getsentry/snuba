@@ -1448,7 +1448,7 @@ class TestDiscoverApi(BaseApiTest):
             == 1.0
         )
 
-    def test_zero_literal_caching(self, disable_query_cache: Callable[..., Any]) -> None:
+    def test_zero_literal_caching(self) -> None:
         response = self.post(
             json.dumps(
                 {

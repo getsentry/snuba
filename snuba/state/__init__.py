@@ -18,9 +18,8 @@ from typing import (
 )
 
 import simplejson as json
-from confluent_kafka import KafkaError
+from confluent_kafka import KafkaError, Producer
 from confluent_kafka import Message as KafkaMessage
-from confluent_kafka import Producer
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba import environment, settings
@@ -40,7 +39,7 @@ config_hash = "snuba-config"
 config_description_hash = "snuba-config-description"
 config_history_hash = "snuba-config-history"
 config_changes_list = "snuba-config-changes"
-config_changes_list_limit = 25
+config_changes_list_limit = 100
 rate_limit_config_key = "snuba-ratelimit-config:"
 
 # Rate Limiting and Deduplication

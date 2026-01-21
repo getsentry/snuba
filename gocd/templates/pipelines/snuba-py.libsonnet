@@ -136,7 +136,7 @@ local deploy_canary_stage(region) =
                 LABEL_SELECTOR: 'service=snuba,is_canary=true',
               },
               tasks: [
-                gocdtasks.script(importstr '../bash/deploy.sh'),
+                gocdtasks.script(importstr '../bash/deploy-py.sh'),
                 gocdtasks.script(importstr '../bash/canary-ddog-health-check.sh'),
               ],
             },
@@ -161,6 +161,7 @@ function(region) {
       shallow_clone: false,
       branch: 'master',
       destination: 'snuba',
+      ignore: ['rust_snuba/**/*'],
     },
   },
   stages: [
@@ -169,6 +170,9 @@ function(region) {
                 jobs: {
                   checks: {
                     elastic_profile_id: 'snuba',
+                    environment_variables: {
+                      PIPELINE_FIRST_STEP: 'deploy-snuba-py-s4s',
+                    },
                     tasks: [
                       gocdtasks.script(importstr '../bash/check-github.sh'),
                       gocdtasks.script(importstr '../bash/check-migrations.sh'),
@@ -208,9 +212,9 @@ function(region) {
             },
             tasks: [
               if getsentry.is_st(region) then
-                gocdtasks.script(importstr '../bash/deploy-st.sh')
+                gocdtasks.script(importstr '../bash/deploy-st-py.sh')
               else
-                gocdtasks.script(importstr '../bash/deploy.sh'),
+                gocdtasks.script(importstr '../bash/deploy-py.sh'),
             ],
           },
         },

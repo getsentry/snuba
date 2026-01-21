@@ -36,9 +36,7 @@ def test_simple() -> None:
         "project": 1,
     }
 
-    query = Query(
-        Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model())
-    )
+    query = Query(Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()))
 
     request = Request(
         id=uuid.UUID("a" * 32),

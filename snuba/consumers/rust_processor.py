@@ -47,9 +47,7 @@ logger = logging.getLogger(__name__)
 processor: Optional[DatasetMessageProcessor] = None
 
 
-def initialize_processor(
-    module: Optional[str] = None, classname: Optional[str] = None
-) -> None:
+def initialize_processor(module: Optional[str] = None, classname: Optional[str] = None) -> None:
     if not module or not classname:
         module = os.environ.get("RUST_SNUBA_PROCESSOR_MODULE")
         classname = os.environ.get("RUST_SNUBA_PROCESSOR_CLASSNAME")
@@ -268,9 +266,7 @@ class RunPythonMultiprocessing:
 
         return self.__get_transformed_messages()
 
-    def join(
-        self, timeout: Optional[float] = None
-    ) -> Sequence[ReturnValueWithCommittable]:
+    def join(self, timeout: Optional[float] = None) -> Sequence[ReturnValueWithCommittable]:
         """
         Close and join inner strategy. Returns all available transformed rows
         """

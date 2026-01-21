@@ -822,33 +822,25 @@ def _apply_allocation_policies_quota(
         op="allocation_policy", description="_apply_allocation_policies_quota"
     ) as span:
         for allocation_policy in allocation_policies:
-            with sentry_sdk.start_span(
-                op="allocation_policy.get_quota_allowance",
-                description=str(allocation_policy.__class__),
-            ) as span:
-                allowance = allocation_policy.get_quota_allowance(
-                    attribution_info.tenant_ids, query_id
+            allowance = allocation_policy.get_quota_allowance(attribution_info.tenant_ids, query_id)
+            can_run &= allowance.can_run
+            quota_allowances[allocation_policy.class_name()] = allowance
+            span.set_data(
+                "quota_allowance",
+                quota_allowances[allocation_policy.class_name()],
+            )
+            if allowance.is_throttled and allowance.max_threads < min_threads_across_policies:
+                throttle_quota_and_policy = _QuotaAndPolicy(
+                    quota_allowance=allowance,
+                    policy=allocation_policy,
                 )
-                can_run &= allowance.can_run
-                quota_allowances[allocation_policy.class_name()] = allowance
-                span.set_data(
-                    "quota_allowance",
-                    quota_allowances[allocation_policy.class_name()],
+            min_threads_across_policies = min(min_threads_across_policies, allowance.max_threads)
+            if not can_run:
+                rejection_quota_and_policy = _QuotaAndPolicy(
+                    quota_allowance=allowance,
+                    policy=allocation_policy,
                 )
-                if allowance.is_throttled and allowance.max_threads < min_threads_across_policies:
-                    throttle_quota_and_policy = _QuotaAndPolicy(
-                        quota_allowance=allowance,
-                        policy=allocation_policy,
-                    )
-                min_threads_across_policies = min(
-                    min_threads_across_policies, allowance.max_threads
-                )
-                if not can_run:
-                    rejection_quota_and_policy = _QuotaAndPolicy(
-                        quota_allowance=allowance,
-                        policy=allocation_policy,
-                    )
-                    break
+                break
 
         allowance_dicts = {
             key: quota_allowance.to_dict() for key, quota_allowance in quota_allowances.items()

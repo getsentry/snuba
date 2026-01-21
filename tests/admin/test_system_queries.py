@@ -54,10 +54,7 @@ from snuba.admin.user import AdminUser
 @pytest.mark.clickhouse_db
 def test_is_valid_system_query(sql_query: str) -> None:
     assert is_valid_system_query(
-        settings.CLUSTERS[0]["host"],
-        int(settings.CLUSTERS[0]["port"]),
-        "errors",
-        sql_query,
+        settings.CLUSTERS[0]["host"], int(settings.CLUSTERS[0]["port"]), "errors", sql_query, False
     )
 
 
@@ -101,6 +98,7 @@ def test_invalid_system_query(sql_query: str) -> None:
             int(settings.CLUSTERS[0]["port"]),
             "errors",
             sql_query,
+            False,
         )
 
 
@@ -135,6 +133,7 @@ def test_sudo_queries(sudo_query: str, expected: bool) -> None:
             "errors",
             sudo_query,
             True,
+            False,
         )  # Should no-op
     else:
         with pytest.raises(Exception):
@@ -144,6 +143,7 @@ def test_sudo_queries(sudo_query: str, expected: bool) -> None:
                 "errors",
                 sudo_query,
                 True,
+                False,
             )
 
 
@@ -199,6 +199,7 @@ def test_run_sudo_queries(
             "errors",
             query,
             sudo_mode,
+            False,
             AdminUser(
                 "me@myself.org",
                 "me@myself.org",
