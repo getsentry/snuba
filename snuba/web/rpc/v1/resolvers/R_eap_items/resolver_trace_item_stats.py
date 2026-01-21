@@ -86,7 +86,7 @@ def _transform_attr_distribution_results(
             AttributeDistribution.Bucket(
                 label=attr_value,
                 value=row[COUNT_LABEL],
-                last_seen=last_seen_ts,  # type: ignore[call-arg]
+                last_seen=last_seen_ts,
             )
         )
 

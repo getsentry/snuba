@@ -5,11 +5,9 @@ import pytest
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     AttributeDistribution,
-    AttributeDistributions,
     AttributeDistributionsRequest,
     StatsType,
     TraceItemStatsRequest,
-    TraceItemStatsResult,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
@@ -31,6 +29,21 @@ from tests.web.rpc.v1.test_utils import (
     START_TIMESTAMP,
     gen_item_message,
 )
+
+
+def bucket_matches(actual: AttributeDistribution.Bucket, label: str, value: float) -> bool:
+    """Check if a bucket matches the expected label and value, ignoring last_seen."""
+    return actual.label == label and actual.value == value
+
+
+def find_distribution(
+    distributions: list[AttributeDistribution], attr_name: str
+) -> AttributeDistribution | None:
+    """Find an AttributeDistribution by attribute name."""
+    for dist in distributions:
+        if dist.attribute_name == attr_name:
+            return dist
+    return None
 
 
 def pick_n_deterministic(choices: list[Any], weights: list[int], num_choices: int) -> list[Any]:
@@ -135,45 +148,30 @@ class TestTraceItemAttributesStats(BaseApiTest):
             ],
         )
         response = EndpointTraceItemStats().execute(message)
-        expected_sdk_name_stats = AttributeDistribution(
-            attribute_name="sentry.sdk.name",
-            buckets=[
-                AttributeDistribution.Bucket(
-                    label="sentry.python.django",
-                    value=120,
-                )
-            ],
-        )
 
         assert response.results[0].HasField("attribute_distributions")
-        assert expected_sdk_name_stats in response.results[0].attribute_distributions.attributes
+        distributions = list(response.results[0].attribute_distributions.attributes)
 
-        expected_low_cardinality_stat = AttributeDistribution(
-            attribute_name="low_cardinality",
-            buckets=[
-                AttributeDistribution.Bucket(label="0", value=40),
-                AttributeDistribution.Bucket(label="1", value=40),
-                AttributeDistribution.Bucket(label="2", value=40),
-            ],
-        )
+        # Check sentry.sdk.name
+        sdk_name_dist = find_distribution(distributions, "sentry.sdk.name")
+        assert sdk_name_dist is not None
+        assert len(sdk_name_dist.buckets) == 1
+        assert bucket_matches(sdk_name_dist.buckets[0], "sentry.python.django", 120)
 
-        match = False
-        for stat in response.results[0].attribute_distributions.attributes:
-            if stat.attribute_name == "low_cardinality":
-                for bucket in expected_low_cardinality_stat.buckets:
-                    match = True
-                    assert bucket in stat.buckets
-        assert match
+        # Check low_cardinality
+        low_cardinality_dist = find_distribution(distributions, "low_cardinality")
+        assert low_cardinality_dist is not None
+        assert len(low_cardinality_dist.buckets) == 3
+        bucket_labels = {b.label: b.value for b in low_cardinality_dist.buckets}
+        assert bucket_labels == {"0": 40, "1": 40, "2": 40}
 
-        expected_duration_stat = AttributeDistribution(
-            attribute_name="duration_ms",
-            buckets=[
-                AttributeDistribution.Bucket(label="30", value=84),
-                AttributeDistribution.Bucket(label="50", value=18),
-                AttributeDistribution.Bucket(label="10", value=6),
-            ],
-        )
-        assert expected_duration_stat in response.results[0].attribute_distributions.attributes
+        # Check duration_ms
+        duration_dist = find_distribution(distributions, "duration_ms")
+        assert duration_dist is not None
+        assert len(duration_dist.buckets) == 3
+        assert bucket_matches(duration_dist.buckets[0], "30", 84)
+        assert bucket_matches(duration_dist.buckets[1], "50", 18)
+        assert bucket_matches(duration_dist.buckets[2], "10", 6)
 
     def test_allow_list(self, setup_teardown: Any) -> None:
         message = TraceItemStatsRequest(
@@ -202,22 +200,17 @@ class TestTraceItemAttributesStats(BaseApiTest):
             ],
         )
         response = EndpointTraceItemStats().execute(message)
-        assert response.results == [
-            TraceItemStatsResult(
-                attribute_distributions=AttributeDistributions(
-                    attributes=[
-                        AttributeDistribution(
-                            attribute_name="duration_ms",
-                            buckets=[
-                                AttributeDistribution.Bucket(label="30", value=84),
-                                AttributeDistribution.Bucket(label="50", value=18),
-                                AttributeDistribution.Bucket(label="10", value=6),
-                            ],
-                        )
-                    ]
-                )
-            )
-        ]
+        assert len(response.results) == 1
+        assert response.results[0].HasField("attribute_distributions")
+        distributions = list(response.results[0].attribute_distributions.attributes)
+        assert len(distributions) == 1
+
+        duration_dist = distributions[0]
+        assert duration_dist.attribute_name == "duration_ms"
+        assert len(duration_dist.buckets) == 3
+        assert bucket_matches(duration_dist.buckets[0], "30", 84)
+        assert bucket_matches(duration_dist.buckets[1], "50", 18)
+        assert bucket_matches(duration_dist.buckets[2], "10", 6)
 
     def test_with_filter(self, setup_teardown: Any) -> None:
         message = TraceItemStatsRequest(
@@ -250,22 +243,21 @@ class TestTraceItemAttributesStats(BaseApiTest):
             ],
         )
         response = EndpointTraceItemStats().execute(message)
-        expected_sdk_name_stats = AttributeDistribution(
-            attribute_name="sentry.sdk.name",
-            buckets=[AttributeDistribution.Bucket(label="sentry.python.django", value=40)],
-        )
 
         assert response.results[0].HasField("attribute_distributions")
-        assert expected_sdk_name_stats in response.results[0].attribute_distributions.attributes
+        distributions = list(response.results[0].attribute_distributions.attributes)
 
-        expected_low_cardinality_stats = AttributeDistribution(
-            attribute_name="low_cardinality",
-            buckets=[AttributeDistribution.Bucket(label="0", value=40)],
-        )
+        # Check sentry.sdk.name
+        sdk_name_dist = find_distribution(distributions, "sentry.sdk.name")
+        assert sdk_name_dist is not None
+        assert len(sdk_name_dist.buckets) == 1
+        assert bucket_matches(sdk_name_dist.buckets[0], "sentry.python.django", 40)
 
-        assert (
-            expected_low_cardinality_stats in response.results[0].attribute_distributions.attributes
-        )
+        # Check low_cardinality
+        low_cardinality_dist = find_distribution(distributions, "low_cardinality")
+        assert low_cardinality_dist is not None
+        assert len(low_cardinality_dist.buckets) == 1
+        assert bucket_matches(low_cardinality_dist.buckets[0], "0", 40)
 
     def test_last_seen_timestamp_in_query_results(self, setup_teardown: Any) -> None:
         """Test that the query returns last_seen timestamps for each bucket.
