@@ -19,7 +19,6 @@ ENABLED_STORAGE_SETS = {
     "metrics",
     "migrations",
     "querylog",
-    "sessions",
 }
 
 ALL_STORAGE_SETS = {
