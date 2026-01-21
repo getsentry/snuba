@@ -14,10 +14,12 @@ class TableStatement:
 
 
 def get_create_table_statements(
-    tables: Sequence[str], source_connection: ClickhousePool, cluster_name: Optional[str]
+    tables: Sequence[str],
+    source_connection: ClickhousePool,
+    source_database: str,
+    cluster_name: Optional[str],
 ) -> Sequence[TableStatement]:
     table_statements = []
-    source_database = "default"
 
     for table in tables:
         db_table = f"{source_database}.{table}"
@@ -48,7 +50,7 @@ def get_create_table_statements(
 
         if cluster_name:
             table_statement = table_statement.replace(
-                db_table, f"{db_table} ON CLUSTER {cluster_name} "
+                db_table, f"{db_table} ON CLUSTER {cluster_name}"
             )
 
         table_statements.append(
@@ -79,12 +81,15 @@ def copy_tables(
     )
 
     storage = _get_storage(storage_name)
+    database_name = storage.get_cluster().get_database()
     cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
 
     assert cluster_name, "Missing cluster name for ON CLUSTER create statement "
 
     tables = get_tables(source_connection)
-    table_statements = get_create_table_statements(tables, source_connection, cluster_name)
+    table_statements = get_create_table_statements(
+        tables, source_connection, database_name, cluster_name
+    )
 
     mergetree_tables = [ts for ts in table_statements if ts.is_mergetree]
     non_mergetree_tables = [ts for ts in table_statements if not ts.is_mergetree]

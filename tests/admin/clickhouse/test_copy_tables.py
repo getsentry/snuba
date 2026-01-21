@@ -1,0 +1,131 @@
+import os
+
+import pytest
+
+from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
+from snuba.admin.clickhouse.copy_tables import (
+    copy_tables,
+    get_create_table_statements,
+)
+from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.migrations.groups import MigrationGroup
+
+OUTCOMES_DAILY_TABLE = """
+CREATE TABLE IF NOT EXISTS snuba_test.outcomes_daily_local_v2 ON CLUSTER test_cluster
+(
+    `org_id` UInt64,
+    `project_id` UInt64,
+    `key_id` UInt64,
+    `timestamp` DateTime,
+    `outcome` UInt8,
+    `reason` LowCardinality(String),
+    `category` UInt8,
+    `quantity` UInt64,
+    `times_seen` UInt64
+)
+ENGINE = SummingMergeTree
+PARTITION BY toStartOfMonth(timestamp)
+ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category)
+TTL timestamp + toIntervalMonth(13)
+SETTINGS index_granularity = 8192
+"""
+
+OUTCOMES_DAILY_MV = """
+CREATE MATERIALIZED VIEW IF NOT EXISTS snuba_test.outcomes_mv_daily_local_v2 ON CLUSTER test_cluster TO snuba_test.outcomes_daily_local_v2
+(
+    `org_id` UInt64,
+    `project_id` UInt64,
+    `key_id` UInt64,
+    `timestamp` DateTime,
+    `outcome` UInt8,
+    `reason` String,
+    `category` UInt8,
+    `quantity` UInt64,
+    `times_seen` UInt64
+)
+AS SELECT
+    org_id,
+    project_id,
+    ifNull(key_id, 0) AS key_id,
+    toStartOfDay(timestamp) AS timestamp,
+    outcome,
+    ifNull(reason, 'none') AS reason,
+    category,
+    count() AS times_seen,
+    sum(quantity) AS quantity
+FROM snuba_test.outcomes_raw_local
+GROUP BY
+    org_id,
+    project_id,
+    key_id,
+    timestamp,
+    outcome,
+    reason,
+    category
+"""
+
+TABLE_DATA = [
+    ("outcomes_daily_local_v2", "outcomes_daily", OUTCOMES_DAILY_TABLE, True),
+    ("outcomes_mv_daily_local_v2", "outcomes_daily", OUTCOMES_DAILY_MV, False),
+]
+
+
+def run_migrations() -> None:
+    from snuba.migrations.runner import Runner
+
+    migration_group = MigrationGroup("outcomes")
+    Runner().run_all(force=True, group=migration_group)
+
+
+@pytest.mark.parametrize("table, storage_name, statement, is_mergetree", TABLE_DATA)
+@pytest.mark.redis_db
+@pytest.mark.custom_clickhouse_db
+def test_get_table_statements(
+    table: str, storage_name: str, statement: str, is_mergetree: bool
+) -> None:
+    """
+    The create statements should have IF EXISTS added, as well
+    as the ON CLUSTER clause.
+    """
+    run_migrations()
+    host = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")
+    settings = ClickhouseClientSettings.QUERY
+    storage = _get_storage(storage_name)
+    database_name = storage.get_cluster().get_database()
+    table_statements = get_create_table_statements(
+        tables=[table],
+        source_connection=get_clusterless_node_connection(
+            host, 9000, storage_name, client_settings=settings
+        ),
+        source_database=database_name,
+        cluster_name="test_cluster",
+    )
+    ts = table_statements[0]
+    assert ts.is_mergetree == is_mergetree
+    assert ts.statement == statement.strip()
+
+
+@pytest.mark.redis_db
+@pytest.mark.custom_clickhouse_db
+def test_create_tables_order() -> None:
+    """
+    Make sure the order in which we create tables is correct.
+    All local (mergetree) tables should be created
+    before Merge (discover) & Materialized Views (non mergetree)
+    """
+    run_migrations()
+    host = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")
+    ordered_tables = [
+        # local tables
+        "migrations_local",
+        "outcomes_daily_local_v2",
+        "outcomes_hourly_local",
+        "outcomes_raw_local",
+        # materialized views
+        "outcomes_mv_daily_local_v2",
+        "outcomes_mv_hourly_local",
+    ]
+    results = copy_tables(
+        source_host=host, target_host=host, storage_name="outcomes_raw", dry_run=True
+    )
+    assert results["tables"] == ",".join(ordered_tables)
