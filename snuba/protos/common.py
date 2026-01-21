@@ -5,7 +5,7 @@ from sentry_conventions.attributes import ATTRIBUTE_METADATA
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal
+from snuba.query.dsl import arrayElement, column, literal
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 
 
@@ -83,7 +83,20 @@ def _generate_subscriptable_reference(
     if alias:
         kwargs["alias"] = alias
     clickhouse_type = PROTO_TYPE_TO_CLICKHOUSE_TYPE[attribute_type]
-    if attribute_type in {AttributeKey.Type.TYPE_INT, AttributeKey.Type.TYPE_BOOLEAN}:
+    if attribute_type == AttributeKey.Type.TYPE_BOOLEAN:
+        # Boolean attributes use a Map column without hash buckets,
+        # so we use arrayElement directly instead of SubscriptableReference
+        # which would be transformed to the nested .key/.value pattern.
+        return f.cast(
+            arrayElement(
+                None,
+                column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
+                literal(attribute_name),
+            ),
+            f"Nullable({clickhouse_type})",
+            **kwargs,
+        )
+    if attribute_type == AttributeKey.Type.TYPE_INT:
         return f.cast(
             SubscriptableReference(
                 column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
