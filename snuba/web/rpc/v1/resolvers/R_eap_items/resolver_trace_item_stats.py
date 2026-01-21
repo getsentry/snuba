@@ -82,6 +82,8 @@ def _transform_attr_distribution_results(
         last_seen_value = row.get(LAST_SEEN_LABEL)
         if isinstance(last_seen_value, datetime):
             last_seen_ts.FromDatetime(last_seen_value)
+        elif isinstance(last_seen_value, str):
+            last_seen_ts.FromDatetime(datetime.fromisoformat(last_seen_value))
         res.setdefault((attr_key, COUNT_LABEL), default).buckets.append(
             AttributeDistribution.Bucket(
                 label=attr_value,
