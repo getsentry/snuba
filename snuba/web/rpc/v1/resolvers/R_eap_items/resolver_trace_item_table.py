@@ -52,7 +52,6 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
-    setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
