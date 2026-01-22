@@ -17,10 +17,8 @@ from snuba.query.joins.pre_processor import (
 )
 from tests.query.joins.equivalence_schema import (
     EVENTS_SCHEMA,
-    GROUPS_ASSIGNEE,
     GROUPS_SCHEMA,
     Events,
-    GroupAssignee,
     Profiles,
 )
 
@@ -54,110 +52,6 @@ TEST_CASES = [
         },
         id="Two entities join",
     ),
-    pytest.param(
-        JoinClause(
-            JoinClause(
-                IndividualNode("ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
-                IndividualNode("as", EntitySource(EntityKey.GROUPASSIGNEE, GROUPS_ASSIGNEE, None)),
-                [
-                    JoinCondition(
-                        JoinConditionExpression("ev", "group_id"),
-                        JoinConditionExpression("as", "group_id"),
-                    )
-                ],
-                JoinType.INNER,
-                None,
-            ),
-            IndividualNode("gr", EntitySource(EntityKey.PROFILES, GROUPS_SCHEMA, None)),
-            [
-                JoinCondition(
-                    JoinConditionExpression("ev", "group_id"),
-                    JoinConditionExpression("gr", "id"),
-                )
-            ],
-            JoinType.INNER,
-            None,
-        ),
-        {
-            QualifiedCol(EntityKey.EVENTS, "group_id"): {
-                QualifiedCol(EntityKey.PROFILES, "id"),
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "group_id"),
-            },
-            QualifiedCol(EntityKey.PROFILES, "id"): {
-                QualifiedCol(EntityKey.EVENTS, "group_id"),
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "group_id"),
-            },
-            QualifiedCol(EntityKey.GROUPASSIGNEE, "group_id"): {
-                QualifiedCol(EntityKey.EVENTS, "group_id"),
-                QualifiedCol(EntityKey.PROFILES, "id"),
-            },
-            QualifiedCol(EntityKey.EVENTS, "project_id"): {
-                QualifiedCol(EntityKey.PROFILES, "project_id"),
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"),
-            },
-            QualifiedCol(EntityKey.PROFILES, "project_id"): {
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"),
-                QualifiedCol(EntityKey.EVENTS, "project_id"),
-            },
-            QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"): {
-                QualifiedCol(EntityKey.PROFILES, "project_id"),
-                QualifiedCol(EntityKey.EVENTS, "project_id"),
-            },
-        },
-        id="Join with three tables",
-    ),
-    pytest.param(
-        JoinClause(
-            JoinClause(
-                IndividualNode("ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
-                IndividualNode("gr", EntitySource(EntityKey.PROFILES, GROUPS_SCHEMA, None)),
-                [
-                    JoinCondition(
-                        JoinConditionExpression("ev", "group_id"),
-                        JoinConditionExpression("gr", "id"),
-                    )
-                ],
-                JoinType.INNER,
-                None,
-            ),
-            IndividualNode("as", EntitySource(EntityKey.GROUPASSIGNEE, GROUPS_ASSIGNEE, None)),
-            [
-                JoinCondition(
-                    JoinConditionExpression("gr", "user_id"),
-                    JoinConditionExpression("as", "user_id"),
-                )
-            ],
-            JoinType.INNER,
-            None,
-        ),
-        {
-            QualifiedCol(EntityKey.EVENTS, "group_id"): {
-                QualifiedCol(EntityKey.PROFILES, "id"),
-            },
-            QualifiedCol(EntityKey.PROFILES, "id"): {
-                QualifiedCol(EntityKey.EVENTS, "group_id"),
-            },
-            QualifiedCol(EntityKey.PROFILES, "user_id"): {
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "user_id"),
-            },
-            QualifiedCol(EntityKey.GROUPASSIGNEE, "user_id"): {
-                QualifiedCol(EntityKey.PROFILES, "user_id"),
-            },
-            QualifiedCol(EntityKey.EVENTS, "project_id"): {
-                QualifiedCol(EntityKey.PROFILES, "project_id"),
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"),
-            },
-            QualifiedCol(EntityKey.PROFILES, "project_id"): {
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"),
-                QualifiedCol(EntityKey.EVENTS, "project_id"),
-            },
-            QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"): {
-                QualifiedCol(EntityKey.PROFILES, "project_id"),
-                QualifiedCol(EntityKey.EVENTS, "project_id"),
-            },
-        },
-        id="Join with three tables",
-    ),
 ]
 
 
@@ -165,7 +59,6 @@ TEST_CASES = [
 def test_find_equivalences(join: JoinClause[EntitySource], graph: EquivalenceGraph) -> None:
     override_entity_map(EntityKey.EVENTS, Events())
     override_entity_map(EntityKey.PROFILES, Profiles())
-    override_entity_map(EntityKey.GROUPASSIGNEE, GroupAssignee())
 
     assert get_equivalent_columns(join) == graph
 

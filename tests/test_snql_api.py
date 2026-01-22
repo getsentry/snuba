@@ -624,51 +624,6 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert "LIMIT 1 BY _snuba_count" in data["sql"]
 
-    def test_multi_table_join(self) -> None:
-        response = self.post(
-            "/events/snql",
-            data=json.dumps(
-                {
-                    "query": f"""
-                    MATCH (e: events) -[grouped]-> (g: profiles),
-                    (e: events) -[assigned]-> (a: groupassignee)
-                    SELECT e.message, e.tags[b], a.user_id, g.last_seen
-                    WHERE e.project_id = {self.project_id}
-                    AND g.project_id = {self.project_id}
-                    AND e.timestamp >= toDateTime('2021-06-04T00:00:00')
-                    AND e.timestamp < toDateTime('2021-07-12T00:00:00')
-                    """,
-                    "turbo": False,
-                    "consistent": False,
-                    "debug": True,
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-
-        assert response.status_code == 200
-
-    def test_complex_table_join(self) -> None:
-        response = self.post(
-            "/events/snql",
-            data=json.dumps(
-                {
-                    "query": f"""
-                    MATCH (e: events) -[grouped]-> (g: profiles)
-                    SELECT g.id, toUInt64(plus(multiply(log(count(e.group_id)), 600), multiply(toUInt64(toUInt64(max(e.timestamp))), 1000))) AS score BY g.id
-                    WHERE e.project_id IN array({self.project_id}) AND e.timestamp >= toDateTime('2021-07-04T01:09:08.188427') AND e.timestamp < toDateTime('2021-08-06T01:10:09.411889') AND g.status IN array(0)
-                    ORDER BY toUInt64(plus(multiply(log(count(e.group_id)), 600), multiply(toUInt64(toUInt64(max(e.timestamp))), 1000))) DESC LIMIT 101
-                    """,
-                    "turbo": False,
-                    "consistent": False,
-                    "debug": True,
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-
-        assert response.status_code == 200
-
     def test_nullable_query(self) -> None:
         response = self.post(
             "/discover/snql",

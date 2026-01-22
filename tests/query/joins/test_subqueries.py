@@ -25,10 +25,8 @@ from snuba.query.joins.subquery_generator import generate_subqueries
 from snuba.query.logical import Query as LogicalQuery
 from tests.query.joins.equivalence_schema import (
     EVENTS_SCHEMA,
-    GROUPS_ASSIGNEE,
     GROUPS_SCHEMA,
     Events,
-    GroupAssignee,
     Profiles,
 )
 from tests.query.joins.join_structures import (
@@ -241,72 +239,6 @@ TEST_CASES = [
     ),
     pytest.param(
         CompositeQuery(
-            from_clause=JoinClause(
-                left_node=BASIC_JOIN,
-                right_node=IndividualNode(
-                    "as", Entity(EntityKey.GROUPASSIGNEE, GROUPS_ASSIGNEE, None)
-                ),
-                keys=[
-                    JoinCondition(
-                        left=JoinConditionExpression("ev", "group_id"),
-                        right=JoinConditionExpression("as", "group_id"),
-                    )
-                ],
-                join_type=JoinType.INNER,
-            ),
-            selected_columns=[
-                SelectedExpression("group_id", Column("_snuba_group_id", "gr", "id")),
-            ],
-        ),
-        CompositeQuery(
-            from_clause=JoinClause(
-                left_node=events_groups_join(
-                    events_node(
-                        [
-                            SelectedExpression(
-                                "_snuba_group_id",
-                                Column("_snuba_group_id", None, "group_id"),
-                            ),
-                        ],
-                    ),
-                    groups_node(
-                        [
-                            SelectedExpression(
-                                "_snuba_group_id",
-                                Column("_snuba_group_id", None, "id"),
-                            ),
-                            SelectedExpression("_snuba_id", Column("_snuba_id", None, "id")),
-                        ],
-                    ),
-                ),
-                right_node=IndividualNode(
-                    alias="as",
-                    data_source=LogicalQuery(
-                        from_clause=Entity(EntityKey.GROUPASSIGNEE, GROUPS_ASSIGNEE),
-                        selected_columns=[
-                            SelectedExpression(
-                                "_snuba_group_id",
-                                Column("_snuba_group_id", None, "group_id"),
-                            ),
-                        ],
-                    ),
-                ),
-                keys=[
-                    JoinCondition(
-                        left=JoinConditionExpression("ev", "_snuba_group_id"),
-                        right=JoinConditionExpression("as", "_snuba_group_id"),
-                    )
-                ],
-                join_type=JoinType.INNER,
-            ),
-            selected_columns=[
-                SelectedExpression("group_id", Column("_snuba_group_id", "gr", "_snuba_group_id")),
-            ],
-        ),
-        id="Multi entity join",
-    ),
-    pytest.param(
-        CompositeQuery(
             from_clause=BASIC_JOIN,
             selected_columns=[
                 SelectedExpression(
@@ -495,7 +427,6 @@ def test_subquery_generator(
 ) -> None:
     override_entity_map(EntityKey.EVENTS, Events())
     override_entity_map(EntityKey.PROFILES, Profiles())
-    override_entity_map(EntityKey.GROUPASSIGNEE, GroupAssignee())
 
     generate_subqueries(original_query)
 

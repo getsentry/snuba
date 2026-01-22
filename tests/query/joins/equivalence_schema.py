@@ -26,14 +26,6 @@ GROUPS_SCHEMA = ColumnSet(
     ]
 )
 
-GROUPS_ASSIGNEE = ColumnSet(
-    [
-        ("group_id", UUID()),
-        ("project_id", UInt(32)),
-        ("message", String()),
-        ("user_id", UInt(64)),
-    ]
-)
 
 
 class FakeEntity(Entity, ABC):
@@ -50,19 +42,6 @@ class Events(FakeEntity):
                 "grouped": JoinRelationship(
                     rhs_entity=EntityKey.PROFILES,
                     columns=[("group_id", "id")],
-                    join_type=JoinType.INNER,
-                    equivalences=[ColumnEquivalence("project_id", "project_id")],
-                ),
-                "assigned_group": JoinRelationship(
-                    rhs_entity=EntityKey.GROUPASSIGNEE,
-                    columns=[("group_id", "group_id")],
-                    join_type=JoinType.INNER,
-                    equivalences=[ColumnEquivalence("project_id", "project_id")],
-                ),
-                # This makes no sense but it is for the sake of the test
-                "assigned_user": JoinRelationship(
-                    rhs_entity=EntityKey.GROUPASSIGNEE,
-                    columns=[("user_id", "user_id")],
                     join_type=JoinType.INNER,
                     equivalences=[ColumnEquivalence("project_id", "project_id")],
                 ),
@@ -90,38 +69,6 @@ class Profiles(FakeEntity):
                 "events": JoinRelationship(
                     rhs_entity=EntityKey.EVENTS,
                     columns=[("id", "group_id")],
-                    join_type=JoinType.INNER,
-                    equivalences=[ColumnEquivalence("project_id", "project_id")],
-                ),
-                "assigned": JoinRelationship(
-                    rhs_entity=EntityKey.GROUPASSIGNEE,
-                    columns=[("user_id", "user_id")],
-                    join_type=JoinType.INNER,
-                    equivalences=[],
-                ),
-            },
-            validators=None,
-            required_time_column=None,
-            subscription_processors=None,
-            subscription_validators=None,
-        )
-
-
-class GroupAssignee(FakeEntity):
-    def __init__(self) -> None:
-        super().__init__(
-            storages=[],
-            abstract_column_set=GROUPS_ASSIGNEE,
-            join_relationships={
-                "events": JoinRelationship(
-                    rhs_entity=EntityKey.EVENTS,
-                    columns=[("group_id", "group_id")],
-                    join_type=JoinType.INNER,
-                    equivalences=[ColumnEquivalence("project_id", "project_id")],
-                ),
-                "user_assigned": JoinRelationship(
-                    rhs_entity=EntityKey.EVENTS,
-                    columns=[("user_id", "user_id")],
                     join_type=JoinType.INNER,
                     equivalences=[ColumnEquivalence("project_id", "project_id")],
                 ),

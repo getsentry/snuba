@@ -6,17 +6,13 @@ from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import (
     JoinClause,
-    JoinCondition,
-    JoinConditionExpression,
     JoinModifier,
-    JoinType,
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column
 from snuba.query.joins.semi_joins import SemiJoinOptimizer
 from snuba.query.query_settings import HTTPQuerySettings
 from tests.query.joins.join_structures import (
-    clickhouse_assignees_node,
     clickhouse_events_node,
     clickhouse_groups_node,
     events_groups_join,
@@ -112,94 +108,6 @@ TEST_CASES = [
         ),
         {"gr": None},
         id="Query with reference to columns on the right side. No semi join",
-    ),
-    pytest.param(
-        CompositeQuery(
-            from_clause=JoinClause(
-                left_node=events_groups_join(
-                    clickhouse_events_node(
-                        [
-                            SelectedExpression(
-                                "_snuba_group_id",
-                                Column("_snuba_group_id", None, "group_id"),
-                            ),
-                        ]
-                    ),
-                    clickhouse_groups_node(
-                        [
-                            SelectedExpression("_snuba_id", Column("_snuba_id", None, "id")),
-                            SelectedExpression(
-                                "_snuba_col1", Column("_snuba_col1", None, "something")
-                            ),
-                        ]
-                    ),
-                ),
-                right_node=clickhouse_assignees_node(
-                    [
-                        SelectedExpression(
-                            "_snuba_group_id",
-                            Column("_snuba_group_id", None, "group_id"),
-                        ),
-                        SelectedExpression("_snuba_col1", Column("_snuba_col1", None, "something")),
-                    ]
-                ),
-                keys=[
-                    JoinCondition(
-                        left=JoinConditionExpression("ev", "_snuba_group_id"),
-                        right=JoinConditionExpression("as", "_snuba_group_id"),
-                    )
-                ],
-                join_type=JoinType.INNER,
-            ),
-            selected_columns=[
-                SelectedExpression("group_id", Column("_snuba_col1", "gr", "_snuba_col1"))
-            ],
-        ),
-        {"gr": None, "as": JoinModifier.ANY},
-        id="Multi table join, make only the right one a semi join.",
-    ),
-    pytest.param(
-        CompositeQuery(
-            from_clause=JoinClause(
-                left_node=events_groups_join(
-                    clickhouse_events_node(
-                        [
-                            SelectedExpression(
-                                "_snuba_group_id",
-                                Column("_snuba_group_id", None, "group_id"),
-                            ),
-                        ]
-                    ),
-                    clickhouse_groups_node(
-                        [
-                            SelectedExpression("_snuba_id", Column("_snuba_id", None, "id")),
-                            SelectedExpression(
-                                "_snuba_col1", Column("_snuba_col1", None, "something")
-                            ),
-                        ]
-                    ),
-                ),
-                right_node=clickhouse_assignees_node(
-                    [
-                        SelectedExpression(
-                            "_snuba_group_id",
-                            Column("_snuba_group_id", None, "group_id"),
-                        ),
-                        SelectedExpression("_snuba_col1", Column("_snuba_col1", None, "something")),
-                    ]
-                ),
-                keys=[
-                    JoinCondition(
-                        left=JoinConditionExpression("ev", "_snuba_group_id"),
-                        right=JoinConditionExpression("as", "_snuba_group_id"),
-                    )
-                ],
-                join_type=JoinType.INNER,
-            ),
-            selected_columns=[],
-        ),
-        {"gr": JoinModifier.ANY, "as": JoinModifier.ANY},
-        id="Multi table join, make both joins semi join.",
     ),
 ]
 

@@ -541,12 +541,6 @@ subscription_validators:
       allows_group_by_without_condition: true
 
 join_relationships:
-  assigned:
-    rhs_entity: groupassignee
-    join_type: inner
-    columns:
-      - [project_id, project_id]
-      - [group_id, group_id]
   attributes:
     rhs_entity: group_attributes
     join_type: left

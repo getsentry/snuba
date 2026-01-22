@@ -16,7 +16,6 @@ ENTITY_KEYS = [
     EntityKey.EVENTS,
     EntityKey.SPANS_NUM_ATTRS,
     EntityKey.SPANS_STR_ATTRS,
-    EntityKey.GROUPASSIGNEE,
     EntityKey.OUTCOMES,
     EntityKey.OUTCOMES_RAW,
     EntityKey.SEARCH_ISSUES,

@@ -18,7 +18,6 @@ from snuba.query.logical import EntityQuery
 from snuba.query.logical import Query as LogicalQuery
 from tests.query.joins.equivalence_schema import (
     EVENTS_SCHEMA,
-    GROUPS_ASSIGNEE,
     GROUPS_SCHEMA,
 )
 
@@ -112,18 +111,6 @@ def clickhouse_groups_node(
     return build_clickhouse_node(
         "gr",
         Table("profiles_local", GROUPS_SCHEMA, storage_key=StorageKey("dontmatter")),
-        selected_columns,
-        condition,
-    )
-
-
-def clickhouse_assignees_node(
-    selected_columns: Sequence[SelectedExpression],
-    condition: Optional[Expression] = None,
-) -> IndividualNode[Table]:
-    return build_clickhouse_node(
-        "as",
-        Table("groupassignee_local", GROUPS_ASSIGNEE, storage_key=StorageKey("dontmatter")),
         selected_columns,
         condition,
     )

@@ -109,8 +109,8 @@ class TestEntityConfiguration(ConfigurationTest):
         assert len(rel.columns) == 2
         assert rel.columns[0][0] == "project_id"
         assert rel.columns[0][1] == "project_id"
-        assert rel.columns[1][0] == "group_id"
-        assert rel.columns[1][1] == "group_id"
+        assert rel.columns[1][0] == "profile_id"
+        assert rel.columns[1][1] == "profile_id"
         assert len(rel.equivalences) == 1
         assert rel.equivalences[0][0] == "offset"
         assert rel.equivalences[0][1] == "offset"

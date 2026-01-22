@@ -98,7 +98,6 @@ def test_failures(query_body: str, message: str) -> None:
     # TODO: Potentially remove this once entities have actual join relationships
     mapping = {
         "contains": (EntityKey.TRANSACTIONS, "event_id"),
-        "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
         "bookmark": (EntityKey.PROFILES, "profile_id"),
     }
 
