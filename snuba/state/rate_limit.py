@@ -259,6 +259,8 @@ def rate_limit_start_request(
                 bucket = _get_bucket_key(rate_limit_prefix, rate_limit_params.bucket, shard_i)
                 pipe.zcount(bucket, "({:f}".format(now), "+inf")
 
+        historical = -1
+        concurrent = -1
         try:
             results = pipe.execute()
             pipe_results = iter(results)
@@ -281,12 +283,13 @@ def rate_limit_start_request(
             # Emit metric for timeout, but don't log since this is expected
             # when Redis is slow. We fail open to avoid blocking requests.
             metrics.increment("ratelimiter_redis_timeout", tags={"function": "start_request"})
-            return RateLimitStats(rate=-1, concurrent=-1)
         except Exception as ex:
             # if something goes wrong, we don't want to block the request,
             # set the values such that they pass under any limit
             logger.exception(ex)
-            return RateLimitStats(rate=-1, concurrent=-1)
+        finally:
+            if historical == -1:
+                return RateLimitStats(rate=-1, concurrent=-1)
 
     per_second = historical / float(state.rate_lookback_s)
 
