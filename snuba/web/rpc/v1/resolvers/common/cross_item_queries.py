@@ -22,6 +22,7 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryResult
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
@@ -48,14 +49,17 @@ def get_trace_ids_sql_for_cross_item_query(
     trace_filters: list[TraceItemFilterWithType],
     sampling_tier: Tier,
     timer: Timer,
-) -> str:
+) -> tuple[str, QueryResult]:
     """
-    Returns the SQL query string for getting trace IDs matching the given filters.
+    Returns the SQL query string and query result for getting trace IDs matching the given filters.
     This allows the query to be used as a subquery in subsequent queries.
 
     This function builds the same query as get_trace_ids_for_cross_item_query() but
     returns the SQL string instead of executing it. Uses dry_run mode to get the SQL
     without actually querying ClickHouse.
+
+    Returns:
+        tuple: (sql_string, query_result) where query_result contains metadata like sampling_tier
     """
     filter_expressions = []
     if trace_filters:
@@ -109,11 +113,32 @@ def get_trace_ids_sql_for_cross_item_query(
             *[trace_item_filters_or_expression] if trace_item_filters_or_expression else [],
         ),
         groupby=[
+            column("organization_id"),
+            column("project_id"),
+            column("item_type"),
+            column("timestamp"),
             column("trace_id"),
         ],
         having=trace_item_filters_and_expression,
-        order_by=[OrderBy(OrderByDirection.DESC, column("trace_id"))],
-        limit=_TRACE_LIMIT,
+        order_by=[
+            OrderBy(
+                direction=OrderByDirection.DESC,
+                expression=column("organization_id"),
+            ),
+            OrderBy(
+                direction=OrderByDirection.DESC,
+                expression=column("project_id"),
+            ),
+            OrderBy(
+                direction=OrderByDirection.DESC,
+                expression=column("item_type"),
+            ),
+            OrderBy(
+                direction=OrderByDirection.DESC,
+                expression=column("timestamp"),
+            ),
+        ],
+        limit=original_request.limit if original_request.limit else _TRACE_LIMIT,
     )
 
     treeify_or_and_conditions(query)
@@ -145,5 +170,11 @@ def get_trace_ids_sql_for_cross_item_query(
         timer=timer,
     )
 
-    # Extract and return SQL from dry_run result
-    return results.extra["sql"]
+    # Dry-run queries don't populate sampling_tier in stats, so add it manually
+    # This is needed for _construct_meta_if_downsampled() to detect downsampled queries
+    if "stats" not in results.extra:
+        results.extra["stats"] = {}
+    results.extra["stats"]["sampling_tier"] = sampling_tier
+
+    # Return both SQL and query result (needed for sampling_tier metadata)
+    return results.extra["sql"], results

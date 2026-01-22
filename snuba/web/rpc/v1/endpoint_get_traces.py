@@ -472,8 +472,8 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         Execute cross-item query using subquery optimization.
         Gets SQL from trace IDs query and uses it as a subquery in metadata query.
         """
-        # Get SQL for trace IDs query (dry run)
-        trace_ids_sql = get_trace_ids_sql_for_cross_item_query(
+        # Get SQL for trace IDs query (dry run) and its query result
+        trace_ids_sql, trace_ids_query_result = get_trace_ids_sql_for_cross_item_query(
             in_msg,
             in_msg.meta,
             convert_trace_filters_to_trace_item_filter_with_type(list(in_msg.filters)),
@@ -486,13 +486,12 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             request=in_msg,
             trace_ids_sql=trace_ids_sql,
         )
-
-        # Build response
+        # Build response - include both query results for proper metadata extraction
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
-            [metadata_query_result],
-            [self._timer],
+            [trace_ids_query_result, metadata_query_result],
+            [self._timer, self._timer],
         )
 
         return GetTracesResponse(
@@ -623,25 +622,25 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 trace_item_filters_expression,
                 f.equals(column("item_type"), item_type),
             ),
-            order_by=[OrderBy(OrderByDirection.DESC, column("trace_id"))],
-            #     order_by=[
-            #         OrderBy(
-            #             direction=OrderByDirection.DESC,
-            #             expression=column("organization_id"),
-            #         ),
-            #         OrderBy(
-            #             direction=OrderByDirection.DESC,
-            #             expression=column("project_id"),
-            #         ),
-            #         OrderBy(
-            #             direction=OrderByDirection.DESC,
-            #             expression=column("item_type"),
-            #         ),
-            #         OrderBy(
-            #             direction=OrderByDirection.DESC,
-            #             expression=column("timestamp"),
-            #         ),
-            #     ],
+            # order_by=[OrderBy(OrderByDirection.DESC, column("trace_id"))],
+            order_by=[
+                OrderBy(
+                    direction=OrderByDirection.DESC,
+                    expression=column("organization_id"),
+                ),
+                OrderBy(
+                    direction=OrderByDirection.DESC,
+                    expression=column("project_id"),
+                ),
+                OrderBy(
+                    direction=OrderByDirection.DESC,
+                    expression=column("item_type"),
+                ),
+                OrderBy(
+                    direction=OrderByDirection.DESC,
+                    expression=column("timestamp"),
+                ),
+            ],
             limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
             offset=request.page_token.offset,
         )

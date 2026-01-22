@@ -37,6 +37,7 @@ from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (
+    compare_get_traces_responses,
     comparison_filter,
     create_cross_item_test_data,
     create_request_meta,
@@ -181,8 +182,6 @@ class TestEndpointGetTraces(BaseApiTest):
                 downsampled_storage_meta=response.meta.downsampled_storage_meta,
             ),
         )
-        # TODO: rather than checking the whole mssage, look at all the feilds of the proto and verify that they
-        # are equal. If a field is not equal recurse into that field and find what exactly does not match
         assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_data_and_limit(self, setup_teardown: Any) -> None:
@@ -208,8 +207,6 @@ class TestEndpointGetTraces(BaseApiTest):
         response = EndpointGetTraces().execute(message)
         spans = generate_spans(_SPANS + _ADDITIONAL_SPANS)
         last_span = spans[0]
-        trace_ids = [span.trace_id for span in spans]
-        print(trace_ids)
         for span in spans:
             if span.timestamp.seconds >= last_span.timestamp.seconds:
                 last_span = span
@@ -241,6 +238,49 @@ class TestEndpointGetTraces(BaseApiTest):
                 downsampled_storage_meta=response.meta.downsampled_storage_meta,
             ),
         )
+        diff = compare_get_traces_responses(expected_response, response)
+        assert diff is None, diff
+        # the diff above returns nothing but MessageToDict still finds a difference
+        # from breakpoint debugging it looks like the response meta is missing a query_info object somehow
+        # which doesn't make sense because above we  created it above from the response object to avoid this situation
+        # (Pdb) expected_response.meta
+        # request_id: "2696f626f384433ca979287021216259"
+        # query_info {
+        #   stats {
+        #   }
+        #   metadata {
+        #   }
+        # }
+        # query_info {
+        #   stats {
+        #     progress_bytes: 30960
+        #   }
+        #   metadata {
+        #   }
+        # }
+        # downsampled_storage_meta {
+        # }
+        #
+        # (Pdb) response.meta
+        # request_id: "2696f626f384433ca979287021216259"
+        # query_info {
+        #   stats {
+        #   }
+        #   metadata {
+        #   }
+        # }
+        # query_info {
+        #   stats {
+        #     progress_bytes: 30960
+        #   }
+        #   metadata {
+        #   }
+        # }
+        # (Pdb) response.meta == expected_response.meta
+        # False
+        # (Pdb) response.meta.query_info == expected_response.meta.query_info
+        # True
+
         assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_data_and_filter(self, setup_teardown: Any) -> None:
