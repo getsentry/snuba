@@ -23,7 +23,7 @@ class RecreateMissingEAPSpansMaterializedViews(Job):
                 storage_node,
             )
             for query in materialized_views:
-                logger.info("Executing query: {query}")
+                logger.info(f"Executing query: {query}")
                 connection.execute(query=query)
 
         logger.info("complete")

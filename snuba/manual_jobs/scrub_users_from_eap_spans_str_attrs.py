@@ -50,7 +50,7 @@ AND timestamp < toDateTime('{end_datetime}')"""
         else:
             cluster_name = None
         query = self._get_query(cluster_name)
-        logger.info("Executing query: {query}")
+        logger.info(f"Executing query: {query}")
         result = connection.execute(query=query, settings={"mutations_sync": 0})
 
         logger.info("complete")

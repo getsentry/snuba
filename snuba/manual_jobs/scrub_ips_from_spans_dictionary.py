@@ -64,7 +64,7 @@ AND end_timestamp < toDateTime('{end_datetime}')"""
             query=self._dictionary_query(cluster_name), settings={"mutations_sync": 2}
         )
         query = self._get_query(cluster_name)
-        logger.info("Executing query: {query}")
+        logger.info(f"Executing query: {query}")
         result = connection.execute(
             query=query,
             settings={
