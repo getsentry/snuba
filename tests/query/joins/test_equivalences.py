@@ -57,8 +57,8 @@ TEST_CASES = [
 
 @pytest.mark.parametrize("join, graph", TEST_CASES)
 def test_find_equivalences(join: JoinClause[EntitySource], graph: EquivalenceGraph) -> None:
-    override_entity_map(EntityKey.EVENTS, Events())
-    override_entity_map(EntityKey.PROFILES, Profiles())
+    override_entity_map(EntityKey.EVENTS, Events())  # type: ignore[arg-type]
+    override_entity_map(EntityKey.PROFILES, Profiles())  # type: ignore[arg-type]
 
     assert get_equivalent_columns(join) == graph
 

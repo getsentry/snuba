@@ -425,8 +425,8 @@ def test_subquery_generator(
     original_query: CompositeQuery[Entity],
     processed_query: CompositeQuery[Entity],
 ) -> None:
-    override_entity_map(EntityKey.EVENTS, Events())
-    override_entity_map(EntityKey.PROFILES, Profiles())
+    override_entity_map(EntityKey.EVENTS, Events())  # type: ignore[arg-type]
+    override_entity_map(EntityKey.PROFILES, Profiles())  # type: ignore[arg-type]
 
     generate_subqueries(original_query)
 

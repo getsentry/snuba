@@ -251,8 +251,8 @@ def test_add_equivalent_condition(
     join_clause: JoinClause[EntitySource],
     expected_expr: Expression,
 ) -> None:
-    override_entity_map(EntityKey.EVENTS, Events())
-    override_entity_map(EntityKey.PROFILES, Profiles())
+    override_entity_map(EntityKey.EVENTS, Events())  # type: ignore[arg-type]
+    override_entity_map(EntityKey.PROFILES, Profiles())  # type: ignore[arg-type]
 
     query = CompositeQuery(
         from_clause=join_clause,

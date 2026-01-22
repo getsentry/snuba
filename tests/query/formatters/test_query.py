@@ -62,12 +62,12 @@ LOGICAL_QUERY = LogicalQuery(
         SelectedExpression("c1", Column("_snuba_c1", "t", "c")),
         SelectedExpression("f1", FunctionCall("_snuba_f1", "f", (Column(None, "t", "c2"),))),
     ],
-    array_join=Column(None, None, "col"),
+    array_join=[Column(None, None, "col")],
     condition=binary_condition("equals", Column(None, None, "c4"), Literal(None, "asd")),
     groupby=[Column(None, "t", "c4")],
     having=binary_condition("equals", Column(None, None, "c6"), Literal(None, "asd2")),
     order_by=[OrderBy(OrderByDirection.ASC, Column(None, "t", "c"))],
-    limitby=LimitBy(100, Column(None, None, "c8")),
+    limitby=LimitBy(100, [Column(None, None, "c8")]),
     limit=150,
 )
 
@@ -249,7 +249,7 @@ TEST_JOIN = [
 
 @pytest.mark.parametrize("query, formatted", TEST_JOIN)
 def test_query_formatter(
-    query: Union[ProcessableQuery, CompositeQuery[Entity]],
+    query: Union[ProcessableQuery[Entity], CompositeQuery[Entity]],
     formatted: TExpression,
 ) -> None:
     formatted_query = format_query(query)  # type: ignore
