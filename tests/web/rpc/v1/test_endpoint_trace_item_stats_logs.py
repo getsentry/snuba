@@ -5,7 +5,6 @@ import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
-    AttributeDistribution,
     AttributeDistributionsRequest,
     StatsType,
     TraceItemStatsRequest,
@@ -78,13 +77,21 @@ class TestTraceItemStatsForLogs(BaseApiTest):
         )
         response = EndpointTraceItemStats().execute(message)
         assert response.results[0].HasField("attribute_distributions")
-        actual = response.results[0].attribute_distributions.attributes
+        actual = list(response.results[0].attribute_distributions.attributes)
         assert len(actual) == 2
-        assert actual[0] == AttributeDistribution(
-            attribute_name="sentry.severity_text",
-            buckets=[AttributeDistribution.Bucket(label="info", value=60)],
-        )
+
+        # Check sentry.severity_text
+        assert actual[0].attribute_name == "sentry.severity_text"
+        assert len(actual[0].buckets) == 1
+        assert actual[0].buckets[0].label == "info"
+        assert actual[0].buckets[0].value == 60
+
+        # Check sentry.body
         assert actual[1].attribute_name == "sentry.body"
-        assert sorted(actual[1].buckets, key=lambda x: int(x.label[len("hello world ") :])) == [
-            AttributeDistribution.Bucket(label=f"hello world {i}", value=1) for i in range(60)
-        ]
+        sorted_buckets = sorted(
+            actual[1].buckets, key=lambda x: int(x.label[len("hello world ") :])
+        )
+        assert len(sorted_buckets) == 60
+        for i, bucket in enumerate(sorted_buckets):
+            assert bucket.label == f"hello world {i}"
+            assert bucket.value == 1
