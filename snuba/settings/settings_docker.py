@@ -1,5 +1,7 @@
 import os
 
+from snuba.utils.metrics.addr_config import get_statsd_addr
+
 env = os.environ.get
 
 DEBUG = env("DEBUG", "0").lower() in ("1", "true")
@@ -13,7 +15,8 @@ REDIS_DB = int(env("REDIS_DB", 1))
 USE_REDIS_CLUSTER = False
 
 # Dogstatsd Options
-DOGSTATSD_HOST = env("DOGSTATSD_HOST")
-DOGSTATSD_PORT = env("DOGSTATSD_PORT")
+DOGSTATSD_HOST, DOGSTATSD_PORT = get_statsd_addr()
 
 SENTRY_DSN = env("SENTRY_DSN")
+
+USE_EAP_ITEMS_TABLE = True

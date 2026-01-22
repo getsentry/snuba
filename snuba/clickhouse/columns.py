@@ -2,9 +2,14 @@ from __future__ import annotations
 
 from typing import Sequence, Union
 
-from snuba.utils.schemas import UUID, AggregateFunction, Any, Array, Column
-from snuba.utils.schemas import ColumnSet as BaseColumnSet
 from snuba.utils.schemas import (
+    JSON,
+    UUID,
+    AggregateFunction,
+    Any,
+    Array,
+    Bool,
+    Column,
     ColumnType,
     Date,
     DateTime,
@@ -30,11 +35,13 @@ from snuba.utils.schemas import (
     UInt,
     WildcardColumn,
 )
+from snuba.utils.schemas import ColumnSet as BaseColumnSet
 
 __all__ = (
     "Any",
     "AggregateFunction",
     "Array",
+    "Bool",
     "Column",
     "ColumnSet",
     "ColumnType",
@@ -47,6 +54,7 @@ __all__ = (
     "Float",
     "IPv4",
     "IPv6",
+    "JSON",
     "Map",
     "Nested",
     "Nullable",
@@ -78,9 +86,7 @@ class ColumnSet(BaseColumnSet):
 
     def __init__(
         self,
-        columns: Sequence[
-            Union[Column[SchemaModifiers], tuple[str, ColumnType[SchemaModifiers]]]
-        ],
+        columns: Sequence[Union[Column[SchemaModifiers], tuple[str, ColumnType[SchemaModifiers]]]],
     ) -> None:
         for column in columns:
             assert not isinstance(column, WildcardColumn)

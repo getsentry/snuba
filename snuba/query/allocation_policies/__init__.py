@@ -1,25 +1,28 @@
 from __future__ import annotations
 
-import logging
 import os
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, field
+from enum import Enum
 from typing import Any, cast
 
+import sentry_sdk
+
 from snuba import environment, settings
+from snuba.configs.configuration import (
+    ConfigurableComponent,
+    ConfigurableComponentData,
+    Configuration,
+    ResourceIdentifier,
+    logger,
+)
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state import delete_config as delete_runtime_config
-from snuba.state import get_all_configs as get_all_runtime_configs
-from snuba.state import get_config as get_runtime_config
-from snuba.state import set_config as set_runtime_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
+from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
-from snuba.web import QueryException, QueryResult
+from snuba.web import QueryResult
 
-logger = logging.getLogger("snuba.query.allocation_policy_base")
 CAPMAN_PREFIX = "capman"
-
 CAPMAN_HASH = "capman"
 
 IS_ACTIVE = "is_active"
@@ -41,56 +44,14 @@ class QueryResultOrError:
     differently"""
 
     query_result: QueryResult | None
-    error: QueryException | None
+    error: Exception | None
 
     def __post_init__(self) -> None:
         assert self.query_result is not None or self.error is not None
 
 
 @dataclass()
-class AllocationPolicyConfig:
-    name: str
-    description: str
-    value_type: type
-    default: Any
-    param_types: dict[str, type] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        if type(self.default) != self.value_type:
-            raise ValueError(
-                f"Config item `{self.name}` expects type {self.value_type} got value `{self.default}` of type {type(self.default)}"
-            )
-
-    def __to_base_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "type": self.value_type.__name__,
-            "default": self.default,
-            "description": self.description,
-        }
-
-    def to_definition_dict(self) -> dict[str, Any]:
-        """Returns a dict representation of the definition of a Config."""
-        return {
-            **self.__to_base_dict(),
-            "params": [
-                {"name": param, "type": self.param_types[param].__name__}
-                for param in self.param_types
-            ],
-        }
-
-    def to_config_dict(
-        self, value: Any = None, params: dict[str, Any] = {}
-    ) -> dict[str, Any]:
-        """Returns a dict representation of a live Config."""
-        return {
-            **self.__to_base_dict(),
-            "value": value if value is not None else self.default,
-            "params": params,
-        }
-
-
-class InvalidPolicyConfig(Exception):
+class AllocationPolicyConfig(Configuration):
     pass
 
 
@@ -110,13 +71,13 @@ class QuotaAllowance:
     quota_unit: str
     suggestion: str
 
+    # sets this value:
+    # https://clickhouse.com/docs/operations/settings/settings#max_bytes_to_read
+    # 0 means unlimited
+    max_bytes_to_read: int = field(default=0)
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
-    def __lt__(self, other: QuotaAllowance) -> bool:
-        if self.can_run and not other.can_run:
-            return False
-        return self.max_threads < other.max_threads
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, QuotaAllowance):
@@ -124,6 +85,7 @@ class QuotaAllowance:
         return (
             self.can_run == other.can_run
             and self.max_threads == other.max_threads
+            and self.max_bytes_to_read == other.max_bytes_to_read
             and self.explanation == other.explanation
             and self.is_throttled == other.is_throttled
             and self.throttle_threshold == other.throttle_threshold
@@ -167,9 +129,7 @@ class AllocationPolicyViolations(SerializableException):
 
     @property
     def quota_allowance(self) -> dict[str, dict[str, Any]]:
-        return cast(
-            dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {})
-        )
+        return cast(dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {}))
 
     @property
     def summary(self) -> dict[str, Any]:
@@ -186,7 +146,16 @@ class AllocationPolicyViolations(SerializableException):
         )
 
 
-class AllocationPolicy(ABC, metaclass=RegisteredClass):
+class PolicyData(ConfigurableComponentData):
+    query_type: str
+
+
+class QueryType(Enum):
+    SELECT = "select"
+    DELETE = "delete"
+
+
+class AllocationPolicy(ConfigurableComponent, ABC):
     """This class should be the centralized place for policy decisions regarding
     resource usage of a clickhouse cluster. It is meant to live as a configurable item
     on a storage.
@@ -371,25 +340,15 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         section of this docstring for more info.
     """
 
-    # This component builds redis strings that are delimited by dots, commas, colons
-    # in order to allow those characters to exist in config we replace them with their
-    # counterparts on write/read. It may be better to just replace our serialization with JSON
-    # instead of what we're doing but this is where we're at rn 1/10/24
-    __KEY_DELIMITERS_TO_ESCAPE_SEQUENCES = {
-        ".": "__dot_literal__",
-        ",": "__comma_literal__",
-        ":": "__colon_literal__",
-    }
-
     def __init__(
         self,
-        storage_key: StorageKey,
+        storage_key: ResourceIdentifier,
         required_tenant_types: list[str],
         default_config_overrides: dict[str, Any],
         **kwargs: str,
     ) -> None:
         self._required_tenant_types = set(required_tenant_types)
-        self._storage_key = storage_key
+        self._resource_identifier = storage_key
         self._default_config_definitions = [
             AllocationPolicyConfig(
                 name=IS_ACTIVE,
@@ -411,8 +370,19 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             ),
         ]
         self._overridden_additional_config_definitions = (
-            self.__get_overridden_additional_config_defaults(default_config_overrides)
+            self._get_overridden_additional_config_defaults(default_config_overrides)
         )
+
+    @classmethod
+    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
+        return cls(
+            storage_key=ResourceIdentifier(resource_identifier),
+            required_tenant_types=[],
+            default_config_overrides={},
+        )
+
+    def _get_hash(self) -> str:
+        return CAPMAN_HASH
 
     @property
     def metrics(self) -> MetricsWrapper:
@@ -420,22 +390,15 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             environment.metrics,
             "allocation_policy",
             tags={
-                "storage_key": self._storage_key.value,
+                "storage_key": self._resource_identifier.value,
                 "is_enforced": str(self.is_enforced),
                 "policy_class": self.__class__.__name__,
             },
         )
 
     @property
-    def runtime_config_prefix(self) -> str:
-        return f"{self._storage_key.value}.{self.__class__.__name__}"
-
-    @property
     def is_active(self) -> bool:
-        return (
-            bool(self.get_config_value(IS_ACTIVE))
-            and settings.ALLOCATION_POLICY_ENABLED
-        )
+        return bool(self.get_config_value(IS_ACTIVE)) and settings.ALLOCATION_POLICY_ENABLED
 
     @property
     def is_enforced(self) -> bool:
@@ -446,14 +409,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         """Maximum number of threads run a single query on ClickHouse with."""
         return int(self.get_config_value(MAX_THREADS))
 
-    @classmethod
-    def config_key(cls) -> str:
-        return cls.__name__
-
-    @classmethod
-    def get_from_name(cls, name: str) -> "AllocationPolicy":
-        return cast("AllocationPolicy", cls.class_from_name(name))
-
     def __eq__(self, other: Any) -> bool:
         """There should not be a need to compare these except that
         AllocationPolicies are attached to the Table a query is executed against.
@@ -461,7 +416,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         """
         return (
             bool(self.__class__ == other.__class__)
-            and self._storage_key == other._storage_key
+            and self._resource_identifier == other._resource_identifier
             and self._required_tenant_types == other._required_tenant_types
         )
 
@@ -475,346 +430,99 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         default_config_overrides: dict[str, Any] = cast(
             "dict[str, Any]", kwargs.pop("default_config_overrides", {})
         )
-        assert isinstance(
-            required_tenant_types, list
-        ), "required_tenant_types must be a list of strings"
+        assert isinstance(required_tenant_types, list), (
+            "required_tenant_types must be a list of strings"
+        )
         assert isinstance(storage_key, str)
         return cls(
             required_tenant_types=required_tenant_types,
-            storage_key=StorageKey(storage_key),
+            storage_key=ResourceIdentifier(StorageKey(storage_key)),
             default_config_overrides=default_config_overrides,
             **kwargs,
         )
 
-    def __get_overridden_additional_config_defaults(
-        self, default_config_overrides: dict[str, Any]
-    ) -> list[AllocationPolicyConfig]:
-        """overrides the defaults specified for the config in code with the default specified
-        to the instance of the policy
-        """
-        definitions = self._additional_config_definitions()
-        return [
-            replace(
-                definition,
-                default=default_config_overrides.get(
-                    definition.name, definition.default
-                ),
-            )
-            for definition in definitions
-        ]
-
-    def additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def additional_config_definitions(self) -> list[Configuration]:
         return self._overridden_additional_config_definitions
 
-    @abstractmethod
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
-        """
-        Define policy specific config definitions, these will be used along
-        with the default definitions of the base class. (is_enforced, is_active)
-        """
-        pass
-
-    def config_definitions(self) -> dict[str, AllocationPolicyConfig]:
-        """Returns a dictionary of config definitions on this AllocationPolicy."""
-        return {
-            config.name: config
-            for config in self._default_config_definitions
-            + self.additional_config_definitions()
-        }
-
-    def get_optional_config_definitions_json(self) -> list[dict[str, Any]]:
-        """Returns a json-like dictionary of optional config definitions on this AllocationPolicy."""
-        return [
-            definition.to_definition_dict()
-            for definition in self.config_definitions().values()
-            if definition.param_types
-        ]
-
-    def get_config_value(
-        self, config_key: str, params: dict[str, Any] = {}, validate: bool = True
-    ) -> Any:
-        """Returns value of a config on this Allocation Policy, or the default if none exists in Redis."""
-        config_definition = (
-            self.__validate_config_params(config_key, params)
-            if validate
-            else self.config_definitions()[config_key]
-        )
-        return get_runtime_config(
-            key=self.__build_runtime_config_key(config_key, params),
-            default=config_definition.default,
-            config_key=CAPMAN_HASH,
-        )
-
-    def set_config_value(
-        self,
-        config_key: str,
-        value: Any,
-        params: dict[str, Any] = {},
-        user: str | None = None,
-    ) -> None:
-        """Sets a value of a config on this AllocationPolicy."""
-        config_definition = self.__validate_config_params(config_key, params, value)
-        # ensure correct type is stored
-        value = config_definition.value_type(value)
-        set_runtime_config(
-            key=self.__build_runtime_config_key(config_key, params),
-            value=value,
-            user=user,
-            force=True,
-            config_key=CAPMAN_HASH,
-        )
-
-    def delete_config_value(
-        self,
-        config_key: str,
-        params: dict[str, Any] = {},
-        user: str | None = None,
-    ) -> None:
-        """
-        Deletes an instance of an optional config on this AllocationPolicy.
-        If this function is run on a required config, it resets the value to default instead.
-        """
-        self.__validate_config_params(config_key, params)
-        delete_runtime_config(
-            key=self.__build_runtime_config_key(config_key, params),
-            user=user,
-            config_key=CAPMAN_HASH,
-        )
-
-    def get_current_configs(self) -> list[dict[str, Any]]:
-        """Returns a list of live configs with their definitions on this AllocationPolicy."""
-
-        runtime_configs = get_all_runtime_configs(CAPMAN_HASH)
-        definitions = self.config_definitions()
-
-        required_configs = set(
-            config_name
-            for config_name, config_def in definitions.items()
-            if not config_def.param_types
-        )
-
-        detailed_configs: list[dict[str, Any]] = []
-
-        for key in runtime_configs:
-            if key.startswith(self.runtime_config_prefix):
-                try:
-                    config_key, params = self.__deserialize_runtime_config_key(key)
-                except Exception:
-                    logger.exception(
-                        f"AllocationPolicy could not deserialize a key: {key}"
-                    )
-                    continue
-                detailed_configs.append(
-                    definitions[config_key].to_config_dict(
-                        value=runtime_configs[key], params=params
-                    )
-                )
-                if config_key in required_configs:
-                    required_configs.remove(config_key)
-
-        for required_config_key in required_configs:
-            detailed_configs.append(definitions[required_config_key].to_config_dict())
-
-        return detailed_configs
-
-    def __build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
-        """
-        Builds a unique key to be used in the actual datastore containing these configs.
-
-        Example return values:
-        - `"mystorage.MyAllocationPolicy.my_config"`            # no params
-        - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`    # sorted params
-        """
-        parameters = "."
-        for param in sorted(list(params.keys())):
-            param_sanitized = self.__escape_delimiter_chars(param)
-            value_sanitized = self.__escape_delimiter_chars(params[param])
-            parameters += f"{param_sanitized}:{value_sanitized},"
-        parameters = parameters[:-1]
-        return f"{self.runtime_config_prefix}.{config}{parameters}"
-
-    def __deserialize_runtime_config_key(self, key: str) -> tuple[str, dict[str, Any]]:
-        """
-        Given a raw runtime config key, deconstructs it into it's AllocationPolicy config
-        key and parameters components.
-
-        Examples:
-        - `"mystorage.MyAllocationPolicy.my_config"`
-            - returns `"my_config", {}`
-        - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`
-            - returns `"my_config", {"a": 1, "b": 2}`
-        """
-
-        # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
-        _, _, config_key, *params = key.split(".")
-        # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
-        params_dict = dict()
-        if params:
-            # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
-            [params_string] = params
-            params_split = params_string.split(",")
-            for param_string in params_split:
-                param_key, param_value = param_string.split(":")
-                param_key = self.__unescape_delimiter_chars(param_key)
-                param_value = self.__unescape_delimiter_chars(param_value)
-                params_dict[param_key] = param_value
-
-        self.__validate_config_params(config_key=config_key, params=params_dict)
-
-        return config_key, params_dict
-
-    def __escape_delimiter_chars(self, key: str) -> str:
-        if not isinstance(key, str):
-            return key
-        for (
-            delimiter_char,
-            escape_sequence,
-        ) in self.__KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
-            if escape_sequence in str(key):
-                raise InvalidPolicyConfig(
-                    f"{escape_sequence} is not a valid string for a policy config"
-                )
-            key = key.replace(delimiter_char, escape_sequence)
-        return key
-
-    def __unescape_delimiter_chars(self, key: str) -> str:
-        for (
-            delimiter_char,
-            escape_sequence,
-        ) in self.__KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
-            key = key.replace(escape_sequence, delimiter_char)
-        return key
-
-    def __validate_config_params(
-        self, config_key: str, params: dict[str, Any], value: Any = None
-    ) -> AllocationPolicyConfig:
-        definitions = self.config_definitions()
-
-        class_name = self.__class__.__name__
-
-        # config doesn't exist
-        if config_key not in definitions:
-            raise InvalidPolicyConfig(
-                f"'{config_key}' is not a valid config for {class_name}!"
-            )
-
-        config = definitions[config_key]
-
-        # missing required parameters
-        if (
-            diff := {
-                key: config.param_types[key].__name__
-                for key in config.param_types
-                if key not in params
-            }
-        ) != dict():
-            raise InvalidPolicyConfig(
-                f"'{config_key}' missing required parameters: {diff} for {class_name}!"
-            )
-
-        # not an optional config (no parameters)
-        if params and not config.param_types:
-            raise InvalidPolicyConfig(
-                f"'{config_key}' takes no params for {class_name}!"
-            )
-
-        # parameters aren't correct types
-        if params:
-            for param_name in params:
-                if not isinstance(params[param_name], config.param_types[param_name]):
-                    try:
-                        # try casting to the right type, eg try int("10")
-                        expected_type = config.param_types[param_name]
-                        params[param_name] = expected_type(params[param_name])
-                    except Exception:
-                        raise InvalidPolicyConfig(
-                            f"'{config_key}' parameter '{param_name}' needs to be of type"
-                            f" {config.param_types[param_name].__name__} (not {type(params[param_name]).__name__})"
-                            f" for {class_name}!"
-                        )
-
-        # value isn't correct type
-        if value is not None:
-            if not isinstance(value, config.value_type):
-                try:
-                    # try casting to the right type
-                    config.value_type(value)
-                except Exception:
-                    raise InvalidPolicyConfig(
-                        f"'{config_key}' value needs to be of type"
-                        f" {config.value_type.__name__} (not {type(value).__name__})"
-                        f" for {class_name}!"
-                    )
-
-        return config
+    def _get_default_config_definitions(self) -> list[Configuration]:
+        return cast(list[Configuration], self._default_config_definitions)
 
     def get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        try:
-            if not self.is_active:
+        with sentry_sdk.start_span(
+            op="allocation_policy.get_quota_allowance", name=self.__class__.__name__
+        ) as span:
+            for t, tid in tenant_ids.items():
+                span.set_data(f"tenant_ids.{t}", str(tid))
+            try:
+                if not self.is_active:
+                    allowance = QuotaAllowance(
+                        can_run=True,
+                        max_threads=self.max_threads,
+                        explanation={},
+                        is_throttled=False,
+                        throttle_threshold=MAX_THRESHOLD,
+                        rejection_threshold=MAX_THRESHOLD,
+                        quota_used=0,
+                        quota_unit=NO_UNITS,
+                        suggestion=NO_SUGGESTION,
+                    )
+                else:
+                    allowance = self._get_quota_allowance(tenant_ids, query_id)
+            except InvalidTenantsForAllocationPolicy as e:
                 allowance = QuotaAllowance(
-                    can_run=True,
-                    max_threads=self.max_threads,
-                    explanation={},
+                    can_run=False,
+                    max_threads=0,
+                    explanation=cast(dict[str, Any], e.to_dict()),
                     is_throttled=False,
-                    throttle_threshold=MAX_THRESHOLD,
-                    rejection_threshold=MAX_THRESHOLD,
+                    throttle_threshold=0,
+                    rejection_threshold=0,
                     quota_used=0,
                     quota_unit=NO_UNITS,
                     suggestion=NO_SUGGESTION,
                 )
-            else:
-                allowance = self._get_quota_allowance(tenant_ids, query_id)
-        except InvalidTenantsForAllocationPolicy as e:
-            allowance = QuotaAllowance(
-                can_run=False,
-                max_threads=0,
-                explanation=cast(dict[str, Any], e.to_dict()),
-                is_throttled=False,
-                throttle_threshold=0,
-                rejection_threshold=0,
-                quota_used=0,
-                quota_unit=NO_UNITS,
-                suggestion=NO_SUGGESTION,
-            )
-        except Exception:
-            logger.exception(
-                "Allocation policy failed to get quota allowance, this is a bug, fix it"
-            )
-            if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
-                raise
-            return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
-        if not allowance.can_run:
-            self.metrics.increment(
-                "db_request_rejected",
-                tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
-            )
-        elif allowance.max_threads < self.max_threads:
-            # NOTE: The elif is very intentional here. Don't count the throttling
-            # if the request was rejected.
-            self.metrics.increment(
-                "db_request_throttled",
-                tags={
-                    "referrer": str(tenant_ids.get("referrer", "no_referrer")),
-                    "max_threads": str(allowance.max_threads),
-                },
-            )
-        if not self.is_enforced:
-            return QuotaAllowance(
-                can_run=True,
-                max_threads=self.max_threads,
-                explanation={},
-                is_throttled=allowance.is_throttled,
-                throttle_threshold=allowance.throttle_threshold,
-                rejection_threshold=allowance.rejection_threshold,
-                quota_used=allowance.quota_used,
-                quota_unit=allowance.quota_unit,
-                suggestion=allowance.suggestion,
-            )
-        # make sure we always know which storage key we rejected a query from
-        allowance.explanation["storage_key"] = str(self._storage_key)
-        return allowance
+            except Exception:
+                self.metrics.increment("fail_open", 1, tags={"method": "get_quota_allowance"})
+                logger.exception(
+                    "Allocation policy failed to get quota allowance, this is a bug, fix it"
+                )
+                if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
+                    raise
+                return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
+            if not allowance.can_run:
+                self.metrics.increment(
+                    "db_request_rejected",
+                    tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+                )
+            elif allowance.max_threads < self.max_threads:
+                # NOTE: The elif is very intentional here. Don't count the throttling
+                # if the request was rejected.
+                self.metrics.increment(
+                    "db_request_throttled",
+                    tags={
+                        "referrer": str(tenant_ids.get("referrer", "no_referrer")),
+                        "max_threads": str(allowance.max_threads),
+                    },
+                )
+                span.set_data("db_request_throttled", True)
+            if not self.is_enforced:
+                allowance = QuotaAllowance(
+                    can_run=True,
+                    max_threads=self.max_threads,
+                    explanation={},
+                    is_throttled=allowance.is_throttled,
+                    throttle_threshold=allowance.throttle_threshold,
+                    rejection_threshold=allowance.rejection_threshold,
+                    quota_used=allowance.quota_used,
+                    quota_unit=allowance.quota_unit,
+                    suggestion=allowance.suggestion,
+                )
+            # make sure we always know which storage key we rejected a query from
+            allowance.explanation["storage_key"] = self._resource_identifier.value
+            for k, v in allowance.to_dict().items():
+                span.set_data(f"quota_allowance.{k}", v)
+            return allowance
 
     @abstractmethod
     def _get_quota_allowance(
@@ -836,6 +544,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             # the policy did not do anything because the tenants were invalid, updating is also not necessary
             pass
         except Exception:
+            self.metrics.increment("fail_open", 1, tags={"method": "update_quota_balance"})
             logger.exception(
                 "Allocation policy failed to update quota balance, this is a bug, fix it"
             )
@@ -852,12 +561,20 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         pass
 
     @property
-    def storage_key(self) -> StorageKey:
-        return self._storage_key
+    def resource_identifier(self) -> ResourceIdentifier:
+        return self._resource_identifier
+
+    @property
+    def query_type(self) -> QueryType:
+        return QueryType.SELECT
+
+    def to_dict(self) -> PolicyData:
+        base_data = super().to_dict()
+        return PolicyData(**base_data, query_type=self.query_type.value)  # type: ignore
 
 
 class PassthroughPolicy(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
     def _get_quota_allowance(
@@ -885,7 +602,7 @@ class PassthroughPolicy(AllocationPolicy):
 
 
 DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
-    StorageKey("default.no_storage_key"),
+    ResourceIdentifier(StorageKey("default.no_storage_key")),
     required_tenant_types=[],
     default_config_overrides={},
 )

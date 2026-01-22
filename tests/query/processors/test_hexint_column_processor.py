@@ -7,6 +7,8 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Table
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import column, if_cond, literal
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.physical.hexint_column_processor import (
     HexIntColumnProcessor,
@@ -27,9 +29,7 @@ tests = [
         binary_condition(
             ConditionFunctions.IN,
             Column(None, None, "column1"),
-            FunctionCall(
-                None, "tuple", (Literal(None, "a" * 16), Literal(None, "b" * 16))
-            ),
+            FunctionCall(None, "tuple", (Literal(None, "a" * 16), Literal(None, "b" * 16))),
         ),
         "in(column1, (12297829382473034410, 13527612320720337851))",
         id="in_operator",
@@ -38,9 +38,7 @@ tests = [
         binary_condition(
             ConditionFunctions.IN,
             Column(None, None, "column1"),
-            FunctionCall(
-                None, "array", (Literal(None, "a" * 16), Literal(None, "b" * 16))
-            ),
+            FunctionCall(None, "array", (Literal(None, "a" * 16), Literal(None, "b" * 16))),
         ),
         "in(column1, [12297829382473034410, 13527612320720337851])",
         id="array_in_operator",
@@ -51,8 +49,17 @@ tests = [
             Column(None, None, "column1"),
             FunctionCall(None, "toString", (Literal(None, "a" * 16),)),
         ),
-        "equals(lower(hex(column1)), toString('aaaaaaaaaaaaaaaa'))",
+        "equals(lower(leftPad(hex(column1), if(greater(length(hex(column1)), 16), 32, 16), '0')), toString('aaaaaaaaaaaaaaaa'))",
         id="non_optimizable_condition_pattern",
+    ),
+    pytest.param(
+        binary_condition(
+            ConditionFunctions.EQ,
+            Column(None, None, "column1"),
+            FunctionCall(None, "toString", (Literal(None, f"00{'a' * 14}"),)),
+        ),
+        "equals(lower(leftPad(hex(column1), if(greater(length(hex(column1)), 16), 32, 16), '0')), toString('00aaaaaaaaaaaaaa'))",
+        id="non_optimizable_condition_pattern_with_leading_zeroes",
     ),
 ]
 
@@ -64,22 +71,24 @@ def test_hexint_column_processor(unprocessed: Expression, formatted_value: str) 
         selected_columns=[SelectedExpression("column1", Column(None, None, "column1"))],
         condition=unprocessed,
     )
+    hex = f.hex(column("column1"))
 
-    HexIntColumnProcessor(set(["column1"])).process_query(
-        unprocessed_query, HTTPQuerySettings()
-    )
+    HexIntColumnProcessor(set(["column1"])).process_query(unprocessed_query, HTTPQuerySettings())
     assert unprocessed_query.get_selected_columns() == [
         SelectedExpression(
             "column1",
-            FunctionCall(
-                None,
-                "lower",
-                (
-                    FunctionCall(
-                        None,
-                        "hex",
-                        (Column(None, None, "column1"),),
+            f.lower(
+                f.leftPad(
+                    hex,
+                    if_cond(
+                        f.greater(
+                            f.length(hex),
+                            literal(16),
+                        ),
+                        literal(32),
+                        literal(16),
                     ),
+                    literal("0"),
                 ),
             ),
         )

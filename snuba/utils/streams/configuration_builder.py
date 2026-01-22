@@ -4,6 +4,9 @@ from arroyo.backends.kafka import build_kafka_configuration
 from arroyo.backends.kafka import (
     build_kafka_consumer_configuration as _build_kafka_consumer_configuration,
 )
+from arroyo.backends.kafka import (
+    build_kafka_producer_configuration as _build_kafka_producer_configuration,
+)
 
 from snuba import settings
 from snuba.utils.streams.topics import Topic
@@ -13,7 +16,6 @@ from snuba.utils.streams.types import KafkaBrokerConfig
 def _get_default_topic_configuration(
     topic: Optional[Topic], slice_id: Optional[int] = None
 ) -> Mapping[str, Any]:
-
     if topic is not None:
         if slice_id is not None:
             return settings.SLICED_KAFKA_BROKER_CONFIG.get(
@@ -33,9 +35,7 @@ def get_default_kafka_configuration(
 ) -> KafkaBrokerConfig:
     default_topic_config = _get_default_topic_configuration(topic, slice_id)
 
-    return build_kafka_configuration(
-        default_topic_config, bootstrap_servers, override_params
-    )
+    return build_kafka_configuration(default_topic_config, bootstrap_servers, override_params)
 
 
 def build_kafka_consumer_configuration(
@@ -69,11 +69,12 @@ def build_kafka_producer_configuration(
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
-    broker_config = get_default_kafka_configuration(
-        topic=topic,
-        slice_id=slice_id,
-        bootstrap_servers=bootstrap_servers,
-        override_params=override_params,
+    default_topic_config = _get_default_topic_configuration(topic, slice_id)
+
+    broker_config = _build_kafka_producer_configuration(
+        default_topic_config,
+        bootstrap_servers,
+        override_params,
     )
 
     # at time of writing (2022-05-09) lz4 was chosen because it

@@ -1,9 +1,13 @@
 import os
 from logging import Logger
 from typing import Callable, Sequence
+from unittest import mock
 from unittest.mock import Mock
 
+import pytest
+
 from snuba.clickhouse.columns import Column, String, UInt
+from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -21,6 +25,7 @@ from snuba.migrations.operations import (
     ModifyColumn,
     ModifyTableSettings,
     ModifyTableTTL,
+    OperationMissingNodes,
     OperationTarget,
     RemoveTableTTL,
     RenameTable,
@@ -111,7 +116,7 @@ def test_rename_table() -> None:
 def test_drop_table() -> None:
     assert (
         DropTable(StorageSetKey.EVENTS, "test_table").format_sql()
-        == "DROP TABLE IF EXISTS test_table;"
+        == "DROP TABLE IF EXISTS test_table SYNC;"
     )
 
 
@@ -143,9 +148,7 @@ def test_drop_column() -> None:
 
 def test_modify_column() -> None:
     assert (
-        ModifyColumn(
-            StorageSetKey.EVENTS, "test_table", Column("test", String())
-        ).format_sql()
+        ModifyColumn(StorageSetKey.EVENTS, "test_table", Column("test", String())).format_sql()
         == "ALTER TABLE test_table MODIFY COLUMN test String;"
     )
 
@@ -174,18 +177,14 @@ def test_drop_index() -> None:
 
 def test_drop_index_async() -> None:
     assert (
-        DropIndex(
-            StorageSetKey.EVENTS, "test_table", "index_1", run_async=True
-        ).format_sql()
+        DropIndex(StorageSetKey.EVENTS, "test_table", "index_1", run_async=True).format_sql()
         == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1 SETTINGS mutations_sync=0;"
     )
 
 
 def test_drop_indices() -> None:
     assert (
-        DropIndices(
-            StorageSetKey.EVENTS, "test_table", ["index_1", "index_2"]
-        ).format_sql()
+        DropIndices(StorageSetKey.EVENTS, "test_table", ["index_1", "index_2"]).format_sql()
         == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1, DROP INDEX IF EXISTS index_2;"
     )
 
@@ -369,10 +368,7 @@ def test_new_drop_column() -> None:
         target=OperationTarget.LOCAL,
     )
 
-    assert (
-        local_op.format_sql()
-        == "ALTER TABLE test_table DROP COLUMN IF EXISTS test_column;"
-    )
+    assert local_op.format_sql() == "ALTER TABLE test_table DROP COLUMN IF EXISTS test_column;"
 
     dist_op = DropColumn(
         StorageSetKey.EVENTS,
@@ -380,10 +376,7 @@ def test_new_drop_column() -> None:
         "test_column",
         target=OperationTarget.DISTRIBUTED,
     )
-    assert (
-        dist_op.format_sql()
-        == "ALTER TABLE test_dist_table DROP COLUMN IF EXISTS test_column;"
-    )
+    assert dist_op.format_sql() == "ALTER TABLE test_dist_table DROP COLUMN IF EXISTS test_column;"
 
 
 def test_refactored_migration() -> None:
@@ -452,3 +445,25 @@ def test_reset_settings() -> None:
         ).format_sql()
         == "ALTER TABLE test_table RESET SETTING setting_a, setting_b;"
     )
+
+
+@mock.patch("snuba.clusters.cluster.ClickhouseCluster.get_local_nodes", return_value=[])
+@pytest.mark.custom_clickhouse_db
+def test_missing_nodes_for_operation(mock_get_local_nodes: Mock) -> None:
+    with pytest.raises(OperationMissingNodes):
+        TruncateTable(StorageSetKey.EVENTS, "blah_table", target=OperationTarget.LOCAL).get_nodes()
+
+    cluster = get_cluster(StorageSetKey.EVENTS)
+    if cluster.is_single_node():
+        # in single node mode get_distributed_nodes returning [] is okay
+        assert (
+            TruncateTable(
+                StorageSetKey.EVENTS, "blah_table", target=OperationTarget.DISTRIBUTED
+            ).get_nodes()
+            == []
+        )
+    else:
+        # in multi node mode get_distributed_nodes should have nodes
+        assert TruncateTable(
+            StorageSetKey.EVENTS, "blah_table", target=OperationTarget.DISTRIBUTED
+        ).get_nodes()

@@ -66,7 +66,7 @@ def test_consume_quota(policy: BytesScannedWindowAllocationPolicy) -> None:
         "is_enforced": True,
         "granted_quota": 0,
         "limit": ORG_SCAN_LIMIT,
-        "storage_key": "StorageKey.ERRORS",
+        "storage_key": "errors",
     }
 
 

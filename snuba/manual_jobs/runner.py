@@ -32,9 +32,7 @@ class JobLockedException(SerializableException):
 
 class JobStatusException(SerializableException):
     def __init__(self, job_id: str, status: JobStatus):
-        super().__init__(
-            f"Job {job_id} has run before, status = {status}, not available to run"
-        )
+        super().__init__(f"Job {job_id} has run before, status = {status}, not available to run")
 
 
 MANIFEST_FILENAME = "job_manifest.json"
@@ -81,9 +79,7 @@ def get_job_status(job_id: str) -> JobStatus:
     redis_status = _redis_client.get(name=_build_job_status_key(job_id))
     status = _update_job_status_if_async(
         job_id,
-        JobStatus(redis_status.decode("utf-8"))
-        if redis_status
-        else JobStatus.NOT_STARTED,
+        JobStatus(redis_status.decode("utf-8")) if redis_status else JobStatus.NOT_STARTED,
     )
     return status
 
@@ -99,14 +95,11 @@ def list_job_specs_with_status(
 ) -> Mapping[str, Mapping[str, Union[JobSpec, JobStatus]]]:
     specs = list_job_specs(manifest_filename)
     job_ids = list(specs.keys())
-    statuses = _get_job_status_multi(
-        [_build_job_status_key(job_id) for job_id in job_ids]
-    )
+    statuses = _get_job_status_multi([_build_job_status_key(job_id) for job_id in job_ids])
     for i in range(len(job_ids)):
         statuses[i] = _update_job_status_if_async(job_ids[i], statuses[i])
     return {
-        job_id: {"spec": specs[job_id], "status": statuses[i]}
-        for i, job_id in enumerate(job_ids)
+        job_id: {"spec": specs[job_id], "status": statuses[i]} for i, job_id in enumerate(job_ids)
     }
 
 

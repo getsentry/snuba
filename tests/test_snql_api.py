@@ -10,6 +10,7 @@ import pytest
 import simplejson as json
 
 from snuba import state
+from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -19,7 +20,6 @@ from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     NO_UNITS,
     AllocationPolicy,
-    AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -32,8 +32,37 @@ from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import override_entity_column_validator, write_unprocessed_events
 
 
+class MaxBytesPolicy123(AllocationPolicy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
+
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(
+            can_run=True,
+            max_threads=0,
+            max_bytes_to_read=1,
+            explanation={},
+            is_throttled=True,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        return
+
+
 class RejectAllocationPolicy123(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+    def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
     def _get_quota_allowance(
@@ -73,16 +102,19 @@ class TestSnQLApi(BaseApiTest):
         self.project_id = self.event["project_id"]
         self.org_id = self.event["organization_id"]
         self.group_id = self.event["group_id"]
+        self.event["data"]["contexts"]["flags"] = {
+            "values": [{"flag": "flag-name", "result": True}]
+        }
         self.skew = timedelta(minutes=180)
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) - timedelta(minutes=180)
+        self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
+            minutes=180
+        )
         events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
         assert events_storage is not None
         write_unprocessed_events(events_storage, [self.event])
-        self.next_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) + timedelta(minutes=180)
+        self.next_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) + timedelta(
+            minutes=180
+        )
         write_unprocessed_events(
             get_writable_storage(StorageKey.TRANSACTIONS),
             [get_raw_transaction()],
@@ -281,9 +313,7 @@ class TestSnQLApi(BaseApiTest):
             + get_storage(StorageKey("errors_ro")).get_allocation_policies()
         )
         concurrent_rate_limit_policies = [
-            p
-            for p in policies
-            if p.config_key() == "ConcurrentRateLimitAllocationPolicy"
+            p for p in policies if p.class_name() == "ConcurrentRateLimitAllocationPolicy"
         ]
         for p in concurrent_rate_limit_policies:
             p.set_config_value("project_override", 0, {"project_id": self.project_id})
@@ -752,9 +782,7 @@ class TestSnQLApi(BaseApiTest):
         "url, entity",
         [
             pytest.param("/transactions/snql", "transactions", id="transactions"),
-            pytest.param(
-                "/discover/snql", "discover_transactions", id="discover_transactions"
-            ),
+            pytest.param("/discover/snql", "discover_transactions", id="discover_transactions"),
         ],
     )
     def test_app_start_type(self, url: str, entity: str) -> None:
@@ -786,9 +814,7 @@ class TestSnQLApi(BaseApiTest):
         "url, entity",
         [
             pytest.param("/transactions/snql", "transactions", id="transactions"),
-            pytest.param(
-                "/discover/snql", "discover_transactions", id="discover_transactions"
-            ),
+            pytest.param("/discover/snql", "discover_transactions", id="discover_transactions"),
         ],
     )
     def test_profile_id(self, url: str, entity: str) -> None:
@@ -819,9 +845,7 @@ class TestSnQLApi(BaseApiTest):
         "url, entity",
         [
             pytest.param("/transactions/snql", "transactions", id="transactions"),
-            pytest.param(
-                "/discover/snql", "discover_transactions", id="discover_transactions"
-            ),
+            pytest.param("/discover/snql", "discover_transactions", id="discover_transactions"),
         ],
     )
     def test_profiler_id(self, url: str, entity: str) -> None:
@@ -1007,7 +1031,9 @@ class TestSnQLApi(BaseApiTest):
     MATCH = "MATCH (e: events) -[grouped]-> (gm: groupedmessage)"
     SELECT = "SELECT e.group_id, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status"
     WHERE = "WHERE e.project_id = 1 AND gm.project_id = 1"
-    TIMESTAMPS = "AND e.timestamp >= toDateTime('2021-01-01') AND e.timestamp < toDateTime('2021-01-02')"
+    TIMESTAMPS = (
+        "AND e.timestamp >= toDateTime('2021-01-01') AND e.timestamp < toDateTime('2021-01-02')"
+    )
 
     invalid_columns_composite_query_tests = [
         pytest.param(
@@ -1091,14 +1117,10 @@ class TestSnQLApi(BaseApiTest):
         self, query: str, response_code: int, error_message: str
     ) -> None:
         override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.ERROR)
-        override_entity_column_validator(
-            EntityKey.GROUPEDMESSAGE, ColumnValidationMode.ERROR
-        )
+        override_entity_column_validator(EntityKey.GROUPEDMESSAGE, ColumnValidationMode.ERROR)
         response = self.post("/events/snql", data=json.dumps({"query": query}))
         override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.WARN)
-        override_entity_column_validator(
-            EntityKey.GROUPEDMESSAGE, ColumnValidationMode.WARN
-        )
+        override_entity_column_validator(EntityKey.GROUPEDMESSAGE, ColumnValidationMode.WARN)
 
         assert response.status_code == response_code
         assert json.loads(response.data)["error"]["message"] == error_message
@@ -1303,12 +1325,47 @@ class TestSnQLApi(BaseApiTest):
             in data["sql"]
         )
 
+    def test_allocation_policy_max_bytes_to_read(self) -> None:
+        with patch(
+            "snuba.web.db_query._get_allocation_policies",
+            return_value=[
+                MaxBytesPolicy123(
+                    ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
+                )
+            ],
+        ):
+            response = self.post(
+                "/discover/snql",
+                data=json.dumps(
+                    {
+                        "query": f"""MATCH (discover_events )
+                        SELECT count() AS count BY project_id, tags[custom_tag]
+                        WHERE type != 'transaction' AND project_id = {self.project_id}
+                        AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        ORDER BY count ASC
+                        LIMIT 1000""",
+                        "referrer": "myreferrer",
+                        "turbo": False,
+                        "consistent": True,
+                        "debug": True,
+                        "tenant_ids": {"referrer": "r", "organization_id": 123},
+                    }
+                ),
+            )
+            assert response.status_code == 429
+
+            assert (
+                response.json["error"]["message"]
+                == "Query scanned more than the allocated amount of bytes"
+            )
+
     def test_allocation_policy_violation(self) -> None:
         with patch(
             "snuba.web.db_query._get_allocation_policies",
             return_value=[
                 RejectAllocationPolicy123(
-                    StorageKey("doesntmatter"), ["a", "b", "c"], {}
+                    ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
                 )
             ],
         ):
@@ -1336,38 +1393,35 @@ class TestSnQLApi(BaseApiTest):
                         "max_threads": 0,
                         "explanation": {
                             "reason": "policy rejects all queries",
-                            "storage_key": "StorageKey.DOESNTMATTER",
+                            "storage_key": "doesntmatter",
                         },
                         "is_throttled": False,
-                        "throttle_threshold": MAX_THRESHOLD,
-                        "rejection_threshold": MAX_THRESHOLD,
+                        "throttle_threshold": 1000000000000,
+                        "rejection_threshold": 1000000000000,
                         "quota_used": 0,
-                        "quota_unit": NO_UNITS,
-                        "suggestion": NO_SUGGESTION,
-                    },
+                        "quota_unit": "no_units",
+                        "suggestion": "no_suggestion",
+                        "max_bytes_to_read": 0,
+                    }
                 },
                 "summary": {
                     "threads_used": 0,
                     "is_successful": False,
                     "is_rejected": True,
                     "is_throttled": False,
-                    "rejection_storage_key": "StorageKey.DOESNTMATTER",
+                    "rejection_storage_key": "doesntmatter",
                     "throttle_storage_key": None,
                     "rejected_by": {
                         "policy": "RejectAllocationPolicy123",
                         "quota_used": 0,
                         "quota_unit": "no_units",
                         "suggestion": "no_suggestion",
-                        "storage_key": "StorageKey.DOESNTMATTER",
+                        "storage_key": "doesntmatter",
                         "rejection_threshold": 1000000000000,
                     },
                     "throttled_by": {},
                 },
             }
-
-            print("info")
-            print(info)
-
             assert (
                 response.json["error"]["message"]
                 == f"Query on could not be run due to allocation policies, info: {info}"
@@ -1497,11 +1551,34 @@ class TestSnQLApi(BaseApiTest):
 
         assert response.status_code == 200
         data = json.loads(response.data)
-        assert (
-            "cast(environment, 'Nullable(String)') AS _snuba_environment" in data["sql"]
-        )
+        assert "cast(environment, 'Nullable(String)') AS _snuba_environment" in data["sql"]
         # platform is not nullable but can be cast to nullable
         assert "cast(platform, 'Nullable(String)') AS _snuba_platform" in data["sql"]
+
+    def test_query_flags(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT flags[flag-name]
+                    WHERE project_id = {self.project_id}
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    LIMIT 1""",
+                    "referrer": "myreferrer",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+        assert data["stats"]["consistent"]
+        assert data["data"] == [{"flags[flag-name]": "true"}]
 
 
 @pytest.mark.clickhouse_db

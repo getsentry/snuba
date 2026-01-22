@@ -1,40 +1,92 @@
 on:
   pull_request:
   push:
-    branches: [master]
+    branches:
+      - master
+      - release/**
+
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build-multiplatform:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: amd64
+          - os: ubuntu-24.04-arm
+            platform: arm64
+    runs-on: ${{ matrix.os }}
+    name: build-${{ matrix.platform }}
+    permissions:
+      contents: read
+      packages: write
+    if: github.repository_owner == 'getsentry'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
+    - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
+      with:
+        image_name: 'snuba'
+        platforms: linux/${{ matrix.platform }}
+        dockerfile_path: 'Dockerfile'
+        tag_suffix: -${{ matrix.platform }}
+        ghcr: true
+        tag_nightly: false
+        tag_latest: false
 
-    - run: docker login --username '${{ github.actor }}' --password-stdin ghcr.io <<< "$GHCR_TOKEN"
-      env:
-        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      if: github.event_name != 'pull_request'
+  build-production:
+    runs-on: ubuntu-24.04
+    name: Build and push production image
+    permissions:
+      contents: read
+      id-token: write
+    if: ${{ github.ref_name == 'master' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
+        with:
+          image_name: 'snuba'
+          platforms: linux/amd64
+          dockerfile_path: './Dockerfile'
+          ghcr: false
+          tag_nightly: false
+          tag_latest: false
+          google_ar: true
+          google_ar_image_name: us-docker.pkg.dev/sentryio/snuba-mr/image
+          google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
+          google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
 
-    - run: docker buildx create --driver docker-container --use
+  assemble:
+    needs: [build-multiplatform]
+    if: ${{ (github.ref_name == 'master' || startsWith(github.ref_name, 'release/')) && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Docker Login
+        run: docker login --username '${{ github.actor }}' --password-stdin ghcr.io <<< "$GHCR_TOKEN"
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: build
-      run: |
-        set -euxo pipefail
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-        if [ ${{ github.event_name }} = 'push' ]; then
-          args=(
-            --tag ghcr.io/getsentry/snuba:latest
-            --tag ghcr.io/getsentry/snuba:amd64-latest
-            --push
-          )
-        else
-          args=()
-        fi
+      - name: Create multiplatform manifests
+        run: |
+          docker buildx imagetools create \
+            --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
+            --tag ghcr.io/getsentry/snuba:nightly \
+            ghcr.io/getsentry/snuba:${{ github.sha }}-amd64 \
+            ghcr.io/getsentry/snuba:${{ github.sha }}-arm64
 
-        docker buildx build \
-          --pull \
-          --platform linux/amd64 \
-          --cache-from ghcr.io/getsentry/snuba:latest \
-          --cache-to type=inline \
-          --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
-          --target application \
-          "${args[@]}" \
-          .
+  self-hosted-end-to-end:
+    needs: [build-multiplatform, assemble]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Run Sentry self-hosted e2e CI
+        uses: getsentry/self-hosted@master
+        with:
+          project_name: snuba
+          image_url: ghcr.io/getsentry/snuba:${{ github.sha }}
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

@@ -33,6 +33,10 @@ SENTRY_TAGS_HASH_MAP_COLUMN = (
 )
 
 
+def get_array_vals_hash(col_name: str) -> str:
+    return f"arrayMap(k -> cityHash64(k), {col_name})"
+
+
 def hash_map_int_column_definition(key_column_name: str, value_column_name: str) -> str:
     return (
         f"arrayMap((k, v) -> cityHash64(concat(toString(k), '=', toString(v))), "

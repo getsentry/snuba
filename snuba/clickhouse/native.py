@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import queue
-import random
 import re
 import time
 from contextlib import contextmanager
@@ -16,7 +15,6 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
-    Tuple,
     TypedDict,
     Union,
     cast,
@@ -72,8 +70,6 @@ def capture_logging() -> Generator[StringIO, None, None]:
 
 
 class ClickhousePool(object):
-    FALLBACK_POOL_SIZE = 3
-
     def __init__(
         self,
         host: str,
@@ -85,7 +81,7 @@ class ClickhousePool(object):
         ca_certs: Optional[str] = None,
         verify: Optional[bool] = False,
         connect_timeout: int = 1,
-        send_receive_timeout: Optional[int] = 300,
+        send_receive_timeout: Optional[int] = 35,
         max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
         client_settings: Mapping[str, Any] = {},
     ) -> None:
@@ -102,35 +98,11 @@ class ClickhousePool(object):
         self.client_settings = client_settings
 
         self.pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(max_pool_size)
-        self.fallback_pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(
-            self.FALLBACK_POOL_SIZE
-        )
         self.__gauge = ThreadSafeGauge(metrics, "connections")
 
         # Fill the queue up so that doing get() on it will block properly
         for _ in range(max_pool_size):
             self.pool.put(None)
-
-        for _ in range(self.FALLBACK_POOL_SIZE):
-            self.fallback_pool.put(None)
-
-    def fallback_pool_enabled(self) -> bool:
-        return state.get_config("use_fallback_host_in_native_connection_pool", 0) == 1
-
-    def get_fallback_host(self) -> Tuple[str, int]:
-        config_hosts_str = state.get_config(
-            f"fallback_hosts:{self.host}:{self.port}", None
-        )
-        assert config_hosts_str, f"no fallback hosts found for {self.host}:{self.port}"
-
-        config_hosts = cast(str, config_hosts_str).split(",")
-        selected_host_port = random.choice(config_hosts).split(":")
-
-        assert (
-            len(selected_host_port) == 2
-        ), f"expected host:port format in fallback hosts for {self.host}:{self.port}"
-
-        return (selected_host_port[0], int(selected_host_port[1]))
 
     # This will actually return an int if an INSERT query is run, but we never capture the
     # output of INSERT queries so I left this as a Sequence.
@@ -154,13 +126,11 @@ class ClickhousePool(object):
         return relatively quickly with an error in case of more persistent
         failures.
         """
-        fallback_mode = False
-
         try:
             conn = self.pool.get(block=True)
 
             if retryable:
-                attempts_remaining = 3 + (1 if self.fallback_pool_enabled() else 0)
+                attempts_remaining = 3
             else:
                 attempts_remaining = 1
 
@@ -169,7 +139,7 @@ class ClickhousePool(object):
                 # Lazily create connection instances
                 if conn is None:
                     self.__gauge.increment()
-                    conn = self._create_conn(fallback_mode)
+                    conn = self._create_conn()
 
                 try:
                     if capture_trace:
@@ -180,12 +150,10 @@ class ClickhousePool(object):
                         )
 
                     def query_execute() -> Any:
-                        with sentry_sdk.start_span(
-                            description=query, op="db.clickhouse"
-                        ) as span:
-                            span.set_data(
-                                sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse"
-                            )
+                        with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
+                            span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
+                            span.set_data("query_id", query_id)
+                            span.set_data("settings", settings)
                             return conn.execute(  # type: ignore
                                 query,
                                 params=params,
@@ -206,11 +174,11 @@ class ClickhousePool(object):
                         result_data = query_execute()
 
                     profile_data = ClickhouseProfile(
-                        bytes=conn.last_query.profile_info.bytes or 0,
-                        progress_bytes=conn.last_query.progress.bytes or 0,
-                        blocks=conn.last_query.profile_info.blocks or 0,
-                        rows=conn.last_query.profile_info.rows or 0,
+                        blocks=getattr(conn.last_query.profile_info, "blocks", 0),
+                        bytes=getattr(conn.last_query.profile_info, "bytes", 0),
                         elapsed=conn.last_query.elapsed or 0.0,
+                        progress_bytes=getattr(conn.last_query.progress, "bytes", 0),
+                        rows=getattr(conn.last_query.profile_info, "rows", 0),
                     )
                     if with_column_types:
                         result = ClickhouseResult(
@@ -231,11 +199,7 @@ class ClickhousePool(object):
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                     metrics.increment(
-                        (
-                            "connection_error"
-                            if not fallback_mode
-                            else "fallback_connection_error"
-                        ),
+                        "connection_error",
                         tags={
                             "host": self.host,
                             "port": str(self.port),
@@ -248,25 +212,15 @@ class ClickhousePool(object):
                     conn = None
                     self.__gauge.decrement()
 
-                    # Move to fallback-mode for one last try if it's enabled
-                    if attempts_remaining == 1 and self.fallback_pool_enabled():
-                        # return a client instance placeholder back to the main connection pool
-                        self.pool.put(None, block=False)
-                        # turn fallback mode on (so new connections will come from run-time config)
-                        fallback_mode = True
-                        # try reusing a connection from the fallback connection pool, but if
-                        # it's None we'll create the connection on-demand later
-                        conn = self.fallback_pool.get(block=True)
-                    else:
-                        if attempts_remaining == 0:
-                            if isinstance(e, errors.Error):
-                                raise ClickhouseError(e.message, code=e.code) from e
-                            else:
-                                raise e
+                    if attempts_remaining == 0:
+                        if isinstance(e, errors.Error):
+                            raise ClickhouseError(e.message, code=e.code) from e
                         else:
-                            # Short sleep to make sure we give the load
-                            # balancer a chance to mark a bad host as down.
-                            time.sleep(0.1)
+                            raise e
+                    else:
+                        # Short sleep to make sure we give the load
+                        # balancer a chance to mark a bad host as down.
+                        time.sleep(0.1)
                 except errors.Error as e:
                     if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
                         attempts_remaining -= 1
@@ -279,9 +233,7 @@ class ClickhousePool(object):
                         if not sleep_interval_seconds:
                             raise ClickhouseError(e.message, code=e.code) from e
 
-                        attempts_remaining = min(
-                            attempts_remaining, 1
-                        )  # only retry once
+                        attempts_remaining = min(attempts_remaining, 1)  # only retry once
 
                         assert sleep_interval_seconds is not None
                         # Linear backoff. Adds one second at each iteration.
@@ -291,10 +243,7 @@ class ClickhousePool(object):
                     raise ClickhouseError(e.message, code=e.code) from e
         finally:
             # Return finished connection to the appropriate connection pool
-            if not fallback_mode:
-                self.pool.put(conn, block=False)
-            else:
-                self.fallback_pool.put(conn, block=False)
+            self.pool.put(conn, block=False)
 
         return ClickhouseResult()
 
@@ -365,10 +314,7 @@ class ClickhousePool(object):
                     assert sleep_interval_seconds is not None
                     # Linear backoff. Adds one second at each iteration.
                     time.sleep(
-                        float(
-                            (total_attempts - attempts_remaining)
-                            * sleep_interval_seconds
-                        )
+                        float((total_attempts - attempts_remaining) * sleep_interval_seconds)
                     )
                     continue
                 else:
@@ -377,12 +323,10 @@ class ClickhousePool(object):
             except errors.Error as e:
                 raise ClickhouseError(e.message, code=e.code) from e
 
-    def _create_conn(self, use_fallback_host: bool = False) -> Client:
-        if use_fallback_host:
-            (fallback_host, fallback_port) = self.get_fallback_host()
+    def _create_conn(self) -> Client:
         return Client(
-            host=(self.host if not use_fallback_host else fallback_host),
-            port=(self.port if not use_fallback_host else fallback_port),
+            host=self.host,
+            port=self.port,
             user=self.user,
             password=self.password,
             database=self.database,
@@ -471,13 +415,9 @@ class NativeDriverReader(Reader):
         # duplicated names are discarded at this stage.
         columns = {c[0]: i for i, c in enumerate(meta)}
 
-        data = [
-            {column: row[index] for column, index in columns.items()} for row in data
-        ]
+        data = [{column: row[index] for column, index in columns.items()} for row in data]
 
-        meta = [
-            {"name": m[0], "type": m[1]} for m in [meta[i] for i in columns.values()]
-        ]
+        meta = [{"name": m[0], "type": m[1]} for m in [meta[i] for i in columns.values()]]
 
         new_result: Result = {}
         if with_totals:
@@ -517,9 +457,7 @@ class NativeDriverReader(Reader):
         if "query_id" in settings:
             query_id = settings.pop("query_id")
 
-        execute_func = (
-            self.__client.execute_robust if robust is True else self.__client.execute
-        )
+        execute_func = self.__client.execute_robust if robust is True else self.__client.execute
 
         return self.__transform_result(
             execute_func(

@@ -1,12 +1,10 @@
-import os
 import re
 from typing import Optional, Sequence
 
 import click
 
 import snuba.migrations.autogeneration as autogeneration
-from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.cluster import CLUSTERS
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.environment import setup_logging
 from snuba.migrations.connect import (
@@ -73,9 +71,7 @@ def list() -> None:
 @click.option("--force", is_flag=True)
 @click.option("--fake", is_flag=True)
 @click.option("--check-dangerous", is_flag=True)
-@click.option(
-    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
-)
+@click.option("--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS))
 def migrate(
     group: Optional[str],
     readiness_state: Optional[Sequence[str]],
@@ -93,9 +89,7 @@ def migrate(
     """
 
     readiness_states = (
-        [ReadinessState(state) for state in readiness_state]
-        if readiness_state
-        else None
+        [ReadinessState(state) for state in readiness_state] if readiness_state else None
     )
 
     setup_logging(log_level)
@@ -129,6 +123,74 @@ def migrate(
 
 
 @migrations.command()
+@click.option("-g", "--group", default=None)
+@click.option(
+    "-r",
+    "--readiness-state",
+    multiple=True,
+    type=click.Choice([r.value for r in ReadinessState], case_sensitive=False),
+    default=(),
+)
+@click.argument("through", default="all")
+@click.option("--force", is_flag=True)
+@click.option("--fake", is_flag=True)
+@click.option("--include-system", is_flag=True)
+@click.option("--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS))
+def revert(
+    group: Optional[str],
+    readiness_state: Optional[Sequence[str]],
+    through: str,
+    force: bool,
+    fake: bool,
+    include_system: bool,
+    log_level: Optional[str] = None,
+) -> None:
+    """
+    If group is specified, reverse all the migrations for a group.
+    If no group is specified, reverses all migrations for all groups.
+        * by default SYSTEM migrations are NOT reversed
+        * use --include-system to also reverse SYSTEM migrations
+
+    --force is required
+    """
+
+    readiness_states = (
+        [ReadinessState(state) for state in readiness_state] if readiness_state else None
+    )
+
+    setup_logging(log_level)
+    clusters_to_check = (
+        get_clusters_for_readiness_states(readiness_states, CLUSTERS)
+        if readiness_states
+        else CLUSTERS
+    )
+    check_clickhouse_connections(clusters_to_check)
+    runner = Runner()
+
+    try:
+        if group:
+            migration_group = MigrationGroup(group)
+        elif through != "all":
+            raise click.ClickException(
+                "A migration group must be specified when 'through' is not 'all'."
+            )
+        else:
+            migration_group = None
+        runner.reverse_all(
+            through=through,
+            force=force,
+            fake=fake,
+            include_system=include_system,
+            group=migration_group,
+            readiness_states=readiness_states,
+        )
+    except MigrationError as e:
+        raise click.ClickException(str(e))
+
+    click.echo("Finished reversing migrations")
+
+
+@migrations.command()
 @click.option("--group", required=True, help="Migration group")
 @click.option("--migration-id", required=True, help="Migration ID")
 @click.option("--force", is_flag=True)
@@ -136,9 +198,7 @@ def migrate(
 @click.option("--dry-run", is_flag=True)
 @click.option("--yes", is_flag=True)
 @click.option("--check-dangerous", is_flag=True)
-@click.option(
-    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
-)
+@click.option("--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS))
 def run(
     group: str,
     migration_id: str,
@@ -160,17 +220,13 @@ def run(
     migration_group = MigrationGroup(group)
     if not dry_run:
         # just check the connection for the migration that's being run
-        check_clickhouse_connections(
-            get_clickhouse_clusters_for_migration_group(migration_group)
-        )
+        check_clickhouse_connections(get_clickhouse_clusters_for_migration_group(migration_group))
 
     runner = Runner()
     migration_key = MigrationKey(migration_group, migration_id)
 
     if dry_run:
-        runner.run_migration(
-            migration_key, dry_run=True, check_dangerous=check_dangerous
-        )
+        runner.run_migration(migration_key, dry_run=True, check_dangerous=check_dangerous)
         return
 
     try:
@@ -179,9 +235,7 @@ def run(
                 "This will mark the migration as completed without actually running it. Your database may be in an invalid state. Are you sure?",
                 abort=True,
             )
-        runner.run_migration(
-            migration_key, force=force, fake=fake, check_dangerous=check_dangerous
-        )
+        runner.run_migration(migration_key, force=force, fake=fake, check_dangerous=check_dangerous)
     except MigrationError as e:
         raise click.ClickException(str(e))
 
@@ -195,9 +249,7 @@ def run(
 @click.option("--fake", is_flag=True)
 @click.option("--dry-run", is_flag=True)
 @click.option("--yes", is_flag=True)
-@click.option(
-    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
-)
+@click.option("--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS))
 def reverse(
     group: str,
     migration_id: str,
@@ -216,9 +268,7 @@ def reverse(
     migration_group = MigrationGroup(group)
     setup_logging(log_level)
     if not dry_run:
-        check_clickhouse_connections(
-            get_clickhouse_clusters_for_migration_group(migration_group)
-        )
+        check_clickhouse_connections(get_clickhouse_clusters_for_migration_group(migration_group))
     runner = Runner()
     migration_key = MigrationKey(migration_group, migration_id)
 
@@ -244,9 +294,7 @@ def reverse(
 @click.option("--fake", is_flag=True)
 @click.option("--dry-run", is_flag=True)
 @click.option("--yes", is_flag=True)
-@click.option(
-    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
-)
+@click.option("--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS))
 def reverse_in_progress(
     fake: bool,
     dry_run: bool,
@@ -287,108 +335,6 @@ def reverse_in_progress(
         raise click.ClickException(str(e))
 
     click.echo("Finished reversing in progress migrations")
-
-
-@migrations.command()
-@click.option(
-    "--type", "node_type", type=click.Choice(["local", "dist"]), required=True
-)
-@click.option(
-    "--storage-set",
-    "storage_set_names",
-    type=click.Choice([s.value for s in StorageSetKey]),
-    required=True,
-    multiple=True,
-)
-@click.option(
-    "--host-name",
-    type=str,
-    required=True,
-    default=os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
-)
-@click.option(
-    "--port",
-    type=int,
-    required=True,
-    default=int(os.environ.get("CLICKHOUSE_PORT", 9000)),
-)
-@click.option(
-    "--database",
-    type=str,
-    required=True,
-    default=os.environ.get("CLICKHOUSE_DATABASE", "default"),
-)
-@click.option(
-    "--secure",
-    type=bool,
-    default=False,
-    help="If true, an encrypted connection will be used",
-)
-@click.option(
-    "--ca-certs",
-    type=str,
-    default=None,
-    help="An optional path to certificates directory.",
-)
-@click.option(
-    "--verify",
-    type=bool,
-    default=False,
-    help="Verify ClickHouse SSL cert.",
-)
-def add_node(
-    node_type: str,
-    storage_set_names: Sequence[str],
-    host_name: str,
-    port: int,
-    database: str,
-    secure: bool,
-    ca_certs: Optional[str],
-    verify: Optional[bool],
-) -> None:
-    """
-    Runs all migrations on a brand new ClickHouse node. This should be performed
-    before a new node is added to an existing ClickHouse cluster.
-
-    All of the SQL operations for the provided storage sets will be run. Any non
-    SQL (Python) operations will be skipped.
-
-    This operation does not change the migration status in the migrations_local
-    / migrations_dist tables, since it is designed to bring a new node up to
-    the same state as existing ones already added to the cluster.
-    """
-    user = os.environ.get("CLICKHOUSE_USER", "default")
-    password = os.environ.get("CLICKHOUSE_PASSWORD", "")
-
-    storage_set_keys = [StorageSetKey(name) for name in storage_set_names]
-
-    cluster = next(
-        (
-            c
-            for c in CLUSTERS
-            if all(ss in c.get_storage_set_keys() for ss in storage_set_keys)
-        ),
-        None,
-    )
-
-    if not cluster:
-        raise click.ClickException("Storage sets should be in the same cluster")
-
-    if cluster.is_single_node():
-        raise click.ClickException("You cannot add a node to a single node cluster")
-
-    Runner.add_node(
-        node_type=ClickhouseNodeType(node_type),
-        storage_sets=storage_set_keys,
-        host_name=host_name,
-        port=port,
-        user=user,
-        password=password,
-        database=database,
-        secure=secure,
-        ca_certs=ca_certs,
-        verify=verify,
-    )
 
 
 @migrations.command()

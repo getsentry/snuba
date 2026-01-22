@@ -5,6 +5,7 @@ from typing import Any, Type, TypedDict
 from snuba.clickhouse.columns import (
     Array,
     Column,
+    Date,
     DateTime,
     DateTime64,
     Enum,
@@ -18,8 +19,10 @@ from snuba.clickhouse.columns import (
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.utils.schemas import (
+    JSON,
     UUID,
     AggregateFunction,
+    Bool,
     ColumnType,
     FixedString,
     Int,
@@ -44,9 +47,7 @@ def get_query_processors(
     query_processor_objects: list[QueryProcessorDefinition],
 ) -> list[ClickhouseQueryProcessor]:
     return [
-        ClickhouseQueryProcessor.get_from_name(qp["processor"]).from_kwargs(
-            **qp.get("args", {})
-        )
+        ClickhouseQueryProcessor.get_from_name(qp["processor"]).from_kwargs(**qp.get("args", {}))
         for qp in query_processor_objects
     ]
 
@@ -55,9 +56,7 @@ def get_mandatory_condition_checkers(
     mandatory_condition_checkers_objects: list[MandatoryConditionCheckerDefinition],
 ) -> list[ConditionChecker]:
     return [
-        ConditionChecker.get_from_name(mc["condition"]).from_kwargs(
-            **mc.get("args", {})
-        )
+        ConditionChecker.get_from_name(mc["condition"]).from_kwargs(**mc.get("args", {}))
         for mc in mandatory_condition_checkers_objects
     ]
 
@@ -72,9 +71,11 @@ SIMPLE_COLUMN_TYPES: dict[str, Type[ColumnType[SchemaModifiers]]] = {
     **NUMBER_COLUMN_TYPES,
     "String": String,
     "DateTime": DateTime,
+    "Date": Date,
     "UUID": UUID,
     "IPv4": IPv4,
     "IPv6": IPv6,
+    "Bool": Bool,
 }
 
 
@@ -88,11 +89,7 @@ def __parse_number(
     col: dict[str, Any], modifiers: SchemaModifiers | None
 ) -> ColumnType[SchemaModifiers]:
     col_type = NUMBER_COLUMN_TYPES[col["type"]](col["args"]["size"], modifiers)
-    assert (
-        isinstance(col_type, UInt)
-        or isinstance(col_type, Float)
-        or isinstance(col_type, Int)
-    )
+    assert isinstance(col_type, UInt) or isinstance(col_type, Float) or isinstance(col_type, Int)
     return col_type
 
 
@@ -144,6 +141,15 @@ def __parse_column_type(col: dict[str, Any]) -> ColumnType[SchemaModifiers]:
         column_type = DateTime64(
             precision=col["args"].get("precision", 3),
             timezone=col["args"].get("timezone"),
+            modifiers=modifiers,
+        )
+    elif col["type"] == "JSON":
+        column_type = JSON(
+            max_dynamic_paths=col["args"].get("max_dynamic_paths"),
+            max_dynamic_types=col["args"].get("max_dynamic_types"),
+            type_hints=col["args"].get("type_hints", {}),
+            skip_paths=col["args"].get("skip_paths", []),
+            skip_regexp=col["args"].get("skip_regexp", []),
             modifiers=modifiers,
         )
     assert column_type is not None

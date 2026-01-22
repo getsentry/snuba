@@ -28,10 +28,7 @@ _REGISTERED_STORAGE_SET_KEYS: dict[str, str] = {}
 
 class _StorageSetKey(type):
     def __getattr__(self, attr: str) -> "StorageSetKey":
-        if (
-            attr not in _HARDCODED_STORAGE_SET_KEYS
-            and attr not in _REGISTERED_STORAGE_SET_KEYS
-        ):
+        if attr not in _HARDCODED_STORAGE_SET_KEYS and attr not in _REGISTERED_STORAGE_SET_KEYS:
             raise AttributeError(attr)
 
         return StorageSetKey(attr.lower())
@@ -86,7 +83,7 @@ DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset()
 # Joins can be performed across storage sets in the same group.
 JOINABLE_STORAGE_SETS: FrozenSet[FrozenSet[StorageSetKey]] = frozenset(
     {
-        frozenset({StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO, StorageSetKey.CDC}),
+        frozenset({StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO}),
         frozenset(
             {
                 StorageSetKey.EVENTS,

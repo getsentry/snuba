@@ -22,6 +22,7 @@ columns: Sequence[Column[Modifiers]] = [
     Column("first_release_id", UInt(64, Modifiers(nullable=True))),
 ]
 
+
 # NOTE: CDC storage deprecated
 class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False

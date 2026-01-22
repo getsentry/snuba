@@ -35,12 +35,7 @@ TESTS = [
     pytest.param(
         SnQLSubscriptionData(
             project_id=1,
-            query=(
-                "MATCH (events) "
-                "SELECT count() AS count "
-                "WHERE "
-                "platform IN tuple('a') "
-            ),
+            query=("MATCH (events) SELECT count() AS count WHERE platform IN tuple('a') "),
             time_window_sec=500 * 60,
             resolution_sec=60,
             entity=get_entity(EntityKey.EVENTS),
@@ -72,7 +67,12 @@ TESTS = [
             project_id=1,
             query=(
                 "MATCH (events) "
-                "SELECT count() AS count, avg(timestamp) AS average_t "
+                "SELECT count() AS count, avg(timestamp) AS average_t, "
+                "min(timestamp) AS min_t, max(timestamp) AS max_t, "
+                "sum(timestamp) AS sum_t, quantile(0.95)(timestamp) AS p95_t, "
+                "uniq(timestamp) AS uniq_t, uniqExact(timestamp) AS uniq_exact_t, "
+                "stddev(timestamp) AS stddev_t, variance(timestamp) AS var_t, "
+                "any(timestamp) AS any_t "
                 "WHERE "
                 "platform IN tuple('a') "
             ),
@@ -92,7 +92,7 @@ TESTS = [
                 "MATCH (events) "
                 "SELECT count() AS count BY project_id "
                 "WHERE platform IN tuple('a') "
-                "AND project_id IN tuple(1) "
+                "HAVING project_id IN tuple(1) "
             ),
             time_window_sec=500 * 60,
             resolution_sec=60,
@@ -117,9 +117,7 @@ TESTS = [
                     aggregations=[
                         AttributeAggregation(
                             aggregate=Function.FUNCTION_COUNT,
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_FLOAT, name="my.float.field"
-                            ),
+                            key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my.float.field"),
                             label="count",
                             extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         ),
@@ -128,7 +126,7 @@ TESTS = [
                 time_window_secs=10800,
                 resolution_secs=60,
             ),
-            EntityKey.EAP_SPANS,
+            EntityKey.EAP_ITEMS,
         ),
         20.0,
         None,
@@ -148,9 +146,7 @@ TESTS = [
                     aggregations=[
                         AttributeAggregation(
                             aggregate=Function.FUNCTION_COUNT,
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_FLOAT, name="my.float.field"
-                            ),
+                            key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my.float.field"),
                             label="count",
                             extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         ),
@@ -168,7 +164,7 @@ TESTS = [
                 time_window_secs=3600,
                 resolution_secs=60,
             ),
-            EntityKey.EAP_SPANS,
+            EntityKey.EAP_ITEMS,
         ),
         None,
         None,

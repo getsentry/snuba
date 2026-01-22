@@ -66,5 +66,10 @@
   "python.testing.pytestEnabled": true,
   "python.testing.pytestArgs": ["tests"],
   "python.analysis.autoImportCompletions": true,
-  "mypy-type-checker.args": ["--strict"]
+  "mypy-type-checker.args": [
+    "--strict"
+  ],
+  "makefile.configureOnOpen": false,
+  "cursorpyright.analysis.autoImportCompletions": true
+
 }

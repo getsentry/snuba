@@ -92,9 +92,7 @@ def test_transactions_compatibility() -> None:
     generate_transactions()
 
     runner = Runner()
-    runner.run_migration(
-        MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True
-    )
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True)
 
     runner._update_migration_status(
         MigrationKey(MigrationGroup.TRANSACTIONS, "0001_transactions"),
@@ -110,9 +108,9 @@ def test_transactions_compatibility() -> None:
 
     assert get_sampling_key() == "cityHash64(span_id)"
 
-    assert perform_select_query(
-        ["count(*)"], "transactions_local", None, None, connection
-    ) == [(5,)]
+    assert perform_select_query(["count(*)"], "transactions_local", None, None, connection) == [
+        (5,)
+    ]
 
 
 @pytest.mark.clickhouse_db
@@ -150,7 +148,6 @@ def generate_transactions() -> None:
 def run_prior_migrations(
     migration_group: MigrationGroup, stop_migration_id: str, runner: Runner
 ) -> None:
-
     """Runs all migrations up to the migration denoted by migration ID
 
     Arguments:
@@ -170,9 +167,7 @@ def run_prior_migrations(
         if migration.migration_id == stop_migration_id:
             break
 
-        runner.run_migration(
-            MigrationKey(migration_group, migration.migration_id), force=True
-        )
+        runner.run_migration(MigrationKey(migration_group, migration.migration_id), force=True)
 
 
 @pytest.mark.clickhouse_db
@@ -183,7 +178,6 @@ def perform_select_query(
     limit: Optional[str],
     connection: ClickhousePool,
 ) -> Sequence[Any]:
-
     """Performs a SELECT query, with optional WHERE and LIMIT clauses
 
     Arguments:
@@ -210,6 +204,4 @@ def perform_select_query(
 
 @pytest.mark.clickhouse_db
 def get_count_from_storage(table_name: str, connection: ClickhousePool) -> int:
-    return int(
-        perform_select_query(["count()"], table_name, None, None, connection)[0][0]
-    )
+    return int(perform_select_query(["count()"], table_name, None, None, connection)[0][0])

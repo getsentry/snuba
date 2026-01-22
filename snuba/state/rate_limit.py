@@ -8,9 +8,8 @@ from collections import ChainMap, namedtuple
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any
+from typing import Any, Iterator, MutableMapping, Optional, Sequence, Type
 from typing import ChainMap as TypingChainMap
-from typing import Iterator, MutableMapping, Optional, Sequence, Type
 
 from snuba import environment, state
 from snuba.redis import RedisClientKey, get_redis_client
@@ -42,19 +41,13 @@ def get_rate_limit_config(
     ct_name, concurrent_default = concurrent
 
     per_second_value, concurrent_value = get_configs([(ps_name, None), (ct_name, None)])
-    found_per_second = (
-        per_second_value if per_second_value is not None else per_second_default
-    )
-    found_concurrent = (
-        concurrent_value if concurrent_value is not None else concurrent_default
-    )
+    found_per_second = per_second_value if per_second_value is not None else per_second_default
+    found_concurrent = concurrent_value if concurrent_value is not None else concurrent_default
 
     return (found_per_second, found_concurrent)
 
 
-def set_rate_limit_config(
-    bucket: str, value: float | int | None, copy: bool = True
-) -> None:
+def set_rate_limit_config(bucket: str, value: float | int | None, copy: bool = True) -> None:
     """
     This function to encapsulate how rate limit keys are set in Redis, since
     that is conceptually a different process from writing normal config keys.
@@ -107,9 +100,7 @@ class RateLimitStatsContainer:
     def get_stats(self, rate_limit_name: str) -> Optional[RateLimitStats]:
         return self.__stats.get(rate_limit_name)
 
-    def __format_single_dict(
-        self, name: str, stats: RateLimitStats
-    ) -> MutableMapping[str, float]:
+    def __format_single_dict(self, name: str, stats: RateLimitStats) -> MutableMapping[str, float]:
         return {
             f"{name}_rate": stats.rate,
             f"{name}_concurrent": stats.concurrent,
@@ -121,8 +112,7 @@ class RateLimitStatsContainer:
         the stats that are returned in the response body
         """
         grouped_stats = [
-            self.__format_single_dict(name, rate_limit)
-            for name, rate_limit in self.__stats.items()
+            self.__format_single_dict(name, rate_limit) for name, rate_limit in self.__stats.items()
         ]
         return ChainMap(*grouped_stats)
 
@@ -195,111 +185,101 @@ def rate_limit_start_request(
 
     # Compute the set shard to which we should add and remove the query_id
     bucket_shard = hash(query_id) % rate_limit_shard_factor
-    query_bucket = _get_bucket_key(
-        rate_limit_prefix, rate_limit_params.bucket, bucket_shard
-    )
-    use_transaction_pipe = bool(
-        state.get_config("rate_limit_use_transaction_pipe", False)
-    )
+    query_bucket = _get_bucket_key(rate_limit_prefix, rate_limit_params.bucket, bucket_shard)
 
-    pipe = rds.pipeline(transaction=use_transaction_pipe)
+    with rds.pipeline(transaction=False) as pipe:
+        # cleanup old query timestamps past our retention window
+        #
+        # it is fine to only perform this cleanup for the shard of the current
+        # query, because on average there will be many other queries that hit other
+        # shards and perform cleanup there
+        pipe.zremrangebyscore(query_bucket, "-inf", "({:f}".format(now - rate_history_sec))
 
-    # cleanup old query timestamps past our retention window
-    #
-    # it is fine to only perform this cleanup for the shard of the current
-    # query, because on average there will be many other queries that hit other
-    # shards and perform cleanup there
-    pipe.zremrangebyscore(query_bucket, "-inf", "({:f}".format(now - rate_history_sec))
+        # Now for the tricky bit:
+        # ======================
+        # The query's *deadline* is added to the sorted set of timestamps, therefore
+        # labeling its execution as in the future.
 
-    # Now for the tricky bit:
-    # ======================
-    # The query's *deadline* is added to the sorted set of timestamps, therefore
-    # labeling its execution as in the future.
+        # All queries with timestamps in the future are considered to be executing *right now*
+        # Example:
 
-    # All queries with timestamps in the future are considered to be executing *right now*
-    # Example:
+        # now = 100
+        # max_query_duration_s = 30
+        # rate_lookback_s = 10
+        # sorted_set (timestamps only for clarity) = [91, 94, 97, 103, 105, 130]
 
-    # now = 100
-    # max_query_duration_s = 30
-    # rate_lookback_s = 10
-    # sorted_set (timestamps only for clarity) = [91, 94, 97, 103, 105, 130]
+        # EXPLANATION:
+        # ===========
 
-    # EXPLANATION:
-    # ===========
+        # queries that have finished running
+        # (in this example there are 3 queries in the last 10 seconds
+        #  thus the per second rate is 3/10 = 0.3)
+        #      |
+        #      v
+        #  -----------              v--- the current query, vaulted into the future
+        #  [91, 94, 97, 103, 105, 130]
+        #               -------------- < - queries currently running
+        #                                (how many queries are
+        #                                   running concurrently; in this case 3)
+        #              ^
+        #              | current time
+        pipe.zadd(query_bucket, {query_id: now + max_query_duration_s})
 
-    # queries that have finished running
-    # (in this example there are 3 queries in the last 10 seconds
-    #  thus the per second rate is 3/10 = 0.3)
-    #      |
-    #      v
-    #  -----------              v--- the current query, vaulted into the future
-    #  [91, 94, 97, 103, 105, 130]
-    #               -------------- < - queries currently running
-    #                                (how many queries are
-    #                                   running concurrently; in this case 3)
-    #              ^
-    #              | current time
-    pipe.zadd(query_bucket, {query_id: now + max_query_duration_s})
-
-    # bump the expiration date of the entire set so that it roughly aligns with
-    # the expiration date of the latest item.
-    #
-    # we do this in order to avoid leaking redis sets in the event that two
-    # things occur at the same time:
-    # 1. a bucket stops receiving requests (this can happen if a bucket
-    #    corresponds to a deleted project id)
-    # 2. a previous request to the same bucket was killed off so that the set
-    #    has a dangling item (ie. a process was killed)
-    #
-    # the TTL is calculated as such:
-    #
-    # * in the previous zadd command, the last item is inserted with timestamp
-    #   `now + max_query_duration_s`.
-    # * the next query's zremrangebyscore would remove this item on `now +
-    #   max_query_duration_s + rate_history_s` at the earliest.
-    # * add +1 to account for rounding errors when casting to int
-    pipe.expire(query_bucket, int(max_query_duration_s + rate_history_sec + 1))
-
-    if rate_limit_params.per_second_limit is not None:
-        # count queries that have finished for the per-second rate
-        for shard_i in range(rate_limit_shard_factor):
-            bucket = _get_bucket_key(
-                rate_limit_prefix, rate_limit_params.bucket, shard_i
-            )
-            pipe.zcount(bucket, now - state.rate_lookback_s, now)
-
-    if rate_limit_params.concurrent_limit is not None:
-        # count the amount queries in the "future" which tells us the amount
-        # of concurrent queries
-        for shard_i in range(rate_limit_shard_factor):
-            bucket = _get_bucket_key(
-                rate_limit_prefix, rate_limit_params.bucket, shard_i
-            )
-            pipe.zcount(bucket, "({:f}".format(now), "+inf")
-
-    try:
-        results = pipe.execute()
-        pipe_results = iter(results)
-
-        # skip zremrangebyscore, zadd and expire
-        next(pipe_results)
-        next(pipe_results)
-        next(pipe_results)
+        # bump the expiration date of the entire set so that it roughly aligns with
+        # the expiration date of the latest item.
+        #
+        # we do this in order to avoid leaking redis sets in the event that two
+        # things occur at the same time:
+        # 1. a bucket stops receiving requests (this can happen if a bucket
+        #    corresponds to a deleted project id)
+        # 2. a previous request to the same bucket was killed off so that the set
+        #    has a dangling item (ie. a process was killed)
+        #
+        # the TTL is calculated as such:
+        #
+        # * in the previous zadd command, the last item is inserted with timestamp
+        #   `now + max_query_duration_s`.
+        # * the next query's zremrangebyscore would remove this item on `now +
+        #   max_query_duration_s + rate_history_s` at the earliest.
+        # * add +1 to account for rounding errors when casting to int
+        pipe.expire(query_bucket, int(max_query_duration_s + rate_history_sec + 1))
 
         if rate_limit_params.per_second_limit is not None:
-            historical = sum(next(pipe_results) for _ in range(rate_limit_shard_factor))
-        else:
-            historical = 0
+            # count queries that have finished for the per-second rate
+            for shard_i in range(rate_limit_shard_factor):
+                bucket = _get_bucket_key(rate_limit_prefix, rate_limit_params.bucket, shard_i)
+                pipe.zcount(bucket, now - state.rate_lookback_s, now)
 
         if rate_limit_params.concurrent_limit is not None:
-            concurrent = sum(next(pipe_results) for _ in range(rate_limit_shard_factor))
-        else:
-            concurrent = 0
-    except Exception as ex:
-        # if something goes wrong, we don't want to block the request,
-        # set the values such that they pass under any limit
-        logger.exception(ex)
-        return RateLimitStats(rate=-1, concurrent=-1)
+            # count the amount queries in the "future" which tells us the amount
+            # of concurrent queries
+            for shard_i in range(rate_limit_shard_factor):
+                bucket = _get_bucket_key(rate_limit_prefix, rate_limit_params.bucket, shard_i)
+                pipe.zcount(bucket, "({:f}".format(now), "+inf")
+
+        try:
+            results = pipe.execute()
+            pipe_results = iter(results)
+
+            # skip zremrangebyscore, zadd and expire
+            next(pipe_results)
+            next(pipe_results)
+            next(pipe_results)
+
+            if rate_limit_params.per_second_limit is not None:
+                historical = sum(next(pipe_results) for _ in range(rate_limit_shard_factor))
+            else:
+                historical = 0
+
+            if rate_limit_params.concurrent_limit is not None:
+                concurrent = sum(next(pipe_results) for _ in range(rate_limit_shard_factor))
+            else:
+                concurrent = 0
+        except Exception as ex:
+            # if something goes wrong, we don't want to block the request,
+            # set the values such that they pass under any limit
+            logger.exception(ex)
+            return RateLimitStats(rate=-1, concurrent=-1)
 
     per_second = historical / float(state.rate_lookback_s)
 
@@ -317,26 +297,22 @@ def rate_limit_finish_request(
 ) -> None:
     """Second half of rate limiting, called after the request is finished. See rate_limit_start_request for details"""
     bucket_shard = hash(query_id) % rate_limit_shard_factor
-    query_bucket = _get_bucket_key(
-        rate_limit_prefix, rate_limit_params.bucket, bucket_shard
-    )
+    query_bucket = _get_bucket_key(rate_limit_prefix, rate_limit_params.bucket, bucket_shard)
     max_query_duration_s = max_query_duration_s or state.max_query_duration_s
-    pipe = rds.pipeline()
-    if was_rate_limited:
-        try:
-            pipe.zrem(query_bucket, query_id)  # not allowed / not counted
-            pipe.expire(query_bucket, max_query_duration_s)
-            pipe.execute()
-        except Exception as ex:
-            logger.exception(ex)
-    else:
-        try:
-            # return the query to its start time, if the query_id was actually added.
-            pipe.zincrby(query_bucket, -float(max_query_duration_s), query_id)
-            pipe.expire(query_bucket, max_query_duration_s)
-            pipe.execute()
-        except Exception as ex:
-            logger.exception(ex)
+
+    try:
+        with rds.pipeline() as pipe:
+            if was_rate_limited:
+                pipe.zrem(query_bucket, query_id)  # not allowed / not counted
+                pipe.expire(query_bucket, max_query_duration_s)
+                pipe.execute()
+            else:
+                # return the query to its start time, if the query_id was actually added.
+                pipe.zincrby(query_bucket, -float(max_query_duration_s), query_id)
+                pipe.expire(query_bucket, max_query_duration_s)
+                pipe.execute()
+    except Exception as ex:
+        logger.exception(ex)
 
 
 @contextmanager
@@ -354,7 +330,11 @@ def rate_limit(
             # will raise RateLimitExceeded if the rate limit is exceeded
 
     """
-    (bypass_rate_limit, rate_history_s, rate_limit_shard_factor,) = state.get_configs(
+    (
+        bypass_rate_limit,
+        rate_history_s,
+        rate_limit_shard_factor,
+    ) = state.get_configs(
         [
             # bool (0/1) flag to disable rate limits altogether
             ("bypass_rate_limit", 0),
@@ -413,9 +393,7 @@ def rate_limit(
         )
 
         raise RateLimitExceeded(
-            "{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}".format(
-                r=reason
-            ),
+            "{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}".format(r=reason),
             scope=reason.scope,
             name=reason.name,
         )
@@ -445,9 +423,7 @@ def rate_limit(
         )
 
 
-def _record_metrics(
-    exc: RateLimitExceeded, rate_limit_param: RateLimitParameters
-) -> None:
+def _record_metrics(exc: RateLimitExceeded, rate_limit_param: RateLimitParameters) -> None:
     """
     Record rate limit metrics if needed.
 

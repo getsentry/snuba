@@ -15,6 +15,7 @@ from snuba.core.initialize import initialize_snuba
 from snuba.datasets.factory import reset_dataset_factory
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
 from snuba.redis import all_redis_clients
 
@@ -26,9 +27,7 @@ def pytest_configure() -> None:
     Set up the Sentry SDK to avoid errors hidden by configuration.
     Ensure the snuba_test database exists
     """
-    assert (
-        settings.TESTING
-    ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
+    assert settings.TESTING, "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
     initialize_snuba()
     setup_sentry()
@@ -51,9 +50,11 @@ def create_databases() -> None:
             storage_sets=cluster["storage_sets"],
             single_node=cluster["single_node"],
             cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
-            distributed_cluster_name=cluster["distributed_cluster_name"]
-            if "distributed_cluster_name" in cluster
-            else None,
+            distributed_cluster_name=(
+                cluster["distributed_cluster_name"]
+                if "distributed_cluster_name" in cluster
+                else None
+            ),
         )
 
         database_name = cluster["database"]
@@ -74,6 +75,8 @@ def pytest_collection_modifyitems(items: Sequence[Any]) -> None:
     for item in items:
         if item.get_closest_marker("clickhouse_db"):
             item.fixturenames.append("clickhouse_db")
+        elif item.get_closest_marker("custom_clickhouse_db"):
+            item.fixturenames.append("custom_clickhouse_db")
         else:
             item.fixturenames.append("block_clickhouse_db")
 
@@ -158,9 +161,7 @@ def _build_migrations_cache() -> None:
         nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
         for node in nodes:
             if (cluster, node) not in MIGRATIONS_CACHE:
-                connection = cluster.get_node_connection(
-                    ClickhouseClientSettings.MIGRATE, node
-                )
+                connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
                 rows = connection.execute(
                     f"SELECT name, create_table_query FROM system.tables WHERE database='{database}'"
                 )
@@ -175,9 +176,9 @@ def _build_migrations_cache() -> None:
                 # tables are created before materialized views that depend on them
                 all_tables = mv_tables + non_mv_tables
                 for table_name, create_table_query in all_tables:
-                    MIGRATIONS_CACHE.setdefault((cluster, node), {})[
-                        table_name
-                    ] = create_table_query
+                    MIGRATIONS_CACHE.setdefault((cluster, node), {})[table_name] = (
+                        create_table_query
+                    )
 
 
 def _clear_db() -> None:
@@ -187,15 +188,35 @@ def _clear_db() -> None:
         database = cluster.get_database()
 
         schema = storage.get_schema()
-        if isinstance(schema, WritableTableSchema):
-            table_name = schema.get_local_table_name()
+        if (
+            isinstance(schema, WritableTableSchema)
+            or storage_key == StorageKey.EAP_ITEMS_DOWNSAMPLE_8
+            or storage_key == StorageKey.EAP_ITEMS_DOWNSAMPLE_64
+            or storage_key == StorageKey.EAP_ITEMS_DOWNSAMPLE_512
+            or storage_key == StorageKey.OUTCOMES_HOURLY
+            or storage_key == StorageKey.OUTCOMES_DAILY
+        ):
+            table_name = schema.get_local_table_name()  # type: ignore
 
             nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
             for node in nodes:
-                connection = cluster.get_node_connection(
-                    ClickhouseClientSettings.MIGRATE, node
-                )
+                connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
                 connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
+
+
+@pytest.fixture
+def custom_clickhouse_db(
+    request: pytest.FixtureRequest,
+) -> Generator[None, None, None]:
+    if not request.node.get_closest_marker("custom_clickhouse_db"):
+        # Make people use the marker explicitly so `-m` works on CLI
+        pytest.fail(
+            "Need to use custom_clickhouse_db marker if custom_clickhouse_db fixture is used"
+        )
+    try:
+        yield
+    finally:
+        _clear_db()
 
 
 @pytest.fixture
@@ -217,9 +238,7 @@ def clickhouse_db(
             # apply migrations from cache
             applied_nodes = set()
             for (cluster, node), tables in MIGRATIONS_CACHE.items():
-                connection = cluster.get_node_connection(
-                    ClickhouseClientSettings.MIGRATE, node
-                )
+                connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
                 for table_name, create_table_query in tables.items():
                     if (node.host_name, node.port, table_name) in applied_nodes:
                         continue
@@ -296,9 +315,3 @@ def snuba_set_config(request: pytest.FixtureRequest) -> SnubaSetConfig:
         state.set_config(key, value)
 
     return set_config
-
-
-@pytest.fixture
-def disable_query_cache(snuba_set_config: SnubaSetConfig, redis_db: None) -> None:
-    snuba_set_config("use_cache", False)
-    snuba_set_config("use_readthrough_query_cache", 0)

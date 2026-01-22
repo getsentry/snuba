@@ -57,7 +57,14 @@ from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.query import run_query
-from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
+from snuba.web.rpc.proto_visitor import (
+    GetExpressionAggregationsVisitor,
+    TimeSeriesExpressionWrapper,
+)
+from snuba.web.rpc.v1.endpoint_time_series import (
+    EndpointTimeSeries,
+    _convert_aggregations_to_expressions,
+)
 
 SUBSCRIPTION_REFERRER = "subscription"
 
@@ -114,18 +121,12 @@ class _SubscriptionData(ABC, Generic[TRequest]):
 
     def validate(self) -> None:
         if self.time_window_sec < 60:
-            raise InvalidSubscriptionError(
-                "Time window must be greater than or equal to 1 minute"
-            )
+            raise InvalidSubscriptionError("Time window must be greater than or equal to 1 minute")
         elif self.time_window_sec > 60 * 60 * 24:
-            raise InvalidSubscriptionError(
-                "Time window must be less than or equal to 24 hours"
-            )
+            raise InvalidSubscriptionError("Time window must be less than or equal to 24 hours")
 
         if self.resolution_sec < 60:
-            raise InvalidSubscriptionError(
-                "Resolution must be greater than or equal to 1 minute"
-            )
+            raise InvalidSubscriptionError("Resolution must be greater than or equal to 1 minute")
 
     @abstractmethod
     def build_request(
@@ -173,6 +174,17 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
     request_name: str
     request_version: str
 
+    def __post_init__(self) -> None:
+        # convert any use of aggregation to expressions
+        request = TimeSeriesRequest()
+        request.ParseFromString(base64.b64decode(self.time_series_request))
+        request = _convert_aggregations_to_expressions(request)
+        object.__setattr__(
+            self,
+            "time_series_request",
+            base64.b64encode(request.SerializeToString()).decode("utf-8"),
+        )
+
     def validate(self) -> None:
         super().validate()
         if (self.request_name, self.request_version) not in REQUEST_TYPE_ALLOWLIST:
@@ -189,19 +201,23 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         if len(request.meta.project_ids) != 1:
             raise InvalidSubscriptionError("Multiple project IDs not supported.")
 
-        if not request.aggregations or len(request.aggregations) != 1:
-            raise InvalidSubscriptionError("Exactly one aggregation required.")
+        if not request.expressions or len(request.expressions) != 1:
+            raise InvalidSubscriptionError("Exactly one expression required.")
 
         if request.group_by:
             raise InvalidSubscriptionError("Group bys not supported.")
 
-        aggregation = request.aggregations[0]
-        if (
-            aggregation.extrapolation_mode
-            != ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
-        ):
+        expression = request.expressions[0]
+        vis = GetExpressionAggregationsVisitor()
+        TimeSeriesExpressionWrapper(expression).accept(vis)
+        allowed_modes = [
+            ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+            ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+        ]
+        if any(e.extrapolation_mode not in allowed_modes for e in vis.aggregations):
             raise InvalidSubscriptionError(
-                f"Invalid extrapolation mode. Allowed extrapolation modes: {ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED}"
+                f"Invalid extrapolation mode. Allowed extrapolation modes: {', '.join([ExtrapolationMode.Name(mode) for mode in allowed_modes])}"
             )
 
     def build_request(
@@ -213,14 +229,11 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
     ) -> TimeSeriesRequest:
-
         request_class = EndpointTimeSeries().request_class()()
         request_class.ParseFromString(base64.b64decode(self.time_series_request))
 
         start_time_proto = Timestamp()
-        start_time_proto.FromDatetime(
-            timestamp - timedelta(seconds=self.time_window_sec)
-        )
+        start_time_proto.FromDatetime(timestamp - timedelta(seconds=self.time_window_sec))
         end_time_proto = Timestamp()
         end_time_proto.FromDatetime(timestamp)
         request_class.meta.start_timestamp.CopyFrom(start_time_proto)
@@ -241,28 +254,24 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         concurrent_queries_gauge: Optional[Gauge] = None,
     ) -> QueryResult:
         response = EndpointTimeSeries().execute(request)
-        if not response.result_timeseries:
+        if not response.result_timeseries or not any(
+            dp.data_present for dp in response.result_timeseries[0].data_points
+        ):
             result: Result = {
                 "meta": [],
-                "data": [{request.aggregations[0].label: None}],
+                "data": [{request.expressions[0].label: None}],
                 "trace_output": "",
             }
-            return QueryResult(
-                result=result, extra={"stats": {}, "sql": "", "experiments": {}}
-            )
+            return QueryResult(result=result, extra={"stats": {}, "sql": "", "experiments": {}})
 
         timeseries = response.result_timeseries[0]
         data = [{timeseries.label: timeseries.data_points[0].data}]
 
         result = {"meta": [], "data": data, "trace_output": ""}
-        return QueryResult(
-            result=result, extra={"stats": {}, "sql": "", "experiments": {}}
-        )
+        return QueryResult(result=result, extra={"stats": {}, "sql": "", "experiments": {}})
 
     @classmethod
-    def from_dict(
-        cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> RPCSubscriptionData:
+    def from_dict(cls, data: Mapping[str, Any], entity_key: EntityKey) -> RPCSubscriptionData:
         entity: Entity = get_entity(entity_key)
         metadata = {}
         for key in data.keys():
@@ -350,9 +359,7 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
         elif isinstance(from_clause, EntityDS):
             entities = [(None, get_entity(from_clause.key))]
         else:
-            raise InvalidSubscriptionError(
-                "Only simple queries and join queries are supported"
-            )
+            raise InvalidSubscriptionError("Only simple queries and join queries are supported")
         for entity_alias, entity in entities:
             conditions_to_add: List[Expression] = [
                 binary_condition(
@@ -386,9 +393,7 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
             new_condition = combine_and_conditions(conditions_to_add)
             condition = query.get_condition()
             if condition:
-                new_condition = binary_condition(
-                    BooleanFunctions.AND, condition, new_condition
-                )
+                new_condition = binary_condition(BooleanFunctions.AND, condition, new_condition)
 
             query.set_ast_condition(new_condition)
 
@@ -460,9 +465,7 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
         )
 
     @classmethod
-    def from_dict(
-        cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SnQLSubscriptionData:
+    def from_dict(cls, data: Mapping[str, Any], entity_key: EntityKey) -> SnQLSubscriptionData:
         entity: Entity = get_entity(entity_key)
 
         metadata = {}

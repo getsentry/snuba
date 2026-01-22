@@ -6,14 +6,49 @@ exclude: >
     )
 
 repos:
-  - repo: https://github.com/psf/black
-    rev: 22.3.0
+  - repo: local
     hooks:
-      - id: black
+      # Configuration for ruff exists in pyproject.toml.
+      - id: ruff-format
+        name: ruff format
+        entry: ruff format
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-lint
+        name: ruff lint
+        entry: ruff check --fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
+        require_serial: true
+
+      - id: validate-configs-syntax
+        name: validate-configs-syntax
+        entry: env SNUBA_SETTINGS=test python3 -m snuba.validate_configs
+        language: python
+        additional_dependencies: [ 'fastjsonschema', 'pyyaml', 'sentry_sdk' ]
+        pass_filenames: false
+        files: 'snuba/datasets/configuration/.*'
+      - id: cargo-fmt
+        name: format rust code
+        language: system
+        # keep in sync with Cargo.toml. There is no way to run cargo fmt for specific files
+        # https://github.com/rust-lang/rustfmt/issues/4485
+        entry: rustfmt --edition 2021
+        files: ^rust_snuba/.*\.rs$
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.2.0
+    rev: v5.0.0
     hooks:
       - id: check-case-conflict
+      - id: check-executables-have-shebangs
       - id: check-merge-conflict
       - id: check-symlinks
       - id: check-xml
@@ -23,37 +58,7 @@ repos:
       - id: trailing-whitespace
       - id: fix-encoding-pragma
         args: ["--remove"]
-  - repo: https://github.com/pycqa/flake8
-    rev: 4.0.1
-    hooks:
-      - id: flake8
-  - repo: https://github.com/pycqa/isort
-    rev: 5.12.0
-    hooks:
-      - id: isort
-        name: isort (python)
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.2.0
-    hooks:
       - id: no-commit-to-branch
         args: ['--branch', 'master']
-  - repo: local
-    hooks:
-      - id: validate-configs-syntax
-        name: validate-configs-syntax
-        entry: env SNUBA_SETTINGS=test python3 -m snuba.validate_configs
-        language: python
-        additional_dependencies: [ 'fastjsonschema', 'pyyaml', 'sentry_sdk' ]
-        pass_filenames: false
-        files: 'snuba/datasets/configuration/.*'
-  - repo: local
-    hooks:
-      - id: cargo-fmt
-        name: format rust code
-        language: system
-        # keep in sync with Cargo.toml. There is no way to run cargo fmt for specific files
-        # https://github.com/rust-lang/rustfmt/issues/4485
-        entry: rustfmt --edition 2021
-        files: ^rust_snuba/.*\.rs$
-default_language_version:
-  python: python3.11
+      - id: check-added-large-files
+        args: ['--maxkb=1024']

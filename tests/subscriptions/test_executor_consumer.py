@@ -13,7 +13,7 @@ from arroyo.processing.strategies import MessageRejected
 from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.produce import Produce
 from arroyo.types import BrokerValue, Message, Partition, Topic
-from arroyo.utils.clock import TestingClock
+from arroyo.utils.clock import MockedClock
 from confluent_kafka.admin import AdminClient
 
 from snuba import state
@@ -31,6 +31,7 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.executor_consumer import (
     ExecuteQuery,
+    SubscriptionQueryException,
     build_executor_consumer,
     calculate_max_concurrent_queries,
 )
@@ -149,9 +150,7 @@ def test_executor_consumer() -> None:
 
     scheduled_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
     assert scheduled_topic_spec is not None
-    tasks_producer = KafkaProducer(
-        build_kafka_producer_configuration(scheduled_topic_spec.topic)
-    )
+    tasks_producer = KafkaProducer(build_kafka_producer_configuration(scheduled_topic_spec.topic))
 
     scheduled_topic = Topic(scheduled_topic_spec.topic_name)
     tasks_producer.produce(scheduled_topic, payload=encoded_task).result()
@@ -164,9 +163,9 @@ def test_executor_consumer() -> None:
     result = result_consumer.poll(5)
     assert result is not None, "Did not receive a result message"
     data = json.loads(result.payload.value)
-    assert (
-        data["payload"]["subscription_id"] == "1/91b46cb6224f11ecb2ddacde48001122"
-    ), "Invalid subscription id"
+    assert data["payload"]["subscription_id"] == "1/91b46cb6224f11ecb2ddacde48001122", (
+        "Invalid subscription id"
+    )
 
     result_producer.close()
 
@@ -174,6 +173,7 @@ def test_executor_consumer() -> None:
 def generate_message(
     entity_key: EntityKey,
     subscription_identifier: Optional[SubscriptionIdentifier] = None,
+    bad_query: Optional[bool] = False,
 ) -> Iterator[Message[KafkaPayload]]:
     codec = SubscriptionScheduledTaskEncoder()
     epoch = datetime(1970, 1, 1)
@@ -188,6 +188,12 @@ def generate_message(
 
     entity = get_entity(entity_key)
 
+    query = (
+        f"MATCH ({entity_key.value}) SELECT sum()"
+        if bad_query
+        else f"MATCH ({entity_key.value}) SELECT count()"
+    )
+
     while True:
         payload = codec.encode(
             ScheduledSubscriptionTask(
@@ -200,7 +206,7 @@ def generate_message(
                             project_id=1,
                             time_window_sec=60,
                             resolution_sec=60,
-                            query=f"MATCH ({entity_key.value}) SELECT count()",
+                            query=query,
                             entity=entity,
                             metadata=metadata,
                         ),
@@ -241,12 +247,42 @@ def test_execute_query_strategy() -> None:
     assert isinstance(message.value, BrokerValue)
     assert next_step.submit.call_args[0][0].committable == message.committable
 
-    result = json.loads(next_step.submit.call_args[0][0].payload.value)["payload"][
-        "result"
-    ]
+    result = json.loads(next_step.submit.call_args[0][0].payload.value)["payload"]["result"]
 
     assert result["data"] == [{"count()": 0}]
     assert result["meta"] == [{"name": "count()", "type": "UInt64"}]
+
+    strategy.close()
+    strategy.join()
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_execute_query_exception() -> None:
+    next_step = mock.Mock()
+
+    strategy = ExecuteQuery(
+        dataset=get_dataset("events"),
+        entity_names=["events"],
+        max_concurrent_queries=2,
+        stale_threshold_seconds=None,
+        metrics=TestingMetricsBackend(),
+        next_step=next_step,
+    )
+
+    make_message = generate_message(EntityKey.EVENTS, bad_query=True)
+    message = next(make_message)
+
+    strategy.submit(message)
+
+    with pytest.raises(SubscriptionQueryException):
+        # wait until future is done
+        while next_step.submit.call_count == 0:
+            time.sleep(0.1)
+            strategy.poll()
+
+    assert isinstance(message.value, BrokerValue)
+    assert next_step.submit.call_count == 0
 
     strategy.close()
     strategy.join()
@@ -301,14 +337,8 @@ def test_skip_execution_for_entity() -> None:
     strategy.close()
     strategy.join()
 
-    assert (
-        Increment("skipped_execution", 1, {"entity": "metrics_sets"})
-        not in metrics.calls
-    )
-    assert (
-        Increment("skipped_execution", 1, {"entity": "metrics_counters"})
-        in metrics.calls
-    )
+    assert Increment("skipped_execution", 1, {"entity": "metrics_sets"}) not in metrics.calls
+    assert Increment("skipped_execution", 1, {"entity": "metrics_counters"}) in metrics.calls
 
 
 @pytest.mark.clickhouse_db
@@ -316,7 +346,7 @@ def test_skip_execution_for_entity() -> None:
 def test_execute_and_produce_result() -> None:
     scheduled_topic = Topic("scheduled-subscriptions-events")
     result_topic = Topic("events-subscriptions-results")
-    clock = TestingClock()
+    clock = MockedClock()
     broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
     broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
     broker.create_topic(scheduled_topic, partitions=1)
@@ -341,10 +371,7 @@ def test_execute_and_produce_result() -> None:
     strategy.submit(message)
 
     # Eventually a message should be produced and offsets committed
-    while (
-        broker_storage.consume(Partition(result_topic, 0), 0) is None
-        or commit.call_count == 0
-    ):
+    while broker_storage.consume(Partition(result_topic, 0), 0) is None or commit.call_count == 0:
         strategy.poll()
 
     produced_message = broker_storage.consume(Partition(result_topic, 0), 0)
@@ -356,7 +383,7 @@ def test_execute_and_produce_result() -> None:
 def test_skip_stale_message() -> None:
     scheduled_topic = Topic("scheduled-subscriptions-events")
     result_topic = Topic("events-subscriptions-results")
-    clock = TestingClock()
+    clock = MockedClock()
     broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
     broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
     broker.create_topic(scheduled_topic, partitions=1)
@@ -425,7 +452,6 @@ def test_max_concurrent_queries(
     total_concurrent_queries: int,
     expected_max_concurrent_queries: int,
 ) -> None:
-
     calculated = calculate_max_concurrent_queries(
         assigned_partition_count, total_partition_count, total_concurrent_queries
     )

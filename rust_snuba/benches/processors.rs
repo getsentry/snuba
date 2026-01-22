@@ -7,7 +7,7 @@ use criterion::{black_box, BenchmarkGroup, BenchmarkId, Criterion, Throughput};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use rust_snuba::{
-    BrokerConfig, ClickhouseConfig, ConsumerStrategyFactory, EnvConfig, KafkaMessageMetadata,
+    BrokerConfig, ClickhouseConfig, ConsumerStrategyFactoryV2, EnvConfig, KafkaMessageMetadata,
     MessageProcessorConfig, ProcessingFunction, ProcessingFunctionType, ProcessorConfig,
     StatsDBackend, StorageConfig, TopicConfig, PROCESSORS,
 };
@@ -53,6 +53,7 @@ fn create_factory(
         clickhouse_cluster: ClickhouseConfig {
             host: "test".into(),
             port: 1234,
+            secure: false,
             http_port: 1234,
             user: "test".into(),
             password: "test".into(),
@@ -72,7 +73,7 @@ fn create_factory(
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let replacements_concurrency =
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
-    let factory = ConsumerStrategyFactory {
+    let factory = ConsumerStrategyFactoryV2 {
         storage_config: storage,
         env_config: EnvConfig::default(),
         logical_topic_name: schema.into(),
@@ -95,9 +96,12 @@ fn create_factory(
             physical_topic_name: "shared-resources-usage".to_string(),
             logical_topic_name: "shared-resources-usage".to_string(),
             broker_config: BrokerConfig::default(),
+            quantized_rebalance_consumer_group_delay_secs: None,
         },
         stop_at_timestamp: None,
         batch_write_timeout: None,
+        join_timeout_ms: None,
+        health_check: "arroyo".to_string(),
     };
     Box::new(factory)
 }
@@ -201,7 +205,7 @@ fn run_processor_bench(
 
 fn main() {
     // this sends to nowhere, but because it's UDP we won't error.
-    metrics::init(StatsDBackend::new("127.0.0.1", 8081, "snuba.consumer", 0.0)).unwrap();
+    metrics::init(StatsDBackend::new("127.0.0.1", 8081, "snuba.consumer")).unwrap();
 
     let mut c = Criterion::default().configure_from_args();
 

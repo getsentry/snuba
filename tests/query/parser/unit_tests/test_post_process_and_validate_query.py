@@ -32,9 +32,7 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("project_id", column("project_id")),
                     SelectedExpression("platform", column("platform")),
@@ -72,16 +70,10 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "project_id", column("project_id", None, "_snuba_project_id")
-                ),
-                SelectedExpression(
-                    "platform", column("platform", None, "_snuba_platform")
-                ),
+                SelectedExpression("project_id", column("project_id", None, "_snuba_project_id")),
+                SelectedExpression("platform", column("platform", None, "_snuba_platform")),
                 SelectedExpression(
                     "test_func_alias",
                     f.test_func(
@@ -89,9 +81,7 @@ test_cases = [
                         alias="_snuba_test_func_alias",
                     ),
                 ),
-                SelectedExpression(
-                    "event_id", column("event_id", None, "_snuba_event_id")
-                ),
+                SelectedExpression("event_id", column("event_id", None, "_snuba_event_id")),
             ],
             array_join=None,
             condition=and_cond(
@@ -104,9 +94,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=[
@@ -125,28 +113,20 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression(
                         "format_eventid(event_id)",
-                        f.format_eventid(
-                            column("event_id"), alias="format_eventid(event_id)"
-                        ),
+                        f.format_eventid(column("event_id"), alias="format_eventid(event_id)"),
                     ),
-                    SelectedExpression(
-                        "platforms", f.count(column("platform"), alias="platforms")
-                    ),
+                    SelectedExpression("platforms", f.count(column("platform"), alias="platforms")),
                     SelectedExpression(
                         "uniq_platforms",
                         f.uniq(column("platform"), alias="uniq_platforms"),
                     ),
                     SelectedExpression(
                         "top_platforms",
-                        f.testF(
-                            column("platform"), column("release"), alias="top_platforms"
-                        ),
+                        f.testF(column("platform"), column("release"), alias="top_platforms"),
                     ),
                     SelectedExpression(
                         "f1_alias",
@@ -174,11 +154,7 @@ test_cases = [
                         ),
                     ),
                 ),
-                groupby=[
-                    f.format_eventid(
-                        column("event_id"), alias="format_eventid(event_id)"
-                    )
-                ],
+                groupby=[f.format_eventid(column("event_id"), alias="format_eventid(event_id)")],
                 having=f.greater(column("retention_days"), literal(1)),
                 order_by=None,
                 limitby=None,
@@ -192,9 +168,7 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "format_eventid(event_id)",
@@ -238,9 +212,7 @@ test_cases = [
             array_join=None,
             condition=and_cond(
                 and_cond(
-                    in_cond(
-                        tags["sentry:dist"], f.tuple(literal("dist1"), literal("dist2"))
-                    ),
+                    in_cond(tags["sentry:dist"], f.tuple(literal("dist1"), literal("dist2"))),
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
@@ -251,9 +223,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=[
@@ -262,9 +232,7 @@ test_cases = [
                     alias="_snuba_format_eventid(event_id)",
                 )
             ],
-            having=f.greater(
-                column("retention_days", None, "_snuba_retention_days"), literal(1)
-            ),
+            having=f.greater(column("retention_days", None, "_snuba_retention_days"), literal(1)),
             order_by=None,
             limitby=None,
             limit=1000,
@@ -276,9 +244,7 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("partition", column("partition")),
                     SelectedExpression("offset", column("offset")),
@@ -315,13 +281,9 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "partition", column("partition", None, "_snuba_partition")
-                ),
+                SelectedExpression("partition", column("partition", None, "_snuba_partition")),
                 SelectedExpression("offset", column("offset", None, "_snuba_offset")),
             ],
             array_join=None,
@@ -335,17 +297,13 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=None,
             having=None,
             order_by=[
-                OrderBy(
-                    OrderByDirection.ASC, column("partition", None, "_snuba_partition")
-                ),
+                OrderBy(OrderByDirection.ASC, column("partition", None, "_snuba_partition")),
                 OrderBy(OrderByDirection.DESC, column("offset", None, "_snuba_offset")),
                 OrderBy(
                     OrderByDirection.DESC,
@@ -362,9 +320,7 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("platform", column("platform")),
                     SelectedExpression("partition", column("partition")),
@@ -397,16 +353,10 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "platform", column("platform", None, "_snuba_platform")
-                ),
-                SelectedExpression(
-                    "partition", column("partition", None, "_snuba_partition")
-                ),
+                SelectedExpression("platform", column("platform", None, "_snuba_platform")),
+                SelectedExpression("partition", column("partition", None, "_snuba_partition")),
             ],
             array_join=None,
             condition=and_cond(
@@ -419,17 +369,13 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=[column("platform", None, "_snuba_platform")],
             having=None,
             order_by=[
-                OrderBy(
-                    OrderByDirection.DESC, column("partition", None, "_snuba_partition")
-                )
+                OrderBy(OrderByDirection.DESC, column("partition", None, "_snuba_partition"))
             ],
             limitby=None,
             limit=1000,
@@ -441,9 +387,7 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression(
                         "foo(tags[test2])",
@@ -480,17 +424,13 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "foo(tags[test2])",
                     f.foo(tags["test2"], alias="_snuba_foo(tags[test2])"),
                 ),
-                SelectedExpression(
-                    "platform", column("platform", None, "_snuba_platform")
-                ),
+                SelectedExpression("platform", column("platform", None, "_snuba_platform")),
                 SelectedExpression("tags[test]", tags["test"]),
             ],
             array_join=None,
@@ -504,9 +444,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=[f.foo(tags["test2"], alias="_snuba_foo(tags[test2])")],
@@ -522,17 +460,11 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("group_id", column("group_id")),
-                    SelectedExpression(
-                        "issue_id", f.goo(column("partition"), alias="issue_id")
-                    ),
-                    SelectedExpression(
-                        "offset", f.foo(f.zoo(column("offset")), alias="offset")
-                    ),
+                    SelectedExpression("issue_id", f.goo(column("partition"), alias="issue_id")),
+                    SelectedExpression("offset", f.foo(f.zoo(column("offset")), alias="offset")),
                 ],
                 array_join=None,
                 condition=and_cond(
@@ -565,9 +497,7 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "group_id",
@@ -586,9 +516,7 @@ test_cases = [
                         alias="_snuba_issue_id",
                     ),
                 ),
-                SelectedExpression(
-                    "offset", f.foo(f.zoo(column("offset")), alias="_snuba_offset")
-                ),
+                SelectedExpression("offset", f.foo(f.zoo(column("offset")), alias="_snuba_offset")),
             ],
             array_join=None,
             condition=and_cond(
@@ -613,9 +541,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -642,9 +568,7 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("exp", f.foo(column("partition"), alias="exp")),
                     SelectedExpression("exp", f.foo(column("partition"), alias="exp")),
@@ -677,9 +601,7 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "exp",
@@ -707,9 +629,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -725,9 +645,7 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("exp", f.foo(column("partition"), alias="exp")),
                     SelectedExpression("exp", column("exp")),
@@ -760,9 +678,7 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "exp",
@@ -790,9 +706,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -808,14 +722,10 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("count", f.count(alias="count")),
-                    SelectedExpression(
-                        "exception_stacks.type", column("exception_stacks.type")
-                    ),
+                    SelectedExpression("exception_stacks.type", column("exception_stacks.type")),
                 ],
                 array_join=[column("exception_stacks.type")],
                 condition=and_cond(
@@ -845,16 +755,12 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="_snuba_count")),
                 SelectedExpression(
                     "exception_stacks.type",
-                    column(
-                        "exception_stacks.type", None, "_snuba_exception_stacks.type"
-                    ),
+                    column("exception_stacks.type", None, "_snuba_exception_stacks.type"),
                 ),
             ],
             array_join=[column("exception_stacks.type", None, "exception_stacks.type")],
@@ -868,9 +774,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -886,14 +790,10 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("count", f.count(alias="count")),
-                    SelectedExpression(
-                        "exception_stacks.type", column("exception_stacks.type")
-                    ),
+                    SelectedExpression("exception_stacks.type", column("exception_stacks.type")),
                 ],
                 array_join=None,
                 condition=and_cond(
@@ -926,16 +826,12 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="_snuba_count")),
                 SelectedExpression(
                     "exception_stacks.type",
-                    column(
-                        "exception_stacks.type", None, "_snuba_exception_stacks.type"
-                    ),
+                    column("exception_stacks.type", None, "_snuba_exception_stacks.type"),
                 ),
             ],
             array_join=None,
@@ -945,9 +841,7 @@ test_cases = [
                         Lambda(
                             None,
                             ("x",),
-                            f.assumeNotNull(
-                                f.like(Argument(None, "x"), literal("Arithmetic%"))
-                            ),
+                            f.assumeNotNull(f.like(Argument(None, "x"), literal("Arithmetic%"))),
                         ),
                         column(
                             "exception_stacks.type",
@@ -965,9 +859,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -983,14 +875,10 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("count", f.count(alias="count")),
-                    SelectedExpression(
-                        "exception_stacks.type", column("exception_stacks.type")
-                    ),
+                    SelectedExpression("exception_stacks.type", column("exception_stacks.type")),
                 ],
                 array_join=[column("exception_stacks.type")],
                 condition=and_cond(
@@ -1023,16 +911,12 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="_snuba_count")),
                 SelectedExpression(
                     "exception_stacks.type",
-                    column(
-                        "exception_stacks.type", None, "_snuba_exception_stacks.type"
-                    ),
+                    column("exception_stacks.type", None, "_snuba_exception_stacks.type"),
                 ),
             ],
             array_join=[column("exception_stacks.type", None, "exception_stacks.type")],
@@ -1056,9 +940,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -1074,9 +956,7 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("count", f.count(alias="count")),
                     SelectedExpression(
@@ -1118,9 +998,7 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="_snuba_count")),
                 SelectedExpression(
@@ -1138,9 +1016,7 @@ test_cases = [
                         Lambda(
                             None,
                             ("x",),
-                            f.assumeNotNull(
-                                f.like(Argument(None, "x"), literal("Arithmetic%"))
-                            ),
+                            f.assumeNotNull(f.like(Argument(None, "x"), literal("Arithmetic%"))),
                         ),
                         column(
                             "exception_stacks.type",
@@ -1158,9 +1034,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -1176,14 +1050,10 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("count", f.count(alias="count")),
-                    SelectedExpression(
-                        "exception_stacks.type", column("exception_stacks.type")
-                    ),
+                    SelectedExpression("exception_stacks.type", column("exception_stacks.type")),
                 ],
                 array_join=None,
                 condition=and_cond(
@@ -1228,16 +1098,12 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="_snuba_count")),
                 SelectedExpression(
                     "exception_stacks.type",
-                    column(
-                        "exception_stacks.type", None, "_snuba_exception_stacks.type"
-                    ),
+                    column("exception_stacks.type", None, "_snuba_exception_stacks.type"),
                 ),
             ],
             array_join=None,
@@ -1292,9 +1158,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -1310,9 +1174,7 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("count", f.count(alias="count")),
                     SelectedExpression(
@@ -1366,9 +1228,7 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="_snuba_count")),
                 SelectedExpression(
@@ -1435,9 +1295,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -1453,9 +1311,7 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("tags_key", column("tags_key")),
                     SelectedExpression("count", f.count(alias="count")),
@@ -1503,13 +1359,9 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "tags_key", column("tags_key", None, "_snuba_tags_key")
-                ),
+                SelectedExpression("tags_key", column("tags_key", None, "_snuba_tags_key")),
                 SelectedExpression("count", f.count(alias="_snuba_count")),
             ],
             array_join=None,
@@ -1517,12 +1369,8 @@ test_cases = [
                 and_cond(
                     f.equals(
                         or_cond(
-                            f.equals(
-                                f.ifNull(tags["foo"], literal("")), literal("baz")
-                            ),
-                            f.equals(
-                                f.ifNull(tags["foo.bar"], literal("")), literal("qux")
-                            ),
+                            f.equals(f.ifNull(tags["foo"], literal("")), literal("baz")),
+                            f.equals(f.ifNull(tags["foo.bar"], literal("")), literal("qux")),
                         ),
                         literal(1),
                     ),
@@ -1536,9 +1384,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=[column("tags_key", None, "_snuba_tags_key")],
@@ -1554,14 +1400,10 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("count", f.count(alias="count")),
-                    SelectedExpression(
-                        "exception_stacks.type", column("exception_stacks.type")
-                    ),
+                    SelectedExpression("exception_stacks.type", column("exception_stacks.type")),
                 ],
                 array_join=[column("exception_stacks")],
                 condition=and_cond(
@@ -1606,16 +1448,12 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="_snuba_count")),
                 SelectedExpression(
                     "exception_stacks.type",
-                    column(
-                        "exception_stacks.type", None, "_snuba_exception_stacks.type"
-                    ),
+                    column("exception_stacks.type", None, "_snuba_exception_stacks.type"),
                 ),
             ],
             array_join=[column("exception_stacks", None, "exception_stacks")],
@@ -1652,9 +1490,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -1670,14 +1506,10 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("count", f.count(alias="count")),
-                    SelectedExpression(
-                        "exception_stacks.type", column("exception_stacks.type")
-                    ),
+                    SelectedExpression("exception_stacks.type", column("exception_stacks.type")),
                 ],
                 array_join=[column("exception_stacks")],
                 condition=and_cond(
@@ -1722,16 +1554,12 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="_snuba_count")),
                 SelectedExpression(
                     "exception_stacks.type",
-                    column(
-                        "exception_stacks.type", None, "_snuba_exception_stacks.type"
-                    ),
+                    column("exception_stacks.type", None, "_snuba_exception_stacks.type"),
                 ),
             ],
             array_join=[
@@ -1770,9 +1598,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -1788,9 +1614,7 @@ test_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("group_id", column("group_id")),
                     SelectedExpression("group_id", column("group_id")),
@@ -1832,16 +1656,10 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "group_id", column("group_id", None, "_snuba_group_id")
-                ),
-                SelectedExpression(
-                    "group_id", column("group_id", None, "_snuba_group_id")
-                ),
+                SelectedExpression("group_id", column("group_id", None, "_snuba_group_id")),
+                SelectedExpression("group_id", column("group_id", None, "_snuba_group_id")),
                 SelectedExpression("count()", f.count(alias="_snuba_count()")),
                 SelectedExpression(
                     "divide(uniq(tags[url]) AS a+*, 1)",
@@ -1863,9 +1681,7 @@ test_cases = [
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
                     ),
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                 ),
             ),
             groupby=[column("group_id", None, "_snuba_group_id")],
@@ -1904,9 +1720,7 @@ test_cases = [
                 ),
                 groupby=[column("replay_id")],
                 having=f.notEquals(
-                    or_cond(
-                        literal(1), or_cond(literal(1), or_cond(literal(1), literal(1)))
-                    ),
+                    or_cond(literal(1), or_cond(literal(1), or_cond(literal(1), literal(1)))),
                     literal(0),
                 ),
                 order_by=None,
@@ -1921,16 +1735,10 @@ test_cases = [
             None,
         ),
         Query(
-            from_clause=Entity(
-                EntityKey.REPLAYS, get_entity(EntityKey.REPLAYS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.REPLAYS, get_entity(EntityKey.REPLAYS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "replay_id", column("replay_id", None, "_snuba_replay_id")
-                ),
-                SelectedExpression(
-                    "replay_id", column("replay_id", None, "_snuba_replay_id")
-                ),
+                SelectedExpression("replay_id", column("replay_id", None, "_snuba_replay_id")),
+                SelectedExpression("replay_id", column("replay_id", None, "_snuba_replay_id")),
             ],
             array_join=None,
             condition=and_cond(
@@ -1951,9 +1759,7 @@ test_cases = [
             ),
             groupby=[column("replay_id", None, "_snuba_replay_id")],
             having=f.notEquals(
-                or_cond(
-                    literal(1), or_cond(literal(1), or_cond(literal(1), literal(1)))
-                ),
+                or_cond(literal(1), or_cond(literal(1), or_cond(literal(1), literal(1)))),
                 literal(0),
             ),
             order_by=None,
@@ -1996,9 +1802,7 @@ failure_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression("alias", f.foo(literal(1), alias="alias")),
                     SelectedExpression("alias", f.bar(literal(2), alias="alias")),
@@ -2023,9 +1827,7 @@ failure_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
                     SelectedExpression(
                         "f1_alias",
@@ -2069,13 +1871,9 @@ failure_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
-                    SelectedExpression(
-                        "f1", f.f1(column("column1"), column("f2"), alias="f1")
-                    ),
+                    SelectedExpression("f1", f.f1(column("column1"), column("f2"), alias="f1")),
                     SelectedExpression("f2", f.f2(column("f1"), alias="f2")),
                 ],
                 array_join=None,
@@ -2110,13 +1908,9 @@ failure_cases = [
     pytest.param(
         (
             Query(
-                from_clause=Entity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-                ),
+                from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
                 selected_columns=[
-                    SelectedExpression(
-                        "c", f.f1(f.f2(column("c"), alias="f2"), alias="c")
-                    )
+                    SelectedExpression("c", f.f1(f.f2(column("c"), alias="f2"), alias="c"))
                 ],
                 array_join=None,
                 condition=and_cond(

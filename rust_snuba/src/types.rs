@@ -1,11 +1,10 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 
-use crate::strategies::clickhouse::batch::HttpBatch;
-
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::timer;
+use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -45,6 +44,58 @@ impl CogsData {
                 .entry(k)
                 .and_modify(|curr| *curr += v)
                 .or_insert(v);
+        }
+    }
+}
+
+/// Returns the friendly name for a TraceItemType, e.g. "span" instead of "TRACE_ITEM_TYPE_SPAN".
+fn item_type_name(item_type: TraceItemType) -> String {
+    item_type
+        .as_str_name()
+        .strip_prefix("TRACE_ITEM_TYPE_")
+        .unwrap_or(item_type.as_str_name())
+        .to_lowercase()
+}
+
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct ItemTypeMetrics {
+    pub counts: BTreeMap<TraceItemType, u64>,
+    pub bytes_processed: BTreeMap<TraceItemType, usize>,
+}
+
+impl ItemTypeMetrics {
+    pub fn new() -> Self {
+        Self {
+            counts: BTreeMap::new(),
+            bytes_processed: BTreeMap::new(),
+        }
+    }
+
+    pub fn record_item(&mut self, item_type: TraceItemType, size_bytes: usize) {
+        self.counts
+            .entry(item_type)
+            .and_modify(|count| *count += 1)
+            .or_insert(1);
+
+        self.bytes_processed
+            .entry(item_type)
+            .and_modify(|bytes| *bytes += size_bytes)
+            .or_insert(size_bytes);
+    }
+
+    pub fn merge(&mut self, other: ItemTypeMetrics) {
+        for (item_type, count) in other.counts {
+            self.counts
+                .entry(item_type)
+                .and_modify(|curr| *curr += count)
+                .or_insert(count);
+        }
+
+        for (item_type, size) in other.bytes_processed {
+            self.bytes_processed
+                .entry(item_type)
+                .and_modify(|curr| *curr += size)
+                .or_insert(size);
         }
     }
 }
@@ -146,6 +197,7 @@ pub struct InsertBatch {
     pub origin_timestamp: Option<DateTime<Utc>>,
     pub sentry_received_timestamp: Option<DateTime<Utc>>,
     pub cogs_data: Option<CogsData>,
+    pub item_type_metrics: Option<ItemTypeMetrics>,
 }
 
 impl InsertBatch {
@@ -162,6 +214,7 @@ impl InsertBatch {
             origin_timestamp,
             sentry_received_timestamp: None,
             cogs_data: None,
+            item_type_metrics: None,
         })
     }
 
@@ -176,7 +229,7 @@ impl InsertBatch {
 
 #[derive(Clone, Debug, Default)]
 pub struct BytesInsertBatch<R> {
-    rows: R,
+    pub rows: R,
 
     /// when the message was inserted into the snuba topic
     ///
@@ -199,9 +252,13 @@ pub struct BytesInsertBatch<R> {
     commit_log_offsets: CommitLogOffsets,
 
     cogs_data: CogsData,
+
+    item_type_metrics: ItemTypeMetrics,
 }
 
 impl<R> BytesInsertBatch<R> {
+    /// Create a new BytesInsertBatch with all fields specified.
+    /// For most use cases, prefer `from_rows()` which uses sensible defaults.
     pub fn new(
         rows: R,
         message_timestamp: Option<DateTime<Utc>>,
@@ -223,7 +280,65 @@ impl<R> BytesInsertBatch<R> {
                 .unwrap_or_default(),
             commit_log_offsets,
             cogs_data,
+            item_type_metrics: Default::default(),
         }
+    }
+
+    /// Create a BytesInsertBatch with just rows, using defaults for all other fields.
+    /// Use builder methods to set optional fields as needed.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let batch = BytesInsertBatch::from_rows(rows)
+    ///     .with_message_timestamp(timestamp)
+    ///     .with_cogs_data(cogs_data);
+    /// ```
+    pub fn from_rows(rows: R) -> Self {
+        Self {
+            rows,
+            message_timestamp: Default::default(),
+            origin_timestamp: Default::default(),
+            sentry_received_timestamp: Default::default(),
+            commit_log_offsets: Default::default(),
+            cogs_data: Default::default(),
+            item_type_metrics: Default::default(),
+        }
+    }
+
+    /// Set the message timestamp (when the message was inserted into the Kafka topic)
+    pub fn with_message_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.message_timestamp = LatencyRecorder::from(timestamp);
+        self
+    }
+
+    /// Set the origin timestamp (when the event was received by Relay)
+    pub fn with_origin_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.origin_timestamp = LatencyRecorder::from(timestamp);
+        self
+    }
+
+    /// Set the sentry received timestamp (when received by ingest consumer in Sentry)
+    pub fn with_sentry_received_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.sentry_received_timestamp = LatencyRecorder::from(timestamp);
+        self
+    }
+
+    /// Set the commit log offsets
+    pub fn with_commit_log_offsets(mut self, offsets: CommitLogOffsets) -> Self {
+        self.commit_log_offsets = offsets;
+        self
+    }
+
+    /// Set the COGS data
+    pub fn with_cogs_data(mut self, cogs_data: CogsData) -> Self {
+        self.cogs_data = cogs_data;
+        self
+    }
+
+    /// Set the item type metrics
+    pub fn with_item_type_metrics(mut self, item_type_metrics: ItemTypeMetrics) -> Self {
+        self.item_type_metrics = item_type_metrics;
+        self
     }
 
     pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
@@ -234,6 +349,18 @@ impl<R> BytesInsertBatch<R> {
         &self.cogs_data
     }
 
+    pub fn clone_meta(&self) -> BytesInsertBatch<()> {
+        BytesInsertBatch {
+            rows: (),
+            message_timestamp: self.message_timestamp.clone(),
+            origin_timestamp: self.origin_timestamp.clone(),
+            sentry_received_timestamp: self.sentry_received_timestamp.clone(),
+            commit_log_offsets: self.commit_log_offsets.clone(),
+            cogs_data: self.cogs_data.clone(),
+            item_type_metrics: self.item_type_metrics.clone(),
+        }
+    }
+
     pub fn take(self) -> (R, BytesInsertBatch<()>) {
         let new = BytesInsertBatch {
             rows: (),
@@ -242,6 +369,7 @@ impl<R> BytesInsertBatch<R> {
             sentry_received_timestamp: self.sentry_received_timestamp,
             commit_log_offsets: self.commit_log_offsets,
             cogs_data: self.cogs_data,
+            item_type_metrics: self.item_type_metrics,
         };
 
         (self.rows, new)
@@ -256,25 +384,43 @@ impl<R> BytesInsertBatch<R> {
         self.sentry_received_timestamp
             .send_metric(write_time, "sentry_received_latency");
     }
+
+    pub fn emit_item_type_metrics(&self) {
+        use sentry_arroyo::counter;
+
+        for (item_type, count) in &self.item_type_metrics.counts {
+            counter!(
+                "insertions.item_type_count",
+                *count,
+                "item_type" => item_type_name(*item_type)
+            );
+        }
+
+        for (item_type, size) in &self.item_type_metrics.bytes_processed {
+            counter!(
+                "insertions.item_bytes_processed",
+                *size as u64,
+                "item_type" => item_type_name(*item_type)
+            );
+        }
+    }
 }
 
 impl BytesInsertBatch<RowData> {
     pub fn len(&self) -> usize {
         self.rows.num_rows
     }
-}
 
-impl BytesInsertBatch<HttpBatch> {
     pub fn merge(mut self, other: BytesInsertBatch<RowData>) -> Self {
-        self.rows
-            .write_rows(&other.rows)
-            .expect("failed to write rows to channel");
+        self.rows.encoded_rows.extend(other.rows.encoded_rows);
+        self.rows.num_rows += other.rows.num_rows;
         self.commit_log_offsets.merge(other.commit_log_offsets);
         self.message_timestamp.merge(other.message_timestamp);
         self.origin_timestamp.merge(other.origin_timestamp);
         self.sentry_received_timestamp
             .merge(other.sentry_received_timestamp);
         self.cogs_data.merge(other.cogs_data);
+        self.item_type_metrics.merge(other.item_type_metrics);
         self
     }
 }
@@ -358,5 +504,33 @@ mod tests {
         let now = Utc.timestamp_opt(65, 0).unwrap();
         assert_eq!(accumulator.max_value_ms(now), 4000);
         assert_eq!(accumulator.avg_value_ms(now), 3000);
+    }
+
+    #[test]
+    fn test_item_type_metrics_merge() {
+        let mut metrics1 = ItemTypeMetrics::new();
+        metrics1.record_item(TraceItemType::Span, 100);
+        metrics1.record_item(TraceItemType::Span, 150);
+        metrics1.record_item(TraceItemType::Log, 200);
+
+        let mut metrics2 = ItemTypeMetrics::new();
+        metrics2.record_item(TraceItemType::Span, 50);
+        metrics2.record_item(TraceItemType::Log, 75);
+
+        metrics1.merge(metrics2);
+
+        // Verify counts are merged correctly
+        assert_eq!(metrics1.counts.get(&TraceItemType::Span), Some(&3));
+        assert_eq!(metrics1.counts.get(&TraceItemType::Log), Some(&2));
+
+        // Verify bytes_processed are merged correctly
+        assert_eq!(
+            metrics1.bytes_processed.get(&TraceItemType::Span),
+            Some(&300)
+        ); // 100 + 150 + 50
+        assert_eq!(
+            metrics1.bytes_processed.get(&TraceItemType::Log),
+            Some(&275)
+        ); // 200 + 75
     }
 }

@@ -18,9 +18,8 @@ from typing import (
 )
 
 import simplejson as json
-from confluent_kafka import KafkaError
+from confluent_kafka import KafkaError, Producer
 from confluent_kafka import Message as KafkaMessage
-from confluent_kafka import Producer
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba import environment, settings
@@ -40,8 +39,7 @@ config_hash = "snuba-config"
 config_description_hash = "snuba-config-description"
 config_history_hash = "snuba-config-history"
 config_changes_list = "snuba-config-changes"
-config_changes_list_limit = 25
-queries_list = "snuba-queries"
+config_changes_list_limit = 100
 rate_limit_config_key = "snuba-ratelimit-config:"
 
 # Rate Limiting and Deduplication
@@ -128,23 +126,23 @@ def set_config(
         enc_original_value = rds.hget(config_key, key)
         if enc_original_value is not None and value is not None:
             original_value = get_typed_value(enc_original_value.decode("utf-8"))
-            if value == original_value and type(value) == type(original_value):
+            if value == original_value and type(value) is type(original_value):
                 return
 
-            if not force and type(value) != type(original_value):
+            if not force and type(value) is not type(original_value):
                 raise MismatchedTypeException(key, type(original_value), type(value))
 
         change_record = (time.time(), user, enc_original_value, enc_value)
-        p = rds.pipeline()
-        if value is None:
-            p.hdel(config_key, key)
-            p.hdel(config_history_hash, key)
-        else:
-            p.hset(config_key, key, enc_value)
-            p.hset(config_history_hash, key, json.dumps(change_record))
-        p.lpush(config_changes_list, json.dumps((key, change_record)))
-        p.ltrim(config_changes_list, 0, config_changes_list_limit)
-        p.execute()
+        with rds.pipeline() as p:
+            if value is None:
+                p.hdel(config_key, key)
+                p.hdel(config_history_hash, key)
+            else:
+                p.hset(config_key, key, enc_value)
+                p.hset(config_history_hash, key, json.dumps(change_record))
+            p.lpush(config_changes_list, json.dumps((key, change_record)))
+            p.ltrim(config_changes_list, 0, config_changes_list_limit)
+            p.execute()
         logger.info(f"Successfully changed option {key} to {value}")
     except MismatchedTypeException as exc:
         logger.exception(
@@ -231,9 +229,7 @@ def get_raw_configs(config_key: str = config_hash) -> Mapping[str, Optional[Any]
         return {}
 
 
-def delete_config(
-    key: str, user: Optional[Any] = None, config_key: str = config_hash
-) -> None:
+def delete_config(key: str, user: Optional[Any] = None, config_key: str = config_hash) -> None:
     set_config(key, None, user=user, config_key=config_key)
 
 
@@ -266,9 +262,7 @@ def get_config_changes() -> Sequence[Tuple[str, float, Optional[str], Any, Any]]
 def set_config_description(
     key: str, description: Optional[str] = None, user: Optional[str] = None
 ) -> None:
-    enc_desc = (
-        "{}".format(description).encode("utf-8") if description is not None else None
-    )
+    enc_desc = "{}".format(description).encode("utf-8") if description is not None else None
 
     try:
         enc_original_desc = rds.hget(config_description_hash, key)
@@ -285,9 +279,7 @@ def set_config_description(
             logger.info(f"Successfully deleted config description for {key}")
         else:
             rds.hset(config_description_hash, key, enc_desc)
-            logger.info(
-                f"Successfully changed config description for {key} to '{description}'"
-            )
+            logger.info(f"Successfully changed config description for {key} to '{description}'")
 
     except Exception as e:
         logger.exception(e)
@@ -325,17 +317,13 @@ def delete_config_description(key: str, user: Optional[str] = None) -> None:
 def safe_dumps_default(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {**value}
-    raise TypeError(
-        f"Cannot convert object of type {type(value).__name__} to JSON-safe type"
-    )
+    raise TypeError(f"Cannot convert object of type {type(value).__name__} to JSON-safe type")
 
 
 safe_dumps = partial(json.dumps, for_json=True, default=safe_dumps_default)
 
 
-def _record_query_delivery_callback(
-    error: Optional[KafkaError], message: KafkaMessage
-) -> None:
+def _record_query_delivery_callback(error: Optional[KafkaError], message: KafkaMessage) -> None:
     metrics.increment(
         "record_query.delivery_callback",
         tags={"status": "success" if error is None else "failure"},
@@ -346,13 +334,9 @@ def _record_query_delivery_callback(
 
 
 def record_query(query_metadata: snuba_queries_v1.Querylog) -> None:
-    max_redis_queries = 200
     try:
         producer = _kafka_producer()
         data = safe_dumps(query_metadata)
-        rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(
-            queries_list, 0, max_redis_queries - 1
-        ).execute()
         producer.poll(0)  # trigger queued delivery callbacks
         producer.produce(
             settings.KAFKA_TOPIC_MAP.get(Topic.QUERYLOG.value, Topic.QUERYLOG.value),

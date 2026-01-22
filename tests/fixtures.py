@@ -183,14 +183,14 @@ def get_raw_event() -> InsertEvent:
             "time_spent": None,
             "type": "error",
             "version": "6",
+            "symbolicated_in_app": True,
+            "sample_rate": 0.5,
         },
     }
 
 
 def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
-    now = datetime.utcnow().replace(
-        minute=0, second=0, microsecond=0, tzinfo=timezone.utc
-    )
+    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
     start_timestamp = now - timedelta(seconds=3)
     end_timestamp = now - timedelta(seconds=2)
     event_received = now - timedelta(seconds=1)
@@ -295,9 +295,7 @@ def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
 
 
 def get_replay_event(replay_id: str | None = None) -> Mapping[str, Any]:
-    replay_id = (
-        replay_id if replay_id else str(uuid.UUID("e5e062bf2e1d4afd96fd2f90b6770431"))
-    )
+    replay_id = replay_id if replay_id else str(uuid.UUID("e5e062bf2e1d4afd96fd2f90b6770431"))
     now = (
         datetime.utcnow()
         .replace(minute=0, second=0, microsecond=0, tzinfo=timezone.utc)

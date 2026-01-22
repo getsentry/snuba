@@ -9,9 +9,10 @@ from snuba.clickhouse.columns import (
     FixedString,
     Float,
     Nested,
+    String,
+    UInt,
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
-from snuba.clickhouse.columns import String, UInt
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query.conditions import (
     BINARY_OPERATORS,
@@ -27,6 +28,7 @@ from snuba.query.matchers import Or, Param
 from snuba.query.matchers import String as StringMatch
 from snuba.query.subscripts import subscript_key_column_name
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.schemas import DateTime64
 
 """
 
@@ -91,6 +93,9 @@ EVENTS_COLUMNS = ColumnSet(
         ("exception_main_thread", UInt(8, Modifiers(nullable=True))),
         ("trace_sampled", UInt(8, Modifiers(nullable=True))),
         ("num_processing_errors", UInt(64, Modifiers(nullable=True))),
+        ("symbolicated_in_app", UInt(8, Modifiers(nullable=True))),
+        ("timestamp_ms", DateTime64(3, modifiers=Modifiers(nullable=True))),
+        ("sample_weight", Float(64, Modifiers(nullable=True))),
     ]
 )
 
@@ -146,9 +151,7 @@ TRANSACTION_FUNCTIONS = FunctionCallMatch(
     Or([StringMatch("apdex"), StringMatch("failure_rate")]), None
 )
 
-EVENT_FUNCTIONS = FunctionCallMatch(
-    Or([StringMatch("isHandled"), StringMatch("notHandled")]), None
-)
+EVENT_FUNCTIONS = FunctionCallMatch(Or([StringMatch("isHandled"), StringMatch("notHandled")]), None)
 
 
 def match_query_to_entity(
@@ -253,18 +256,14 @@ def _track_bad_query(
         if transactions_only_columns.get(schema_col_name):
             transaction_columns.add(schema_col_name)
 
-    event_mismatch = (
-        event_columns and selected_entity == EntityKey.DISCOVER_TRANSACTIONS
-    )
+    event_mismatch = event_columns and selected_entity == EntityKey.DISCOVER_TRANSACTIONS
     transaction_mismatch = transaction_columns and selected_entity in [
         EntityKey.DISCOVER_EVENTS,
         EntityKey.DISCOVER,
     ]
 
     if event_mismatch or transaction_mismatch:
-        missing_columns = ",".join(
-            sorted(event_columns if event_mismatch else transaction_columns)
-        )
+        missing_columns = ",".join(sorted(event_columns if event_mismatch else transaction_columns))
         selected_entity_str = (
             str(selected_entity.value)
             if isinstance(selected_entity, EntityKey)

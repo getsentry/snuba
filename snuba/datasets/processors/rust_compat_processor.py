@@ -23,9 +23,13 @@ class RustCompatProcessor(DatasetMessageProcessor):
     def process_message(
         self, message: Any, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
+        if self.__processor_name == "EAPItemsProcessor":
+            payload = message
+        else:
+            payload = json.dumps(message).encode("utf8")
         insert_payload, replacement_payload = self.__process_message(
             self.__processor_name,
-            json.dumps(message).encode("utf8"),
+            payload,
             metadata.partition,
             metadata.offset,
             int(metadata.timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000),
@@ -34,11 +38,7 @@ class RustCompatProcessor(DatasetMessageProcessor):
         if insert_payload is not None:
             assert replacement_payload is None
 
-            rows = [
-                json.loads(line)
-                for line in insert_payload.rstrip(b"\n").split(b"\n")
-                if line
-            ]
+            rows = [json.loads(line) for line in insert_payload.rstrip(b"\n").split(b"\n") if line]
 
             return InsertBatch(
                 rows=rows,
@@ -49,11 +49,7 @@ class RustCompatProcessor(DatasetMessageProcessor):
             assert insert_payload is None
             key, values_bytes = replacement_payload
 
-            values = [
-                json.loads(line)
-                for line in values_bytes.rstrip(b"\n").split(b"\n")
-                if line
-            ]
+            values = [json.loads(line) for line in values_bytes.rstrip(b"\n").split(b"\n") if line]
             return ReplacementBatch(key=key.decode("utf8"), values=values)
         else:
             raise ValueError("unsupported return value from snuba_rust")

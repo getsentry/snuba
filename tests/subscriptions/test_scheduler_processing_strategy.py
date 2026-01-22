@@ -11,7 +11,7 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.types import BrokerValue
-from arroyo.utils.clock import TestingClock
+from arroyo.utils.clock import MockedClock
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -40,9 +40,7 @@ def test_tick_buffer_immediate() -> None:
     next_step = mock.Mock()
     metrics = TestingMetricsBackend()
 
-    strategy = TickBuffer(
-        SchedulingWatermarkMode.PARTITION, 2, None, next_step, metrics
-    )
+    strategy = TickBuffer(SchedulingWatermarkMode.PARTITION, 2, None, next_step, metrics)
 
     topic = Topic("messages")
     partition = Partition(topic, 0)
@@ -521,17 +519,11 @@ def test_scheduled_subscription_queue() -> None:
     queue.append(tick_message, deque(futures))
 
     assert len(queue) == 2
-    assert queue.peek() == TickSubscription(
-        tick_message, futures[0], offset_to_commit=None
-    )
-    assert queue.popleft() == TickSubscription(
-        tick_message, futures[0], offset_to_commit=None
-    )
+    assert queue.peek() == TickSubscription(tick_message, futures[0], offset_to_commit=None)
+    assert queue.popleft() == TickSubscription(tick_message, futures[0], offset_to_commit=None)
     assert len(queue) == 1
 
-    assert queue.popleft() == TickSubscription(
-        tick_message, futures[1], offset_to_commit=1
-    )
+    assert queue.popleft() == TickSubscription(tick_message, futures[1], offset_to_commit=1)
     assert len(queue) == 0
 
 
@@ -544,7 +536,7 @@ def test_produce_scheduled_subscription_message() -> None:
     topic = Topic("scheduled-subscriptions-events")
     partition = Partition(topic, partition_index)
 
-    clock = TestingClock()
+    clock = MockedClock()
     broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
     broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
     broker.create_topic(topic, partitions=1)
@@ -663,7 +655,7 @@ def test_produce_stale_message() -> None:
     topic = Topic("scheduled-subscriptions-events")
     partition = Partition(topic, partition_index)
 
-    clock = TestingClock()
+    clock = MockedClock()
     broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
     broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
     broker.create_topic(topic, partitions=1)

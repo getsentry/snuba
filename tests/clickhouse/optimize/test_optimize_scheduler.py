@@ -127,9 +127,7 @@ def test_subdivide_partitions(
     expected: Sequence[Sequence[str]],
 ) -> None:
     optimize_scheduler = OptimizeScheduler(default_parallel_threads=1)
-    assert (
-        optimize_scheduler._subdivide_partitions(partitions, subdivisions) == expected
-    )
+    assert optimize_scheduler._subdivide_partitions(partitions, subdivisions) == expected
 
 
 last_midnight = (datetime.now(UTC) + timedelta(minutes=10)).replace(
@@ -182,8 +180,7 @@ last_midnight = (datetime.now(UTC) + timedelta(minutes=10)).replace(
                         "(30,'2022-06-08')",
                     ]
                 ],
-                last_midnight
-                + timedelta(hours=settings.PARALLEL_OPTIMIZE_JOB_START_TIME),
+                last_midnight + timedelta(hours=settings.PARALLEL_OPTIMIZE_JOB_START_TIME),
             ),
             id="parallel before parallel start",
         ),
@@ -195,8 +192,7 @@ last_midnight = (datetime.now(UTC) + timedelta(minutes=10)).replace(
             - timedelta(minutes=30),
             OptimizationSchedule(
                 [["(90,'2022-03-28')"], ["(90,'2022-03-21')"]],
-                last_midnight
-                + timedelta(hours=settings.PARALLEL_OPTIMIZE_JOB_END_TIME),
+                last_midnight + timedelta(hours=settings.PARALLEL_OPTIMIZE_JOB_END_TIME),
             ),
             id="parallel before parallel end",
         ),
@@ -223,23 +219,20 @@ def test_get_next_schedule(
     current_time: datetime,
     expected: OptimizationSchedule,
 ) -> None:
-    optimize_scheduler = OptimizeScheduler(
-        default_parallel_threads=default_parallel_threads
-    )
+    optimize_scheduler = OptimizeScheduler(default_parallel_threads=default_parallel_threads)
 
     with time_machine.travel(current_time, tick=False):
         assert optimize_scheduler.get_next_schedule(partitions) == expected
 
 
 def test_get_next_schedule_raises_exception() -> None:
-    optimize_scheduler = OptimizeScheduler(default_parallel_threads=1)
-    with time_machine.travel(
-        last_midnight
-        + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)
-        + timedelta(minutes=20),
-        tick=False,
-    ):
-        with pytest.raises(OptimizedSchedulerTimeout):
-            optimize_scheduler.get_next_schedule(
-                ["(90,'2022-03-28')", "(90,'2022-03-21')"]
-            )
+    with time_machine.travel(last_midnight, tick=False):
+        optimize_scheduler = OptimizeScheduler(default_parallel_threads=1)
+        with time_machine.travel(
+            last_midnight
+            + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)
+            + timedelta(minutes=20),
+            tick=False,
+        ):
+            with pytest.raises(OptimizedSchedulerTimeout):
+                optimize_scheduler.get_next_schedule(["(90,'2022-03-28')", "(90,'2022-03-21')"])

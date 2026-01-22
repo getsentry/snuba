@@ -1,10 +1,11 @@
 use crate::config::MessageProcessorConfig;
 
-use crate::types::{BytesInsertBatch, CogsData, CommitLogEntry, CommitLogOffsets, RowData};
+use crate::types::{BytesInsertBatch, CommitLogEntry, CommitLogOffsets, RowData};
 use anyhow::Error;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use pyo3::prelude::*;
+use pyo3::types::PyAnyMethods;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
@@ -84,14 +85,16 @@ impl PythonTransformStep {
                 })
                 .collect();
 
-            let payload = BytesInsertBatch::new(
-                RowData::from_encoded_rows(payload),
-                Some(message_timestamp),
-                origin_timestamp,
-                sentry_received_timestamp,
-                CommitLogOffsets(commit_log_offsets),
-                CogsData::default(),
-            );
+            let mut payload = BytesInsertBatch::from_rows(RowData::from_encoded_rows(payload))
+                .with_message_timestamp(message_timestamp)
+                .with_commit_log_offsets(CommitLogOffsets(commit_log_offsets));
+
+            if let Some(ts) = origin_timestamp {
+                payload = payload.with_origin_timestamp(ts);
+            }
+            if let Some(ts) = sentry_received_timestamp {
+                payload = payload.with_sentry_received_timestamp(ts);
+            }
 
             let mut committable: BTreeMap<Partition, u64> = BTreeMap::new();
             for ((t, p), o) in offsets {
@@ -246,7 +249,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     message: transformed_message,
                 })) => {
                     self.transformed_messages.push_front(transformed_message);
-                    if deadline.map_or(false, |d| d.has_elapsed()) {
+                    if deadline.is_some_and(|d| d.has_elapsed()) {
                         tracing::warn!("Timeout reached");
                         break;
                     }
@@ -275,7 +278,7 @@ struct InvalidMessageMetadata {
 }
 
 impl FromPyObject<'_> for InvalidMessageMetadata {
-    fn extract(dict: &'_ PyAny) -> PyResult<Self> {
+    fn extract_bound(dict: &Bound<'_, PyAny>) -> PyResult<Self> {
         Ok(InvalidMessageMetadata {
             topic: dict.get_item("topic")?.extract()?,
             partition: dict.get_item("partition")?.extract()?,

@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import time
 from collections import deque
-from concurrent.futures import Future
 from datetime import datetime
 from typing import (
     Deque,
@@ -17,7 +16,7 @@ from typing import (
 )
 
 from arroyo import Message, Topic
-from arroyo.backends.abstract import Producer
+from arroyo.backends.abstract import Producer, ProducerFuture
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.types import BrokerValue, Commit
@@ -82,9 +81,9 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
 
         # Store the last message we received for each partition so know when
         # to commit offsets.
-        self.__latest_messages_by_partition: MutableMapping[
-            int, Optional[BrokerValue[Tick]]
-        ] = {index: None for index in range(self.__partitions)}
+        self.__latest_messages_by_partition: MutableMapping[int, Optional[BrokerValue[Tick]]] = {
+            index: None for index in range(self.__partitions)
+        }
         self.__offset_low_watermark: Optional[int] = None
         self.__offset_high_watermark: Optional[int] = None
 
@@ -104,9 +103,7 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         should_commit = self.__should_commit(message)
         offset_to_commit = self.__offset_high_watermark if should_commit else None
 
-        self.__next_step.submit(
-            message.replace(CommittableTick(message.payload, offset_to_commit))
-        )
+        self.__next_step.submit(message.replace(CommittableTick(message.payload, offset_to_commit)))
         if should_commit:
             self.__offset_low_watermark = self.__offset_high_watermark
 
@@ -157,10 +154,7 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
             (fastest - slowest) * 1000,
         )
 
-        if (
-            self.__offset_high_watermark is None
-            or earliest > self.__offset_high_watermark
-        ):
+        if self.__offset_high_watermark is None or earliest > self.__offset_high_watermark:
             self.__offset_high_watermark = earliest
 
     def close(self) -> None:
@@ -258,9 +252,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
 
         # If the buffer length exceeds `max_ticks_buffered_per_partition`
         # immediately submit the earliest message in that buffer to the next step.
-        if len(self.__buffers[tick_partition]) > cast(
-            int, self.__max_ticks_buffered_per_partition
-        ):
+        if len(self.__buffers[tick_partition]) > cast(int, self.__max_ticks_buffered_per_partition):
             logger.warning(
                 f"Tick buffer exceeded {self.__max_ticks_buffered_per_partition} for partition {tick_partition}"
             )
@@ -308,7 +300,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
 
 class TickSubscription(NamedTuple):
     tick_message: BrokerValue[CommittableTick]
-    subscription_future: Future[BrokerValue[KafkaPayload]]
+    subscription_future: ProducerFuture[BrokerValue[KafkaPayload]]
     offset_to_commit: Optional[int]
 
 
@@ -320,14 +312,15 @@ class ScheduledSubscriptionQueue:
     def __init__(self) -> None:
         self.__queues: Deque[
             Tuple[
-                BrokerValue[CommittableTick], Deque[Future[BrokerValue[KafkaPayload]]]
+                BrokerValue[CommittableTick],
+                Deque[ProducerFuture[BrokerValue[KafkaPayload]]],
             ]
         ] = deque()
 
     def append(
         self,
         tick_message: BrokerValue[CommittableTick],
-        futures: Deque[Future[BrokerValue[KafkaPayload]]],
+        futures: Deque[ProducerFuture[BrokerValue[KafkaPayload]]],
     ) -> None:
         if len(futures) > 0:
             self.__queues.append((tick_message, futures))
@@ -353,9 +346,7 @@ class ScheduledSubscriptionQueue:
             if is_empty:
                 self.__queues.popleft()
 
-            offset_to_commit = (
-                tick_message.payload.offset_to_commit if is_empty else None
-            )
+            offset_to_commit = tick_message.payload.offset_to_commit if is_empty else None
 
             return TickSubscription(tick_message, subscription_future, offset_to_commit)
 
@@ -401,9 +392,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         self.__schedulers = schedulers
         self.__encoder = SubscriptionScheduledTaskEncoder()
         self.__producer = producer
-        self.__scheduled_topic = Topic(
-            scheduled_topic_spec.get_physical_topic_name(slice_id)
-        )
+        self.__scheduled_topic = Topic(scheduled_topic_spec.get_physical_topic_name(slice_id))
         self.__commit = commit
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
@@ -467,9 +456,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                 except InvalidQueryException:
                     entity = task.task.subscription.data.entity
                     if get_entity_name(entity) == EntityKey.GENERIC_METRICS_GAUGES:
-                        if isinstance(
-                            task.task.subscription.data, SnQLSubscriptionData
-                        ):
+                        if isinstance(task.task.subscription.data, SnQLSubscriptionData):
                             logger.warning(
                                 "Skipping malformed subscription query %r in scheduler",
                                 task.task.subscription.data.query,
@@ -494,10 +481,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         self.__queue.append(
             message.value,
             deque(
-                [
-                    self.__producer.produce(self.__scheduled_topic, task)
-                    for task in encoded_tasks
-                ]
+                [self.__producer.produce(self.__scheduled_topic, task) for task in encoded_tasks]
             ),
         )
 

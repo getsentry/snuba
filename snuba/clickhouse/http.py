@@ -57,9 +57,7 @@ class JSONRowEncoder(Encoder[bytes, WriterTableRow]):
             raise TypeError
 
     def encode(self, value: WriterTableRow) -> bytes:
-        return cast(
-            bytes, rapidjson.dumps(value, default=self.__default).encode("utf-8")
-        )
+        return cast(bytes, rapidjson.dumps(value, default=self.__default).encode("utf-8"))
 
 
 class ValuesRowEncoder(Encoder[bytes, WriterTableRow]):
@@ -74,9 +72,7 @@ class ValuesRowEncoder(Encoder[bytes, WriterTableRow]):
             raise TypeError("unknown Clickhouse value type", value.__class__)
 
     def encode(self, row: WriterTableRow) -> bytes:
-        ordered_columns = [
-            self.encode_value(row.get(column)) for column in self.__columns
-        ]
+        ordered_columns = [self.encode_value(row.get(column)) for column in self.__columns]
         ordered_columns_str = ",".join(ordered_columns)
         return f"({ordered_columns_str})".encode("utf-8")
 
@@ -101,16 +97,10 @@ class InsertStatement:
         return self
 
     def get_qualified_table(self) -> str:
-        return (
-            f"{self.__database}.{self.__table_name}"
-            if self.__database
-            else self.__table_name
-        )
+        return f"{self.__database}.{self.__table_name}" if self.__database else self.__table_name
 
     def build_statement(self) -> str:
-        columns_statement = (
-            f"({','.join(self.__column_names)}) " if self.__column_names else ""
-        )
+        columns_statement = f"({','.join(self.__column_names)}) " if self.__column_names else ""
         format_statement = ""
 
         if self.__format:
@@ -175,9 +165,9 @@ class HTTPWriteBatch:
         if chunk_size is None:
             chunk_size = settings.CLICKHOUSE_HTTP_CHUNK_SIZE
 
-        self.__queue: Union[
-            Queue[Union[bytes, None]], SimpleQueue[Union[bytes, None]]
-        ] = (Queue(buffer_size) if buffer_size else SimpleQueue())
+        self.__queue: Union[Queue[Union[bytes, None]], SimpleQueue[Union[bytes, None]]] = (
+            Queue(buffer_size) if buffer_size else SimpleQueue()
+        )
 
         body = self.__read_until_eof()
         if chunk_size > 1:
@@ -212,9 +202,7 @@ class HTTPWriteBatch:
         self.__statement = statement
 
     def __repr__(self) -> str:
-        return (
-            f"<{type(self).__name__}: {self.__debug_buffer} rows ({self.__size} bytes)>"
-        )
+        return f"<{type(self).__name__}: {self.__debug_buffer} rows ({self.__size} bytes)>"
 
     def __read_until_eof(self) -> Iterator[bytes]:
         while True:
@@ -281,9 +269,7 @@ class HTTPWriteBatch:
 
                 raise ClickhouseWriterError(message, code=code, row=row)
             else:
-                raise HTTPError(
-                    f"Received unexpected {response.status} response: {content}"
-                )
+                raise HTTPError(f"Received unexpected {response.status} response: {content}")
 
 
 class HTTPBatchWriter(BatchWriter[bytes]):
@@ -312,9 +298,13 @@ class HTTPBatchWriter(BatchWriter[bytes]):
                 port,
                 ca_certs=ca_certs,
                 cert_reqs="REQUIRED" if verify else "CERT_NONE",
+                maxsize=max_connections,
+                block=block_connections,
             )
         else:
-            self.__pool = HTTPConnectionPool(host, port)
+            self.__pool = HTTPConnectionPool(
+                host, port, maxsize=max_connections, block=block_connections
+            )
         self.__executor = ThreadPoolExecutor()
         self.__metrics = metrics
 
@@ -325,9 +315,7 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         self.__statement = statement
         self.__buffer_size = buffer_size
         self.__chunk_size = chunk_size
-        self.__debug_buffer_size_bytes = state.get_config(
-            "debug_buffer_size_bytes", None
-        )
+        self.__debug_buffer_size_bytes = state.get_config("debug_buffer_size_bytes", None)
         assert (
             isinstance(self.__debug_buffer_size_bytes, int)
             or self.__debug_buffer_size_bytes is None

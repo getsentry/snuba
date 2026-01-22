@@ -7,8 +7,8 @@ from datetime import datetime
 from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
 
 import sentry_sdk
-
 from redis.cluster import ClusterPipeline as StrictClusterPipeline
+
 from snuba import settings
 from snuba.processor import ReplacementType
 from snuba.redis import RedisClientKey, get_redis_client
@@ -48,10 +48,10 @@ class ProjectsQueryFlags:
         key, type_key = ProjectsQueryFlags._build_project_needs_final_key_and_type_key(
             project_id, state_name
         )
-        p = redis_client.pipeline()
-        p.set(key, time.time(), ex=settings.REPLACER_KEY_TTL)
-        p.set(type_key, replacement_type, ex=settings.REPLACER_KEY_TTL)
-        p.execute()
+        with redis_client.pipeline() as p:
+            p.set(key, time.time(), ex=settings.REPLACER_KEY_TTL)
+            p.set(type_key, replacement_type, ex=settings.REPLACER_KEY_TTL)
+            p.execute()
 
     @staticmethod
     def set_project_exclude_groups(
@@ -78,40 +78,39 @@ class ProjectsQueryFlags:
         ) = ProjectsQueryFlags._build_project_exclude_groups_key_and_type_key(
             project_id, state_name
         )
-        p = redis_client.pipeline()
+        with redis_client.pipeline() as p:
+            # the redis key size limit is defined as 2 times the clickhouse query size
+            # limit. there is an explicit check in the query processor for the same
+            # limit
+            max_group_ids_exclude = get_config(
+                "max_group_ids_exclude",
+                settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
+            )
+            assert isinstance(max_group_ids_exclude, int)
 
-        # the redis key size limit is defined as 2 times the clickhouse query size
-        # limit. there is an explicit check in the query processor for the same
-        # limit
-        max_group_ids_exclude = get_config(
-            "max_group_ids_exclude",
-            settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
-        )
-        assert isinstance(max_group_ids_exclude, int)
+            group_id_data: MutableMapping[str | bytes, bytes | float | int | str] = {}
+            for group_id in group_ids:
+                group_id_data[str(group_id)] = now
+                if len(group_id_data) > 2 * max_group_ids_exclude:
+                    break
 
-        group_id_data: MutableMapping[str | bytes, bytes | float | int | str] = {}
-        for group_id in group_ids:
-            group_id_data[str(group_id)] = now
-            if len(group_id_data) > 2 * max_group_ids_exclude:
-                break
+            p.zadd(key, group_id_data)
+            ProjectsQueryFlags._truncate_group_id_replacement_set(
+                p, key, now, max_group_ids_exclude
+            )
+            p.expire(key, int(settings.REPLACER_KEY_TTL))
 
-        p.zadd(key, group_id_data)
-        ProjectsQueryFlags._truncate_group_id_replacement_set(
-            p, key, now, max_group_ids_exclude
-        )
-        p.expire(key, int(settings.REPLACER_KEY_TTL))
+            # store the replacement type data
+            replacement_type_data: Mapping[str | bytes, bytes | float | int | str] = {
+                replacement_type: now
+            }
+            p.zadd(type_key, replacement_type_data)
+            ProjectsQueryFlags._truncate_group_id_replacement_set(
+                p, type_key, now, max_group_ids_exclude
+            )
+            p.expire(type_key, int(settings.REPLACER_KEY_TTL))
 
-        # store the replacement type data
-        replacement_type_data: Mapping[str | bytes, bytes | float | int | str] = {
-            replacement_type: now
-        }
-        p.zadd(type_key, replacement_type_data)
-        ProjectsQueryFlags._truncate_group_id_replacement_set(
-            p, type_key, now, max_group_ids_exclude
-        )
-        p.expire(type_key, int(settings.REPLACER_KEY_TTL))
-
-        p.execute()
+            p.execute()
 
     @classmethod
     def load_from_redis(
@@ -122,37 +121,43 @@ class ProjectsQueryFlags:
 
         - Searches through Redis for relevant replacements info
         - Splits up results from pipeline into something that makes sense
+
+        Fails open, in case redis is unavailable, query goes through
         """
         s_project_ids = set(project_ids)
 
-        p = redis_client.pipeline()
+        try:
+            with redis_client.pipeline() as p:
+                with sentry_sdk.start_span(op="function", description="build_redis_pipeline"):
+                    cls._query_redis(s_project_ids, state_name, p)
 
-        with sentry_sdk.start_span(op="function", description="build_redis_pipeline"):
-            cls._query_redis(s_project_ids, state_name, p)
+                with sentry_sdk.start_span(
+                    op="function", description="execute_redis_pipeline"
+                ) as span:
+                    results = p.execute()
+                    # getting size of str(results) since sys.getsizeof() doesn't count recursively
+                    span.set_tag("results_size", sys.getsizeof(str(results)))
 
-        with sentry_sdk.start_span(
-            op="function", description="execute_redis_pipeline"
-        ) as span:
-            results = p.execute()
-            # getting size of str(results) since sys.getsizeof() doesn't count recursively
-            span.set_tag("results_size", sys.getsizeof(str(results)))
+            with sentry_sdk.start_span(op="function", description="process_redis_results") as span:
+                flags = cls._process_redis_results(results, len(s_project_ids))
+                span.set_tag("projects", s_project_ids)
+                span.set_tag("exclude_groups", flags.group_ids_to_exclude)
+                span.set_tag("len(exclude_groups)", len(flags.group_ids_to_exclude))
+                span.set_tag("latest_replacement_time", flags.latest_replacement_time)
+                span.set_tag("replacement_types", flags.replacement_types)
 
-        with sentry_sdk.start_span(
-            op="function", description="process_redis_results"
-        ) as span:
-            flags = cls._process_redis_results(results, len(s_project_ids))
-            span.set_tag("projects", s_project_ids)
-            span.set_tag("exclude_groups", flags.group_ids_to_exclude)
-            span.set_tag("len(exclude_groups)", len(flags.group_ids_to_exclude))
-            span.set_tag("latest_replacement_time", flags.latest_replacement_time)
-            span.set_tag("replacement_types", flags.replacement_types)
-
-        return flags
+            return flags
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            return cls(
+                needs_final=False,
+                group_ids_to_exclude=set([]),
+                replacement_types=set([]),
+                latest_replacement_time=None,
+            )
 
     @classmethod
-    def _process_redis_results(
-        cls, results: List[Any], len_projects: int
-    ) -> ProjectsQueryFlags:
+    def _process_redis_results(cls, results: List[Any], len_projects: int) -> ProjectsQueryFlags:
         """
         Produces readable data from flattened list of Redis pipeline results.
 
@@ -196,17 +201,13 @@ class ProjectsQueryFlags:
             for replacement_type in groups_replacement_types_result
         }
 
-        replacement_types = groups_replacement_types.union(
-            needs_final_replacement_types
-        )
+        replacement_types = groups_replacement_types.union(needs_final_replacement_types)
 
         latest_replacement_time = cls._process_latest_replacement(
             needs_final, needs_final_result, latest_exclude_groups_result
         )
 
-        flags = cls(
-            needs_final, exclude_groups, replacement_types, latest_replacement_time
-        )
+        flags = cls(needs_final, exclude_groups, replacement_types, latest_replacement_time)
         return flags
 
     @staticmethod
@@ -223,9 +224,7 @@ class ProjectsQueryFlags:
         above this class.
         """
         needs_final_keys_and_type_keys = [
-            ProjectsQueryFlags._build_project_needs_final_key_and_type_key(
-                project_id, state_name
-            )
+            ProjectsQueryFlags._build_project_needs_final_key_and_type_key(project_id, state_name)
             for project_id in project_ids
         ]
 
@@ -305,11 +304,7 @@ class ProjectsQueryFlags:
                 [(_, timestamp)] = latest_exclude_groups
                 latest_replacements.add(timestamp)
 
-        return (
-            datetime.fromtimestamp(max(latest_replacements))
-            if latest_replacements
-            else None
-        )
+        return datetime.fromtimestamp(max(latest_replacements)) if latest_replacements else None
 
     @staticmethod
     def _build_project_needs_final_key_and_type_key(

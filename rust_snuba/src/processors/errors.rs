@@ -15,7 +15,7 @@ use uuid::Uuid;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{enforce_retention, StringToIntDatetime};
+use crate::processors::utils::{enforce_retention, StringToIntDatetime64};
 use crate::types::{
     InsertBatch, InsertOrReplacement, KafkaMessageMetadata, ReplacementData, RowData,
 };
@@ -72,6 +72,7 @@ pub fn process_message_with_replacement(
                 rows: RowData::from_rows([row])?,
                 sentry_received_timestamp: None,
                 cogs_data: None,
+                item_type_metrics: None,
             }))
         }
         ("insert", None, _) => {
@@ -109,9 +110,11 @@ struct ReplacementEvent {
 struct ErrorMessage {
     data: ErrorData,
     #[serde(default)]
-    datetime: StringToIntDatetime,
+    datetime: StringToIntDatetime64,
     event_id: Uuid,
     group_id: u64,
+    #[serde(default)]
+    group_first_seen: StringToIntDatetime64,
     message: String,
     primary_hash: String,
     project_id: u64,
@@ -153,6 +156,10 @@ struct ErrorData {
     user: Option<User>,
     #[serde(default)]
     version: Option<String>,
+    #[serde(default)]
+    symbolicated_in_app: Option<bool>,
+    #[serde(default)]
+    sample_rate: Option<f64>,
 }
 
 // Contexts
@@ -161,6 +168,8 @@ type GenericContext = BTreeMap<String, ContextStringify>;
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Contexts {
+    #[serde(default)]
+    flags: Option<FlagContext>,
     #[serde(default)]
     replay: Option<ReplayContext>,
     #[serde(default)]
@@ -181,6 +190,20 @@ struct TraceContext {
     parent_span_id: Option<String>,
     #[serde(flatten)]
     other: GenericContext,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+struct FlagContext {
+    #[serde(default)]
+    values: Option<Vec<Option<FlagContextItem>>>,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+struct FlagContextItem {
+    #[serde(default)]
+    flag: Unicodify,
+    #[serde(default)]
+    result: Unicodify,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -350,6 +373,7 @@ struct ErrorRow {
     #[serde(rename = "exception_stacks.value")]
     exception_stacks_value: Vec<Option<String>>,
     group_id: u64,
+    group_first_seen: u32,
     http_method: Option<String>,
     http_referer: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -384,7 +408,12 @@ struct ErrorRow {
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
     tags_value: Vec<String>,
+    #[serde(rename = "flags.key")]
+    flags_key: Vec<String>,
+    #[serde(rename = "flags.value")]
+    flags_value: Vec<String>,
     timestamp: u32,
+    timestamp_ms: u64,
     title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     trace_id: Option<Uuid>,
@@ -398,6 +427,9 @@ struct ErrorRow {
     user_name: Option<String>,
     user: String,
     version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    symbolicated_in_app: Option<bool>,
+    sample_weight: Option<f64>,
 }
 
 impl ErrorRow {
@@ -563,6 +595,21 @@ impl ErrorRow {
             replay_id = Some(rid)
         }
 
+        // Split feature keys and values into two vectors if the context could be parsed.
+        let mut flags_key = Vec::new();
+        let mut flags_value = Vec::new();
+
+        if let Some(ctx) = from_context.flags {
+            if let Some(values) = ctx.values {
+                for item in values.into_iter().flatten() {
+                    if let (Some(k), Some(v)) = (item.flag.0, item.result.0) {
+                        flags_key.push(k);
+                        flags_value.push(v);
+                    }
+                }
+            }
+        };
+
         // Stacktrace.
 
         let exceptions = from
@@ -646,6 +693,11 @@ impl ErrorRow {
             }
         }
 
+        let sample_weight =
+            from.data
+                .sample_rate
+                .and_then(|rate| if rate == 0.0 { None } else { Some(1.0 / rate) });
+
         Ok(Self {
             contexts_key: contexts_keys,
             contexts_value: contexts_values,
@@ -668,7 +720,10 @@ impl ErrorRow {
             exception_stacks_mechanism_type: stack_mechanism_types,
             exception_stacks_type: stack_types,
             exception_stacks_value: stack_values,
+            flags_key,
+            flags_value,
             group_id: from.group_id,
+            group_first_seen: (from.group_first_seen.0 / 1000) as u32,
             http_method: from_request.method.0,
             http_referer,
             ip_address_v4,
@@ -692,7 +747,8 @@ impl ErrorRow {
             span_id,
             tags_key,
             tags_value,
-            timestamp: from.datetime.0,
+            timestamp: (from.datetime.0 / 1000) as u32,
+            timestamp_ms: from.datetime.0,
             title: from.data.title.0.unwrap_or_default(),
             trace_id: from_trace_context.trace_id,
             trace_sampled: from_trace_context.sampled.map(|v| v as u8),
@@ -703,6 +759,8 @@ impl ErrorRow {
             user_name: from_user.username.0,
             user: user.unwrap_or_default(),
             version: from.data.version,
+            symbolicated_in_app: from.data.symbolicated_in_app,
+            sample_weight,
             ..Default::default()
         })
     }

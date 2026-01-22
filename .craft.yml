@@ -6,15 +6,19 @@ statusProvider:
   name: github
   config:
     contexts:
-      - 'build-on-branch-push (sentryio)'
+    - 'build-amd64'
+    - 'build-arm64'
+    - 'assemble'
 targets:
-  - id: release
-    name: docker
-    source: us-central1-docker.pkg.dev/sentryio/snuba/image
-    target: getsentry/snuba
-  - id: latest
-    name: docker
-    source: us-central1-docker.pkg.dev/sentryio/snuba/image
-    target: getsentry/snuba
-    targetFormat: '{{{target}}}:latest'
-  - name: github
+- id: release
+  name: docker
+  source: ghcr.io/getsentry/snuba
+  target: getsentry/snuba
+- id: latest
+  name: docker
+  source: ghcr.io/getsentry/snuba
+  target: getsentry/snuba
+  targetFormat: '{{{target}}}:latest'
+- name: github
+versioning:
+  policy: calver

@@ -7,6 +7,7 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
@@ -34,7 +35,7 @@ class PermissiveJoinClause(JoinClause[Table]):
 events_table = Table(
     "errors",
     ColumnSet([]),
-    allocation_policies=[PassthroughPolicy(StorageKey("flimflam"), [], {})],
+    allocation_policies=[PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), [], {})],
     storage_key=StorageKey("errors"),
     final=False,
     sampling_rate=None,
@@ -44,7 +45,7 @@ events_table = Table(
 groups_table = Table(
     "groups",
     ColumnSet([]),
-    allocation_policies=[PassthroughPolicy(StorageKey("jimjam"), [], {})],
+    allocation_policies=[PassthroughPolicy(ResourceIdentifier(StorageKey("jimjam")), [], {})],
     storage_key=StorageKey("groups"),
     final=False,
     sampling_rate=None,
@@ -97,7 +98,7 @@ join_query = CompositeQuery(
     [
         pytest.param(
             composite_query,
-            [PassthroughPolicy(StorageKey("flimflam"), [], {})],
+            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), [], {})],
             id="composite query uses leaf query's allocation policy",
         ),
         pytest.param(
@@ -106,20 +107,18 @@ join_query = CompositeQuery(
                 selected_columns=[
                     SelectedExpression(
                         "average",
-                        FunctionCall(
-                            "average", "avg", (Column(None, None, "project_id"),)
-                        ),
+                        FunctionCall("average", "avg", (Column(None, None, "project_id"),)),
                     ),
                 ],
             ),
-            [PassthroughPolicy(StorageKey("flimflam"), [], {})],
+            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), [], {})],
             id="double nested composite query uses leaf query's allocation policy",
         ),
         pytest.param(
             join_query,
             [
-                PassthroughPolicy(StorageKey("flimflam"), [], {}),
-                PassthroughPolicy(StorageKey("jimjam"), [], {}),
+                PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), [], {}),
+                PassthroughPolicy(ResourceIdentifier(StorageKey("jimjam")), [], {}),
             ],
             id="all allocation policies from joins are put together",
         ),
@@ -136,7 +135,7 @@ join_query = CompositeQuery(
                     Literal(None, datetime(2020, 1, 1, 12, 0)),
                 ),
             ),
-            [PassthroughPolicy(StorageKey("flimflam"), [], {})],
+            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), [], {})],
             id="simple query uses table's allocation policy",
         ),
     ],

@@ -116,7 +116,16 @@ def test_failures(query_body: str, message: str) -> None:
     events = get_dataset("events")
     events_entity = get_entity(EntityKey.EVENTS)
 
-    with pytest.raises(ParsingException, match=re.escape(message)), mock.patch.object(
-        events_entity, "get_join_relationship", events_mock
+    with (
+        pytest.raises(ParsingException, match=re.escape(message)),
+        mock.patch.object(events_entity, "get_join_relationship", events_mock),
     ):
         parse_snql_query(query_body, events)
+
+
+def test_flag_bracket_query() -> None:
+    # Parsing does not raise.
+    parse_snql_query(
+        "MATCH (events) SELECT error_id WHERE project_id = 1 AND timestamp >= toDateTime('2021-01-01') AND timestamp < toDateTime('2021-01-02') AND flags[hello-world] = 'true'",
+        get_dataset("events"),
+    )

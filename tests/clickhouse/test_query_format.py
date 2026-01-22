@@ -28,6 +28,8 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Table
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import column, literal, literals_tuple
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 
 ERRORS_SCHEMA = ColumnSet(
@@ -54,9 +56,7 @@ node_err = IndividualNode(
 )
 node_group = IndividualNode(
     alias="groups",
-    data_source=Table(
-        "groupedmessage_local", GROUPS_SCHEMA, storage_key=StorageKey("groups")
-    ),
+    data_source=Table("groupedmessage_local", GROUPS_SCHEMA, storage_key=StorageKey("groups")),
 )
 node_assignee = IndividualNode(
     alias="assignee",
@@ -300,9 +300,7 @@ test_cases = [
                     SelectedExpression("column1", Column(None, None, "column1")),
                     SelectedExpression(
                         "sub_average",
-                        FunctionCall(
-                            "sub_average", "avg", (Column(None, None, "column2"),)
-                        ),
+                        FunctionCall("sub_average", "avg", (Column(None, None, "column2"),)),
                     ),
                     SelectedExpression("column3", Column(None, None, "column3")),
                 ],
@@ -316,9 +314,7 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "average",
-                    FunctionCall(
-                        "average", "avg", (Column(None, None, "sub_average"),)
-                    ),
+                    FunctionCall("average", "avg", (Column(None, None, "sub_average"),)),
                 ),
                 SelectedExpression("alias", Column("alias", None, "column3")),
             ],
@@ -376,9 +372,7 @@ test_cases = [
                 SelectedExpression("error_id", Column("error_id", "err", "event_id")),
                 SelectedExpression("message", Column("message", "groups", "message")),
             ],
-            condition=binary_condition(
-                "eq", Column(None, "groups", "id"), Literal(None, 1)
-            ),
+            condition=binary_condition("eq", Column(None, "groups", "id"), Literal(None, 1)),
         ),
         [
             "SELECT (err.event_id AS error_id), (groups.message AS message)",
@@ -445,9 +439,7 @@ test_cases = [
                             ),
                             selected_columns=[
                                 SelectedExpression("id", Column("id", None, "id")),
-                                SelectedExpression(
-                                    "message", Column("message", None, "message")
-                                ),
+                                SelectedExpression("message", Column("message", None, "message")),
                             ],
                             condition=binary_condition(
                                 "eq",
@@ -473,9 +465,7 @@ test_cases = [
                             storage_key=StorageKey("dontmatter"),
                         ),
                         selected_columns=[
-                            SelectedExpression(
-                                "group_id", Column("group_id", None, "group_id")
-                            ),
+                            SelectedExpression("group_id", Column("group_id", None, "group_id")),
                         ],
                         condition=binary_condition(
                             "eq",
@@ -564,6 +554,22 @@ test_cases = [
             "GROUP BY groups.id"
         ),
         id="Join of multiple subqueries",
+    ),
+    pytest.param(
+        Query(
+            Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
+            selected_columns=[
+                SelectedExpression("column1", Column(None, None, "column1")),
+            ],
+            condition=f.less(
+                f.tuple(*(column(c_name) for c_name in ["a.b", "b.c"])),
+                literals_tuple(None, [literal(c) for c in ["c", "d"]]),
+            ),
+        ),
+        ["SELECT column1", ["FROM", "my_table"], "WHERE less((`a.b`, `b.c`), ('c', 'd'))"],
+        "SELECT column1 FROM my_table WHERE less((`a.b`, `b.c`), ('c', 'd'))",
+        "SELECT column1 FROM my_table WHERE less((`a.b`, `b.c`), ('$S', '$S'))",
+        id="Simple query with tuple comparison",
     ),
 ]
 
@@ -655,12 +661,7 @@ def test_delete_query() -> None:
     )
 
     clickhouse_query = format_query(query)
-    expected = (
-        "DELETE "
-        "FROM my_table "
-        "ON CLUSTER 'cluster_name' "
-        "WHERE eq(project_id, 1)"
-    )
+    expected = "DELETE FROM my_table ON CLUSTER 'cluster_name' WHERE eq(project_id, 1)"
 
     assert clickhouse_query.get_sql() == expected
 
@@ -758,8 +759,5 @@ TEST_JOIN = [
 def test_join_format(
     clause: JoinClause[Table], formatted_seq: SequenceNode, formatted_str: str
 ) -> None:
-    assert (
-        str(clause.accept(JoinFormatter(ClickhouseExpressionFormatter)))
-        == formatted_str
-    )
+    assert str(clause.accept(JoinFormatter(ClickhouseExpressionFormatter))) == formatted_str
     assert clause.accept(JoinFormatter(ClickhouseExpressionFormatter)) == formatted_seq

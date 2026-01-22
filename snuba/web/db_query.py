@@ -23,7 +23,8 @@ from snuba.clickhouse.formatter.query import format_query_anonymized
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
-from snuba.datasets.storages.storage_key import StorageKey
+from snuba.configs.configuration import ResourceIdentifier
+from snuba.downsampled_storage_tiers import Tier
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
     MAX_THRESHOLD,
@@ -32,13 +33,13 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
+from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
-from snuba.query.query_settings import QuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.querylog.query_metadata import (
-    SLO,
     ClickhouseQueryMetadata,
     QueryStatus,
     RequestStatus,
@@ -253,15 +254,12 @@ def execute_query_with_query_id(
             referrer,
         )
     except ClickhouseError as e:
-        if (
-            e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING
-            or not state.get_config("retry_duplicate_query_id", False)
+        if e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING or not state.get_config(
+            "retry_duplicate_query_id", False
         ):
             raise
 
-        logger.error(
-            "Query cache for query ID %s lost, retrying query with random ID", query_id
-        )
+        logger.error("Query cache for query ID %s lost, retrying query with random ID", query_id)
         metrics.increment("query_cache_lost")
 
         query_id = f"randomized-{uuid.uuid4().hex}"
@@ -293,15 +291,12 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
-    span = sentry_sdk.get_current_span()
-
     if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
         "enable_bypass_cache_referrers"
     ):
         query_id = f"randomized-{uuid.uuid4().hex}"
         clickhouse_query_settings["query_id"] = query_id
-        if span:
-            span.set_data("query_id", query_id)
+        sentry_sdk.update_current_span(attributes={"query_id": query_id})
         return execute_query(
             clickhouse_query,
             query_settings,
@@ -315,8 +310,7 @@ def execute_query_with_readthrough_caching(
 
     clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
 
-    if span:
-        span.set_data("query_id", query_id)
+    sentry_sdk.update_current_span(attributes={"query_id": query_id})
 
     def record_cache_hit_type(hit_type: int) -> None:
         span_tag = "cache_miss"
@@ -329,8 +323,7 @@ def execute_query_with_readthrough_caching(
         elif hit_type == SIMPLE_READTHROUGH:
             stats["cache_hit_simple"] = 1
         sentry_sdk.set_tag("cache_status", span_tag)
-        if span:
-            span.set_data("cache_status", span_tag)
+        sentry_sdk.update_current_span(attributes={"cache_status": span_tag})
 
     cache_partition = _get_cache_partition(reader)
     metrics.increment(
@@ -376,9 +369,7 @@ def _get_query_settings_from_config(
 
     # Populate the query settings with the default values
     clickhouse_query_settings: MutableMapping[str, Any] = {
-        k.split("/", 1)[1]: v
-        for k, v in all_confs.items()
-        if k.startswith("query_settings/")
+        k.split("/", 1)[1]: v for k, v in all_confs.items() if k.startswith("query_settings/")
     }
 
     if async_override:
@@ -437,9 +428,7 @@ def _raw_query(
     consistent = query_settings.get_consistent()
     stats["consistent"] = consistent
     if consistent:
-        sample_rate = state.get_config(
-            f"{dataset_name}_ignore_consistent_queries_sample_rate", 0
-        )
+        sample_rate = state.get_config(f"{dataset_name}_ignore_consistent_queries_sample_rate", 0)
         assert sample_rate is not None
         ignore_consistent = random.random() < float(sample_rate)
         if not ignore_consistent:
@@ -479,12 +468,18 @@ def _raw_query(
         trigger_rate_limiter = None
         status = None
         request_status = get_request_status(cause)
+
+        calculated_cause = cause
         if isinstance(cause, RateLimitExceeded):
             status = QueryStatus.RATE_LIMITED
             trigger_rate_limiter = cause.extra_data.get("scope", "")
         elif isinstance(cause, ClickhouseError):
             error_code = cause.code
             status = get_query_status_from_error_codes(error_code)
+            if error_code == ErrorCodes.TOO_MANY_BYTES:
+                calculated_cause = RateLimitExceeded(
+                    "Query scanned more than the allocated amount of bytes"
+                )
 
             with configure_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
@@ -495,9 +490,6 @@ def _raw_query(
             status = QueryStatus.TIMEOUT
         elif isinstance(cause, ExecutionTimeoutError):
             status = QueryStatus.TIMEOUT
-
-        if request_status.slo == SLO.AGAINST:
-            logger.exception("Error running query: %s\n%s", sql, cause)
 
         with configure_scope() as scope:
             if scope.span:
@@ -513,13 +505,13 @@ def _raw_query(
             # This exception needs to have the message of the cause in it for sentry
             # to pick it up properly
             cause.__class__.__name__,
-            str(cause),
+            cause.message if isinstance(cause, ClickhouseError) else str(cause),
             {
                 "stats": stats,
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
             },
-        ) from cause
+        ) from calculated_cause
     else:
         stats = update_with_status(
             status=QueryStatus.SUCCESS,
@@ -578,7 +570,7 @@ def _record_bytes_scanned(
     result_or_error: QueryResultOrError,
     attribution_info: AttributionInfo,
     dataset_name: str,
-    storage_key: StorageKey,
+    resource_identifier: ResourceIdentifier,
 ) -> None:
     custom_metrics = MetricsWrapper(environment.metrics, "allocation_policy")
 
@@ -590,7 +582,7 @@ def _record_bytes_scanned(
             tags={
                 "referrer": attribution_info.referrer,
                 "dataset": dataset_name,
-                "storage_key": storage_key.value,
+                "storage_key": resource_identifier.value,
             },
         )
 
@@ -701,16 +693,25 @@ def db_query(
     except QueryException as e:
         error = e
     except Exception as e:
-        # We count on _raw_query capturing all exceptions in a QueryException
-        # if it didn't do that, something is very wrong so we just panic out here
-        raise e
+        error = QueryException.from_args(
+            # This exception needs to have the message of the cause in it for sentry
+            # to pick it up properly
+            e.__class__.__name__,
+            str(e),
+            {
+                "stats": stats,
+                "sql": "",
+                "experiments": clickhouse_query.get_experiments(),
+            },
+        )
+        error.__cause__ = e
     finally:
         result_or_error = QueryResultOrError(query_result=result, error=error)
         _record_bytes_scanned(
             result_or_error,
             attribution_info,
             dataset_name,
-            allocation_policies[0].storage_key,
+            allocation_policies[0].resource_identifier,
         )
         for allocation_policy in allocation_policies:
             allocation_policy.update_quota_balance(
@@ -726,11 +727,17 @@ def db_query(
             metrics.increment("cache_miss", tags={"dataset": dataset_name})
         if stats.get("cache_hit_simple"):
             metrics.increment("cache_hit_simple", tags={"dataset": dataset_name})
+
         if result:
+            if (
+                isinstance(query_settings, HTTPQuerySettings)
+                and query_settings.get_sampling_tier() != Tier.TIER_NO_TIER
+            ):
+                stats = dict(result.extra["stats"])
+                stats["sampling_tier"] = query_settings.get_sampling_tier()
+                result.extra["stats"] = stats
             return result
-        raise error or Exception(
-            "No error or result when running query, this should never happen"
-        )
+        raise error or Exception("No error or result when running query, this should never happen")
 
 
 @dataclass
@@ -749,12 +756,12 @@ def _add_quota_info(
     summary[action] = quota_info
 
     if quota_and_policy is not None:
-        quota_info["policy"] = quota_and_policy.policy.config_key()
+        quota_info["policy"] = quota_and_policy.policy.class_name()
         quota_allowance = quota_and_policy.quota_allowance
         quota_info["quota_used"] = quota_allowance.quota_used
         quota_info["quota_unit"] = quota_allowance.quota_unit
         quota_info["suggestion"] = quota_allowance.suggestion
-        quota_info["storage_key"] = str(quota_and_policy.policy.storage_key)
+        quota_info["storage_key"] = quota_and_policy.policy.resource_identifier.value
 
         if action == _REJECTED_BY:
             quota_info["rejection_threshold"] = quota_allowance.rejection_threshold
@@ -782,15 +789,12 @@ def _populate_query_status(
     if rejection_quota_and_policy:
         summary[is_successful] = False
         summary[is_rejected] = True
-        summary[rejection_storage_key] = str(
-            rejection_quota_and_policy.policy.storage_key
-        )
+        summary[rejection_storage_key] = rejection_quota_and_policy.policy.resource_identifier.value
+
     if throttle_quota_and_policy:
         summary[is_successful] = False
         summary[is_throttled] = True
-        summary[throttle_storage_key] = str(
-            throttle_quota_and_policy.policy.storage_key
-        )
+        summary[throttle_storage_key] = throttle_quota_and_policy.policy.resource_identifier.value
 
 
 def _apply_allocation_policies_quota(
@@ -805,6 +809,10 @@ def _apply_allocation_policies_quota(
     Sets the resource quota in the query_settings object to the minimum of all available
     quota allowances from the given allocation policies.
     """
+    if len(allocation_policies) == 0:
+        logger.info("No allocation policies to apply")
+        return
+
     quota_allowances: dict[str, Any] = {}
     can_run = True
     rejection_quota_and_policy = None
@@ -814,49 +822,42 @@ def _apply_allocation_policies_quota(
         op="allocation_policy", description="_apply_allocation_policies_quota"
     ) as span:
         for allocation_policy in allocation_policies:
-            with sentry_sdk.start_span(
-                op="allocation_policy.get_quota_allowance",
-                description=str(allocation_policy.__class__),
-            ) as span:
-                allowance = allocation_policy.get_quota_allowance(
-                    attribution_info.tenant_ids, query_id
+            allowance = allocation_policy.get_quota_allowance(attribution_info.tenant_ids, query_id)
+            can_run &= allowance.can_run
+            quota_allowances[allocation_policy.class_name()] = allowance
+            span.set_data(
+                "quota_allowance",
+                quota_allowances[allocation_policy.class_name()],
+            )
+            if allowance.is_throttled and allowance.max_threads < min_threads_across_policies:
+                throttle_quota_and_policy = _QuotaAndPolicy(
+                    quota_allowance=allowance,
+                    policy=allocation_policy,
                 )
-                can_run &= allowance.can_run
-                quota_allowances[allocation_policy.config_key()] = allowance
-                span.set_data(
-                    "quota_allowance",
-                    quota_allowances[allocation_policy.config_key()],
+            min_threads_across_policies = min(min_threads_across_policies, allowance.max_threads)
+            if not can_run:
+                rejection_quota_and_policy = _QuotaAndPolicy(
+                    quota_allowance=allowance,
+                    policy=allocation_policy,
                 )
-                if (
-                    allowance.is_throttled
-                    and allowance.max_threads < min_threads_across_policies
-                ):
-                    throttle_quota_and_policy = _QuotaAndPolicy(
-                        quota_allowance=allowance,
-                        policy=allocation_policy,
-                    )
-                min_threads_across_policies = min(
-                    min_threads_across_policies, allowance.max_threads
-                )
-                if not can_run:
-                    rejection_quota_and_policy = _QuotaAndPolicy(
-                        quota_allowance=allowance,
-                        policy=allocation_policy,
-                    )
-                    break
+                break
 
         allowance_dicts = {
-            key: quota_allowance.to_dict()
-            for key, quota_allowance in quota_allowances.items()
+            key: quota_allowance.to_dict() for key, quota_allowance in quota_allowances.items()
         }
+
         stats["quota_allowance"] = {}
         stats["quota_allowance"]["details"] = allowance_dicts
 
         summary: dict[str, Any] = {}
         summary["threads_used"] = min_threads_across_policies
-        _populate_query_status(
-            summary, rejection_quota_and_policy, throttle_quota_and_policy
-        )
+
+        max_bytes_to_read = get_max_bytes_to_read(list(quota_allowances.values()))
+        if max_bytes_to_read != 0:
+            query_settings.push_clickhouse_setting("max_bytes_to_read", max_bytes_to_read)
+            summary["max_bytes_to_read"] = max_bytes_to_read
+
+        _populate_query_status(summary, rejection_quota_and_policy, throttle_quota_and_policy)
         _add_quota_info(summary, _REJECTED_BY, rejection_quota_and_policy)
         _add_quota_info(summary, _THROTTLED_BY, throttle_quota_and_policy)
         stats["quota_allowance"]["summary"] = summary
@@ -864,20 +865,20 @@ def _apply_allocation_policies_quota(
         if not can_run:
             metrics.increment(
                 "rejected_query",
-                tags={"storage_key": allocation_policies[0].storage_key.value},
+                tags={"storage_key": allocation_policies[0].resource_identifier.value},
             )
             raise AllocationPolicyViolations.from_args(stats["quota_allowance"])
 
         if throttle_quota_and_policy is not None:
             metrics.increment(
                 "throttled_query",
-                tags={"storage_key": allocation_policies[0].storage_key.value},
+                tags={"storage_key": allocation_policies[0].resource_identifier.value},
             )
         else:
             metrics.increment(
                 "successful_query",
-                tags={"storage_key": allocation_policies[0].storage_key.value},
+                tags={"storage_key": allocation_policies[0].resource_identifier.value},
             )
-        max_threads = min(quota_allowances.values()).max_threads
+        max_threads = min_threads_across_policies
         span.set_data("max_threads", max_threads)
         query_settings.set_resource_quota(ResourceQuota(max_threads=max_threads))

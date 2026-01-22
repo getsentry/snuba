@@ -5,7 +5,9 @@ import tempfile
 from typing import Any
 
 from snuba.clickhouse.columns import (
+    JSON,
     Array,
+    Bool,
     Column,
     DateTime,
     DateTime64,
@@ -95,16 +97,9 @@ delete_allocation_policies:
                 mapping_optimizer_qp,
                 clickhouse_settings_override_qp,
             ) = storage.get_query_processors()
-            assert (
-                getattr(mapping_optimizer_qp, "_MappingOptimizer__column_name") == "a"
-            )
-            assert (
-                getattr(mapping_optimizer_qp, "_MappingOptimizer__hash_map_name")
-                == "hashmap"
-            )
-            assert (
-                getattr(mapping_optimizer_qp, "_MappingOptimizer__killswitch") == "kill"
-            )
+            assert getattr(mapping_optimizer_qp, "_MappingOptimizer__column_name") == "a"
+            assert getattr(mapping_optimizer_qp, "_MappingOptimizer__hash_map_name") == "hashmap"
+            assert getattr(mapping_optimizer_qp, "_MappingOptimizer__killswitch") == "kill"
             assert (
                 getattr(
                     clickhouse_settings_override_qp,
@@ -121,14 +116,12 @@ delete_allocation_policies:
             )
             assert storage.required_time_column == "timestamp"
             assert len(policies := storage.get_allocation_policies()) == 2
-            assert set([p.config_key() for p in policies]) == {
+            assert set([p.class_name() for p in policies]) == {
                 "BytesScannedWindowAllocationPolicy",
                 "PassthroughPolicy",
             }
-            passthru = next(
-                p for p in policies if p.config_key() == "PassthroughPolicy"
-            )
-            assert passthru.runtime_config_prefix == "test-storage.PassthroughPolicy"
+            passthru = next(p for p in policies if p.class_name() == "PassthroughPolicy")
+            assert passthru.component_name() == "test-storage.PassthroughPolicy"
             assert passthru._required_tenant_types == {"some_tenant"}
 
             assert storage.get_deletion_settings().is_enabled == 0
@@ -139,12 +132,12 @@ delete_allocation_policies:
 
             assert len(storage.get_deletion_processors()) == 1
             column_filter_processor = storage.get_deletion_processors()[0]
-            assert getattr(
-                column_filter_processor, "_ColumnFilterProcessor__column_filters"
-            ) == {"some_column"}
+            assert getattr(column_filter_processor, "_ColumnFilterProcessor__column_filters") == {
+                "some_column"
+            }
 
             assert len(delete_policies := storage.get_delete_allocation_policies()) == 1
-            assert set([p.config_key() for p in delete_policies]) == {
+            assert set([p.class_name() for p in delete_policies]) == {
                 "DeleteConcurrentRateLimitAllocationPolicy",
             }
 
@@ -153,6 +146,7 @@ delete_allocation_policies:
             {"name": "int_col", "type": "UInt", "args": {"size": 64}},
             {"name": "float_col", "type": "Float", "args": {"size": 32}},
             {"name": "string_col", "type": "String"},
+            {"name": "bool_col", "type": "Bool"},
             {"name": "time_col", "type": "DateTime"},
             {
                 "name": "time64_col",
@@ -203,12 +197,20 @@ delete_allocation_policies:
                     "schema_modifiers": ["nullable"],
                 },
             },
+            {
+                "name": "json_col",
+                "type": "JSON",
+                "args": {
+                    "max_dynamic_paths": 128,
+                },
+            },
         ]
 
         expected_python_columns = [
             Column("int_col", UInt(64)),
             Column("float_col", Float(32)),
             Column("string_col", String()),
+            Column("bool_col", Bool()),
             Column("time_col", DateTime()),
             Column("time64_col", DateTime64(3, "America/New_York")),
             Column("nested_col", Nested([Column("sub_col", UInt(64))])),
@@ -227,6 +229,10 @@ delete_allocation_policies:
                     [("success", 0), ("error", 1), ("pending", 2)],
                     SchemaModifiers(nullable=True, readonly=False),
                 ),
+            ),
+            Column(
+                "json_col",
+                JSON(max_dynamic_paths=128),
             ),
         ]
 

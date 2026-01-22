@@ -15,10 +15,9 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.matchers import Any
+from snuba.query.matchers import Any, Or
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
-from snuba.query.matchers import Or
 from snuba.query.matchers import String as StringMatch
 from snuba.util import qualified_column
 from snuba.utils.registered_class import RegisteredClass
@@ -27,9 +26,7 @@ TExpIn = TypeVar("TExpIn")
 TExpOut = TypeVar("TExpOut")
 
 
-class SnubaClickhouseMapper(
-    ExpressionMapper[TExpIn, TExpOut, SnubaClickhouseStrictTranslator]
-):
+class SnubaClickhouseMapper(ExpressionMapper[TExpIn, TExpOut, SnubaClickhouseStrictTranslator]):
     pass
 
 
@@ -50,9 +47,7 @@ class LiteralMapper(SnubaClickhouseMapper[Literal, Literal]):
 ValidColumnMappings = Union[Column, Literal, FunctionCall, CurriedFunctionCall]
 
 
-class ColumnMapper(
-    SnubaClickhouseMapper[Column, ValidColumnMappings], metaclass=RegisteredClass
-):
+class ColumnMapper(SnubaClickhouseMapper[Column, ValidColumnMappings], metaclass=RegisteredClass):
     """
     Columns can be translated into other Columns, or Literals (if a Snuba
     column has a hardcoded value on a storage like the event type on
@@ -93,9 +88,7 @@ class FunctionCallMapper(
 
 
 class CurriedFunctionCallMapper(
-    SnubaClickhouseMapper[
-        CurriedFunctionCall, Union[CurriedFunctionCall, FunctionCall]
-    ],
+    SnubaClickhouseMapper[CurriedFunctionCall, Union[CurriedFunctionCall, FunctionCall]],
     metaclass=RegisteredClass,
 ):
     @classmethod
@@ -161,9 +154,7 @@ class DefaultNoneColumnMapper(ColumnMapper):
             return identity(
                 Literal(None, None),
                 expression.alias
-                or qualified_column(
-                    expression.column_name, expression.table_name or ""
-                ),
+                or qualified_column(expression.column_name, expression.table_name or ""),
             )
         else:
             return None
@@ -209,7 +200,6 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
         expression: FunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCall]:
-
         # HACK: Quick fix to avoid this function dropping important conditions from the query
         logical_functions = {"and", "or", "xor"}
 

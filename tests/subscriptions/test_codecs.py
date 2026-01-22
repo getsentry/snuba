@@ -51,7 +51,6 @@ from snuba.utils.metrics.timer import Timer
 def build_rpc_subscription_data_from_proto(
     entity_key: EntityKey, metadata: Mapping[str, Any]
 ) -> SubscriptionData:
-
     return RPCSubscriptionData.from_proto(
         CreateSubscriptionRequestProto(
             time_series_request=TimeSeriesRequest(
@@ -65,9 +64,7 @@ def build_rpc_subscription_data_from_proto(
                 aggregations=[
                     AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                         label="sum",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
@@ -83,37 +80,37 @@ def build_rpc_subscription_data_from_proto(
             time_window_secs=300,
             resolution_secs=60,
         ),
-        EntityKey.EAP_SPANS,
+        EntityKey.EAP_ITEMS,
     )
 
 
 def build_rpc_subscription_data(
     entity_key: EntityKey, metadata: Mapping[str, Any]
 ) -> SubscriptionData:
-
-    return RPCSubscriptionData(
+    tmp = RPCSubscriptionData(
         project_id=1,
         time_window_sec=300,
         resolution_sec=60,
         entity=get_entity(entity_key),
         metadata=metadata,
-        time_series_request="Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIaGggBEg8IAxILdGVzdF9tZXRyaWMaA3N1bSAB",
+        time_series_request="Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIyIQoaCAESDwgDEgt0ZXN0X21ldHJpYxoDc3VtIAEaA3N1bQ==",
         request_name="TimeSeriesRequest",
         request_version="v1",
     )
+    return tmp
 
 
 RPC_CASES = [
     pytest.param(
         build_rpc_subscription_data_from_proto,
         {"organization": 1},
-        EntityKey.EAP_SPANS,
+        EntityKey.EAP_ITEMS,
         id="rpc",
     ),
     pytest.param(
         build_rpc_subscription_data,
         {"organization": 1},
-        EntityKey.EAP_SPANS,
+        EntityKey.EAP_ITEMS,
         id="rpc",
     ),
 ]
@@ -122,7 +119,6 @@ RPC_CASES = [
 def build_snql_subscription_data(
     entity_key: EntityKey, metadata: Mapping[str, Any]
 ) -> SubscriptionData:
-
     return SnQLSubscriptionData(
         project_id=5,
         time_window_sec=500 * 60,
@@ -269,8 +265,8 @@ RESULTS_CASES = [
         id="snql_subscription",
     ),
     pytest.param(
-        build_rpc_subscription_data(entity_key=EntityKey.EAP_SPANS, metadata={}),
-        EntityKey.EAP_SPANS,
+        build_rpc_subscription_data(entity_key=EntityKey.EAP_ITEMS, metadata={}),
+        EntityKey.EAP_ITEMS,
         id="rpc_subscriptions",
     ),
 ]
@@ -285,9 +281,7 @@ def test_subscription_task_result_encoder(
     timestamp = datetime.now()
 
     # XXX: This seems way too coupled to the dataset.
-    request = subscription.build_request(
-        get_dataset("events"), timestamp, None, Timer("timer")
-    )
+    request = subscription.build_request(get_dataset("events"), timestamp, None, Timer("timer"))
     result: Result = {
         "meta": [{"type": "UInt64", "name": "count"}],
         "data": [{"count": 1}],
@@ -315,9 +309,7 @@ def test_subscription_task_result_encoder(
     assert data["version"] == 3
     payload = data["payload"]
 
-    assert payload["subscription_id"] == str(
-        task_result.task.task.subscription.identifier
-    )
+    assert payload["subscription_id"] == str(task_result.task.task.subscription.identifier)
     if isinstance(request, ProtobufMessage):
         assert payload["request"]["request_name"] == "TimeSeriesRequest"
         assert payload["request"]["request_version"] == "v1"
@@ -402,9 +394,7 @@ def test_metrics_subscription_task_result_encoder(
     assert data["version"] == 3
     payload = data["payload"]
 
-    assert payload["subscription_id"] == str(
-        task_result.task.task.subscription.identifier
-    )
+    assert payload["subscription_id"] == str(task_result.task.task.subscription.identifier)
     assert payload["request"] == request.original_body
     assert payload["result"]["data"] == result["data"]
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
@@ -431,9 +421,7 @@ def test_subscription_task_encoder_snql() -> None:
 
     subscription_with_metadata = SubscriptionWithMetadata(
         EntityKey.EVENTS,
-        Subscription(
-            SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
-        ),
+        Subscription(SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data),
         tick_upper_offset,
     )
 
@@ -458,7 +446,7 @@ def test_subscription_task_encoder_snql() -> None:
 
 def test_subscription_task_encoder_rpc() -> None:
     encoder = SubscriptionScheduledTaskEncoder()
-    subscription_data = build_rpc_subscription_data(EntityKey.EAP_SPANS, {})
+    subscription_data = build_rpc_subscription_data(EntityKey.EAP_ITEMS, {})
 
     subscription_id = uuid.UUID("91b46cb6224f11ecb2ddacde48001122")
 
@@ -467,10 +455,8 @@ def test_subscription_task_encoder_rpc() -> None:
     tick_upper_offset = 5
 
     subscription_with_metadata = SubscriptionWithMetadata(
-        EntityKey.EAP_SPANS,
-        Subscription(
-            SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
-        ),
+        EntityKey.EAP_ITEMS,
+        Subscription(SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data),
         tick_upper_offset,
     )
 
@@ -482,9 +468,9 @@ def test_subscription_task_encoder_rpc() -> None:
     assert encoded.value == (
         b"{"
         b'"timestamp":"1970-01-01T00:00:00",'
-        b'"entity":"eap_spans",'
+        b'"entity":"eap_items",'
         b'"task":{'
-        b'"data":{"project_id":1,"time_window":300,"resolution":60,"time_series_request":"Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIaGggBEg8IAxILdGVzdF9tZXRyaWMaA3N1bSAB","request_version":"v1","request_name":"TimeSeriesRequest","subscription_type":"rpc"}},'
+        b'"data":{"project_id":1,"time_window":300,"resolution":60,"time_series_request":"Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIyIQoaCAESDwgDEgt0ZXN0X21ldHJpYxoDc3VtIAEaA3N1bQ==","request_version":"v1","request_name":"TimeSeriesRequest","subscription_type":"rpc"}},'
         b'"tick_upper_offset":5'
         b"}"
     )

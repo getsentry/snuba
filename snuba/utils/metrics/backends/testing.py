@@ -23,9 +23,7 @@ class RecordedEventCall:
 RecordedMetricCalls = List[RecordedMetricCall]
 
 
-RECORDED_METRIC_CALLS: MutableMapping[
-    str, MutableMapping[str, List[RecordedMetricCall]]
-] = {}
+RECORDED_METRIC_CALLS: MutableMapping[str, MutableMapping[str, List[RecordedMetricCall]]] = {}
 RECORDED_EVENT_CALLS: MutableMapping[str, List[RecordedEventCall]] = {}
 
 

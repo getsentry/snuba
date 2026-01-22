@@ -9,7 +9,8 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
+from snuba.web.rpc.common.common import attribute_key_to_expression
+from snuba.web.rpc.v1.resolvers.common.aggregation import (
     CUSTOM_COLUMN_PREFIX,
     CustomColumnInformation,
     ExtrapolationContext,
@@ -75,7 +76,8 @@ def test_get_confidence_interval_column_for_non_extrapolatable_column() -> None:
                 key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test"),
                 label="min(test)",
                 extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
-            )
+            ),
+            attribute_key_to_expression,
         )
         is None
     )
@@ -235,7 +237,4 @@ def test_get_closest_percentile_index(
     width: float,
     expected_index: int,
 ) -> None:
-    assert (
-        _get_closest_percentile_index(value, percentile, granularity, width)
-        == expected_index
-    )
+    assert _get_closest_percentile_index(value, percentile, granularity, width) == expected_index
