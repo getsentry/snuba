@@ -788,6 +788,68 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    def test_any_aggregation_with_string_attribute(self, setup_teardown: Any) -> None:
+        """Test that any() aggregation works with string attributes.
+
+        The fixture creates 120 spans all with custom_tag="blah".
+        Using any() on this attribute should return "blah" for each group.
+        """
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="custom_tag")
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_ANY,
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="custom_tag"),
+                        label="any(custom_tag)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))
+                ),
+            ],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        # All spans have custom_tag="blah", so any() should return "blah" for each location group
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="location",
+                results=[
+                    AttributeValue(val_str="backend"),
+                    AttributeValue(val_str="frontend"),
+                    AttributeValue(val_str="mobile"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="any(custom_tag)",
+                results=[
+                    AttributeValue(val_str="blah"),
+                    AttributeValue(val_str="blah"),
+                    AttributeValue(val_str="blah"),
+                ],
+            ),
+        ]
+
     def test_table_with_columns_not_in_groupby_backward_compat(self, setup_teardown: Any) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(

@@ -10,6 +10,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     AttributeValue,
+    Function,
     Reliability,
 )
 
@@ -33,8 +34,39 @@ def _add_converter(column: Column, converters: Dict[str, Callable[[Any], Attribu
             raise BadSnubaRPCRequestException(
                 f"unknown attribute type: {AttributeKey.Type.Name(column.key.type)}"
             )
+    elif column.HasField("aggregation"):
+        # For FUNCTION_ANY, the result type matches the key type since it returns actual values
+        if column.aggregation.aggregate == Function.FUNCTION_ANY:
+            key_type = column.aggregation.key.type
+            if key_type == AttributeKey.TYPE_STRING:
+                converters[column.label] = lambda x: AttributeValue(val_str=str(x))
+            elif key_type == AttributeKey.TYPE_INT:
+                converters[column.label] = lambda x: AttributeValue(val_int=int(x))
+            elif key_type == AttributeKey.TYPE_BOOLEAN:
+                converters[column.label] = lambda x: AttributeValue(val_bool=bool(x))
+            else:
+                # Default to double for float/double types
+                converters[column.label] = lambda x: AttributeValue(val_double=float(x))
+        else:
+            # Other aggregation functions return numeric values
+            converters[column.label] = lambda x: AttributeValue(val_double=float(x))
     elif column.HasField("conditional_aggregation"):
-        converters[column.label] = lambda x: AttributeValue(val_double=float(x))
+        # For FUNCTION_ANY, the result type matches the key type since it returns actual values
+        # Note: AggregationToConditionalAggregationVisitor converts aggregation -> conditional_aggregation
+        if column.conditional_aggregation.aggregate == Function.FUNCTION_ANY:
+            key_type = column.conditional_aggregation.key.type
+            if key_type == AttributeKey.TYPE_STRING:
+                converters[column.label] = lambda x: AttributeValue(val_str=str(x))
+            elif key_type == AttributeKey.TYPE_INT:
+                converters[column.label] = lambda x: AttributeValue(val_int=int(x))
+            elif key_type == AttributeKey.TYPE_BOOLEAN:
+                converters[column.label] = lambda x: AttributeValue(val_bool=bool(x))
+            else:
+                # Default to double for float/double types
+                converters[column.label] = lambda x: AttributeValue(val_double=float(x))
+        else:
+            # Other aggregation functions return numeric values
+            converters[column.label] = lambda x: AttributeValue(val_double=float(x))
     elif column.HasField("formula"):
         converters[column.label] = lambda x: AttributeValue(val_double=float(x))
         _add_converter(column.formula.left, converters)
