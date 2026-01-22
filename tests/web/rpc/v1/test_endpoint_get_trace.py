@@ -621,7 +621,13 @@ class TestGetTracePagination(BaseApiTest):
         # Wrap the real run_query to capture the actual QueryResult while still hitting ClickHouse.
         captured: dict[str, Any] = {}
 
-        def wrapper(dataset, request, timer, robust: bool = False, concurrent_queries_gauge=None) -> QueryResult:  # type: ignore[no-untyped-def]
+        def wrapper(
+            dataset: Any,
+            request: Any,
+            timer: Any,
+            robust: bool = False,
+            concurrent_queries_gauge: Any | None = None,
+        ) -> QueryResult:
             qr = run_query(dataset, request, timer, robust, concurrent_queries_gauge)
             captured["query_result"] = qr
             return qr
