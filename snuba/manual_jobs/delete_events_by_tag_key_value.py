@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Mapping, Optional
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
@@ -21,13 +22,22 @@ class DeleteEventsByTagKeyValue(Job):
         self._project_ids = params["project_ids"]
         self._tag_key = params["tag_key"]
         self._tag_value = params["tag_value"]
+        self._start_datetime = datetime.fromisoformat(params["start_datetime"])
+        self._end_datetime = datetime.fromisoformat(params["end_datetime"])
 
     def _get_query(self, cluster_name: str | None) -> str:
         project_ids = ",".join([str(p) for p in self._project_ids])
         key = self._tag_key
         value = self._tag_value
+        start_datetime = self._start_datetime.isoformat()
+        end_datetime = self._end_datetime.isoformat()
         on_cluster = f"ON CLUSTER '{cluster_name}'" if cluster_name else ""
-        return f"""DELETE FROM errors_local {on_cluster} WHERE project_id IN [{project_ids}] AND has(tags.key, '{key}') AND has(tags.value, '{value}')"""
+        return f"""DELETE FROM errors_local {on_cluster}
+WHERE project_id IN [{project_ids}]
+AND has(tags.key, '{key}')
+AND has(tags.value, '{value}')
+AND timestamp >= toDateTime('{start_datetime}')
+AND timestamp < toDateTime('{end_datetime}')"""
 
     def execute(self, logger: JobLogger) -> None:
         cluster = get_cluster(StorageSetKey.EVENTS)
