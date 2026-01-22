@@ -27,7 +27,6 @@ GROUPS_SCHEMA = ColumnSet(
 )
 
 
-
 class FakeEntity(Entity, ABC):
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return []
