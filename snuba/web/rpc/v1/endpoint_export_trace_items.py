@@ -81,7 +81,7 @@ class ExportTraceItemsPageToken:
             filters[1].comparison_filter.key.name == "last_seen_timestamp"
             and filters[1].comparison_filter.key.type == AttributeKey.Type.TYPE_DOUBLE
         ):
-            raise ValueError("Invalid page token")
+            raise ValueError("Invalid timestamp")
         last_seen_timestamp = filters[1].comparison_filter.value.val_double
 
         if not (
@@ -95,7 +95,7 @@ class ExportTraceItemsPageToken:
             filters[3].comparison_filter.key.name == "last_seen_item_id"
             and filters[3].comparison_filter.key.type == AttributeKey.Type.TYPE_STRING
         ):
-            raise ValueError("Invalid page token")
+            raise ValueError("Invalid item id")
         last_seen_item_id = filters[3].comparison_filter.value.val_str
 
         return cls(

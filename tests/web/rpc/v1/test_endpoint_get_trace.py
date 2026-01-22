@@ -32,6 +32,8 @@ from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.settings import ENABLE_TRACE_PAGINATION_DEFAULT
+from snuba.web import QueryResult
+from snuba.web.query import run_query
 from snuba.web.rpc.v1.endpoint_get_trace import (
     APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
     EndpointGetTrace,
@@ -529,7 +531,7 @@ class TestGetTracePagination(BaseApiTest):
                 ),
             ],
         )
-        items_received = set[str]()
+        items_received = []
         while True:
             response = EndpointGetTrace().execute(message)
             curr_response_len = 0
@@ -537,7 +539,7 @@ class TestGetTracePagination(BaseApiTest):
                 for item in group.items:
                     curr_response_len += 1
                     assert item.id not in items_received
-                    items_received.add(item.id)
+                    items_received.append(item.id)
             assert curr_response_len <= mylimit
             if curr_response_len < mylimit:
                 assert response.page_token.end_pagination == True
@@ -598,7 +600,7 @@ class TestGetTracePagination(BaseApiTest):
                     ),
                 ],
             )
-            items_received = set[str]()
+            items_received = []
             while True:
                 response = EndpointGetTrace().execute(message)
                 curr_response_len = 0
@@ -606,7 +608,7 @@ class TestGetTracePagination(BaseApiTest):
                     for item in group.items:
                         curr_response_len += 1
                         assert item.id not in items_received
-                        items_received.add(item.id)
+                        items_received.append(item.id)
                 assert curr_response_len <= configmax
                 if curr_response_len < configmax:
                     assert response.page_token.end_pagination == True
@@ -614,3 +616,42 @@ class TestGetTracePagination(BaseApiTest):
                     break
                 message.page_token.CopyFrom(response.page_token)
             assert len(items_received) == len(_SPANS) + len(_LOGS)
+
+    def test_no_transformation_on_order_by(self, setup_teardown: Any, monkeypatch: Any) -> None:
+        # Wrap the real run_query to capture the actual QueryResult while still hitting ClickHouse.
+        captured: dict[str, Any] = {}
+
+        def wrapper(dataset, request, timer, robust: bool = False, concurrent_queries_gauge=None) -> QueryResult:  # type: ignore[no-untyped-def]
+            qr = run_query(dataset, request, timer, robust, concurrent_queries_gauge)
+            captured["query_result"] = qr
+            return qr
+
+        monkeypatch.setattr("snuba.web.rpc.v1.endpoint_get_trace.run_query", wrapper)
+
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+        message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                )
+            ],
+        )
+
+        EndpointGetTrace().execute(message)
+
+        qr = captured["query_result"]
+        assert (
+            "ORDER BY organization_id ASC, project_id ASC, item_type ASC, timestamp ASC, trace_id ASC, item_id ASC"
+            in qr.extra["sql"]
+        )
