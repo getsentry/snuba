@@ -11,6 +11,8 @@ from types import TracebackType
 from typing import Any, Iterator, MutableMapping, Optional, Sequence, Type
 from typing import ChainMap as TypingChainMap
 
+from redis.exceptions import TimeoutError as RedisTimeoutError
+
 from snuba import environment, state
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state import get_configs, set_config
@@ -279,6 +281,8 @@ def rate_limit_start_request(
             # if something goes wrong, we don't want to block the request,
             # set the values such that they pass under any limit
             logger.exception(ex)
+            if isinstance(ex, RedisTimeoutError):
+                metrics.increment("ratelimiter_redis_timeout", tags={"function": "start_request"})
             return RateLimitStats(rate=-1, concurrent=-1)
 
     per_second = historical / float(state.rate_lookback_s)
@@ -313,6 +317,8 @@ def rate_limit_finish_request(
                 pipe.execute()
     except Exception as ex:
         logger.exception(ex)
+        if isinstance(ex, RedisTimeoutError):
+            metrics.increment("ratelimiter_redis_timeout", tags={"function": "finish_request"})
 
 
 @contextmanager
