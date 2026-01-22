@@ -18,61 +18,57 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
 
 
+def _get_converter_for_type(
+    key_type: "AttributeKey.Type.ValueType",
+) -> Callable[[Any], AttributeValue]:
+    """Returns a converter function for the given attribute type."""
+    if key_type == AttributeKey.TYPE_BOOLEAN:
+        return lambda x: AttributeValue(val_bool=bool(x))
+    elif key_type == AttributeKey.TYPE_STRING:
+        return lambda x: AttributeValue(val_str=str(x))
+    elif key_type == AttributeKey.TYPE_INT:
+        return lambda x: AttributeValue(val_int=int(x))
+    elif key_type == AttributeKey.TYPE_FLOAT:
+        return lambda x: AttributeValue(val_float=float(x))
+    elif key_type == AttributeKey.TYPE_DOUBLE:
+        return lambda x: AttributeValue(val_double=float(x))
+    else:
+        raise BadSnubaRPCRequestException(
+            f"unknown attribute type: {AttributeKey.Type.Name(key_type)}"
+        )
+
+
+def _get_double_converter() -> Callable[[Any], AttributeValue]:
+    """Returns a converter that converts to double (used for most aggregations)."""
+    return lambda x: AttributeValue(val_double=float(x))
+
+
 def _add_converter(column: Column, converters: Dict[str, Callable[[Any], AttributeValue]]) -> None:
     if column.HasField("key"):
-        if column.key.type == AttributeKey.TYPE_BOOLEAN:
-            converters[column.label] = lambda x: AttributeValue(val_bool=bool(x))
-        elif column.key.type == AttributeKey.TYPE_STRING:
-            converters[column.label] = lambda x: AttributeValue(val_str=str(x))
-        elif column.key.type == AttributeKey.TYPE_INT:
-            converters[column.label] = lambda x: AttributeValue(val_int=int(x))
-        elif column.key.type == AttributeKey.TYPE_FLOAT:
-            converters[column.label] = lambda x: AttributeValue(val_float=float(x))
-        elif column.key.type == AttributeKey.TYPE_DOUBLE:
-            converters[column.label] = lambda x: AttributeValue(val_double=float(x))
-        else:
-            raise BadSnubaRPCRequestException(
-                f"unknown attribute type: {AttributeKey.Type.Name(column.key.type)}"
-            )
+        converters[column.label] = _get_converter_for_type(column.key.type)
     elif column.HasField("aggregation"):
         # For FUNCTION_ANY, the result type matches the key type since it returns actual values
         if column.aggregation.aggregate == Function.FUNCTION_ANY:
-            key_type = column.aggregation.key.type
-            if key_type == AttributeKey.TYPE_STRING:
-                converters[column.label] = lambda x: AttributeValue(val_str=str(x))
-            elif key_type == AttributeKey.TYPE_INT:
-                converters[column.label] = lambda x: AttributeValue(val_int=int(x))
-            elif key_type == AttributeKey.TYPE_BOOLEAN:
-                converters[column.label] = lambda x: AttributeValue(val_bool=bool(x))
-            else:
-                # Default to double for float/double types
-                converters[column.label] = lambda x: AttributeValue(val_double=float(x))
+            converters[column.label] = _get_converter_for_type(column.aggregation.key.type)
         else:
             # Other aggregation functions return numeric values
-            converters[column.label] = lambda x: AttributeValue(val_double=float(x))
+            converters[column.label] = _get_double_converter()
     elif column.HasField("conditional_aggregation"):
         # For FUNCTION_ANY, the result type matches the key type since it returns actual values
         # Note: AggregationToConditionalAggregationVisitor converts aggregation -> conditional_aggregation
         if column.conditional_aggregation.aggregate == Function.FUNCTION_ANY:
-            key_type = column.conditional_aggregation.key.type
-            if key_type == AttributeKey.TYPE_STRING:
-                converters[column.label] = lambda x: AttributeValue(val_str=str(x))
-            elif key_type == AttributeKey.TYPE_INT:
-                converters[column.label] = lambda x: AttributeValue(val_int=int(x))
-            elif key_type == AttributeKey.TYPE_BOOLEAN:
-                converters[column.label] = lambda x: AttributeValue(val_bool=bool(x))
-            else:
-                # Default to double for float/double types
-                converters[column.label] = lambda x: AttributeValue(val_double=float(x))
+            converters[column.label] = _get_converter_for_type(
+                column.conditional_aggregation.key.type
+            )
         else:
             # Other aggregation functions return numeric values
-            converters[column.label] = lambda x: AttributeValue(val_double=float(x))
+            converters[column.label] = _get_double_converter()
     elif column.HasField("formula"):
-        converters[column.label] = lambda x: AttributeValue(val_double=float(x))
+        converters[column.label] = _get_double_converter()
         _add_converter(column.formula.left, converters)
         _add_converter(column.formula.right, converters)
     elif column.HasField("literal"):
-        converters[column.label] = lambda x: AttributeValue(val_double=float(x))
+        converters[column.label] = _get_double_converter()
     else:
         raise BadSnubaRPCRequestException(
             "column is not one of: attribute, (conditional) aggregation, or formula"
