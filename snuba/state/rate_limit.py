@@ -286,8 +286,6 @@ def rate_limit_start_request(
             # if something goes wrong, we don't want to block the request,
             # set the values such that they pass under any limit
             logger.exception(ex)
-            if isinstance(ex, RedisTimeoutError):
-                metrics.increment("ratelimiter_redis_timeout", tags={"function": "start_request"})
             return RateLimitStats(rate=-1, concurrent=-1)
 
     per_second = historical / float(state.rate_lookback_s)
@@ -326,8 +324,6 @@ def rate_limit_finish_request(
         metrics.increment("ratelimiter_redis_timeout", tags={"function": "finish_request"})
     except Exception as ex:
         logger.exception(ex)
-        if isinstance(ex, RedisTimeoutError):
-            metrics.increment("ratelimiter_redis_timeout", tags={"function": "finish_request"})
 
 
 @contextmanager
