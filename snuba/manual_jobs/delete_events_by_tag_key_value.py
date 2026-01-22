@@ -34,8 +34,7 @@ class DeleteEventsByTagKeyValue(Job):
         on_cluster = f"ON CLUSTER '{cluster_name}'" if cluster_name else ""
         return f"""DELETE FROM errors_local {on_cluster}
 WHERE project_id IN [{project_ids}]
-AND has(tags.key, '{key}')
-AND has(tags.value, '{value}')
+AND arrayElement(tags.value, indexOf(tags.key, '{key}')) = '{value}'
 AND timestamp >= toDateTime('{start_datetime}')
 AND timestamp < toDateTime('{end_datetime}')"""
 
