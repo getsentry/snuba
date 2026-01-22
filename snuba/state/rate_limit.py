@@ -11,8 +11,6 @@ from types import TracebackType
 from typing import Any, Iterator, MutableMapping, Optional, Sequence, Type
 from typing import ChainMap as TypingChainMap
 
-from redis.exceptions import TimeoutError as RedisTimeoutError
-
 from snuba import environment, state
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state import get_configs, set_config
@@ -277,11 +275,6 @@ def rate_limit_start_request(
                 concurrent = sum(next(pipe_results) for _ in range(rate_limit_shard_factor))
             else:
                 concurrent = 0
-        except RedisTimeoutError:
-            # Emit metric for timeout, but don't log since this is expected
-            # when Redis is slow. We fail open to avoid blocking requests.
-            metrics.increment("ratelimiter_redis_timeout", tags={"function": "start_request"})
-            return RateLimitStats(rate=-1, concurrent=-1)
         except Exception as ex:
             # if something goes wrong, we don't want to block the request,
             # set the values such that they pass under any limit
@@ -290,7 +283,8 @@ def rate_limit_start_request(
 
     per_second = historical / float(state.rate_lookback_s)
 
-    return RateLimitStats(rate=per_second, concurrent=concurrent)
+    stats = RateLimitStats(rate=per_second, concurrent=concurrent)
+    return stats
 
 
 def rate_limit_finish_request(
@@ -317,10 +311,6 @@ def rate_limit_finish_request(
                 pipe.zincrby(query_bucket, -float(max_query_duration_s), query_id)
                 pipe.expire(query_bucket, max_query_duration_s)
                 pipe.execute()
-    except RedisTimeoutError:
-        # Emit metric for timeout, but don't log since this is expected
-        # when Redis is slow. We fail open to avoid blocking requests.
-        metrics.increment("ratelimiter_redis_timeout", tags={"function": "finish_request"})
     except Exception as ex:
         logger.exception(ex)
 
