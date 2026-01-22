@@ -89,7 +89,9 @@ def get_trace_ids_sql_for_cross_item_query(
         )
         trace_item_filters_or_expression = or_cond(*filter_expressions)
     elif len(filter_expressions) == 1:
-        trace_item_filters_and_expression = f.greater(f.countIf(filter_expressions[0]), 0)
+        # if there is only one filter expression, the having clause is unnecessary
+        # because everything that is necessary is already filtered by the where clause.
+        trace_item_filters_and_expression = None
         trace_item_filters_or_expression = filter_expressions[0]
     else:
         trace_item_filters_and_expression = None
