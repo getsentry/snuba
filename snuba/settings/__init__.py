@@ -330,7 +330,7 @@ SUPPORTED_STATES: Set[str] = {
 # We expect to remove them after all storages and migration groups have been migrated.
 READINESS_STATE_FAIL_QUERIES: bool = True
 
-MAX_RESOLUTION_FOR_JITTER = 60
+MAX_RESOLUTION_FOR_JITTER = 120
 
 # These contexts will not be stored in the transactions table
 # Example: {123: {"context1", "context2"}}
