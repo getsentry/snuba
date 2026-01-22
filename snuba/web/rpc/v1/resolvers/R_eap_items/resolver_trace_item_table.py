@@ -35,7 +35,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, in_cond, literal, literals_array, or_cond
 from snuba.query.dsl import column as snuba_column
-from snuba.query.expressions import Expression, SubscriptableReference
+from snuba.query.expressions import DangerousRawSQL, Expression, SubscriptableReference
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -68,7 +68,7 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
-    get_trace_ids_for_cross_item_query,
+    get_trace_ids_sql_for_cross_item_query,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 
@@ -431,14 +431,11 @@ def build_query(
     # Handle cross item queries by first getting trace IDs
     additional_conditions: List[Expression] = []
     if request.trace_filters and timer is not None:
-        trace_ids = get_trace_ids_for_cross_item_query(
+        trace_ids_sql = get_trace_ids_sql_for_cross_item_query(
             request, request.meta, list(request.trace_filters), timer
         )
         additional_conditions.append(
-            in_cond(
-                snuba_column("trace_id"),
-                literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
-            )
+            in_cond(snuba_column("trace_id"), DangerousRawSQL(None, f"({trace_ids_sql})"))
         )
     if time_window is not None:
         additional_conditions.append(

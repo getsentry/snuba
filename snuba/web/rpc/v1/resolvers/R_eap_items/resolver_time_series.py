@@ -30,8 +30,8 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, in_cond, literal, literals_array
-from snuba.query.expressions import Expression
+from snuba.query.dsl import column, in_cond, literal
+from snuba.query.expressions import DangerousRawSQL, Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -62,7 +62,7 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
-    get_trace_ids_for_cross_item_query,
+    get_trace_ids_sql_for_cross_item_query,
 )
 from snuba.web.rpc.v1.resolvers.common.formula_reliability import (
     FormulaReliabilityCalculator,
@@ -348,13 +348,13 @@ def build_query(request: TimeSeriesRequest, timer: Optional[Timer] = None) -> Qu
     # Handle cross item queries by first getting trace IDs
     additional_conditions = []
     if request.trace_filters and timer is not None:
-        trace_ids = get_trace_ids_for_cross_item_query(
+        trace_ids_sql = get_trace_ids_sql_for_cross_item_query(
             request, request.meta, list(request.trace_filters), timer
         )
         additional_conditions.append(
             in_cond(
                 column("trace_id"),
-                literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
+                DangerousRawSQL(None, f"({trace_ids_sql})"),
             )
         )
 
