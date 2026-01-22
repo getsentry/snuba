@@ -5,8 +5,15 @@ from typing import Any
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
+from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    RequestMeta,
+    TraceItemFilterWithType,
+    TraceItemType,
+)
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 from snuba import state
 from snuba.downsampled_storage_tiers import Tier
@@ -297,3 +304,117 @@ def test_outcomes_based_routing_defaults_to_tier1_for_unspecified_item_type(
     assert routing_decision.tier == Tier.TIER_1
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
+
+
+def test_get_item_types_in_query_trace_item_table_request_with_filters() -> None:
+    """Test extracting item types from TraceItemTableRequest with multiple trace_filters."""
+    strategy = OutcomesBasedRoutingStrategy()
+    request_meta = _get_request_meta()
+
+    trace_filter_span = TraceItemFilterWithType(
+        item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        filter=TraceItemFilter(),
+    )
+    trace_filter_log = TraceItemFilterWithType(
+        item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+        filter=TraceItemFilter(),
+    )
+    request = TraceItemTableRequest(
+        meta=request_meta,
+        trace_filters=[trace_filter_span, trace_filter_log],
+    )
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+    )
+
+    item_types = strategy.get_item_types_in_query(context)
+
+    assert set(item_types) == {
+        TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        TraceItemType.TRACE_ITEM_TYPE_LOG,
+    }
+
+
+def test_get_item_types_in_query_time_series_request_with_filters() -> None:
+    """Test extracting item types from TimeSeriesRequest with trace_filters."""
+    strategy = OutcomesBasedRoutingStrategy()
+    request_meta = _get_request_meta()
+
+    trace_filter_span = TraceItemFilterWithType(
+        item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        filter=TraceItemFilter(),
+    )
+    request = TimeSeriesRequest(
+        meta=request_meta,
+        trace_filters=[trace_filter_span],
+    )
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+    )
+
+    item_types = strategy.get_item_types_in_query(context)
+
+    assert item_types == [TraceItemType.TRACE_ITEM_TYPE_SPAN]
+
+
+def test_get_item_types_in_query_get_traces_request_with_filters() -> None:
+    """Test extracting item types from GetTracesRequest with filters."""
+    strategy = OutcomesBasedRoutingStrategy()
+    request_meta = _get_request_meta()
+
+    get_traces_filter = GetTracesRequest.TraceFilter(
+        item_type=TraceItemType.TRACE_ITEM_TYPE_METRIC,
+        filter=TraceItemFilter(),
+    )
+    request = GetTracesRequest(
+        meta=request_meta,
+        filters=[get_traces_filter],
+    )
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+    )
+
+    item_types = strategy.get_item_types_in_query(context)
+
+    assert item_types == [TraceItemType.TRACE_ITEM_TYPE_METRIC]
+
+
+def test_get_item_types_in_query_fallback_to_meta() -> None:
+    """Test fallback to meta.trace_item_type when no filters are present."""
+    strategy = OutcomesBasedRoutingStrategy()
+    request_meta = _get_request_meta()
+
+    request = TraceItemTableRequest(meta=request_meta)
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+    )
+
+    item_types = strategy.get_item_types_in_query(context)
+
+    assert item_types == [TraceItemType.TRACE_ITEM_TYPE_SPAN]
+
+
+def test_get_item_types_in_query_empty_when_unspecified() -> None:
+    """Test returns empty list when no filters and trace_item_type is UNSPECIFIED."""
+    strategy = OutcomesBasedRoutingStrategy()
+    request_meta = _get_request_meta()
+    request_meta.trace_item_type = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+
+    request = TraceItemTableRequest(meta=request_meta)
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+    )
+
+    item_types = strategy.get_item_types_in_query(context)
+
+    assert item_types == []
