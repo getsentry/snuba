@@ -13,6 +13,7 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.downsampled_storage_tiers import Tier
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -45,6 +46,7 @@ def get_trace_ids_sql_for_cross_item_query(
     original_request: Message,
     request_meta: RequestMeta,
     trace_filters: list[TraceItemFilterWithType],
+    sampling_tier: Tier,
     timer: Timer,
 ) -> str:
     """
@@ -55,33 +57,39 @@ def get_trace_ids_sql_for_cross_item_query(
     returns the SQL string instead of executing it. Uses dry_run mode to get the SQL
     without actually querying ClickHouse.
     """
-    converted_trace_filters = [trace_filter for trace_filter in trace_filters]
-    if isinstance(trace_filters[0], GetTracesRequest.TraceFilter):
-        converted_trace_filters = [
-            TraceItemFilterWithType(item_type=trace_filter.item_type, filter=trace_filter.filter)
-            for trace_filter in trace_filters
-        ]
-
     filter_expressions = []
-    for trace_filter in converted_trace_filters:
-        filter_expressions.append(
-            and_cond(
-                f.equals(column("item_type"), trace_filter.item_type),
-                trace_item_filters_to_expression(
-                    trace_filter.filter,
-                    attribute_key_to_expression,
-                ),
+    if trace_filters:
+        converted_trace_filters = [trace_filter for trace_filter in trace_filters]
+        if isinstance(trace_filters[0], GetTracesRequest.TraceFilter):
+            converted_trace_filters = [
+                TraceItemFilterWithType(
+                    item_type=trace_filter.item_type, filter=trace_filter.filter
+                )
+                for trace_filter in trace_filters
+            ]
+
+        for trace_filter in converted_trace_filters:
+            filter_expressions.append(
+                and_cond(
+                    f.equals(column("item_type"), trace_filter.item_type),
+                    trace_item_filters_to_expression(
+                        trace_filter.filter,
+                        attribute_key_to_expression,
+                    ),
+                )
             )
-        )
 
     if len(filter_expressions) > 1:
         trace_item_filters_and_expression = and_cond(
             *[f.greater(f.countIf(expression), 0) for expression in filter_expressions]
         )
         trace_item_filters_or_expression = or_cond(*filter_expressions)
-    else:
+    elif len(filter_expressions) == 1:
         trace_item_filters_and_expression = f.greater(f.countIf(filter_expressions[0]), 0)
         trace_item_filters_or_expression = filter_expressions[0]
+    else:
+        trace_item_filters_and_expression = None
+        trace_item_filters_or_expression = None
 
     entity = Entity(
         key=EntityKey("eap_items"),
@@ -98,13 +106,13 @@ def get_trace_ids_sql_for_cross_item_query(
         ],
         condition=base_conditions_and(
             request_meta,
-            trace_item_filters_or_expression,
+            *[trace_item_filters_or_expression] if trace_item_filters_or_expression else [],
         ),
         groupby=[
             column("trace_id"),
         ],
         having=trace_item_filters_and_expression,
-        order_by=[OrderBy(OrderByDirection.ASC, column("trace_id"))],
+        order_by=[OrderBy(OrderByDirection.DESC, column("trace_id"))],
         limit=_TRACE_LIMIT,
     )
 
@@ -112,7 +120,7 @@ def get_trace_ids_sql_for_cross_item_query(
 
     # Use dry_run to get SQL without executing
     query_settings = HTTPQuerySettings(dry_run=True)
-
+    query_settings.set_sampling_tier(sampling_tier)
     snuba_request = SnubaRequest(
         id=uuid.UUID(request_meta.request_id),
         original_body=MessageToDict(original_request),

@@ -477,6 +477,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             in_msg,
             in_msg.meta,
             convert_trace_filters_to_trace_item_filter_with_type(list(in_msg.filters)),
+            self.routing_decision.tier,
             self._timer,
         )
 
@@ -622,30 +623,32 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 trace_item_filters_expression,
                 f.equals(column("item_type"), item_type),
             ),
-            order_by=[
-                OrderBy(
-                    direction=OrderByDirection.DESC,
-                    expression=column("organization_id"),
-                ),
-                OrderBy(
-                    direction=OrderByDirection.DESC,
-                    expression=column("project_id"),
-                ),
-                OrderBy(
-                    direction=OrderByDirection.DESC,
-                    expression=column("item_type"),
-                ),
-                OrderBy(
-                    direction=OrderByDirection.DESC,
-                    expression=column("timestamp"),
-                ),
-            ],
+            order_by=[OrderBy(OrderByDirection.DESC, column("trace_id"))],
+            #     order_by=[
+            #         OrderBy(
+            #             direction=OrderByDirection.DESC,
+            #             expression=column("organization_id"),
+            #         ),
+            #         OrderBy(
+            #             direction=OrderByDirection.DESC,
+            #             expression=column("project_id"),
+            #         ),
+            #         OrderBy(
+            #             direction=OrderByDirection.DESC,
+            #             expression=column("item_type"),
+            #         ),
+            #         OrderBy(
+            #             direction=OrderByDirection.DESC,
+            #             expression=column("timestamp"),
+            #         ),
+            #     ],
             limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
             offset=request.page_token.offset,
         )
 
         treeify_or_and_conditions(query)
         settings = setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
+        settings.set_sampling_tier(self.routing_decision.tier)
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=_build_snuba_request(request, query, query_settings=settings),

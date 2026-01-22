@@ -181,6 +181,8 @@ class TestEndpointGetTraces(BaseApiTest):
                 downsampled_storage_meta=response.meta.downsampled_storage_meta,
             ),
         )
+        # TODO: rather than checking the whole mssage, look at all the feilds of the proto and verify that they
+        # are equal. If a field is not equal recurse into that field and find what exactly does not match
         assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_data_and_limit(self, setup_teardown: Any) -> None:
