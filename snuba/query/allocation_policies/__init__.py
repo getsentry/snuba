@@ -487,7 +487,9 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 # Emit metric for timeout, but don't log since this is expected
                 # when Redis is slow. We fail open to avoid blocking requests.
                 self.metrics.increment(
-                    "fail_open", tags={"method": "get_quota_allowance", "reason": "redis_timeout"}
+                    "fail_open",
+                    1,
+                    tags={"method": "get_quota_allowance", "reason": "redis_timeout"},
                 )
                 return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
             except Exception:
