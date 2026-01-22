@@ -1,7 +1,10 @@
 import abc
+import logging
 import time
 from typing import Iterable, Tuple
 from uuid import UUID
+
+import sentry_sdk
 
 from snuba import environment
 from snuba.datasets.entities.entity_key import EntityKey
@@ -10,6 +13,7 @@ from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
+logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "subscription_store")
 
 
@@ -55,13 +59,25 @@ class RedisSubscriptionDataStore(SubscriptionDataStore):
         Stores subscription data in Redis. Will overwrite any existing
         subscriptions with the same id.
         """
-        self.client.hset(self.__key, key.hex.encode("utf-8"), self.codec.encode(data))
+        try:
+            self.client.hset(self.__key, key.hex.encode("utf-8"), self.codec.encode(data))
+        except Exception as e:
+            logger.error(f"Failed to create subscription {key} in Redis: {e}")
+            sentry_sdk.capture_exception(e)
+            metrics.increment("redis_error", tags={"operation": "create"})
+            raise
 
     def delete(self, key: UUID) -> None:
         """
         Removes a subscription from the Redis store.
         """
-        self.client.hdel(self.__key, key.hex.encode("utf-8"))
+        try:
+            self.client.hdel(self.__key, key.hex.encode("utf-8"))
+        except Exception as e:
+            logger.error(f"Failed to delete subscription {key} from Redis: {e}")
+            sentry_sdk.capture_exception(e)
+            metrics.increment("redis_error", tags={"operation": "delete"})
+            raise
 
     def all(self) -> Iterable[Tuple[UUID, SubscriptionData]]:
         """
@@ -69,10 +85,16 @@ class RedisSubscriptionDataStore(SubscriptionDataStore):
         :return: An iterable of `Subscriptions`.
         """
         start = time.time()
-        res = [
-            (UUID(key.decode("utf-8")), self.codec.decode(val))
-            for key, val in self.client.hgetall(self.__key).items()
-        ]
+        try:
+            res = [
+                (UUID(key.decode("utf-8")), self.codec.decode(val))
+                for key, val in self.client.hgetall(self.__key).items()
+            ]
+        except Exception as e:
+            logger.error(f"Failed to fetch subscriptions from Redis: {e}")
+            sentry_sdk.capture_exception(e)
+            metrics.increment("redis_error", tags={"operation": "all"})
+            raise
         fetch_time = time.time() - start
 
         metrics.timing("all_fetch_time", fetch_time)

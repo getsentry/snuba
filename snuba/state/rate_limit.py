@@ -398,27 +398,21 @@ def rate_limit(
             name=reason.name,
         )
 
+    # Track whether this query was rate limited by a nested rate limiter
+    was_rate_limited = False
     try:
         yield rate_limit_stats
-        _, err, _ = sys.exc_info()
-        if isinstance(err, RateLimitExceeded):
-            # If another rate limiter throws an exception, it won't be propagated
-            # through this context. So check for the exception explicitly.
-            # If another rate limit was hit, we don't want to count this query
-            # against this limit.
-            rate_limit_finish_request(
-                rate_limit_params,
-                query_id,
-                rate_limit_shard_factor,
-                True,
-                state.ratelimit_prefix,
-            )
+    except RateLimitExceeded:
+        # If another rate limiter throws an exception, we don't want to count
+        # this query against this limit.
+        was_rate_limited = True
+        raise
     finally:
         rate_limit_finish_request(
             rate_limit_params,
             query_id,
             rate_limit_shard_factor,
-            False,
+            was_rate_limited,
             state.ratelimit_prefix,
         )
 

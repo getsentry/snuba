@@ -171,6 +171,8 @@ REDIS_INIT_MAX_RETRIES = 3
 REDIS_REINITIALIZE_STEPS = 10
 # default redis command timeout in seconds for redis commands (e.g. configs, rate limits) which are meant to be quick and fail-open
 REDIS_SOCKET_TIMEOUT = 0.1
+# Maximum connections per Redis client (for single-node deployments)
+REDIS_MAX_CONNECTIONS = int(os.environ.get("REDIS_MAX_CONNECTIONS", 50))
 
 
 class RedisClusters(TypedDict):

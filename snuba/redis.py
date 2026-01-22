@@ -1,17 +1,23 @@
 from __future__ import absolute_import, annotations
 
+import atexit
+import logging
 import time
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Iterable, Mapping, TypeVar, Union, cast
 
 from redis.cluster import ClusterNode, RedisCluster
+from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import RedisClusterException
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from sentry_redis_tools.failover_redis import FailoverRedis
 from sentry_redis_tools.retrying_cluster import RetryingRedisCluster
 
 from snuba import settings
 from snuba.utils.serializable_exception import SerializableException
+
+logger = logging.getLogger(__name__)
 
 # We use FailoverRedis as our default redis client for single-node deployments,
 # as its additions to StrictRedis are required to work correctly under GCP
@@ -36,6 +42,7 @@ def _retry(max_retries: int) -> Callable[[RedisInitFunction], RedisInitFunction]
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             retry_counter = 0
+            last_exception: Exception | None = None
             while retry_counter < max_retries:
                 try:
                     return func(*args, **kwargs)
@@ -46,9 +53,19 @@ def _retry(max_retries: int) -> Callable[[RedisInitFunction], RedisInitFunction]
                         sleep_duration = 0.5 * (2**retry_counter)
                         time.sleep(sleep_duration)
                         retry_counter += 1
+                        last_exception = e
                         continue
                     raise
-            raise FailedClusterInitization("Init failed")
+                except (RedisConnectionError, RedisTimeoutError, OSError) as e:
+                    # Also retry on connection errors for single-node deployments
+                    sleep_duration = 0.5 * (2**retry_counter)
+                    time.sleep(sleep_duration)
+                    retry_counter += 1
+                    last_exception = e
+                    continue
+            raise FailedClusterInitization(
+                f"Init failed after {max_retries} retries: {last_exception}"
+            )
 
         return cast(RedisInitFunction, wrapper)
 
@@ -81,6 +98,7 @@ def _initialize_redis_cluster(config: settings.RedisClusterConfig) -> RedisClien
             ssl=config.get("ssl", False),
             socket_keepalive=True,
             socket_timeout=config.get("socket_timeout", settings.REDIS_SOCKET_TIMEOUT),
+            max_connections=settings.REDIS_MAX_CONNECTIONS,
         )
 
 
@@ -162,3 +180,27 @@ def get_redis_client(name: RedisClientKey) -> RedisClientType:
 
 def all_redis_clients() -> Iterable[RedisClientType]:
     return cast(Iterable[RedisClientType], _redis_clients.values())
+
+
+def close_all_redis_clients() -> None:
+    """
+    Gracefully close all Redis connections.
+
+    This function attempts to close all Redis client connections. It's registered
+    with atexit to ensure cleanup on application shutdown. Errors during cleanup
+    are logged but not raised to avoid masking other shutdown errors.
+    """
+    for key, client in _redis_clients.items():
+        try:
+            client.close()
+        except Exception as e:
+            logger.warning(f"Error closing Redis client {key.value}: {e}")
+
+    try:
+        _default_redis_client.close()
+    except Exception as e:
+        logger.warning(f"Error closing default Redis client: {e}")
+
+
+# Register cleanup function to run on interpreter shutdown
+atexit.register(close_all_redis_clients)

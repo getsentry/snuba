@@ -2,6 +2,7 @@ from __future__ import absolute_import, annotations
 
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass
 from functools import partial
@@ -76,23 +77,28 @@ class ConfigKeyCallable(Protocol):  # Necessary for typing the memoize
 class memoize:
     """
     Simple expiring memoizer for state functions that takes a config key.
+
+    This implementation is thread-safe, using a lock to protect concurrent
+    access to the cache dictionaries.
     """
 
     def __init__(self, timeout: int = 1) -> None:
         self.timeout = timeout
         self.saved: dict[str, Any] = {}
         self.at: dict[str, float] = {}
+        self._lock = threading.RLock()
 
     def __call__(self, func: ConfigKeyCallable) -> ConfigKeyCallable:
         def wrapper(config_key: str = config_hash) -> Any:
             now = time.time()
-            at = self.at.get(config_key, 0.0)
-            if now > at + self.timeout or config_key not in self.saved:
-                self.saved[config_key], self.at[config_key] = (
-                    func(config_key=config_key),
-                    now,
-                )
-            return self.saved[config_key]
+            with self._lock:
+                at = self.at.get(config_key, 0.0)
+                if now > at + self.timeout or config_key not in self.saved:
+                    self.saved[config_key], self.at[config_key] = (
+                        func(config_key=config_key),
+                        now,
+                    )
+                return self.saved[config_key]
 
         return wrapper
 

@@ -109,8 +109,8 @@ def run_job(job_spec: JobSpec) -> JobStatus:
     if current_job_status is not None and current_job_status != JobStatus.NOT_STARTED:
         raise JobStatusException(job_id=job_spec.job_id, status=current_job_status)
 
-    have_lock = _acquire_job_lock(job_spec.job_id)
-    if not have_lock:
+    lock_token = _acquire_job_lock(job_spec.job_id)
+    if lock_token is None:
         raise JobLockedException(job_spec.job_id)
 
     current_job_status = _set_job_status(job_spec.job_id, JobStatus.NOT_STARTED)
@@ -133,7 +133,7 @@ def run_job(job_spec: JobSpec) -> JobStatus:
         job_logger.info(f"[runner] exception {traceback.format_exc()}")
         raise e
     finally:
-        _release_job_lock(job_spec.job_id)
+        _release_job_lock(job_spec.job_id, lock_token)
 
     return current_job_status
 
