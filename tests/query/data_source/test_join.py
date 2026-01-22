@@ -13,9 +13,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column
 from snuba.query.logical import Query
 
-ERRORS_SCHEMA = ColumnSet(
-    [("event_id", UUID()), ("message", String()), ("group_id", UInt(32))]
-)
+ERRORS_SCHEMA = ColumnSet([("event_id", UUID()), ("message", String()), ("group_id", UInt(32))])
 
 GROUPS_SCHEMA = ColumnSet([("id", UInt(32)), ("message", String())])
 
@@ -33,7 +31,7 @@ def test_simple_join() -> None:
     e = Entity(key=EntityKey.EVENTS, schema=ERRORS_SCHEMA)
     node_err = IndividualNode(alias="err", data_source=e)
 
-    g = Entity(key=EntityKey.GROUPEDMESSAGE, schema=GROUPS_SCHEMA)
+    g = Entity(key=EntityKey.PROFILES, schema=GROUPS_SCHEMA)
     node_group = IndividualNode(alias="groups", data_source=g)
 
     join = JoinClause(
@@ -62,7 +60,7 @@ def test_complex_joins() -> None:
     e = Entity(key=EntityKey.EVENTS, schema=ERRORS_SCHEMA)
     node_err = IndividualNode(alias="err", data_source=e)
 
-    g = Entity(key=EntityKey.GROUPEDMESSAGE, schema=GROUPS_SCHEMA)
+    g = Entity(key=EntityKey.PROFILES, schema=GROUPS_SCHEMA)
     node_group = IndividualNode(alias="groups", data_source=g)
 
     a = Entity(key=EntityKey.GROUPASSIGNEE, schema=GROUPS_ASSIGNEE)

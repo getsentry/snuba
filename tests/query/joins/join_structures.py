@@ -66,7 +66,7 @@ def groups_node(
 ) -> IndividualNode[Entity]:
     return build_node(
         "gr",
-        Entity(EntityKey.GROUPEDMESSAGE, ColumnSet(GROUPS_SCHEMA.columns)),
+        Entity(EntityKey.PROFILES, ColumnSet(GROUPS_SCHEMA.columns)),
         selected_columns,
         condition,
         granularity,
@@ -111,7 +111,7 @@ def clickhouse_groups_node(
 ) -> IndividualNode[Table]:
     return build_clickhouse_node(
         "gr",
-        Table("groupedmessage_local", GROUPS_SCHEMA, storage_key=StorageKey("dontmatter")),
+        Table("profiles_local", GROUPS_SCHEMA, storage_key=StorageKey("dontmatter")),
         selected_columns,
         condition,
     )

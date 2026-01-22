@@ -56,7 +56,7 @@ node_err = IndividualNode(
 )
 node_group = IndividualNode(
     alias="groups",
-    data_source=Table("groupedmessage_local", GROUPS_SCHEMA, storage_key=StorageKey("groups")),
+    data_source=Table("profiles_local", GROUPS_SCHEMA, storage_key=StorageKey("groups")),
 )
 node_assignee = IndividualNode(
     alias="assignee",
@@ -381,7 +381,7 @@ test_cases = [
                 [
                     ["errors_local", "err"],
                     "INNER JOIN",
-                    ["groupedmessage_local", "groups"],
+                    ["profiles_local", "groups"],
                     "ON",
                     ["err.group_id=groups.id"],
                 ],
@@ -390,13 +390,13 @@ test_cases = [
         ],
         (
             "SELECT (err.event_id AS error_id), (groups.message AS message) "
-            "FROM errors_local err INNER JOIN groupedmessage_local groups "
+            "FROM errors_local err INNER JOIN profiles_local groups "
             "ON err.group_id=groups.id "
             "WHERE eq(groups.id, 1)"
         ),
         (
             "SELECT (err.event_id AS error_id), (groups.message AS message) "
-            "FROM errors_local err INNER JOIN groupedmessage_local groups "
+            "FROM errors_local err INNER JOIN profiles_local groups "
             "ON err.group_id=groups.id "
             "WHERE eq(groups.id, -1337)"
         ),
@@ -433,7 +433,7 @@ test_cases = [
                         alias="groups",
                         data_source=Query(
                             from_clause=Table(
-                                "groupedmessage_local",
+                                "profiles_local",
                                 GROUPS_SCHEMA,
                                 storage_key=StorageKey("dontmatter"),
                             ),
@@ -506,7 +506,7 @@ test_cases = [
                         [
                             [
                                 "SELECT id, message",
-                                ["FROM", "groupedmessage_local"],
+                                ["FROM", "profiles_local"],
                                 "WHERE eq(project_id, 1)",
                             ],
                             "groups",
@@ -534,7 +534,7 @@ test_cases = [
             "FROM "
             "(SELECT (event_id AS error_id), group_id FROM errors_local WHERE eq(project_id, 1)) err "
             "INNER JOIN "
-            "(SELECT id, message FROM groupedmessage_local WHERE eq(project_id, 1)) groups "
+            "(SELECT id, message FROM profiles_local WHERE eq(project_id, 1)) groups "
             "ON err.group_id=groups.id "
             "INNER JOIN "
             "(SELECT group_id FROM groupassignee_local WHERE eq(user, 'me')) assignee "
@@ -546,7 +546,7 @@ test_cases = [
             "FROM "
             "(SELECT (event_id AS error_id), group_id FROM errors_local WHERE eq(project_id, -1337)) err "
             "INNER JOIN "
-            "(SELECT id, message FROM groupedmessage_local WHERE eq(project_id, -1337)) groups "
+            "(SELECT id, message FROM profiles_local WHERE eq(project_id, -1337)) groups "
             "ON err.group_id=groups.id "
             "INNER JOIN "
             "(SELECT group_id FROM groupassignee_local WHERE eq(user, '$S')) assignee "
@@ -688,7 +688,7 @@ TEST_JOIN = [
             [
                 PaddingNode(None, StringNode("errors_local"), "err"),
                 StringNode("SEMI INNER JOIN"),
-                PaddingNode(None, StringNode("groupedmessage_local"), "groups"),
+                PaddingNode(None, StringNode("profiles_local"), "groups"),
                 StringNode("ON"),
                 SequenceNode(
                     [
@@ -700,7 +700,7 @@ TEST_JOIN = [
             ]
         ),
         (
-            "errors_local err SEMI INNER JOIN groupedmessage_local groups "
+            "errors_local err SEMI INNER JOIN profiles_local groups "
             "ON err.group_id=groups.id AND err.project_id=groups.project_id"
         ),
         id="Simple join",
@@ -734,7 +734,7 @@ TEST_JOIN = [
                     [
                         PaddingNode(None, StringNode("errors_local"), "err"),
                         StringNode("SEMI INNER JOIN"),
-                        PaddingNode(None, StringNode("groupedmessage_local"), "groups"),
+                        PaddingNode(None, StringNode("profiles_local"), "groups"),
                         StringNode("ON"),
                         SequenceNode([StringNode("err.group_id=groups.id")], " AND "),
                     ]
@@ -746,7 +746,7 @@ TEST_JOIN = [
             ]
         ),
         (
-            "errors_local err SEMI INNER JOIN groupedmessage_local groups "
+            "errors_local err SEMI INNER JOIN profiles_local groups "
             "ON err.group_id=groups.id INNER JOIN groupassignee_local assignee "
             "ON err.group_id=assignee.id"
         ),

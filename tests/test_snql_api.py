@@ -211,7 +211,7 @@ class TestSnQLApi(BaseApiTest):
             "/events/snql",
             data=json.dumps(
                 {
-                    "query": f"""MATCH (e: events) -[grouped]-> (gm: groupedmessage)
+                    "query": f"""MATCH (e: events) -[grouped]-> (gm: profiles)
                     SELECT e.group_id, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status
                     WHERE e.project_id = {self.project_id}
                     AND gm.project_id = {self.project_id}
@@ -630,7 +630,7 @@ class TestSnQLApi(BaseApiTest):
             data=json.dumps(
                 {
                     "query": f"""
-                    MATCH (e: events) -[grouped]-> (g: groupedmessage),
+                    MATCH (e: events) -[grouped]-> (g: profiles),
                     (e: events) -[assigned]-> (a: groupassignee)
                     SELECT e.message, e.tags[b], a.user_id, g.last_seen
                     WHERE e.project_id = {self.project_id}
@@ -654,7 +654,7 @@ class TestSnQLApi(BaseApiTest):
             data=json.dumps(
                 {
                     "query": f"""
-                    MATCH (e: events) -[grouped]-> (g: groupedmessage)
+                    MATCH (e: events) -[grouped]-> (g: profiles)
                     SELECT g.id, toUInt64(plus(multiply(log(count(e.group_id)), 600), multiply(toUInt64(toUInt64(max(e.timestamp))), 1000))) AS score BY g.id
                     WHERE e.project_id IN array({self.project_id}) AND e.timestamp >= toDateTime('2021-07-04T01:09:08.188427') AND e.timestamp < toDateTime('2021-08-06T01:10:09.411889') AND g.status IN array(0)
                     ORDER BY toUInt64(plus(multiply(log(count(e.group_id)), 600), multiply(toUInt64(toUInt64(max(e.timestamp))), 1000))) DESC LIMIT 101
@@ -1015,7 +1015,7 @@ class TestSnQLApi(BaseApiTest):
             "/events/snql",
             data=json.dumps(
                 {
-                    "query": f"""MATCH (e: events) -[grouped]-> (gm: groupedmessage)
+                    "query": f"""MATCH (e: events) -[grouped]-> (gm: profiles)
                     SELECT e.group_id, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status
                     WHERE e.project_id = {self.project_id}
                     AND gm.project_id = {self.project_id}
@@ -1028,7 +1028,7 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
-    MATCH = "MATCH (e: events) -[grouped]-> (gm: groupedmessage)"
+    MATCH = "MATCH (e: events) -[grouped]-> (gm: profiles)"
     SELECT = "SELECT e.group_id, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status"
     WHERE = "WHERE e.project_id = 1 AND gm.project_id = 1"
     TIMESTAMPS = (
@@ -1063,7 +1063,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
+            "validation failed for entity profiles: Query column 'fsdfsd' does not exist",
             id="Invalid second Select column",
         ),
         pytest.param(
@@ -1073,7 +1073,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
+            "validation failed for entity profiles: Query column 'fsdfsd' does not exist",
             id="Invalid By column",
         ),
         pytest.param(
@@ -1084,7 +1084,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
+            "validation failed for entity profiles: Query column 'fsdfsd' does not exist",
             id="Invalid Where column",
         ),
         pytest.param(
@@ -1117,10 +1117,10 @@ class TestSnQLApi(BaseApiTest):
         self, query: str, response_code: int, error_message: str
     ) -> None:
         override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.ERROR)
-        override_entity_column_validator(EntityKey.GROUPEDMESSAGE, ColumnValidationMode.ERROR)
+        override_entity_column_validator(EntityKey.PROFILES, ColumnValidationMode.ERROR)
         response = self.post("/events/snql", data=json.dumps({"query": query}))
         override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.WARN)
-        override_entity_column_validator(EntityKey.GROUPEDMESSAGE, ColumnValidationMode.WARN)
+        override_entity_column_validator(EntityKey.PROFILES, ColumnValidationMode.WARN)
 
         assert response.status_code == response_code
         assert json.loads(response.data)["error"]["message"] == error_message

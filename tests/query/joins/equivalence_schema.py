@@ -48,7 +48,7 @@ class Events(FakeEntity):
             abstract_column_set=EVENTS_SCHEMA,
             join_relationships={
                 "grouped": JoinRelationship(
-                    rhs_entity=EntityKey.GROUPEDMESSAGE,
+                    rhs_entity=EntityKey.PROFILES,
                     columns=[("group_id", "id")],
                     join_type=JoinType.INNER,
                     equivalences=[ColumnEquivalence("project_id", "project_id")],
@@ -81,7 +81,7 @@ class Events(FakeEntity):
         )
 
 
-class GroupedMessage(FakeEntity):
+class Profiles(FakeEntity):
     def __init__(self) -> None:
         super().__init__(
             storages=[],

@@ -57,8 +57,8 @@ events_table = Table(
     mandatory_conditions=events_storage.get_schema().get_data_source().get_mandatory_conditions(),
 )
 
-groups_ent = Entity(EntityKey.GROUPEDMESSAGE, get_entity(EntityKey.GROUPEDMESSAGE).get_data_model())
-groups_storage = get_storage(StorageKey.GROUPEDMESSAGES)
+groups_ent = Entity(EntityKey.PROFILES, get_entity(EntityKey.PROFILES).get_data_model())
+groups_storage = get_storage(StorageKey.PROFILES)
 groups_schema = groups_storage.get_schema()
 assert isinstance(groups_schema, TableSchema)
 

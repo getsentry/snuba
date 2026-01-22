@@ -545,12 +545,6 @@ subscription_validators:
       required_time_column: timestamp
 
 join_relationships:
-  grouped:
-    rhs_entity: groupedmessage
-    join_type: inner
-    columns:
-      - [project_id, project_id]
-      - [group_id, id]
   assigned:
     rhs_entity: groupassignee
     join_type: inner

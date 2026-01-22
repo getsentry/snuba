@@ -1028,7 +1028,7 @@ test_cases = [
         f"""MATCH
             (e: events) -[contains]-> (t: transactions),
             (e: events) -[assigned]-> (ga: groupassignee),
-            (e: events) -[bookmark]-> (gm: groupedmessage),
+            (e: events) -[bookmark]-> (gm: profiles),
             (e: events) -[activity]-> (se: metrics_sets)
         SELECT 4-5, e.event_id, t.event_id, ga.offset, gm.offset, se.metric_id
         WHERE {build_cond("e")} AND {build_cond("t")}
@@ -1064,14 +1064,14 @@ test_cases = [
                         right_node=IndividualNode(
                             "gm",
                             QueryEntity(
-                                EntityKey.GROUPEDMESSAGE,
-                                get_entity(EntityKey.GROUPEDMESSAGE).get_data_model(),
+                                EntityKey.PROFILES,
+                                get_entity(EntityKey.PROFILES).get_data_model(),
                             ),
                         ),
                         keys=[
                             JoinCondition(
                                 JoinConditionExpression("e", "event_id"),
-                                JoinConditionExpression("gm", "first_release_id"),
+                                JoinConditionExpression("gm", "profile_id"),
                             )
                         ],
                         join_type=JoinType.INNER,
@@ -1813,7 +1813,7 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
     mapping = {
         "contains": (EntityKey.TRANSACTIONS, "event_id"),
         "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
-        "bookmark": (EntityKey.GROUPEDMESSAGE, "first_release_id"),
+        "bookmark": (EntityKey.PROFILES, "profile_id"),
         "activity": (EntityKey.METRICS_SETS, "org_id"),
     }
 

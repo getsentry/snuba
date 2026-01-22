@@ -165,11 +165,11 @@ test_cases = [
         ),
         ClickhouseQueryProfile(
             time_range=31,
-            table="groupedmessage_local,sentry_errors",
+            table="profiles_local,sentry_errors",
             all_columns={
                 "sentry_errors.group_id",
                 "sentry_errors.timestamp",
-                "groupedmessage_local.id",
+                "profiles_local.id",
                 "sentry_errors.tags.key",
                 "sentry_errors.tags.value",
             },
@@ -218,11 +218,11 @@ test_cases = [
         ),
         ClickhouseQueryProfile(
             time_range=None,
-            table="groupedmessage_local,sentry_errors",
+            table="profiles_local,sentry_errors",
             all_columns={
                 "sentry_errors.timestamp",
                 "sentry_errors.group_id",
-                "groupedmessage_local.id",
+                "profiles_local.id",
             },
             multi_level_condition=True,
             where_profile=FilterProfile(

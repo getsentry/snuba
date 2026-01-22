@@ -21,9 +21,9 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
     equivalent in another entity in the join and add the same condition
     on the equivalent column.
 
-    Example: In a join between events and groupedmessage, if there is
+    Example: In a join between events and profiles, if there is
     a condition on events.project_id, it would replicate the same
-    condition on groupedmessage.project_id as this is a semantically
+    condition on profiles.project_id as this is a semantically
     equivalent column.
 
     The goal is to reduce the amount of data that is loaded by clickhouse
