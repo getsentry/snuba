@@ -391,7 +391,7 @@ class TestRPCSubscriptionCreator:
             == subscription
         )
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.eap
     @pytest.mark.redis_db
     def test_rpc_subscription_unspecified_extrapolation_mode(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EAP_ITEMS)
