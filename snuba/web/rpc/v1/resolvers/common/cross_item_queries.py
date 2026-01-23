@@ -89,8 +89,6 @@ def get_trace_ids_sql_for_cross_item_query(
         )
         trace_item_filters_or_expression = or_cond(*filter_expressions)
     elif len(filter_expressions) == 1:
-        # if there is only one filter expression, the having clause is unnecessary
-        # because everything that is necessary is already filtered by the where clause.
         trace_item_filters_and_expression = None
         trace_item_filters_or_expression = filter_expressions[0]
     else:
@@ -117,8 +115,6 @@ def get_trace_ids_sql_for_cross_item_query(
         groupby=[
             column("organization_id"),
             column("project_id"),
-            column("item_type"),
-            column("timestamp"),
             column("trace_id"),
         ],
         having=trace_item_filters_and_expression,
@@ -133,11 +129,7 @@ def get_trace_ids_sql_for_cross_item_query(
             ),
             OrderBy(
                 direction=OrderByDirection.DESC,
-                expression=column("item_type"),
-            ),
-            OrderBy(
-                direction=OrderByDirection.DESC,
-                expression=column("timestamp"),
+                expression=f.max(column("timestamp")),
             ),
         ],
         limit=original_request.limit if original_request.limit else _TRACE_LIMIT,

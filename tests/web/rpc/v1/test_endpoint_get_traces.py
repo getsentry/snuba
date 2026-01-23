@@ -917,6 +917,8 @@ class TestEndpointGetTracesCrossItem(TestEndpointGetTraces):
     """Run all tests with use_cross_item_path_for_single_item_queries enabled."""
 
     @pytest.fixture(autouse=True)
-    def use_cross_item_path(self, setup_teardown: Any, snuba_set_config: SnubaSetConfig) -> None:
+    def use_cross_item_path(
+        self, clickhouse_db: Any, redis_db: Any, snuba_set_config: SnubaSetConfig
+    ) -> None:
         """Enable the feature flag for cross-item path for all tests in this class."""
         snuba_set_config("use_cross_item_path_for_single_item_queries", 1)
