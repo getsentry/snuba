@@ -132,7 +132,7 @@ def get_trace_ids_sql_for_cross_item_query(
                 expression=f.max(column("timestamp")),
             ),
         ],
-        limit=original_request.limit if original_request.limit else _TRACE_LIMIT,
+        limit=getattr(original_request, "limit", None) or _TRACE_LIMIT,
     )
 
     treeify_or_and_conditions(query)
