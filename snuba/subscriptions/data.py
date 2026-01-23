@@ -28,7 +28,6 @@ from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest,
 )
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
@@ -210,15 +209,6 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         expression = request.expressions[0]
         vis = GetExpressionAggregationsVisitor()
         TimeSeriesExpressionWrapper(expression).accept(vis)
-        allowed_modes = [
-            ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
-            ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
-            ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
-        ]
-        if any(e.extrapolation_mode not in allowed_modes for e in vis.aggregations):
-            raise InvalidSubscriptionError(
-                f"Invalid extrapolation mode. Allowed extrapolation modes: {', '.join([ExtrapolationMode.Name(mode) for mode in allowed_modes])}"
-            )
 
     def build_request(
         self,
