@@ -28,6 +28,7 @@ from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest,
 )
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
@@ -209,6 +210,11 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         expression = request.expressions[0]
         vis = GetExpressionAggregationsVisitor()
         TimeSeriesExpressionWrapper(expression).accept(vis)
+        if any(
+            e.extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_UNSPECIFIED
+            for e in vis.aggregations
+        ):
+            raise InvalidSubscriptionError("Extrapolation mode must be specified.")
 
     def build_request(
         self,
