@@ -29,9 +29,7 @@ tests = [
         binary_condition(
             ConditionFunctions.IN,
             Column(None, None, "column1"),
-            FunctionCall(
-                None, "tuple", (Literal(None, "a" * 16), Literal(None, "b" * 16))
-            ),
+            FunctionCall(None, "tuple", (Literal(None, "a" * 16), Literal(None, "b" * 16))),
         ),
         "in(column1, (12297829382473034410, 13527612320720337851))",
         id="in_operator",
@@ -40,9 +38,7 @@ tests = [
         binary_condition(
             ConditionFunctions.IN,
             Column(None, None, "column1"),
-            FunctionCall(
-                None, "array", (Literal(None, "a" * 16), Literal(None, "b" * 16))
-            ),
+            FunctionCall(None, "array", (Literal(None, "a" * 16), Literal(None, "b" * 16))),
         ),
         "in(column1, [12297829382473034410, 13527612320720337851])",
         id="array_in_operator",
@@ -77,9 +73,7 @@ def test_hexint_column_processor(unprocessed: Expression, formatted_value: str) 
     )
     hex = f.hex(column("column1"))
 
-    HexIntColumnProcessor(set(["column1"])).process_query(
-        unprocessed_query, HTTPQuerySettings()
-    )
+    HexIntColumnProcessor(set(["column1"])).process_query(unprocessed_query, HTTPQuerySettings())
     assert unprocessed_query.get_selected_columns() == [
         SelectedExpression(
             "column1",

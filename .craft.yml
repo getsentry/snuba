@@ -7,9 +7,9 @@ statusProvider:
   name: github
   config:
     contexts:
-      - 'build-amd64'
-      - 'build-arm64'
-      - 'assemble'
+    - 'build-amd64'
+    - 'build-arm64'
+    - 'assemble'
 targets:
   - id: release
     name: docker
@@ -21,3 +21,5 @@ targets:
     target: ghcr.io/getsentry/snuba
     targetFormat: '{{{target}}}:latest'
   - name: github
+versioning:
+  policy: calver  

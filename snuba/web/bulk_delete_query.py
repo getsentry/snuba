@@ -4,9 +4,8 @@ from threading import Thread
 from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence, TypedDict
 
 import rapidjson
-from confluent_kafka import KafkaError
+from confluent_kafka import KafkaError, Producer
 from confluent_kafka import Message as KafkaMessage
-from confluent_kafka import Producer
 
 from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
@@ -226,10 +225,7 @@ def delete_from_storage(
         _validate_attribute_conditions(attribute_conditions, delete_settings)
 
         if not get_int_config("permit_delete_by_attribute", default=0):
-            logger.error(
-                "valid attribute_conditions passed to delete_from_storage, but delete will be ignored "
-                "as functionality is not yet launched (permit_delete_by_attribute=0)"
-            )
+            metrics.increment("delete_query.delete_ignored")
             return {}
 
     attr_info = _get_attribution_info(attribution_info)

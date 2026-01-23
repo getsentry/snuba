@@ -110,9 +110,7 @@ def visit_high_pri_op(node: Node, visited_children: Iterable[Any]) -> HighPriOpe
     return HighPriOperator(node.text)
 
 
-def visit_arithmetic_term(
-    node: Node, visited_children: Tuple[Any, Expression]
-) -> Expression:
+def visit_arithmetic_term(node: Node, visited_children: Tuple[Any, Expression]) -> Expression:
     _, term = visited_children
     return term
 
@@ -151,9 +149,7 @@ def visit_quoted_literal(node: Node, visited_children: Tuple[Any]) -> Literal:
     return Literal(None, match)
 
 
-def visit_parameter(
-    node: Node, visited_children: Tuple[Expression, Any, Any, Any]
-) -> Expression:
+def visit_parameter(node: Node, visited_children: Tuple[Expression, Any, Any, Any]) -> Expression:
     param, _, _, _ = visited_children
     return param
 
@@ -179,9 +175,7 @@ def visit_parameters_list(
 
 def visit_function_call(
     node: Node,
-    visited_children: Tuple[
-        str, Any, List[Expression], Any, Union[Node, List[Expression]]
-    ],
+    visited_children: Tuple[str, Any, List[Expression], Any, Union[Node, List[Expression]]],
 ) -> Expression:
     name, _, params1, _, params2 = visited_children
     param_list1 = tuple(params1)

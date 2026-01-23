@@ -144,9 +144,7 @@ def test_run_optimize_with_partition_tracker() -> None:
             time=int((datetime.now() - timedelta(weeks=week)).timestamp()),
         )
 
-    partitions = optimize.get_partitions_from_clickhouse(
-        clickhouse_pool, storage, database, table
-    )
+    partitions = optimize.get_partitions_from_clickhouse(clickhouse_pool, storage, database, table)
 
     original_num_partitions = len(partitions)
     assert original_num_partitions > 0
@@ -238,9 +236,7 @@ def test_run_optimize_with_ongoing_merges() -> None:
             time=int((datetime.now() - timedelta(weeks=week)).timestamp()),
         )
 
-    partitions = optimize.get_partitions_from_clickhouse(
-        clickhouse_pool, storage, database, table
-    )
+    partitions = optimize.get_partitions_from_clickhouse(clickhouse_pool, storage, database, table)
 
     original_num_partitions = len(partitions)
     assert original_num_partitions > 0
@@ -305,9 +301,7 @@ def test_merge_info() -> None:
     with patch.object(ClickhousePool, "execute") as mock_clickhouse_execute:
         mock_clickhouse_execute.return_value = merge_query_result
         merge_info = optimize.get_current_large_merges(
-            clickhouse=ClickhousePool(
-                "127.0.0.1", 9000, "user", "password", "database"
-            ),
+            clickhouse=ClickhousePool("127.0.0.1", 9000, "user", "password", "database"),
             database="default",
             table="errors_local",
         )
@@ -326,13 +320,9 @@ def test_merge_info() -> None:
             ),
         ]
 
-        assert merge_info[0].estimated_time == 8020.61436897 / (
-            0.9895385071013121 + 0.0001
-        )
+        assert merge_info[0].estimated_time == 8020.61436897 / (0.9895385071013121 + 0.0001)
         busy = optimize.is_busy_merging(
-            clickhouse=ClickhousePool(
-                "127.0.0.1", 9000, "user", "password", "database"
-            ),
+            clickhouse=ClickhousePool("127.0.0.1", 9000, "user", "password", "database"),
             database="default",
             table="errors_local",
         )

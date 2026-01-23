@@ -14,9 +14,7 @@ EAP_ITEMS_ENTITY = Entity(
     sample=None,
 )
 
-EAP_ITEMS_STORAGE_CONNECTIONS = get_entity(
-    EntityKey.EAP_ITEMS
-).get_all_storage_connections()
+EAP_ITEMS_STORAGE_CONNECTIONS = get_entity(EntityKey.EAP_ITEMS).get_all_storage_connections()
 
 
 def test_selects_eap_items() -> None:

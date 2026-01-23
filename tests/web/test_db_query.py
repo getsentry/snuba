@@ -523,10 +523,13 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
         def __init__(self, max_threads: int, policy_name: str) -> None:
             super().__init__(max_threads=max_threads, policy_name=policy_name)
 
+    attribution_info = mock.Mock()
+    attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
+
     stats: MutableMapping[str, Any] = {}
     _apply_allocation_policies_quota(
         query_settings=HTTPQuerySettings(),
-        attribution_info=mock.Mock(),
+        attribution_info=attribution_info,
         formatted_query=format_query(query),
         stats=stats,
         allocation_policies=[
@@ -634,13 +637,16 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             )
         ],
     ):
+        attribution_info = mock.Mock()
+        attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
+
         query_metadata_list: list[ClickhouseQueryMetadata] = []
         stats: dict[str, Any] = {}
         with pytest.raises(QueryException) as excinfo:
             db_query(
                 clickhouse_query=query,
                 query_settings=HTTPQuerySettings(),
-                attribution_info=mock.Mock(),
+                attribution_info=attribution_info,
                 dataset_name="events",
                 query_metadata_list=query_metadata_list,
                 formatted_query=format_query(query),
@@ -704,9 +710,9 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         cause = excinfo.value.__cause__
         assert isinstance(cause, AllocationPolicyViolations)
         assert "RejectAllocationPolicy" in cause.violations
-        assert (
-            update_called
-        ), "update_quota_balance should have been called even though the query was rejected but was not"
+        assert update_called, (
+            "update_quota_balance should have been called even though the query was rejected but was not"
+        )
 
 
 @pytest.mark.clickhouse_db

@@ -38,7 +38,7 @@ TPayload = TypeVar("TPayload")
 
 import logging
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class LWDeleteQueryException(Exception):
@@ -60,6 +60,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__tables = storage.get_deletion_settings().tables
         self.__formatter: Formatter = formatter
         self.__metrics = metrics
+        self.__last_ongoing_mutations_check: Optional[float] = None
 
     def poll(self) -> None:
         self.__next_step.poll()
@@ -82,6 +83,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             str_config = get_str_config("org_ids_delete_allowlist", "")
             assert str_config
             org_ids_delete_allowlist = set([int(org_id) for org_id in str_config.split(",")])
+            logger.info(f"query conditions: {conditions}, allowlist: {org_ids_delete_allowlist}")
             return org_ids_delete_allowlist.issuperset(query_org_ids)
 
     def submit(self, message: Message[ValuesBatch[KafkaPayload]]) -> None:
@@ -154,8 +156,17 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                         raise LWDeleteQueryException(exc.message)
 
     def _check_ongoing_mutations(self) -> None:
+        now = time.time()
+        if (
+            self.__last_ongoing_mutations_check is not None
+            and now - self.__last_ongoing_mutations_check < 1.0
+        ):
+            raise TooManyOngoingMutationsError(
+                "ongoing mutations check is throttled to once per second"
+            )
         start = time.time()
         ongoing_mutations = _num_ongoing_mutations(self.__storage.get_cluster(), self.__tables)
+        self.__last_ongoing_mutations_check = time.time()
         max_ongoing_mutations = typing.cast(
             int,
             get_int_config(
@@ -166,7 +177,6 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__metrics.timing("ongoing_mutations_query_ms", (time.time() - start) * 1000)
         max_ongoing_mutations = int(settings.MAX_ONGOING_MUTATIONS_FOR_DELETE)
         if ongoing_mutations > max_ongoing_mutations:
-
             raise TooManyOngoingMutationsError(
                 f"{ongoing_mutations} mutations for {self.__tables} table(s) is above max ongoing mutations: {max_ongoing_mutations} "
             )

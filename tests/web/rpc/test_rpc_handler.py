@@ -17,9 +17,7 @@ from tests.base import BaseApiTest
 
 
 def test_rpc_handler_bad_request() -> None:
-    resp = run_rpc_handler(
-        "EndpointTraceItemAttributeNames", "v1", b"invalid-proto-data"
-    )
+    resp = run_rpc_handler("EndpointTraceItemAttributeNames", "v1", b"invalid-proto-data")
     assert isinstance(resp, ErrorProto)
     assert resp.code == 400
 
@@ -47,9 +45,7 @@ def test_basic() -> None:
         offset=20,
     )
 
-    resp = run_rpc_handler(
-        "EndpointTraceItemAttributeNames", "v1", message.SerializeToString()
-    )
+    resp = run_rpc_handler("EndpointTraceItemAttributeNames", "v1", message.SerializeToString())
     assert isinstance(resp, TraceItemAttributeNamesResponse)
 
 
@@ -63,12 +59,8 @@ def test_basic() -> None:
             RPCRequestException(status_code=502, message="blah"),
             id="specified_status_code",
         ),
-        pytest.param(
-            429, QueryException(exception_type="RateLimitExceeded"), id="rate_limit"
-        ),
-        pytest.param(
-            500, QueryException(exception_type="AttributeError"), id="arbitrary_error"
-        ),
+        pytest.param(429, QueryException(exception_type="RateLimitExceeded"), id="rate_limit"),
+        pytest.param(500, QueryException(exception_type="AttributeError"), id="arbitrary_error"),
     ],
 )
 def test_internal_error(expected_status_code: int, error: Exception) -> None:
@@ -90,9 +82,7 @@ def test_internal_error(expected_status_code: int, error: Exception) -> None:
         "snuba.web.rpc.v1.endpoint_trace_item_attribute_names.EndpointTraceItemAttributeNames._execute"
     ) as patch:
         patch.side_effect = error
-        resp = run_rpc_handler(
-            "EndpointTraceItemAttributeNames", "v1", message.SerializeToString()
-        )
+        resp = run_rpc_handler("EndpointTraceItemAttributeNames", "v1", message.SerializeToString())
         assert isinstance(resp, ErrorProto)
         assert resp.code == expected_status_code
 
@@ -107,7 +97,5 @@ class TestAPIFailures(BaseApiTest):
     def test_bad_serialization(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
-        response = self.app.post(
-            "/rpc/EndpointTraceItemTable/v1", data=b"11111asdasdasd"
-        )
+        response = self.app.post("/rpc/EndpointTraceItemTable/v1", data=b"11111asdasdasd")
         assert response.status_code == 400

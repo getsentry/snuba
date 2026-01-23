@@ -13,6 +13,7 @@ from snuba.query.expressions import (
     Argument,
     Column,
     CurriedFunctionCall,
+    DangerousRawSQL,
     Expression,
     ExpressionVisitor,
     FunctionCall,
@@ -178,6 +179,14 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
         parameters = [self.__escape_identifier_enforce(v) for v in exp.parameters]
         ret = f"{', '.join(parameters)} -> {exp.transformation.accept(self)}"
         return self._alias(ret, exp.alias)
+
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> str:
+        """
+        Format DangerousRawSQL by passing through the SQL content directly without
+        any escaping or validation. This is intentional as DangerousRawSQL is meant
+        for pre-validated SQL in query optimization scenarios.
+        """
+        return self._alias(exp.sql, exp.alias)
 
 
 class ClickhouseExpressionFormatter(ExpressionFormatterBase):

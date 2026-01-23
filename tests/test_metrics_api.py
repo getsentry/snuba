@@ -211,12 +211,8 @@ class TestMetricsApiCounters(BaseApiTest):
         # we need to query hours 2-3, (offset by 1 and 2) because
         # we start 15 minutes into hour 1
         query_str = self.build_simple_query(
-            start_time=(self.base_time + timedelta(hours=1))
-            .replace(minute=0)
-            .isoformat(),
-            end_time=(self.base_time + timedelta(hours=2))
-            .replace(minute=0)
-            .isoformat(),
+            start_time=(self.base_time + timedelta(hours=1)).replace(minute=0).isoformat(),
+            end_time=(self.base_time + timedelta(hours=2)).replace(minute=0).isoformat(),
             granularity=3600,
         )
         response = self.app.post(
@@ -358,9 +354,7 @@ class TestOrgMetricsApiCounters(BaseApiTest):
     def test_retrieval_single_hour_at_hour_granularity(self) -> None:
         query_str = self.build_simple_query(
             start_time=timestamp_to_bucket(self.base_time, 3600).isoformat(),
-            end_time=(
-                timestamp_to_bucket(self.base_time, 3600) + timedelta(hours=1)
-            ).isoformat(),
+            end_time=(timestamp_to_bucket(self.base_time, 3600) + timedelta(hours=1)).isoformat(),
             granularity=3600,
         )
         response = self.app.post(
@@ -408,9 +402,7 @@ class TestMetricsApiSets(BaseApiTest):
         self.skew = timedelta(seconds=self.seconds)
 
         self.base_time = utc_yesterday_12_15() - timedelta(minutes=self.seconds)
-        self.sentry_received_timestamp = utc_yesterday_12_15() - timedelta(
-            minutes=self.seconds
-        )
+        self.sentry_received_timestamp = utc_yesterday_12_15() - timedelta(minutes=self.seconds)
         self.storage = cast(
             WritableTableStorage,
             get_entity(EntityKey.METRICS_SETS).get_writable_storage(),
@@ -436,8 +428,7 @@ class TestMetricsApiSets(BaseApiTest):
                     "tags": self.default_tags,
                     "metric_id": self.metric_id,
                     "retention_days": RETENTION_DAYS,
-                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                    + n,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp() + n,
                 }
 
                 processed = processor.process_message(
@@ -512,9 +503,7 @@ class TestMetricsApiDistributions(BaseApiTest):
         self.skew = timedelta(seconds=self.seconds)
 
         self.base_time = utc_yesterday_12_15() - timedelta(seconds=self.seconds)
-        self.sentry_received_timestamp = utc_yesterday_12_15() - timedelta(
-            seconds=self.seconds
-        )
+        self.sentry_received_timestamp = utc_yesterday_12_15() - timedelta(seconds=self.seconds)
         self.storage = cast(
             WritableTableStorage,
             get_entity(EntityKey.METRICS_DISTRIBUTIONS).get_writable_storage(),
@@ -544,8 +533,7 @@ class TestMetricsApiDistributions(BaseApiTest):
                     "tags": self.default_tags,
                     "metric_id": self.metric_id,
                     "retention_days": RETENTION_DAYS,
-                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                    + n,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp() + n,
                 }
 
                 processed = processor.process_message(
@@ -609,9 +597,7 @@ class TestMetricsApiDistributions(BaseApiTest):
             metric_id=self.metric_id,
             org_id=self.org_id,
             start_time=timestamp_to_bucket(self.base_time, 86400).isoformat(),
-            end_time=(
-                timestamp_to_bucket(self.base_time + timedelta(days=2), 86400)
-            ).isoformat(),
+            end_time=(timestamp_to_bucket(self.base_time + timedelta(days=2), 86400)).isoformat(),
         )
         response = self.app.post(
             SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
@@ -627,12 +613,9 @@ class TestMetricsApiDistributions(BaseApiTest):
         assert aggregation["project_id"] == self.project_ids[0]
         assert aggregation["dist_min"] == self.d_range_min
         assert aggregation["dist_max"] == approx(self.d_range_max, rel=1)
-        assert aggregation["dist_count"] == self.seconds * (
-            self.d_range_max - self.d_range_min
-        )
+        assert aggregation["dist_count"] == self.seconds * (self.d_range_max - self.d_range_min)
         assert (
-            aggregation["dist_sum"]
-            == sum(range(self.d_range_min, self.d_range_max)) * self.seconds
+            aggregation["dist_sum"] == sum(range(self.d_range_min, self.d_range_max)) * self.seconds
         )
 
     def test_bucketed_time(self) -> None:
@@ -647,9 +630,7 @@ class TestMetricsApiDistributions(BaseApiTest):
                     """.format(
             metric_id=self.metric_id,
             org_id=self.org_id,
-            start_time=timestamp_to_bucket(
-                self.base_time - self.skew, 3600
-            ).isoformat(),
+            start_time=timestamp_to_bucket(self.base_time - self.skew, 3600).isoformat(),
             end_time=timestamp_to_bucket(self.base_time + self.skew, 3600).isoformat(),
         )
         response = self.app.post(

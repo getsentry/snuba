@@ -126,9 +126,7 @@ def lw_deletions_consumer(
             "consumer_group": consumer_group,
             "storage": storage,
         }
-        metrics = MetricsWrapper(
-            environment.metrics, "lw_deletions_consumer", tags=metrics_tags
-        )
+        metrics = MetricsWrapper(environment.metrics, "lw_deletions_consumer", tags=metrics_tags)
         configure_metrics(StreamMetricsAdapter(metrics), force=True)
         consumer_config = resolve_consumer_config(
             storage_names=[storage],

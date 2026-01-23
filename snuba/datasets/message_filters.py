@@ -11,9 +11,7 @@ from snuba.utils.registered_class import RegisteredClass
 
 TPayload = TypeVar("TPayload")
 
-KAFKA_ONLY_PARTITION = (
-    0  # CDC only works with single partition topics. So partition must be 0
-)
+KAFKA_ONLY_PARTITION = 0  # CDC only works with single partition topics. So partition must be 0
 
 
 class StreamMessageFilter(ABC, Generic[TPayload], metaclass=RegisteredClass):
@@ -74,12 +72,10 @@ class CdcTableNameMessageFilter(StreamMessageFilter[KafkaPayload]):
         self.__postgres_table = postgres_table
 
     def should_drop(self, message: Message[KafkaPayload]) -> bool:
-        assert [p.index for p in message.committable.keys()] == [
-            KAFKA_ONLY_PARTITION
-        ], "CDC can only work with single partition topics for consistency"
-
-        table_name = next(
-            (value for key, value in message.payload.headers if key == "table"), None
+        assert [p.index for p in message.committable.keys()] == [KAFKA_ONLY_PARTITION], (
+            "CDC can only work with single partition topics for consistency"
         )
+
+        table_name = next((value for key, value in message.payload.headers if key == "table"), None)
 
         return not table_name or table_name.decode("utf-8") != self.__postgres_table

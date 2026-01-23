@@ -19,9 +19,7 @@ test_data = [
     Column("alias", "table", "col"),
     Literal("alias", 123),
     Argument("alias", "arg"),
-    SubscriptableReference(
-        "tags[asd]", Column(None, None, "tags"), Literal(None, "release")
-    ),
+    SubscriptableReference("tags[asd]", Column(None, None, "tags"), Literal(None, "release")),
     FunctionCall(
         "alias",
         "f",
@@ -47,8 +45,6 @@ def test_default_translation(expression: Expression) -> None:
     produces a deep copy of the original expression.
     """
 
-    translated = expression.accept(
-        SnubaClickhouseMappingTranslator(TranslationMappers())
-    )
+    translated = expression.accept(SnubaClickhouseMappingTranslator(TranslationMappers()))
 
     assert translated == expression

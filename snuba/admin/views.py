@@ -999,12 +999,12 @@ def set_configuration() -> Response:
         configurable_component_namespace = data["configurable_component_namespace"]
         configurable_component_class_name = data["configurable_component_class_name"]
         resource_name = data["resource_name"]
-        assert isinstance(
-            configurable_component_namespace, str
-        ), f"Invalid configurable_component_namespace: {configurable_component_namespace}"
-        assert isinstance(
-            configurable_component_class_name, str
-        ), f"Invalid configurable_component_class_name: {configurable_component_class_name}"
+        assert isinstance(configurable_component_namespace, str), (
+            f"Invalid configurable_component_namespace: {configurable_component_namespace}"
+        )
+        assert isinstance(configurable_component_class_name, str), (
+            f"Invalid configurable_component_class_name: {configurable_component_class_name}"
+        )
         assert isinstance(resource_name, str), f"Invalid resource_name {resource_name}"
         configurable_component = (
             ConfigurableComponent.get_component_class(configurable_component_namespace)

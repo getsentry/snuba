@@ -9,6 +9,7 @@ from snuba.query.expressions import (
     Argument,
     Column,
     CurriedFunctionCall,
+    DangerousRawSQL,
     Expression,
     FunctionCall,
     Lambda,
@@ -240,9 +241,7 @@ TEST_CASES = [
     (
         CurriedFunctionCall(
             None,
-            FunctionCall(
-                None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))
-            ),
+            FunctionCall(None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))),
             (Literal(None, "hello"), Literal(None, "kitty")),
         ),
         """f1(
@@ -287,18 +286,139 @@ TEST_CASES = [
   )
 """,
     ),
+    (DangerousRawSQL(None, "COUNT(*)"), "DangerousRawSQL('COUNT(*)')"),
+    (DangerousRawSQL("alias", "SUM(col)"), "DangerousRawSQL('SUM(col)') AS `alias`"),
 ]
 
 
 @pytest.mark.parametrize("test_expr,expected_str", TEST_CASES)
-def test_format(test_expr, expected_str) -> None:
+def test_format(test_expr: Expression, expected_str: str) -> None:
     assert repr(test_expr) == expected_str
 
 
 @pytest.mark.parametrize("test_expr,_formatted_str", TEST_CASES)
-def test_functional_eq(test_expr, _formatted_str):
-    mangled_expr = test_expr.transform(
-        lambda expr: replace(expr, alias=uuid.uuid4().hex)
-    )
+def test_functional_eq(test_expr: Expression, _formatted_str: str) -> None:
+    mangled_expr = test_expr.transform(lambda expr: replace(expr, alias=uuid.uuid4().hex))
     assert test_expr != mangled_expr
     assert mangled_expr.functional_eq(test_expr)
+
+
+def test_arbitrary_sql_basic() -> None:
+    """Test basic DangerousRawSQL construction and properties"""
+    sql = "SELECT * FROM table"
+    exp = DangerousRawSQL(None, sql)
+
+    assert exp.sql == sql
+    assert exp.alias is None
+
+    exp_with_alias = DangerousRawSQL("my_alias", sql)
+    assert exp_with_alias.alias == "my_alias"
+
+
+def test_arbitrary_sql_iteration() -> None:
+    """Test that DangerousRawSQL iterates over itself only"""
+    sql = "COUNT(*) + 1"
+    exp = DangerousRawSQL(None, sql)
+
+    result = list(exp)
+    assert result == [exp]
+    assert len(result) == 1
+
+
+def test_arbitrary_sql_transform() -> None:
+    """Test that transform applies function to self"""
+    sql = "AVG(column)"
+    exp = DangerousRawSQL(None, sql)
+
+    # Transform should only apply to self, not change SQL content
+    def add_alias(e: Expression) -> Expression:
+        if isinstance(e, DangerousRawSQL):
+            return replace(e, alias="transformed")
+        return e
+
+    transformed = exp.transform(add_alias)
+    assert isinstance(transformed, DangerousRawSQL)
+    assert transformed.sql == sql
+    assert transformed.alias == "transformed"
+
+
+def test_arbitrary_sql_transform_identity() -> None:
+    """Test that transform with identity function returns self"""
+    sql = "SUM(col)"
+    exp = DangerousRawSQL("alias", sql)
+
+    transformed = exp.transform(lambda e: e)
+    assert transformed is exp
+
+
+def test_arbitrary_sql_functional_eq() -> None:
+    """Test functional equality ignores aliases"""
+    sql = "MAX(value)"
+    exp1 = DangerousRawSQL(None, sql)
+    exp2 = DangerousRawSQL("alias1", sql)
+    exp3 = DangerousRawSQL("alias2", sql)
+    exp4 = DangerousRawSQL(None, "MIN(value)")
+
+    # Same SQL, different aliases - should be functionally equal
+    assert exp1.functional_eq(exp2)
+    assert exp2.functional_eq(exp3)
+    assert exp1.functional_eq(exp3)
+
+    # Different SQL - not equal
+    assert not exp1.functional_eq(exp4)
+
+    # Different type - not equal
+    literal = Literal(None, sql)
+    assert not exp1.functional_eq(literal)
+
+
+def test_arbitrary_sql_hash() -> None:
+    """Test that DangerousRawSQL expressions are hashable"""
+    sql1 = "COUNT(DISTINCT user_id)"
+    sql2 = "SUM(amount)"
+
+    exp1 = DangerousRawSQL(None, sql1)
+    exp2 = DangerousRawSQL("alias", sql1)
+    exp3 = DangerousRawSQL(None, sql2)
+
+    # Should be able to add to set
+    expr_set = {exp1, exp2, exp3}
+    assert len(expr_set) == 3
+
+
+def test_arbitrary_sql_in_function_call() -> None:
+    """Test DangerousRawSQL as parameter in function call"""
+    arbitrary = DangerousRawSQL(None, "custom_agg(col)")
+    col = Column(None, "t1", "c1")
+    func = FunctionCall(None, "if", (arbitrary, col, Literal(None, 0)))
+
+    # Should iterate correctly
+    result = list(func)
+    assert arbitrary in result
+    assert col in result
+
+
+def test_arbitrary_sql_edge_cases() -> None:
+    """Test edge cases like empty string, special characters"""
+    # Empty string
+    exp_empty = DangerousRawSQL(None, "")
+    assert exp_empty.sql == ""
+
+    # SQL with newlines
+    sql_multiline = """SELECT
+    col1,
+    col2
+FROM table"""
+    exp_multiline = DangerousRawSQL(None, sql_multiline)
+    assert exp_multiline.sql == sql_multiline
+
+    # SQL with quotes and escapes
+    sql_complex = "SELECT 'can''t', \"quoted\", `backticks`"
+    exp_complex = DangerousRawSQL(None, sql_complex)
+    assert exp_complex.sql == sql_complex
+
+    # SQL with alias in content vs expression alias
+    sql_with_alias = "column AS my_name"
+    exp = DangerousRawSQL("outer_alias", sql_with_alias)
+    assert exp.sql == sql_with_alias
+    assert exp.alias == "outer_alias"

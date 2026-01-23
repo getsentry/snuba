@@ -82,9 +82,7 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         rate_limit_shard_factor = self.get_config_value("rate_limit_shard_factor")
         assert isinstance(rate_history_s, (int, float))
         assert isinstance(rate_limit_shard_factor, int)
-        assert (
-            rate_limit_params.concurrent_limit is not None
-        ), "concurrent_limit must be set"
+        assert rate_limit_params.concurrent_limit is not None, "concurrent_limit must be set"
 
         assert rate_limit_shard_factor > 0
 
@@ -184,18 +182,13 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
                     config_value = self.get_config_value(config_definition.name, params)
                     if config_value != config_definition.default:
                         key = "|".join(
-                            [
-                                f"{param}__{tenant_id}"
-                                for param, tenant_id in sorted(params.items())
-                            ]
+                            [f"{param}__{tenant_id}" for param, tenant_id in sorted(params.items())]
                         )
 
                         overrides[key] = config_value
         return overrides
 
-    def _get_tenant_key_and_value(
-        self, tenant_ids: dict[str, str | int]
-    ) -> tuple[str, str | int]:
+    def _get_tenant_key_and_value(self, tenant_ids: dict[str, str | int]) -> tuple[str, str | int]:
         if "project_id" in tenant_ids:
             return "project_id", tenant_ids["project_id"]
         if "organization_id" in tenant_ids:

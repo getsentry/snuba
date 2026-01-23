@@ -9,9 +9,7 @@ def extract_message_meta(in_msg: ProtobufMessage) -> RequestMeta:
     if isinstance(in_msg, CreateSubscriptionRequest):
         return in_msg.time_series_request.meta
     elif (
-        hasattr(in_msg, "meta")
-        and in_msg.HasField("meta")
-        and isinstance(in_msg.meta, RequestMeta)
+        hasattr(in_msg, "meta") and in_msg.HasField("meta") and isinstance(in_msg.meta, RequestMeta)
     ):
         return in_msg.meta
     else:

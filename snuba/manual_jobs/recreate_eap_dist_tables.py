@@ -50,12 +50,12 @@ class RecreateEAPDistTables(Job):
                 storage_node,
             )
             for statement in statements:
-                logger.info("Run create table statement: {statement}")
+                logger.info(f"Run create table statement: {statement}")
                 connection.execute(query=statement)
 
             for table_name in tables:
                 statement = f"RENAME TABLE {table_name} TO old_{table_name}, new_{table_name} TO {table_name}"
-                logger.info("Rename table: {statement}")
+                logger.info(f"Rename table: {statement}")
                 connection.execute(query=statement)
 
         logger.info("complete")

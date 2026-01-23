@@ -49,16 +49,7 @@ FROM build_base AS base
 COPY pyproject.toml uv.lock ./
 RUN set -ex; \
     \
-    uv sync --no-dev --frozen --no-install-project --no-install-workspace; \
-    mkdir /tmp/uwsgi-dogstatsd; \
-    wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
-    | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
-    uwsgi --build-plugin /tmp/uwsgi-dogstatsd; \
-    rm -rf /tmp/uwsgi-dogstatsd .uwsgi_plugins_builder; \
-    mkdir -p /var/lib/uwsgi; \
-    mv dogstatsd_plugin.so /var/lib/uwsgi/; \
-    # TODO: https://github.com/lincolnloop/pyuwsgi-wheels/pull/17
-    python -c 'import os, sys; sys.setdlopenflags(sys.getdlopenflags() | os.RTLD_GLOBAL); import pyuwsgi; pyuwsgi.run()' --need-plugin=/var/lib/uwsgi/dogstatsd --help > /dev/null
+    uv sync --no-dev --frozen --no-install-project --no-install-workspace
 
 # We assume that compared to snuba codebase, the Rust consumer is the least likely to get
 # changed. We do need requirements.txt installed though, so we cannot use the
@@ -101,7 +92,8 @@ COPY --from=build_rust_snuba_deps /usr/src/snuba/rust_snuba/target/ ./rust_snuba
 COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
     cd ./rust_snuba/; \
-    uvx maturin build --release --compatibility linux --locked
+    uvx maturin build --release --compatibility linux --locked; \
+    rm -rf /root/.rustup/toolchains/*/share/doc
 
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
@@ -110,11 +102,9 @@ ENV NODE_VERSION=20
 COPY ./snuba/admin ./snuba/admin
 RUN set -ex; \
     mkdir -p snuba/admin/dist/; \
-    curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
-    echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
-    curl -SLO https://deb.nodesource.com/nsolid_setup_deb.sh | bash -s -- ${NODE_VERSION} &&\
-    apt-get update && \
-    apt-get install -y yarn nodejs --no-install-recommends && \
+    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - && \
+    apt-get install -y nodejs --no-install-recommends && \
+    npm install -g yarn && \
     cd snuba/admin && \
     yarn install && \
     yarn run build
@@ -142,11 +132,7 @@ ENV LD_PRELOAD=/usr/src/snuba/libjemalloc.so.2 \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    UWSGI_ENABLE_METRICS=true \
-    UWSGI_NEED_PLUGIN=/var/lib/uwsgi/dogstatsd \
-    UWSGI_STATS_PUSH=dogstatsd:127.0.0.1:8126 \
-    UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
+    PYTHONDONTWRITEBYTECODE=1
 
 USER snuba
 EXPOSE 1218 1219

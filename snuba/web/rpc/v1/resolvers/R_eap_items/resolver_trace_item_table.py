@@ -33,9 +33,8 @@ from snuba.protos.common import NORMALIZED_COLUMNS_EAP_ITEMS
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond
+from snuba.query.dsl import and_cond, in_cond, literal, literals_array, or_cond
 from snuba.query.dsl import column as snuba_column
-from snuba.query.dsl import in_cond, literal, literals_array, or_cond
 from snuba.query.expressions import Expression, SubscriptableReference
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -53,7 +52,6 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
-    setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
@@ -570,7 +568,11 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         in_msg: TraceItemTableRequest,
         routing_decision: RoutingDecision,
     ) -> TraceItemTableResponse:
-        query_settings = setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
+        query_settings = HTTPQuerySettings(apply_default_subscriptable_mapping=False)
+        if in_msg.meta.debug:
+            query_settings.set_clickhouse_settings(
+                {"send_logs_level": "trace", "log_profile_events": 1}
+            )
         try:
             routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
             query_settings.set_sampling_tier(routing_decision.tier)

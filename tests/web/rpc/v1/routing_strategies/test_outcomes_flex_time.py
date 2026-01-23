@@ -31,7 +31,6 @@ def _get_request_meta(
     end: datetime,
     downsampled_storage_config: DownsampledStorageConfig | None = None,
 ) -> RequestMeta:
-
     return RequestMeta(
         project_ids=[_PROJECT_ID],
         organization_id=_ORG_ID,

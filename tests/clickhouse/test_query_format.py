@@ -661,7 +661,7 @@ def test_delete_query() -> None:
     )
 
     clickhouse_query = format_query(query)
-    expected = "DELETE " "FROM my_table " "ON CLUSTER 'cluster_name' " "WHERE eq(project_id, 1)"
+    expected = "DELETE FROM my_table ON CLUSTER 'cluster_name' WHERE eq(project_id, 1)"
 
     assert clickhouse_query.get_sql() == expected
 

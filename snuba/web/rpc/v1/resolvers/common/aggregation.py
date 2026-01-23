@@ -513,6 +513,11 @@ def get_extrapolated_function(
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
+        Function.FUNCTION_ANY: f.anyIfOrNull(
+            field,
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
+            **alias_dict,
+        ),
     }
 
     return function_map_sample_weighted.get(aggregation.aggregate)
@@ -525,7 +530,7 @@ def _get_ci_count(
     z_value: float = Z_VALUE_P95,
     use_sampling_factor: bool = False,
 ) -> Expression:
-    """
+    r"""
     confidence interval = Z \cdot \sqrt{\sum_{i=1}^n w_i^2 - w_i}
 
           ┌───────────┐
@@ -575,7 +580,7 @@ def _get_ci_sum(
     z_value: float = Z_VALUE_P95,
     use_sampling_factor: bool = False,
 ) -> Expression:
-    """
+    r"""
     confidence interval = Z \cdot \sqrt{\sum_{i=1}^n x_i^2 \cdot (w_i^2 - w_i)}
 
           ┌─────────────────┐
@@ -622,7 +627,7 @@ def _get_ci_avg(
     use_sampling_factor: bool = False,
 ) -> Expression:
     """
-    confidence interval = (\\frac{t + err_t}{c - err_c} - \\frac{t - err_t}{c + err_c}) \cdot 0.5
+    confidence interval = (\\frac{t + err_t}{c - err_c} - \\frac{t - err_t}{c + err_c}) \\cdot 0.5
 
      t + err_t   t - err_t
     (───────── - ─────────) ⋅ 0.5
@@ -832,6 +837,10 @@ def aggregation_to_expression(
             field,
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
+        Function.FUNCTION_ANY: f.anyIfOrNull(
+            field,
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
+        ),
     }
 
     if aggregation.extrapolation_mode in [
@@ -845,7 +854,15 @@ def aggregation_to_expression(
     else:
         agg_func_expr = function_map.get(aggregation.aggregate)
         if agg_func_expr is not None:
-            agg_func_expr = f.round(agg_func_expr, _FLOATING_POINT_PRECISION, **alias_dict)
+            # Don't apply round() to FUNCTION_ANY since it can return non-numeric types (e.g., strings)
+            if aggregation.aggregate == Function.FUNCTION_ANY:
+                agg_func_expr = f.anyIfOrNull(
+                    field,
+                    and_cond(get_field_existence_expression(field), condition_in_aggregation),
+                    **alias_dict,
+                )
+            else:
+                agg_func_expr = f.round(agg_func_expr, _FLOATING_POINT_PRECISION, **alias_dict)
 
     if agg_func_expr is None:
         raise BadSnubaRPCRequestException(f"Aggregation not specified for {aggregation.key.name}")

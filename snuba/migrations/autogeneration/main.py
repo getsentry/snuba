@@ -1,3 +1,4 @@
+import ast
 import os
 import subprocess
 from typing import Optional
@@ -109,8 +110,6 @@ def write_migration(
             f"Error: The migration number {nextnum} was larger than the last migration in the group loader '{group_loader_name}', but the migration already exists"
         )
 
-    from black import Mode, format_str
-
     with open(newpath, "w") as f:
-        f.write(format_str(migration, mode=Mode()))
+        f.write(ast.unparse(ast.parse(migration)))
     return newpath

@@ -110,7 +110,5 @@ class BulkLoadSource(ABC):
 
     @abstractmethod
     @contextmanager
-    def get_preprocessed_table_file(
-        self, table: str
-    ) -> Generator[Iterator[bytes], None, None]:
+    def get_preprocessed_table_file(self, table: str) -> Generator[Iterator[bytes], None, None]:
         raise NotImplementedError
