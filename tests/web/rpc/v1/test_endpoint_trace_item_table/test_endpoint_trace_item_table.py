@@ -1119,6 +1119,43 @@ class TestTraceItemTable(BaseApiTest):
         measurement_avg = [v.val_double for v in response.column_values[0].results][0]
         assert measurement_avg == 420
 
+    def test_aggregation_on_boolean_attribute(
+        self,
+        setup_teardown: Any,
+    ) -> None:
+        """Test that aggregations work correctly on TYPE_BOOLEAN attributes.
+
+        Boolean attributes use a Map column (attributes_bool) and require
+        arrayElement for access rather than SubscriptableReference.
+        """
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="my.true.bool.field"),
+                        label="count(my.true.bool.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    )
+                ),
+            ],
+            order_by=[],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        # All spans in setup_teardown have my.true.bool.field=True (from _DEFAULT_ATTRIBUTES)
+        count_result = [v.val_double for v in response.column_values[0].results][0]
+        assert count_result == _SPAN_COUNT
+
     def test_different_column_label_and_attr_name_backward_compat(
         self,
         setup_teardown: Any,
