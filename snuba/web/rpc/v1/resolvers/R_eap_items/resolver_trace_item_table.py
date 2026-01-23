@@ -29,6 +29,7 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.downsampled_storage_tiers import Tier
 from snuba.protos.common import NORMALIZED_COLUMNS_EAP_ITEMS
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
@@ -405,6 +406,7 @@ def _get_offset_from_page_token(page_token: PageToken | None) -> int:
 def build_query(
     request: TraceItemTableRequest,
     time_window: TimeWindow | None = None,
+    sampling_tier: Optional[Tier] = None,
     timer: Optional[Timer] = None,
 ) -> Query:
     entity = Entity(
@@ -430,9 +432,9 @@ def build_query(
 
     # Handle cross item queries by first getting trace IDs
     additional_conditions: List[Expression] = []
-    if request.trace_filters and timer is not None:
-        trace_ids_sql = get_trace_ids_sql_for_cross_item_query(
-            request, request.meta, list(request.trace_filters), timer
+    if request.trace_filters and timer is not None and sampling_tier is not None:
+        trace_ids_sql, _ = get_trace_ids_sql_for_cross_item_query(
+            request, request.meta, list(request.trace_filters), sampling_tier, timer
         )
         additional_conditions.append(
             in_cond(snuba_column("trace_id"), DangerousRawSQL(None, f"({trace_ids_sql})"))
@@ -526,6 +528,7 @@ def _build_snuba_request(
     request: TraceItemTableRequest,
     query_settings: HTTPQuerySettings,
     time_window: TimeWindow | None = None,
+    sampling_tier: Optional[Tier] = None,
     timer: Optional[Timer] = None,
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
@@ -540,7 +543,7 @@ def _build_snuba_request(
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=build_query(request, time_window, timer),
+        query=build_query(request, time_window, sampling_tier, timer),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -576,7 +579,7 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             start_timestamp=in_msg.meta.start_timestamp, end_timestamp=in_msg.meta.end_timestamp
         )
         snuba_request = _build_snuba_request(
-            in_msg, query_settings, routing_decision.time_window, self._timer
+            in_msg, query_settings, routing_decision.time_window, routing_decision.tier, self._timer
         )
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
