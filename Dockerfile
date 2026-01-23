@@ -102,11 +102,9 @@ ENV NODE_VERSION=20
 COPY ./snuba/admin ./snuba/admin
 RUN set -ex; \
     mkdir -p snuba/admin/dist/; \
-    curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
-    echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
-    curl -SLO https://deb.nodesource.com/nsolid_setup_deb.sh | bash -s -- ${NODE_VERSION} &&\
-    apt-get update && \
-    apt-get install -y yarn nodejs --no-install-recommends && \
+    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - && \
+    apt-get install -y nodejs --no-install-recommends && \
+    npm install -g yarn && \
     cd snuba/admin && \
     yarn install && \
     yarn run build
