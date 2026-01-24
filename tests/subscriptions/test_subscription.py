@@ -390,3 +390,33 @@ class TestRPCSubscriptionCreator:
             )[0][1]
             == subscription
         )
+
+    @pytest.mark.eap
+    @pytest.mark.redis_db
+    def test_rpc_subscription_unspecified_extrapolation_mode(self) -> None:
+        creator = SubscriptionCreator(self.dataset, EntityKey.EAP_ITEMS)
+        subscription = RPCSubscriptionData.from_proto(
+            CreateSubscriptionRequestProto(
+                time_series_request=TimeSeriesRequest(
+                    meta=RequestMeta(
+                        project_ids=[1],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    ),
+                    aggregations=[
+                        AttributeAggregation(
+                            aggregate=Function.FUNCTION_SUM,
+                            key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                            label="sum",
+                        ),
+                    ],
+                ),
+                time_window_secs=300,
+                resolution_secs=60,
+            ),
+            EntityKey.EAP_ITEMS,
+        )
+        with raises(InvalidSubscriptionError):
+            creator.create(subscription, self.timer)
