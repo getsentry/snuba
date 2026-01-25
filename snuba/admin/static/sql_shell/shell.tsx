@@ -396,8 +396,88 @@ function SQLShell({ api, mode }: SQLShellProps) {
     [api, mode, state.currentStorage, state.currentHost, state.currentPort, state.profileEnabled, state.sudoEnabled, storages, getHostsForStorage, addHistoryEntry]
   );
 
+  const handleTabComplete = useCallback(() => {
+    const trimmed = inputValue.trimStart();
+
+    // Check for USE <partial> pattern
+    const useMatch = trimmed.match(/^USE\s+(.*)$/i);
+    if (useMatch) {
+      const partial = useMatch[1].toLowerCase();
+      const matches = storages.filter((s) =>
+        s.toLowerCase().startsWith(partial)
+      );
+
+      if (matches.length === 1) {
+        setInputValue(`USE ${matches[0]}`);
+      } else if (matches.length > 1) {
+        // Find common prefix
+        const commonPrefix = matches.reduce((prefix, storage) => {
+          while (!storage.toLowerCase().startsWith(prefix.toLowerCase())) {
+            prefix = prefix.slice(0, -1);
+          }
+          return storage.slice(0, prefix.length);
+        }, matches[0]);
+
+        if (commonPrefix.length > partial.length) {
+          setInputValue(`USE ${commonPrefix}`);
+        } else {
+          // Show available options
+          addHistoryEntry({
+            type: "info",
+            content: `Matching storages: ${matches.join(", ")}`,
+            timestamp: Date.now(),
+          });
+        }
+      }
+      return true;
+    }
+
+    // Check for HOST <partial> pattern (system mode only)
+    if (mode === "system" && state.currentStorage) {
+      const hostMatch = trimmed.match(/^HOST\s+(.*)$/i);
+      if (hostMatch) {
+        const partial = hostMatch[1].toLowerCase();
+        const hosts = getHostsForStorage(state.currentStorage).map((h) =>
+          h.replace(/ \(.*\)$/, "")
+        );
+        const matches = hosts.filter((h) => h.toLowerCase().startsWith(partial));
+
+        if (matches.length === 1) {
+          setInputValue(`HOST ${matches[0]}`);
+        } else if (matches.length > 1) {
+          const commonPrefix = matches.reduce((prefix, host) => {
+            while (!host.toLowerCase().startsWith(prefix.toLowerCase())) {
+              prefix = prefix.slice(0, -1);
+            }
+            return host.slice(0, prefix.length);
+          }, matches[0]);
+
+          if (commonPrefix.length > partial.length) {
+            setInputValue(`HOST ${commonPrefix}`);
+          } else {
+            addHistoryEntry({
+              type: "info",
+              content: `Matching hosts: ${matches.join(", ")}`,
+              timestamp: Date.now(),
+            });
+          }
+        }
+        return true;
+      }
+    }
+
+    return false;
+  }, [inputValue, storages, mode, state.currentStorage, getHostsForStorage, addHistoryEntry]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
+      // Tab completion
+      if (e.key === "Tab") {
+        e.preventDefault();
+        handleTabComplete();
+        return;
+      }
+
       // Execute on Enter or Cmd+Enter
       if (e.key === "Enter") {
         e.preventDefault();
@@ -447,7 +527,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
         return;
       }
     },
-    [state.commandHistory, state.historyIndex, state.isExecuting, inputValue, executeCommand]
+    [state.commandHistory, state.historyIndex, state.isExecuting, inputValue, executeCommand, handleTabComplete]
   );
 
   const focusInput = () => {
@@ -554,7 +634,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
               </div>
             </>
           )}
-          <div style={{ color: "#666666" }}>Execute: Enter | History: Up/Down</div>
+          <div style={{ color: "#6e7681" }}>Tab: Autocomplete | Enter: Execute | ↑↓: History</div>
         </div>
       </div>
     </div>
