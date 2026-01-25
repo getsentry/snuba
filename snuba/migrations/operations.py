@@ -121,6 +121,7 @@ class SqlOperation(ABC):
         )
 
     def execute(self) -> None:
+        """Execute DDL using ON CLUSTER (single-node execution, cluster handles distribution)."""
         cluster = get_cluster(self._storage_set)
         node = self._get_execution_node()
         if node is None:
@@ -140,6 +141,26 @@ class SqlOperation(ABC):
                 f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{sql}\n{self._settings}"
             )
             raise
+
+    def _execute_per_node(self) -> None:
+        """Execute SQL on each node individually (for operations that don't support ON CLUSTER)."""
+        nodes = self.get_nodes()
+        cluster = get_cluster(self._storage_set)
+        sql = self.format_sql()
+        if nodes:
+            if settings.LOG_MIGRATIONS:
+                logger.info(f"Executing op: {sql[:32]}...")
+        for node in nodes:
+            connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+            if settings.LOG_MIGRATIONS:
+                logger.info(f"Executing on {self.target.value} node: {node}")
+            try:
+                connection.execute(sql, settings=self._settings)
+            except Exception:
+                logger.exception(
+                    f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{sql}\n{self._settings}"
+                )
+                raise
 
     @abstractmethod
     def format_sql(self) -> str:
@@ -168,26 +189,7 @@ class RunSql(SqlOperation):
         self.__statement = statement
 
     def execute(self) -> None:
-        """
-        Override execute to use per-node execution for arbitrary SQL.
-        RunSql statements may not support ON CLUSTER syntax.
-        """
-        nodes = self.get_nodes()
-        cluster = get_cluster(self._storage_set)
-        if nodes:
-            if settings.LOG_MIGRATIONS:
-                logger.info(f"Executing op: {self.format_sql()[:32]}...")
-        for node in nodes:
-            connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
-            if settings.LOG_MIGRATIONS:
-                logger.info(f"Executing on {self.target.value} node: {node}")
-            try:
-                connection.execute(self.format_sql(), settings=self._settings)
-            except Exception:
-                logger.exception(
-                    f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{self.format_sql()}\n{self._settings}"
-                )
-                raise
+        self._execute_per_node()
 
     def format_sql(self) -> str:
         return self.__statement
@@ -688,26 +690,7 @@ class InsertIntoSelect(SqlOperation):
         self.__where = where
 
     def execute(self) -> None:
-        """
-        Override execute to use per-node execution for DML operations.
-        INSERT INTO SELECT is DML, not DDL, so ON CLUSTER syntax doesn't apply.
-        """
-        nodes = self.get_nodes()
-        cluster = get_cluster(self._storage_set)
-        if nodes:
-            if settings.LOG_MIGRATIONS:
-                logger.info(f"Executing op: {self.format_sql()[:32]}...")
-        for node in nodes:
-            connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
-            if settings.LOG_MIGRATIONS:
-                logger.info(f"Executing on {self.target.value} node: {node}")
-            try:
-                connection.execute(self.format_sql(), settings=self._settings)
-            except Exception:
-                logger.exception(
-                    f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{self.format_sql()}\n{self._settings}"
-                )
-                raise
+        self._execute_per_node()
 
     def format_sql(self) -> str:
         src_columns = ", ".join(self.__src_columns)
