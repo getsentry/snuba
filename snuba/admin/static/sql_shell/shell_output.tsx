@@ -116,6 +116,14 @@ function ErrorOutput({
   } else {
     errorMessage = String(error);
   }
+
+  // Strip stack trace from ClickHouse errors
+  // ClickHouse errors typically have "Stack trace:" followed by the trace
+  const stackTraceIndex = errorMessage.indexOf("Stack trace:");
+  if (stackTraceIndex !== -1) {
+    errorMessage = errorMessage.substring(0, stackTraceIndex).trim();
+  }
+
   return <div className={classes.errorText}>Error: {errorMessage}</div>;
 }
 
