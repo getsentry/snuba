@@ -152,6 +152,12 @@ class SqlOperation(ABC):
 
 
 class RunSql(SqlOperation):
+    """
+    Runs arbitrary SQL statements. Uses per-node execution because the SQL
+    may not support ON CLUSTER syntax (e.g., queries, DML, or already contains
+    ON CLUSTER).
+    """
+
     def __init__(
         self,
         storage_set: StorageSetKey,
@@ -160,6 +166,28 @@ class RunSql(SqlOperation):
     ) -> None:
         super().__init__(storage_set, target=target)
         self.__statement = statement
+
+    def execute(self) -> None:
+        """
+        Override execute to use per-node execution for arbitrary SQL.
+        RunSql statements may not support ON CLUSTER syntax.
+        """
+        nodes = self.get_nodes()
+        cluster = get_cluster(self._storage_set)
+        if nodes:
+            if settings.LOG_MIGRATIONS:
+                logger.info(f"Executing op: {self.format_sql()[:32]}...")
+        for node in nodes:
+            connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+            if settings.LOG_MIGRATIONS:
+                logger.info(f"Executing on {self.target.value} node: {node}")
+            try:
+                connection.execute(self.format_sql(), settings=self._settings)
+            except Exception:
+                logger.exception(
+                    f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{self.format_sql()}\n{self._settings}"
+                )
+                raise
 
     def format_sql(self) -> str:
         return self.__statement
