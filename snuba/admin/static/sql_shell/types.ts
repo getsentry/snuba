@@ -28,7 +28,7 @@ export type ShellHistoryEntry =
   | { type: "command"; content: string; timestamp: number }
   | { type: "result"; content: TracingResult; timestamp: number }
   | { type: "system_result"; content: QueryResult; timestamp: number }
-  | { type: "error"; content: string; timestamp: number }
+  | { type: "error"; content: string | Record<string, any>; timestamp: number }
   | { type: "info"; content: string; timestamp: number }
   | { type: "storages"; content: string[]; timestamp: number }
   | { type: "hosts"; content: string[]; timestamp: number }

@@ -105,10 +105,18 @@ function ErrorOutput({
   error,
   classes,
 }: {
-  error: string;
+  error: string | { code?: string; message?: string; type?: string } | any;
   classes: Record<string, string>;
 }) {
-  return <div className={classes.errorText}>Error: {error}</div>;
+  let errorMessage: string;
+  if (typeof error === "string") {
+    errorMessage = error;
+  } else if (typeof error === "object" && error !== null) {
+    errorMessage = error.message || error.error || JSON.stringify(error);
+  } else {
+    errorMessage = String(error);
+  }
+  return <div className={classes.errorText}>Error: {errorMessage}</div>;
 }
 
 function StoragesOutput({
