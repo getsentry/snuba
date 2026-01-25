@@ -6,12 +6,16 @@ import {
   ParsedCommand,
   ShellState,
   ShellHistoryEntry,
+  ShellMode,
 } from "SnubaAdmin/sql_shell/types";
 import { TracingRequest } from "SnubaAdmin/tracing/types";
+import { QueryRequest, ClickhouseNodeData } from "SnubaAdmin/clickhouse_queries/types";
 
-const COMMAND_HISTORY_KEY = "sql_shell_command_history";
+function getCommandHistoryKey(mode: ShellMode): string {
+  return mode === "tracing" ? "sql_shell_command_history" : "system_shell_command_history";
+}
 
-function parseCommand(input: string): ParsedCommand {
+function parseCommand(input: string, mode: ShellMode): ParsedCommand {
   const trimmed = input.trim();
 
   // USE storage_name
@@ -20,21 +24,43 @@ function parseCommand(input: string): ParsedCommand {
     return { type: "use", storage };
   }
 
+  // HOST host:port (system mode only)
+  if (/^HOST\s+/i.test(trimmed)) {
+    const hostStr = trimmed.replace(/^HOST\s+/i, "").trim();
+    const match = hostStr.match(/^([^:]+):(\d+)$/);
+    if (match) {
+      return { type: "host", host: match[1], port: parseInt(match[2], 10) };
+    }
+    // If no port specified, default to 9000
+    return { type: "host", host: hostStr, port: 9000 };
+  }
+
   // SHOW STORAGES
   if (/^SHOW\s+STORAGES$/i.test(trimmed)) {
     return { type: "show_storages" };
   }
 
-  // PROFILE ON/OFF
+  // SHOW HOSTS (system mode only)
+  if (/^SHOW\s+HOSTS$/i.test(trimmed)) {
+    return { type: "show_hosts" };
+  }
+
+  // PROFILE ON/OFF (tracing mode only)
   if (/^PROFILE\s+(ON|OFF)$/i.test(trimmed)) {
     const enabled = /ON$/i.test(trimmed);
     return { type: "profile", enabled };
   }
 
-  // TRACE RAW/FORMATTED
+  // TRACE RAW/FORMATTED (tracing mode only)
   if (/^TRACE\s+(RAW|FORMATTED)$/i.test(trimmed)) {
     const formatted = /FORMATTED$/i.test(trimmed);
     return { type: "trace_mode", formatted };
+  }
+
+  // SUDO ON/OFF (system mode only)
+  if (/^SUDO\s+(ON|OFF)$/i.test(trimmed)) {
+    const enabled = /ON$/i.test(trimmed);
+    return { type: "sudo", enabled };
   }
 
   // HELP
@@ -51,19 +77,19 @@ function parseCommand(input: string): ParsedCommand {
   return { type: "sql", query: trimmed };
 }
 
-function loadCommandHistory(): string[] {
+function loadCommandHistory(mode: ShellMode): string[] {
   try {
-    const saved = localStorage.getItem(COMMAND_HISTORY_KEY);
+    const saved = localStorage.getItem(getCommandHistoryKey(mode));
     return saved ? JSON.parse(saved) : [];
   } catch {
     return [];
   }
 }
 
-function saveCommandHistory(history: string[]) {
+function saveCommandHistory(mode: ShellMode, history: string[]) {
   try {
     localStorage.setItem(
-      COMMAND_HISTORY_KEY,
+      getCommandHistoryKey(mode),
       JSON.stringify(history.slice(-100))
     );
   } catch {
@@ -73,26 +99,32 @@ function saveCommandHistory(history: string[]) {
 
 interface SQLShellProps {
   api: Client;
+  mode: ShellMode;
 }
 
-function SQLShell({ api }: SQLShellProps) {
+function SQLShell({ api, mode }: SQLShellProps) {
   const { classes } = useShellStyles();
   const [state, setState] = useState<ShellState>({
     currentStorage: null,
+    currentHost: null,
+    currentPort: null,
     profileEnabled: true,
     traceFormatted: true,
+    sudoEnabled: false,
     history: [],
-    commandHistory: loadCommandHistory(),
+    commandHistory: loadCommandHistory(mode),
     historyIndex: -1,
     isExecuting: false,
   });
   const [inputValue, setInputValue] = useState("");
+  const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [storages, setStorages] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const outputRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.getClickhouseNodes().then((res) => {
+      setNodeData(res);
       setStorages(res.map((n) => n.storage_name));
     });
   }, [api]);
@@ -102,6 +134,26 @@ function SQLShell({ api }: SQLShellProps) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
   }, [state.history]);
+
+  const getHostsForStorage = useCallback((storageName: string): string[] => {
+    const nodeInfo = nodeData.find((n) => n.storage_name === storageName);
+    if (!nodeInfo) return [];
+
+    const hosts: string[] = [];
+    nodeInfo.local_nodes.forEach((node) => {
+      hosts.push(`${node.host}:${node.port}`);
+    });
+    nodeInfo.dist_nodes.forEach((node) => {
+      const hostStr = `${node.host}:${node.port}`;
+      if (!hosts.includes(hostStr)) {
+        hosts.push(`${hostStr} (distributed)`);
+      }
+    });
+    if (nodeInfo.query_node) {
+      hosts.push(`${nodeInfo.query_node.host}:${nodeInfo.query_node.port} (query node)`);
+    }
+    return hosts;
+  }, [nodeData]);
 
   const addHistoryEntry = useCallback((entry: ShellHistoryEntry) => {
     setState((prev) => ({
@@ -114,7 +166,7 @@ function SQLShell({ api }: SQLShellProps) {
     async (input: string) => {
       if (!input.trim()) return;
 
-      const parsed = parseCommand(input);
+      const parsed = parseCommand(input, mode);
 
       // Add command to history display
       addHistoryEntry({
@@ -126,7 +178,7 @@ function SQLShell({ api }: SQLShellProps) {
       // Add to command history for navigation
       setState((prev) => {
         const newCmdHistory = [...prev.commandHistory, input];
-        saveCommandHistory(newCmdHistory);
+        saveCommandHistory(mode, newCmdHistory);
         return {
           ...prev,
           commandHistory: newCmdHistory,
@@ -136,7 +188,7 @@ function SQLShell({ api }: SQLShellProps) {
 
       switch (parsed.type) {
         case "help":
-          addHistoryEntry({ type: "help", timestamp: Date.now() });
+          addHistoryEntry({ type: "help", mode, timestamp: Date.now() });
           break;
 
         case "clear":
@@ -151,11 +203,37 @@ function SQLShell({ api }: SQLShellProps) {
           });
           break;
 
+        case "show_hosts":
+          if (mode !== "system") {
+            addHistoryEntry({
+              type: "error",
+              content: "SHOW HOSTS is only available in system mode.",
+              timestamp: Date.now(),
+            });
+            break;
+          }
+          if (!state.currentStorage) {
+            addHistoryEntry({
+              type: "error",
+              content: "No storage selected. Use USE <storage> first.",
+              timestamp: Date.now(),
+            });
+            break;
+          }
+          addHistoryEntry({
+            type: "hosts",
+            content: getHostsForStorage(state.currentStorage),
+            timestamp: Date.now(),
+          });
+          break;
+
         case "use":
           if (storages.includes(parsed.storage)) {
             setState((prev) => ({
               ...prev,
               currentStorage: parsed.storage,
+              currentHost: null,
+              currentPort: null,
             }));
             addHistoryEntry({
               type: "info",
@@ -171,7 +249,36 @@ function SQLShell({ api }: SQLShellProps) {
           }
           break;
 
+        case "host":
+          if (mode !== "system") {
+            addHistoryEntry({
+              type: "error",
+              content: "HOST command is only available in system mode.",
+              timestamp: Date.now(),
+            });
+            break;
+          }
+          setState((prev) => ({
+            ...prev,
+            currentHost: parsed.host,
+            currentPort: parsed.port,
+          }));
+          addHistoryEntry({
+            type: "info",
+            content: `Host set to: ${parsed.host}:${parsed.port}`,
+            timestamp: Date.now(),
+          });
+          break;
+
         case "profile":
+          if (mode !== "tracing") {
+            addHistoryEntry({
+              type: "error",
+              content: "PROFILE command is only available in tracing mode.",
+              timestamp: Date.now(),
+            });
+            break;
+          }
           setState((prev) => ({
             ...prev,
             profileEnabled: parsed.enabled,
@@ -184,6 +291,14 @@ function SQLShell({ api }: SQLShellProps) {
           break;
 
         case "trace_mode":
+          if (mode !== "tracing") {
+            addHistoryEntry({
+              type: "error",
+              content: "TRACE command is only available in tracing mode.",
+              timestamp: Date.now(),
+            });
+            break;
+          }
           setState((prev) => ({
             ...prev,
             traceFormatted: parsed.formatted,
@@ -195,12 +310,40 @@ function SQLShell({ api }: SQLShellProps) {
           });
           break;
 
+        case "sudo":
+          if (mode !== "system") {
+            addHistoryEntry({
+              type: "error",
+              content: "SUDO command is only available in system mode.",
+              timestamp: Date.now(),
+            });
+            break;
+          }
+          setState((prev) => ({
+            ...prev,
+            sudoEnabled: parsed.enabled,
+          }));
+          addHistoryEntry({
+            type: "info",
+            content: `Sudo mode ${parsed.enabled ? "enabled" : "disabled"}`,
+            timestamp: Date.now(),
+          });
+          break;
+
         case "sql":
           if (!state.currentStorage) {
             addHistoryEntry({
               type: "error",
-              content:
-                "No storage selected. Use USE <storage> to select a storage first.",
+              content: "No storage selected. Use USE <storage> to select a storage first.",
+              timestamp: Date.now(),
+            });
+            return;
+          }
+
+          if (mode === "system" && (!state.currentHost || !state.currentPort)) {
+            addHistoryEntry({
+              type: "error",
+              content: "No host selected. Use HOST <host:port> to select a host first.",
               timestamp: Date.now(),
             });
             return;
@@ -209,23 +352,39 @@ function SQLShell({ api }: SQLShellProps) {
           setState((prev) => ({ ...prev, isExecuting: true }));
 
           try {
-            const request: TracingRequest = {
-              sql: parsed.query,
-              storage: state.currentStorage,
-              gather_profile_events: state.profileEnabled,
-            };
+            if (mode === "tracing") {
+              const request: TracingRequest = {
+                sql: parsed.query,
+                storage: state.currentStorage,
+                gather_profile_events: state.profileEnabled,
+              };
 
-            const result = await api.executeTracingQuery(request);
-            addHistoryEntry({
-              type: "result",
-              content: result,
-              timestamp: Date.now(),
-            });
+              const result = await api.executeTracingQuery(request);
+              addHistoryEntry({
+                type: "result",
+                content: result,
+                timestamp: Date.now(),
+              });
+            } else {
+              const request: QueryRequest = {
+                sql: parsed.query,
+                storage: state.currentStorage,
+                host: state.currentHost!,
+                port: state.currentPort!,
+                sudo: state.sudoEnabled,
+              };
+
+              const result = await api.executeSystemQuery(request);
+              addHistoryEntry({
+                type: "system_result",
+                content: result,
+                timestamp: Date.now(),
+              });
+            }
           } catch (err) {
             addHistoryEntry({
               type: "error",
-              content:
-                err instanceof Error ? err.message : "Query execution failed",
+              content: err instanceof Error ? err.message : "Query execution failed",
               timestamp: Date.now(),
             });
           } finally {
@@ -234,7 +393,7 @@ function SQLShell({ api }: SQLShellProps) {
           break;
       }
     },
-    [api, state.currentStorage, state.profileEnabled, storages, addHistoryEntry]
+    [api, mode, state.currentStorage, state.currentHost, state.currentPort, state.profileEnabled, state.sudoEnabled, storages, getHostsForStorage, addHistoryEntry]
   );
 
   const handleKeyDown = useCallback(
@@ -295,12 +454,29 @@ function SQLShell({ api }: SQLShellProps) {
     inputRef.current?.focus();
   };
 
+  const getPlaceholder = () => {
+    if (mode === "tracing") {
+      return state.currentStorage
+        ? `Enter SQL or command (storage: ${state.currentStorage})`
+        : "Enter USE <storage> to select a storage, or HELP for commands";
+    } else {
+      if (!state.currentStorage) {
+        return "Enter USE <storage> to select a storage, or HELP for commands";
+      }
+      if (!state.currentHost) {
+        return `Enter HOST <host:port> to select a host (storage: ${state.currentStorage})`;
+      }
+      return `Enter SQL or command (${state.currentStorage} @ ${state.currentHost}:${state.currentPort})`;
+    }
+  };
+
   return (
-    <div className={classes.shellContainer} onClick={focusInput}>
+    <div className={state.sudoEnabled ? classes.shellContainerSudo : classes.shellContainer} onClick={focusInput}>
       <div ref={outputRef} className={classes.outputArea}>
         <ShellOutput
           entries={state.history}
           traceFormatted={state.traceFormatted}
+          mode={mode}
         />
         {state.isExecuting && (
           <div className={classes.executingIndicator}>Executing query...</div>
@@ -315,11 +491,7 @@ function SQLShell({ api }: SQLShellProps) {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={
-            state.currentStorage
-              ? `Enter SQL or command (storage: ${state.currentStorage})`
-              : "Enter USE <storage> to select a storage, or HELP for commands"
-          }
+          placeholder={getPlaceholder()}
           disabled={state.isExecuting}
           autoFocus
         />
@@ -336,24 +508,52 @@ function SQLShell({ api }: SQLShellProps) {
           </span>
         </div>
         <div style={{ display: "flex", gap: "16px" }}>
-          <div className={classes.statusItem}>
-            <span>PROFILE:</span>
-            <span
-              className={
-                state.profileEnabled
-                  ? classes.statusActive
-                  : classes.statusInactive
-              }
-            >
-              {state.profileEnabled ? "ON" : "OFF"}
-            </span>
-          </div>
-          <div className={classes.statusItem}>
-            <span>TRACE:</span>
-            <span className={classes.statusActive}>
-              {state.traceFormatted ? "FORMATTED" : "RAW"}
-            </span>
-          </div>
+          {mode === "system" && (
+            <>
+              <div className={classes.statusItem}>
+                <span>Host:</span>
+                <span
+                  className={
+                    state.currentHost ? classes.statusActive : classes.statusInactive
+                  }
+                >
+                  {state.currentHost ? `${state.currentHost}:${state.currentPort}` : "none"}
+                </span>
+              </div>
+              <div className={classes.statusItem}>
+                <span>SUDO:</span>
+                <span
+                  className={
+                    state.sudoEnabled ? classes.statusWarn : classes.statusInactive
+                  }
+                >
+                  {state.sudoEnabled ? "ON" : "OFF"}
+                </span>
+              </div>
+            </>
+          )}
+          {mode === "tracing" && (
+            <>
+              <div className={classes.statusItem}>
+                <span>PROFILE:</span>
+                <span
+                  className={
+                    state.profileEnabled
+                      ? classes.statusActive
+                      : classes.statusInactive
+                  }
+                >
+                  {state.profileEnabled ? "ON" : "OFF"}
+                </span>
+              </div>
+              <div className={classes.statusItem}>
+                <span>TRACE:</span>
+                <span className={classes.statusActive}>
+                  {state.traceFormatted ? "FORMATTED" : "RAW"}
+                </span>
+              </div>
+            </>
+          )}
           <div style={{ color: "#666666" }}>Execute: Enter | History: Up/Down</div>
         </div>
       </div>

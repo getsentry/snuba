@@ -11,6 +11,17 @@ export const useShellStyles = createStyles((theme) => ({
       '"JetBrains Mono", "Fira Code", "Source Code Pro", "IBM Plex Mono", "Roboto Mono", "Cascadia Code", Consolas, Monaco, "Courier New", monospace',
     overflow: "hidden",
   },
+  shellContainerSudo: {
+    height: "70vh",
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: theme.colors.dark[9],
+    borderRadius: theme.radius.sm,
+    fontFamily:
+      '"JetBrains Mono", "Fira Code", "Source Code Pro", "IBM Plex Mono", "Roboto Mono", "Cascadia Code", Consolas, Monaco, "Courier New", monospace',
+    overflow: "hidden",
+    border: "3px solid #ff4444",
+  },
   outputArea: {
     flex: 1,
     overflowY: "auto",
@@ -63,6 +74,10 @@ export const useShellStyles = createStyles((theme) => ({
   },
   statusInactive: {
     color: theme.colors.dark[4],
+  },
+  statusWarn: {
+    color: "#ff4444",
+    fontWeight: "bold" as const,
   },
   commandLine: {
     marginBottom: "8px",

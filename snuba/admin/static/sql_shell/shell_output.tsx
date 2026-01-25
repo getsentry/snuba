@@ -1,6 +1,6 @@
 import React from "react";
 import { useShellStyles } from "SnubaAdmin/sql_shell/styles";
-import { ShellHistoryEntry } from "SnubaAdmin/sql_shell/types";
+import { ShellHistoryEntry, ShellMode } from "SnubaAdmin/sql_shell/types";
 import {
   TracingResult,
   TracingSummary,
@@ -12,19 +12,21 @@ import {
   AggregationSummary,
   SortingSummary,
 } from "SnubaAdmin/tracing/types";
+import { QueryResult } from "SnubaAdmin/clickhouse_queries/types";
 
 interface ShellOutputProps {
   entries: ShellHistoryEntry[];
   traceFormatted: boolean;
+  mode: ShellMode;
 }
 
-export function ShellOutput({ entries, traceFormatted }: ShellOutputProps) {
+export function ShellOutput({ entries, traceFormatted, mode }: ShellOutputProps) {
   const { classes } = useShellStyles();
 
   return (
     <>
       {entries.map((entry, idx) => (
-        <ShellEntry key={idx} entry={entry} traceFormatted={traceFormatted} classes={classes} />
+        <ShellEntry key={idx} entry={entry} traceFormatted={traceFormatted} mode={mode} classes={classes} />
       ))}
     </>
   );
@@ -33,10 +35,12 @@ export function ShellOutput({ entries, traceFormatted }: ShellOutputProps) {
 function ShellEntry({
   entry,
   traceFormatted,
+  mode,
   classes,
 }: {
   entry: ShellHistoryEntry;
   traceFormatted: boolean;
+  mode: ShellMode;
   classes: Record<string, string>;
 }) {
   switch (entry.type) {
@@ -54,10 +58,19 @@ function ShellEntry({
           classes={classes}
         />
       );
+    case "system_result":
+      return (
+        <SystemResultsOutput
+          result={entry.content}
+          classes={classes}
+        />
+      );
     case "storages":
       return <StoragesOutput storages={entry.content} classes={classes} />;
+    case "hosts":
+      return <HostsOutput hosts={entry.content} classes={classes} />;
     case "help":
-      return <HelpOutput classes={classes} />;
+      return <HelpOutput mode={entry.mode} classes={classes} />;
     default:
       return null;
   }
@@ -119,8 +132,29 @@ function StoragesOutput({
   );
 }
 
-function HelpOutput({ classes }: { classes: Record<string, string> }) {
-  const commands = [
+function HostsOutput({
+  hosts,
+  classes,
+}: {
+  hosts: string[];
+  classes: Record<string, string>;
+}) {
+  return (
+    <div>
+      <div className={classes.infoText}>Available hosts:</div>
+      <ul className={classes.storageList}>
+        {hosts.map((host) => (
+          <li key={host} className={classes.storageItem}>
+            {host}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function HelpOutput({ mode, classes }: { mode: ShellMode; classes: Record<string, string> }) {
+  const tracingCommands = [
     { cmd: "USE <storage>", desc: "Set the active storage for queries" },
     { cmd: "SHOW STORAGES", desc: "List all available storages" },
     { cmd: "PROFILE ON/OFF", desc: "Toggle profile event collection" },
@@ -129,6 +163,19 @@ function HelpOutput({ classes }: { classes: Record<string, string> }) {
     { cmd: "HELP", desc: "Show this help message" },
     { cmd: "<SQL query>", desc: "Execute SQL with tracing" },
   ];
+
+  const systemCommands = [
+    { cmd: "USE <storage>", desc: "Set the active storage for queries" },
+    { cmd: "HOST <host:port>", desc: "Set the target host (e.g., HOST 127.0.0.1:9000)" },
+    { cmd: "SHOW STORAGES", desc: "List all available storages" },
+    { cmd: "SHOW HOSTS", desc: "List available hosts for current storage" },
+    { cmd: "SUDO ON/OFF", desc: "Toggle sudo mode" },
+    { cmd: "CLEAR", desc: "Clear the terminal output" },
+    { cmd: "HELP", desc: "Show this help message" },
+    { cmd: "<SQL query>", desc: "Execute SQL query" },
+  ];
+
+  const commands = mode === "tracing" ? tracingCommands : systemCommands;
 
   return (
     <div>
@@ -230,6 +277,62 @@ function ResultsOutput({
           classes={classes}
         />
       ) : null}
+    </div>
+  );
+}
+
+function SystemResultsOutput({
+  result,
+  classes,
+}: {
+  result: QueryResult;
+  classes: Record<string, string>;
+}) {
+  if (result.error) {
+    return <ErrorOutput error={result.error} classes={classes} />;
+  }
+
+  const cols = result.column_names || [];
+  const rows = result.rows || [];
+
+  return (
+    <div>
+      <div className={classes.resultBox}>
+        <div className={classes.resultHeader}>
+          Query Results ({rows.length} rows)
+        </div>
+        {cols.length > 0 ? (
+          <div className={classes.tableContainer}>
+            <table className={classes.resultTable}>
+              <thead>
+                <tr>
+                  {cols.map((col: string, idx: number) => (
+                    <th key={idx}>{col}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 100).map((row: any[], rowIdx: number) => (
+                  <tr key={rowIdx}>
+                    {row.map((cell, cellIdx) => (
+                      <td key={cellIdx}>
+                        {typeof cell === "object" ? JSON.stringify(cell) : String(cell)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {rows.length > 100 && (
+              <div style={{ color: "#888888", marginTop: "8px" }}>
+                ... showing first 100 of {rows.length} rows
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ color: "#888888" }}>No results returned</div>
+        )}
+      </div>
     </div>
   );
 }

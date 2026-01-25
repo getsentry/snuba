@@ -4,7 +4,7 @@ import AuditLog from "SnubaAdmin/runtime_config/auditlog";
 import ClickhouseMigrations from "SnubaAdmin/clickhouse_migrations";
 import ClickhouseQueries from "SnubaAdmin/clickhouse_queries";
 import TracingQueries from "SnubaAdmin/tracing";
-import SQLShellPage from "SnubaAdmin/sql_shell";
+import SQLShellPage, { SystemShellPage } from "SnubaAdmin/sql_shell";
 import SnQLToSQL from "SnubaAdmin/snql_to_sql";
 import Kafka from "SnubaAdmin/kafka";
 import QuerylogQueries from "SnubaAdmin/querylog";
@@ -53,6 +53,11 @@ const NAV_ITEMS = [
     id: "system-queries",
     display: "🏚️ System Queries",
     component: ClickhouseQueries,
+  },
+  {
+    id: "system-shell",
+    display: "💻 System Shell",
+    component: SystemShellPage,
   },
   {
     id: "clickhouse-migrations",
