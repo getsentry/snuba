@@ -2,7 +2,8 @@ import { createStyles } from "@mantine/core";
 
 export const useShellStyles = createStyles((theme) => ({
   shellContainer: {
-    height: "70vh",
+    height: "100%",
+    minHeight: 0,
     display: "flex",
     flexDirection: "column",
     backgroundColor: theme.colors.dark[9],
@@ -12,7 +13,8 @@ export const useShellStyles = createStyles((theme) => ({
     overflow: "hidden",
   },
   shellContainerSudo: {
-    height: "70vh",
+    height: "100%",
+    minHeight: 0,
     display: "flex",
     flexDirection: "column",
     backgroundColor: theme.colors.dark[9],
