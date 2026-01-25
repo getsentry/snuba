@@ -479,6 +479,8 @@ function SQLShell({ api, mode }: SQLShellProps) {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
+      const input = inputRef.current;
+
       // Tab completion
       if (e.key === "Tab") {
         e.preventDefault();
@@ -490,16 +492,78 @@ function SQLShell({ api, mode }: SQLShellProps) {
       if (e.key === "Enter") {
         e.preventDefault();
         if (!state.isExecuting) {
+          setSuggestions([]);
           executeCommand(inputValue);
           setInputValue("");
         }
         return;
       }
 
-      // Clear screen with Ctrl+L
+      // Ctrl+C - Clear current input
+      if (e.key === "c" && e.ctrlKey) {
+        e.preventDefault();
+        setInputValue("");
+        setSuggestions([]);
+        setState((prev) => ({ ...prev, historyIndex: -1 }));
+        return;
+      }
+
+      // Ctrl+L - Clear screen
       if (e.key === "l" && e.ctrlKey) {
         e.preventDefault();
         setState((prev) => ({ ...prev, history: [] }));
+        return;
+      }
+
+      // Ctrl+U - Clear line (delete from beginning to cursor)
+      if (e.key === "u" && e.ctrlKey && input) {
+        e.preventDefault();
+        const pos = input.selectionStart || 0;
+        setInputValue(inputValue.slice(pos));
+        // Move cursor to beginning after React re-renders
+        setTimeout(() => {
+          input.setSelectionRange(0, 0);
+        }, 0);
+        return;
+      }
+
+      // Ctrl+K - Kill from cursor to end of line
+      if (e.key === "k" && e.ctrlKey && input) {
+        e.preventDefault();
+        const pos = input.selectionStart || 0;
+        setInputValue(inputValue.slice(0, pos));
+        return;
+      }
+
+      // Ctrl+W - Delete word before cursor
+      if (e.key === "w" && e.ctrlKey && input) {
+        e.preventDefault();
+        const pos = input.selectionStart || 0;
+        const before = inputValue.slice(0, pos);
+        const after = inputValue.slice(pos);
+        // Find the start of the previous word
+        const trimmed = before.trimEnd();
+        const lastSpace = trimmed.lastIndexOf(" ");
+        const newBefore = lastSpace === -1 ? "" : before.slice(0, lastSpace + 1);
+        setInputValue(newBefore + after);
+        setTimeout(() => {
+          input.setSelectionRange(newBefore.length, newBefore.length);
+        }, 0);
+        return;
+      }
+
+      // Ctrl+A - Move cursor to beginning of line
+      if (e.key === "a" && e.ctrlKey && input) {
+        e.preventDefault();
+        input.setSelectionRange(0, 0);
+        return;
+      }
+
+      // Ctrl+E - Move cursor to end of line
+      if (e.key === "e" && e.ctrlKey && input) {
+        e.preventDefault();
+        const len = inputValue.length;
+        input.setSelectionRange(len, len);
         return;
       }
 
@@ -516,6 +580,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
 
         setState((prev) => ({ ...prev, historyIndex: newIndex }));
         setInputValue(cmdHistory[newIndex]);
+        setSuggestions([]);
         return;
       }
 
@@ -532,6 +597,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
           setState((prev) => ({ ...prev, historyIndex: newIndex }));
           setInputValue(cmdHistory[newIndex]);
         }
+        setSuggestions([]);
         return;
       }
     },

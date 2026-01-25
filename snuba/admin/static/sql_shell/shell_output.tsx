@@ -188,20 +188,48 @@ function HelpOutput({ mode, classes }: { mode: ShellMode; classes: Record<string
           </div>
         ))}
       </div>
-      <div style={{ marginTop: "12px", color: "#888888" }}>
+      <div style={{ marginTop: "12px", color: "#8b949e" }}>
         Keyboard shortcuts:
       </div>
       <div style={{ marginTop: "4px" }}>
-        <span className={classes.helpCommand}>Enter / Cmd+Enter</span>
+        <span className={classes.helpCommand}>Enter</span>
         <span className={classes.helpDescription}>Execute command</span>
       </div>
       <div style={{ marginBottom: "4px" }}>
-        <span className={classes.helpCommand}>Up/Down Arrow</span>
+        <span className={classes.helpCommand}>Tab</span>
+        <span className={classes.helpDescription}>Autocomplete storage/host</span>
+      </div>
+      <div style={{ marginBottom: "4px" }}>
+        <span className={classes.helpCommand}>↑ / ↓</span>
         <span className={classes.helpDescription}>Navigate command history</span>
+      </div>
+      <div style={{ marginBottom: "4px" }}>
+        <span className={classes.helpCommand}>Ctrl+C</span>
+        <span className={classes.helpDescription}>Clear current input</span>
       </div>
       <div style={{ marginBottom: "4px" }}>
         <span className={classes.helpCommand}>Ctrl+L</span>
         <span className={classes.helpDescription}>Clear screen</span>
+      </div>
+      <div style={{ marginBottom: "4px" }}>
+        <span className={classes.helpCommand}>Ctrl+U</span>
+        <span className={classes.helpDescription}>Delete from cursor to start</span>
+      </div>
+      <div style={{ marginBottom: "4px" }}>
+        <span className={classes.helpCommand}>Ctrl+K</span>
+        <span className={classes.helpDescription}>Delete from cursor to end</span>
+      </div>
+      <div style={{ marginBottom: "4px" }}>
+        <span className={classes.helpCommand}>Ctrl+W</span>
+        <span className={classes.helpDescription}>Delete word before cursor</span>
+      </div>
+      <div style={{ marginBottom: "4px" }}>
+        <span className={classes.helpCommand}>Ctrl+A</span>
+        <span className={classes.helpDescription}>Move cursor to start</span>
+      </div>
+      <div style={{ marginBottom: "4px" }}>
+        <span className={classes.helpCommand}>Ctrl+E</span>
+        <span className={classes.helpDescription}>Move cursor to end</span>
       </div>
     </div>
   );
