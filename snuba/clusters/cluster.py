@@ -384,6 +384,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_clickhouse_cluster_name(self) -> Optional[str]:
         return self.__cluster_name
 
+    def get_clickhouse_distributed_cluster_name(self) -> Optional[str]:
+        return self.__distributed_cluster_name
+
     def get_database(self) -> str:
         return self.__database
 

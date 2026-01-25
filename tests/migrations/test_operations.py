@@ -683,3 +683,25 @@ class TestOnCluster:
         )
         sql = op.format_sql()
         assert "ON CLUSTER" not in sql
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="storage_cluster")
+    def test_local_target_uses_cluster_name(
+        self, mock_cluster_name: Mock, mock_single_node: Mock
+    ) -> None:
+        """LOCAL target should use cluster_name for ON CLUSTER."""
+        op = DropTable(StorageSetKey.EVENTS, "test_table", target=OperationTarget.LOCAL)
+        sql = op.format_sql()
+        assert "ON CLUSTER 'storage_cluster'" in sql
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(
+        ClickhouseCluster, "get_clickhouse_distributed_cluster_name", return_value="query_cluster"
+    )
+    def test_distributed_target_uses_distributed_cluster_name(
+        self, mock_dist_cluster_name: Mock, mock_single_node: Mock
+    ) -> None:
+        """DISTRIBUTED target should use distributed_cluster_name for ON CLUSTER."""
+        op = DropTable(StorageSetKey.EVENTS, "test_table", target=OperationTarget.DISTRIBUTED)
+        sql = op.format_sql()
+        assert "ON CLUSTER 'query_cluster'" in sql

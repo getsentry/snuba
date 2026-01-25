@@ -58,11 +58,22 @@ class SqlOperation(ABC):
         return self._storage_set
 
     def _get_on_cluster_clause(self) -> str:
-        """Returns ON CLUSTER clause for multi-node clusters, empty string otherwise."""
+        """Returns ON CLUSTER clause for multi-node clusters, empty string otherwise.
+
+        Uses the appropriate cluster name based on target type:
+        - LOCAL: uses cluster_name (for storage nodes)
+        - DISTRIBUTED: uses distributed_cluster_name (for query nodes)
+        """
         cluster = get_cluster(self._storage_set)
         if cluster.is_single_node():
             return ""
-        cluster_name = cluster.get_clickhouse_cluster_name()
+
+        # Use the appropriate cluster name based on target type
+        if self.target == OperationTarget.DISTRIBUTED:
+            cluster_name = cluster.get_clickhouse_distributed_cluster_name()
+        else:
+            cluster_name = cluster.get_clickhouse_cluster_name()
+
         if cluster_name:
             return f" ON CLUSTER '{cluster_name}'"
         return ""
