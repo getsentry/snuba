@@ -48,6 +48,27 @@ export const useShellStyles = createStyles((theme) => ({
       background: "#484f58",
     },
   },
+  suggestionsBar: {
+    borderTop: "1px solid #30363d",
+    padding: "6px 16px",
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+    backgroundColor: "rgba(22, 27, 34, 0.95)",
+    fontSize: "12px",
+  },
+  suggestionItem: {
+    color: "#58a6ff",
+    backgroundColor: "rgba(88, 166, 255, 0.1)",
+    padding: "2px 8px",
+    borderRadius: "4px",
+    cursor: "pointer",
+    transition: "all 0.15s ease",
+    "&:hover": {
+      backgroundColor: "rgba(88, 166, 255, 0.2)",
+      color: "#79c0ff",
+    },
+  },
   inputArea: {
     borderTop: "1px solid #30363d",
     padding: "8px 16px",

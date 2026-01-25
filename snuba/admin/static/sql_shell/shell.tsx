@@ -119,6 +119,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
   const [inputValue, setInputValue] = useState("");
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [storages, setStorages] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const outputRef = useRef<HTMLDivElement>(null);
 
@@ -409,6 +410,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
 
       if (matches.length === 1) {
         setInputValue(`USE ${matches[0]}`);
+        setSuggestions([]);
       } else if (matches.length > 1) {
         // Find common prefix
         const commonPrefix = matches.reduce((prefix, storage) => {
@@ -420,14 +422,11 @@ function SQLShell({ api, mode }: SQLShellProps) {
 
         if (commonPrefix.length > partial.length) {
           setInputValue(`USE ${commonPrefix}`);
-        } else {
-          // Show available options
-          addHistoryEntry({
-            type: "info",
-            content: `Matching storages: ${matches.join(", ")}`,
-            timestamp: Date.now(),
-          });
         }
+        // Show available options above input
+        setSuggestions(matches);
+      } else {
+        setSuggestions([]);
       }
       return true;
     }
@@ -444,6 +443,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
 
         if (matches.length === 1) {
           setInputValue(`HOST ${matches[0]}`);
+          setSuggestions([]);
         } else if (matches.length > 1) {
           const commonPrefix = matches.reduce((prefix, host) => {
             while (!host.toLowerCase().startsWith(prefix.toLowerCase())) {
@@ -454,20 +454,19 @@ function SQLShell({ api, mode }: SQLShellProps) {
 
           if (commonPrefix.length > partial.length) {
             setInputValue(`HOST ${commonPrefix}`);
-          } else {
-            addHistoryEntry({
-              type: "info",
-              content: `Matching hosts: ${matches.join(", ")}`,
-              timestamp: Date.now(),
-            });
           }
+          // Show available options above input
+          setSuggestions(matches);
+        } else {
+          setSuggestions([]);
         }
         return true;
       }
     }
 
+    setSuggestions([]);
     return false;
-  }, [inputValue, storages, mode, state.currentStorage, getHostsForStorage, addHistoryEntry]);
+  }, [inputValue, storages, mode, state.currentStorage, getHostsForStorage]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -562,6 +561,28 @@ function SQLShell({ api, mode }: SQLShellProps) {
           <div className={classes.executingIndicator}>Executing query...</div>
         )}
       </div>
+      {suggestions.length > 0 && (
+        <div className={classes.suggestionsBar}>
+          {suggestions.map((s, i) => (
+            <span
+              key={i}
+              className={classes.suggestionItem}
+              onClick={() => {
+                const trimmed = inputValue.trimStart();
+                if (/^USE\s/i.test(trimmed)) {
+                  setInputValue(`USE ${s}`);
+                } else if (/^HOST\s/i.test(trimmed)) {
+                  setInputValue(`HOST ${s}`);
+                }
+                setSuggestions([]);
+                inputRef.current?.focus();
+              }}
+            >
+              {s}
+            </span>
+          ))}
+        </div>
+      )}
       <div className={classes.inputArea}>
         <span className={classes.prompt}>{">"}</span>
         <input
@@ -569,7 +590,10 @@ function SQLShell({ api, mode }: SQLShellProps) {
           type="text"
           className={classes.input}
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e) => {
+            setInputValue(e.target.value);
+            setSuggestions([]);
+          }}
           onKeyDown={handleKeyDown}
           placeholder={getPlaceholder()}
           disabled={state.isExecuting}
