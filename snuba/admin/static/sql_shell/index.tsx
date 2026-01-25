@@ -11,7 +11,7 @@ function SQLShellPage({ api }: ShellPageProps) {
   return (
     <div>
       <Title order={2} style={{ marginBottom: "16px" }}>
-        SQL Shell - ClickHouse Tracing
+        Tracing Shell
       </Title>
       <SQLShell api={api} mode="tracing" />
     </div>
@@ -22,7 +22,7 @@ function SystemShellPage({ api }: ShellPageProps) {
   return (
     <div>
       <Title order={2} style={{ marginBottom: "16px" }}>
-        System Shell - ClickHouse Queries
+        System Shell
       </Title>
       <SQLShell api={api} mode="system" />
     </div>

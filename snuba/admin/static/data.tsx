@@ -70,8 +70,8 @@ const NAV_ITEMS = [
     component: TracingQueries,
   },
   {
-    id: "sql-shell",
-    display: "💻 SQL Shell",
+    id: "tracing-shell",
+    display: "💻 Tracing Shell",
     component: SQLShellPage,
   },
   {
