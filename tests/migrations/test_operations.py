@@ -1,4 +1,3 @@
-import os
 from logging import Logger
 from typing import Callable, Sequence
 from unittest import mock
@@ -39,34 +38,43 @@ from snuba.migrations.table_engines import ReplacingMergeTree
 from snuba.utils.schemas import DateTime
 
 
-def test_create_table() -> None:
-    database = os.environ.get("CLICKHOUSE_DATABASE", "default")
+def _make_single_node_mock_cluster() -> Mock:
+    """Create a mock single-node cluster for tests that expect no ON CLUSTER clause."""
+    mock_cluster = Mock(spec=ClickhouseCluster)
+    mock_cluster.is_single_node.return_value = True
+    mock_cluster.get_clickhouse_cluster_name.return_value = None
+    mock_cluster.get_clickhouse_distributed_cluster_name.return_value = None
+    return mock_cluster
+
+
+@patch("snuba.migrations.operations.get_cluster")
+def test_create_table(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     columns: Sequence[Column[Modifiers]] = [
         Column("id", String()),
         Column("name", String(Modifiers(nullable=True))),
         Column("version", UInt(64)),
     ]
 
-    assert CreateTable(
-        StorageSetKey.EVENTS,
-        "test_table",
-        columns,
-        ReplacingMergeTree(
-            storage_set=StorageSetKey.EVENTS,
-            version_column="version",
-            order_by="version",
-            settings={"index_granularity": "256"},
-        ),
-    ).format_sql() in [
-        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;",
-        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplicatedReplacingMergeTree('/clickhouse/tables/events/{shard}/"
-        + f"{database}/test_table'"
-        + ", '{replica}', version) ORDER BY version SETTINGS index_granularity=256;",
-    ]
+    assert (
+        CreateTable(
+            StorageSetKey.EVENTS,
+            "test_table",
+            columns,
+            ReplacingMergeTree(
+                storage_set=StorageSetKey.EVENTS,
+                version_column="version",
+                order_by="version",
+                settings={"index_granularity": "256"},
+            ),
+        ).format_sql()
+        == "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;"
+    )
 
 
-def test_create_table_with_column_ttl() -> None:
-    database = os.environ.get("CLICKHOUSE_DATABASE", "default")
+@patch("snuba.migrations.operations.get_cluster")
+def test_create_table_with_column_ttl(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     columns: Sequence[Column[Modifiers]] = [
         Column("id", String()),
         Column("name", String(Modifiers(nullable=True))),
@@ -77,25 +85,25 @@ def test_create_table_with_column_ttl() -> None:
         ),
     ]
 
-    assert CreateTable(
-        StorageSetKey.EVENTS,
-        "test_table",
-        columns,
-        ReplacingMergeTree(
-            storage_set=StorageSetKey.EVENTS,
-            version_column="version",
-            order_by="version",
-            settings={"index_granularity": "256"},
-        ),
-    ).format_sql() in [
-        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64, restricted LowCardinality(String) TTL timestamp + toIntervalDay(1)) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;",
-        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64, restricted LowCardinality(String) TTL timestamp + toIntervalDay(1)) ENGINE ReplicatedReplacingMergeTree('/clickhouse/tables/events/{shard}/"
-        + f"{database}/test_table'"
-        + ", '{replica}', version) ORDER BY version SETTINGS index_granularity=256;",
-    ]
+    assert (
+        CreateTable(
+            StorageSetKey.EVENTS,
+            "test_table",
+            columns,
+            ReplacingMergeTree(
+                storage_set=StorageSetKey.EVENTS,
+                version_column="version",
+                order_by="version",
+                settings={"index_granularity": "256"},
+            ),
+        ).format_sql()
+        == "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64, restricted LowCardinality(String) TTL timestamp + toIntervalDay(1)) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;"
+    )
 
 
-def test_create_materialized_view() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_create_materialized_view(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         CreateMaterializedView(
             StorageSetKey.EVENTS,
@@ -108,28 +116,36 @@ def test_create_materialized_view() -> None:
     )
 
 
-def test_rename_table() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_rename_table(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         RenameTable(StorageSetKey.EVENTS, "old_table", "new_table").format_sql()
         == "RENAME TABLE old_table TO new_table;"
     )
 
 
-def test_drop_table() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_drop_table(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         DropTable(StorageSetKey.EVENTS, "test_table").format_sql()
         == "DROP TABLE IF EXISTS test_table SYNC;"
     )
 
 
-def test_truncate_table() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_truncate_table(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         TruncateTable(StorageSetKey.EVENTS, "test_table").format_sql()
         == "TRUNCATE TABLE IF EXISTS test_table;"
     )
 
 
-def test_add_column() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_add_column(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         AddColumn(
             StorageSetKey.EVENTS,
@@ -141,21 +157,27 @@ def test_add_column() -> None:
     )
 
 
-def test_drop_column() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_drop_column(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         DropColumn(StorageSetKey.EVENTS, "test_table", "test").format_sql()
         == "ALTER TABLE test_table DROP COLUMN IF EXISTS test;"
     )
 
 
-def test_modify_column() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_modify_column(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         ModifyColumn(StorageSetKey.EVENTS, "test_table", Column("test", String())).format_sql()
         == "ALTER TABLE test_table MODIFY COLUMN test String;"
     )
 
 
-def test_add_index() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_add_index(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         AddIndex(
             StorageSetKey.EVENTS,
@@ -170,28 +192,36 @@ def test_add_index() -> None:
     )
 
 
-def test_drop_index() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_drop_index(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         DropIndex(StorageSetKey.EVENTS, "test_table", "index_1").format_sql()
         == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1;"
     )
 
 
-def test_drop_index_async() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_drop_index_async(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         DropIndex(StorageSetKey.EVENTS, "test_table", "index_1", run_async=True).format_sql()
         == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1 SETTINGS mutations_sync=0;"
     )
 
 
-def test_drop_indices() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_drop_indices(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         DropIndices(StorageSetKey.EVENTS, "test_table", ["index_1", "index_2"]).format_sql()
         == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1, DROP INDEX IF EXISTS index_2;"
     )
 
 
-def test_drop_indices_async() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_drop_indices_async(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         DropIndices(
             StorageSetKey.EVENTS, "test_table", ["index_1", "index_2"], run_async=True
@@ -201,6 +231,7 @@ def test_drop_indices_async() -> None:
 
 
 def test_insert_into_select() -> None:
+    # InsertIntoSelect is DML, not DDL, so it never uses ON CLUSTER - no mock needed
     assert (
         InsertIntoSelect(
             StorageSetKey.EVENTS, "dest", ["a2", "b2"], "src", ["a1", "b1"]
@@ -209,10 +240,12 @@ def test_insert_into_select() -> None:
     )
 
 
-def test_modify_ttl() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_modify_ttl(mock_get_cluster: Mock) -> None:
     """
     Test that modifying and removing of TTLs are formatted correctly.
     """
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     columns: Sequence[Column[Modifiers]] = [
         Column("id", String()),
         Column("name", String(Modifiers(nullable=True))),
@@ -305,8 +338,9 @@ def test_specify_order() -> None:
     assert order == [drop_local_op, drop_dist_op]
 
 
-def test_new_create_table() -> None:
-    database = os.environ.get("CLICKHOUSE_DATABASE", "default")
+@patch("snuba.migrations.operations.get_cluster")
+def test_new_create_table(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     columns: Sequence[Column[Modifiers]] = [
         Column("id", String()),
         Column("name", String(Modifiers(nullable=True))),
@@ -326,15 +360,15 @@ def test_new_create_table() -> None:
         target=OperationTarget.DISTRIBUTED,
     )
 
-    assert op.format_sql() in [
-        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;",
-        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplicatedReplacingMergeTree('/clickhouse/tables/events/{shard}/"
-        + f"{database}/test_table'"
-        + ", '{replica}', version) ORDER BY version SETTINGS index_granularity=256;",
-    ]
+    assert (
+        op.format_sql()
+        == "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;"
+    )
 
 
-def test_new_add_column() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_new_add_column(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     dist_op = AddColumn(
         StorageSetKey.EVENTS,
         "test_table",
@@ -362,7 +396,9 @@ def test_new_add_column() -> None:
     )
 
 
-def test_new_drop_column() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_new_drop_column(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     local_op = DropColumn(
         StorageSetKey.EVENTS,
         "test_table",
@@ -421,7 +457,9 @@ def test_refactored_migration() -> None:
     assert order == [drop_dist_op, drop_local_op]
 
 
-def test_modify_settings() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_modify_settings(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         ModifyTableSettings(
             StorageSetKey.EVENTS,
@@ -435,7 +473,9 @@ def test_modify_settings() -> None:
     )
 
 
-def test_reset_settings() -> None:
+@patch("snuba.migrations.operations.get_cluster")
+def test_reset_settings(mock_get_cluster: Mock) -> None:
+    mock_get_cluster.return_value = _make_single_node_mock_cluster()
     assert (
         ResetTableSettings(
             StorageSetKey.EVENTS,
