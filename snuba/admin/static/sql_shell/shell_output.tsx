@@ -390,14 +390,23 @@ function FormattedTraceOutput({
   profileEvents?: any;
   classes: Record<string, string>;
 }) {
+  if (!summary || !summary.query_summaries) {
+    return (
+      <div className={classes.traceBox}>
+        <div className={classes.resultHeader}>Trace Summary</div>
+        <div style={{ color: "#8b949e" }}>No trace data available</div>
+      </div>
+    );
+  }
+
   const querySummaries = summary.query_summaries;
   let distNode: QuerySummary | null = null;
   const nodes: QuerySummary[] = [];
 
   for (const [, nodeSummary] of Object.entries(querySummaries)) {
-    if (nodeSummary.is_distributed) {
+    if (nodeSummary && nodeSummary.is_distributed) {
       distNode = nodeSummary;
-    } else {
+    } else if (nodeSummary) {
       nodes.push(nodeSummary);
     }
   }
@@ -423,6 +432,8 @@ function NodeSummary({
   node: QuerySummary;
   classes: Record<string, string>;
 }) {
+  if (!node) return null;
+
   const dist = node.is_distributed ? " (Distributed)" : "";
   const execTime =
     node.execute_summaries && node.execute_summaries[0]
@@ -490,6 +501,15 @@ function RawTraceOutput({
   profileEvents?: any;
   classes: Record<string, string>;
 }) {
+  if (!traceOutput) {
+    return (
+      <div className={classes.traceBox}>
+        <div className={classes.resultHeader}>Raw Trace Output</div>
+        <div style={{ color: "#8b949e" }}>No trace data available</div>
+      </div>
+    );
+  }
+
   const lines = traceOutput.split("\n").filter((l) => l.trim());
 
   return (
@@ -500,7 +520,7 @@ function RawTraceOutput({
       )}
       <div style={{ marginTop: "8px" }}>
         {lines.map((line, idx) => (
-          <div key={idx} style={{ color: "#cccccc", fontSize: "12px" }}>
+          <div key={idx} style={{ color: "#e6edf3", fontSize: "12px" }}>
             {line}
           </div>
         ))}
