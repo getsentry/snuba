@@ -30,7 +30,7 @@ export const useShellStyles = createStyles((theme) => ({
   outputArea: {
     flex: 1,
     overflowY: "auto",
-    padding: "20px 24px",
+    padding: "12px 16px",
     fontSize: "13px",
     lineHeight: 1.6,
     color: "#e6edf3",
@@ -50,7 +50,7 @@ export const useShellStyles = createStyles((theme) => ({
   },
   inputArea: {
     borderTop: "1px solid #30363d",
-    padding: "12px 20px",
+    padding: "8px 16px",
     display: "flex",
     alignItems: "center",
     backgroundColor: "rgba(22, 27, 34, 0.8)",
@@ -77,7 +77,7 @@ export const useShellStyles = createStyles((theme) => ({
   },
   statusBar: {
     borderTop: "1px solid #30363d",
-    padding: "8px 20px",
+    padding: "6px 16px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
