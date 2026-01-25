@@ -382,10 +382,19 @@ function SQLShell({ api, mode }: SQLShellProps) {
                 timestamp: Date.now(),
               });
             }
-          } catch (err) {
+          } catch (err: any) {
+            let errorMessage = "Query execution failed";
+            if (err instanceof Error) {
+              errorMessage = err.message;
+            } else if (typeof err === "object" && err !== null) {
+              // API returns error as JSON object
+              errorMessage = err.error || err.message || JSON.stringify(err);
+            } else if (typeof err === "string") {
+              errorMessage = err;
+            }
             addHistoryEntry({
               type: "error",
-              content: err instanceof Error ? err.message : "Query execution failed",
+              content: errorMessage,
               timestamp: Date.now(),
             });
           } finally {
