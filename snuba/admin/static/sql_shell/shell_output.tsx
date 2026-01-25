@@ -244,6 +244,10 @@ function ResultsOutput({
   traceFormatted: boolean;
   classes: Record<string, string>;
 }) {
+  if (!result) {
+    return <ErrorOutput error="No result received" classes={classes} />;
+  }
+
   if (result.error) {
     return <ErrorOutput error={result.error} classes={classes} />;
   }
@@ -262,33 +266,37 @@ function ResultsOutput({
             <table className={classes.resultTable}>
               <thead>
                 <tr>
-                  {cols.map((col: string[], idx: number) => (
+                  {cols.map((col: string[] | undefined, idx: number) => (
                     <th key={idx}>
-                      {col[0]} <small style={{ color: "#666666" }}>({col[1]})</small>
+                      {col ? col[0] : "?"} <small style={{ color: "#666666" }}>({col ? col[1] : "?"})</small>
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {rows.slice(0, 100).map((row: any[], rowIdx: number) => (
+                {rows.slice(0, 100).map((row: any[] | undefined, rowIdx: number) => (
                   <tr key={rowIdx}>
-                    {row.map((cell, cellIdx) => (
+                    {row ? row.map((cell, cellIdx) => (
                       <td key={cellIdx}>
-                        {typeof cell === "object" ? JSON.stringify(cell) : String(cell)}
+                        {cell === null || cell === undefined
+                          ? "NULL"
+                          : typeof cell === "object"
+                          ? JSON.stringify(cell)
+                          : String(cell)}
                       </td>
-                    ))}
+                    )) : <td>Invalid row</td>}
                   </tr>
                 ))}
               </tbody>
             </table>
             {rows.length > 100 && (
-              <div style={{ color: "#888888", marginTop: "8px" }}>
+              <div style={{ color: "#8b949e", marginTop: "8px" }}>
                 ... showing first 100 of {rows.length} rows
               </div>
             )}
           </div>
         ) : (
-          <div style={{ color: "#888888" }}>No results returned</div>
+          <div style={{ color: "#8b949e" }}>No results returned</div>
         )}
       </div>
 
@@ -316,6 +324,10 @@ function SystemResultsOutput({
   result: QueryResult;
   classes: Record<string, string>;
 }) {
+  if (!result) {
+    return <ErrorOutput error="No result received" classes={classes} />;
+  }
+
   if (result.error) {
     return <ErrorOutput error={result.error} classes={classes} />;
   }
@@ -340,25 +352,29 @@ function SystemResultsOutput({
                 </tr>
               </thead>
               <tbody>
-                {rows.slice(0, 100).map((row: any[], rowIdx: number) => (
+                {rows.slice(0, 100).map((row: any[] | undefined, rowIdx: number) => (
                   <tr key={rowIdx}>
-                    {row.map((cell, cellIdx) => (
+                    {row ? row.map((cell, cellIdx) => (
                       <td key={cellIdx}>
-                        {typeof cell === "object" ? JSON.stringify(cell) : String(cell)}
+                        {cell === null || cell === undefined
+                          ? "NULL"
+                          : typeof cell === "object"
+                          ? JSON.stringify(cell)
+                          : String(cell)}
                       </td>
-                    ))}
+                    )) : <td>Invalid row</td>}
                   </tr>
                 ))}
               </tbody>
             </table>
             {rows.length > 100 && (
-              <div style={{ color: "#888888", marginTop: "8px" }}>
+              <div style={{ color: "#8b949e", marginTop: "8px" }}>
                 ... showing first 100 of {rows.length} rows
               </div>
             )}
           </div>
         ) : (
-          <div style={{ color: "#888888" }}>No results returned</div>
+          <div style={{ color: "#8b949e" }}>No results returned</div>
         )}
       </div>
     </div>
