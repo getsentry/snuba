@@ -7,7 +7,7 @@ interface ShellPageProps {
 }
 
 const shellWrapperStyle = {
-  height: "calc(100vh - 140px)",
+  height: "calc(100vh - 105px)",
 };
 
 function SQLShellPage({ api }: ShellPageProps) {

@@ -32,7 +32,7 @@ function Nav(props: NavProps) {
           allowedTools?.includes(item.id) || allowedTools?.includes("all") ? (
             item.id === active ? (
               <li key={item.id} >
-                <a style={{ color: COLORS.TEXT_DEFAULT, ...linkStyle }} className="nav-link-active">
+                <a style={{ ...linkStyle, ...activeLinkStyle }} className="nav-link-active">
                   {item.display}
                 </a>
               </li>
@@ -72,6 +72,13 @@ const linkStyle = {
   textDecoration: "none",
   cursor: "pointer",
   padding: 20,
+};
+
+const activeLinkStyle = {
+  color: COLORS.TEXT_DEFAULT,
+  backgroundColor: "rgba(59, 130, 246, 0.15)",
+  borderLeft: "3px solid #3b82f6",
+  fontWeight: "bold" as const,
 };
 
 export default Nav;
