@@ -28,8 +28,12 @@ function Nav(props: NavProps) {
   return (
     <nav style={navStyle}>
       <ul style={ulStyle}>
-        {NAV_ITEMS.map((item) =>
-          allowedTools?.includes(item.id) || allowedTools?.includes("all") ? (
+        {NAV_ITEMS.map((item) => {
+          // Shell pages inherit permissions from their parent pages
+          const permissionId = item.id === "tracing-shell" ? "tracing"
+            : item.id === "system-shell" ? "system-queries"
+            : item.id;
+          return allowedTools?.includes(permissionId) || allowedTools?.includes("all") ? (
             item.id === active ? (
               <li key={item.id} >
                 <a style={{ ...linkStyle, ...activeLinkStyle }} className="nav-link-active">
@@ -49,8 +53,8 @@ function Nav(props: NavProps) {
             )
           ) : (
             <div key={item.id} />
-          )
-        )}
+          );
+        })}
       </ul>
     </nav>
   );
