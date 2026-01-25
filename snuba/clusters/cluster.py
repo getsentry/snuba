@@ -54,6 +54,7 @@ class ClickhouseClientSettings(Enum):
             "load_balancing": "in_order",
             "replication_alter_partitions_sync": 2,
             "mutations_sync": 2,
+            "alter_sync": 2,  # Wait for ON CLUSTER DDL on all replicas
             "database_atomic_wait_for_drop_and_detach_synchronously": 1,
         },
         10000,

@@ -2,12 +2,12 @@ import os
 from logging import Logger
 from typing import Callable, Sequence
 from unittest import mock
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
 from snuba.clickhouse.columns import Column, String, UInt
-from snuba.clusters.cluster import get_cluster
+from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -15,6 +15,8 @@ from snuba.migrations.context import Context
 from snuba.migrations.operations import (
     AddColumn,
     AddIndex,
+    AddIndices,
+    AddIndicesData,
     CreateMaterializedView,
     CreateTable,
     DropColumn,
@@ -467,3 +469,217 @@ def test_missing_nodes_for_operation(mock_get_local_nodes: Mock) -> None:
         assert TruncateTable(
             StorageSetKey.EVENTS, "blah_table", target=OperationTarget.DISTRIBUTED
         ).get_nodes()
+
+
+class TestOnCluster:
+    """Tests for ON CLUSTER DDL syntax in multi-node clusters."""
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_create_table_on_cluster(self, mock_cluster_name: Mock, mock_single_node: Mock) -> None:
+        columns: Sequence[Column[Modifiers]] = [
+            Column("id", String()),
+            Column("version", UInt(64)),
+        ]
+        op = CreateTable(
+            StorageSetKey.EVENTS,
+            "test_table",
+            columns,
+            ReplacingMergeTree(
+                storage_set=StorageSetKey.EVENTS,
+                version_column="version",
+                order_by="version",
+            ),
+        )
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert sql.startswith("CREATE TABLE IF NOT EXISTS test_table ON CLUSTER")
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=True)
+    def test_create_table_single_node_no_on_cluster(self, mock_single_node: Mock) -> None:
+        columns: Sequence[Column[Modifiers]] = [
+            Column("id", String()),
+            Column("version", UInt(64)),
+        ]
+        op = CreateTable(
+            StorageSetKey.EVENTS,
+            "test_table",
+            columns,
+            ReplacingMergeTree(
+                storage_set=StorageSetKey.EVENTS,
+                version_column="version",
+                order_by="version",
+            ),
+        )
+        sql = op.format_sql()
+        assert "ON CLUSTER" not in sql
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_create_materialized_view_on_cluster(
+        self, mock_cluster_name: Mock, mock_single_node: Mock
+    ) -> None:
+        op = CreateMaterializedView(
+            StorageSetKey.EVENTS,
+            "test_mv",
+            "test_dest",
+            [Column("id", String())],
+            "SELECT id FROM test_table",
+        )
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert "CREATE MATERIALIZED VIEW IF NOT EXISTS test_mv ON CLUSTER" in sql
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_drop_table_on_cluster(self, mock_cluster_name: Mock, mock_single_node: Mock) -> None:
+        op = DropTable(StorageSetKey.EVENTS, "test_table")
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert sql == "DROP TABLE IF EXISTS test_table ON CLUSTER 'test_cluster' SYNC;"
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_truncate_table_on_cluster(
+        self, mock_cluster_name: Mock, mock_single_node: Mock
+    ) -> None:
+        op = TruncateTable(StorageSetKey.EVENTS, "test_table")
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert sql == "TRUNCATE TABLE IF EXISTS test_table ON CLUSTER 'test_cluster';"
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_rename_table_on_cluster(self, mock_cluster_name: Mock, mock_single_node: Mock) -> None:
+        op = RenameTable(StorageSetKey.EVENTS, "old_table", "new_table")
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert sql == "RENAME TABLE old_table TO new_table ON CLUSTER 'test_cluster';"
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_add_column_on_cluster(self, mock_cluster_name: Mock, mock_single_node: Mock) -> None:
+        op = AddColumn(
+            StorageSetKey.EVENTS,
+            "test_table",
+            Column("new_col", String()),
+            after="id",
+        )
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert "ALTER TABLE test_table ON CLUSTER 'test_cluster' ADD COLUMN" in sql
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_drop_column_on_cluster(self, mock_cluster_name: Mock, mock_single_node: Mock) -> None:
+        op = DropColumn(StorageSetKey.EVENTS, "test_table", "old_col")
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert (
+            sql == "ALTER TABLE test_table ON CLUSTER 'test_cluster' DROP COLUMN IF EXISTS old_col;"
+        )
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_modify_column_on_cluster(
+        self, mock_cluster_name: Mock, mock_single_node: Mock
+    ) -> None:
+        op = ModifyColumn(StorageSetKey.EVENTS, "test_table", Column("col", String()))
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert sql == "ALTER TABLE test_table ON CLUSTER 'test_cluster' MODIFY COLUMN col String;"
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_modify_ttl_on_cluster(self, mock_cluster_name: Mock, mock_single_node: Mock) -> None:
+        op = ModifyTableTTL(StorageSetKey.EVENTS, "test_table", "timestamp", 90)
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert "ALTER TABLE test_table ON CLUSTER 'test_cluster' MODIFY TTL" in sql
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_remove_ttl_on_cluster(self, mock_cluster_name: Mock, mock_single_node: Mock) -> None:
+        op = RemoveTableTTL(StorageSetKey.EVENTS, "test_table")
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert sql == "ALTER TABLE test_table ON CLUSTER 'test_cluster' REMOVE TTL;"
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_modify_settings_on_cluster(
+        self, mock_cluster_name: Mock, mock_single_node: Mock
+    ) -> None:
+        op = ModifyTableSettings(StorageSetKey.EVENTS, "test_table", {"key": "val"})
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert sql == "ALTER TABLE test_table ON CLUSTER 'test_cluster' MODIFY SETTING key = val;"
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_reset_settings_on_cluster(
+        self, mock_cluster_name: Mock, mock_single_node: Mock
+    ) -> None:
+        op = ResetTableSettings(StorageSetKey.EVENTS, "test_table", ["setting_a"])
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert sql == "ALTER TABLE test_table ON CLUSTER 'test_cluster' RESET SETTING setting_a;"
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_add_index_on_cluster(self, mock_cluster_name: Mock, mock_single_node: Mock) -> None:
+        op = AddIndex(
+            StorageSetKey.EVENTS,
+            "test_table",
+            "idx_1",
+            "timestamp",
+            "minmax",
+            3,
+        )
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert "ALTER TABLE test_table ON CLUSTER 'test_cluster' ADD INDEX" in sql
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_add_indices_on_cluster(self, mock_cluster_name: Mock, mock_single_node: Mock) -> None:
+        op = AddIndices(
+            StorageSetKey.EVENTS,
+            "test_table",
+            [AddIndicesData("idx_1", "col1", "bloom_filter(0.1)", 4)],
+        )
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert "ALTER TABLE test_table ON CLUSTER 'test_cluster' ADD INDEX" in sql
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_drop_index_on_cluster(self, mock_cluster_name: Mock, mock_single_node: Mock) -> None:
+        op = DropIndex(StorageSetKey.EVENTS, "test_table", "idx_1")
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert sql == "ALTER TABLE test_table ON CLUSTER 'test_cluster' DROP INDEX IF EXISTS idx_1;"
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_drop_indices_on_cluster(self, mock_cluster_name: Mock, mock_single_node: Mock) -> None:
+        op = DropIndices(StorageSetKey.EVENTS, "test_table", ["idx_1", "idx_2"])
+        sql = op.format_sql()
+        assert "ON CLUSTER 'test_cluster'" in sql
+        assert "ALTER TABLE test_table ON CLUSTER 'test_cluster' DROP INDEX IF EXISTS idx_1" in sql
+
+    @patch.object(ClickhouseCluster, "is_single_node", return_value=False)
+    @patch.object(ClickhouseCluster, "get_clickhouse_cluster_name", return_value="test_cluster")
+    def test_insert_into_select_no_on_cluster(
+        self, mock_cluster_name: Mock, mock_single_node: Mock
+    ) -> None:
+        """InsertIntoSelect is DML, not DDL, so it should NOT use ON CLUSTER."""
+        op = InsertIntoSelect(
+            StorageSetKey.EVENTS,
+            "dest_table",
+            ["a", "b"],
+            "src_table",
+            ["a", "b"],
+        )
+        sql = op.format_sql()
+        assert "ON CLUSTER" not in sql
