@@ -57,7 +57,10 @@ class ClickhouseClientSettings(Enum):
             "alter_sync": 2,  # Wait for ON CLUSTER DDL on all replicas
             "database_atomic_wait_for_drop_and_detach_synchronously": 1,
         },
-        10000,
+        # 5 minute timeout to allow ON CLUSTER DDL operations to complete
+        # across all replicas. This is needed because alter_sync=2 blocks
+        # until all replicas confirm completion.
+        300000,
     )
     DELETE = ClickhouseClientSettingsType({"mutations_sync": 1}, None)
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
