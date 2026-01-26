@@ -17,3 +17,7 @@ tmp/
 gocd/templates/vendor/
 gocd/generated-pipelines/
 Brewfile.lock.json
+.env
+
+# Claude
+.claude/settings.local.json
