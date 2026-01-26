@@ -11,7 +11,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.migrations.groups import MigrationGroup
 
 OUTCOMES_DAILY_TABLE = """
-CREATE TABLE IF NOT EXISTS snuba_test.outcomes_daily_local_v2 ON CLUSTER test_cluster
+CREATE TABLE IF NOT EXISTS {db}.outcomes_daily_local_v2 ON CLUSTER test_cluster
 (
     `org_id` UInt64,
     `project_id` UInt64,
@@ -31,7 +31,7 @@ SETTINGS index_granularity = 8192
 """
 
 OUTCOMES_DAILY_MV = """
-CREATE MATERIALIZED VIEW IF NOT EXISTS snuba_test.outcomes_mv_daily_local_v2 ON CLUSTER test_cluster TO snuba_test.outcomes_daily_local_v2
+CREATE MATERIALIZED VIEW IF NOT EXISTS {db}.outcomes_mv_daily_local_v2 ON CLUSTER test_cluster TO {db}.outcomes_daily_local_v2
 (
     `org_id` UInt64,
     `project_id` UInt64,
@@ -53,7 +53,7 @@ AS SELECT
     category,
     count() AS times_seen,
     sum(quantity) AS quantity
-FROM snuba_test.outcomes_raw_local
+FROM {db}.outcomes_raw_local
 GROUP BY
     org_id,
     project_id,
@@ -102,7 +102,7 @@ def test_get_table_statements(
     )
     ts = table_statements[0]
     assert ts.is_mergetree == is_mergetree
-    assert ts.statement == statement.strip()
+    assert ts.statement == statement.format(db=database_name).strip()
 
 
 @pytest.mark.redis_db
