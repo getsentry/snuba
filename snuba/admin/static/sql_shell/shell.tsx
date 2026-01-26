@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 const MAX_HISTORY_ENTRIES = 500;
 import Client from "SnubaAdmin/api_client";
 import { useShellStyles } from "SnubaAdmin/sql_shell/styles";
 import { ShellOutput } from "SnubaAdmin/sql_shell/shell_output";
+import { ShellInput } from "SnubaAdmin/sql_shell/shell_input";
 import {
   ParsedCommand,
   ShellState,
@@ -122,7 +123,6 @@ function SQLShell({ api, mode }: SQLShellProps) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [storages, setStorages] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     api.getClickhouseNodes().then((res) => {
@@ -480,142 +480,73 @@ function SQLShell({ api, mode }: SQLShellProps) {
     return false;
   }, [inputValue, storages, mode, state.currentStorage, getHostsForStorage]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      const input = inputRef.current;
+  // Callback handlers for ShellInput
+  const handleExecute = useCallback(() => {
+    if (!state.isExecuting) {
+      setSuggestions([]);
+      executeCommand(inputValue);
+      setInputValue("");
+    }
+  }, [state.isExecuting, inputValue, executeCommand]);
 
-      // Tab completion
-      if (e.key === "Tab") {
-        e.preventDefault();
-        handleTabComplete();
-        return;
-      }
+  const handleClear = useCallback(() => {
+    setInputValue("");
+    setSuggestions([]);
+    setState((prev) => ({ ...prev, historyIndex: -1 }));
+  }, []);
 
-      // Shift+Enter adds a newline
-      if (e.key === "Enter" && e.shiftKey) {
-        // Allow default textarea behavior (insert newline)
-        return;
-      }
+  const handleClearScreen = useCallback(() => {
+    setState((prev) => ({ ...prev, history: [] }));
+  }, []);
 
-      // Plain Enter executes the command
-      if (e.key === "Enter") {
-        e.preventDefault();
-        if (!state.isExecuting) {
-          setSuggestions([]);
-          executeCommand(inputValue);
-          setInputValue("");
-        }
-        return;
-      }
+  const handleDeleteToStart = useCallback(() => {
+    setInputValue("");
+  }, []);
 
-      // Ctrl+C - Clear current input
-      if (e.key === "c" && e.ctrlKey) {
-        e.preventDefault();
-        setInputValue("");
-        setSuggestions([]);
-        setState((prev) => ({ ...prev, historyIndex: -1 }));
-        return;
-      }
+  const handleDeleteToEnd = useCallback(() => {
+    // For simplicity, clear the input (CodeMirror handles cursor position internally)
+    setInputValue("");
+  }, []);
 
-      // Ctrl+L - Clear screen
-      if (e.key === "l" && e.ctrlKey) {
-        e.preventDefault();
-        setState((prev) => ({ ...prev, history: [] }));
-        return;
-      }
+  const handleDeleteWord = useCallback(() => {
+    const trimmed = inputValue.trimEnd();
+    const lastSpace = trimmed.lastIndexOf(" ");
+    setInputValue(lastSpace === -1 ? "" : inputValue.slice(0, lastSpace + 1));
+  }, [inputValue]);
 
-      // Ctrl+U - Clear line (delete from beginning to cursor)
-      if (e.key === "u" && e.ctrlKey && input) {
-        e.preventDefault();
-        const pos = input.selectionStart || 0;
-        setInputValue(inputValue.slice(pos));
-        // Move cursor to beginning after React re-renders
-        setTimeout(() => {
-          input.setSelectionRange(0, 0);
-        }, 0);
-        return;
-      }
+  const handleHistoryUp = useCallback(() => {
+    const cmdHistory = state.commandHistory;
+    if (cmdHistory.length === 0) return;
 
-      // Ctrl+K - Kill from cursor to end of line
-      if (e.key === "k" && e.ctrlKey && input) {
-        e.preventDefault();
-        const pos = input.selectionStart || 0;
-        setInputValue(inputValue.slice(0, pos));
-        return;
-      }
+    const newIndex =
+      state.historyIndex === -1
+        ? cmdHistory.length - 1
+        : Math.max(0, state.historyIndex - 1);
 
-      // Ctrl+W - Delete word before cursor
-      if (e.key === "w" && e.ctrlKey && input) {
-        e.preventDefault();
-        const pos = input.selectionStart || 0;
-        const before = inputValue.slice(0, pos);
-        const after = inputValue.slice(pos);
-        // Find the start of the previous word
-        const trimmed = before.trimEnd();
-        const lastSpace = trimmed.lastIndexOf(" ");
-        const newBefore = lastSpace === -1 ? "" : before.slice(0, lastSpace + 1);
-        setInputValue(newBefore + after);
-        setTimeout(() => {
-          input.setSelectionRange(newBefore.length, newBefore.length);
-        }, 0);
-        return;
-      }
+    setState((prev) => ({ ...prev, historyIndex: newIndex }));
+    setInputValue(cmdHistory[newIndex]);
+    setSuggestions([]);
+  }, [state.commandHistory, state.historyIndex]);
 
-      // Ctrl+A - Move cursor to beginning of line
-      if (e.key === "a" && e.ctrlKey && input) {
-        e.preventDefault();
-        input.setSelectionRange(0, 0);
-        return;
-      }
+  const handleHistoryDown = useCallback(() => {
+    const cmdHistory = state.commandHistory;
+    if (state.historyIndex === -1) return;
 
-      // Ctrl+E - Move cursor to end of line
-      if (e.key === "e" && e.ctrlKey && input) {
-        e.preventDefault();
-        const len = inputValue.length;
-        input.setSelectionRange(len, len);
-        return;
-      }
+    const newIndex = state.historyIndex + 1;
+    if (newIndex >= cmdHistory.length) {
+      setState((prev) => ({ ...prev, historyIndex: -1 }));
+      setInputValue("");
+    } else {
+      setState((prev) => ({ ...prev, historyIndex: newIndex }));
+      setInputValue(cmdHistory[newIndex]);
+    }
+    setSuggestions([]);
+  }, [state.commandHistory, state.historyIndex]);
 
-      // Navigate history with Up/Down arrows
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        const cmdHistory = state.commandHistory;
-        if (cmdHistory.length === 0) return;
-
-        const newIndex =
-          state.historyIndex === -1
-            ? cmdHistory.length - 1
-            : Math.max(0, state.historyIndex - 1);
-
-        setState((prev) => ({ ...prev, historyIndex: newIndex }));
-        setInputValue(cmdHistory[newIndex]);
-        setSuggestions([]);
-        return;
-      }
-
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        const cmdHistory = state.commandHistory;
-        if (state.historyIndex === -1) return;
-
-        const newIndex = state.historyIndex + 1;
-        if (newIndex >= cmdHistory.length) {
-          setState((prev) => ({ ...prev, historyIndex: -1 }));
-          setInputValue("");
-        } else {
-          setState((prev) => ({ ...prev, historyIndex: newIndex }));
-          setInputValue(cmdHistory[newIndex]);
-        }
-        setSuggestions([]);
-        return;
-      }
-    },
-    [state.commandHistory, state.historyIndex, state.isExecuting, inputValue, executeCommand, handleTabComplete]
-  );
-
-  const focusInput = () => {
-    inputRef.current?.focus();
-  };
+  const handleInputChange = useCallback((value: string) => {
+    setInputValue(value);
+    setSuggestions([]);
+  }, []);
 
   const getPlaceholder = () => {
     if (mode === "tracing") {
@@ -634,7 +565,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
   };
 
   return (
-    <div className={state.sudoEnabled ? classes.shellContainerSudo : classes.shellContainer} onClick={focusInput}>
+    <div className={state.sudoEnabled ? classes.shellContainerSudo : classes.shellContainer}>
       <ShellOutput
         entries={state.history}
         traceFormatted={state.traceFormatted}
@@ -655,7 +586,6 @@ function SQLShell({ api, mode }: SQLShellProps) {
                   setInputValue(`HOST ${s}`);
                 }
                 setSuggestions([]);
-                inputRef.current?.focus();
               }}
             >
               {s}
@@ -665,19 +595,20 @@ function SQLShell({ api, mode }: SQLShellProps) {
       )}
       <div className={classes.inputArea}>
         <span className={classes.prompt}>{">"}</span>
-        <textarea
-          ref={inputRef}
-          className={classes.input}
+        <ShellInput
           value={inputValue}
-          onChange={(e) => {
-            setInputValue(e.target.value);
-            setSuggestions([]);
-          }}
-          onKeyDown={handleKeyDown}
+          onChange={handleInputChange}
+          onExecute={handleExecute}
+          onTab={handleTabComplete}
+          onHistoryUp={handleHistoryUp}
+          onHistoryDown={handleHistoryDown}
+          onClear={handleClear}
+          onClearScreen={handleClearScreen}
+          onDeleteToStart={handleDeleteToStart}
+          onDeleteToEnd={handleDeleteToEnd}
+          onDeleteWord={handleDeleteWord}
           placeholder={getPlaceholder()}
           disabled={state.isExecuting}
-          autoFocus
-          rows={Math.min(10, Math.max(1, inputValue.split("\n").length))}
         />
       </div>
       <div className={classes.statusBar}>
