@@ -622,7 +622,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 trace_item_filters_expression,
                 f.equals(column("item_type"), item_type),
             ),
-            # order_by=[OrderBy(OrderByDirection.DESC, column("trace_id"))],
             order_by=[
                 OrderBy(
                     direction=OrderByDirection.DESC,
