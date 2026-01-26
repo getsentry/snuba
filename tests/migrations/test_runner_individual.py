@@ -11,7 +11,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.migrations.groups import MigrationGroup, get_group_loader
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 from snuba.processor import InsertBatch
@@ -142,57 +142,6 @@ def generate_transactions() -> None:
         table_writer.get_batch_writer(metrics=DummyMetricsBackend(strict=True)),
         JSONRowEncoder(),
     ).write(rows)
-
-
-@pytest.mark.clickhouse_db
-def test_groupedmessages_compatibility() -> None:
-    cluster = get_cluster(StorageSetKey.EVENTS)
-
-    # Ignore the multi node mode because this tests a migration
-    # for an older table state that only applied to single node
-    if not cluster.is_single_node():
-        return
-
-    database = cluster.get_database()
-    connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-
-    # Create old style table witihout project ID
-    connection.execute(
-        """
-        CREATE TABLE groupedmessage_local (`offset` UInt64, `record_deleted` UInt8,
-        `id` UInt64, `status` Nullable(UInt8), `last_seen` Nullable(DateTime),
-        `first_seen` Nullable(DateTime), `active_at` Nullable(DateTime),
-        `first_release_id` Nullable(UInt64)) ENGINE = ReplacingMergeTree(offset)
-        ORDER BY id SAMPLE BY id SETTINGS index_granularity = 8192
-        """
-    )
-
-    migration_id = "0010_groupedmessages_onpremise_compatibility"
-
-    runner = Runner()
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True)
-    events_migrations = get_group_loader(MigrationGroup.EVENTS).get_migrations()
-
-    # Mark prior migrations complete
-    for migration in events_migrations[: (events_migrations.index(migration_id))]:
-        runner._update_migration_status(
-            MigrationKey(MigrationGroup.EVENTS, migration), Status.COMPLETED
-        )
-
-    runner.run_migration(
-        MigrationKey(MigrationGroup.EVENTS, migration_id),
-        force=True,
-    )
-
-    outcome = perform_select_query(
-        ["primary_key"],
-        "system.tables",
-        {"name": "groupedmessage_local", "database": str(database)},
-        None,
-        connection,
-    )
-
-    assert outcome == [("project_id, id",)]
 
 
 @pytest.mark.clickhouse_db

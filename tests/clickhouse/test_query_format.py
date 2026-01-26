@@ -48,21 +48,13 @@ GROUPS_SCHEMA = ColumnSet(
         ("message", String()),
     ]
 )
-GROUPS_ASSIGNEE = ColumnSet([("id", UInt(32)), ("user", String())])
-
 node_err = IndividualNode(
     alias="err",
     data_source=Table("errors_local", ERRORS_SCHEMA, storage_key=StorageKey("errors")),
 )
 node_group = IndividualNode(
     alias="groups",
-    data_source=Table("groupedmessage_local", GROUPS_SCHEMA, storage_key=StorageKey("groups")),
-)
-node_assignee = IndividualNode(
-    alias="assignee",
-    data_source=Table(
-        "groupassignee_local", GROUPS_ASSIGNEE, storage_key=StorageKey("group_assignee")
-    ),
+    data_source=Table("profiles_local", GROUPS_SCHEMA, storage_key=StorageKey("groups")),
 )
 
 test_cases = [
@@ -381,7 +373,7 @@ test_cases = [
                 [
                     ["errors_local", "err"],
                     "INNER JOIN",
-                    ["groupedmessage_local", "groups"],
+                    ["profiles_local", "groups"],
                     "ON",
                     ["err.group_id=groups.id"],
                 ],
@@ -390,170 +382,17 @@ test_cases = [
         ],
         (
             "SELECT (err.event_id AS error_id), (groups.message AS message) "
-            "FROM errors_local err INNER JOIN groupedmessage_local groups "
+            "FROM errors_local err INNER JOIN profiles_local groups "
             "ON err.group_id=groups.id "
             "WHERE eq(groups.id, 1)"
         ),
         (
             "SELECT (err.event_id AS error_id), (groups.message AS message) "
-            "FROM errors_local err INNER JOIN groupedmessage_local groups "
+            "FROM errors_local err INNER JOIN profiles_local groups "
             "ON err.group_id=groups.id "
             "WHERE eq(groups.id, -1337)"
         ),
         id="Simple join",
-    ),
-    pytest.param(
-        CompositeQuery(
-            from_clause=JoinClause(
-                left_node=JoinClause(
-                    left_node=IndividualNode(
-                        alias="err",
-                        data_source=Query(
-                            from_clause=Table(
-                                "errors_local",
-                                ERRORS_SCHEMA,
-                                storage_key=StorageKey("dontmatter"),
-                            ),
-                            selected_columns=[
-                                SelectedExpression(
-                                    "error_id", Column("error_id", None, "event_id")
-                                ),
-                                SelectedExpression(
-                                    "group_id", Column("group_id", None, "group_id")
-                                ),
-                            ],
-                            condition=binary_condition(
-                                "eq",
-                                Column(None, None, "project_id"),
-                                Literal(None, 1),
-                            ),
-                        ),
-                    ),
-                    right_node=IndividualNode(
-                        alias="groups",
-                        data_source=Query(
-                            from_clause=Table(
-                                "groupedmessage_local",
-                                GROUPS_SCHEMA,
-                                storage_key=StorageKey("dontmatter"),
-                            ),
-                            selected_columns=[
-                                SelectedExpression("id", Column("id", None, "id")),
-                                SelectedExpression("message", Column("message", None, "message")),
-                            ],
-                            condition=binary_condition(
-                                "eq",
-                                Column(None, None, "project_id"),
-                                Literal(None, 1),
-                            ),
-                        ),
-                    ),
-                    keys=[
-                        JoinCondition(
-                            left=JoinConditionExpression("err", "group_id"),
-                            right=JoinConditionExpression("groups", "id"),
-                        )
-                    ],
-                    join_type=JoinType.INNER,
-                ),
-                right_node=IndividualNode(
-                    alias="assignee",
-                    data_source=Query(
-                        from_clause=Table(
-                            "groupassignee_local",
-                            GROUPS_ASSIGNEE,
-                            storage_key=StorageKey("dontmatter"),
-                        ),
-                        selected_columns=[
-                            SelectedExpression("group_id", Column("group_id", None, "group_id")),
-                        ],
-                        condition=binary_condition(
-                            "eq",
-                            Column(None, None, "user"),
-                            Literal(None, "me"),
-                        ),
-                    ),
-                ),
-                keys=[
-                    JoinCondition(
-                        left=JoinConditionExpression("err", "group_id"),
-                        right=JoinConditionExpression("assignee", "group_id"),
-                    )
-                ],
-                join_type=JoinType.INNER,
-            ),
-            selected_columns=[
-                SelectedExpression("group_id", Column("group_id", "err", "group_id")),
-                SelectedExpression("events", FunctionCall("events", "count", tuple())),
-            ],
-            groupby=[Column(None, "groups", "id")],
-        ),
-        [
-            "SELECT (err.group_id AS group_id), (count() AS events)",
-            [
-                "FROM",
-                [
-                    [
-                        [
-                            [
-                                "SELECT (event_id AS error_id), group_id",
-                                ["FROM", "errors_local"],
-                                "WHERE eq(project_id, 1)",
-                            ],
-                            "err",
-                        ],
-                        "INNER JOIN",
-                        [
-                            [
-                                "SELECT id, message",
-                                ["FROM", "groupedmessage_local"],
-                                "WHERE eq(project_id, 1)",
-                            ],
-                            "groups",
-                        ],
-                        "ON",
-                        ["err.group_id=groups.id"],
-                    ],
-                    "INNER JOIN",
-                    [
-                        [
-                            "SELECT group_id",
-                            ["FROM", "groupassignee_local"],
-                            "WHERE eq(user, 'me')",
-                        ],
-                        "assignee",
-                    ],
-                    "ON",
-                    ["err.group_id=assignee.group_id"],
-                ],
-            ],
-            "GROUP BY groups.id",
-        ],
-        (
-            "SELECT (err.group_id AS group_id), (count() AS events) "
-            "FROM "
-            "(SELECT (event_id AS error_id), group_id FROM errors_local WHERE eq(project_id, 1)) err "
-            "INNER JOIN "
-            "(SELECT id, message FROM groupedmessage_local WHERE eq(project_id, 1)) groups "
-            "ON err.group_id=groups.id "
-            "INNER JOIN "
-            "(SELECT group_id FROM groupassignee_local WHERE eq(user, 'me')) assignee "
-            "ON err.group_id=assignee.group_id "
-            "GROUP BY groups.id"
-        ),
-        (
-            "SELECT (err.group_id AS group_id), (count() AS events) "
-            "FROM "
-            "(SELECT (event_id AS error_id), group_id FROM errors_local WHERE eq(project_id, -1337)) err "
-            "INNER JOIN "
-            "(SELECT id, message FROM groupedmessage_local WHERE eq(project_id, -1337)) groups "
-            "ON err.group_id=groups.id "
-            "INNER JOIN "
-            "(SELECT group_id FROM groupassignee_local WHERE eq(user, '$S')) assignee "
-            "ON err.group_id=assignee.group_id "
-            "GROUP BY groups.id"
-        ),
-        id="Join of multiple subqueries",
     ),
     pytest.param(
         Query(
@@ -688,7 +527,7 @@ TEST_JOIN = [
             [
                 PaddingNode(None, StringNode("errors_local"), "err"),
                 StringNode("SEMI INNER JOIN"),
-                PaddingNode(None, StringNode("groupedmessage_local"), "groups"),
+                PaddingNode(None, StringNode("profiles_local"), "groups"),
                 StringNode("ON"),
                 SequenceNode(
                     [
@@ -700,57 +539,10 @@ TEST_JOIN = [
             ]
         ),
         (
-            "errors_local err SEMI INNER JOIN groupedmessage_local groups "
+            "errors_local err SEMI INNER JOIN profiles_local groups "
             "ON err.group_id=groups.id AND err.project_id=groups.project_id"
         ),
         id="Simple join",
-    ),
-    pytest.param(
-        JoinClause(
-            left_node=JoinClause(
-                left_node=node_err,
-                right_node=node_group,
-                keys=[
-                    JoinCondition(
-                        left=JoinConditionExpression("err", "group_id"),
-                        right=JoinConditionExpression("groups", "id"),
-                    )
-                ],
-                join_type=JoinType.INNER,
-                join_modifier=JoinModifier.SEMI,
-            ),
-            right_node=node_assignee,
-            keys=[
-                JoinCondition(
-                    left=JoinConditionExpression("err", "group_id"),
-                    right=JoinConditionExpression("assignee", "id"),
-                )
-            ],
-            join_type=JoinType.INNER,
-        ),
-        SequenceNode(
-            [
-                SequenceNode(
-                    [
-                        PaddingNode(None, StringNode("errors_local"), "err"),
-                        StringNode("SEMI INNER JOIN"),
-                        PaddingNode(None, StringNode("groupedmessage_local"), "groups"),
-                        StringNode("ON"),
-                        SequenceNode([StringNode("err.group_id=groups.id")], " AND "),
-                    ]
-                ),
-                StringNode("INNER JOIN"),
-                PaddingNode(None, StringNode("groupassignee_local"), "assignee"),
-                StringNode("ON"),
-                SequenceNode([StringNode("err.group_id=assignee.id")], " AND "),
-            ]
-        ),
-        (
-            "errors_local err SEMI INNER JOIN groupedmessage_local groups "
-            "ON err.group_id=groups.id INNER JOIN groupassignee_local assignee "
-            "ON err.group_id=assignee.id"
-        ),
-        id="Complex join",
     ),
 ]
 

@@ -2,9 +2,8 @@ from typing import Union
 
 import pytest
 
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import ColumnSet, UInt
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
-from snuba.clickhouse.columns import UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.storages.storage_key import StorageKey
@@ -39,7 +38,7 @@ BASIC_JOIN = JoinClause(
     ),
     right_node=IndividualNode(
         alias="gr",
-        data_source=Entity(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None),
+        data_source=Entity(EntityKey.PROFILES, GROUPS_SCHEMA, None),
     ),
     keys=[
         JoinCondition(
@@ -61,18 +60,14 @@ LOGICAL_QUERY = LogicalQuery(
     from_clause=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, 0.5),
     selected_columns=[
         SelectedExpression("c1", Column("_snuba_c1", "t", "c")),
-        SelectedExpression(
-            "f1", FunctionCall("_snuba_f1", "f", (Column(None, "t", "c2"),))
-        ),
+        SelectedExpression("f1", FunctionCall("_snuba_f1", "f", (Column(None, "t", "c2"),))),
     ],
-    array_join=Column(None, None, "col"),
-    condition=binary_condition(
-        "equals", Column(None, None, "c4"), Literal(None, "asd")
-    ),
+    array_join=[Column(None, None, "col")],
+    condition=binary_condition("equals", Column(None, None, "c4"), Literal(None, "asd")),
     groupby=[Column(None, "t", "c4")],
     having=binary_condition("equals", Column(None, None, "c6"), Literal(None, "asd2")),
     order_by=[OrderBy(OrderByDirection.ASC, Column(None, "t", "c"))],
-    limitby=LimitBy(100, Column(None, None, "c8")),
+    limitby=LimitBy(100, [Column(None, None, "c8")]),
     limit=150,
 )
 
@@ -116,9 +111,7 @@ TEST_JOIN = [
         CompositeQuery(
             from_clause=LOGICAL_QUERY,
             selected_columns=[
-                SelectedExpression(
-                    "f", FunctionCall("f", "avg", (Column(None, "t", "c"),))
-                )
+                SelectedExpression("f", FunctionCall("f", "avg", (Column(None, "t", "c"),)))
             ],
         ),
         [
@@ -174,7 +167,7 @@ TEST_JOIN = [
             "FROM",
             "    ['Entity(events)'] AS `ev`",
             "  INNER JOIN",
-            "    ['Entity(groupedmessage)'] AS `gr`",
+            "    ['Entity(profiles)'] AS `gr`",
             "  ON",
             "    ev.group_id",
             "    gr.id",
@@ -187,9 +180,7 @@ TEST_JOIN = [
                 from_clause=CompositeQuery(
                     from_clause=SIMPLE_SELECT_QUERY,
                     selected_columns=[
-                        SelectedExpression(
-                            "f", FunctionCall("f", "avg", (Column(None, "t", "c"),))
-                        )
+                        SelectedExpression("f", FunctionCall("f", "avg", (Column(None, "t", "c"),)))
                     ],
                 ),
                 selected_columns=[SelectedExpression("tc", Column(None, "t", "c"))],
@@ -258,7 +249,7 @@ TEST_JOIN = [
 
 @pytest.mark.parametrize("query, formatted", TEST_JOIN)
 def test_query_formatter(
-    query: Union[ProcessableQuery, CompositeQuery[Entity]],
+    query: Union[ProcessableQuery[Entity], CompositeQuery[Entity]],
     formatted: TExpression,
 ) -> None:
     formatted_query = format_query(query)  # type: ignore

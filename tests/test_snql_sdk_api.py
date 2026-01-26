@@ -97,7 +97,7 @@ class TestSDKSnQLApi(BaseApiTest):
 
     def test_join_query(self) -> None:
         ev = Entity("events", "ev")
-        gm = Entity("groupedmessage", "gm")
+        gm = Entity("profiles", "gm")
         join = Join([Relationship(ev, "grouped", gm)])
         query = (
             Query(join)
@@ -249,7 +249,7 @@ class TestSDKSnQLApi(BaseApiTest):
 
     def test_array_condition_unpack_in_join_query(self) -> None:
         ev = Entity("events", "ev")
-        gm = Entity("groupedmessage", "gm")
+        gm = Entity("profiles", "gm")
         join = Join([Relationship(ev, "grouped", gm)])
         query = (
             Query(join)

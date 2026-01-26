@@ -41,37 +41,34 @@ class TestHTTPBatchWriter:
         assert error.value.row == 2
 
 
-DATA = """project_id,id,status,last_seen,first_seen,active_at,first_release_id
-2,1409156,0,2021-03-13 00:43:02,2021-03-13 00:43:02,2021-03-13 00:43:02,
-2,1409157,0,2021-03-13 00:43:02,2021-03-13 00:43:02,2021-03-13 00:43:02,
+DATA = """organization_id,project_id,received,platform
+1,2,2021-03-13 00:43:02,python
+1,2,2021-03-13 00:43:02,python
 """
 
 
 class FakeQuery(FormattedQuery):
     def get_sql(self, format: Optional[str] = None) -> str:
-        return "SELECT count() FROM groupedmessage_local;"
+        return "SELECT count() FROM profiles_local;"
 
 
 @pytest.mark.clickhouse_db
 def test_gzip_load() -> None:
     content = gzip.compress(DATA.encode("utf-8"))
 
-    entity = get_entity(EntityKey.GROUPEDMESSAGE)
+    entity = get_entity(EntityKey.PROFILES)
     metrics = DummyMetricsBackend(strict=True)
     writer = enforce_table_writer(entity).get_bulk_writer(
         metrics,
         "gzip",
         [
+            "organization_id",
             "project_id",
-            "id",
-            "status",
-            "last_seen",
-            "first_seen",
-            "active_at",
-            "first_release_id",
+            "received",
+            "platform",
         ],
         options=None,
-        table_name="groupedmessage_local",
+        table_name="profiles_local",
     )
 
     writer.write([content])

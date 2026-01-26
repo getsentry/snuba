@@ -46,10 +46,9 @@ def fix_order_by(_logger: logging.Logger) -> None:
     clickhouse.execute(add_column_sql)
 
     # There shouldn't be any data in the table yet
-    assert (
-        clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results[0][0]
-        == 0
-    ), f"{TABLE_NAME} is not empty"
+    assert clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results[0][0] == 0, (
+        f"{TABLE_NAME} is not empty"
+    )
 
     new_order_by = f"ORDER BY ({new_primary_key})"
     old_order_by = f"ORDER BY {old_primary_key}"
@@ -102,16 +101,7 @@ class Migration(migration.CodeMigration):
     blocking = True
 
     def forwards_global(self) -> Sequence[operations.RunPython]:
-        return [
-            operations.RunPython(
-                func=fix_order_by, description="Sync project ID colum for onpremise"
-            ),
-        ]
+        return []
 
     def backwards_global(self) -> Sequence[operations.RunPython]:
-        return [
-            operations.RunPython(
-                func=ensure_drop_temporary_tables,
-                description="Ensure temporary tables created by the migration are dropped",
-            )
-        ]
+        return []
