@@ -31,6 +31,7 @@ from snuba.migrations.operations import (
     RemoveTableTTL,
     RenameTable,
     ResetTableSettings,
+    RunSql,
     SqlOperation,
     TruncateTable,
 )
@@ -745,6 +746,63 @@ class TestOnCluster:
         op = DropTable(StorageSetKey.EVENTS, "test_table", target=OperationTarget.DISTRIBUTED)
         sql = op.format_sql()
         assert "ON CLUSTER 'query_cluster'" in sql
+
+    @patch("snuba.migrations.operations.get_cluster")
+    def test_run_sql_with_on_cluster_uses_single_node_execution(
+        self, mock_get_cluster: Mock
+    ) -> None:
+        """RunSql with ON CLUSTER in statement should use single-node execution."""
+        mock_cluster = _make_mock_cluster(single_node=False)
+        mock_node = Mock()
+        mock_cluster.get_local_nodes.return_value = [mock_node]
+        mock_connection = Mock()
+        mock_cluster.get_node_connection.return_value = mock_connection
+        mock_get_cluster.return_value = mock_cluster
+
+        sql = "ALTER TABLE test ON CLUSTER 'my_cluster' ADD COLUMN x String"
+        op = RunSql(StorageSetKey.EVENTS, sql, target=OperationTarget.LOCAL)
+        op.execute()
+
+        # Should execute once (single-node execution via parent's execute())
+        mock_connection.execute.assert_called_once_with(sql, settings=None)
+
+    @patch("snuba.migrations.operations.get_cluster")
+    def test_run_sql_without_on_cluster_uses_per_node_execution(
+        self, mock_get_cluster: Mock
+    ) -> None:
+        """RunSql without ON CLUSTER should use per-node execution."""
+        mock_cluster = _make_mock_cluster(single_node=False)
+        mock_node1 = Mock()
+        mock_node2 = Mock()
+        mock_cluster.get_local_nodes.return_value = [mock_node1, mock_node2]
+        mock_connection = Mock()
+        mock_cluster.get_node_connection.return_value = mock_connection
+        mock_get_cluster.return_value = mock_cluster
+
+        sql = "SELECT 1"
+        op = RunSql(StorageSetKey.EVENTS, sql, target=OperationTarget.LOCAL)
+        op.execute()
+
+        # Should execute twice (once per node via _execute_per_node())
+        assert mock_connection.execute.call_count == 2
+
+    @patch("snuba.migrations.operations.get_cluster")
+    def test_run_sql_on_cluster_case_insensitive(self, mock_get_cluster: Mock) -> None:
+        """RunSql should detect ON CLUSTER regardless of case."""
+        mock_cluster = _make_mock_cluster(single_node=False)
+        mock_node = Mock()
+        mock_cluster.get_local_nodes.return_value = [mock_node]
+        mock_connection = Mock()
+        mock_cluster.get_node_connection.return_value = mock_connection
+        mock_get_cluster.return_value = mock_cluster
+
+        # Test lowercase
+        sql = "ALTER TABLE test on cluster 'my_cluster' ADD COLUMN x String"
+        op = RunSql(StorageSetKey.EVENTS, sql, target=OperationTarget.LOCAL)
+        op.execute()
+
+        # Should execute once (detected ON CLUSTER)
+        mock_connection.execute.assert_called_once()
 
 
 @pytest.mark.custom_clickhouse_db

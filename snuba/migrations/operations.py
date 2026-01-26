@@ -174,9 +174,11 @@ class SqlOperation(ABC):
 
 class RunSql(SqlOperation):
     """
-    Runs arbitrary SQL statements. Uses per-node execution because the SQL
-    may not support ON CLUSTER syntax (e.g., queries, DML, or already contains
-    ON CLUSTER).
+    Runs arbitrary SQL statements.
+
+    If the SQL contains ON CLUSTER, it executes on a single node (letting
+    ClickHouse handle distribution). Otherwise, it uses per-node execution
+    since the SQL may not support ON CLUSTER syntax (e.g., queries, DML).
     """
 
     def __init__(
@@ -189,7 +191,12 @@ class RunSql(SqlOperation):
         self.__statement = statement
 
     def execute(self) -> None:
-        self._execute_per_node()
+        if "ON CLUSTER" in self.__statement.upper():
+            # SQL already has ON CLUSTER, use single-node execution
+            super().execute()
+        else:
+            # No ON CLUSTER, execute on each node individually
+            self._execute_per_node()
 
     def format_sql(self) -> str:
         return self.__statement
