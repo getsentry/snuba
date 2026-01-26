@@ -233,7 +233,7 @@ def _build_query(
                     column("item_type"),
                     column("timestamp"),
                     column("trace_id"),
-                    column("item_id"),
+                    f.reinterpretAsUInt128(f.reverse(f.unhex(column("item_id")))),
                 ),
                 f.tuple(
                     literal(page_token.last_seen_project_id),
