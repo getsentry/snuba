@@ -73,7 +73,7 @@ export const useShellStyles = createStyles((theme) => ({
     borderTop: "1px solid #30363d",
     padding: "8px 16px",
     display: "flex",
-    alignItems: "center",
+    alignItems: "flex-start",
     backgroundColor: "rgba(22, 27, 34, 0.8)",
   },
   prompt: {
@@ -82,6 +82,8 @@ export const useShellStyles = createStyles((theme) => ({
     fontSize: "14px",
     fontWeight: 700,
     textShadow: "0 0 10px rgba(88, 166, 255, 0.3)",
+    lineHeight: "21px",
+    paddingTop: "1px",
   },
   input: {
     flex: 1,
@@ -92,8 +94,23 @@ export const useShellStyles = createStyles((theme) => ({
     fontSize: "14px",
     outline: "none",
     caretColor: "#58a6ff",
+    resize: "none",
+    lineHeight: "21px",
+    minHeight: "21px",
+    maxHeight: "210px",
+    overflow: "auto",
     "&::placeholder": {
       color: "#6e7681",
+    },
+    "&::-webkit-scrollbar": {
+      width: "6px",
+    },
+    "&::-webkit-scrollbar-track": {
+      background: "transparent",
+    },
+    "&::-webkit-scrollbar-thumb": {
+      background: "#30363d",
+      borderRadius: "3px",
     },
   },
   statusBar: {

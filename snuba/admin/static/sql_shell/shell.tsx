@@ -122,7 +122,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [storages, setStorages] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     api.getClickhouseNodes().then((res) => {
@@ -352,10 +352,13 @@ function SQLShell({ api, mode }: SQLShellProps) {
 
           setState((prev) => ({ ...prev, isExecuting: true }));
 
+          // Normalize query: replace newlines with spaces for API
+          const normalizedQuery = parsed.query.replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
+
           try {
             if (mode === "tracing") {
               const request: TracingRequest = {
-                sql: parsed.query,
+                sql: normalizedQuery,
                 storage: state.currentStorage,
                 gather_profile_events: state.profileEnabled,
               };
@@ -368,7 +371,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
               });
             } else {
               const request: QueryRequest = {
-                sql: parsed.query,
+                sql: normalizedQuery,
                 storage: state.currentStorage,
                 host: state.currentHost!,
                 port: state.currentPort!,
@@ -478,7 +481,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
   }, [inputValue, storages, mode, state.currentStorage, getHostsForStorage]);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       const input = inputRef.current;
 
       // Tab completion
@@ -488,7 +491,13 @@ function SQLShell({ api, mode }: SQLShellProps) {
         return;
       }
 
-      // Execute on Enter or Cmd+Enter
+      // Shift+Enter adds a newline
+      if (e.key === "Enter" && e.shiftKey) {
+        // Allow default textarea behavior (insert newline)
+        return;
+      }
+
+      // Plain Enter executes the command
       if (e.key === "Enter") {
         e.preventDefault();
         if (!state.isExecuting) {
@@ -656,9 +665,8 @@ function SQLShell({ api, mode }: SQLShellProps) {
       )}
       <div className={classes.inputArea}>
         <span className={classes.prompt}>{">"}</span>
-        <input
+        <textarea
           ref={inputRef}
-          type="text"
           className={classes.input}
           value={inputValue}
           onChange={(e) => {
@@ -669,6 +677,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
           placeholder={getPlaceholder()}
           disabled={state.isExecuting}
           autoFocus
+          rows={Math.min(10, Math.max(1, inputValue.split("\n").length))}
         />
       </div>
       <div className={classes.statusBar}>
@@ -729,7 +738,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
               </div>
             </>
           )}
-          <div style={{ color: "#6e7681" }}>Tab: Autocomplete | Enter: Execute | ↑↓: History</div>
+          <div style={{ color: "#6e7681" }}>Tab: Autocomplete | Enter: Execute | Shift+Enter: New line | ↑↓: History</div>
         </div>
       </div>
     </div>
