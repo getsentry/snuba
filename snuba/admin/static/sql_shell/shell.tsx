@@ -5,8 +5,8 @@ import Client from "SnubaAdmin/api_client";
 import { useShellStyles } from "SnubaAdmin/sql_shell/styles";
 import { ShellOutput } from "SnubaAdmin/sql_shell/shell_output";
 import { ShellInput } from "SnubaAdmin/sql_shell/shell_input";
+import { parseCommand } from "SnubaAdmin/sql_shell/command_parser";
 import {
-  ParsedCommand,
   ShellState,
   ShellHistoryEntry,
   ShellMode,
@@ -16,68 +16,6 @@ import { QueryRequest, ClickhouseNodeData } from "SnubaAdmin/clickhouse_queries/
 
 function getCommandHistoryKey(mode: ShellMode): string {
   return mode === "tracing" ? "sql_shell_command_history" : "system_shell_command_history";
-}
-
-function parseCommand(input: string, mode: ShellMode): ParsedCommand {
-  const trimmed = input.trim();
-
-  // USE storage_name
-  if (/^USE\s+/i.test(trimmed)) {
-    const storage = trimmed.replace(/^USE\s+/i, "").trim();
-    return { type: "use", storage };
-  }
-
-  // HOST host:port (system mode only)
-  if (/^HOST\s+/i.test(trimmed)) {
-    const hostStr = trimmed.replace(/^HOST\s+/i, "").trim();
-    const match = hostStr.match(/^([^:]+):(\d+)$/);
-    if (match) {
-      return { type: "host", host: match[1], port: parseInt(match[2], 10) };
-    }
-    // If no port specified, default to 9000
-    return { type: "host", host: hostStr, port: 9000 };
-  }
-
-  // SHOW STORAGES
-  if (/^SHOW\s+STORAGES$/i.test(trimmed)) {
-    return { type: "show_storages" };
-  }
-
-  // SHOW HOSTS (system mode only)
-  if (/^SHOW\s+HOSTS$/i.test(trimmed)) {
-    return { type: "show_hosts" };
-  }
-
-  // PROFILE ON/OFF (tracing mode only)
-  if (/^PROFILE\s+(ON|OFF)$/i.test(trimmed)) {
-    const enabled = /ON$/i.test(trimmed);
-    return { type: "profile", enabled };
-  }
-
-  // TRACE RAW/FORMATTED (tracing mode only)
-  if (/^TRACE\s+(RAW|FORMATTED)$/i.test(trimmed)) {
-    const formatted = /FORMATTED$/i.test(trimmed);
-    return { type: "trace_mode", formatted };
-  }
-
-  // SUDO ON/OFF (system mode only)
-  if (/^SUDO\s+(ON|OFF)$/i.test(trimmed)) {
-    const enabled = /ON$/i.test(trimmed);
-    return { type: "sudo", enabled };
-  }
-
-  // HELP
-  if (/^HELP$/i.test(trimmed)) {
-    return { type: "help" };
-  }
-
-  // CLEAR
-  if (/^CLEAR$/i.test(trimmed)) {
-    return { type: "clear" };
-  }
-
-  // SQL query
-  return { type: "sql", query: trimmed };
 }
 
 function loadCommandHistory(mode: ShellMode): string[] {
