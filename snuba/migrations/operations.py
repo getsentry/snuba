@@ -57,6 +57,40 @@ class SqlOperation(ABC):
     def storage_set(self) -> StorageSetKey:
         return self._storage_set
 
+    def _get_on_cluster_clause(self) -> str:
+        """Returns ON CLUSTER clause for multi-node clusters, empty string otherwise.
+
+        Uses the appropriate cluster name based on target type:
+        - LOCAL: uses cluster_name (for storage nodes)
+        - DISTRIBUTED: uses distributed_cluster_name (for query nodes)
+        """
+        cluster = get_cluster(self._storage_set)
+        if cluster.is_single_node():
+            return ""
+
+        # Use the appropriate cluster name based on target type
+        if self.target == OperationTarget.DISTRIBUTED:
+            cluster_name = cluster.get_clickhouse_distributed_cluster_name()
+        else:
+            cluster_name = cluster.get_clickhouse_cluster_name()
+
+        if cluster_name:
+            return f" ON CLUSTER '{cluster_name}'"
+        return ""
+
+    def _get_execution_node(self) -> Optional[ClickhouseNode]:
+        """Returns a single node to execute DDL on (ON CLUSTER handles distribution)."""
+        cluster = get_cluster(self._storage_set)
+        if self.target == OperationTarget.DISTRIBUTED:
+            if cluster.is_single_node():
+                return None
+            nodes = cluster.get_distributed_nodes()
+            return nodes[0] if nodes else None
+        elif self.target == OperationTarget.LOCAL:
+            nodes = cluster.get_local_nodes()
+            return nodes[0] if nodes else None
+        raise ValueError(f"Target not set for {self}")
+
     def get_nodes(self) -> Sequence[ClickhouseNode]:
         """
         This should return the given local or dist nodes for which the operation should
@@ -87,46 +121,46 @@ class SqlOperation(ABC):
         )
 
     def execute(self) -> None:
+        """Execute DDL using ON CLUSTER (single-node execution, cluster handles distribution)."""
+        cluster = get_cluster(self._storage_set)
+        node = self._get_execution_node()
+        if node is None:
+            return  # Valid for distributed on single-node
+
+        connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+        sql = self.format_sql()
+        if settings.LOG_MIGRATIONS:
+            logger.info(f"Executing op: {sql}")
+            logger.info(f"Executing on {self.target.value} node: {node}")
+        try:
+            connection.execute(sql, settings=self._settings)
+            # No polling needed - alter_sync=2 and mutations_sync=2 ensure ClickHouse
+            # blocks until all replicas confirm completion
+        except Exception:
+            logger.exception(
+                f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{sql}\n{self._settings}"
+            )
+            raise
+
+    def _execute_per_node(self) -> None:
+        """Execute SQL on each node individually (for operations that don't support ON CLUSTER)."""
         nodes = self.get_nodes()
         cluster = get_cluster(self._storage_set)
+        sql = self.format_sql()
         if nodes:
             if settings.LOG_MIGRATIONS:
-                logger.info(f"Executing op: {self.format_sql()[:32]}...")
+                logger.info(f"Executing op: {sql}")
         for node in nodes:
             connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
             if settings.LOG_MIGRATIONS:
                 logger.info(f"Executing on {self.target.value} node: {node}")
             try:
-                connection.execute(self.format_sql(), settings=self._settings)
-                self._block_on_mutations(connection)
+                connection.execute(sql, settings=self._settings)
             except Exception:
                 logger.exception(
-                    f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{self.format_sql()}\n{self._settings}"
+                    f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{sql}\n{self._settings}"
                 )
                 raise
-
-    def _block_on_mutations(
-        self, conn: ClickhousePool, poll_seconds: int = 5, timeout_seconds: int = 300
-    ) -> None:
-        """
-        This function blocks until all entries of system.mutations
-        have is_done=1. Polls system.mutations every poll_seconds.
-        Raises error if not unblocked after timeout_seconds.
-        """
-        slept_so_far = 0
-        while True:
-            is_mutating = conn.execute(
-                "select count(*) from system.mutations where is_done=0"
-            ).results != [(0,)]
-            if not is_mutating:
-                return
-            elif slept_so_far >= timeout_seconds:
-                raise TimeoutError(
-                    f"{conn.host}:{conn.port} not finished mutating after {timeout_seconds} seconds"
-                )
-            else:
-                time.sleep(poll_seconds)
-                slept_so_far += poll_seconds
 
     @abstractmethod
     def format_sql(self) -> str:
@@ -139,6 +173,14 @@ class SqlOperation(ABC):
 
 
 class RunSql(SqlOperation):
+    """
+    Runs arbitrary SQL statements.
+
+    If the SQL contains ON CLUSTER, it executes on a single node (letting
+    ClickHouse handle distribution). Otherwise, it uses per-node execution
+    since the SQL may not support ON CLUSTER syntax (e.g., queries, DML).
+    """
+
     def __init__(
         self,
         storage_set: StorageSetKey,
@@ -147,6 +189,14 @@ class RunSql(SqlOperation):
     ) -> None:
         super().__init__(storage_set, target=target)
         self.__statement = statement
+
+    def execute(self) -> None:
+        if "ON CLUSTER" in self.__statement.upper():
+            # SQL already has ON CLUSTER, use single-node execution
+            super().execute()
+        else:
+            # No ON CLUSTER, execute on each node individually
+            self._execute_per_node()
 
     def format_sql(self) -> str:
         return self.__statement
@@ -191,7 +241,10 @@ class CreateTable(SqlOperation):
         columns = ", ".join([col.for_schema() for col in self.__columns])
         cluster = get_cluster(self._storage_set)
         engine = self.engine.get_sql(cluster, self.table_name)
-        return f"CREATE TABLE IF NOT EXISTS {self.table_name} ({columns}) ENGINE {engine};"
+        on_cluster = self._get_on_cluster_clause()
+        return (
+            f"CREATE TABLE IF NOT EXISTS {self.table_name}{on_cluster} ({columns}) ENGINE {engine};"
+        )
 
 
 class CreateMaterializedView(SqlOperation):
@@ -212,8 +265,8 @@ class CreateMaterializedView(SqlOperation):
 
     def format_sql(self) -> str:
         columns = ", ".join([col.for_schema() for col in self.__columns])
-
-        return f"CREATE MATERIALIZED VIEW IF NOT EXISTS {self.__view_name} TO {self.__destination_table_name} ({columns}) AS {self.__query};"
+        on_cluster = self._get_on_cluster_clause()
+        return f"CREATE MATERIALIZED VIEW IF NOT EXISTS {self.__view_name}{on_cluster} TO {self.__destination_table_name} ({columns}) AS {self.__query};"
 
 
 class RenameTable(SqlOperation):
@@ -229,7 +282,8 @@ class RenameTable(SqlOperation):
         self.__new_table_name = new_table_name
 
     def format_sql(self) -> str:
-        return f"RENAME TABLE {self.__old_table_name} TO {self.__new_table_name};"
+        on_cluster = self._get_on_cluster_clause()
+        return f"RENAME TABLE {self.__old_table_name} TO {self.__new_table_name}{on_cluster};"
 
 
 class DropTable(SqlOperation):
@@ -243,7 +297,8 @@ class DropTable(SqlOperation):
         self.table_name = table_name
 
     def format_sql(self) -> str:
-        return f"DROP TABLE IF EXISTS {self.table_name} SYNC;"
+        on_cluster = self._get_on_cluster_clause()
+        return f"DROP TABLE IF EXISTS {self.table_name}{on_cluster} SYNC;"
 
 
 class TruncateTable(SqlOperation):
@@ -258,7 +313,8 @@ class TruncateTable(SqlOperation):
         self.__table_name = table_name
 
     def format_sql(self) -> str:
-        return f"TRUNCATE TABLE IF EXISTS {self.__table_name};"
+        on_cluster = self._get_on_cluster_clause()
+        return f"TRUNCATE TABLE IF EXISTS {self.__table_name}{on_cluster};"
 
 
 class ModifyTableTTL(SqlOperation):
@@ -286,8 +342,9 @@ class ModifyTableTTL(SqlOperation):
         self.__ttl_days = ttl_days
 
     def format_sql(self) -> str:
+        on_cluster = self._get_on_cluster_clause()
         return (
-            f"ALTER TABLE {self.__table_name} MODIFY TTL "
+            f"ALTER TABLE {self.__table_name}{on_cluster} MODIFY TTL "
             f"{self.__reference_column} + "
             f"toIntervalDay({self.__ttl_days});"
         )
@@ -310,7 +367,8 @@ class RemoveTableTTL(SqlOperation):
         self.__table_name = table_name
 
     def format_sql(self) -> str:
-        return f"ALTER TABLE {self.__table_name} REMOVE TTL;"
+        on_cluster = self._get_on_cluster_clause()
+        return f"ALTER TABLE {self.__table_name}{on_cluster} REMOVE TTL;"
 
 
 class AddColumn(RetryOnSyncError, SqlOperation):
@@ -338,7 +396,8 @@ class AddColumn(RetryOnSyncError, SqlOperation):
     def format_sql(self) -> str:
         column = self.column.for_schema()
         optional_after_clause = f" AFTER {self.__after}" if self.__after else ""
-        return f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS {column}{optional_after_clause};"
+        on_cluster = self._get_on_cluster_clause()
+        return f"ALTER TABLE {self.table_name}{on_cluster} ADD COLUMN IF NOT EXISTS {column}{optional_after_clause};"
 
     def get_reverse(self) -> DropColumn:
         return DropColumn(
@@ -375,7 +434,10 @@ class DropColumn(RetryOnSyncError, SqlOperation):
         self.column_name = column_name
 
     def format_sql(self) -> str:
-        return f"ALTER TABLE {self.table_name} DROP COLUMN IF EXISTS {self.column_name};"
+        on_cluster = self._get_on_cluster_clause()
+        return (
+            f"ALTER TABLE {self.table_name}{on_cluster} DROP COLUMN IF EXISTS {self.column_name};"
+        )
 
     def __repr__(self) -> str:
         return f"DropColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column_name={repr(self.column_name)}, target={repr(self.target)})"
@@ -405,7 +467,8 @@ class ModifyColumn(RetryOnSyncError, SqlOperation):
 
     def format_sql(self) -> str:
         column = self.__column.for_schema()
-        return f"ALTER TABLE {self.__table_name} MODIFY COLUMN {column}{self.optional_ttl_clause};"
+        on_cluster = self._get_on_cluster_clause()
+        return f"ALTER TABLE {self.__table_name}{on_cluster} MODIFY COLUMN {column}{self.optional_ttl_clause};"
 
     def get_column(self) -> Column[MigrationModifiers]:
         return self.__column
@@ -440,7 +503,8 @@ class ModifyTableSettings(SqlOperation):
 
     def format_sql(self) -> str:
         settings = ", ".join(f"{k} = {v}" for k, v in self.__settings.items())
-        return f"ALTER TABLE {self.__table_name} MODIFY SETTING {settings};"
+        on_cluster = self._get_on_cluster_clause()
+        return f"ALTER TABLE {self.__table_name}{on_cluster} MODIFY SETTING {settings};"
 
 
 class ResetTableSettings(SqlOperation):
@@ -461,7 +525,8 @@ class ResetTableSettings(SqlOperation):
 
     def format_sql(self) -> str:
         settings = ", ".join(self.__settings)
-        return f"ALTER TABLE {self.__table_name} RESET SETTING {settings};"
+        on_cluster = self._get_on_cluster_clause()
+        return f"ALTER TABLE {self.__table_name}{on_cluster} RESET SETTING {settings};"
 
 
 class AddIndex(SqlOperation):
@@ -495,7 +560,8 @@ class AddIndex(SqlOperation):
 
     def format_sql(self) -> str:
         optional_after_clause = f" AFTER {self.__after}" if self.__after else ""
-        return f"ALTER TABLE {self.__table_name} ADD INDEX IF NOT EXISTS {self.__index_name} {self.__index_expression} TYPE {self.__index_type} GRANULARITY {self.__granularity}{optional_after_clause};"
+        on_cluster = self._get_on_cluster_clause()
+        return f"ALTER TABLE {self.__table_name}{on_cluster} ADD INDEX IF NOT EXISTS {self.__index_name} {self.__index_expression} TYPE {self.__index_type} GRANULARITY {self.__granularity}{optional_after_clause};"
 
 
 @dataclass
@@ -532,8 +598,8 @@ class AddIndices(SqlOperation):
             f"ADD INDEX IF NOT EXISTS {idx.name} {idx.expression} TYPE {idx.type} GRANULARITY {idx.granularity}"
             for idx in self.__indices
         ]
-
-        return f"ALTER TABLE {self.__table_name} {', '.join(statements)};"
+        on_cluster = self._get_on_cluster_clause()
+        return f"ALTER TABLE {self.__table_name}{on_cluster} {', '.join(statements)};"
 
 
 class DropIndex(RetryOnSyncError, SqlOperation):
@@ -558,17 +624,8 @@ class DropIndex(RetryOnSyncError, SqlOperation):
         settings = ""
         if self.__run_async:
             settings = " SETTINGS mutations_sync=0"
-        return (
-            f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name}{settings};"
-        )
-
-    def _block_on_mutations(
-        self, conn: ClickhousePool, poll_seconds: int = 5, timeout_seconds: int = 300
-    ) -> None:
-        if self.__run_async:
-            return
-        else:
-            super()._block_on_mutations(conn, poll_seconds, timeout_seconds)
+        on_cluster = self._get_on_cluster_clause()
+        return f"ALTER TABLE {self.__table_name}{on_cluster} DROP INDEX IF EXISTS {self.__index_name}{settings};"
 
 
 class DropIndices(RetryOnSyncError, SqlOperation):
@@ -597,7 +654,8 @@ class DropIndices(RetryOnSyncError, SqlOperation):
         if self.__run_async:
             settings = " SETTINGS mutations_sync=0, alter_sync=0"
         statements = [f"DROP INDEX IF EXISTS {idx}" for idx in self.__indices]
-        return f"ALTER TABLE {self.__table_name} {', '.join(statements)}{settings};"
+        on_cluster = self._get_on_cluster_clause()
+        return f"ALTER TABLE {self.__table_name}{on_cluster} {', '.join(statements)}{settings};"
 
 
 class InsertIntoSelect(SqlOperation):
@@ -608,6 +666,9 @@ class InsertIntoSelect(SqlOperation):
 
     This operation may not be very performant if data is inserted into several partitions
     at once. It may be better to group data by partition key and insert in batches.
+
+    NOTE: This is a DML operation, not DDL, so it uses per-node execution instead of
+    ON CLUSTER syntax.
     """
 
     def __init__(
@@ -634,6 +695,9 @@ class InsertIntoSelect(SqlOperation):
         self.__limit = limit
         self.__offset = offset
         self.__where = where
+
+    def execute(self) -> None:
+        self._execute_per_node()
 
     def format_sql(self) -> str:
         src_columns = ", ".join(self.__src_columns)
