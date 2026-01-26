@@ -60,9 +60,11 @@ function Nav(props: NavProps) {
   );
 }
 
-const navStyle = {
+const navStyle: React.CSSProperties = {
   borderRight: `1px solid ${COLORS.NAV_BORDER}`,
   width: 250,
+  overflowY: "auto",
+  flexShrink: 0,
 };
 
 const ulStyle = {
