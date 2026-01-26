@@ -745,3 +745,55 @@ class TestOnCluster:
         op = DropTable(StorageSetKey.EVENTS, "test_table", target=OperationTarget.DISTRIBUTED)
         sql = op.format_sql()
         assert "ON CLUSTER 'query_cluster'" in sql
+
+
+@pytest.mark.custom_clickhouse_db
+def test_on_cluster_query_on_single_node() -> None:
+    """Test that ON CLUSTER DDL fails on single-node without Zookeeper.
+
+    ON CLUSTER DDL operations require Zookeeper (or ClickHouse Keeper) to be
+    configured for distributed DDL coordination. On a single-node setup without
+    Zookeeper, these queries will fail with error code 139:
+    "There is no Zookeeper configuration in server config"
+
+    This test verifies that our migration operations correctly avoid using
+    ON CLUSTER syntax on single-node clusters (via is_single_node() check).
+    """
+    from snuba.clickhouse.errors import ClickhouseError
+    from snuba.clusters.cluster import ClickhouseClientSettings
+
+    cluster = get_cluster(StorageSetKey.EVENTS)
+
+    if not cluster.is_single_node():
+        pytest.skip("This test is specifically for single-node clusters")
+
+    # Get a connection to execute raw SQL
+    nodes = cluster.get_local_nodes()
+    assert len(nodes) > 0, "Expected at least one local node"
+    connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, nodes[0])
+
+    # Query available clusters from ClickHouse
+    result = connection.execute("SELECT DISTINCT cluster FROM system.clusters")
+    available_clusters = [row[0] for row in result.results]
+
+    if not available_clusters:
+        pytest.skip("No clusters configured in ClickHouse - cannot test ON CLUSTER syntax")
+
+    # Use the first available cluster
+    cluster_name = available_clusters[0]
+    table_name = "test_on_cluster_single_node"
+
+    create_sql = f"""
+        CREATE TABLE IF NOT EXISTS {table_name} ON CLUSTER '{cluster_name}'
+        (id UInt64, name String)
+        ENGINE = MergeTree()
+        ORDER BY id
+    """
+
+    # ON CLUSTER should fail on single-node without Zookeeper
+    # Error code 139: "There is no Zookeeper configuration in server config"
+    with pytest.raises(ClickhouseError) as exc_info:
+        connection.execute(create_sql)
+
+    assert exc_info.value.code == 139, f"Expected error code 139, got {exc_info.value.code}"
+    assert "Zookeeper" in str(exc_info.value)

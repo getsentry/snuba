@@ -130,7 +130,7 @@ class SqlOperation(ABC):
         connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
         sql = self.format_sql()
         if settings.LOG_MIGRATIONS:
-            logger.info(f"Executing op: {sql[:32]}...")
+            logger.info(f"Executing op: {sql}")
             logger.info(f"Executing on {self.target.value} node: {node}")
         try:
             connection.execute(sql, settings=self._settings)
@@ -149,7 +149,7 @@ class SqlOperation(ABC):
         sql = self.format_sql()
         if nodes:
             if settings.LOG_MIGRATIONS:
-                logger.info(f"Executing op: {sql[:32]}...")
+                logger.info(f"Executing op: {sql}")
         for node in nodes:
             connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
             if settings.LOG_MIGRATIONS:
