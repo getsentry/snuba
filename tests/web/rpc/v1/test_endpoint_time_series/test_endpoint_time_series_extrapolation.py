@@ -1052,7 +1052,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             metrics=[
                 DummyMetric("test_metric", get_value=lambda x: 1000)
             ],  # Large value to make it obvious
-            server_sample_rate=0.0,  # Zero sampling rate - should be discarded
+            server_sample_rate=0.0000000001,  # Zero sampling rate - should be discarded
         )
 
         # Store metrics with non-zero sampling rate (should be included)
@@ -1063,6 +1063,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             metrics=[DummyMetric("test_metric", get_value=lambda x: 10)],
             server_sample_rate=1.0,  # 100% sampling rate
         )
+        breakpoint()
 
         message = TimeSeriesRequest(
             meta=RequestMeta(

@@ -1210,7 +1210,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                         ),  # Large value to make it obvious if included
                         "custom_tag": AnyValue(string_value="test"),
                     },
-                    server_sample_rate=0.0,  # Zero sampling rate - should be discarded
+                    server_sample_rate=0.0000000001,  # Sampling rate so low it gets clipped to 0, should be discarded
                     end_timestamp=end_timestamp,
                 )
             )
