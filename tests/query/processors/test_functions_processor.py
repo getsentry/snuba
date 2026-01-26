@@ -22,9 +22,7 @@ test_data = [
                 ),
                 SelectedExpression(
                     "alias2",
-                    FunctionCall(
-                        "alias2", "emptyIfNull", (Column(None, None, "column2"),)
-                    ),
+                    FunctionCall("alias2", "emptyIfNull", (Column(None, None, "column2"),)),
                 ),
             ],
         ),
@@ -37,9 +35,7 @@ test_data = [
                         "alias",
                         "ifNull",
                         (
-                            FunctionCall(
-                                None, "uniq", (Column(None, None, "column1"),)
-                            ),
+                            FunctionCall(None, "uniq", (Column(None, None, "column1"),)),
                             Literal(None, 0),
                         ),
                     ),
@@ -50,9 +46,7 @@ test_data = [
                         "alias2",
                         "ifNull",
                         (
-                            FunctionCall(
-                                None, "emptyIfNull", (Column(None, None, "column2"),)
-                            ),
+                            FunctionCall(None, "emptyIfNull", (Column(None, None, "column2"),)),
                             Literal(None, ""),
                         ),
                     ),
@@ -71,14 +65,10 @@ test_data = [
                 ),
                 SelectedExpression(
                     "alias2",
-                    FunctionCall(
-                        "alias2", "emptyIfNull", (Column(None, None, "column2"),)
-                    ),
+                    FunctionCall("alias2", "emptyIfNull", (Column(None, None, "column2"),)),
                 ),
             ],
-            condition=FunctionCall(
-                None, "eq", (Column(None, None, "column1"), Literal(None, "a"))
-            ),
+            condition=FunctionCall(None, "eq", (Column(None, None, "column1"), Literal(None, "a"))),
             groupby=[
                 FunctionCall("alias3", "uniq", (Column(None, None, "column5"),)),
                 FunctionCall("alias4", "emptyIfNull", (Column(None, None, "column6"),)),
@@ -94,9 +84,7 @@ test_data = [
                         "alias",
                         "ifNull",
                         (
-                            FunctionCall(
-                                None, "uniq", (Column(None, None, "column1"),)
-                            ),
+                            FunctionCall(None, "uniq", (Column(None, None, "column1"),)),
                             Literal(None, 0),
                         ),
                     ),
@@ -107,17 +95,13 @@ test_data = [
                         "alias2",
                         "ifNull",
                         (
-                            FunctionCall(
-                                None, "emptyIfNull", (Column(None, None, "column2"),)
-                            ),
+                            FunctionCall(None, "emptyIfNull", (Column(None, None, "column2"),)),
                             Literal(None, ""),
                         ),
                     ),
                 ),
             ],
-            condition=FunctionCall(
-                None, "eq", (Column(None, None, "column1"), Literal(None, "a"))
-            ),
+            condition=FunctionCall(None, "eq", (Column(None, None, "column1"), Literal(None, "a"))),
             groupby=[
                 FunctionCall(
                     "alias3",
@@ -131,9 +115,7 @@ test_data = [
                     "alias4",
                     "ifNull",
                     (
-                        FunctionCall(
-                            None, "emptyIfNull", (Column(None, None, "column6"),)
-                        ),
+                        FunctionCall(None, "emptyIfNull", (Column(None, None, "column6"),)),
                         Literal(None, ""),
                     ),
                 ),

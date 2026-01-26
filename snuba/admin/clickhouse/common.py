@@ -184,13 +184,12 @@ def get_clusterless_node_connection(
     client_settings: ClickhouseClientSettings,
 ) -> ClickhousePool:
     storage = _get_storage(storage_name)
-
-    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless"
-    if key in NODE_CONNECTIONS:
-        return NODE_CONNECTIONS[key]
-
     cluster = storage.get_cluster()
     database = cluster.get_database()
+
+    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless-{database}"
+    if key in NODE_CONNECTIONS:
+        return NODE_CONNECTIONS[key]
 
     (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
     connection = ClickhousePool(

@@ -16,9 +16,7 @@ class DangerousOperationError(Exception):
     pass
 
 
-def check_dangerous_operation(
-    op: SqlOperation, columns_state: ColumnStatesMapType
-) -> None:
+def check_dangerous_operation(op: SqlOperation, columns_state: ColumnStatesMapType) -> None:
     """
     Returns True if the operation is deemed dangerous or will cause a full columns rewrite
     based on some heuristics.
@@ -29,20 +27,14 @@ def check_dangerous_operation(
             table = op.get_table_name()
             nodes = op.get_nodes()
             for node in nodes:
-                old_type = columns_state.get(
-                    (node.host_name, node.port, table, col.name), None
-                )
+                old_type = columns_state.get((node.host_name, node.port, table, col.name), None)
                 if old_type:
                     _check_dangerous(old_type, col.type)
     except DangerousOperationError as err:
-        raise DangerousOperationError(
-            f"Operation {op.format_sql()} is dangerous: \n{err}"
-        ) from err
+        raise DangerousOperationError(f"Operation {op.format_sql()} is dangerous: \n{err}") from err
 
 
-def _check_dangerous(
-    old_type_str: str, new_col_type: ColumnType[MigrationModifiers]
-) -> None:
+def _check_dangerous(old_type_str: str, new_col_type: ColumnType[MigrationModifiers]) -> None:
     old_type_str = old_type_str.lower()
 
     # check nullable is not changed

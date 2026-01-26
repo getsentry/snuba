@@ -64,9 +64,7 @@ def build_rpc_subscription_data_from_proto(
                 aggregations=[
                     AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                         label="sum",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
@@ -283,9 +281,7 @@ def test_subscription_task_result_encoder(
     timestamp = datetime.now()
 
     # XXX: This seems way too coupled to the dataset.
-    request = subscription.build_request(
-        get_dataset("events"), timestamp, None, Timer("timer")
-    )
+    request = subscription.build_request(get_dataset("events"), timestamp, None, Timer("timer"))
     result: Result = {
         "meta": [{"type": "UInt64", "name": "count"}],
         "data": [{"count": 1}],
@@ -313,9 +309,7 @@ def test_subscription_task_result_encoder(
     assert data["version"] == 3
     payload = data["payload"]
 
-    assert payload["subscription_id"] == str(
-        task_result.task.task.subscription.identifier
-    )
+    assert payload["subscription_id"] == str(task_result.task.task.subscription.identifier)
     if isinstance(request, ProtobufMessage):
         assert payload["request"]["request_name"] == "TimeSeriesRequest"
         assert payload["request"]["request_version"] == "v1"
@@ -400,9 +394,7 @@ def test_metrics_subscription_task_result_encoder(
     assert data["version"] == 3
     payload = data["payload"]
 
-    assert payload["subscription_id"] == str(
-        task_result.task.task.subscription.identifier
-    )
+    assert payload["subscription_id"] == str(task_result.task.task.subscription.identifier)
     assert payload["request"] == request.original_body
     assert payload["result"]["data"] == result["data"]
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
@@ -429,9 +421,7 @@ def test_subscription_task_encoder_snql() -> None:
 
     subscription_with_metadata = SubscriptionWithMetadata(
         EntityKey.EVENTS,
-        Subscription(
-            SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
-        ),
+        Subscription(SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data),
         tick_upper_offset,
     )
 
@@ -466,9 +456,7 @@ def test_subscription_task_encoder_rpc() -> None:
 
     subscription_with_metadata = SubscriptionWithMetadata(
         EntityKey.EAP_ITEMS,
-        Subscription(
-            SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
-        ),
+        Subscription(SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data),
         tick_upper_offset,
     )
 

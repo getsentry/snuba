@@ -31,9 +31,7 @@ class StorageClusterSelector(ABC):
         raise NotImplementedError
 
 
-def _should_use_mega_cluster(
-    storage_set: StorageSetKey, logical_partition: int
-) -> bool:
+def _should_use_mega_cluster(storage_set: StorageSetKey, logical_partition: int) -> bool:
     """
     Helper method to find out whether a logical partition of a sliced storage
     set needs to send queries to the mega cluster.
@@ -103,8 +101,6 @@ class ColumnBasedStorageSliceSelector(StorageClusterSelector):
         if _should_use_mega_cluster(self.storage_set, logical_partition):
             return get_cluster(self.storage_set)
         else:
-            slice_id = map_logical_partition_to_slice(
-                self.storage_set, logical_partition
-            )
+            slice_id = map_logical_partition_to_slice(self.storage_set, logical_partition)
             cluster = get_cluster(self.storage_set, slice_id)
             return cluster

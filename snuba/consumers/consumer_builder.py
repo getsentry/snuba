@@ -127,9 +127,7 @@ class ConsumerBuilder:
 
         if self.__consumer_config.commit_log_topic is not None:
             self.commit_log_producer = Producer(
-                build_kafka_configuration(
-                    self.__consumer_config.commit_log_topic.broker_config
-                )
+                build_kafka_configuration(self.__consumer_config.commit_log_topic.broker_config)
             )
         else:
             self.commit_log_producer = None
@@ -223,9 +221,7 @@ class ConsumerBuilder:
         else:
             commit_log_config = None
 
-        strategy_factory: ProcessingStrategyFactory[
-            KafkaPayload
-        ] = KafkaConsumerStrategyFactory(
+        strategy_factory: ProcessingStrategyFactory[KafkaPayload] = KafkaConsumerStrategyFactory(
             prefilter=stream_loader.get_pre_filter(),
             process_message=functools.partial(
                 process_message,
@@ -281,9 +277,7 @@ class ConsumerBuilder:
         # DLQ consumer never writes to the commit log
         commit_log_config = None
 
-        strategy_factory: ProcessingStrategyFactory[
-            KafkaPayload
-        ] = KafkaConsumerStrategyFactory(
+        strategy_factory: ProcessingStrategyFactory[KafkaPayload] = KafkaConsumerStrategyFactory(
             prefilter=stream_loader.get_pre_filter(),
             process_message=functools.partial(
                 process_message,
@@ -335,9 +329,7 @@ class ConsumerBuilder:
             self.__build_default_dlq_policy(),
         )
 
-    def build_dlq_consumer(
-        self, instruction: DlqInstruction
-    ) -> StreamProcessor[KafkaPayload]:
+    def build_dlq_consumer(self, instruction: DlqInstruction) -> StreamProcessor[KafkaPayload]:
         """
         Dlq consumer. Same as the base consumer but exits after `max_messages_to_process`
         and applies the user defined DLQ policy.
@@ -391,9 +383,7 @@ class ConsumerBuilder:
         """
         if self.__consumer_config.dlq_topic is not None:
             self.dlq_producer = KafkaProducer(
-                build_kafka_configuration(
-                    self.__consumer_config.dlq_topic.broker_config
-                )
+                build_kafka_configuration(self.__consumer_config.dlq_topic.broker_config)
             )
 
             dlq_policy = DlqPolicy(

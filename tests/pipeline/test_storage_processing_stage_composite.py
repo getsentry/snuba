@@ -43,14 +43,10 @@ events_table = Table(
     allocation_policies=events_storage.get_allocation_policies(),
     final=False,
     sampling_rate=None,
-    mandatory_conditions=events_storage.get_schema()
-    .get_data_source()
-    .get_mandatory_conditions(),
+    mandatory_conditions=events_storage.get_schema().get_data_source().get_mandatory_conditions(),
 )
 
-groups_ent = Entity(
-    EntityKey.GROUPEDMESSAGE, get_entity(EntityKey.GROUPEDMESSAGE).get_data_model()
-)
+groups_ent = Entity(EntityKey.GROUPEDMESSAGE, get_entity(EntityKey.GROUPEDMESSAGE).get_data_model())
 groups_storage = get_storage(StorageKey.GROUPEDMESSAGES)
 groups_schema = groups_storage.get_schema()
 assert isinstance(groups_schema, TableSchema)
@@ -114,9 +110,7 @@ TEST_CASES = [
             selected_columns=[
                 SelectedExpression(
                     "average",
-                    FunctionCall(
-                        "average", "avg", (Column(None, None, "count_environment"),)
-                    ),
+                    FunctionCall("average", "avg", (Column(None, None, "count_environment"),)),
                 ),
             ],
         ),
@@ -170,9 +164,7 @@ TEST_CASES = [
             selected_columns=[
                 SelectedExpression(
                     "average",
-                    FunctionCall(
-                        "average", "avg", (Column(None, None, "count_environment"),)
-                    ),
+                    FunctionCall("average", "avg", (Column(None, None, "count_environment"),)),
                 ),
             ],
         ),
@@ -184,9 +176,7 @@ TEST_CASES = [
                 from_clause=ClickhouseQuery(
                     from_clause=events_table,
                     selected_columns=[
-                        SelectedExpression(
-                            "project_id", Column(None, None, "project_id")
-                        ),
+                        SelectedExpression("project_id", Column(None, None, "project_id")),
                         SelectedExpression(
                             "count_environment",
                             FunctionCall(
@@ -229,18 +219,14 @@ TEST_CASES = [
                 selected_columns=[
                     SelectedExpression(
                         "max",
-                        FunctionCall(
-                            "max", "max", (Column(None, None, "count_environment"),)
-                        ),
+                        FunctionCall("max", "max", (Column(None, None, "count_environment"),)),
                     ),
                 ],
             ),
             selected_columns=[
                 SelectedExpression(
                     "average",
-                    FunctionCall(
-                        "average", "avg", (Column(None, None, "count_environment"),)
-                    ),
+                    FunctionCall("average", "avg", (Column(None, None, "count_environment"),)),
                 ),
             ],
         ),
@@ -249,9 +235,7 @@ TEST_CASES = [
                 from_clause=ClickhouseQuery(
                     from_clause=events_table,
                     selected_columns=[
-                        SelectedExpression(
-                            "project_id", Column(None, None, "project_id")
-                        ),
+                        SelectedExpression("project_id", Column(None, None, "project_id")),
                         SelectedExpression(
                             "count_environment",
                             FunctionCall(
@@ -297,18 +281,14 @@ TEST_CASES = [
                 selected_columns=[
                     SelectedExpression(
                         "max",
-                        FunctionCall(
-                            "max", "max", (Column(None, None, "count_environment"),)
-                        ),
+                        FunctionCall("max", "max", (Column(None, None, "count_environment"),)),
                     ),
                 ],
             ),
             selected_columns=[
                 SelectedExpression(
                     "average",
-                    FunctionCall(
-                        "average", "avg", (Column(None, None, "count_environment"),)
-                    ),
+                    FunctionCall("average", "avg", (Column(None, None, "count_environment"),)),
                 ),
             ],
         ),
@@ -363,9 +343,7 @@ TEST_CASES = [
                     data_source=ClickhouseQuery(
                         from_clause=groups_table,
                         selected_columns=[
-                            SelectedExpression(
-                                "_snuba_id", Column("_snuba_id", None, "id")
-                            ),
+                            SelectedExpression("_snuba_id", Column("_snuba_id", None, "id")),
                             SelectedExpression(
                                 "_snuba_right",
                                 Column("_snuba_right", None, "right_col"),
@@ -416,9 +394,7 @@ TEST_CASES = [
                             BooleanFunctions.AND,
                             binary_condition(
                                 ConditionFunctions.EQ,
-                                Column(
-                                    alias=None, table_name=None, column_name="deleted"
-                                ),
+                                Column(alias=None, table_name=None, column_name="deleted"),
                                 Literal(alias=None, value=0),
                             ),
                             binary_condition(
@@ -439,9 +415,7 @@ TEST_CASES = [
                     data_source=ClickhouseQuery(
                         from_clause=replace(groups_table, final=True),
                         selected_columns=[
-                            SelectedExpression(
-                                "_snuba_id", Column("_snuba_id", None, "id")
-                            ),
+                            SelectedExpression("_snuba_id", Column("_snuba_id", None, "id")),
                             SelectedExpression(
                                 "_snuba_right",
                                 Column("_snuba_right", None, "right_col"),

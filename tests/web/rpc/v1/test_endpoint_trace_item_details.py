@@ -202,14 +202,10 @@ class TestTraceItemDetails(BaseApiTest):
                     ),
                     columns=[
                         Column(
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_STRING, name="sentry.item_id"
-                            )
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
                         ),
                         Column(
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_STRING, name="sentry.trace_id"
-                            )
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")
                         ),
                     ],
                 )
@@ -275,14 +271,10 @@ class TestTraceItemDetails(BaseApiTest):
                     ),
                     columns=[
                         Column(
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_STRING, name="sentry.item_id"
-                            )
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
                         ),
                         Column(
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_STRING, name="sentry.trace_id"
-                            )
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")
                         ),
                     ],
                 )

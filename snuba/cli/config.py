@@ -57,9 +57,7 @@ def get(*, key: str, format: str) -> None:
 @config.command()
 @click.argument("key")
 @click.argument("value")
-@click.option(
-    "--force-type", is_flag=True, default=False, help="Override type checking of values"
-)
+@click.option("--force-type", is_flag=True, default=False, help="Override type checking of values")
 def set(*, key: str, value: str, force_type: bool) -> None:
     "Set a single key."
     try:
@@ -72,9 +70,7 @@ def set(*, key: str, value: str, force_type: bool) -> None:
 
 @config.command("set-many")
 @click.argument("data")
-@click.option(
-    "--force-type", is_flag=True, default=False, help="Override type checking of values"
-)
+@click.option("--force-type", is_flag=True, default=False, help="Override type checking of values")
 def set_many(*, data: str, force_type: bool) -> None:
     "Set multiple keys, input as JSON."
     try:

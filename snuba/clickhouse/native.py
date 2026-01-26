@@ -70,7 +70,6 @@ def capture_logging() -> Generator[StringIO, None, None]:
 
 
 class ClickhousePool(object):
-
     def __init__(
         self,
         host: str,

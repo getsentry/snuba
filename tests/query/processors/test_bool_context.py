@@ -1,6 +1,5 @@
-from snuba.clickhouse.columns import ColumnSet, Nested
+from snuba.clickhouse.columns import ColumnSet, Nested, String, UInt
 from snuba.clickhouse.columns import SchemaModifiers as Modifier
-from snuba.clickhouse.columns import String, UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
@@ -63,9 +62,7 @@ def test_events_promoted_boolean_context() -> None:
                                 "toString",
                                 (Column(None, None, "device_charging"),),
                             ),
-                            literals_tuple(
-                                None, [Literal(None, "1"), Literal(None, "True")]
-                            ),
+                            literals_tuple(None, [Literal(None, "1"), Literal(None, "True")]),
                         ),
                         Literal(None, "True"),
                         Literal(None, "False"),
@@ -85,9 +82,7 @@ def test_events_promoted_boolean_context() -> None:
 
 
 def test_events_boolean_context() -> None:
-    columns = ColumnSet(
-        [("contexts", Nested([("key", String()), ("value", String())]))]
-    )
+    columns = ColumnSet([("contexts", Nested([("key", String()), ("value", String())]))])
     query = ClickhouseQuery(
         Table("errors", columns, storage_key=StorageKey("dontmatter")),
         selected_columns=[
@@ -138,9 +133,7 @@ def test_events_boolean_context() -> None:
                                     ),
                                 ),
                             ),
-                            literals_tuple(
-                                None, [Literal(None, "1"), Literal(None, "True")]
-                            ),
+                            literals_tuple(None, [Literal(None, "1"), Literal(None, "True")]),
                         ),
                         Literal(None, "True"),
                         Literal(None, "False"),

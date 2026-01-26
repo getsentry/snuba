@@ -99,7 +99,6 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
     def _process_base_event_values(
         self, processed: MutableMapping[str, Any], event_dict: EventDict
     ) -> MutableMapping[str, Any]:
-
         extract_base(processed, event_dict)
 
         transaction_ctx = event_dict["data"]["contexts"]["trace"]
@@ -148,7 +147,6 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         processed: MutableMapping[str, Any],
         event_dict: EventDict,
     ) -> None:
-
         tags: Mapping[str, Any] = _as_dict_safe(event_dict["data"].get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
         promoted_tags = {col: tags[col] for col in self.PROMOTED_TAGS if col in tags}

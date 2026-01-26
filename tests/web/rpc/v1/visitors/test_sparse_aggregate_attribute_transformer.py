@@ -48,9 +48,7 @@ def test_basic() -> None:
             Column(
                 conditional_aggregation=AttributeConditionalAggregation(
                     aggregate=Function.FUNCTION_MAX,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
-                    ),
+                    key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="my.float.field"),
                     label="max(my.float.field)",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                 ),
@@ -58,9 +56,7 @@ def test_basic() -> None:
             Column(
                 conditional_aggregation=AttributeConditionalAggregation(
                     aggregate=Function.FUNCTION_AVG,
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
-                    ),
+                    key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="my.float.field"),
                     label="avg(my.float.field)",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                 ),
@@ -69,9 +65,7 @@ def test_basic() -> None:
         group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
         order_by=[
             TraceItemTableRequest.OrderBy(
-                column=Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
-                )
+                column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))
             ),
         ],
         limit=5,
@@ -83,9 +77,7 @@ def test_basic() -> None:
             filters=[
                 TraceItemFilter(
                     exists_filter=ExistsFilter(
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_STRING, name="sentry.category"
-                        )
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.category")
                     )
                 ),
                 TraceItemFilter(
@@ -140,9 +132,7 @@ def test_no_aggregate() -> None:
         ],
         order_by=[
             TraceItemTableRequest.OrderBy(
-                column=Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
-                )
+                column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))
             ),
         ],
         limit=5,

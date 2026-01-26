@@ -35,9 +35,7 @@ TESTS = [
     pytest.param(
         SnQLSubscriptionData(
             project_id=1,
-            query=(
-                "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a') "
-            ),
+            query=("MATCH (events) SELECT count() AS count WHERE platform IN tuple('a') "),
             time_window_sec=500 * 60,
             resolution_sec=60,
             entity=get_entity(EntityKey.EVENTS),
@@ -119,9 +117,7 @@ TESTS = [
                     aggregations=[
                         AttributeAggregation(
                             aggregate=Function.FUNCTION_COUNT,
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_FLOAT, name="my.float.field"
-                            ),
+                            key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my.float.field"),
                             label="count",
                             extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         ),
@@ -150,9 +146,7 @@ TESTS = [
                     aggregations=[
                         AttributeAggregation(
                             aggregate=Function.FUNCTION_COUNT,
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_FLOAT, name="my.float.field"
-                            ),
+                            key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my.float.field"),
                             label="count",
                             extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         ),

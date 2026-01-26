@@ -22,9 +22,7 @@ def write_processed_messages(
         rows.extend(message.rows)
 
     BatchWriterEncoderWrapper(
-        storage.get_table_writer().get_batch_writer(
-            metrics=DummyMetricsBackend(strict=True)
-        ),
+        storage.get_table_writer().get_batch_writer(metrics=DummyMetricsBackend(strict=True)),
         JSONRowEncoder(),
     ).write(rows)
 

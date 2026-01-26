@@ -108,6 +108,6 @@ def test_execute_retries(retryable: bool, expected: int) -> None:
         with pytest.raises(ClickhouseError):
             pool.execute("SELECT something", retryable=retryable)
 
-    assert (
-        socket_timeout_connection.execute.call_count == expected
-    ), f"Expected {expected} (failed) attempts with main connection pool"
+    assert socket_timeout_connection.execute.call_count == expected, (
+        f"Expected {expected} (failed) attempts with main connection pool"
+    )

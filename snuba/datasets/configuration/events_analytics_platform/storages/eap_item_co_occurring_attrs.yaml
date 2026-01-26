@@ -20,7 +20,8 @@ schema:
 
       { name: attribute_keys_hash, type: Array, args: { inner_type: { type: UInt, args: { size: 64 } } } },
       { name: attributes_string, type: Array, args: { inner_type: { type: String } } },
-      { name: attributes_float, type: Array, args: { inner_type: { type: String } } }
+      { name: attributes_float, type: Array, args: { inner_type: { type: String } } },
+      { name: attributes_bool, type: Array, args: { inner_type: { type: String } } }
     ]
   local_table_name: eap_item_co_occurring_attrs_1_local
   dist_table_name: eap_item_co_occurring_attrs_1_dist

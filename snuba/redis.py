@@ -5,11 +5,11 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Iterable, Mapping, TypeVar, Union, cast
 
+from redis.cluster import ClusterNode, RedisCluster
+from redis.exceptions import RedisClusterException
 from sentry_redis_tools.failover_redis import FailoverRedis
 from sentry_redis_tools.retrying_cluster import RetryingRedisCluster
 
-from redis.cluster import ClusterNode, RedisCluster
-from redis.exceptions import RedisClusterException
 from snuba import settings
 from snuba.utils.serializable_exception import SerializableException
 
@@ -128,7 +128,7 @@ _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
         socket_timeout=1,
     ),
     RedisClientKey.RATE_LIMITER: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["rate_limiter"], socket_timeout=0.5
+        settings.REDIS_CLUSTERS["rate_limiter"], socket_timeout=0.1
     ),
     RedisClientKey.SUBSCRIPTION_STORE: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["subscription_store"],

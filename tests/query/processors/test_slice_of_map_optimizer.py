@@ -34,9 +34,7 @@ tests = [
                                 None,
                                 "replaceAll",
                                 (
-                                    FunctionCall(
-                                        None, "toString", (Argument(None, "x"),)
-                                    ),
+                                    FunctionCall(None, "toString", (Argument(None, "x"),)),
                                     Literal(None, "-"),
                                     Literal(None, ""),
                                 ),

@@ -217,7 +217,6 @@ class TestValidateMigrations:
         expectation: Any,
         err_msg: str,
     ) -> None:
-
         mock_get_local_table_name.side_effect = self._dist_to_local
 
         storage = StorageSetKey.EVENTS

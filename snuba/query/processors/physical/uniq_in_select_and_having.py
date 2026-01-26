@@ -32,9 +32,7 @@ class _ExpressionOrAliasMatcher(NoopVisitor):
         for param in exp.parameters:
             param.accept(self)
         for i, exp_to_match in enumerate(self.expressions_to_match):
-            if isinstance(exp_to_match, FunctionCall) and exp_to_match.functional_eq(
-                exp
-            ):
+            if isinstance(exp_to_match, FunctionCall) and exp_to_match.functional_eq(exp):
                 self.found_expressions[i] = True
 
 

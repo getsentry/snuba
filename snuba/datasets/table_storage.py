@@ -71,9 +71,7 @@ class KafkaTopicSpec:
         client = AdminClient(config)
         topic_name = self.get_physical_topic_name()
         return len(
-            client.describe_topics(_TopicCollection([topic_name]))[topic_name]
-            .result()
-            .partitions
+            client.describe_topics(_TopicCollection([topic_name]))[topic_name].result().partitions
         )
 
     @cached_property
@@ -123,18 +121,16 @@ class KafkaStreamLoader:
             bool(subscription_synchronization_timestamp),
             bool(subscription_delay_seconds),
         ]
-        assert all(subscription_values) or not any(
-            subscription_values
-        ), "provide all subscription config or none"
+        assert all(subscription_values) or not any(subscription_values), (
+            "provide all subscription config or none"
+        )
 
         self.__processor = processor
         self.__default_topic_spec = default_topic_spec
         self.__replacement_topic_spec = replacement_topic_spec
         self.__commit_log_topic_spec = commit_log_topic_spec
         self.__subscription_scheduler_mode = subscription_scheduler_mode
-        self.__subscription_synchronization_timestamp = (
-            subscription_synchronization_timestamp
-        )
+        self.__subscription_synchronization_timestamp = subscription_synchronization_timestamp
         self.__subscription_scheduled_topic_spec = subscription_scheduled_topic_spec
         self.__subscription_result_topic_spec = subscription_result_topic_spec
         self.__subscription_delay_seconds = subscription_delay_seconds
@@ -287,9 +283,7 @@ class TableWriter:
         elif self.__write_format == WriteFormat.VALUES:
             column_names = self.get_writeable_columns()
             insert_statement = (
-                InsertStatement(table_name)
-                .with_format("VALUES")
-                .with_columns(column_names)
+                InsertStatement(table_name).with_format("VALUES").with_columns(column_names)
             )
         else:
             raise TypeError("unknown table format", self.__write_format)
@@ -325,9 +319,7 @@ class TableWriter:
 
         return get_cluster(self.__storage_set).get_batch_writer(
             metrics,
-            InsertStatement(table_name)
-            .with_columns(column_names)
-            .with_format("CSVWithNames"),
+            InsertStatement(table_name).with_columns(column_names).with_format("CSVWithNames"),
             encoding=encoding,
             options=options,
             chunk_size=1,

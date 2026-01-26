@@ -78,7 +78,6 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestExportTraceItems(BaseApiTest):
-
     def test_timerange_without_data(self, setup_teardown: Any) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
@@ -100,7 +99,6 @@ class TestExportTraceItems(BaseApiTest):
         assert response.trace_items == []
 
     def test_with_pagination(self, setup_teardown: Any) -> None:
-
         response = None
         message = ExportTraceItemsRequest(
             meta=RequestMeta(
@@ -134,7 +132,13 @@ class TestExportTraceItems(BaseApiTest):
         # Wrap the real run_query to capture the actual QueryResult while still hitting ClickHouse.
         captured: dict[str, Any] = {}
 
-        def wrapper(dataset, request, timer, robust: bool = False, concurrent_queries_gauge=None) -> QueryResult:  # type: ignore[no-untyped-def]
+        def wrapper(
+            dataset: Any,
+            request: Any,
+            timer: Any,
+            robust: bool = False,
+            concurrent_queries_gauge: Any | None = None,
+        ) -> QueryResult:
             qr = run_query(dataset, request, timer, robust, concurrent_queries_gauge)
             captured["query_result"] = qr
             return qr

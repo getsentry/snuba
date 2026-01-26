@@ -3,9 +3,8 @@ from typing import Any, MutableMapping
 import pytest
 
 from snuba import state
-from snuba.clickhouse.columns import ColumnSet, DateTime
+from snuba.clickhouse.columns import ColumnSet, DateTime, String
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
-from snuba.clickhouse.columns import String
 from snuba.clickhouse.query import Query
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
@@ -47,9 +46,7 @@ def test_apply_clickhouse_settings(
         selected_columns=[
             SelectedExpression(
                 name="_snuba_count_unique_sdk_version",
-                expression=FunctionCall(
-                    None, "uniq", (Column(None, None, "mismatched1"),)
-                ),
+                expression=FunctionCall(None, "uniq", (Column(None, None, "mismatched1"),)),
             )
         ],
     )
@@ -75,9 +72,7 @@ def test_per_query_settings() -> None:
         selected_columns=[
             SelectedExpression(
                 name="_snuba_count_unique_sdk_version",
-                expression=FunctionCall(
-                    None, "uniq", (Column(None, None, "mismatched1"),)
-                ),
+                expression=FunctionCall(None, "uniq", (Column(None, None, "mismatched1"),)),
             )
         ],
     )
@@ -121,9 +116,7 @@ def test_ignore_clickhouse_settings_overrides() -> None:
         selected_columns=[
             SelectedExpression(
                 name="_snuba_count_unique_sdk_version",
-                expression=FunctionCall(
-                    None, "uniq", (Column(None, None, "mismatched1"),)
-                ),
+                expression=FunctionCall(None, "uniq", (Column(None, None, "mismatched1"),)),
             )
         ],
     )

@@ -53,7 +53,7 @@ sentry = { version = "0.41.0", default-features = false, features = [
     "logs"
 ] }
 sentry-kafka-schemas = "2.0.2"
-sentry_protos = "0.4.8"
+sentry_protos = "0.4.14"
 sentry_arroyo = { version = "2.37.0", features = ["ssl"] }
 sentry_usage_accountant = { version = "0.1.2", features = ["kafka"] }
 seq-macro = "0.3"
