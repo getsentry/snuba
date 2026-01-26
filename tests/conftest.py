@@ -1,6 +1,6 @@
 import json
 import traceback
-from typing import Any, Callable, Dict, Generator, List, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, Generator, List, Sequence, Set, Tuple, Union
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
@@ -204,6 +204,27 @@ def _clear_db() -> None:
                 connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
 
 
+def _drop_tables() -> None:
+    clusters: Set[ClickhouseCluster] = set()
+    for storage_key in get_all_storage_keys():
+        storage = get_storage(storage_key)
+        cluster = storage.get_cluster()
+        clusters.add(cluster)
+
+    for cluster in clusters:
+        database_name = cluster.get_database()
+
+        nodes = [
+            *cluster.get_local_nodes(),
+            *cluster.get_distributed_nodes(),
+        ]
+
+        for node in nodes:
+            connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+            connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
+            connection.execute(f"CREATE DATABASE {database_name};")
+
+
 @pytest.fixture
 def custom_clickhouse_db(
     request: pytest.FixtureRequest,
@@ -214,9 +235,10 @@ def custom_clickhouse_db(
             "Need to use custom_clickhouse_db marker if custom_clickhouse_db fixture is used"
         )
     try:
+        _drop_tables()
         yield
     finally:
-        _clear_db()
+        _drop_tables()
 
 
 @pytest.fixture
