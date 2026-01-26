@@ -53,7 +53,6 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
-    setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
@@ -569,7 +568,11 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         in_msg: TraceItemTableRequest,
         routing_decision: RoutingDecision,
     ) -> TraceItemTableResponse:
-        query_settings = setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
+        query_settings = HTTPQuerySettings(apply_default_subscriptable_mapping=False)
+        if in_msg.meta.debug:
+            query_settings.set_clickhouse_settings(
+                {"send_logs_level": "trace", "log_profile_events": 1}
+            )
         try:
             routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
             query_settings.set_sampling_tier(routing_decision.tier)

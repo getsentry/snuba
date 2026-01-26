@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import ipaddress
 import sys
 from contextlib import redirect_stdout
 from dataclasses import asdict
@@ -23,6 +24,7 @@ from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
 )
 from snuba.admin.clickhouse.common import InvalidCustomQuery, InvalidNodeError
+from snuba.admin.clickhouse.copy_tables import copy_tables
 from snuba.admin.clickhouse.database_clusters import get_node_info, get_system_settings
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
@@ -450,6 +452,68 @@ def clickhouse_system_query() -> Response:
 
     # We should never get here
     return make_response(jsonify({"error": "Something went wrong"}), 400)
+
+
+@application.route("/run_copy_table_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.SYSTEM_QUERIES])
+def copy_table_query() -> Response:
+    req = request.get_json() or {}
+    try:
+        storage = req["storage"]
+        source_host = req["source_host"]
+        target_host = req["target_host"]
+        # raises a ValueError when an invalid ip
+        ipaddress.ip_address(target_host)
+
+        dry_run = req.get("dry_run", True)
+
+        resp = copy_tables(
+            source_host=source_host,
+            target_host=target_host,
+            storage_name=storage,
+            dry_run=dry_run,
+        )
+    except KeyError as err:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Invalid request, missing key {err.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+    except ValueError as err:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Target host is invalid: {err.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+    except ClickhouseError as err:
+        logger.error(err, exc_info=True)
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+
+    try:
+        return make_response(jsonify(resp), 200)
+    except Exception as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
+        )
 
 
 # Sample cURL command:

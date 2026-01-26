@@ -513,6 +513,11 @@ def get_extrapolated_function(
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
             **alias_dict,
         ),
+        Function.FUNCTION_ANY: f.anyIfOrNull(
+            field,
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
+            **alias_dict,
+        ),
     }
 
     return function_map_sample_weighted.get(aggregation.aggregate)
@@ -832,6 +837,10 @@ def aggregation_to_expression(
             field,
             and_cond(get_field_existence_expression(field), condition_in_aggregation),
         ),
+        Function.FUNCTION_ANY: f.anyIfOrNull(
+            field,
+            and_cond(get_field_existence_expression(field), condition_in_aggregation),
+        ),
     }
 
     if aggregation.extrapolation_mode in [
@@ -845,7 +854,15 @@ def aggregation_to_expression(
     else:
         agg_func_expr = function_map.get(aggregation.aggregate)
         if agg_func_expr is not None:
-            agg_func_expr = f.round(agg_func_expr, _FLOATING_POINT_PRECISION, **alias_dict)
+            # Don't apply round() to FUNCTION_ANY since it can return non-numeric types (e.g., strings)
+            if aggregation.aggregate == Function.FUNCTION_ANY:
+                agg_func_expr = f.anyIfOrNull(
+                    field,
+                    and_cond(get_field_existence_expression(field), condition_in_aggregation),
+                    **alias_dict,
+                )
+            else:
+                agg_func_expr = f.round(agg_func_expr, _FLOATING_POINT_PRECISION, **alias_dict)
 
     if agg_func_expr is None:
         raise BadSnubaRPCRequestException(f"Aggregation not specified for {aggregation.key.name}")

@@ -210,15 +210,11 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         expression = request.expressions[0]
         vis = GetExpressionAggregationsVisitor()
         TimeSeriesExpressionWrapper(expression).accept(vis)
-        allowed_modes = [
-            ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
-            ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
-            ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
-        ]
-        if any(e.extrapolation_mode not in allowed_modes for e in vis.aggregations):
-            raise InvalidSubscriptionError(
-                f"Invalid extrapolation mode. Allowed extrapolation modes: {', '.join([ExtrapolationMode.Name(mode) for mode in allowed_modes])}"
-            )
+        if any(
+            e.extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_UNSPECIFIED
+            for e in vis.aggregations
+        ):
+            raise InvalidSubscriptionError("Extrapolation mode must be specified.")
 
     def build_request(
         self,
