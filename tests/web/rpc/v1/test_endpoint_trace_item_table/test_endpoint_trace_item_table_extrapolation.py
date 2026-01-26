@@ -1187,3 +1187,106 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 ],
             ),
         ]
+
+    def test_aggregation_with_zero_sampling_rate_mixed(self) -> None:
+        """
+        Test that aggregations correctly discard items with zero sampling rate.
+        Items with zero sampling rate should be excluded from extrapolation calculations.
+        """
+        items_storage = get_storage(StorageKey("eap_items"))
+        messages_with_zero_rate = []
+        messages_with_nonzero_rate = []
+
+        # Create 3 items with zero sampling rate (should be discarded)
+        for i in range(3):
+            start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
+            end_timestamp = start_timestamp + timedelta(seconds=1)
+            messages_with_zero_rate.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={
+                        "custom_measurement": AnyValue(
+                            int_value=100
+                        ),  # Large value to make it obvious if included
+                        "custom_tag": AnyValue(string_value="test"),
+                    },
+                    server_sample_rate=0.0,  # Zero sampling rate - should be discarded
+                    end_timestamp=end_timestamp,
+                )
+            )
+
+        # Create 5 items with non-zero sampling rate (should be included)
+        for i in range(5):
+            start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
+            end_timestamp = start_timestamp + timedelta(seconds=1)
+            messages_with_nonzero_rate.append(
+                gen_item_message(
+                    start_timestamp=start_timestamp,
+                    attributes={
+                        "custom_measurement": AnyValue(int_value=i),  # Values 0, 1, 2, 3, 4
+                        "custom_tag": AnyValue(string_value="test"),
+                    },
+                    server_sample_rate=1.0,  # Full sampling rate
+                    end_timestamp=end_timestamp,
+                )
+            )
+
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            messages_with_zero_rate + messages_with_nonzero_rate,
+        )
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
+                        label="sum(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
+                        label="count(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
+                        label="avg(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+            ],
+            order_by=[],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        # Zero sample rate items should be discarded, so we should only see results from the 5 non-zero items
+        measurement_sum = [v.val_double for v in response.column_values[0].results][0]
+        measurement_count = [v.val_double for v in response.column_values[1].results][0]
+        measurement_avg = [v.val_double for v in response.column_values[2].results][0]
+
+        # Expected: sum of 0+1+2+3+4 = 10 (zero sample rate items with value 100 should be excluded)
+        assert measurement_sum == 10
+        # Expected: count of 5 items (zero sample rate items should be excluded)
+        assert measurement_count == 5
+        # Expected: average of (0+1+2+3+4)/5 = 2.0
+        assert measurement_avg == 2.0
