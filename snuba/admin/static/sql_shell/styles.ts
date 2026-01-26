@@ -289,4 +289,124 @@ export const useShellStyles = createStyles((theme) => ({
       "50%": { opacity: 0.4 },
     },
   },
+  // Collapsible section styles
+  resultContainer: {
+    marginTop: "8px",
+    marginBottom: "8px",
+  },
+  collapsibleSection: {
+    backgroundColor: "rgba(13, 17, 23, 0.6)",
+    borderRadius: "6px",
+    border: "1px solid #30363d",
+    marginBottom: "6px",
+    overflow: "hidden",
+  },
+  collapsibleHeader: {
+    display: "flex",
+    alignItems: "center",
+    padding: "6px 10px",
+    cursor: "pointer",
+    userSelect: "none",
+    backgroundColor: "rgba(22, 27, 34, 0.8)",
+    "&:hover": {
+      backgroundColor: "rgba(48, 54, 61, 0.6)",
+    },
+  },
+  collapsibleChevron: {
+    color: "#8b949e",
+    fontSize: "10px",
+    marginRight: "8px",
+    width: "12px",
+  },
+  collapsibleTitle: {
+    color: "#e6edf3",
+    fontSize: "12px",
+    fontWeight: 500,
+  },
+  collapsibleBadge: {
+    marginLeft: "8px",
+    padding: "1px 6px",
+    backgroundColor: "rgba(88, 166, 255, 0.15)",
+    color: "#58a6ff",
+    borderRadius: "10px",
+    fontSize: "10px",
+    fontWeight: 500,
+  },
+  collapsibleContent: {
+    padding: "8px 10px",
+    borderTop: "1px solid #21262d",
+  },
+  // Compact result table styles
+  resultTableCompact: {
+    borderCollapse: "collapse",
+    width: "100%",
+    fontSize: "11px",
+    "& th": {
+      backgroundColor: "#161b22",
+      color: "#58a6ff",
+      padding: "6px 10px",
+      textAlign: "left",
+      borderBottom: "1px solid #30363d",
+      fontWeight: 600,
+      fontSize: "10px",
+      textTransform: "uppercase",
+      letterSpacing: "0.3px",
+      whiteSpace: "nowrap",
+      "& small": {
+        color: "#6e7681",
+        fontWeight: 400,
+      },
+    },
+    "& td": {
+      padding: "4px 10px",
+      borderBottom: "1px solid #21262d",
+      color: "#e6edf3",
+      maxWidth: "300px",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+    },
+    "& tr:hover td": {
+      backgroundColor: "rgba(88, 166, 255, 0.05)",
+    },
+    "& tr:last-child td": {
+      borderBottom: "none",
+    },
+  },
+  nullValue: {
+    color: "#6e7681",
+    fontStyle: "italic",
+  },
+  truncatedNote: {
+    color: "#6e7681",
+    fontSize: "10px",
+    marginTop: "6px",
+    paddingTop: "6px",
+    borderTop: "1px solid #21262d",
+  },
+  emptyResult: {
+    color: "#6e7681",
+    fontSize: "11px",
+    fontStyle: "italic",
+  },
+  rawTraceContent: {
+    maxHeight: "200px",
+    overflowY: "auto",
+    "&::-webkit-scrollbar": {
+      width: "6px",
+    },
+    "&::-webkit-scrollbar-track": {
+      background: "transparent",
+    },
+    "&::-webkit-scrollbar-thumb": {
+      background: "#30363d",
+      borderRadius: "3px",
+    },
+  },
+  rawTraceLine: {
+    color: "#e6edf3",
+    fontSize: "11px",
+    lineHeight: 1.4,
+    fontFamily: "inherit",
+  },
 }));

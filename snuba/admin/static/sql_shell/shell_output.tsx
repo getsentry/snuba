@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useShellStyles } from "SnubaAdmin/sql_shell/styles";
 import { ShellHistoryEntry, ShellMode } from "SnubaAdmin/sql_shell/types";
@@ -14,6 +14,39 @@ import {
   SortingSummary,
 } from "SnubaAdmin/tracing/types";
 import { QueryResult } from "SnubaAdmin/clickhouse_queries/types";
+
+// Collapsible section component
+function CollapsibleSection({
+  title,
+  badge,
+  defaultExpanded = false,
+  children,
+  classes,
+}: {
+  title: string;
+  badge?: string;
+  defaultExpanded?: boolean;
+  children: React.ReactNode;
+  classes: Record<string, string>;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  return (
+    <div className={classes.collapsibleSection}>
+      <div
+        className={classes.collapsibleHeader}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span className={classes.collapsibleChevron}>
+          {expanded ? "▼" : "▶"}
+        </span>
+        <span className={classes.collapsibleTitle}>{title}</span>
+        {badge && <span className={classes.collapsibleBadge}>{badge}</span>}
+      </div>
+      {expanded && <div className={classes.collapsibleContent}>{children}</div>}
+    </div>
+  );
+}
 
 interface ShellOutputProps {
   entries: ShellHistoryEntry[];
@@ -354,21 +387,24 @@ function ResultsOutput({
 
   const cols = result.cols || [];
   const rows = result.result || [];
+  const rowCount = result.num_rows_result || rows.length || 0;
 
   return (
-    <div>
-      <div className={classes.resultBox}>
-        <div className={classes.resultHeader}>
-          Query Results ({result.num_rows_result || 0} rows)
-        </div>
+    <div className={classes.resultContainer}>
+      <CollapsibleSection
+        title="Results"
+        badge={`${rowCount} rows`}
+        defaultExpanded={true}
+        classes={classes}
+      >
         {cols.length > 0 ? (
           <div className={classes.tableContainer}>
-            <table className={classes.resultTable}>
+            <table className={classes.resultTableCompact}>
               <thead>
                 <tr>
                   {cols.map((col: string[] | undefined, idx: number) => (
                     <th key={idx}>
-                      {col ? col[0] : "?"} <small style={{ color: "#666666" }}>({col ? col[1] : "?"})</small>
+                      {col ? col[0] : "?"} <small>({col ? col[1] : "?"})</small>
                     </th>
                   ))}
                 </tr>
@@ -379,7 +415,7 @@ function ResultsOutput({
                     {row ? row.map((cell, cellIdx) => (
                       <td key={cellIdx}>
                         {cell === null || cell === undefined
-                          ? "NULL"
+                          ? <span className={classes.nullValue}>NULL</span>
                           : typeof cell === "object"
                           ? JSON.stringify(cell)
                           : String(cell)}
@@ -390,15 +426,15 @@ function ResultsOutput({
               </tbody>
             </table>
             {rows.length > 100 && (
-              <div style={{ color: "#8b949e", marginTop: "8px" }}>
+              <div className={classes.truncatedNote}>
                 ... showing first 100 of {rows.length} rows
               </div>
             )}
           </div>
         ) : (
-          <div style={{ color: "#8b949e" }}>No results returned</div>
+          <div className={classes.emptyResult}>No results returned</div>
         )}
-      </div>
+      </CollapsibleSection>
 
       {traceFormatted && result.summarized_trace_output ? (
         <FormattedTraceOutput
@@ -436,14 +472,16 @@ function SystemResultsOutput({
   const rows = result.rows || [];
 
   return (
-    <div>
-      <div className={classes.resultBox}>
-        <div className={classes.resultHeader}>
-          Query Results ({rows.length} rows)
-        </div>
+    <div className={classes.resultContainer}>
+      <CollapsibleSection
+        title="Results"
+        badge={`${rows.length} rows`}
+        defaultExpanded={true}
+        classes={classes}
+      >
         {cols.length > 0 ? (
           <div className={classes.tableContainer}>
-            <table className={classes.resultTable}>
+            <table className={classes.resultTableCompact}>
               <thead>
                 <tr>
                   {cols.map((col: string, idx: number) => (
@@ -457,7 +495,7 @@ function SystemResultsOutput({
                     {row ? row.map((cell, cellIdx) => (
                       <td key={cellIdx}>
                         {cell === null || cell === undefined
-                          ? "NULL"
+                          ? <span className={classes.nullValue}>NULL</span>
                           : typeof cell === "object"
                           ? JSON.stringify(cell)
                           : String(cell)}
@@ -468,15 +506,15 @@ function SystemResultsOutput({
               </tbody>
             </table>
             {rows.length > 100 && (
-              <div style={{ color: "#8b949e", marginTop: "8px" }}>
+              <div className={classes.truncatedNote}>
                 ... showing first 100 of {rows.length} rows
               </div>
             )}
           </div>
         ) : (
-          <div style={{ color: "#8b949e" }}>No results returned</div>
+          <div className={classes.emptyResult}>No results returned</div>
         )}
-      </div>
+      </CollapsibleSection>
     </div>
   );
 }
@@ -492,10 +530,13 @@ function FormattedTraceOutput({
 }) {
   if (!summary || !summary.query_summaries) {
     return (
-      <div className={classes.traceBox}>
-        <div className={classes.resultHeader}>Trace Summary</div>
-        <div style={{ color: "#8b949e" }}>No trace data available</div>
-      </div>
+      <CollapsibleSection
+        title="Trace"
+        defaultExpanded={false}
+        classes={classes}
+      >
+        <div className={classes.emptyResult}>No trace data available</div>
+      </CollapsibleSection>
     );
   }
 
@@ -511,9 +552,15 @@ function FormattedTraceOutput({
     }
   }
 
+  const nodeCount = (distNode ? 1 : 0) + nodes.length;
+
   return (
-    <div className={classes.traceBox}>
-      <div className={classes.resultHeader}>Trace Summary</div>
+    <CollapsibleSection
+      title="Trace"
+      badge={`${nodeCount} node${nodeCount !== 1 ? "s" : ""}`}
+      defaultExpanded={false}
+      classes={classes}
+    >
       {distNode && <NodeSummary node={distNode} classes={classes} />}
       {nodes.map((node) => (
         <NodeSummary key={node.node_name} node={node} classes={classes} />
@@ -521,7 +568,7 @@ function FormattedTraceOutput({
       {profileEvents && Object.keys(profileEvents).length > 0 && (
         <ProfileEventsOutput profileEvents={profileEvents} classes={classes} />
       )}
-    </div>
+    </CollapsibleSection>
   );
 }
 
@@ -603,29 +650,36 @@ function RawTraceOutput({
 }) {
   if (!traceOutput) {
     return (
-      <div className={classes.traceBox}>
-        <div className={classes.resultHeader}>Raw Trace Output</div>
-        <div style={{ color: "#8b949e" }}>No trace data available</div>
-      </div>
+      <CollapsibleSection
+        title="Raw Trace"
+        defaultExpanded={false}
+        classes={classes}
+      >
+        <div className={classes.emptyResult}>No trace data available</div>
+      </CollapsibleSection>
     );
   }
 
   const lines = traceOutput.split("\n").filter((l) => l.trim());
 
   return (
-    <div className={classes.traceBox}>
-      <div className={classes.resultHeader}>Raw Trace Output</div>
+    <CollapsibleSection
+      title="Raw Trace"
+      badge={`${lines.length} lines`}
+      defaultExpanded={false}
+      classes={classes}
+    >
       {profileEvents && Object.keys(profileEvents).length > 0 && (
         <ProfileEventsOutput profileEvents={profileEvents} classes={classes} />
       )}
-      <div style={{ marginTop: "8px" }}>
+      <div className={classes.rawTraceContent}>
         {lines.map((line, idx) => (
-          <div key={idx} style={{ color: "#e6edf3", fontSize: "12px" }}>
+          <div key={idx} className={classes.rawTraceLine}>
             {line}
           </div>
         ))}
       </div>
-    </div>
+    </CollapsibleSection>
   );
 }
 
