@@ -77,8 +77,6 @@ def pytest_collection_modifyitems(items: Sequence[Any]) -> None:
             item.fixturenames.append("clickhouse_db")
         elif item.get_closest_marker("custom_clickhouse_db"):
             item.fixturenames.append("custom_clickhouse_db")
-        elif item.get_closest_marker("clickhouse_db_outcomes"):
-            item.fixturenames.append("clickhouse_db_outcomes")
         else:
             item.fixturenames.append("block_clickhouse_db")
 

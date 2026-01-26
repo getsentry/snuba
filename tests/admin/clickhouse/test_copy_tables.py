@@ -8,6 +8,7 @@ from snuba.admin.clickhouse.copy_tables import (
     get_create_table_statements,
 )
 from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.migrations import table_engines
 from snuba.migrations.groups import MigrationGroup
 
 OUTCOMES_DAILY_TABLE = """
@@ -23,7 +24,7 @@ CREATE TABLE IF NOT EXISTS {db}.outcomes_daily_local_v2 ON CLUSTER test_cluster
     `quantity` UInt64,
     `times_seen` UInt64
 )
-ENGINE = SummingMergeTree
+ENGINE = {engine}
 PARTITION BY toStartOfMonth(timestamp)
 ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category)
 TTL timestamp + toIntervalMonth(13)
@@ -91,7 +92,15 @@ def test_get_table_statements(
     host = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")
     settings = ClickhouseClientSettings.QUERY
     storage = _get_storage(storage_name)
-    database_name = storage.get_cluster().get_database()
+    cluster = storage.get_cluster()
+    database_name = cluster.get_database()
+    if cluster.is_single_node():
+        engine = "SummingMergeTree"
+    else:
+        engine = table_engines.SummingMergeTree(
+            storage_set=storage.get_storage_set_key(),
+            order_by="",
+        )._get_engine_type(cluster, table)
     table_statements = get_create_table_statements(
         tables=[table],
         source_connection=get_clusterless_node_connection(
@@ -102,7 +111,7 @@ def test_get_table_statements(
     )
     ts = table_statements[0]
     assert ts.is_mergetree == is_mergetree
-    assert ts.statement == statement.format(db=database_name).strip()
+    assert ts.statement == statement.format(db=database_name, engine=engine).strip()
 
 
 @pytest.mark.redis_db
