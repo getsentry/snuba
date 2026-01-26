@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+
+const MAX_HISTORY_ENTRIES = 500;
 import Client from "SnubaAdmin/api_client";
 import { useShellStyles } from "SnubaAdmin/sql_shell/styles";
 import { ShellOutput } from "SnubaAdmin/sql_shell/shell_output";
@@ -121,7 +123,6 @@ function SQLShell({ api, mode }: SQLShellProps) {
   const [storages, setStorages] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const outputRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.getClickhouseNodes().then((res) => {
@@ -129,12 +130,6 @@ function SQLShell({ api, mode }: SQLShellProps) {
       setStorages(res.map((n) => n.storage_name));
     });
   }, [api]);
-
-  useEffect(() => {
-    if (outputRef.current) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight;
-    }
-  }, [state.history]);
 
   const getHostsForStorage = useCallback((storageName: string): string[] => {
     const nodeInfo = nodeData.find((n) => n.storage_name === storageName);
@@ -157,10 +152,15 @@ function SQLShell({ api, mode }: SQLShellProps) {
   }, [nodeData]);
 
   const addHistoryEntry = useCallback((entry: ShellHistoryEntry) => {
-    setState((prev) => ({
-      ...prev,
-      history: [...prev.history, entry],
-    }));
+    setState((prev) => {
+      const newHistory = [...prev.history, entry];
+      return {
+        ...prev,
+        history: newHistory.length > MAX_HISTORY_ENTRIES
+          ? newHistory.slice(-MAX_HISTORY_ENTRIES)
+          : newHistory,
+      };
+    });
   }, []);
 
   const executeCommand = useCallback(
@@ -626,16 +626,12 @@ function SQLShell({ api, mode }: SQLShellProps) {
 
   return (
     <div className={state.sudoEnabled ? classes.shellContainerSudo : classes.shellContainer} onClick={focusInput}>
-      <div ref={outputRef} className={classes.outputArea}>
-        <ShellOutput
-          entries={state.history}
-          traceFormatted={state.traceFormatted}
-          mode={mode}
-        />
-        {state.isExecuting && (
-          <div className={classes.executingIndicator}>Executing query...</div>
-        )}
-      </div>
+      <ShellOutput
+        entries={state.history}
+        traceFormatted={state.traceFormatted}
+        mode={mode}
+        isExecuting={state.isExecuting}
+      />
       {suggestions.length > 0 && (
         <div className={classes.suggestionsBar}>
           {suggestions.map((s, i) => (

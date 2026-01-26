@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useRef, useEffect, useCallback } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useShellStyles } from "SnubaAdmin/sql_shell/styles";
 import { ShellHistoryEntry, ShellMode } from "SnubaAdmin/sql_shell/types";
 import {
@@ -18,17 +19,100 @@ interface ShellOutputProps {
   entries: ShellHistoryEntry[];
   traceFormatted: boolean;
   mode: ShellMode;
+  isExecuting?: boolean;
 }
 
-export function ShellOutput({ entries, traceFormatted, mode }: ShellOutputProps) {
+function estimateEntryHeight(entry: ShellHistoryEntry): number {
+  const heights: Record<ShellHistoryEntry["type"], number> = {
+    command: 40,
+    info: 35,
+    error: 80,
+    result: 300,
+    system_result: 250,
+    storages: 200,
+    hosts: 150,
+    help: 400,
+  };
+  return heights[entry.type] || 50;
+}
+
+export function ShellOutput({ entries, traceFormatted, mode, isExecuting }: ShellOutputProps) {
   const { classes } = useShellStyles();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const wasAtBottomRef = useRef(true);
+
+  const virtualizer = useVirtualizer({
+    count: entries.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: (index) => estimateEntryHeight(entries[index]),
+    overscan: 5,
+  });
+
+  // Check if user is at bottom before entries change
+  const checkIfAtBottom = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return true;
+    const threshold = 50; // pixels from bottom to consider "at bottom"
+    return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+  }, []);
+
+  // Track scroll position to determine if we should auto-scroll
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      wasAtBottomRef.current = checkIfAtBottom();
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [checkIfAtBottom]);
+
+  // Auto-scroll to bottom when new entries are added (if user was at bottom)
+  useEffect(() => {
+    if (entries.length > 0 && wasAtBottomRef.current) {
+      virtualizer.scrollToIndex(entries.length - 1, { align: "end" });
+    }
+  }, [entries.length, virtualizer]);
+
+  const virtualItems = virtualizer.getVirtualItems();
 
   return (
-    <>
-      {entries.map((entry, idx) => (
-        <ShellEntry key={idx} entry={entry} traceFormatted={traceFormatted} mode={mode} classes={classes} />
-      ))}
-    </>
+    <div ref={scrollContainerRef} className={classes.outputArea}>
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: "100%",
+          position: "relative",
+        }}
+      >
+        {virtualItems.map((virtualItem) => (
+          <div
+            key={virtualItem.index}
+            data-index={virtualItem.index}
+            ref={virtualizer.measureElement}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              transform: `translateY(${virtualItem.start}px)`,
+            }}
+          >
+            <ShellEntry
+              entry={entries[virtualItem.index]}
+              traceFormatted={traceFormatted}
+              mode={mode}
+              classes={classes}
+            />
+          </div>
+        ))}
+      </div>
+      {isExecuting && (
+        <div className={classes.executingIndicator}>Executing query...</div>
+      )}
+    </div>
   );
 }
 
