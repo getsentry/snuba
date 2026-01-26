@@ -20,7 +20,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, literal, or_cond
+from snuba.query.dsl import column, literal
 from snuba.query.expressions import FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -227,61 +227,20 @@ def _build_query(
 
     page_token_filter = (
         [
-            or_cond(
-                # (project_id > page_token.last_seen_project_id)
-                f.greater(column("project_id"), literal(page_token.last_seen_project_id)),
-                or_cond(
-                    # (project_id = page_token.last_seen_project_id AND item_type > page_token.last_seen_item_type)
-                    and_cond(
-                        f.equals(column("project_id"), literal(page_token.last_seen_project_id)),
-                        f.greater(column("item_type"), literal(page_token.last_seen_item_type)),
-                    ),
-                    or_cond(
-                        # (project_id = page_token.last_seen_project_id AND item_type = page_token.last_seen_item_type AND timestamp > page_token.last_seen_timestamp)
-                        and_cond(
-                            f.equals(
-                                column("project_id"), literal(page_token.last_seen_project_id)
-                            ),
-                            f.equals(column("item_type"), literal(page_token.last_seen_item_type)),
-                            f.greater(column("timestamp"), literal(page_token.last_seen_timestamp)),
-                        ),
-                        or_cond(
-                            # (project_id = page_token.last_seen_project_id AND item_type = page_token.last_seen_item_type AND timestamp = page_token.last_seen_timestamp AND trace_id > page_token.last_seen_trace_id)
-                            and_cond(
-                                f.equals(
-                                    column("project_id"), literal(page_token.last_seen_project_id)
-                                ),
-                                f.equals(
-                                    column("item_type"), literal(page_token.last_seen_item_type)
-                                ),
-                                f.equals(
-                                    column("timestamp"), literal(page_token.last_seen_timestamp)
-                                ),
-                                f.greater(
-                                    column("trace_id"), literal(page_token.last_seen_trace_id)
-                                ),
-                            ),
-                            # (project_id = page_token.last_seen_project_id AND item_type = page_token.last_seen_item_type AND timestamp = page_token.last_seen_timestamp AND trace_id = page_token.last_seen_trace_id AND item_id > page_token.last_seen_item_id)
-                            and_cond(
-                                f.equals(
-                                    column("project_id"), literal(page_token.last_seen_project_id)
-                                ),
-                                f.equals(
-                                    column("item_type"), literal(page_token.last_seen_item_type)
-                                ),
-                                f.equals(
-                                    column("timestamp"), literal(page_token.last_seen_timestamp)
-                                ),
-                                f.equals(
-                                    column("trace_id"), literal(page_token.last_seen_trace_id)
-                                ),
-                                f.greater(
-                                    f.reinterpretAsUInt128(f.reverse(f.unhex(column("item_id")))),
-                                    literal(page_token.last_seen_item_id),
-                                ),
-                            ),
-                        ),
-                    ),
+            f.greater(
+                f.tuple(
+                    column("project_id"),
+                    column("item_type"),
+                    column("timestamp"),
+                    column("trace_id"),
+                    column("item_id"),
+                ),
+                f.tuple(
+                    literal(page_token.last_seen_project_id),
+                    literal(page_token.last_seen_item_type),
+                    literal(page_token.last_seen_timestamp),
+                    literal(page_token.last_seen_trace_id),
+                    literal(page_token.last_seen_item_id),
                 ),
             )
         ]
