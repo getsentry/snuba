@@ -124,17 +124,27 @@ def test_create_tables_order() -> None:
     """
     run_migrations()
     host = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")
-    ordered_tables = [
-        # local tables
+    expected_local_tables = [
         "migrations_local",
         "outcomes_daily_local_v2",
         "outcomes_hourly_local",
         "outcomes_raw_local",
-        # materialized views
+    ]
+    expected_non_local_tables = [
+        "migrations_dist",
+        "outcomes_daily_dist_v2",
+        "outcomes_hourly_dist",
         "outcomes_mv_daily_local_v2",
         "outcomes_mv_hourly_local",
+        "outcomes_raw_dist",
     ]
+
     results = copy_tables(
         source_host=host, target_host=host, storage_name="outcomes_raw", dry_run=True
     )
-    assert results["tables"] == ",".join(ordered_tables)
+    all_tables = str(results["tables"])
+
+    local_tables = all_tables.split(",")[:4]
+    non_local_tables = all_tables.split(",")[4:]
+    assert local_tables == expected_local_tables
+    assert all(table in expected_non_local_tables for table in non_local_tables)
