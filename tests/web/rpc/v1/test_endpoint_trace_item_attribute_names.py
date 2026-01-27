@@ -64,11 +64,11 @@ def populate_eap_spans_storage(num_rows: int) -> None:
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
+def setup_teardown(eap: None, redis_db: None) -> None:
     populate_eap_spans_storage(num_rows=TOTAL_GENERATED_SPANS)
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestTraceItemAttributeNames(BaseApiTest):
     def test_basic(self) -> None:

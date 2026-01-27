@@ -67,13 +67,13 @@ def _assert_attributes_keys(trace_items: list[TraceItem]) -> None:
 
 
 @pytest.fixture(autouse=False)
-def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
+def setup_teardown(eap: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
     write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
     write_raw_unprocessed_events(items_storage, _LOGS)  # type: ignore
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestExportTraceItems(BaseApiTest):
     def test_timerange_without_data(self, setup_teardown: Any) -> None:
