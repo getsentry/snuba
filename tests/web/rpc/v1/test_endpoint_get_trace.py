@@ -144,14 +144,14 @@ def get_attributes(
 
 
 @pytest.fixture(autouse=False)
-def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
+def setup_teardown(eap: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
 
     write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
     write_raw_unprocessed_events(items_storage, _LOGS)  # type: ignore
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestGetTrace(BaseApiTest):
     def test_without_data(self) -> None:
@@ -487,7 +487,7 @@ def get_span_id(span: TraceItem) -> str:
     )[2:].rjust(16, "0")
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestGetTracePagination(BaseApiTest):
     def test_pagination_with_user_limit(self, setup_teardown: Any) -> None:

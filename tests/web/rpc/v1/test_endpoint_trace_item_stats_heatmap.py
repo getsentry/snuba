@@ -32,7 +32,7 @@ from tests.web.rpc.v1.test_utils import (
 
 
 @pytest.fixture(autouse=False)
-def setup_heatmap_teardown(clickhouse_db: None, redis_db: None) -> None:
+def setup_heatmap_teardown(eap: None, redis_db: None) -> None:
     """
     Setup test data for heatmap tests.
     Creates 100 trace items with varied attributes for testing heatmap functionality:
@@ -91,7 +91,7 @@ def setup_heatmap_teardown(clickhouse_db: None, redis_db: None) -> None:
     write_raw_unprocessed_events(items_storage, messages)  # type: ignore
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestTraceItemStatsHeatmap(BaseApiTest):
     def test_basic_heatmap_no_data(self) -> None:

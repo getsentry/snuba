@@ -37,7 +37,7 @@ _TRACE_ID = str(uuid.uuid4())
 
 
 @pytest.fixture(autouse=False)
-def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
+def setup_logs_in_db(eap: None, redis_db: None) -> None:
     logs_storage = get_storage(StorageKey("eap_items"))
     messages = []
     for i in range(120):
@@ -67,7 +67,7 @@ def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
 
 
 @pytest.fixture(autouse=False)
-def setup_spans_in_db(clickhouse_db: None, redis_db: None) -> None:
+def setup_spans_in_db(eap: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_items"))
     messages = [
         gen_item_message(
@@ -84,7 +84,7 @@ def setup_spans_in_db(clickhouse_db: None, redis_db: None) -> None:
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestTraceItemDetails(BaseApiTest):
     def test_not_found(self, setup_logs_in_db: Any) -> None:
