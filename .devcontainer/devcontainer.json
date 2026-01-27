@@ -1,0 +1,119 @@
+{
+  "name": "Snuba Development",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "snuba-dev",
+  "workspaceFolder": "/workspace",
+
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW"
+  ],
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "charliermarsh.ruff",
+        "ms-python.python",
+        "ms-python.mypy-type-checker",
+        "rust-lang.rust-analyzer",
+        "ms-python.debugpy",
+        "tamasfe.even-better-toml",
+        "eamodio.gitlens",
+        "anthropic.claude-code",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "files.exclude": {
+          "**/*.pyc": true,
+          "**/*.min.js": true,
+          "**/*.js.map": true,
+          "/static/": true,
+          "node_modules": true,
+          "htmlcov": true,
+          "build": true,
+          "*.log": true,
+          "*.egg-info": true
+        },
+        "search.followSymlinks": false,
+        "files.trimTrailingWhitespace": true,
+        "files.trimFinalNewlines": true,
+        "files.insertFinalNewline": true,
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "[python]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "charliermarsh.ruff"
+        },
+        "[rust]": {
+          "editor.defaultFormatter": "rust-lang.rust-analyzer",
+          "editor.formatOnSave": true
+        },
+        "[javascript]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "esbenp.prettier-vscode",
+          "editor.tabSize": 2
+        },
+        "[typescript]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "esbenp.prettier-vscode",
+          "editor.tabSize": 2
+        },
+        "python.defaultInterpreterPath": ".venv/bin/python",
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": ["tests"],
+        "python.analysis.autoImportCompletions": true,
+        "mypy-type-checker.args": ["--strict"],
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "bash": {
+            "path": "bash",
+            "icon": "terminal-bash"
+          },
+          "zsh": {
+            "path": "zsh"
+          }
+        }
+      }
+    }
+  },
+
+  "containerEnv": {
+    "SNUBA_SETTINGS": "test",
+    "CLICKHOUSE_HOST": "clickhouse",
+    "DEFAULT_BROKERS": "kafka:9092",
+    "REDIS_HOST": "redis-cluster",
+    "REDIS_PORT": "7000",
+    "USE_REDIS_CLUSTER": "1",
+    "REDIS_DB": "0",
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+    "POWERLEVEL9K_DISABLE_GITSTATUS": "true"
+  },
+
+  "mounts": [
+    "source=snuba-venv-${devcontainerId},target=/workspace/.venv,type=volume",
+    "source=snuba-cargo-${devcontainerId},target=/home/vscode/.cargo,type=volume",
+    "source=snuba-rustup-${devcontainerId},target=/home/vscode/.rustup,type=volume",
+    "source=snuba-uv-cache-${devcontainerId},target=/home/vscode/.cache/uv,type=volume",
+    "source=snuba-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+    "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+    "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume"
+  ],
+
+  "forwardPorts": [1218, 1219, 59248, 8123, 9000],
+  "portsAttributes": {
+    "1218": { "label": "Snuba API" },
+    "1219": { "label": "Snuba Admin" },
+    "8123": { "label": "ClickHouse HTTP" },
+    "9000": { "label": "ClickHouse Native" }
+  },
+
+  "postCreateCommand": "bash .devcontainer/scripts/post-create.sh",
+  "postStartCommand": "bash .devcontainer/scripts/post-start.sh",
+  "waitFor": "postStartCommand",
+
+  "remoteUser": "vscode"
+}

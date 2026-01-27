@@ -1,0 +1,150 @@
+# Snuba Development Container
+# Includes Claude Code sandbox features + Snuba development environment
+ARG PYTHON_VERSION=3.11.11
+
+FROM python:${PYTHON_VERSION}-bookworm
+
+ARG TZ
+ENV TZ="$TZ"
+
+ARG CLAUDE_CODE_VERSION=latest
+ARG GIT_DELTA_VERSION=0.18.2
+ARG ZSH_IN_DOCKER_VERSION=1.2.0
+
+# Install system dependencies (matching production Dockerfile + Claude Code sandbox)
+RUN set -ex; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        # Build tools
+        git \
+        gcc \
+        g++ \
+        make \
+        cmake \
+        pkg-config \
+        # Libraries
+        libc6-dev \
+        liblz4-dev \
+        libpcre3-dev \
+        libssl-dev \
+        zlib1g-dev \
+        # Utilities
+        curl \
+        wget \
+        gnupg \
+        gnupg2 \
+        ca-certificates \
+        # Protobuf
+        protobuf-compiler \
+        # Runtime/debugging
+        gdb \
+        heaptrack \
+        libjemalloc2 \
+        # Networking utilities for health checks and firewall
+        netcat-openbsd \
+        redis-tools \
+        iptables \
+        ipset \
+        iproute2 \
+        dnsutils \
+        aggregate \
+        # Dev utilities
+        sudo \
+        less \
+        vim \
+        nano \
+        jq \
+        zsh \
+        fzf \
+        procps \
+        man-db \
+        unzip \
+        gh \
+    ; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20 + yarn for admin UI
+ENV NODE_VERSION=20
+RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - && \
+    apt-get install -y nodejs --no-install-recommends && \
+    npm install -g yarn && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install uv from Sentry PyPI
+RUN pip install --index-url 'https://pypi.devinfra.sentry.io/simple' 'uv==0.8.2'
+
+# Install git-delta for better diffs
+RUN ARCH=$(dpkg --print-architecture) && \
+    wget "https://github.com/dandavison/delta/releases/download/${GIT_DELTA_VERSION}/git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
+    dpkg -i "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
+    rm "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
+
+# Create vscode user with sudo access
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME
+
+# Persist bash/zsh history
+RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
+    && mkdir /commandhistory \
+    && touch /commandhistory/.bash_history \
+    && chown -R $USERNAME /commandhistory
+
+# Create directories for mounted caches and Claude config
+RUN mkdir -p /home/vscode/.cargo \
+    /home/vscode/.rustup \
+    /home/vscode/.cache/uv \
+    /home/vscode/.claude \
+    && chown -R vscode:vscode /home/vscode
+
+# Install rustup (toolchain will be installed on first use from rust-toolchain.toml)
+USER vscode
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain none -y
+
+# Configure cargo for better Docker performance
+RUN mkdir -p /home/vscode/.cargo && \
+    echo '[net]' > /home/vscode/.cargo/config.toml && \
+    echo 'git-fetch-with-cli = true' >> /home/vscode/.cargo/config.toml && \
+    echo '[registries.crates-io]' >> /home/vscode/.cargo/config.toml && \
+    echo 'protocol = "sparse"' >> /home/vscode/.cargo/config.toml
+
+# Install zsh-in-docker with powerlevel10k theme
+RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/v${ZSH_IN_DOCKER_VERSION}/zsh-in-docker.sh)" -- \
+    -p git \
+    -p fzf \
+    -a "source /usr/share/doc/fzf/examples/key-bindings.zsh" \
+    -a "source /usr/share/doc/fzf/examples/completion.zsh" \
+    -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
+    -x
+
+# Install Claude Code CLI (needs root for global install)
+USER root
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+USER vscode
+
+# Set up environment
+ENV PATH="/home/vscode/.cargo/bin:/home/vscode/.local/bin:${PATH}"
+ENV CARGO_HOME=/home/vscode/.cargo
+ENV RUSTUP_HOME=/home/vscode/.rustup
+ENV UV_CACHE_DIR=/home/vscode/.cache/uv
+ENV SHELL=/bin/zsh
+ENV EDITOR=nano
+ENV VISUAL=nano
+ENV DEVCONTAINER=true
+
+WORKDIR /workspace
+
+# Copy and set up firewall script
+COPY init-firewall.sh /usr/local/bin/
+USER root
+RUN chmod +x /usr/local/bin/init-firewall.sh && \
+    echo "vscode ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/vscode-firewall && \
+    chmod 0440 /etc/sudoers.d/vscode-firewall
+USER vscode

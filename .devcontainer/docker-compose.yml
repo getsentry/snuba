@@ -1,0 +1,72 @@
+services:
+  snuba-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ..:/workspace:cached
+    command: sleep infinity
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      redis-cluster:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      clickhouse:
+        condition: service_started
+      zookeeper:
+        condition: service_started
+    environment:
+      SNUBA_SETTINGS: test
+      CLICKHOUSE_HOST: clickhouse
+      USE_REDIS_CLUSTER: "1"
+      REDIS_HOST: redis-cluster
+      REDIS_PORT: "7000"
+      REDIS_DB: "0"
+      DEFAULT_BROKERS: kafka:9092
+
+  zookeeper:
+    image: ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0
+    platform: linux/amd64
+    environment:
+      ZOOKEEPER_CLIENT_PORT: "2181"
+      CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
+      ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: WARN
+      ZOOKEEPER_TOOLS_LOG4J_LOGLEVEL: WARN
+
+  kafka:
+    image: ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0
+    platform: linux/amd64
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
+      KAFKA_LOG4J_LOGGERS: "kafka.cluster=WARN,kafka.controller=WARN,kafka.coordinator=WARN,kafka.log=WARN,kafka.server=WARN,kafka.zookeeper=WARN,state.change.logger=WARN"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
+      KAFKA_TOOLS_LOG4J_LOGLEVEL: WARN
+
+  clickhouse:
+    image: ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable
+    hostname: clickhouse
+    volumes:
+      - ../config/clickhouse/macros.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ../config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml:ro
+      - ../config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml:ro
+      - ../config/clickhouse/default-password.xml:/etc/clickhouse-server/users.d/default-password.xml:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  redis-cluster:
+    image: ghcr.io/getsentry/docker-redis-cluster:7.0.10
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli -p 7000 cluster info | grep "cluster_slots_assigned:16384"']
+      interval: 5s
+      timeout: 5s
+      retries: 30
