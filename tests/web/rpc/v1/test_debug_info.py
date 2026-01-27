@@ -17,7 +17,7 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestDebugInfo:
     @staticmethod
