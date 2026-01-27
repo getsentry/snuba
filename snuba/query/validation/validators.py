@@ -336,32 +336,102 @@ class TagConditionValidator(QueryValidator):
             array_ops=[ConditionFunctions.IN, ConditionFunctions.NOT_IN],
         )
 
+    def _coerce_literal_to_string(
+        self, literal: Literal, col_str: str, is_array_element: bool = False
+    ) -> None:
+        """
+        Coerce a non-string literal to a string for tag conditions IN PLACE.
+
+        Args:
+            literal: The Literal expression to potentially coerce (modified in place)
+            col_str: The column string for error messages (e.g., 'tags[issue.id]')
+            is_array_element: Whether this literal is inside an array
+
+        Raises:
+            InvalidQueryException: If the value is None or cannot be coerced
+        """
+        if isinstance(literal.value, str):
+            # Already a string, no coercion needed
+            return
+
+        if literal.value is None:
+            # None cannot be coerced to a meaningful string
+            error_prefix = f"invalid tag condition on '{col_str}':"
+            if is_array_element:
+                raise InvalidQueryException(
+                    f"{error_prefix} array literal None must be a string"
+                )
+            else:
+                raise InvalidQueryException(
+                    f"{error_prefix} None must be a string"
+                )
+
+        # Coerce int, float, bool to string
+        if isinstance(literal.value, (int, float, bool)):
+            original_value = literal.value
+            original_type = type(literal.value).__name__
+
+            # Replace the value with string representation
+            # Use object.__setattr__ because Literal is a frozen dataclass
+            object.__setattr__(literal, "value", str(literal.value))
+
+            # Log metrics for monitoring
+            metrics.increment(
+                "tag_condition_auto_coercion",
+                tags={
+                    "tag_key": col_str.split('[')[1].rstrip(']'),
+                    "original_type": original_type,
+                },
+            )
+            logger.warning(
+                f"Auto-coerced tag condition: {col_str} "
+                f"value {original_value} ({original_type}) to string. "
+                f"This indicates an upstream bug in Sentry. Issue: SNUBA-9VC/9VD"
+            )
+            return
+
+        # Unknown type - keep existing behavior (raise exception)
+        error_prefix = f"invalid tag condition on '{col_str}':"
+        if is_array_element:
+            raise InvalidQueryException(
+                f"{error_prefix} array literal {literal.value} must be a string"
+            )
+        else:
+            raise InvalidQueryException(
+                f"{error_prefix} {literal.value} must be a string"
+            )
+
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        """
+        Validate tag conditions and auto-coerce numeric literals to strings.
+
+        IMPORTANT: This auto-coercion is a pragmatic fix for upstream Sentry bugs
+        (SNUBA-9VC/9VD). Ideally, Sentry should send properly typed tag values.
+        The metrics and logging help us monitor when this happens and validate
+        when the upstream fix is deployed.
+        """
         condition = query.get_condition()
         if not condition:
             return
+
         for cond in condition:
             match = self.condition_matcher.match(cond)
             if match:
                 column = match.expression("column")
-                col_str: str
                 if not isinstance(column, SubscriptableReferenceExpr):
-                    return  # only fail things on the tags[] column
+                    continue  # only process things on the tags[] column
 
                 col_str = f"{column.column.column_name}[{column.key.value}]"
-                error_prefix = f"invalid tag condition on '{col_str}':"
 
                 rhs = match.expression("rhs")
                 if isinstance(rhs, Literal):
-                    if not isinstance(rhs.value, str):
-                        raise InvalidQueryException(f"{error_prefix} {rhs.value} must be a string")
+                    # Single literal value - coerce if needed
+                    self._coerce_literal_to_string(rhs, col_str, is_array_element=False)
                 elif isinstance(rhs, FunctionCall):
-                    # The rhs is guaranteed to be an array function because of the match
+                    # Array function - coerce each parameter if needed
                     for param in rhs.parameters:
-                        if isinstance(param, Literal) and not isinstance(param.value, str):
-                            raise InvalidQueryException(
-                                f"{error_prefix} array literal {param.value} must be a string"
-                            )
+                        if isinstance(param, Literal):
+                            self._coerce_literal_to_string(param, col_str, is_array_element=True)
 
 
 class DatetimeConditionValidator(QueryValidator):
