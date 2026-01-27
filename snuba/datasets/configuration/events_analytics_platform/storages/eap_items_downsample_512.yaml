@@ -129,6 +129,7 @@ query_processors:
       settings:
         max_execution_time: 25
         timeout_before_checking_execution_speed: 0
+        distributed_product_mode: global
 
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
