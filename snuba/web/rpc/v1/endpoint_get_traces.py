@@ -54,6 +54,7 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
     convert_trace_filters_to_trace_item_filter_with_type,
+    get_trace_ids_for_cross_item_query,
     get_trace_ids_sql_for_cross_item_query,
 )
 
@@ -472,12 +473,11 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         Execute cross-item query using subquery optimization.
         Gets SQL from trace IDs query and uses it as a subquery in metadata query.
         """
-        # Get SQL for trace IDs query (dry run) and its query result
-        trace_ids_sql, trace_ids_query_result = get_trace_ids_sql_for_cross_item_query(
+        # Get SQL for trace IDs query (dry run)
+        trace_ids_sql = get_trace_ids_sql_for_cross_item_query(
             in_msg,
             in_msg.meta,
             convert_trace_filters_to_trace_item_filter_with_type(list(in_msg.filters)),
-            self.routing_decision.tier,
             self._timer,
         )
 
@@ -486,12 +486,13 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             request=in_msg,
             trace_ids_sql=trace_ids_sql,
         )
-        # Build response - include both query results for proper metadata extraction
+
+        # Build response
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
-            [trace_ids_query_result, metadata_query_result],
-            [self._timer, self._timer],
+            [metadata_query_result],
+            [self._timer],
         )
 
         return GetTracesResponse(
@@ -502,18 +503,25 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
     def _execute(self, in_msg: GetTracesRequest) -> GetTracesResponse:
         _validate_order_by(in_msg)
-
-        # Feature flag: Use cross-item query path for all queries (single-item and cross-item)
-        use_cross_item_path = self._is_cross_event_query(in_msg.filters) or state.get_config(
-            "use_cross_item_path_for_single_item_queries", False
-        )
+        # Feature flag: Use subquery optimization for cross-item queries
+        if self._is_cross_event_query(in_msg.filters) and state.get_config(
+            "enable_cross_item_subquery_optimization", True
+        ):
+            return self._execute_with_subquery_optimization(in_msg)
 
         # Original code path (unchanged)
         query_results: list[Any] = []
 
         # Get a dict of trace IDs and timestamps.
-        if use_cross_item_path:
-            return self._execute_with_subquery_optimization(in_msg)
+        if self._is_cross_event_query(in_msg.filters):
+            trace_ids, trace_ids_query_results = get_trace_ids_for_cross_item_query(
+                in_msg,
+                in_msg.meta,
+                convert_trace_filters_to_trace_item_filter_with_type(list(in_msg.filters)),
+                self._timer,
+                return_query_results=True,
+            )
+            query_results.extend(trace_ids_query_results)
         else:
             trace_ids, trace_ids_query_result = self._get_trace_ids_for_single_item_query(
                 request=in_msg
