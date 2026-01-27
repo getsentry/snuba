@@ -479,6 +479,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             convert_trace_filters_to_trace_item_filter_with_type(list(in_msg.filters)),
             self.routing_decision.tier,
             self._timer,
+            limit=in_msg.limit if in_msg.limit > 0 else None,
         )
 
         # Get metadata using subquery
