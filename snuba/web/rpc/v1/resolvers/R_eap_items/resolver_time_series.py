@@ -27,12 +27,11 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.downsampled_storage_tiers import Tier
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, in_cond, literal
-from snuba.query.expressions import DangerousRawSQL, Expression
+from snuba.query.dsl import column, in_cond, literal, literals_array
+from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -63,7 +62,7 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
-    get_trace_ids_sql_for_cross_item_query,
+    get_trace_ids_for_cross_item_query,
 )
 from snuba.web.rpc.v1.resolvers.common.formula_reliability import (
     FormulaReliabilityCalculator,
@@ -318,9 +317,7 @@ def _proto_expression_to_ast_expression(
             raise ValueError(f"Unknown expression type: {default}")
 
 
-def build_query(
-    request: TimeSeriesRequest, sampling_tier: Optional[Tier] = None, timer: Optional[Timer] = None
-) -> Query:
+def build_query(request: TimeSeriesRequest, timer: Optional[Timer] = None) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
@@ -350,14 +347,14 @@ def build_query(
 
     # Handle cross item queries by first getting trace IDs
     additional_conditions = []
-    if request.trace_filters and timer is not None and sampling_tier is not None:
-        trace_ids_sql, _ = get_trace_ids_sql_for_cross_item_query(
-            request, request.meta, list(request.trace_filters), sampling_tier, timer
+    if request.trace_filters and timer is not None:
+        trace_ids = get_trace_ids_for_cross_item_query(
+            request, request.meta, list(request.trace_filters), timer
         )
         additional_conditions.append(
             in_cond(
                 column("trace_id"),
-                DangerousRawSQL(None, f"({trace_ids_sql})"),
+                literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
             )
         )
 
@@ -419,10 +416,7 @@ def build_query(
 
 
 def _build_snuba_request(
-    request: TimeSeriesRequest,
-    query_settings: HTTPQuerySettings,
-    sampling_tier: Optional[Tier] = None,
-    timer: Optional[Timer] = None,
+    request: TimeSeriesRequest, query_settings: HTTPQuerySettings, timer: Optional[Timer] = None
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
         team = "ourlogs"
@@ -436,7 +430,7 @@ def _build_snuba_request(
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=build_query(request, sampling_tier, timer),
+        query=build_query(request, timer),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -473,9 +467,7 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
 
-        snuba_request = _build_snuba_request(
-            in_msg, query_settings, routing_decision.tier, self._timer
-        )
+        snuba_request = _build_snuba_request(in_msg, query_settings, self._timer)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
