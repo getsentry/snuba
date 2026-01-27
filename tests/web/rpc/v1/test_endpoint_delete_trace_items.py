@@ -67,12 +67,12 @@ _SPANS = [
 
 
 @pytest.fixture(autouse=False)
-def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
+def setup_teardown(eap: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
     write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestEndpointDeleteTrace(BaseApiTest):
     def test_missing_trace_id_raises_exception(self) -> None:

@@ -53,7 +53,7 @@ COMMON_META = RequestMeta(
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown(clickhouse_db: None, redis_db: None) -> Generator[List[bytes], None, None]:
+def setup_teardown(eap: None, redis_db: None) -> Generator[List[bytes], None, None]:
     items_storage = get_storage(StorageKey("eap_items"))
     start_timestamp = BASE_TIME
     messages = [
@@ -113,7 +113,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> Generator[List[bytes]
     yield messages
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestTraceItemAttributes(BaseApiTest):
     def test_basic(self) -> None:
