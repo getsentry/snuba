@@ -34,6 +34,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (
     comparison_filter,
@@ -100,7 +101,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-class TestGetTraces(BaseApiTest):
+class TestEndpointGetTraces(BaseApiTest):
     def test_without_data(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
@@ -205,8 +206,6 @@ class TestGetTraces(BaseApiTest):
         response = EndpointGetTraces().execute(message)
         spans = generate_spans(_SPANS + _ADDITIONAL_SPANS)
         last_span = spans[0]
-        trace_ids = [span.trace_id for span in spans]
-        print(trace_ids)
         for span in spans:
             if span.timestamp.seconds >= last_span.timestamp.seconds:
                 last_span = span
@@ -910,3 +909,16 @@ def trace_filter(
         item_type=item_type,
         filter=filter,
     )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestEndpointGetTracesCrossItem(TestEndpointGetTraces):
+    """Run all tests with use_cross_item_path_for_single_item_queries enabled."""
+
+    @pytest.fixture(autouse=True)
+    def use_cross_item_path(
+        self, clickhouse_db: Any, redis_db: Any, snuba_set_config: SnubaSetConfig
+    ) -> None:
+        """Enable the feature flag for cross-item path for all tests in this class."""
+        snuba_set_config("use_cross_item_path_for_single_item_queries", 1)
