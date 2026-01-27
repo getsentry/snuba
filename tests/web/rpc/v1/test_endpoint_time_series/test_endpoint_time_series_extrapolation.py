@@ -1063,8 +1063,6 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             metrics=[DummyMetric("test_metric", get_value=lambda x: 10)],
             server_sample_rate=1.0,  # 100% sampling rate
         )
-        breakpoint()
-
         message = TimeSeriesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
