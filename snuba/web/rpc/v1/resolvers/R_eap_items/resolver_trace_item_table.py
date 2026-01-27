@@ -49,6 +49,7 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     use_sampling_factor,
+    valid_sampling_factor_conditions,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -462,6 +463,7 @@ def build_query(
                 request.filter,
                 attribute_key_to_expression,
             ),
+            valid_sampling_factor_conditions(),
             *item_type_conds,
             *additional_conditions,
         ),
