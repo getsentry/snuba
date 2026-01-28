@@ -5,6 +5,7 @@ import ClickhouseMigrations from "SnubaAdmin/clickhouse_migrations";
 import ClickhouseQueries from "SnubaAdmin/clickhouse_queries";
 import CopyTables from "SnubaAdmin/copy_tables";
 import TracingQueries from "SnubaAdmin/tracing";
+import SQLShellPage, { SystemShellPage } from "SnubaAdmin/sql_shell";
 import SnQLToSQL from "SnubaAdmin/snql_to_sql";
 import Kafka from "SnubaAdmin/kafka";
 import QuerylogQueries from "SnubaAdmin/querylog";
@@ -55,6 +56,11 @@ const NAV_ITEMS = [
     component: ClickhouseQueries,
   },
   {
+    id: "system-shell",
+    display: "💻 System Shell",
+    component: SystemShellPage,
+  },
+  {
     id: "copy-tables",
     display: "📋 Copy Tables",
     component: CopyTables,
@@ -68,6 +74,11 @@ const NAV_ITEMS = [
     id: "tracing",
     display: "🔎 ClickHouse Tracing",
     component: TracingQueries,
+  },
+  {
+    id: "tracing-shell",
+    display: "💻 Tracing Shell",
+    component: SQLShellPage,
   },
   {
     id: "rpc-endpoints",
