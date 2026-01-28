@@ -353,15 +353,25 @@ class TagConditionValidator(QueryValidator):
 
                 rhs = match.expression("rhs")
                 if isinstance(rhs, Literal):
-                    if not isinstance(rhs.value, str):
+                    # Auto-convert boolean integers (0, 1) to strings for tag comparisons
+                    # Tags are always strings in ClickHouse, so boolean values must be "0" or "1"
+                    if isinstance(rhs.value, int) and rhs.value in (0, 1):
+                        # Modify the literal in place to convert int to string
+                        # Use object.__setattr__ to bypass frozen dataclass
+                        object.__setattr__(rhs, "value", str(rhs.value))
+                    elif not isinstance(rhs.value, str):
                         raise InvalidQueryException(f"{error_prefix} {rhs.value} must be a string")
                 elif isinstance(rhs, FunctionCall):
                     # The rhs is guaranteed to be an array function because of the match
                     for param in rhs.parameters:
-                        if isinstance(param, Literal) and not isinstance(param.value, str):
-                            raise InvalidQueryException(
-                                f"{error_prefix} array literal {param.value} must be a string"
-                            )
+                        if isinstance(param, Literal):
+                            # Auto-convert boolean integers in arrays
+                            if isinstance(param.value, int) and param.value in (0, 1):
+                                object.__setattr__(param, "value", str(param.value))
+                            elif not isinstance(param.value, str):
+                                raise InvalidQueryException(
+                                    f"{error_prefix} array literal {param.value} must be a string"
+                                )
 
 
 class DatetimeConditionValidator(QueryValidator):
