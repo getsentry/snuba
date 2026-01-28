@@ -146,6 +146,25 @@ tests = [
         None,
         id="boolean integer 1 in tag condition is auto-converted to string",
     ),
+    pytest.param(
+        LogicalQuery(
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
+            selected_columns=[
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
+            ],
+            condition=binary_condition(
+                "equals",
+                SubscriptableReference(
+                    "_snuba_tags[error.handled]",
+                    Column("_snuba_tags", None, "tags"),
+                    Literal(None, "error.handled"),
+                ),
+                Literal(None, 0),
+            ),
+        ),
+        None,
+        id="boolean integer 0 in tag condition is auto-converted to string",
+    ),
 ]
 
 
