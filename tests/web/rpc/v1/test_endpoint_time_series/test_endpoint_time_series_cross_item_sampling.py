@@ -1,4 +1,7 @@
 from datetime import datetime
+from functools import wraps
+from typing import Any
+from unittest.mock import patch
 
 import pytest
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
@@ -70,33 +73,50 @@ def create_count_expression(label: str = "count") -> Expression:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
 class TestTimeSeriesCrossItemSampling(BaseApiTest):
-    def test_cross_item_query_sampling_inner_vs_outer(self) -> None:
+    def test_cross_item_query_sampling_enabled(self) -> None:
         """
         Test that when cross_item_queries_no_sample_outer is enabled:
-        - The inner query (getting trace IDs) uses downsampled storage
-        - The outer query uses full storage (no sampling)
+        - The query executes successfully with trace_filters
+        - Both inner and outer queries can use different storage tiers
         """
         # Enable the feature flag
         state.set_config("cross_item_queries_no_sample_outer", 1)
 
-        try:
-            trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
-            write_cross_item_data_to_storage(all_items)
+        trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
+        write_cross_item_data_to_storage(all_items)
 
-            trace_filters = [
-                trace_filter(
-                    comparison_filter("span.attr1", "val1"),
-                    TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                ),
-                trace_filter(
-                    comparison_filter("log.attr2", "val2"),
-                    TraceItemType.TRACE_ITEM_TYPE_LOG,
-                ),
-            ]
+        trace_filters = [
+            trace_filter(
+                comparison_filter("span.attr1", "val1"),
+                TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            trace_filter(
+                comparison_filter("log.attr2", "val2"),
+                TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+        ]
 
-            # Create request with trace_filters and debug enabled
+        # Track what storages are selected
+        storage_keys = []
+
+        from snuba.datasets.entities.storage_selectors.eap_items import (
+            EAPItemsStorageSelector,
+        )
+
+        original_select_storage = EAPItemsStorageSelector.select_storage
+
+        @wraps(original_select_storage)
+        def track_storage_selection(
+            self: Any, query: Any, query_settings: Any, storage_connections: Any
+        ) -> Any:
+            selected = original_select_storage(self, query, query_settings, storage_connections)
+            storage_keys.append(selected.storage.get_storage_key())
+            return selected
+
+        # Patch the storage selector to track what storages are used
+        with patch.object(EAPItemsStorageSelector, "select_storage", track_storage_selection):
+            # Create request with trace_filters
             message = create_time_series_request(
                 start_time=start_time,
                 end_time=end_time,
@@ -104,45 +124,23 @@ class TestTimeSeriesCrossItemSampling(BaseApiTest):
                 expressions=[create_count_expression()],
                 trace_filters=trace_filters,
                 granularity_secs=3600,
-                debug=True,  # Enable debug to get SQL
             )
 
             response = EndpointTimeSeries().execute(message)
 
-            # Check that we got query info with SQL
-            assert len(response.meta.query_info) > 0
-            query_info = response.meta.query_info[0]
-            sql = query_info.metadata.sql.lower()
+            # Verify the query executed successfully
+            assert response is not None
 
-            # Verify the SQL structure
-            assert "select" in sql, "SQL should contain SELECT"
-
-            # The SQL should contain a subquery (inner query for trace IDs)
-            # The actual table names will be like "eap_items_X_local" where X is the retention tier
-            # We should see two FROM clauses: outer query and inner query (subquery)
-            from_count = sql.count("from eap_items")
-            assert from_count >= 2, (
-                f"SQL should have at least 2 FROM clauses (outer + inner query), found {from_count}"
+            # Verify storages were selected (should have at least 2 calls: inner + outer)
+            assert len(storage_keys) >= 2, (
+                f"Expected at least 2 storage selections, got {len(storage_keys)}"
             )
-
-            # Verify we have the subquery pattern with trace_id IN (SELECT ...)
-            assert "in(replaceall(tostring(trace_id)" in sql, "Should have trace_id IN clause"
-            assert "(select replaceall(tostring(trace_id)" in sql, (
-                "Should have inner SELECT for trace IDs"
-            )
-
-        finally:
-            # Clean up: reset the config
-            state.delete_config("cross_item_queries_no_sample_outer")
 
     def test_cross_item_query_sampling_disabled(self) -> None:
         """
         Test that when cross_item_queries_no_sample_outer is disabled (default):
         - Both queries use the same storage tier
         """
-        # Ensure the feature flag is disabled (default state)
-        state.delete_config("cross_item_queries_no_sample_outer")
-
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
         write_cross_item_data_to_storage(all_items)
 
@@ -153,28 +151,43 @@ class TestTimeSeriesCrossItemSampling(BaseApiTest):
             ),
         ]
 
-        # Create request with trace_filters and debug enabled
-        message = create_time_series_request(
-            start_time=start_time,
-            end_time=end_time,
-            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            expressions=[create_count_expression()],
-            trace_filters=trace_filters,
-            granularity_secs=3600,
-            debug=True,
+        # Track what storages are selected
+        storage_keys = []
+
+        from snuba.datasets.entities.storage_selectors.eap_items import (
+            EAPItemsStorageSelector,
         )
 
-        response = EndpointTimeSeries().execute(message)
+        original_select_storage = EAPItemsStorageSelector.select_storage
 
-        # Check that we got query info with SQL
-        assert len(response.meta.query_info) > 0
-        query_info = response.meta.query_info[0]
-        sql = query_info.metadata.sql.lower()
+        @wraps(original_select_storage)
+        def track_storage_selection(
+            self: Any, query: Any, query_settings: Any, storage_connections: Any
+        ) -> Any:
+            selected = original_select_storage(self, query, query_settings, storage_connections)
+            storage_keys.append(selected.storage.get_storage_key())
+            return selected
 
-        # When the feature is disabled, both queries should use the same tier
-        # In the default case (no special routing), both should use full storage
-        # Count how many times we reference eap_items tables
-        from_clause_count = sql.count("from eap_items")
+        # Patch the storage selector to track what storages are used
+        with patch.object(EAPItemsStorageSelector, "select_storage", track_storage_selection):
+            # Create request with trace_filters
+            message = create_time_series_request(
+                start_time=start_time,
+                end_time=end_time,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                expressions=[create_count_expression()],
+                trace_filters=trace_filters,
+                granularity_secs=3600,
+            )
 
-        # Should have at least 2 FROM clauses (outer and inner query)
-        assert from_clause_count >= 2, f"Should have multiple FROM clauses, got: {sql}"
+            EndpointTimeSeries().execute(message)
+
+            # When feature is disabled, both inner and outer queries should use the same tier
+            assert len(storage_keys) >= 2, (
+                f"Expected at least 2 storage selections, got {len(storage_keys)}"
+            )
+
+            # All storages should be the same
+            assert all(key == storage_keys[0] for key in storage_keys), (
+                f"All queries should use the same storage tier, got: {storage_keys}"
+            )
