@@ -1,7 +1,5 @@
 from datetime import datetime
-from functools import wraps
-from typing import Any, ContextManager, List
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
@@ -24,7 +22,9 @@ from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_utils import (
     comparison_filter,
     create_cross_item_test_data,
+    create_mock_routing_decision,
     create_request_meta,
+    track_storage_selections,
     write_cross_item_data_to_storage,
 )
 
@@ -55,34 +55,6 @@ def create_trace_item_table_request(
     )
 
 
-def track_storage_selections() -> tuple[List[StorageKey], ContextManager[None]]:
-    """
-    Context manager that tracks storage selections during query execution.
-    Returns a tuple of (storage_keys list, context manager).
-    """
-    storage_keys: List[StorageKey] = []
-
-    from snuba.datasets.entities.storage_selectors.eap_items import (
-        EAPItemsStorageSelector,
-    )
-
-    original_select_storage = EAPItemsStorageSelector.select_storage
-
-    @wraps(original_select_storage)
-    def track_storage_selection(
-        self: Any, query: Any, query_settings: Any, storage_connections: Any
-    ) -> Any:
-        selected = original_select_storage(self, query, query_settings, storage_connections)
-        storage_keys.append(selected.storage.get_storage_key())
-        return selected
-
-    return storage_keys, patch.object(
-        EAPItemsStorageSelector,
-        "select_storage",
-        track_storage_selection,  # type: ignore[arg-type]
-    )
-
-
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestTraceItemTableCrossItemSampling(BaseApiTest):
@@ -109,15 +81,7 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
             ),
         ]
 
-        # Create a mock routing decision with TIER_8
-        mock_routing_decision = Mock()
-        mock_routing_decision.tier = Tier.TIER_8
-        mock_routing_decision.can_run = True
-        mock_routing_decision.time_window = None
-        mock_routing_decision.strategy = Mock()
-        mock_routing_decision.strategy.merge_clickhouse_settings = Mock(return_value={})
-        mock_routing_decision.strategy.after_execute = Mock()
-
+        mock_routing_decision = create_mock_routing_decision(Tier.TIER_8)
         storage_keys, storage_tracker = track_storage_selections()
 
         with storage_tracker:
@@ -168,15 +132,7 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
             ),
         ]
 
-        # Create a mock routing decision with TIER_8
-        mock_routing_decision = Mock()
-        mock_routing_decision.tier = Tier.TIER_8
-        mock_routing_decision.can_run = True
-        mock_routing_decision.time_window = None
-        mock_routing_decision.strategy = Mock()
-        mock_routing_decision.strategy.merge_clickhouse_settings = Mock(return_value={})
-        mock_routing_decision.strategy.after_execute = Mock()
-
+        mock_routing_decision = create_mock_routing_decision(Tier.TIER_8)
         storage_keys, storage_tracker = track_storage_selections()
 
         with storage_tracker:
