@@ -359,23 +359,44 @@ def track_storage_selections() -> tuple[list[StorageKey], Any]:
     )
 
 
-def create_mock_routing_decision(tier: Any) -> Any:
+def create_mock_routing_decision(tier: Any, in_msg: Any) -> Any:
     """
-    Create a mock routing decision with all required attributes.
+    Create a real RoutingDecision with a mocked strategy.
 
     Args:
         tier: The sampling tier to use (e.g., Tier.TIER_8)
+        in_msg: The protobuf request message
 
     Returns:
-        Mock routing_decision object
+        RoutingDecision object with mocked strategy
     """
     from unittest.mock import Mock
 
-    mock_routing_decision = Mock()
-    mock_routing_decision.tier = tier
-    mock_routing_decision.can_run = True
-    mock_routing_decision.time_window = None
-    mock_routing_decision.strategy = Mock()
-    mock_routing_decision.strategy.merge_clickhouse_settings = Mock(return_value={})
-    mock_routing_decision.strategy.after_execute = Mock()
-    return mock_routing_decision
+    from snuba.utils.metrics.timer import Timer
+    from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+        RoutingContext,
+        RoutingDecision,
+    )
+
+    # Create a real RoutingContext
+    routing_context = RoutingContext(
+        timer=Timer("test"),
+        in_msg=in_msg,
+        query_id="test-query-id",
+    )
+
+    # Mock the strategy
+    mock_strategy = Mock()
+    mock_strategy.merge_clickhouse_settings = Mock(return_value={})
+    mock_strategy.after_execute = Mock()
+
+    # Create a real RoutingDecision with the mocked strategy
+    routing_decision = RoutingDecision(
+        routing_context=routing_context,
+        strategy=mock_strategy,
+        tier=tier,
+        can_run=True,
+        time_window=None,
+    )
+
+    return routing_decision

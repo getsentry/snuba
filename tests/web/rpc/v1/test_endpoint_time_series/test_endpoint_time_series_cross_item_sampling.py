@@ -100,7 +100,6 @@ class TestTimeSeriesCrossItemSampling(BaseApiTest):
             ),
         ]
 
-        mock_routing_decision = create_mock_routing_decision(Tier.TIER_8)
         storage_keys, storage_tracker = track_storage_selections()
 
         with storage_tracker:
@@ -113,6 +112,8 @@ class TestTimeSeriesCrossItemSampling(BaseApiTest):
                     trace_filters=trace_filters,
                     granularity_secs=3600,
                 )
+
+                mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
 
                 endpoint = EndpointTimeSeries()
                 endpoint.routing_decision = mock_routing_decision
@@ -148,7 +149,6 @@ class TestTimeSeriesCrossItemSampling(BaseApiTest):
             ),
         ]
 
-        mock_routing_decision = create_mock_routing_decision(Tier.TIER_8)
         storage_keys, storage_tracker = track_storage_selections()
 
         with storage_tracker:
@@ -161,6 +161,8 @@ class TestTimeSeriesCrossItemSampling(BaseApiTest):
                     trace_filters=trace_filters,
                     granularity_secs=3600,
                 )
+
+                mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
 
                 endpoint = EndpointTimeSeries()
                 endpoint.routing_decision = mock_routing_decision
