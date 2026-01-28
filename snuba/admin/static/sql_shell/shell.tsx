@@ -20,7 +20,7 @@ function getCommandHistoryKey(mode: ShellMode): string {
 
 function loadCommandHistory(mode: ShellMode): string[] {
   try {
-    const saved = localStorage.getItem(getCommandHistoryKey(mode));
+    const saved = sessionStorage.getItem(getCommandHistoryKey(mode));
     return saved ? JSON.parse(saved) : [];
   } catch {
     return [];
@@ -29,7 +29,7 @@ function loadCommandHistory(mode: ShellMode): string[] {
 
 function saveCommandHistory(mode: ShellMode, history: string[]) {
   try {
-    localStorage.setItem(
+    sessionStorage.setItem(
       getCommandHistoryKey(mode),
       JSON.stringify(history.slice(-100))
     );
