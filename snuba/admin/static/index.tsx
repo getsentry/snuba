@@ -20,6 +20,8 @@ const containerStyle = {
 const bodyStyle = {
   flexGrow: 1,
   display: "flex",
+  minHeight: 0,
+  overflow: "hidden",
 };
 
 let client = Client();

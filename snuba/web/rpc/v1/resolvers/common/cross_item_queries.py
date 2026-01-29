@@ -8,6 +8,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     TraceItemFilterWithType,
 )
 
+from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -49,6 +50,7 @@ def get_trace_ids_sql_for_cross_item_query(
     trace_filters: list[TraceItemFilterWithType],
     sampling_tier: Tier,
     timer: Timer,
+    limit: int | None = None,
 ) -> tuple[str, QueryResult]:
     """
     Returns the SQL query string and query result for getting trace IDs matching the given filters.
@@ -132,7 +134,7 @@ def get_trace_ids_sql_for_cross_item_query(
                 expression=f.max(column("timestamp")),
             ),
         ],
-        limit=getattr(original_request, "limit", None) or _TRACE_LIMIT,
+        limit=limit or state.get_config("trace_ids_cross_item_query_limit", _TRACE_LIMIT),
     )
 
     treeify_or_and_conditions(query)

@@ -389,6 +389,12 @@ def timestamp_in_range_condition(start_ts: int, end_ts: int) -> Expression:
     )
 
 
+def valid_sampling_factor_conditions() -> Expression:
+    return and_cond(
+        f.lessOrEquals(column("sampling_factor"), 1), f.greater(column("sampling_factor"), 0)
+    )
+
+
 def base_conditions_and(meta: RequestMeta, *other_exprs: Expression) -> Expression:
     """
 
