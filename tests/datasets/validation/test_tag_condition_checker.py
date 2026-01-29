@@ -127,6 +127,70 @@ tests = [
         None,
         id="complex expressions don't match",
     ),
+    pytest.param(
+        LogicalQuery(
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
+            selected_columns=[
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
+            ],
+            condition=binary_condition(
+                "equals",
+                SubscriptableReference(
+                    "_snuba_tags[error.main_thread]",
+                    Column("_snuba_tags", None, "tags"),
+                    Literal(None, "error.main_thread"),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+        None,
+        id="boolean integer 1 in tag condition is auto-converted to string",
+    ),
+    pytest.param(
+        LogicalQuery(
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
+            selected_columns=[
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
+            ],
+            condition=binary_condition(
+                "equals",
+                SubscriptableReference(
+                    "_snuba_tags[error.handled]",
+                    Column("_snuba_tags", None, "tags"),
+                    Literal(None, "error.handled"),
+                ),
+                Literal(None, 0),
+            ),
+        ),
+        None,
+        id="boolean integer 0 in tag condition is auto-converted to string",
+    ),
+    pytest.param(
+        LogicalQuery(
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
+            selected_columns=[
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
+            ],
+            condition=binary_condition(
+                "in",
+                SubscriptableReference(
+                    "_snuba_tags[error.main_thread]",
+                    Column("_snuba_tags", None, "tags"),
+                    Literal(None, "error.main_thread"),
+                ),
+                FunctionCall(
+                    None,
+                    "array",
+                    (
+                        Literal(None, 0),
+                        Literal(None, 1),
+                    ),
+                ),
+            ),
+        ),
+        None,
+        id="boolean integers in array are auto-converted to strings",
+    ),
 ]
 
 
