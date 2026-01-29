@@ -38,7 +38,7 @@ jobs:
         co_authored_by: >-
           ${{ github.event.inputs.co_authored_by || format('{0}\n<{1}+{0}@users.noreply.github.com>', github.event.sender.login, github.event.sender.id) }}
         committer_name: sentry-snuba-fast-revert-bot[bot]
-        committer_email: 1027539+sentry-snuba-fast-revert-bot[bot]@users.noreply.github.com
+        committer_email: 257653817+sentry-snuba-fast-revert-bot[bot]@users.noreply.github.com
         token: ${{ steps.token.outputs.token }}
     - name: comment on failure
       run: |
