@@ -71,7 +71,7 @@ enum MetricValue {
 }
 
 /// The raw row that is written to clickhouse.
-#[derive(Debug, Serialize, Default)]
+#[derive(Debug, Serialize, Default, clickhouse::Row)]
 struct MetricsRawRow {
     use_case_id: String,
     org_id: u64,
@@ -175,6 +175,7 @@ pub fn process_metrics_message(
                     sentry_received_timestamp,
                     cogs_data: None,
                     item_type_metrics: None,
+                    typed_rows: None,
                 })
             } else {
                 Ok(InsertBatch::skip())

@@ -83,7 +83,7 @@ pub fn process_message(
     InsertBatch::from_rows([msg], None)
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, clickhouse::Row)]
 struct Outcome {
     #[serde(default)]
     org_id: u64,
