@@ -526,6 +526,126 @@ class TestOccurrenceHourlyEventRateUnsupported(BaseApiTest):
             assert result.val_double > 0, f"Expected positive rate, got {result.val_double}"
 
     @pytest.mark.xfail(
+        reason="Cannot use aggregate result (first_seen) in conditional aggregation filter"
+    )
+    def test_countif_with_aggregate_in_condition(
+        self, setup_occurrence_data: dict[str, Any]
+    ) -> None:
+        """
+        Test using an aggregated first_seen value in a countIf condition.
+
+        DESIRED BEHAVIOR:
+        1. Compute first_seen = min(timestamp) per group
+        2. Use that first_seen in a condition: countIf(first_seen > one_week_ago)
+
+        This is the core limitation - we want to filter based on an aggregate result.
+
+        What WORKS:
+        - countIf(timestamp > X) - filtering individual rows by their timestamp
+
+        What DOESN'T WORK:
+        - countIf(min(timestamp) > X) - condition uses an aggregate
+
+        Currently NOT supported because:
+        - AttributeConditionalAggregation.filter only accepts TraceItemFilter
+        - TraceItemFilter compares attributes against literal values
+        - Cannot reference another aggregate's result in the filter condition
+        """
+        one_week_ago_ts = setup_occurrence_data["one_week_ago"].timestamp()
+
+        # This is what we WANT to express but cannot:
+        #
+        # SELECT
+        #   group_id,
+        #   min(timestamp) as first_seen,
+        #   CASE
+        #     WHEN min(timestamp) < one_week_ago THEN count(*) / 168
+        #     ELSE count(*) / hours_since_first_seen
+        #   END as hourly_rate
+        # FROM occurrences
+        # GROUP BY group_id
+        #
+        # Or alternatively with countIf:
+        # countIf(first_seen > one_week_ago) where first_seen is min(timestamp)
+
+        # The limitation: we cannot use an aggregate (min) in the filter of
+        # another conditional aggregation. The filter can only compare
+        # row-level attributes against literals, not aggregate results.
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="test",
+                referrer="test.countif_with_aggregate",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id")),
+                # First seen = min(timestamp)
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_MIN,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp_precise"
+                        ),
+                        label="first_seen",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+                # Total count
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id"),
+                        label="total_count",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+                # We WANT: countIf(first_seen > one_week_ago) but we cannot express this
+                # because first_seen is an aggregate, not a row attribute
+                #
+                # The filter below filters ROWS, not the aggregate result
+                # This doesn't give us what we want
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id")],
+            limit=100,
+        )
+
+        response = EndpointTraceItemTable().execute(message)
+
+        # Verify we have results
+        assert len(response.column_values) >= 2
+
+        # The test documents that we CANNOT conditionally aggregate based on
+        # an aggregate result. We would need to:
+        # 1. Run a query to get first_seen per group
+        # 2. Use those results to construct a second query with the appropriate filters
+        # OR have native support for CASE WHEN with aggregates in conditions
+
+        # This assertion will fail because we're testing an unsupported feature
+        group_col = next(c for c in response.column_values if c.attribute_name == "sentry.group_id")
+        first_seen_col = next(c for c in response.column_values if c.attribute_name == "first_seen")
+
+        # We want to verify that groups with first_seen > one_week_ago are counted differently
+        # But we cannot express this in a single query
+        for i, group_val in enumerate(group_col.results):
+            first_seen = first_seen_col.results[i].val_double
+            # This check demonstrates what we'd WANT to do in the query itself
+            is_new_issue = first_seen > one_week_ago_ts
+            # We need conditional behavior based on is_new_issue, but cannot express it
+            assert is_new_issue is not None  # Placeholder - real test would verify conditional rate
+
+        # Force failure to document the limitation
+        raise AssertionError(
+            "Cannot use aggregate result (first_seen = min(timestamp)) in countIf condition. "
+            "AttributeConditionalAggregation.filter can only compare row attributes to literals, "
+            "not aggregate results."
+        )
+
+    @pytest.mark.xfail(
         reason="Conditional expression with aggregate in condition not yet supported - "
         "no 'if' function in Column.BinaryFormula to express: "
         "if(min(ts) < week_ago, count/168, count/hours_since_first_seen)"
