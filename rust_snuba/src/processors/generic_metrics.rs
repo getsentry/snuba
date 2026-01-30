@@ -387,6 +387,7 @@ where
                         )]),
                     }),
                     item_type_metrics: None,
+                    typed_rows: None,
                 })
             } else {
                 Ok(InsertBatch::skip())
@@ -1036,6 +1037,7 @@ mod tests {
             sentry_received_timestamp: Some(sentry_received_timestamp),
             cogs_data: Some(cogs_data),
             item_type_metrics: None,
+            typed_rows: None,
         }
     }
 

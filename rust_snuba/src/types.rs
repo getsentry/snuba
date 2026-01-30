@@ -1,11 +1,14 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::timer;
 use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Serialize};
+
+use crate::strategies::clickhouse::client::{InsertableRows, TypedRows};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommitLogEntry {
@@ -191,16 +194,34 @@ pub enum InsertOrReplacement<T> {
 }
 
 /// The return value of message processors.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Default, Debug)]
 pub struct InsertBatch {
     pub rows: RowData,
     pub origin_timestamp: Option<DateTime<Utc>>,
     pub sentry_received_timestamp: Option<DateTime<Utc>>,
     pub cogs_data: Option<CogsData>,
     pub item_type_metrics: Option<ItemTypeMetrics>,
+    /// Optional typed rows for native ClickHouse client insertion using RowBinary format.
+    /// When set, the native client can use these directly instead of parsing JSON.
+    pub typed_rows: Option<Arc<dyn InsertableRows>>,
+}
+
+impl PartialEq for InsertBatch {
+    fn eq(&self, other: &Self) -> bool {
+        // Compare all fields except typed_rows (which can't be compared for equality)
+        self.rows == other.rows
+            && self.origin_timestamp == other.origin_timestamp
+            && self.sentry_received_timestamp == other.sentry_received_timestamp
+            && self.cogs_data == other.cogs_data
+            && self.item_type_metrics == other.item_type_metrics
+            // For typed_rows, just check if both are Some or both are None
+            && self.typed_rows.is_some() == other.typed_rows.is_some()
+    }
 }
 
 impl InsertBatch {
+    /// Create an InsertBatch with JSON-encoded rows.
+    /// This is the standard path used by most processors.
     pub fn from_rows<T>(
         rows: impl IntoIterator<Item = T>,
         origin_timestamp: Option<DateTime<Utc>>,
@@ -215,6 +236,28 @@ impl InsertBatch {
             sentry_received_timestamp: None,
             cogs_data: None,
             item_type_metrics: None,
+            typed_rows: None,
+        })
+    }
+
+    /// Create an InsertBatch with both JSON-encoded rows and typed rows for native client.
+    /// Use this when you want to support both HTTP/JSON and native/RowBinary paths.
+    pub fn from_rows_with_typed<T>(
+        rows: Vec<T>,
+        origin_timestamp: Option<DateTime<Utc>>,
+    ) -> anyhow::Result<Self>
+    where
+        T: Serialize + clickhouse::Row + Send + Sync + std::fmt::Debug + Clone + 'static,
+    {
+        let json_rows = RowData::from_rows(&rows)?;
+        let typed_rows: Arc<dyn InsertableRows> = Arc::new(TypedRows::new(rows));
+        Ok(Self {
+            rows: json_rows,
+            origin_timestamp,
+            sentry_received_timestamp: None,
+            cogs_data: None,
+            item_type_metrics: None,
+            typed_rows: Some(typed_rows),
         })
     }
 
@@ -254,6 +297,11 @@ pub struct BytesInsertBatch<R> {
     cogs_data: CogsData,
 
     item_type_metrics: ItemTypeMetrics,
+
+    /// Optional typed rows for native ClickHouse client insertion using RowBinary format.
+    /// When set, the native client can use these directly instead of parsing JSON.
+    /// This is wrapped in Arc for cheap cloning through the pipeline.
+    typed_rows: Option<Arc<dyn InsertableRows>>,
 }
 
 impl<R> BytesInsertBatch<R> {
@@ -281,6 +329,7 @@ impl<R> BytesInsertBatch<R> {
             commit_log_offsets,
             cogs_data,
             item_type_metrics: Default::default(),
+            typed_rows: None,
         }
     }
 
@@ -302,6 +351,7 @@ impl<R> BytesInsertBatch<R> {
             commit_log_offsets: Default::default(),
             cogs_data: Default::default(),
             item_type_metrics: Default::default(),
+            typed_rows: None,
         }
     }
 
@@ -341,6 +391,22 @@ impl<R> BytesInsertBatch<R> {
         self
     }
 
+    /// Set the typed rows for native ClickHouse client insertion
+    pub fn with_typed_rows(mut self, typed_rows: Arc<dyn InsertableRows>) -> Self {
+        self.typed_rows = Some(typed_rows);
+        self
+    }
+
+    /// Get the typed rows if available (for native ClickHouse client insertion)
+    pub fn typed_rows(&self) -> Option<&Arc<dyn InsertableRows>> {
+        self.typed_rows.as_ref()
+    }
+
+    /// Take the typed rows, leaving None in their place
+    pub fn take_typed_rows(&mut self) -> Option<Arc<dyn InsertableRows>> {
+        self.typed_rows.take()
+    }
+
     pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
         &self.commit_log_offsets
     }
@@ -358,6 +424,8 @@ impl<R> BytesInsertBatch<R> {
             commit_log_offsets: self.commit_log_offsets.clone(),
             cogs_data: self.cogs_data.clone(),
             item_type_metrics: self.item_type_metrics.clone(),
+            // Don't clone typed_rows to metadata-only batch - they stay with the actual data
+            typed_rows: None,
         }
     }
 
@@ -370,6 +438,8 @@ impl<R> BytesInsertBatch<R> {
             commit_log_offsets: self.commit_log_offsets,
             cogs_data: self.cogs_data,
             item_type_metrics: self.item_type_metrics,
+            // Keep typed_rows with the metadata batch for access by the writer
+            typed_rows: self.typed_rows,
         };
 
         (self.rows, new)
@@ -421,6 +491,16 @@ impl BytesInsertBatch<RowData> {
             .merge(other.sentry_received_timestamp);
         self.cogs_data.merge(other.cogs_data);
         self.item_type_metrics.merge(other.item_type_metrics);
+
+        // Try to merge typed_rows if both batches have them and they're the same type
+        self.typed_rows = match (self.typed_rows, other.typed_rows) {
+            (Some(self_rows), Some(other_rows)) => {
+                // Try type-aware merge
+                self_rows.try_merge(other_rows.as_ref())
+            }
+            // If either batch doesn't have typed_rows, fall back to JSON path
+            _ => None,
+        };
         self
     }
 }

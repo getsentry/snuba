@@ -1,5 +1,8 @@
+use std::any::Any;
+use std::sync::Arc;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use clickhouse::Client;
 use sentry_arroyo::counter;
 
@@ -19,6 +22,91 @@ impl Default for RetryConfig {
             initial_backoff_ms: 500.0,
             max_retries: 4,
             jitter_factor: 0.2,
+        }
+    }
+}
+
+/// Trait for typed rows that can be inserted into ClickHouse using the native client.
+/// This allows storing typed rows in a type-erased manner while still being able to
+/// insert them using the native RowBinary format.
+#[async_trait]
+pub trait InsertableRows: Send + Sync + std::fmt::Debug {
+    /// Insert these rows into ClickHouse using the provided client.
+    async fn insert_into(
+        &self,
+        client: &NativeClickhouseClient,
+        retry_config: RetryConfig,
+    ) -> anyhow::Result<()>;
+
+    /// Get the number of rows.
+    fn len(&self) -> usize;
+
+    /// Check if there are no rows.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Return self as Any for downcasting.
+    fn as_any(&self) -> &dyn Any;
+
+    /// Try to merge another InsertableRows into this one, returning a new merged instance.
+    /// Returns None if the types don't match or merging is not supported.
+    /// The default implementation returns None (no merging support).
+    fn try_merge(&self, other: &dyn InsertableRows) -> Option<Arc<dyn InsertableRows>> {
+        let _ = other;
+        None
+    }
+}
+
+/// A type-erased container for rows that can be inserted via the native client.
+/// This wraps `Vec<T>` where T implements the required traits for ClickHouse insertion.
+#[derive(Debug)]
+pub struct TypedRows<T> {
+    rows: Vec<T>,
+}
+
+impl<T> TypedRows<T> {
+    pub fn new(rows: Vec<T>) -> Self {
+        Self { rows }
+    }
+
+    #[allow(dead_code)]
+    pub fn into_inner(self) -> Vec<T> {
+        self.rows
+    }
+}
+
+#[async_trait]
+impl<T> InsertableRows for TypedRows<T>
+where
+    T: clickhouse::Row + serde::Serialize + Send + Sync + std::fmt::Debug + Clone + 'static,
+{
+    async fn insert_into(
+        &self,
+        client: &NativeClickhouseClient,
+        retry_config: RetryConfig,
+    ) -> anyhow::Result<()> {
+        client.insert_rows(&self.rows, retry_config).await
+    }
+
+    fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn try_merge(&self, other: &dyn InsertableRows) -> Option<Arc<dyn InsertableRows>> {
+        // Try to downcast the other to the same TypedRows<T> type
+        let other_any = other.as_any();
+        if let Some(other_typed) = other_any.downcast_ref::<TypedRows<T>>() {
+            // Clone both row vectors and concatenate them
+            let mut merged_rows = self.rows.clone();
+            merged_rows.extend(other_typed.rows.iter().cloned());
+            Some(Arc::new(TypedRows::new(merged_rows)))
+        } else {
+            None
         }
     }
 }
@@ -63,12 +151,12 @@ impl NativeClickhouseClient {
 
     /// Insert rows into ClickHouse using the native RowBinary format.
     /// This method handles retries with exponential backoff.
-    pub async fn insert<T>(&self, rows: Vec<T>, retry_config: RetryConfig) -> anyhow::Result<()>
+    pub async fn insert_rows<T>(&self, rows: &[T], retry_config: RetryConfig) -> anyhow::Result<()>
     where
         T: clickhouse::Row + serde::Serialize + Send,
     {
         for attempt in 0..=retry_config.max_retries {
-            let result = self.try_insert(&rows).await;
+            let result = self.try_insert(rows).await;
 
             match result {
                 Ok(()) => return Ok(()),
@@ -140,6 +228,7 @@ mod tests {
             user: "default".to_string(),
             password: "".to_string(),
             database: "default".to_string(),
+            use_native_client: true,
         };
 
         let client = NativeClickhouseClient::new(&config, "test_table");
@@ -156,6 +245,7 @@ mod tests {
             user: "admin".to_string(),
             password: "secret".to_string(),
             database: "production".to_string(),
+            use_native_client: true,
         };
 
         let client = NativeClickhouseClient::new(&config, "events");
@@ -168,5 +258,79 @@ mod tests {
         assert_eq!(config.initial_backoff_ms, 500.0);
         assert_eq!(config.max_retries, 4);
         assert_eq!(config.jitter_factor, 0.2);
+    }
+
+    // Test row type for type-aware merge tests
+    #[derive(Debug, Clone, serde::Serialize, clickhouse::Row)]
+    struct TestRow {
+        id: u64,
+        name: String,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, clickhouse::Row)]
+    struct DifferentRow {
+        value: i32,
+    }
+
+    #[test]
+    fn test_typed_rows_merge_same_type() {
+        let rows1: Arc<dyn InsertableRows> = Arc::new(TypedRows::new(vec![
+            TestRow {
+                id: 1,
+                name: "a".to_string(),
+            },
+            TestRow {
+                id: 2,
+                name: "b".to_string(),
+            },
+        ]));
+
+        let rows2: Arc<dyn InsertableRows> = Arc::new(TypedRows::new(vec![TestRow {
+            id: 3,
+            name: "c".to_string(),
+        }]));
+
+        // Should successfully merge same types
+        let merged = rows1.try_merge(rows2.as_ref());
+        assert!(merged.is_some());
+
+        let merged = merged.unwrap();
+        assert_eq!(merged.len(), 3);
+    }
+
+    #[test]
+    fn test_typed_rows_merge_different_types() {
+        let rows1: Arc<dyn InsertableRows> = Arc::new(TypedRows::new(vec![TestRow {
+            id: 1,
+            name: "a".to_string(),
+        }]));
+
+        let rows2: Arc<dyn InsertableRows> =
+            Arc::new(TypedRows::new(vec![DifferentRow { value: 42 }]));
+
+        // Should fail to merge different types
+        let merged = rows1.try_merge(rows2.as_ref());
+        assert!(merged.is_none());
+    }
+
+    #[test]
+    fn test_typed_rows_len() {
+        let rows = TypedRows::new(vec![
+            TestRow {
+                id: 1,
+                name: "a".to_string(),
+            },
+            TestRow {
+                id: 2,
+                name: "b".to_string(),
+            },
+        ]);
+
+        assert_eq!(rows.len(), 2);
+        assert!(!rows.is_empty());
+
+        let empty_rows: TypedRows<TestRow> = TypedRows::new(vec![]);
+        assert_eq!(empty_rows.len(), 0);
+        assert!(empty_rows.is_empty());
     }
 }

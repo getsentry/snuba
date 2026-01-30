@@ -24,7 +24,7 @@ use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
-use crate::strategies::clickhouse::writer_v2::ClickhouseWriterStep;
+use crate::strategies::clickhouse::writer_v2::{ClickhouseWriterStep, NativeClickhouseWriterStep};
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
@@ -119,13 +119,29 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
-        let next_step = ClickhouseWriterStep::new(
-            next_step,
-            self.storage_config.clickhouse_cluster.clone(),
-            self.storage_config.clickhouse_table_name.clone(),
-            false,
-            &self.clickhouse_concurrency,
-        );
+        // Choose between native RowBinary client and HTTP/JSON client based on config
+        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<RowData>>> =
+            if self.storage_config.clickhouse_cluster.use_native_client {
+                tracing::info!(
+                    "Using native ClickHouse client with RowBinary format for table {}",
+                    self.storage_config.clickhouse_table_name
+                );
+                Box::new(NativeClickhouseWriterStep::new(
+                    next_step,
+                    self.storage_config.clickhouse_cluster.clone(),
+                    self.storage_config.clickhouse_table_name.clone(),
+                    false,
+                    &self.clickhouse_concurrency,
+                ))
+            } else {
+                Box::new(ClickhouseWriterStep::new(
+                    next_step,
+                    self.storage_config.clickhouse_cluster.clone(),
+                    self.storage_config.clickhouse_table_name.clone(),
+                    false,
+                    &self.clickhouse_concurrency,
+                ))
+            };
 
         let accumulator = Arc::new(
             |batch: BytesInsertBatch<RowData>, small_batch: Message<BytesInsertBatch<RowData>>| {

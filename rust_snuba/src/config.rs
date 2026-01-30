@@ -89,6 +89,11 @@ pub struct ClickhouseConfig {
     pub user: String,
     pub password: String,
     pub database: String,
+    /// Use the native ClickHouse client with RowBinary format instead of HTTP with JSONEachRow.
+    /// This can provide better performance for high-throughput workloads.
+    /// Default: false (use HTTP client for backward compatibility)
+    #[serde(default)]
+    pub use_native_client: bool,
 }
 
 #[derive(Deserialize, Clone, Debug)]

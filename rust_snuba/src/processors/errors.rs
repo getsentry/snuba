@@ -73,6 +73,7 @@ pub fn process_message_with_replacement(
                 sentry_received_timestamp: None,
                 cogs_data: None,
                 item_type_metrics: None,
+                typed_rows: None,
             }))
         }
         ("insert", None, _) => {

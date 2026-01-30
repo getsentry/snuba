@@ -24,6 +24,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 adler = "1.0.2"
 anyhow = { version = "1.0.69", features = ["backtrace"] }
+async-trait = "0.1"
 cadence = "1.0.0"
 chrono = { version = "0.4.26", features = ["serde"] }
 ctrlc = { version = "3.2.5", features = ["termination"] }
