@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import replace
 from itertools import islice
-from typing import List, Optional, Sequence
+from typing import Any, Callable, List, Optional, Sequence
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -35,9 +35,14 @@ from snuba.protos.common import NORMALIZED_COLUMNS_EAP_ITEMS
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, in_cond, literal, literals_array, or_cond
+from snuba.query.dsl import and_cond, if_cond, in_cond, literal, literals_array, or_cond
 from snuba.query.dsl import column as snuba_column
-from snuba.query.expressions import DangerousRawSQL, Expression, SubscriptableReference
+from snuba.query.expressions import (
+    DangerousRawSQL,
+    Expression,
+    FunctionCall,
+    SubscriptableReference,
+)
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -76,12 +81,50 @@ from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 
 _DEFAULT_ROW_LIMIT = 10_000
 
+
+def _has_proto_field(proto: Any, field_name: str) -> bool:
+    """
+    Safely check if a proto message has a field set.
+
+    This handles the case where the field doesn't exist in the proto definition yet
+    (e.g., when preparing for a new proto field that will be added later).
+    HasField() throws ValueError if the field doesn't exist, so we catch that.
+    """
+    try:
+        return bool(proto.HasField(field_name))
+    except ValueError:
+        # Field doesn't exist in the proto definition
+        return False
+
+
 OP_TO_EXPR = {
     Column.BinaryFormula.OP_ADD: f.plus,
     Column.BinaryFormula.OP_SUBTRACT: f.minus,
     Column.BinaryFormula.OP_MULTIPLY: f.multiply,
     Column.BinaryFormula.OP_DIVIDE: f.divide,
 }
+
+# Comparison operators for ConditionalFormula conditions
+# These will be populated when the proto is available
+# Maps FormulaCondition.Op enum values to expression functions
+COMPARISON_OP_TO_EXPR: dict[int, Callable[..., FunctionCall]] = {}
+
+# Try to populate comparison operators if the proto is available
+# This allows the code to work both before and after the proto is added
+if hasattr(Column, "FormulaCondition"):
+    FormulaCondition = Column.FormulaCondition
+    if hasattr(FormulaCondition, "OP_LESS_THAN"):
+        COMPARISON_OP_TO_EXPR[FormulaCondition.OP_LESS_THAN] = f.less
+    if hasattr(FormulaCondition, "OP_GREATER_THAN"):
+        COMPARISON_OP_TO_EXPR[FormulaCondition.OP_GREATER_THAN] = f.greater
+    if hasattr(FormulaCondition, "OP_LESS_THAN_OR_EQUALS"):
+        COMPARISON_OP_TO_EXPR[FormulaCondition.OP_LESS_THAN_OR_EQUALS] = f.lessOrEquals
+    if hasattr(FormulaCondition, "OP_GREATER_THAN_OR_EQUALS"):
+        COMPARISON_OP_TO_EXPR[FormulaCondition.OP_GREATER_THAN_OR_EQUALS] = f.greaterOrEquals
+    if hasattr(FormulaCondition, "OP_EQUALS"):
+        COMPARISON_OP_TO_EXPR[FormulaCondition.OP_EQUALS] = f.equals
+    if hasattr(FormulaCondition, "OP_NOT_EQUALS"):
+        COMPARISON_OP_TO_EXPR[FormulaCondition.OP_NOT_EQUALS] = f.notEquals
 
 
 def _apply_virtual_columns(
@@ -310,6 +353,35 @@ def _get_reliability_context_columns(
 
         return context_cols
 
+    if _has_proto_field(column, "conditional_formula"):
+        # For conditional formulas, extract context columns from all parts:
+        # condition (left/right), match, and default
+        context_cols = []
+        conditional = column.conditional_formula  # type: ignore[attr-defined]
+
+        # Extract from condition's left and right
+        if _has_proto_field(conditional, "condition"):
+            for col in [conditional.condition.left, conditional.condition.right]:
+                if col.HasField("conditional_aggregation") or col.HasField("formula"):
+                    context_cols.extend(_get_reliability_context_columns(col, request_meta))
+
+        # Extract from match and default branches
+        # Note: 'match' is a Python keyword, so use getattr
+        match_col = getattr(conditional, "match")
+        default_col = conditional.default
+        for col in [match_col, default_col]:
+            if not col.HasField("formula") and not _has_proto_field(col, "conditional_formula"):
+                if col.label:
+                    context_cols.append(
+                        SelectedExpression(
+                            name=col.label,
+                            expression=_column_to_expression(col, request_meta),
+                        )
+                    )
+            context_cols.extend(_get_reliability_context_columns(col, request_meta))
+
+        return context_cols
+
     if not (column.HasField("conditional_aggregation")):
         return []
 
@@ -352,21 +424,96 @@ def _get_reliability_context_columns(
 
 
 def _formula_to_expression(formula: Column.BinaryFormula, request_meta: RequestMeta) -> Expression:
-    formula_expr = OP_TO_EXPR[formula.op](
-        _column_to_expression(formula.left, request_meta),
-        _column_to_expression(formula.right, request_meta),
-    )
+    left_expr = _column_to_expression(formula.left, request_meta)
+    right_expr = _column_to_expression(formula.right, request_meta)
+
+    # Get the default value if specified
+    default_value: float | int | None = None
     match formula.WhichOneof("default_value"):
-        case None:
-            return formula_expr
         case "default_value_double":
-            return f.coalesce(formula_expr, formula.default_value_double)
+            default_value = formula.default_value_double
         case "default_value_int64":
-            return f.coalesce(formula_expr, formula.default_value_int64)
+            default_value = formula.default_value_int64
+        case None:
+            pass
         case default:
             raise BadSnubaRPCRequestException(
                 f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
             )
+
+    # For division operations with a default value, protect against NULL/zero divisors
+    # This handles cases like count / ((now - min(timestamp)) / 3600) where the divisor
+    # may be NULL (if min(timestamp) is NULL) or zero
+    if formula.op == Column.BinaryFormula.OP_DIVIDE and default_value is not None:
+        # if(right IS NULL OR right = 0, default, left / right)
+        return if_cond(
+            or_cond(f.isNull(right_expr), f.equals(right_expr, literal(0))),
+            literal(default_value),
+            f.divide(left_expr, right_expr),
+        )
+
+    formula_expr = OP_TO_EXPR[formula.op](left_expr, right_expr)
+
+    if default_value is not None:
+        return f.coalesce(formula_expr, default_value)
+
+    return formula_expr
+
+
+def _conditional_formula_to_expression(
+    conditional_formula: Any,
+    request_meta: RequestMeta,  # Column.ConditionalFormula when proto is available
+) -> Expression:
+    """
+    Converts a ConditionalFormula proto to a ClickHouse if() expression.
+
+    ConditionalFormula allows expressing: if(condition, match_value, default_value)
+    where the condition can compare aggregates (e.g., if(min(ts) < X, rate1, rate2)).
+
+    This enables use cases like:
+    - if(min(timestamp) < one_week_ago, count/WEEK_IN_HOURS, count/hours_since_first_seen)
+
+    NOTE: This function requires the ConditionalFormula proto message to be defined in
+    sentry-protos. Until then, this code path won't be executed (HasField will return False).
+
+    Proto structure:
+        message ConditionalFormula {
+            FormulaCondition condition = 1;
+            Column match = 2;    // value when condition is true
+            Column default = 3;  // value when condition is false
+        }
+
+        message FormulaCondition {
+            Column left = 1;
+            Op op = 2;
+            Column right = 3;
+            enum Op {
+                OP_UNSPECIFIED = 0;
+                OP_LESS_THAN = 1;
+                OP_GREATER_THAN = 2;
+                OP_LESS_THAN_OR_EQUALS = 3;
+                OP_GREATER_THAN_OR_EQUALS = 4;
+                OP_EQUALS = 5;
+                OP_NOT_EQUALS = 6;
+            }
+        }
+    """
+    condition = conditional_formula.condition
+    left_expr = _column_to_expression(condition.left, request_meta)
+    right_expr = _column_to_expression(condition.right, request_meta)
+
+    if condition.op not in COMPARISON_OP_TO_EXPR:
+        raise BadSnubaRPCRequestException(
+            f"Unsupported comparison operator in ConditionalFormula: {condition.op}"
+        )
+
+    comparison_expr = COMPARISON_OP_TO_EXPR[condition.op](left_expr, right_expr)
+    # 'match' is the value when condition is true, 'default' is when false
+    # Note: 'match' is a Python keyword in 3.10+, but protobuf accesses it as an attribute
+    match_expr = _column_to_expression(getattr(conditional_formula, "match"), request_meta)
+    default_expr = _column_to_expression(conditional_formula.default, request_meta)
+
+    return if_cond(comparison_expr, match_expr, default_expr)
 
 
 def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expression:
@@ -388,11 +535,21 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
         formula_expr = _formula_to_expression(column.formula, request_meta)
         formula_expr = replace(formula_expr, alias=column.label)
         return formula_expr
+    elif _has_proto_field(column, "conditional_formula"):
+        # ConditionalFormula allows if(condition, if_true, if_false) expressions
+        # where the condition can compare aggregates
+        # NOTE: This requires the ConditionalFormula proto message in sentry-protos
+        conditional_expr = _conditional_formula_to_expression(
+            column.conditional_formula,  # type: ignore[attr-defined]
+            request_meta,
+        )
+        conditional_expr = replace(conditional_expr, alias=column.label)
+        return conditional_expr
     elif column.HasField("literal"):
         return literal(column.literal.val_double)
     else:
         raise BadSnubaRPCRequestException(
-            "Column is not one of: aggregate, attribute key, or formula"
+            "Column is not one of: aggregate, attribute key, formula, or conditional_formula"
         )
 
 
