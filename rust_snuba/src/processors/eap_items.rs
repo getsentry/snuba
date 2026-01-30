@@ -4,7 +4,7 @@ use chrono::Utc;
 use prost::Message;
 use seq_macro::seq;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
@@ -13,6 +13,7 @@ use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
+use crate::types::CogsData;
 use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
 
 pub fn process_message(
@@ -47,8 +48,31 @@ pub fn process_message(
     let mut item_type_metrics = ItemTypeMetrics::new();
     item_type_metrics.record_item(item_type, payload.len());
 
+    // COGS tracking by item type
+    let app_feature = match item_type {
+        TraceItemType::Span => "eap_spans",
+        TraceItemType::Error => "eap_errors",
+        TraceItemType::Log => "eap_logs",
+        TraceItemType::UptimeCheck => "eap_uptime_check",
+        TraceItemType::UptimeResult => "eap_uptime_result",
+        TraceItemType::Replay => "eap_replay",
+        TraceItemType::Occurrence => "eap_occurrence",
+        TraceItemType::Metric => "eap_metric",
+        TraceItemType::ProfileFunction => "eap_profile_function",
+        TraceItemType::Attachment => "eap_attachment",
+        TraceItemType::Preprod => "eap_preprod",
+        TraceItemType::UserSession => "eap_user_session",
+        TraceItemType::Unspecified => "eap_unspecified",
+    }
+    .to_string();
+
+    let cogs_data = CogsData {
+        data: BTreeMap::from([(app_feature, payload.len() as u64)]),
+    };
+
     let mut batch = InsertBatch::from_rows([eap_item], origin_timestamp)?;
     batch.item_type_metrics = Some(item_type_metrics);
+    batch.cogs_data = Some(cogs_data);
     Ok(batch)
 }
 
