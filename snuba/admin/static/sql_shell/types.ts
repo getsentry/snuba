@@ -3,6 +3,8 @@ import { QueryResult } from "SnubaAdmin/clickhouse_queries/types";
 
 export type ShellMode = "tracing" | "system";
 
+export type OutputFormat = "table" | "json" | "csv" | "vertical";
+
 export type ParsedCommand =
   | { type: "use"; storage: string }
   | { type: "host"; host: string; port: number }
@@ -11,6 +13,7 @@ export type ParsedCommand =
   | { type: "profile"; enabled: boolean }
   | { type: "trace_mode"; formatted: boolean }
   | { type: "sudo"; enabled: boolean }
+  | { type: "format"; format: OutputFormat }
   | { type: "help" }
   | { type: "clear" }
   | { type: "sql"; query: string };
@@ -41,6 +44,7 @@ export interface ShellState {
   profileEnabled: boolean;
   traceFormatted: boolean;
   sudoEnabled: boolean;
+  outputFormat: OutputFormat;
   history: ShellHistoryEntry[];
   commandHistory: string[];
   historyIndex: number;

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useShellStyles } from "SnubaAdmin/sql_shell/styles";
-import { ShellHistoryEntry, ShellMode } from "SnubaAdmin/sql_shell/types";
+import { ShellHistoryEntry, ShellMode, OutputFormat } from "SnubaAdmin/sql_shell/types";
 import {
   TracingResult,
   TracingSummary,
@@ -52,6 +52,7 @@ interface ShellOutputProps {
   entries: ShellHistoryEntry[];
   traceFormatted: boolean;
   mode: ShellMode;
+  outputFormat: OutputFormat;
   isExecuting?: boolean;
 }
 
@@ -69,7 +70,7 @@ function estimateEntryHeight(entry: ShellHistoryEntry): number {
   return heights[entry.type] || 50;
 }
 
-export function ShellOutput({ entries, traceFormatted, mode, isExecuting }: ShellOutputProps) {
+export function ShellOutput({ entries, traceFormatted, mode, outputFormat, isExecuting }: ShellOutputProps) {
   const { classes } = useShellStyles();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
@@ -137,6 +138,7 @@ export function ShellOutput({ entries, traceFormatted, mode, isExecuting }: Shel
               entry={entries[virtualItem.index]}
               traceFormatted={traceFormatted}
               mode={mode}
+              outputFormat={outputFormat}
               classes={classes}
             />
           </div>
@@ -153,11 +155,13 @@ function ShellEntry({
   entry,
   traceFormatted,
   mode,
+  outputFormat,
   classes,
 }: {
   entry: ShellHistoryEntry;
   traceFormatted: boolean;
   mode: ShellMode;
+  outputFormat: OutputFormat;
   classes: Record<string, string>;
 }) {
   switch (entry.type) {
@@ -172,6 +176,7 @@ function ShellEntry({
         <ResultsOutput
           result={entry.content}
           traceFormatted={traceFormatted}
+          outputFormat={outputFormat}
           classes={classes}
         />
       );
@@ -179,6 +184,7 @@ function ShellEntry({
       return (
         <SystemResultsOutput
           result={entry.content}
+          outputFormat={outputFormat}
           classes={classes}
         />
       );
@@ -292,6 +298,7 @@ function HelpOutput({ mode, classes }: { mode: ShellMode; classes: Record<string
     { cmd: "SHOW STORAGES", desc: "List all available storages" },
     { cmd: "PROFILE ON/OFF", desc: "Toggle profile event collection" },
     { cmd: "TRACE RAW/FORMATTED", desc: "Toggle trace output format" },
+    { cmd: "FORMAT TABLE/JSON/CSV/VERTICAL", desc: "Set output format" },
     { cmd: "CLEAR", desc: "Clear the terminal output" },
     { cmd: "HELP", desc: "Show this help message" },
     { cmd: "<SQL query>", desc: "Execute SQL with tracing" },
@@ -303,6 +310,7 @@ function HelpOutput({ mode, classes }: { mode: ShellMode; classes: Record<string
     { cmd: "SHOW STORAGES", desc: "List all available storages" },
     { cmd: "SHOW HOSTS", desc: "List available hosts for current storage" },
     { cmd: "SUDO ON/OFF", desc: "Toggle sudo mode" },
+    { cmd: "FORMAT TABLE/JSON/CSV/VERTICAL", desc: "Set output format" },
     { cmd: "CLEAR", desc: "Clear the terminal output" },
     { cmd: "HELP", desc: "Show this help message" },
     { cmd: "<SQL query>", desc: "Execute SQL query" },
@@ -368,13 +376,105 @@ function HelpOutput({ mode, classes }: { mode: ShellMode; classes: Record<string
   );
 }
 
+// Helper function to escape CSV values
+function escapeCsvValue(value: any): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  const str = typeof value === "object" ? JSON.stringify(value) : String(value);
+  // If value contains comma, quote, or newline, wrap in quotes and escape internal quotes
+  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+// Render data as JSON format
+function renderAsJson(
+  cols: string[],
+  rows: any[][],
+  classes: Record<string, string>
+): React.ReactNode {
+  const data = rows.slice(0, 100).map((row) => {
+    const obj: Record<string, any> = {};
+    cols.forEach((col, idx) => {
+      obj[col] = row[idx];
+    });
+    return obj;
+  });
+
+  return (
+    <pre className={classes.jsonOutput}>
+      {JSON.stringify(data, null, 2)}
+    </pre>
+  );
+}
+
+// Render data as CSV format
+function renderAsCsv(
+  cols: string[],
+  rows: any[][],
+  classes: Record<string, string>
+): React.ReactNode {
+  const headerRow = cols.map(escapeCsvValue).join(",");
+  const dataRows = rows.slice(0, 100).map((row) =>
+    row.map(escapeCsvValue).join(",")
+  );
+
+  return (
+    <pre className={classes.csvOutput}>
+      {[headerRow, ...dataRows].join("\n")}
+    </pre>
+  );
+}
+
+// Render data as vertical format (one column per line per row)
+function renderAsVertical(
+  cols: string[],
+  rows: any[][],
+  classes: Record<string, string>
+): React.ReactNode {
+  const maxColWidth = Math.max(...cols.map((c) => c.length));
+
+  return (
+    <div className={classes.verticalOutput}>
+      {rows.slice(0, 100).map((row, rowIdx) => (
+        <div key={rowIdx} className={classes.verticalRow}>
+          <div className={classes.verticalRowHeader}>
+            *************************** {rowIdx + 1}. row ***************************
+          </div>
+          {cols.map((col, colIdx) => {
+            const value = row[colIdx];
+            const displayValue =
+              value === null || value === undefined
+                ? "NULL"
+                : typeof value === "object"
+                ? JSON.stringify(value)
+                : String(value);
+            return (
+              <div key={colIdx} className={classes.verticalField}>
+                <span className={classes.verticalFieldName}>
+                  {col.padStart(maxColWidth)}:
+                </span>
+                <span className={classes.verticalFieldValue}> {displayValue}</span>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ResultsOutput({
   result,
   traceFormatted,
+  outputFormat,
   classes,
 }: {
   result: TracingResult;
   traceFormatted: boolean;
+  outputFormat: OutputFormat;
   classes: Record<string, string>;
 }) {
   if (!result) {
@@ -389,15 +489,51 @@ function ResultsOutput({
   const rows = result.result || [];
   const rowCount = result.num_rows_result || rows.length || 0;
 
-  return (
-    <div className={classes.resultContainer}>
-      <CollapsibleSection
-        title="Results"
-        badge={`${rowCount} rows`}
-        defaultExpanded={true}
-        classes={classes}
-      >
-        {cols.length > 0 ? (
+  // Extract column names for format renderers (cols are [name, type] arrays)
+  const colNames = cols.map((col: string[] | undefined) => col ? col[0] : "?");
+
+  const renderResultContent = () => {
+    if (cols.length === 0) {
+      return <div className={classes.emptyResult}>No results returned</div>;
+    }
+
+    switch (outputFormat) {
+      case "json":
+        return (
+          <>
+            {renderAsJson(colNames, rows, classes)}
+            {rows.length > 100 && (
+              <div className={classes.truncatedNote}>
+                ... showing first 100 of {rows.length} rows
+              </div>
+            )}
+          </>
+        );
+      case "csv":
+        return (
+          <>
+            {renderAsCsv(colNames, rows, classes)}
+            {rows.length > 100 && (
+              <div className={classes.truncatedNote}>
+                ... showing first 100 of {rows.length} rows
+              </div>
+            )}
+          </>
+        );
+      case "vertical":
+        return (
+          <>
+            {renderAsVertical(colNames, rows, classes)}
+            {rows.length > 100 && (
+              <div className={classes.truncatedNote}>
+                ... showing first 100 of {rows.length} rows
+              </div>
+            )}
+          </>
+        );
+      case "table":
+      default:
+        return (
           <div className={classes.tableContainer}>
             <table className={classes.resultTableCompact}>
               <thead>
@@ -431,9 +567,19 @@ function ResultsOutput({
               </div>
             )}
           </div>
-        ) : (
-          <div className={classes.emptyResult}>No results returned</div>
-        )}
+        );
+    }
+  };
+
+  return (
+    <div className={classes.resultContainer}>
+      <CollapsibleSection
+        title="Results"
+        badge={`${rowCount} rows`}
+        defaultExpanded={true}
+        classes={classes}
+      >
+        {renderResultContent()}
       </CollapsibleSection>
 
       {traceFormatted && result.summarized_trace_output ? (
@@ -455,9 +601,11 @@ function ResultsOutput({
 
 function SystemResultsOutput({
   result,
+  outputFormat,
   classes,
 }: {
   result: QueryResult;
+  outputFormat: OutputFormat;
   classes: Record<string, string>;
 }) {
   if (!result) {
@@ -468,18 +616,51 @@ function SystemResultsOutput({
     return <ErrorOutput error={result.error} classes={classes} />;
   }
 
-  const cols = result.column_names || [];
-  const rows = result.rows || [];
+  const cols = (result.column_names || []) as string[];
+  const rows = (result.rows || []) as any[][];
 
-  return (
-    <div className={classes.resultContainer}>
-      <CollapsibleSection
-        title="Results"
-        badge={`${rows.length} rows`}
-        defaultExpanded={true}
-        classes={classes}
-      >
-        {cols.length > 0 ? (
+  const renderResultContent = () => {
+    if (cols.length === 0) {
+      return <div className={classes.emptyResult}>No results returned</div>;
+    }
+
+    switch (outputFormat) {
+      case "json":
+        return (
+          <>
+            {renderAsJson(cols, rows, classes)}
+            {rows.length > 100 && (
+              <div className={classes.truncatedNote}>
+                ... showing first 100 of {rows.length} rows
+              </div>
+            )}
+          </>
+        );
+      case "csv":
+        return (
+          <>
+            {renderAsCsv(cols, rows, classes)}
+            {rows.length > 100 && (
+              <div className={classes.truncatedNote}>
+                ... showing first 100 of {rows.length} rows
+              </div>
+            )}
+          </>
+        );
+      case "vertical":
+        return (
+          <>
+            {renderAsVertical(cols, rows, classes)}
+            {rows.length > 100 && (
+              <div className={classes.truncatedNote}>
+                ... showing first 100 of {rows.length} rows
+              </div>
+            )}
+          </>
+        );
+      case "table":
+      default:
+        return (
           <div className={classes.tableContainer}>
             <table className={classes.resultTableCompact}>
               <thead>
@@ -511,9 +692,19 @@ function SystemResultsOutput({
               </div>
             )}
           </div>
-        ) : (
-          <div className={classes.emptyResult}>No results returned</div>
-        )}
+        );
+    }
+  };
+
+  return (
+    <div className={classes.resultContainer}>
+      <CollapsibleSection
+        title="Results"
+        badge={`${rows.length} rows`}
+        defaultExpanded={true}
+        classes={classes}
+      >
+        {renderResultContent()}
       </CollapsibleSection>
     </div>
   );
