@@ -14,6 +14,7 @@ function Welcome(props: { api: Client }) {
     return (
       <div>
         <p>Available regions:</p>
+        <p>MEREDITH IS THE BEST</p>
         <ul>
           <li>
             <a href="https://snuba-admin.getsentry.net/" target="_blank">
