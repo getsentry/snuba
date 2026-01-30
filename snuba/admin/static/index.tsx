@@ -21,7 +21,7 @@ const bodyStyle = {
   flexGrow: 1,
   display: "flex",
   minHeight: 0,
-  overflow: "auto",
+  overflow: "hidden",
 };
 
 let client = Client();
