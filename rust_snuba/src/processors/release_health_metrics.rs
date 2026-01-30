@@ -71,7 +71,7 @@ enum MetricValue {
 }
 
 /// The raw row that is written to clickhouse.
-#[derive(Debug, Serialize, Default)]
+#[derive(Debug, Serialize, Default, clickhouse::Row)]
 struct MetricsRawRow {
     use_case_id: String,
     org_id: u64,

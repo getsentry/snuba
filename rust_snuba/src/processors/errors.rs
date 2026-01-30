@@ -333,7 +333,7 @@ struct User {
 
 // Row
 
-#[derive(Debug, Default, Serialize, JsonSchema)]
+#[derive(Debug, Default, Serialize, JsonSchema, clickhouse::Row)]
 struct ErrorRow {
     #[serde(rename = "contexts.key")]
     contexts_key: Vec<String>,

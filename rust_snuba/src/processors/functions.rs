@@ -20,33 +20,41 @@ pub fn process_message(
     let functions: Vec<Function> = msg
         .functions
         .iter()
-        .map(|from| {
-            Function {
-                profile_id: msg.profile_id,
-                project_id: msg.project_id,
+        .map(|from| Function {
+            profile_id: msg.profile_id,
+            project_id: msg.project_id,
 
-                // Profile metadata
-                environment: msg.environment.as_deref(),
-                platform: &msg.platform,
-                release: msg.release.as_deref(),
-                retention_days: msg.retention_days,
-                timestamp: msg.timestamp,
-                transaction_name: &msg.transaction_name,
-                start_timestamp: msg.start_timestamp.map(|t| (t * 1e6) as u64),
-                end_timestamp: msg.end_timestamp.map(|t| (t * 1e6) as u64),
-                profiling_type: msg.profiling_type.as_deref(),
-                materialization_version: msg.materialization_version.unwrap_or_default(),
+            // Profile metadata
+            environment: msg.environment.clone(),
+            platform: msg.platform.clone(),
+            release: msg.release.clone(),
+            retention_days: msg.retention_days,
+            timestamp: msg.timestamp,
+            transaction_name: msg.transaction_name.clone(),
+            start_timestamp: msg.start_timestamp.map(|t| (t * 1e6) as u64),
+            end_timestamp: msg.end_timestamp.map(|t| (t * 1e6) as u64),
+            profiling_type: msg.profiling_type.clone(),
+            materialization_version: msg.materialization_version.unwrap_or_default(),
 
-                // Function metadata
-                fingerprint: from.fingerprint,
-                durations: &from.self_times_ns,
-                package: &from.package,
-                name: &from.function,
-                is_application: from.in_app as u8,
-                thread_id: from.thread_id.clone().unwrap_or_default(),
+            // Function metadata
+            fingerprint: from.fingerprint,
+            durations: from.self_times_ns.clone(),
+            package: from.package.clone(),
+            name: from.function.clone(),
+            is_application: from.in_app as u8,
+            thread_id: from.thread_id.clone().unwrap_or_default(),
 
-                ..Default::default()
-            }
+            // Deprecated fields
+            browser_name: String::new(),
+            depth: 0,
+            device_classification: 0,
+            dist: String::new(),
+            os_name: String::new(),
+            os_version: String::new(),
+            parent_fingerprint: 0,
+            path: String::new(),
+            transaction_op: String::new(),
+            transaction_status: 0,
         })
         .collect();
 
@@ -88,37 +96,37 @@ struct InputMessage {
     materialization_version: Option<u8>,
 }
 
-#[derive(Default, Debug, Serialize)]
-struct Function<'a> {
-    durations: &'a [u64],
-    environment: Option<&'a str>,
+#[derive(Default, Debug, Serialize, clickhouse::Row)]
+struct Function {
+    durations: Vec<u64>,
+    environment: Option<String>,
     fingerprint: u64,
     is_application: u8,
     materialization_version: u8,
-    name: &'a str,
-    package: &'a str,
-    platform: &'a str,
+    name: String,
+    package: String,
+    platform: String,
     profile_id: Uuid,
     project_id: u64,
-    release: Option<&'a str>,
+    release: Option<String>,
     retention_days: u32,
     timestamp: u64,
     start_timestamp: Option<u64>,
     end_timestamp: Option<u64>,
-    transaction_name: &'a str,
+    transaction_name: String,
     thread_id: String,
-    profiling_type: Option<&'a str>,
+    profiling_type: Option<String>,
 
     // Deprecated fields
-    browser_name: &'a str,
+    browser_name: String,
     depth: u8,
     device_classification: u32,
-    dist: &'a str,
-    os_name: &'a str,
-    os_version: &'a str,
+    dist: String,
+    os_name: String,
+    os_version: String,
     parent_fingerprint: u8,
-    path: &'a str,
-    transaction_op: &'a str,
+    path: String,
+    transaction_op: String,
     transaction_status: u8,
 }
 

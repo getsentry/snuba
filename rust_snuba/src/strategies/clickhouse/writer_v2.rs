@@ -15,8 +15,11 @@ use sentry_arroyo::{counter, timer};
 use crate::config::ClickhouseConfig;
 use crate::types::{BytesInsertBatch, RowData};
 
+// Re-export the native client for future use with RowBinary format
+pub use super::client::NativeClickhouseClient;
+
 fn clickhouse_task_runner(
-    client: Arc<ClickhouseClient>,
+    client: Arc<HttpClickhouseClient>,
     skip_write: bool,
 ) -> impl TaskRunner<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error> {
     move |message: Message<BytesInsertBatch<RowData>>| -> RunTaskFunc<BytesInsertBatch<()>, anyhow::Error> {
@@ -87,7 +90,7 @@ where
         let inner = RunTaskInThreads::new(
             next_step,
             clickhouse_task_runner(
-                Arc::new(ClickhouseClient::new(&cluster_config.clone(), &table)),
+                Arc::new(HttpClickhouseClient::new(&cluster_config.clone(), &table)),
                 skip_write,
             ),
             concurrency,
@@ -122,10 +125,11 @@ where
     }
 }
 
+/// Configuration for retry behavior when writing to ClickHouse.
 pub struct RetryConfig {
-    initial_backoff_ms: f64,
-    max_retries: usize,
-    jitter_factor: f64, // between 0 and 1
+    pub initial_backoff_ms: f64,
+    pub max_retries: usize,
+    pub jitter_factor: f64, // between 0 and 1
 }
 
 impl Default for RetryConfig {
@@ -138,16 +142,19 @@ impl Default for RetryConfig {
     }
 }
 
+/// HTTP-based ClickHouse client using reqwest for JSONEachRow format.
+/// This is the legacy client maintained for backward compatibility.
+/// For new implementations using RowBinary format, use NativeClickhouseClient.
 #[derive(Clone)]
-pub struct ClickhouseClient {
+pub struct HttpClickhouseClient {
     client: Client,
     headers: HeaderMap<HeaderValue>,
     url: String,
     query: String,
 }
 
-impl ClickhouseClient {
-    pub fn new(config: &ClickhouseConfig, table: &str) -> ClickhouseClient {
+impl HttpClickhouseClient {
+    pub fn new(config: &ClickhouseConfig, table: &str) -> HttpClickhouseClient {
         let mut headers = HeaderMap::with_capacity(6);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
@@ -172,7 +179,7 @@ impl ClickhouseClient {
         let url = format!("{scheme}://{host}:{port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
-        ClickhouseClient {
+        HttpClickhouseClient {
             client: Client::new(),
             headers,
             url,
@@ -268,6 +275,9 @@ impl ClickhouseClient {
     }
 }
 
+// Type alias for backward compatibility
+pub type ClickhouseClient = HttpClickhouseClient;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -294,7 +304,7 @@ mod tests {
             database: std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string()),
         };
         println!("config: {:?}", config);
-        let client: ClickhouseClient = ClickhouseClient::new(&config, "querylog_local");
+        let client: HttpClickhouseClient = HttpClickhouseClient::new(&config, "querylog_local");
 
         assert!(client.url.contains("load_balancing"));
         assert!(client.url.contains("insert_distributed_sync"));
@@ -318,7 +328,7 @@ mod tests {
             database: "default".to_string(),
         };
 
-        let client = ClickhouseClient::new(&config, "test_table");
+        let client = HttpClickhouseClient::new(&config, "test_table");
 
         let start_time = Instant::now();
         let result = client

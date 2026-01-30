@@ -39,7 +39,7 @@ pub fn process_message(
 
     eap_item.retention_days = retention_days;
     eap_item.downsampled_retention_days = downsampled_retention_days;
-    eap_item.attributes.insert_int(
+    eap_item.insert_int(
         "sentry._internal.ingested_at".into(),
         Utc::now().timestamp_millis(),
     );
@@ -52,7 +52,16 @@ pub fn process_message(
     Ok(batch)
 }
 
-#[derive(Debug, Default, Serialize)]
+macro_rules! seq_attrs {
+    ($($tt:tt)*) => {
+        seq!(N in 0..40 {
+            $($tt)*
+        });
+    }
+}
+
+seq_attrs! {
+#[derive(Debug, Default, Serialize, clickhouse::Row)]
 struct EAPItem {
     organization_id: u64,
     project_id: u64,
@@ -61,8 +70,23 @@ struct EAPItem {
     trace_id: Uuid,
     item_id: u128,
 
-    #[serde(flatten)]
-    attributes: AttributeMap,
+    // Attribute fields (formerly in AttributeMap)
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_bool: HashMap<String, bool>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_int: HashMap<String, i64>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array: HashMap<String, Vec<EAPValue>>,
+
+    #(
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_string_~N: HashMap<String, String>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_float_~N: HashMap<String, f64>,
+    )*
 
     sampling_factor: f64,
     sampling_weight: u64,
@@ -72,6 +96,7 @@ struct EAPItem {
 
     retention_days: Option<u16>,
     downsampled_retention_days: Option<u16>,
+}
 }
 
 impl TryFrom<TraceItem> for EAPItem {
@@ -86,22 +111,22 @@ impl TryFrom<TraceItem> for EAPItem {
             trace_id: Uuid::parse_str(&from.trace_id)?,
             item_id: read_item_id(from.item_id),
             timestamp: timestamp.seconds as u32,
-            attributes: Default::default(),
             retention_days: Default::default(),
             downsampled_retention_days: Default::default(),
             sampling_factor: 1.0,
             sampling_weight: 1,
             client_sample_rate: 1.0,
             server_sample_rate: 1.0,
+            ..Default::default()
         };
 
         for (key, value) in from.attributes {
             match value.value {
-                Some(Value::StringValue(string)) => eap_item.attributes.insert_string(key, string),
-                Some(Value::DoubleValue(double)) => eap_item.attributes.insert_float(key, double),
-                Some(Value::IntValue(int)) => eap_item.attributes.insert_int(key, int),
-                Some(Value::BoolValue(bool)) => eap_item.attributes.insert_bool(key, bool),
-                Some(Value::ArrayValue(array)) => eap_item.attributes.insert_array(key, array),
+                Some(Value::StringValue(string)) => eap_item.insert_string(key, string),
+                Some(Value::DoubleValue(double)) => eap_item.insert_float(key, double),
+                Some(Value::IntValue(int)) => eap_item.insert_int(key, int),
+                Some(Value::BoolValue(bool)) => eap_item.insert_bool(key, bool),
+                Some(Value::ArrayValue(array)) => eap_item.insert_array(key, array),
                 Some(Value::BytesValue(_)) => (),
                 Some(Value::KvlistValue(_)) => (),
                 None => (),
@@ -144,14 +169,6 @@ fn read_item_id(from: Vec<u8>) -> u128 {
     u128::from_le_bytes(item_id_bytes.try_into().unwrap())
 }
 
-macro_rules! seq_attrs {
-    ($($tt:tt)*) => {
-        seq!(N in 0..40 {
-            $($tt)*
-        });
-    }
-}
-
 #[derive(Debug, Serialize, PartialEq)]
 enum EAPValue {
     String(String),
@@ -160,29 +177,7 @@ enum EAPValue {
     Double(f64),
 }
 
-seq_attrs! {
-#[derive(Debug, Default, Serialize)]
-struct AttributeMap {
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attributes_bool: HashMap<String, bool>,
-
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attributes_int: HashMap<String, i64>,
-
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attributes_array: HashMap<String, Vec<EAPValue>>,
-
-    #(
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attributes_string_~N: HashMap<String, String>,
-
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attributes_float_~N: HashMap<String, f64>,
-    )*
-}
-}
-
-impl AttributeMap {
+impl EAPItem {
     pub fn insert_string(&mut self, k: String, v: String) {
         seq_attrs! {
             let attr_str_buckets = [
@@ -453,12 +448,7 @@ mod tests {
 
         assert!(eap_item.is_ok());
         assert_eq!(
-            eap_item
-                .unwrap()
-                .attributes
-                .attributes_array
-                .get("arrays")
-                .unwrap()[0],
+            eap_item.unwrap().attributes_array.get("arrays").unwrap()[0],
             EAPValue::Int(1234567890)
         );
     }
