@@ -50,19 +50,19 @@ pub fn process_message(
 
     // COGS tracking by item type
     let app_feature = match item_type {
-        TraceItemType::Span => "eap_spans",
-        TraceItemType::Error => "eap_errors",
-        TraceItemType::Log => "eap_logs",
-        TraceItemType::UptimeCheck => "eap_uptime_check",
-        TraceItemType::UptimeResult => "eap_uptime_result",
-        TraceItemType::Replay => "eap_replay",
-        TraceItemType::Occurrence => "eap_occurrence",
-        TraceItemType::Metric => "eap_metric",
-        TraceItemType::ProfileFunction => "eap_profile_function",
-        TraceItemType::Attachment => "eap_attachment",
-        TraceItemType::Preprod => "eap_preprod",
-        TraceItemType::UserSession => "eap_user_session",
-        TraceItemType::Unspecified => "eap_unspecified",
+        TraceItemType::Span => "spans",
+        TraceItemType::Error => "errors",
+        TraceItemType::Log => "our_logs",
+        TraceItemType::UptimeCheck => "uptime",
+        TraceItemType::UptimeResult => "uptime",
+        TraceItemType::Replay => "replays",
+        TraceItemType::Occurrence => "issueplatform",
+        TraceItemType::Metric => "sessions",
+        TraceItemType::ProfileFunction => "profiles",
+        TraceItemType::Attachment => "attachments",
+        TraceItemType::Preprod => "preprod",
+        TraceItemType::UserSession => "sessions",
+        TraceItemType::Unspecified => "null",
     }
     .to_string();
 
