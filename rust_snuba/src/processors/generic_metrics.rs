@@ -222,36 +222,46 @@ where
     deserializer.deserialize_any(Visitor(PhantomData))
 }
 
-#[derive(Debug, Serialize, Default)]
-struct CommonMetricFields {
-    use_case_id: String,
-    org_id: u64,
-    project_id: u64,
-    metric_id: u64,
-    timestamp: u32,
-    retention_days: u16,
-    #[serde(rename = "tags.key")]
-    tags_key: Vec<u64>,
-    #[serde(default, rename = "tags.indexed_value")]
-    tags_indexed_value: Vec<u64>,
-    #[serde(rename = "tags.raw_value")]
-    tags_raw_value: Vec<String>,
-    metric_type: String,
-    materialization_version: u8,
-    timeseries_id: u32,
-    granularities: Vec<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    sampling_weight: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    decasecond_retention_days: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    min_retention_days: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    hr_retention_days: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    day_retention_days: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    record_meta: Option<u8>,
+/// Helper macro to generate metric row structs with common fields inline.
+/// This avoids using #[serde(flatten)] which is incompatible with clickhouse::Row derive.
+macro_rules! define_metric_row {
+    ($name:ident { $($extra_field:tt)* }) => {
+        #[derive(Debug, Serialize, Default, clickhouse::Row)]
+        struct $name {
+            // Common metric fields (inlined from former CommonMetricFields)
+            use_case_id: String,
+            org_id: u64,
+            project_id: u64,
+            metric_id: u64,
+            timestamp: u32,
+            retention_days: u16,
+            #[serde(rename = "tags.key")]
+            tags_key: Vec<u64>,
+            #[serde(default, rename = "tags.indexed_value")]
+            tags_indexed_value: Vec<u64>,
+            #[serde(rename = "tags.raw_value")]
+            tags_raw_value: Vec<String>,
+            metric_type: String,
+            materialization_version: u8,
+            timeseries_id: u32,
+            granularities: Vec<u8>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            sampling_weight: Option<u64>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            decasecond_retention_days: Option<u8>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            min_retention_days: Option<u8>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            hr_retention_days: Option<u8>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            day_retention_days: Option<u8>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            record_meta: Option<u8>,
+
+            // Type-specific fields
+            $($extra_field)*
+        }
+    };
 }
 
 fn should_record_meta(use_case_id: &str) -> Option<u8> {
@@ -262,13 +272,10 @@ fn should_record_meta(use_case_id: &str) -> Option<u8> {
 }
 
 /// The raw row that is written to clickhouse for counters.
-#[derive(Debug, Serialize, Default)]
-struct CountersRawRow {
-    #[serde(flatten)]
-    common_fields: CommonMetricFields,
+define_metric_row!(CountersRawRow {
     #[serde(default)]
     count_value: f64,
-}
+});
 
 /// Parse is the trait which should be implemented for all metric types.
 /// It is used to parse the incoming message into the appropriate raw row.
@@ -308,7 +315,7 @@ impl Parse for CountersRawRow {
 
         let record_meta = should_record_meta(from.use_case_id.as_str());
 
-        let common_fields = CommonMetricFields {
+        Ok(Some(Self {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
             project_id: from.project_id,
@@ -327,11 +334,8 @@ impl Parse for CountersRawRow {
             granularities,
             min_retention_days: Some(retention_days as u8),
             record_meta,
-            ..Default::default()
-        };
-        Ok(Some(Self {
-            common_fields,
             count_value,
+            ..Default::default()
         }))
     }
 }
@@ -443,12 +447,9 @@ pub fn process_counter_message(
 }
 
 /// The raw row that is written to clickhouse for sets.
-#[derive(Debug, Serialize, Default)]
-struct SetsRawRow {
-    #[serde(flatten)]
-    common_fields: CommonMetricFields,
+define_metric_row!(SetsRawRow {
     set_values: Vec<u32>,
-}
+});
 
 impl Parse for SetsRawRow {
     fn parse(
@@ -483,7 +484,7 @@ impl Parse for SetsRawRow {
 
         let record_meta = should_record_meta(from.use_case_id.as_str());
 
-        let common_fields = CommonMetricFields {
+        Ok(Some(Self {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
             project_id: from.project_id,
@@ -499,11 +500,8 @@ impl Parse for SetsRawRow {
             granularities,
             min_retention_days: Some(retention_days as u8),
             record_meta,
-            ..Default::default()
-        };
-        Ok(Some(Self {
-            common_fields,
             set_values,
+            ..Default::default()
         }))
     }
 }
@@ -522,16 +520,13 @@ pub fn process_set_message(
     }
 }
 
-#[derive(Debug, Serialize, Default)]
-struct DistributionsRawRow {
-    #[serde(flatten)]
-    common_fields: CommonMetricFields,
+define_metric_row!(DistributionsRawRow {
     distribution_values: Vec<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     enable_histogram: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     disable_percentiles: Option<u8>,
-}
+});
 
 impl Parse for DistributionsRawRow {
     fn parse(
@@ -574,7 +569,7 @@ impl Parse for DistributionsRawRow {
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
         let record_meta = should_record_meta(from.use_case_id.as_str());
 
-        let common_fields = CommonMetricFields {
+        Ok(Some(Self {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
             project_id: from.project_id,
@@ -593,13 +588,10 @@ impl Parse for DistributionsRawRow {
             granularities,
             min_retention_days: Some(retention_days as u8),
             record_meta,
-            ..Default::default()
-        };
-        Ok(Some(Self {
-            common_fields,
             distribution_values,
             enable_histogram,
             disable_percentiles,
+            ..Default::default()
         }))
     }
 }
@@ -618,10 +610,7 @@ pub fn process_distribution_message(
     }
 }
 
-#[derive(Debug, Serialize, Default)]
-struct GaugesRawRow {
-    #[serde(flatten)]
-    common_fields: CommonMetricFields,
+define_metric_row!(GaugesRawRow {
     #[serde(rename = "gauges_values.last")]
     gauges_values_last: Vec<f64>,
     #[serde(rename = "gauges_values.min")]
@@ -632,7 +621,7 @@ struct GaugesRawRow {
     gauges_values_sum: Vec<f64>,
     #[serde(rename = "gauges_values.count")]
     gauges_values_count: Vec<u64>,
-}
+});
 
 impl Parse for GaugesRawRow {
     fn parse(
@@ -679,7 +668,7 @@ impl Parse for GaugesRawRow {
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
         let record_meta = should_record_meta(from.use_case_id.as_str());
 
-        let common_fields = CommonMetricFields {
+        Ok(Some(Self {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
             project_id: from.project_id,
@@ -698,15 +687,12 @@ impl Parse for GaugesRawRow {
             granularities,
             min_retention_days: Some(retention_days as u8),
             record_meta,
-            ..Default::default()
-        };
-        Ok(Some(Self {
-            common_fields,
             gauges_values_last,
             gauges_values_count,
             gauges_values_max,
             gauges_values_min,
             gauges_values_sum,
+            ..Default::default()
         }))
     }
 }
@@ -732,6 +718,63 @@ mod tests {
     use super::*;
     use chrono::{DateTime, Utc};
     use std::time::SystemTime;
+
+    /// Helper struct for constructing expected metric rows in tests.
+    /// This mirrors the common fields that are inlined into each metric row type.
+    #[derive(Debug, Default, PartialEq)]
+    struct CommonMetricFields {
+        use_case_id: String,
+        org_id: u64,
+        project_id: u64,
+        metric_id: u64,
+        timestamp: u32,
+        retention_days: u16,
+        tags_key: Vec<u64>,
+        tags_indexed_value: Vec<u64>,
+        tags_raw_value: Vec<String>,
+        metric_type: String,
+        materialization_version: u8,
+        timeseries_id: u32,
+        granularities: Vec<u8>,
+        sampling_weight: Option<u64>,
+        decasecond_retention_days: Option<u8>,
+        min_retention_days: Option<u8>,
+        hr_retention_days: Option<u8>,
+        day_retention_days: Option<u8>,
+        record_meta: Option<u8>,
+    }
+
+    /// Helper macro to construct a metric row for test assertions.
+    /// Expands common_fields into individual fields.
+    macro_rules! make_metric_row {
+        ($row_type:ident { common_fields: $common:expr, $($field:ident: $value:expr),* $(,)? }) => {
+            {
+                let common = $common;
+                $row_type {
+                    use_case_id: common.use_case_id,
+                    org_id: common.org_id,
+                    project_id: common.project_id,
+                    metric_id: common.metric_id,
+                    timestamp: common.timestamp,
+                    retention_days: common.retention_days,
+                    tags_key: common.tags_key,
+                    tags_indexed_value: common.tags_indexed_value,
+                    tags_raw_value: common.tags_raw_value,
+                    metric_type: common.metric_type,
+                    materialization_version: common.materialization_version,
+                    timeseries_id: common.timeseries_id,
+                    granularities: common.granularities,
+                    sampling_weight: common.sampling_weight,
+                    decasecond_retention_days: common.decasecond_retention_days,
+                    min_retention_days: common.min_retention_days,
+                    hr_retention_days: common.hr_retention_days,
+                    day_retention_days: common.day_retention_days,
+                    record_meta: common.record_meta,
+                    $($field: $value),*
+                }
+            }
+        };
+    }
 
     const DUMMY_COUNTER_MESSAGE: &str = r#"{
         "version": 2,
@@ -1034,7 +1077,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_BASE64_ENCODED_DISTRIBUTION_MESSAGE,
         );
-        let expected_row = DistributionsRawRow {
+        let expected_row = make_metric_row!(DistributionsRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1067,7 +1110,7 @@ mod tests {
             distribution_values: vec![3f64, 1f64, 2f64],
             enable_histogram: None,
             disable_percentiles: None,
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -1092,7 +1135,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_ZSTD_ENCODED_DISTRIBUTION_MESSAGE,
         );
-        let expected_row = DistributionsRawRow {
+        let expected_row = make_metric_row!(DistributionsRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1125,7 +1168,7 @@ mod tests {
             distribution_values: vec![1f64, 2f64, 3f64],
             enable_histogram: None,
             disable_percentiles: None,
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -1150,7 +1193,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_ZSTD_ENCODED_DISTRIBUTION_MESSAGE_WITH_SAMPLING_WEIGHT,
         );
-        let expected_row = DistributionsRawRow {
+        let expected_row = make_metric_row!(DistributionsRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1183,7 +1226,7 @@ mod tests {
             distribution_values: vec![1f64, 2f64, 3f64],
             enable_histogram: None,
             disable_percentiles: None,
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -1243,7 +1286,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_BASE64_ENCODED_SET_MESSAGE,
         );
-        let expected_row = SetsRawRow {
+        let expected_row = make_metric_row!(SetsRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1274,7 +1317,7 @@ mod tests {
                 sampling_weight: None,
             },
             set_values: vec![1u32, 7u32],
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -1299,7 +1342,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_ZSTD_ENCODED_SET_MESSAGE,
         );
-        let expected_row = SetsRawRow {
+        let expected_row = make_metric_row!(SetsRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1330,7 +1373,7 @@ mod tests {
                 sampling_weight: None,
             },
             set_values: vec![1u32, 7u32],
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -1457,7 +1500,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_COUNTER_MESSAGE,
         );
-        let expected_row = CountersRawRow {
+        let expected_row = make_metric_row!(CountersRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1488,7 +1531,7 @@ mod tests {
                 sampling_weight: None,
             },
             count_value: 1.0,
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -1513,7 +1556,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_COUNTER_MESSAGE_WITH_SAMPLING_WEIGHT,
         );
-        let expected_row = CountersRawRow {
+        let expected_row = make_metric_row!(CountersRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1544,7 +1587,7 @@ mod tests {
                 sampling_weight: Some(100),
             },
             count_value: 1.0,
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -1584,7 +1627,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_SET_MESSAGE,
         );
-        let expected_row = SetsRawRow {
+        let expected_row = make_metric_row!(SetsRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1615,7 +1658,7 @@ mod tests {
                 sampling_weight: None,
             },
             set_values: vec![0, 1, 2, 3, 4, 5],
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -1655,7 +1698,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_LEGACY_DISTRIBUTION_MESSAGE,
         );
-        let expected_row = DistributionsRawRow {
+        let expected_row = make_metric_row!(DistributionsRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1688,7 +1731,7 @@ mod tests {
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
             disable_percentiles: None,
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -1713,7 +1756,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_ARR_ENCODED_DISTRIBUTION_MESSAGE,
         );
-        let expected_row = DistributionsRawRow {
+        let expected_row = make_metric_row!(DistributionsRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1746,7 +1789,7 @@ mod tests {
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
             disable_percentiles: None,
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -1771,7 +1814,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_DISTRIBUTION_MESSAGE_WITH_HIST_AGGREGATE_OPTION,
         );
-        let expected_row = DistributionsRawRow {
+        let expected_row = make_metric_row!(DistributionsRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1804,7 +1847,7 @@ mod tests {
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: Some(1),
             disable_percentiles: None,
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -1829,7 +1872,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_DISTRIBUTION_MESSAGE_WITH_PERCENTILE_AGGREGATE_OPTION,
         );
-        let expected_row = DistributionsRawRow {
+        let expected_row = make_metric_row!(DistributionsRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1862,7 +1905,7 @@ mod tests {
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
             disable_percentiles: Some(1),
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -1902,7 +1945,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_GAUGE_MESSAGE,
         );
-        let expected_row = GaugesRawRow {
+        let expected_row = make_metric_row!(GaugesRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1937,7 +1980,7 @@ mod tests {
             gauges_values_max: vec![10.0],
             gauges_values_min: vec![1.0],
             gauges_values_sum: vec![20.0],
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -1962,7 +2005,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_GAUGE_MESSAGE_WITH_SAMPLING_WEIGHT,
         );
-        let expected_row = GaugesRawRow {
+        let expected_row = make_metric_row!(GaugesRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -1997,7 +2040,7 @@ mod tests {
             gauges_values_max: vec![10.0],
             gauges_values_min: vec![1.0],
             gauges_values_sum: vec![20.0],
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -2022,7 +2065,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_GAUGE_MESSAGE_WITH_TEN_SECOND_AGGREGATE_OPTION,
         );
-        let expected_row = GaugesRawRow {
+        let expected_row = make_metric_row!(GaugesRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -2058,7 +2101,7 @@ mod tests {
             gauges_values_max: vec![10.0],
             gauges_values_min: vec![1.0],
             gauges_values_sum: vec![20.0],
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(
@@ -2098,7 +2141,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_ARR_ENCODED_SET_MESSAGE,
         );
-        let expected_row = SetsRawRow {
+        let expected_row = make_metric_row!(SetsRawRow {
             common_fields: CommonMetricFields {
                 use_case_id: "spans".to_string(),
                 org_id: 1,
@@ -2129,7 +2172,7 @@ mod tests {
                 sampling_weight: None,
             },
             set_values: vec![0, 1, 2, 3, 4, 5],
-        };
+        });
         assert_eq!(
             result.unwrap(),
             expected_insert_batch(

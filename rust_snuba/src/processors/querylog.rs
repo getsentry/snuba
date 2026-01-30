@@ -19,16 +19,49 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let from: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
 
+    let query_list: QueryList = from.query_list.try_into()?;
+
     let querylog_msg = QuerylogMessage {
-        request: from.request,
+        // Request fields
+        request_id: from.request.id,
+        request_body: from.request.body,
+        referrer: from.request.referrer,
+
+        // Direct fields
         dataset: from.dataset,
         projects: from.projects,
         organization: from.organization,
         status: from.status,
-        timing: from.timing,
-        query_list: from.query_list.try_into()?,
         partition: metadata.partition,
         offset: metadata.offset,
+
+        // Timing fields
+        timestamp: from.timing.timestamp,
+        request_duration_ms: from.timing.duration_ms,
+
+        // QueryList fields
+        clickhouse_queries_sql: query_list.sql,
+        clickhouse_queries_status: query_list.status,
+        clickhouse_queries_trace_id: query_list.trace_id,
+        clickhouse_queries_stats: query_list.stats,
+        clickhouse_queries_final: query_list.r#final,
+        clickhouse_queries_cache_hit: query_list.cache_hit,
+        clickhouse_queries_sample: query_list.sample,
+        clickhouse_queries_max_threads: query_list.max_threads,
+        clickhouse_queries_num_days: query_list.num_days,
+        clickhouse_queries_clickhouse_table: query_list.clickhouse_table,
+        clickhouse_queries_query_id: query_list.query_id,
+        clickhouse_queries_is_duplicate: query_list.is_duplicate,
+        clickhouse_queries_consistent: query_list.consistent,
+        clickhouse_queries_all_columns: query_list.all_columns,
+        clickhouse_queries_or_conditions: query_list.or_conditions,
+        clickhouse_queries_where_columns: query_list.where_columns,
+        clickhouse_queries_where_mapping_columns: query_list.where_mapping_columns,
+        clickhouse_queries_groupby_columns: query_list.groupby_columns,
+        clickhouse_queries_array_join_columns: query_list.array_join_columns,
+        clickhouse_queries_bytes_scanned: query_list.bytes_scanned,
+        clickhouse_queries_bytes: query_list.bytes,
+        clickhouse_queries_duration_ms: query_list.duration_ms,
     };
 
     InsertBatch::from_rows([querylog_msg], None)
@@ -295,20 +328,76 @@ struct FromQuerylogMessage {
     query_list: Vec<FromQuery>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, clickhouse::Row)]
 struct QuerylogMessage {
-    #[serde(flatten)]
-    request: Request,
+    // Fields from Request (inlined)
+    #[serde(rename(serialize = "request_id"))]
+    request_id: Uuid,
+    #[serde(
+        rename(serialize = "request_body"),
+        serialize_with = "serialize_json_str"
+    )]
+    request_body: RequestBody,
+    referrer: String,
+
+    // Direct fields
     dataset: String,
     projects: Vec<u64>,
     organization: Option<u64>,
     status: String,
     partition: u16,
     offset: u64,
-    #[serde(flatten)]
-    timing: Timing,
-    #[serde(flatten)]
-    query_list: QueryList,
+
+    // Fields from Timing (inlined)
+    timestamp: u64,
+    #[serde(rename(serialize = "duration_ms"))]
+    request_duration_ms: u64,
+
+    // Fields from QueryList (inlined)
+    #[serde(rename(serialize = "clickhouse_queries.sql"))]
+    clickhouse_queries_sql: Vec<String>,
+    #[serde(rename(serialize = "clickhouse_queries.status"))]
+    clickhouse_queries_status: Vec<String>,
+    #[serde(rename(serialize = "clickhouse_queries.trace_id"))]
+    clickhouse_queries_trace_id: Vec<Uuid>,
+    #[serde(rename(serialize = "clickhouse_queries.stats"))]
+    clickhouse_queries_stats: Vec<String>,
+    #[serde(rename(serialize = "clickhouse_queries.final"))]
+    clickhouse_queries_final: Vec<u8>,
+    #[serde(rename(serialize = "clickhouse_queries.cache_hit"))]
+    clickhouse_queries_cache_hit: Vec<u8>,
+    #[serde(rename(serialize = "clickhouse_queries.sample"))]
+    clickhouse_queries_sample: Vec<f32>,
+    #[serde(rename(serialize = "clickhouse_queries.max_threads"))]
+    clickhouse_queries_max_threads: Vec<u8>,
+    #[serde(rename(serialize = "clickhouse_queries.num_days"))]
+    clickhouse_queries_num_days: Vec<u32>,
+    #[serde(rename(serialize = "clickhouse_queries.clickhouse_table"))]
+    clickhouse_queries_clickhouse_table: Vec<String>,
+    #[serde(rename(serialize = "clickhouse_queries.query_id"))]
+    clickhouse_queries_query_id: Vec<String>,
+    #[serde(rename(serialize = "clickhouse_queries.is_duplicate"))]
+    clickhouse_queries_is_duplicate: Vec<u8>,
+    #[serde(rename(serialize = "clickhouse_queries.consistent"))]
+    clickhouse_queries_consistent: Vec<u8>,
+    #[serde(rename(serialize = "clickhouse_queries.all_columns"))]
+    clickhouse_queries_all_columns: Vec<Vec<String>>,
+    #[serde(rename(serialize = "clickhouse_queries.or_conditions"))]
+    clickhouse_queries_or_conditions: Vec<u8>,
+    #[serde(rename(serialize = "clickhouse_queries.where_columns"))]
+    clickhouse_queries_where_columns: Vec<Vec<String>>,
+    #[serde(rename(serialize = "clickhouse_queries.where_mapping_columns"))]
+    clickhouse_queries_where_mapping_columns: Vec<Vec<String>>,
+    #[serde(rename(serialize = "clickhouse_queries.groupby_columns"))]
+    clickhouse_queries_groupby_columns: Vec<Vec<String>>,
+    #[serde(rename(serialize = "clickhouse_queries.array_join_columns"))]
+    clickhouse_queries_array_join_columns: Vec<Vec<String>>,
+    #[serde(rename(serialize = "clickhouse_queries.bytes_scanned"))]
+    clickhouse_queries_bytes_scanned: Vec<u64>,
+    #[serde(rename(serialize = "clickhouse_queries.bytes"))]
+    clickhouse_queries_bytes: Vec<u64>,
+    #[serde(rename(serialize = "clickhouse_queries.duration_ms"))]
+    clickhouse_queries_duration_ms: Vec<u64>,
 }
 
 #[cfg(test)]
