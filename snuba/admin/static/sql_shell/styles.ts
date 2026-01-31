@@ -154,10 +154,16 @@ export const useShellStyles = createStyles((theme) => ({
   },
   commandText: {
     color: "#e6edf3",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
   },
   infoText: {
     color: "#58a6ff",
     padding: "4px 0",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
   },
   errorText: {
     color: "#f85149",
@@ -166,6 +172,9 @@ export const useShellStyles = createStyles((theme) => ({
     borderRadius: "6px",
     borderLeft: "3px solid #f85149",
     marginBottom: "8px",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
   },
   resultBox: {
     backgroundColor: "rgba(13, 17, 23, 0.6)",
@@ -269,6 +278,9 @@ export const useShellStyles = createStyles((theme) => ({
     marginLeft: "16px",
     fontSize: "12px",
     lineHeight: 1.5,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
   },
   executingIndicator: {
     color: "#ffa657",
@@ -361,10 +373,10 @@ export const useShellStyles = createStyles((theme) => ({
       padding: "4px 10px",
       borderBottom: "1px solid #21262d",
       color: "#e6edf3",
-      maxWidth: "300px",
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap",
+      maxWidth: "400px",
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word",
+      overflowWrap: "break-word",
     },
     "& tr:hover td": {
       backgroundColor: "rgba(88, 166, 255, 0.05)",
@@ -408,5 +420,8 @@ export const useShellStyles = createStyles((theme) => ({
     fontSize: "11px",
     lineHeight: 1.4,
     fontFamily: "inherit",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
   },
 }));

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import Client from "SnubaAdmin/api_client";
 import SQLShell from "SnubaAdmin/sql_shell/shell";
 
@@ -10,7 +10,18 @@ const shellWrapperStyle = {
   height: "calc(100vh - 75px)",
 };
 
+function useDisableWindowScroll() {
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
+}
+
 function SQLShellPage({ api }: ShellPageProps) {
+  useDisableWindowScroll();
   return (
     <div style={shellWrapperStyle}>
       <SQLShell api={api} mode="tracing" />
@@ -19,6 +30,7 @@ function SQLShellPage({ api }: ShellPageProps) {
 }
 
 function SystemShellPage({ api }: ShellPageProps) {
+  useDisableWindowScroll();
   return (
     <div style={shellWrapperStyle}>
       <SQLShell api={api} mode="system" />
