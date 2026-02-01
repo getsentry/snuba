@@ -80,7 +80,7 @@ class EndpointGetTracePageToken:
 
     # We kind of use the page token in a way it wasnt fully designed for.
     # And we rely on knowing the encoding algorithm used to encode it in order to decode it.
-    # But since this class handles it all, this complexity is abstracted.
+    # But since this class handles it all, this complexity is abstracted. hi
     def __init__(
         self,
         last_item_index: int,
