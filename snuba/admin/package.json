@@ -7,6 +7,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.0.0",
     "@codemirror/commands": "^6.6.0",
     "@codemirror/lang-sql": "^6.7.0",
     "@codemirror/language": "^6.0.0",

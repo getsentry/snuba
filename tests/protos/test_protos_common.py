@@ -7,7 +7,7 @@ from snuba.protos.common import (
     attribute_key_to_expression,
 )
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal
+from snuba.query.dsl import arrayElement, column, literal
 from snuba.query.expressions import SubscriptableReference
 
 
@@ -60,10 +60,10 @@ class TestAttributeKeyToExpression:
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="derp"),
         ) == f.cast(
-            SubscriptableReference(
-                alias=None,
-                column=column("attributes_float"),
-                key=literal("derp"),
+            arrayElement(
+                None,
+                column("attributes_bool"),
+                literal("derp"),
             ),
             "Nullable(Boolean)",
             alias="derp_TYPE_BOOLEAN",

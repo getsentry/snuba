@@ -4,12 +4,10 @@ import { Collapse } from "SnubaAdmin/collapse";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
-
-import { SelectItem, Switch, Alert } from "@mantine/core";
+import { Switch } from "@mantine/core";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
-import { Collapse as MantineCollapse, Group, Text } from '@mantine/core';
-import { IconChevronDown, IconChevronRight } from '@tabler/icons-react';
+import { getHostsForStorage, getErrorDomElement } from "SnubaAdmin/utils/clickhouse_node_utils";
 
 import {
   ClickhouseNodeData,
@@ -118,65 +116,6 @@ function QueryDisplay(props: {
       });
   }
 
-  function getHosts(nodeData: ClickhouseNodeData[]): SelectItem[] {
-    let node_info = nodeData.find((el) => el.storage_name === query.storage)!;
-    // populate the hosts entries marking distributed hosts that are not also local
-    if (node_info) {
-      let local_hosts = node_info.local_nodes.map((node) => ({
-        value: `${node.host}:${node.port}`,
-        label: `${node.host}:${node.port}`,
-      }));
-      let dist_hosts = node_info.dist_nodes
-        .filter((node) => !node_info.local_nodes.includes(node))
-        .map((node) => ({
-          value: `${node.host}:${node.port}`,
-          label: `${node.host}:${node.port} (distributed)`,
-        }));
-      let hosts = local_hosts.concat(dist_hosts);
-      let query_node = node_info.query_node;
-      if (query_node) {
-        hosts.push({
-          value: `${query_node.host}:${query_node.port}`,
-          label: `${query_node.host}:${query_node.port} (query node)`,
-        });
-      }
-      return hosts;
-    }
-    return [];
-  }
-
-  function getErrorDomElement() {
-    if (queryError !== null) {
-      let title: string;
-      let bodyDOM;
-      if (queryError.name === "Error" && queryError.message.includes("Stack trace:")) {
-        // this puts the stack trace in a collapsible section
-        const split = queryError.message.indexOf("Stack trace:")
-        title = queryError.message.slice(0, split)
-
-        const stackTrace = queryError.message.slice(split + "Stack trace:".length)
-          .split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
-        bodyDOM = <div>
-          <Group spacing="xs" onClick={() => setCollapseOpened((o) => !o)} style={{ cursor: 'pointer' }}>
-            {collapseOpened ? <IconChevronDown size={16} /> : <IconChevronRight size={16} />}
-            <Text weight={500}>Stack Trace</Text>
-          </Group>
-
-          <MantineCollapse in={collapseOpened}>
-            <Text mt="sm">
-              {stackTrace}
-            </Text>
-          </MantineCollapse>
-        </div>
-      } else {
-        title = queryError.name
-        bodyDOM = queryError.message.split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
-      }
-      return <Alert title={title} color="red">{bodyDOM}</Alert>;
-    }
-    return "";
-  }
-
   function handleQueryError(error: Error) {
     setQueryError(error);
   }
@@ -257,7 +196,7 @@ function QueryDisplay(props: {
                   }
                   onChange={selectHost}
                   name="Host"
-                  options={getHosts(nodeData)}
+                  options={getHostsForStorage(nodeData, query.storage)}
                 />
               </div>
             )}
@@ -273,7 +212,7 @@ function QueryDisplay(props: {
         </div>
       </form>
       <div>
-        {getErrorDomElement()}
+        {getErrorDomElement(queryError, collapseOpened, setCollapseOpened)}
       </div>
       <div>
         <h2>Query results</h2>

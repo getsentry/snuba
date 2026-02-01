@@ -40,7 +40,7 @@ from tests.web.rpc.v1.test_utils import (
 
 
 @pytest.fixture(autouse=False)
-def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
+def setup_logs_in_db(eap: None, redis_db: None) -> None:
     logs_storage = get_storage(StorageKey("eap_items"))
     messages = []
     for i in range(120):
@@ -64,7 +64,7 @@ def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
     write_raw_unprocessed_events(logs_storage, messages)  # type: ignore
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestTraceItemTableForLogs(BaseApiTest):
     def test_with_logs_data(self, setup_logs_in_db: Any) -> None:

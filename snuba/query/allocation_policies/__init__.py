@@ -7,6 +7,7 @@ from enum import Enum
 from typing import Any, cast
 
 import sentry_sdk
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from snuba import environment, settings
 from snuba.configs.configuration import (
@@ -482,6 +483,15 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     quota_unit=NO_UNITS,
                     suggestion=NO_SUGGESTION,
                 )
+            except RedisTimeoutError:
+                # Emit metric for timeout, but don't log since this is expected
+                # when Redis is slow. We fail open to avoid blocking requests.
+                self.metrics.increment(
+                    "fail_open",
+                    1,
+                    tags={"method": "get_quota_allowance", "reason": "redis_timeout"},
+                )
+                return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
             except Exception:
                 self.metrics.increment("fail_open", 1, tags={"method": "get_quota_allowance"})
                 logger.exception(
@@ -543,6 +553,12 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         except InvalidTenantsForAllocationPolicy:
             # the policy did not do anything because the tenants were invalid, updating is also not necessary
             pass
+        except RedisTimeoutError:
+            # Emit metric for timeout, but don't log since this is expected
+            # when Redis is slow. We fail open to avoid blocking requests.
+            self.metrics.increment(
+                "fail_open", 1, tags={"method": "update_quota_balance", "reason": "redis_timeout"}
+            )
         except Exception:
             self.metrics.increment("fail_open", 1, tags={"method": "update_quota_balance"})
             logger.exception(

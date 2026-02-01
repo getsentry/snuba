@@ -73,6 +73,7 @@ pub fn get_cogs_label(processor_name: &str) -> Option<String> {
             Some("generic_metrics_processor_distributions".to_string())
         }
         "GenericGaugesMetricsProcessor" => Some("generic_metrics_processor_gauges".to_string()),
+        "EAPItemsProcessor" => Some("eap_items_processor".to_string()),
         _ => None,
     }
 }

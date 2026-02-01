@@ -159,15 +159,15 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                         aggregate=Function.FUNCTION_SUM,
                         key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                         label="sum",
-                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_UNSPECIFIED,
                     ),
                 ],
             ),
             time_window_secs=300,
             resolution_secs=60,
         ),
-        "Invalid extrapolation mode",
-        id="Invalid subscription: extrapolation mode",
+        "Extrapolation mode must be specified",
+        id="Invalid subscription: extrapolation mode unspecified",
     ),
 ]
 
