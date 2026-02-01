@@ -22,4 +22,4 @@ targets:
     targetFormat: '{{{target}}}:latest'
   - name: github
 versioning:
-  policy: calver  
+  policy: calver
