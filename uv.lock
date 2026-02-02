@@ -411,21 +411,21 @@ wheels = [
 
 [[package]]
 name = "granian"
-version = "2.6.0"
+version = "2.7.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "click", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.6.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:efd9c92bc5d245f10d6924847c25d7f20046c976a4817a87fd8476c22c222b16" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.6.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:318a7db03e771e2611a976a8c4ecc7ae39e43e2ebffd20a4c2371a71cdc5659c" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.6.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:cdb1ab7a0cedfa834c6e8e7c9e2530d80d6fd6f04076c2f6998629688f8ecb00" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.6.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:b6aad6e7ded7a0a916119cd3ee28aa989e619074a6ca1ba3dc19cf5ad608832c" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.6.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2dbbce087a055eb64896b809a9a1f88161751815b112de4aa02ee4348f49cb73" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.6.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:a7fa2728d32dfaf3b1b2bf5b0b7c6d23bb75eaf62bd08b71b61797d292381970" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.6.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:f4e0e925d016e3dc43ae5950021c9ea0e9ee2ef1334a76ba7fbb80cc9e17c044" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.6.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7c032dca04171e4fbd54e587fe03aeef1825739d02ff3e3c49d578a8b5cc752c" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.6.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:d5686da7358fede8e9a1e1344310c6e3cb2c4d02a1aca52c31c990fe6b7d6281" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.7.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:628523302274f95ca967f295a9aa7bc4ade5e1eced42afc60d06dfe20f2da07a" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.7.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:cc6039c61a07b2d36462c487b66b131ae3fd862bdc8fb81d6e5c206c1a2b683c" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.7.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:f3b0442beb11b035ee09959726f44b3730d0b55688110defd1d9a9a6c7486955" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.7.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:a3421bd5c90430073e1f3f88fc63bc8d0a8ee547a9a5c06d577a281f384160bd" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.7.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:213dd224a47c7bfcbb91718c7eeb56d6067825a28dcae50f537964e2dafb729a" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.7.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:bb5be27c0265268d43bab9a878ac27a20b4288843ffc9fda1009b8226673f629" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.7.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:e274a0d6a01c475b9135212106ca5b69f5ec2f67f4ca6ce812d185d80255cdf5" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.7.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:95ac07d5314e03e667210349dfc76124d69726731007c24716e21a2554cc15ca" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/granian-2.7.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:f6812e342c41ca80e1b34fb6c9a7e51a4bbd14f59025bd1bb59d45a39e02b8d5" },
 ]
 
 [package.optional-dependencies]
@@ -1232,7 +1232,7 @@ requires-dist = [
     { name = "google-api-python-client", specifier = ">=2.88.0" },
     { name = "google-cloud-storage", specifier = ">=2.18.0" },
     { name = "googleapis-common-protos", specifier = ">=1.63.2" },
-    { name = "granian", extras = ["pname"], specifier = ">=2.6" },
+    { name = "granian", extras = ["pname"], specifier = ">=2.7" },
     { name = "jsonschema", specifier = ">=4.23.0" },
     { name = "packaging", specifier = ">=24.1" },
     { name = "parsimonious", specifier = ">=0.10.0" },
