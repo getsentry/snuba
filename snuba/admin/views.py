@@ -38,7 +38,11 @@ from snuba.admin.clickhouse.system_queries import (
     UnauthorizedForSudo,
     run_system_query_on_host_with_sql,
 )
-from snuba.admin.clickhouse.trace_log_parsing import summarize_trace_output
+from snuba.admin.clickhouse.trace_log_parsing import (
+    QuerySummary,
+    TracingSummary,
+    summarize_trace_output,
+)
 from snuba.admin.clickhouse.tracing import TraceOutput, run_query_and_get_trace
 from snuba.admin.dead_letter_queue import get_dlq_topics
 from snuba.admin.kafka.topics import get_broker_data
@@ -535,22 +539,11 @@ def clickhouse_trace_query() -> Response:
             ),
             400,
         )
-    try_gather_profile_events = req.get("gather_profile_events", True)
     try:
-        settings = {}
-        if try_gather_profile_events:
-            settings["log_profile_events"] = 1
+        settings = {"log_profile_events": 1}
 
         query_trace = run_query_and_get_trace(storage, raw_sql, settings)
 
-        if try_gather_profile_events:
-            try:
-                gather_profile_events(query_trace, storage)
-            except Exception:
-                logger.warning(
-                    "Error gathering profile events, returning trace anyway",
-                    exc_info=True,
-                )
         return make_response(jsonify(asdict(query_trace)), 200)
     except InvalidCustomQuery as err:
         return make_response(
@@ -572,6 +565,107 @@ def clickhouse_trace_query() -> Response:
             "code": err.code,
         }
         return make_response(jsonify({"error": details}), 400)
+    except Exception as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
+        )
+
+
+@application.route("/fetch_profile_events", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.QUERY_TRACING])
+def fetch_profile_events() -> Response:
+    """
+    Fetch profile events for query summaries that have already been executed.
+    This endpoint is called separately from the trace query to allow lazy loading.
+    """
+    req = json.loads(request.data)
+    try:
+        query_summaries_dict = req["query_summaries"]
+        storage = req["storage"]
+    except KeyError as e:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "validation",
+                        "message": f"Invalid request, missing key {e.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+
+    try:
+        # Reconstruct QuerySummary objects from the dict
+        query_summaries = {}
+        for node_name, summary_dict in query_summaries_dict.items():
+            query_summary = QuerySummary(
+                node_name=summary_dict["node_name"],
+                is_distributed=summary_dict["is_distributed"],
+                query_id=summary_dict["query_id"],
+                execute_summaries=summary_dict.get("execute_summaries"),
+                select_summaries=summary_dict.get("select_summaries"),
+                index_summaries=summary_dict.get("index_summaries"),
+                stream_summaries=summary_dict.get("stream_summaries"),
+                aggregation_summaries=summary_dict.get("aggregation_summaries"),
+                sorting_summaries=summary_dict.get("sorting_summaries"),
+            )
+            query_summaries[node_name] = query_summary
+
+        # Create a minimal TraceOutput object
+        trace_output = TraceOutput(
+            trace_output="",
+            summarized_trace_output=TracingSummary(query_summaries=query_summaries),
+            cols=[],
+            num_rows_result=0,
+            result=[],
+            profile_events_results={},
+            profile_events_meta=[],
+            profile_events_profile={},
+        )
+
+        # Gather profile events
+        gather_profile_events(trace_output, storage)
+
+        # Check if profile events were successfully gathered
+        if not trace_output.profile_events_results:
+            return make_response(
+                jsonify(
+                    {
+                        "status": "not_ready",
+                        "message": "Profile events are not ready yet. Please try again in a few seconds.",
+                        "retry_suggested": True,
+                    }
+                ),
+                404,
+            )
+
+        # Return the profile events
+        return make_response(
+            jsonify(
+                {
+                    "profile_events_results": trace_output.profile_events_results,
+                    "profile_events_meta": trace_output.profile_events_meta,
+                    "profile_events_profile": trace_output.profile_events_profile,
+                }
+            ),
+            200,
+        )
+    except InvalidNodeError as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "node_error",
+                        "message": str(err),
+                    }
+                }
+            ),
+            400,
+        )
     except Exception as err:
         logger.error(err, exc_info=True)
         return make_response(

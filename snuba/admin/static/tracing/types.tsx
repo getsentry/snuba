@@ -7,6 +7,7 @@ export type TracingRequest = {
 type TracingResult = {
   input_query?: string;
   timestamp: number;
+  storage?: string;
   trace_output?: string;
   summarized_trace_output?: TracingSummary;
   cols?: Array<Array<string>>;

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Accordion, Stack, Title, Text, Group, Table } from "@mantine/core";
+import React, { useState, useCallback } from "react";
+import { Accordion, Stack, Title, Text, Group, Table, Loader, Alert } from "@mantine/core";
 
 import Client from "SnubaAdmin/api_client";
 import QueryDisplay from "SnubaAdmin/tracing/query_display";
@@ -63,6 +63,96 @@ function getMessageCategory(logLine: LogLine): MessageCategory {
 }
 
 function TracingQueries(props: { api: Client }) {
+  const [profileEventsCache, setProfileEventsCache] = useState<{
+    [timestamp: number]: {
+      loading: boolean;
+      error: string | null;
+      data: ProfileEvent | null;
+      retryCount: number;
+    };
+  }>({});
+
+  const fetchProfileEventsWithRetry = useCallback(async (
+    querySummaries: { [nodeName: string]: QuerySummary },
+    storage: string,
+    timestamp: number,
+    retryCount: number = 0
+  ) => {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 2000;
+
+    setProfileEventsCache(prev => ({
+      ...prev,
+      [timestamp]: { loading: true, error: null, data: prev[timestamp]?.data || null, retryCount }
+    }));
+
+    try {
+      const response = await props.api.fetchProfileEvents(querySummaries, storage);
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      if (response.status === "not_ready" && retryCount < MAX_RETRIES) {
+        setTimeout(() => {
+          fetchProfileEventsWithRetry(querySummaries, storage, timestamp, retryCount + 1);
+        }, RETRY_DELAY_MS);
+        return;
+      }
+
+      if (response.status === "not_ready") {
+        setProfileEventsCache(prev => ({
+          ...prev,
+          [timestamp]: {
+            loading: false,
+            error: "Profile events not ready. Try again in a few seconds.",
+            data: null,
+            retryCount
+          }
+        }));
+        return;
+      }
+
+      setProfileEventsCache(prev => ({
+        ...prev,
+        [timestamp]: {
+          loading: false,
+          error: null,
+          data: response.profile_events_results as ProfileEvent,
+          retryCount
+        }
+      }));
+    } catch (error) {
+      setProfileEventsCache(prev => ({
+        ...prev,
+        [timestamp]: {
+          loading: false,
+          error: error instanceof Error ? error.message : "Failed to fetch",
+          data: null,
+          retryCount
+        }
+      }));
+    }
+  }, [props.api]);
+
+  const handleProfileEventsAccordionChange = useCallback((value: string | null, queryResult: TracingResult) => {
+    if (value === "profile-events") {
+      const timestamp = queryResult.timestamp;
+      const cached = profileEventsCache[timestamp];
+
+      if (!cached || (!cached.loading && !cached.data && !cached.error)) {
+        if (queryResult.summarized_trace_output?.query_summaries && queryResult.storage) {
+          fetchProfileEventsWithRetry(
+            queryResult.summarized_trace_output.query_summaries,
+            queryResult.storage,
+            timestamp,
+            0
+          );
+        }
+      }
+    }
+  }, [profileEventsCache, fetchProfileEventsWithRetry]);
+
   function tablePopulator(queryResult: TracingResult, showFormatted: boolean) {
     var elements = {};
     if (queryResult.error) {
@@ -70,10 +160,10 @@ function TracingQueries(props: { api: Client }) {
     } else {
       elements = { Trace: [queryResult, 400] };
     }
-    return tracingOutput(elements, showFormatted);
+    return tracingOutput(elements, showFormatted, queryResult);
   }
 
-  function tracingOutput(elements: Object, showFormatted: boolean) {
+  function tracingOutput(elements: Object, showFormatted: boolean, queryResult: TracingResult) {
     return (
       <>
         <br />
@@ -98,7 +188,7 @@ function TracingQueries(props: { api: Client }) {
                   <br />
                   <b>Number of rows in result set:</b> {value.num_rows_result}
                   <br />
-                  {summarizedTraceDisplay(value.summarized_trace_output, value.profile_events_results)}
+                  {summarizedTraceDisplay(value.summarized_trace_output, value.profile_events_results, queryResult)}
                 </div>
               );
             } else {
@@ -107,7 +197,7 @@ function TracingQueries(props: { api: Client }) {
                   <br />
                   <b>Number of rows in result set:</b> {value.num_rows_result}
                   <br />
-                  {rawTraceDisplay(title, value.trace_output, value.profile_events_results)}
+                  {rawTraceDisplay(title, value.trace_output, value.profile_events_results, queryResult)}
                 </div>
               );
             }
@@ -117,17 +207,36 @@ function TracingQueries(props: { api: Client }) {
     );
   }
 
-  function rawTraceDisplay(title: string, value: any, profileEventResults: ProfileEvent): JSX.Element | undefined {
+  function rawTraceDisplay(title: string, value: any, profileEventResults: ProfileEvent, queryResult: TracingResult): JSX.Element | undefined {
     const parsedLines: Array<string> = value.split(/\n/);
+    const timestamp = queryResult.timestamp;
+    const profileEventsState = profileEventsCache[timestamp];
+    const effectiveProfileEvents = profileEventsState?.data || profileEventResults || {};
 
     const profileEventRows: Array<string> = [];
-    for (const [k, v] of Object.entries(profileEventResults)) {
+    for (const [k, v] of Object.entries(effectiveProfileEvents)) {
       profileEventRows.push(k + '=>' + v.rows[0]);
     }
 
     return (
       <ol style={collapsibleStyle} key={title + "-root"}>
         <Title order={4}>Profile Events Output</Title>
+        {profileEventsState?.loading && (
+          <li>
+            <Loader size="sm" />
+            <Text>Loading profile events...</Text>
+          </li>
+        )}
+        {profileEventsState?.error && (
+          <li>
+            <Alert color="yellow">{profileEventsState.error}</Alert>
+          </li>
+        )}
+        {!profileEventsState?.loading && profileEventRows.length === 0 && (
+          <li>
+            <Alert color="blue">No profile events found</Alert>
+          </li>
+        )}
         {profileEventRows.map((line, index) => {
           const node_name = line.split("=>")[0];
           const row = line.split("=>")[1];
@@ -268,8 +377,13 @@ function TracingQueries(props: { api: Client }) {
 
   function summarizedTraceDisplay(
     value: TracingSummary,
-    profileEventResults: ProfileEvent
+    profileEventResults: ProfileEvent,
+    queryResult: TracingResult
   ): JSX.Element | undefined {
+    const timestamp = queryResult.timestamp;
+    const profileEventsState = profileEventsCache[timestamp];
+    const effectiveProfileEvents = profileEventsState?.data || profileEventResults || {};
+
     let dist_node;
     let nodes = [];
     for (const [host, summary] of Object.entries(value.query_summaries)) {
@@ -289,13 +403,29 @@ function TracingQueries(props: { api: Client }) {
             .filter((q: QuerySummary) => !q.is_distributed)
             .map((q: QuerySummary) => querySummary(q))}
         </Accordion>
-        <Accordion chevronPosition="left">
+        <Accordion chevronPosition="left" onChange={(value) => handleProfileEventsAccordionChange(value, queryResult)}>
           <Accordion.Item value="profile-events" key="profile-events">
             <Accordion.Control>
               <Title order={4}>Profile Events Output</Title>
             </Accordion.Control>
             <Accordion.Panel>
-              {Object.entries(profileEventResults).map(([host, event]) => (
+              {profileEventsState?.loading && (
+                <Stack>
+                  <Loader size="md" />
+                  <Text>Loading profile events... (Attempt {profileEventsState.retryCount + 1}/4)</Text>
+                </Stack>
+              )}
+              {profileEventsState?.error && (
+                <Alert color="yellow" title="Profile Events Not Available">
+                  {profileEventsState.error}
+                </Alert>
+              )}
+              {!profileEventsState?.loading && Object.keys(effectiveProfileEvents).length === 0 && (
+                <Alert color="blue" title="No Profile Events">
+                  No profile events were found for this query.
+                </Alert>
+              )}
+              {Object.entries(effectiveProfileEvents).map(([host, event]) => (
                 <Accordion chevronPosition="left" key={host}>
                   <Accordion.Item value={host}>
                     <Accordion.Control>
