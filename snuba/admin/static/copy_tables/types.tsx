@@ -19,24 +19,22 @@ type CopyTableHost = {
 
 type CopyTableHostsState = {
   sourceHost: Partial<CopyTableHost>
-  targetHost: Partial<CopyTableHost>
 }
 
 type CopyTableRequest = {
   storage: string;
   source_host: string;
   source_port: number;
-  target_host: string;
-  target_port: number;
   dry_run: boolean;
 };
 
 type CopyTableResult = {
   source_host: string
-  target_host: string
   tables: string
   dry_run: boolean
   cluster_name: string
+  incomplete_hosts?: Record<string, string>
+  verified?: number
 }
 
 export { ClickhouseNodeData, CopyTableHostsState, CopyTableRequest, CopyTableResult };

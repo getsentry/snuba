@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import MutableMapping, Optional, Sequence
+from typing import MutableMapping, Optional, Sequence, Tuple, TypedDict
 
 from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
 from snuba.clickhouse.native import ClickhousePool
@@ -11,6 +11,15 @@ class TableStatement:
     name: str
     statement: str
     is_mergetree: bool
+
+
+class CopyTablesResponse(TypedDict, total=False):
+    source_host: str
+    tables: str
+    cluster_name: str
+    dry_run: bool
+    incomplete_hosts: dict[str, str]
+    verified: int
 
 
 def get_create_table_statements(
@@ -66,25 +75,71 @@ def get_tables(connection: ClickhousePool) -> Sequence[str]:
     return tables
 
 
+def verify_tables_on_replicas(
+    connection: ClickhousePool,
+    cluster_name: Optional[str],
+    database_name: str,
+    table_names: Sequence[str],
+) -> Tuple[MutableMapping[str, list[str]], int]:
+    """
+    Checks that the tables we have copied are present on all hosts.
+    Returns a count of the verified hosts (host that have all the
+    correct tables) and a mapping of hosts to the missing tables
+    if the expected created tables are missing.
+    """
+    if cluster_name:
+        from_clause = f"FROM clusterAllReplicas('{cluster_name}', system.tables)"
+    else:
+        from_clause = "FROM system.tables"
+
+    query = f"""
+    SELECT
+        hostName() as host,
+        groupArray(name) as table_name
+    {from_clause}
+    WHERE database = '{database_name}'
+    GROUP BY host
+    ORDER BY host
+    """
+
+    results = connection.execute(query).results
+
+    created_tables = set(table_names)
+    missing_host_tables: MutableMapping[str, list[str]] = {}
+    verified_hosts_num = 0
+    for row in results:
+        host = row[0]
+        tables_on_host = set(row[1])
+        # its possible that a node has extra tables so we only check that the
+        # expected created tables are on the host, instead comparing table counts
+        missing_tables = [t for t in created_tables if t not in tables_on_host]
+        if missing_tables:
+            missing_host_tables[host] = missing_tables
+        else:
+            verified_hosts_num += 1
+    return missing_host_tables, verified_hosts_num
+
+
 def copy_tables(
     source_host: str,
-    target_host: str,
     storage_name: str,
     dry_run: bool,
-) -> MutableMapping[str, str | bool]:
+) -> CopyTablesResponse:
     settings = ClickhouseClientSettings.QUERY
     source_connection = get_clusterless_node_connection(
         source_host, 9000, storage_name, client_settings=settings
     )
-    target_connection = get_clusterless_node_connection(
-        target_host, 9000, storage_name, client_settings=settings
-    )
 
     storage = _get_storage(storage_name)
-    database_name = storage.get_cluster().get_database()
-    cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
+    cluster = storage.get_cluster()
+    database_name = cluster.get_database()
 
-    assert cluster_name, "Missing cluster name for ON CLUSTER create statement "
+    if not cluster.is_single_node():
+        cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
+
+        assert cluster_name, "Missing cluster name for ON CLUSTER create statement "
+    else:
+        cluster_name = None
 
     tables = get_tables(source_connection)
     table_statements = get_create_table_statements(
@@ -98,11 +153,10 @@ def copy_tables(
         ts.name for ts in non_mergetree_tables
     ]
 
-    resp: MutableMapping[str, str | bool] = {
+    resp: CopyTablesResponse = {
         "source_host": source_host,
-        "target_host": target_host,
         "tables": ",".join(ordered_table_names),
-        "cluster_name": cluster_name,
+        "cluster_name": cluster_name or "no cluster",
         "dry_run": dry_run,
     }
 
@@ -110,9 +164,18 @@ def copy_tables(
         return resp
 
     for ts in mergetree_tables:
-        target_connection.execute(ts.statement)
+        source_connection.execute(ts.statement)
 
     for ts in non_mergetree_tables:
-        target_connection.execute(ts.statement)
+        source_connection.execute(ts.statement)
 
+    # Verify tables were created on all replicas
+    missing_tables_by_host, verified_hosts_num = verify_tables_on_replicas(
+        source_connection, cluster_name, database_name, ordered_table_names
+    )
+
+    resp["incomplete_hosts"] = {
+        host: ",".join(tables) for host, tables in missing_tables_by_host.items()
+    }
+    resp["verified"] = verified_hosts_num
     return resp

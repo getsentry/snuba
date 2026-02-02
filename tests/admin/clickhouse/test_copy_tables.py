@@ -6,6 +6,7 @@ from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_con
 from snuba.admin.clickhouse.copy_tables import (
     copy_tables,
     get_create_table_statements,
+    verify_tables_on_replicas,
 )
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.migrations import table_engines
@@ -139,12 +140,46 @@ def test_create_tables_order() -> None:
         "outcomes_raw_dist",
     ]
 
-    results = copy_tables(
-        source_host=host, target_host=host, storage_name="outcomes_raw", dry_run=True
-    )
+    results = copy_tables(source_host=host, storage_name="outcomes_raw", dry_run=True)
     all_tables = str(results["tables"])
 
     local_tables = all_tables.split(",")[:4]
     non_local_tables = all_tables.split(",")[4:]
     assert local_tables == expected_local_tables
     assert all(table in expected_non_local_tables for table in non_local_tables)
+
+
+@pytest.mark.redis_db
+@pytest.mark.custom_clickhouse_db
+def test_verify_tables_on_replicas() -> None:
+    """
+    Test that verify_tables_on_replicas correctly identifies missing tables.
+    """
+    run_migrations()
+    host = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")
+    settings = ClickhouseClientSettings.QUERY
+    storage = _get_storage("outcomes_raw")
+    cluster = storage.get_cluster()
+    database_name = cluster.get_database()
+    cluster_name = None if cluster.is_single_node() else cluster.get_clickhouse_cluster_name()
+
+    connection = get_clusterless_node_connection(
+        host, 9000, "outcomes_raw", client_settings=settings
+    )
+
+    # Test with table that exist, all should be verified
+    existing_tables = ["outcomes_raw_local"]
+    missing_hosts, verified_count = verify_tables_on_replicas(
+        connection, cluster_name, database_name, existing_tables
+    )
+    assert verified_count > 0
+    assert missing_hosts == {}
+
+    # Test with a non-existent table, none should be verified
+    nonexistent_tables = ["nonexistent_table_xyz"]
+    missing_hosts, verified_count = verify_tables_on_replicas(
+        connection, cluster_name, database_name, nonexistent_tables
+    )
+
+    assert verified_count == 0
+    assert ["nonexistent_table_xyz"] in missing_hosts.values()
