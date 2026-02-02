@@ -8,9 +8,6 @@ expression: item
     "my.true.bool.field": true,
     "sentry.is_segment": true
   },
-  "attributes_float_1": {
-    "my.true.bool.field": 1.0
-  },
   "attributes_float_14": {
     "my.int.field": 2000.0
   },
@@ -24,9 +21,6 @@ expression: item
     "sentry.exclusive_time_ms": 0.228,
     "sentry.start_timestamp_precise": 1721319572.616648
   },
-  "attributes_float_26": {
-    "sentry.is_segment": 1.0
-  },
   "attributes_float_31": {
     "num_of_spans": 50.0
   },
@@ -36,9 +30,6 @@ expression: item
   "attributes_float_5": {
     "my.neg.field": -100.0,
     "sentry.duration_ms": 152.0
-  },
-  "attributes_float_6": {
-    "my.false.bool.field": 0.0
   },
   "attributes_float_7": {
     "sentry.received": 1721319572.877828
