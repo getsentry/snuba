@@ -482,7 +482,7 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
             # When trace_filters are present and the feature is enabled, don't use sampling on the outer query
             # The inner query (getting trace IDs) will use sampling
             cross_item_queries_no_sample_outer = state.get_int_config(
-                "cross_item_queries_no_sample_outer", 0
+                "cross_item_queries_no_sample_outer", 1
             )
             if not (in_msg.trace_filters and cross_item_queries_no_sample_outer):
                 query_settings.set_sampling_tier(routing_decision.tier)

@@ -32,7 +32,9 @@ from snuba.web.rpc.common.common import (
     treeify_or_and_conditions,
 )
 
-_TRACE_LIMIT = 10000
+# 50 million trace ids * 16 bytes per id = a limit of 1gigabyte memory usage per cross item query
+# most queries do not hit this number this is just an upper bound
+_TRACE_LIMIT = 50_000_000
 
 
 def convert_trace_filters_to_trace_item_filter_with_type(
