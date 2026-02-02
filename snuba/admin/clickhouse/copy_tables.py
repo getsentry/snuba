@@ -82,9 +82,10 @@ def verify_tables_on_replicas(
     table_names: Sequence[str],
 ) -> Tuple[MutableMapping[str, list[str]], int]:
     """
-    Verify that tables exist on all replicas in the cluster.
-
-    Returns a mapping of table_name -> list of hosts where the table exists.
+    Checks that the tables we have copied are present on all hosts.
+    Returns a count of the verified hosts (host that have all the
+    correct tables) and a mapping of hosts to the missing tables
+    if the expected created tables are missing.
     """
     if cluster_name:
         from_clause = f"FROM clusterAllReplicas('{cluster_name}', system.tables)"
@@ -108,8 +109,10 @@ def verify_tables_on_replicas(
     verified_hosts_num = 0
     for row in results:
         host = row[0]
-        tables = set(row[1])
-        missing_tables = [t for t in tables if t not in created_tables]
+        tables_on_host = set(row[1])
+        # its possible that a node has extra tables so we only check that the
+        # expected created tables are on the host, instead comparing table counts
+        missing_tables = [t for t in created_tables if t not in tables_on_host]
         if missing_tables:
             missing_host_tables[host] = missing_tables
         else:
