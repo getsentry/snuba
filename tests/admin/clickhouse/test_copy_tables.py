@@ -161,7 +161,7 @@ def test_verify_tables_on_replicas() -> None:
     storage = _get_storage("outcomes_raw")
     cluster = storage.get_cluster()
     database_name = cluster.get_database()
-    cluster_name = None if cluster.is_single_node() else "test_cluster"
+    cluster_name = None if cluster.is_single_node() else cluster.get_clickhouse_cluster_name()
 
     connection = get_clusterless_node_connection(
         host, 9000, "outcomes_raw", client_settings=settings
