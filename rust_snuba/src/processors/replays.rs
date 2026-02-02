@@ -489,7 +489,7 @@ struct ReplayViewedEvent {
 // columns. These nullable columns are written to with empty values and will eventually have
 // their null condition dropped.
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, clickhouse::Row)]
 pub struct ReplayRow {
     browser_name: String,
     browser_version: String,

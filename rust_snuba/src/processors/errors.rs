@@ -73,6 +73,7 @@ pub fn process_message_with_replacement(
                 sentry_received_timestamp: None,
                 cogs_data: None,
                 item_type_metrics: None,
+                typed_rows: None,
             }))
         }
         ("insert", None, _) => {
@@ -333,7 +334,7 @@ struct User {
 
 // Row
 
-#[derive(Debug, Default, Serialize, JsonSchema)]
+#[derive(Debug, Default, Serialize, JsonSchema, clickhouse::Row)]
 struct ErrorRow {
     #[serde(rename = "contexts.key")]
     contexts_key: Vec<String>,

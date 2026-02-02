@@ -38,7 +38,7 @@ struct FromChunkMessage {
     retention_days: Option<u16>,
 }
 
-#[derive(Debug, Default, Serialize, JsonSchema)]
+#[derive(Debug, Default, Serialize, JsonSchema, clickhouse::Row)]
 struct Chunk {
     project_id: u64,
     profiler_id: Uuid,
