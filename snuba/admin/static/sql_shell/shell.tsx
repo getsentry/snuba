@@ -1,42 +1,16 @@
 import React, { useState, useEffect, useCallback } from "react";
 
-const MAX_HISTORY_ENTRIES = 500;
 import Client from "SnubaAdmin/api_client";
 import { useShellStyles } from "SnubaAdmin/sql_shell/styles";
 import { ShellOutput } from "SnubaAdmin/sql_shell/shell_output";
 import { ShellInput } from "SnubaAdmin/sql_shell/shell_input";
 import { parseCommand } from "SnubaAdmin/sql_shell/command_parser";
+import { useShellState } from "SnubaAdmin/sql_shell/shell_context";
 import {
-  ShellState,
-  ShellHistoryEntry,
   ShellMode,
 } from "SnubaAdmin/sql_shell/types";
 import { TracingRequest } from "SnubaAdmin/tracing/types";
 import { QueryRequest, ClickhouseNodeData } from "SnubaAdmin/clickhouse_queries/types";
-
-function getCommandHistoryKey(mode: ShellMode): string {
-  return mode === "tracing" ? "sql_shell_command_history" : "system_shell_command_history";
-}
-
-function loadCommandHistory(mode: ShellMode): string[] {
-  try {
-    const saved = sessionStorage.getItem(getCommandHistoryKey(mode));
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveCommandHistory(mode: ShellMode, history: string[]) {
-  try {
-    sessionStorage.setItem(
-      getCommandHistoryKey(mode),
-      JSON.stringify(history.slice(-100))
-    );
-  } catch {
-    // Ignore storage errors
-  }
-}
 
 interface SQLShellProps {
   api: Client;
@@ -45,18 +19,7 @@ interface SQLShellProps {
 
 function SQLShell({ api, mode }: SQLShellProps) {
   const { classes } = useShellStyles();
-  const [state, setState] = useState<ShellState>({
-    currentStorage: null,
-    currentHost: null,
-    currentPort: null,
-    profileEnabled: true,
-    traceFormatted: true,
-    sudoEnabled: false,
-    history: [],
-    commandHistory: loadCommandHistory(mode),
-    historyIndex: -1,
-    isExecuting: false,
-  });
+  const { state, setState, addHistoryEntry, addCommandToHistory, clearHistory } = useShellState(mode);
   const [inputValue, setInputValue] = useState("");
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [storages, setStorages] = useState<string[]>([]);
@@ -89,18 +52,6 @@ function SQLShell({ api, mode }: SQLShellProps) {
     return hosts;
   }, [nodeData]);
 
-  const addHistoryEntry = useCallback((entry: ShellHistoryEntry) => {
-    setState((prev) => {
-      const newHistory = [...prev.history, entry];
-      return {
-        ...prev,
-        history: newHistory.length > MAX_HISTORY_ENTRIES
-          ? newHistory.slice(-MAX_HISTORY_ENTRIES)
-          : newHistory,
-      };
-    });
-  }, []);
-
   const executeCommand = useCallback(
     async (input: string) => {
       if (!input.trim()) return;
@@ -115,15 +66,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
       });
 
       // Add to command history for navigation
-      setState((prev) => {
-        const newCmdHistory = [...prev.commandHistory, input];
-        saveCommandHistory(mode, newCmdHistory);
-        return {
-          ...prev,
-          commandHistory: newCmdHistory,
-          historyIndex: -1,
-        };
-      });
+      addCommandToHistory(input);
 
       switch (parsed.type) {
         case "help":
@@ -131,7 +74,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
           break;
 
         case "clear":
-          setState((prev) => ({ ...prev, history: [] }));
+          clearHistory();
           break;
 
         case "show_storages":
@@ -344,7 +287,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
           break;
       }
     },
-    [api, mode, state.currentStorage, state.currentHost, state.currentPort, state.profileEnabled, state.sudoEnabled, storages, getHostsForStorage, addHistoryEntry]
+    [api, mode, state.currentStorage, state.currentHost, state.currentPort, state.profileEnabled, state.sudoEnabled, storages, getHostsForStorage, addHistoryEntry, addCommandToHistory, clearHistory]
   );
 
   const handleTabComplete = useCallback(() => {
@@ -431,11 +374,11 @@ function SQLShell({ api, mode }: SQLShellProps) {
     setInputValue("");
     setSuggestions([]);
     setState((prev) => ({ ...prev, historyIndex: -1 }));
-  }, []);
+  }, [setState]);
 
   const handleClearScreen = useCallback(() => {
-    setState((prev) => ({ ...prev, history: [] }));
-  }, []);
+    clearHistory();
+  }, [clearHistory]);
 
   const handleDeleteToStart = useCallback(() => {
     setInputValue("");
@@ -464,7 +407,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
     setState((prev) => ({ ...prev, historyIndex: newIndex }));
     setInputValue(cmdHistory[newIndex]);
     setSuggestions([]);
-  }, [state.commandHistory, state.historyIndex]);
+  }, [state.commandHistory, state.historyIndex, setState]);
 
   const handleHistoryDown = useCallback(() => {
     const cmdHistory = state.commandHistory;
@@ -479,7 +422,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
       setInputValue(cmdHistory[newIndex]);
     }
     setSuggestions([]);
-  }, [state.commandHistory, state.historyIndex]);
+  }, [state.commandHistory, state.historyIndex, setState]);
 
   const handleInputChange = useCallback((value: string) => {
     setInputValue(value);

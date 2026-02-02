@@ -19,16 +19,23 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' || github.event.label.name == 'Trigger: Revert'
     steps:
-    - uses: actions/checkout@v6
+    - name: Get auth token
+      id: token
+      uses: getsentry/action-github-app-token@d4b5da6c5e37703f8c3b3e43abb5705b46e159cc # v3.0.0
       with:
-        token: ${{ secrets.GETSENTRY_BOT_REVERT_TOKEN }}
-    - uses: getsentry/action-fast-revert@35b4b6c1f8f91b5911159568b3b15e531b5b8174  # v2.0.1
+        app_id: ${{ secrets.FAST_REVERT_BOT_APP_ID }}
+        private_key: ${{ secrets.GH_FAST_REVERT_PRIVATE_KEY }}
+    - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+      with:
+        token: ${{ steps.token.outputs.token }}
+    - uses: getsentry/action-fast-revert@35b4b6c1f8f91b5911159568b3b15e531b5b8174 # v2.0.1
       with:
         pr: ${{ github.event.number || github.event.inputs.pr }}
-        co_authored_by: ${{ github.event.inputs.co_authored_by || format('{0} <{1}+{0}@users.noreply.github.com>', github.event.sender.login, github.event.sender.id) }}
-        committer_name: getsentry-bot
-        committer_email: bot@sentry.io
-        token: ${{ secrets.GETSENTRY_BOT_REVERT_TOKEN }}
+        co_authored_by: >-
+          ${{ github.event.inputs.co_authored_by || format('{0}\n<{1}+{0}@users.noreply.github.com>', github.event.sender.login, github.event.sender.id) }}
+        committer_name: sentry-snuba-fast-revert-bot[bot]
+        committer_email: 257653817+sentry-snuba-fast-revert-bot[bot]@users.noreply.github.com
+        token: ${{ steps.token.outputs.token }}
     - name: comment on failure
       run: |
         curl \
