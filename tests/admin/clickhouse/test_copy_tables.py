@@ -139,9 +139,7 @@ def test_create_tables_order() -> None:
         "outcomes_raw_dist",
     ]
 
-    results = copy_tables(
-        source_host=host, target_host=host, storage_name="outcomes_raw", dry_run=True
-    )
+    results = copy_tables(source_host=host, storage_name="outcomes_raw", dry_run=True)
     all_tables = str(results["tables"])
 
     local_tables = all_tables.split(",")[:4]

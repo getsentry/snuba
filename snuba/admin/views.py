@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import ipaddress
 import sys
 from contextlib import redirect_stdout
 from dataclasses import asdict
@@ -461,15 +460,11 @@ def copy_table_query() -> Response:
     try:
         storage = req["storage"]
         source_host = req["source_host"]
-        target_host = req["target_host"]
-        # raises a ValueError when an invalid ip
-        ipaddress.ip_address(target_host)
 
         dry_run = req.get("dry_run", True)
 
         resp = copy_tables(
             source_host=source_host,
-            target_host=target_host,
             storage_name=storage,
             dry_run=dry_run,
         )
