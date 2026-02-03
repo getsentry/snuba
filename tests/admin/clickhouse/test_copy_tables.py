@@ -13,7 +13,7 @@ from snuba.migrations import table_engines
 from snuba.migrations.groups import MigrationGroup
 
 OUTCOMES_DAILY_TABLE = """
-CREATE TABLE IF NOT EXISTS {db}.outcomes_daily_local_v2 ON CLUSTER test_cluster
+CREATE TABLE IF NOT EXISTS {db}.outcomes_daily_local_v2 ON CLUSTER 'test_cluster'
 (
     `org_id` UInt64,
     `project_id` UInt64,
@@ -33,7 +33,7 @@ SETTINGS index_granularity = 8192
 """
 
 OUTCOMES_DAILY_MV = """
-CREATE MATERIALIZED VIEW IF NOT EXISTS {db}.outcomes_mv_daily_local_v2 ON CLUSTER test_cluster TO {db}.outcomes_daily_local_v2
+CREATE MATERIALIZED VIEW IF NOT EXISTS {db}.outcomes_mv_daily_local_v2 ON CLUSTER 'test_cluster' TO {db}.outcomes_daily_local_v2
 (
     `org_id` UInt64,
     `project_id` UInt64,
