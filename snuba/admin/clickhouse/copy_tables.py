@@ -59,7 +59,7 @@ def get_create_table_statements(
 
         if cluster_name:
             table_statement = table_statement.replace(
-                db_table, f"{db_table} ON CLUSTER {cluster_name}"
+                db_table, f"{db_table} ON CLUSTER '{cluster_name}'"
             )
 
         table_statements.append(
