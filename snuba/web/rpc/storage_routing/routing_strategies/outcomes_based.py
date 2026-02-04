@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import cast
 
 import sentry_sdk
@@ -218,12 +218,12 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
-        thirty_one_days_ago_ts = int((datetime.now(tz=UTC) - timedelta(days=31)).timestamp())
-        older_than_thirty_days = thirty_one_days_ago_ts > in_msg_meta.start_timestamp.seconds
+        seconds_delta = in_msg_meta.end_timestamp.seconds - in_msg_meta.start_timestamp.seconds
+        duration_over_30_days = seconds_delta > (30 * 24 * 60 * 60)
 
         if (
             state.get_int_config("enable_long_term_retention_downsampling", 0)
-            and older_than_thirty_days
+            and duration_over_30_days
             and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION
         ):
             routing_decision.tier = Tier.TIER_8

@@ -150,8 +150,8 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
-    # request that queries last 50 days of data
-    start_time = end_time - timedelta(hours=1200)  # 50 days
+    # request that queries last 50 days of data (duration > 30 days triggers downsampling)
+    start_time = end_time - timedelta(days=50)
     request = TraceItemTableRequest(meta=_get_request_meta(start=start_time, end=end_time))
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
     context = RoutingContext(
@@ -166,12 +166,11 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     assert routing_decision.can_run
 
     # request(s) that query window of 30 minutes, but with timestamps 40 days ago
-    # one in MODE_NORMAL, one in MODE_HIGHEST_ACCURACY (which is ignored in favor of
-    # the enable_long_term_retention_downsampling)
+    # since duration is only 30 minutes (not > 30 days), should NOT trigger downsampling
     start = datetime.now(tz=UTC) - timedelta(days=40, minutes=30)
     end = datetime.now(tz=UTC) - timedelta(days=40)
 
-    # normal
+    # normal - short duration query should use Tier 1 even for old timestamps
     request = TraceItemTableRequest(meta=_get_request_meta(start=start, end=end))
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
     context = RoutingContext(
@@ -181,11 +180,11 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     )
 
     routing_decision = strategy.get_routing_decision(context)
-    assert routing_decision.tier == Tier.TIER_8
+    assert routing_decision.tier == Tier.TIER_1
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
-    # highest accuracy
+    # highest accuracy - short duration query should also use Tier 1
     request = TraceItemTableRequest(meta=_get_request_meta(start=start, end=end))
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
     context = RoutingContext(
@@ -195,7 +194,7 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     )
 
     routing_decision = strategy.get_routing_decision(context)
-    assert routing_decision.tier == Tier.TIER_8
+    assert routing_decision.tier == Tier.TIER_1
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
