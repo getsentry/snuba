@@ -44,6 +44,20 @@ import { AllocationPolicy, StrategyData } from "SnubaAdmin/configurable_componen
 import { ReplayInstruction, Topic } from "SnubaAdmin/dead_letter_queue/types";
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
 import { ClickhouseNodeInfo, ClickhouseSystemSetting } from "SnubaAdmin/database_clusters/types";
+import { QuerySummary } from "SnubaAdmin/tracing/types";
+
+interface ProfileEventsResponse {
+  profile_events_results?: { [nodeName: string]: { column_names: string[]; rows: string[] } };
+  profile_events_meta?: Array<Object>;
+  profile_events_profile?: {};
+  status?: string;
+  message?: string;
+  retry_suggested?: boolean;
+  error?: {
+    type: string;
+    message: string;
+  };
+}
 
 interface Client {
   getSettings: () => Promise<Settings>;
@@ -124,6 +138,7 @@ interface Client {
   getJobLogs(job_id: string): Promise<string[]>;
   getClickhouseSystemSettings: (host: string, port: number, storage: string) => Promise<ClickhouseSystemSetting[]>;
   summarizeTraceWithProfile: (traceLogs: string, spanType: string, signal?: AbortSignal) => Promise<any>;
+  fetchProfileEvents: (querySummaries: { [nodeName: string]: QuerySummary }, storage: string) => Promise<ProfileEventsResponse>;
 }
 
 function Client(): Client {
@@ -645,6 +660,23 @@ function Client(): Client {
         signal,
       }).then((resp) => {
         if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
+    },
+    fetchProfileEvents: (querySummaries: { [nodeName: string]: QuerySummary }, storage: string) => {
+      const url = baseUrl + "fetch_profile_events";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify({
+          query_summaries: querySummaries,
+          storage: storage
+        }),
+      }).then((resp) => {
+        if (resp.ok || resp.status === 404) {
           return resp.json();
         } else {
           return resp.json().then(Promise.reject.bind(Promise));
