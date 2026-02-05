@@ -1,6 +1,6 @@
 import typing
 import uuid
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 from snuba import settings
 from snuba.attribution import get_app_id
@@ -155,11 +155,12 @@ def _delete_from_table(
     except InvalidColumnType as e:
         raise InvalidQueryException(e.message)
 
-    try:
-        _enforce_max_rows(query)
-    except NoRowsToDeleteException:
-        result: Result = {}
-        return result
+    if get_int_config("enforce_max_rows_to_delete", default=1):
+        try:
+            _enforce_max_rows(query)
+        except NoRowsToDeleteException:
+            result: Result = {}
+            return result
 
     deletion_processors = storage.get_deletion_processors()
     # These settings aren't needed at the moment
@@ -302,7 +303,7 @@ def _execute_query(
     result = None
     error = None
 
-    stats: MutableMapping[str, Any] = {
+    stats: Dict[str, Any] = {
         "clickhouse_table": table,
         "referrer": attribution_info.referrer,
         "cluster_name": cluster_name or "<unknown>",
