@@ -110,3 +110,9 @@ gocd:
 	cd ./gocd/templates && jsonnet --ext-code output-files=true -J vendor -m ../generated-pipelines ./snuba-rs.jsonnet
 	cd ./gocd/generated-pipelines && find . -type f \( -name '*.yaml' \) -print0 | xargs -n 1 -0 yq -p json -o yaml -i
 .PHONY: gocd
+
+install-proto-dev:
+	devenv sync && \
+	uv pip install -e ../sentry-protos/py --config-settings editable_mode=compat && \
+	echo "Installed local sentry-protos, please restart the vscode language server. Run 'uv pip uninstall sentry-protos && uv sync' to go back to the original version."
+.PHONY: install-proto-dev
