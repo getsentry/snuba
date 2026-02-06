@@ -24,6 +24,7 @@ from uuid import UUID
 import sentry_sdk
 from clickhouse_driver import Client, errors
 from dateutil.tz import tz
+from sentry_sdk.integrations.logging import ignore_logger
 
 from snuba import environment, settings, state
 from snuba.clickhouse.errors import ClickhouseError
@@ -31,6 +32,8 @@ from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
 from snuba.utils.metrics.gauge import ThreadSafeGauge
 from snuba.utils.metrics.wrapper import MetricsWrapper
+
+ignore_logger("clickhouse_driver.log")
 
 logger = logging.getLogger("snuba.clickhouse")
 trace_logger = logging.getLogger("clickhouse_driver.log")
