@@ -11,7 +11,8 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         alter_workload = """
-            ALTER WORKLOAD low_priority_deletes
+            CREATE OR REPLACE WORKLOAD low_priority_deletes
+            IN all
             SETTINGS
                 priority = 100,
                 max_requests = 2,
@@ -29,7 +30,8 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         # Restore original settings without max_threads
         alter_workload = """
-            ALTER WORKLOAD low_priority_deletes
+            CREATE OR REPLACE WORKLOAD low_priority_deletes
+            IN all
             SETTINGS
                 priority = 100,
                 max_requests = 2;
