@@ -17,12 +17,10 @@ from snuba.query.exceptions import TooManyDeleteRowsException
 from snuba.state import set_config
 from snuba.web.delete_query import _enforce_max_rows
 from tests.base import BaseApiTest
-from tests.datasets.configuration.utils import ConfigurationTest
-from tests.test_api import SimpleAPITest
 from tests.web.rpc.v1.test_utils import write_eap_item
 
 
-class TestMaxRowsEnforcer(SimpleAPITest, BaseApiTest, ConfigurationTest):
+class TestMaxRowsEnforcer(BaseApiTest):
     def setup_method(self, test_method: Callable[..., Any]) -> None:
         super().setup_method(test_method)
         initialize_snuba()
@@ -56,11 +54,13 @@ class TestMaxRowsEnforcer(SimpleAPITest, BaseApiTest, ConfigurationTest):
         )
 
     @pytest.mark.eap
+    @pytest.mark.redis_db
     def test_max_row_enforcer_passes(self) -> None:
         self._insert_event()
         _enforce_max_rows(self.query)
 
     @pytest.mark.eap
+    @pytest.mark.redis_db
     @mock.patch(
         "snuba.datasets.storage.ReadableTableStorage.get_deletion_settings",
         return_value=DeletionSettings(
@@ -76,6 +76,7 @@ class TestMaxRowsEnforcer(SimpleAPITest, BaseApiTest, ConfigurationTest):
             _enforce_max_rows(self.query)
 
     @pytest.mark.eap
+    @pytest.mark.redis_db
     @mock.patch(
         "snuba.datasets.storage.ReadableTableStorage.get_deletion_settings",
         return_value=DeletionSettings(
