@@ -155,12 +155,11 @@ def _delete_from_table(
     except InvalidColumnType as e:
         raise InvalidQueryException(e.message)
 
-    if get_int_config("enforce_max_rows_to_delete", default=1):
-        try:
-            _enforce_max_rows(query)
-        except NoRowsToDeleteException:
-            result: Result = {}
-            return result
+    try:
+        _enforce_max_rows(query)
+    except NoRowsToDeleteException:
+        result: Result = {}
+        return result
 
     deletion_processors = storage.get_deletion_processors()
     # These settings aren't needed at the moment
@@ -260,7 +259,10 @@ def _enforce_max_rows(delete_query: Query) -> int:
     if rows_to_delete == 0:
         raise NoRowsToDeleteException
     max_rows_allowed = get_storage(storage_key).get_deletion_settings().max_rows_to_delete
-    if rows_to_delete > max_rows_allowed:
+    if (
+        get_int_config("enforce_max_rows_to_delete", default=1)
+        and rows_to_delete > max_rows_allowed
+    ):
         raise TooManyDeleteRowsException(
             f"Too many rows to delete ({rows_to_delete}), maximum allowed is {max_rows_allowed}"
         )
