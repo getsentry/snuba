@@ -33,7 +33,7 @@ from snuba.reader import Reader, Result, build_result_transformer
 from snuba.utils.metrics.gauge import ThreadSafeGauge
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-ignore_logger("clickhouse_driver.log")
+ignore_logger("clickhouse_driver.connection")
 
 logger = logging.getLogger("snuba.clickhouse")
 trace_logger = logging.getLogger("clickhouse_driver.log")
