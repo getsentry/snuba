@@ -85,7 +85,9 @@ def get_storage_info() -> Sequence[Storage]:
             "query_node": _get_query_node(storage_key),
         }
         for storage_key in sorted(get_all_storage_keys(), key=lambda storage_key: storage_key.value)
-        if (get_storage(storage_key).get_storage_set_key() not in DEV_STORAGE_SETS
-            or settings.ENABLE_DEV_FEATURES)
+        if (
+            get_storage(storage_key).get_storage_set_key() not in DEV_STORAGE_SETS
+            or settings.ENABLE_DEV_FEATURES
+        )
         and get_storage(storage_key).get_readiness_state() != ReadinessState.DEPRECATE
     ]
