@@ -1,8 +1,10 @@
 from typing import Any
 
 import pytest
+from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
+    AttributeConditionalAggregation,
+)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeAggregation,
     AttributeKey,
     ExtrapolationMode,
     Function,
@@ -71,7 +73,7 @@ def test_get_custom_column_information() -> None:
 def test_get_confidence_interval_column_for_non_extrapolatable_column() -> None:
     assert (
         get_confidence_interval_column(
-            AttributeAggregation(
+            AttributeConditionalAggregation(
                 aggregate=Function.FUNCTION_MIN,
                 key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test"),
                 label="min(test)",
