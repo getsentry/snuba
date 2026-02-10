@@ -24,21 +24,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 
 
-def _has_proto_field(proto: ProtobufMessage, field_name: str) -> bool:
-    """
-    Safely check if a proto message has a field set.
-
-    This handles the case where the field doesn't exist in the proto definition yet
-    (e.g., when preparing for a new proto field that will be added later).
-    HasField() throws ValueError if the field doesn't exist, so we catch that.
-    """
-    try:
-        return proto.HasField(field_name)
-    except ValueError:
-        # Field doesn't exist in the proto definition
-        return False
-
-
 class ProtoWrapper(Generic[Tin], ABC):
     def __init__(self, underlying_proto: Tin):
         self.underlying_proto = underlying_proto
@@ -55,22 +40,17 @@ class ColumnWrapper(ProtoWrapper[Column]):
         if column.HasField("formula"):
             ColumnWrapper(column.formula.left).accept(visitor)
             ColumnWrapper(column.formula.right).accept(visitor)
-        # Handle ConditionalFormula when the proto is available
-        # ConditionalFormula has: condition (with left/right), match, default
-        # We use _has_proto_field to safely check if the field exists in the proto
-        if _has_proto_field(column, "conditional_formula"):
-            conditional = column.conditional_formula  # type: ignore[attr-defined]
-            # Visit condition's left and right columns
-            if _has_proto_field(conditional, "condition"):
-                if _has_proto_field(conditional.condition, "left"):
+        if column.HasField("conditional_formula"):
+            conditional = column.conditional_formula
+            if conditional.HasField("condition"):
+                if conditional.condition.HasField("left"):
                     ColumnWrapper(conditional.condition.left).accept(visitor)
-                if _has_proto_field(conditional.condition, "right"):
+                if conditional.condition.HasField("right"):
                     ColumnWrapper(conditional.condition.right).accept(visitor)
-            # Visit match and default columns
             # Note: 'match' is a Python keyword, so use getattr
-            if _has_proto_field(conditional, "match"):
+            if conditional.HasField("match"):
                 ColumnWrapper(getattr(conditional, "match")).accept(visitor)
-            if _has_proto_field(conditional, "default"):
+            if conditional.HasField("default"):
                 ColumnWrapper(conditional.default).accept(visitor)
 
 

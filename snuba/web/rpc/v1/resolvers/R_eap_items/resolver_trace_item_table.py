@@ -82,21 +82,6 @@ from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 _DEFAULT_ROW_LIMIT = 10_000
 
 
-def _has_proto_field(proto: Any, field_name: str) -> bool:
-    """
-    Safely check if a proto message has a field set.
-
-    This handles the case where the field doesn't exist in the proto definition yet
-    (e.g., when preparing for a new proto field that will be added later).
-    HasField() throws ValueError if the field doesn't exist, so we catch that.
-    """
-    try:
-        return bool(proto.HasField(field_name))
-    except ValueError:
-        # Field doesn't exist in the proto definition
-        return False
-
-
 OP_TO_EXPR = {
     Column.BinaryFormula.OP_ADD: f.plus,
     Column.BinaryFormula.OP_SUBTRACT: f.minus,
@@ -104,27 +89,14 @@ OP_TO_EXPR = {
     Column.BinaryFormula.OP_DIVIDE: f.divide,
 }
 
-# Comparison operators for ConditionalFormula conditions
-# These will be populated when the proto is available
-# Maps FormulaCondition.Op enum values to expression functions
-COMPARISON_OP_TO_EXPR: dict[int, Callable[..., FunctionCall]] = {}
-
-# Try to populate comparison operators if the proto is available
-# This allows the code to work both before and after the proto is added
-if hasattr(Column, "FormulaCondition"):
-    FormulaCondition = Column.FormulaCondition
-    if hasattr(FormulaCondition, "OP_LESS_THAN"):
-        COMPARISON_OP_TO_EXPR[FormulaCondition.OP_LESS_THAN] = f.less
-    if hasattr(FormulaCondition, "OP_GREATER_THAN"):
-        COMPARISON_OP_TO_EXPR[FormulaCondition.OP_GREATER_THAN] = f.greater
-    if hasattr(FormulaCondition, "OP_LESS_THAN_OR_EQUALS"):
-        COMPARISON_OP_TO_EXPR[FormulaCondition.OP_LESS_THAN_OR_EQUALS] = f.lessOrEquals
-    if hasattr(FormulaCondition, "OP_GREATER_THAN_OR_EQUALS"):
-        COMPARISON_OP_TO_EXPR[FormulaCondition.OP_GREATER_THAN_OR_EQUALS] = f.greaterOrEquals
-    if hasattr(FormulaCondition, "OP_EQUALS"):
-        COMPARISON_OP_TO_EXPR[FormulaCondition.OP_EQUALS] = f.equals
-    if hasattr(FormulaCondition, "OP_NOT_EQUALS"):
-        COMPARISON_OP_TO_EXPR[FormulaCondition.OP_NOT_EQUALS] = f.notEquals
+COMPARISON_OP_TO_EXPR: dict[int, Callable[..., FunctionCall]] = {
+    Column.FormulaCondition.OP_LESS_THAN: f.less,
+    Column.FormulaCondition.OP_GREATER_THAN: f.greater,
+    Column.FormulaCondition.OP_LESS_THAN_OR_EQUALS: f.lessOrEquals,
+    Column.FormulaCondition.OP_GREATER_THAN_OR_EQUALS: f.greaterOrEquals,
+    Column.FormulaCondition.OP_EQUALS: f.equals,
+    Column.FormulaCondition.OP_NOT_EQUALS: f.notEquals,
+}
 
 
 def _apply_virtual_columns(
@@ -353,14 +325,14 @@ def _get_reliability_context_columns(
 
         return context_cols
 
-    if _has_proto_field(column, "conditional_formula"):
+    if column.HasField("conditional_formula"):
         # For conditional formulas, extract context columns from all parts:
         # condition (left/right), match, and default
         context_cols = []
-        conditional = column.conditional_formula  # type: ignore[attr-defined]
+        conditional = column.conditional_formula
 
         # Extract from condition's left and right
-        if _has_proto_field(conditional, "condition"):
+        if conditional.HasField("condition"):
             for col in [conditional.condition.left, conditional.condition.right]:
                 if col.HasField("conditional_aggregation") or col.HasField("formula"):
                     context_cols.extend(_get_reliability_context_columns(col, request_meta))
@@ -370,7 +342,7 @@ def _get_reliability_context_columns(
         match_col = getattr(conditional, "match")
         default_col = conditional.default
         for col in [match_col, default_col]:
-            if not col.HasField("formula") and not _has_proto_field(col, "conditional_formula"):
+            if not col.HasField("formula") and not col.HasField("conditional_formula"):
                 if col.label:
                     context_cols.append(
                         SelectedExpression(
@@ -535,12 +507,9 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
         formula_expr = _formula_to_expression(column.formula, request_meta)
         formula_expr = replace(formula_expr, alias=column.label)
         return formula_expr
-    elif _has_proto_field(column, "conditional_formula"):
-        # ConditionalFormula allows if(condition, if_true, if_false) expressions
-        # where the condition can compare aggregates
-        # NOTE: This requires the ConditionalFormula proto message in sentry-protos
+    elif column.HasField("conditional_formula"):
         conditional_expr = _conditional_formula_to_expression(
-            column.conditional_formula,  # type: ignore[attr-defined]
+            column.conditional_formula,
             request_meta,
         )
         conditional_expr = replace(conditional_expr, alias=column.label)

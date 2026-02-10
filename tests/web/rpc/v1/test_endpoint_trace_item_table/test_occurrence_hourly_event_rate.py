@@ -659,15 +659,7 @@ class TestOccurrenceHourlyEventRateUnsupported(BaseApiTest):
         This uses the ConditionalFormula proto message to express:
         if(condition, match, default) where condition can compare aggregates.
 
-        NOTE: This test requires the ConditionalFormula proto from sentry-protos PR #173.
-        It will skip if the proto field is not available yet.
         """
-        # Check if ConditionalFormula is available in the proto
-        if not hasattr(Column, "ConditionalFormula"):
-            pytest.skip(
-                "ConditionalFormula proto not yet available (waiting for sentry-protos PR #173)"
-            )
-
         expected_rates = setup_occurrence_data["expected_rates"]
         one_week_ago_ts = setup_occurrence_data["one_week_ago"].timestamp()
         now_ts = setup_occurrence_data["now"].timestamp()
@@ -703,7 +695,7 @@ class TestOccurrenceHourlyEventRateUnsupported(BaseApiTest):
 
         # Build the ConditionalFormula:
         # if(min(timestamp) < one_week_ago, count/168, count/hours_since_first_seen)
-        FormulaCondition = Column.FormulaCondition  # type: ignore[attr-defined]
+        FormulaCondition = Column.FormulaCondition
         conditional_formula = Column.ConditionalFormula(
             condition=FormulaCondition(
                 left=Column(aggregation=min_ts_agg),
@@ -747,7 +739,7 @@ class TestOccurrenceHourlyEventRateUnsupported(BaseApiTest):
                 Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id")),
                 # Conditional hourly rate using ConditionalFormula
                 Column(
-                    conditional_formula=conditional_formula,  # type: ignore[call-arg]
+                    conditional_formula=conditional_formula,
                     label="hourly_rate",
                 ),
                 # First seen for verification
