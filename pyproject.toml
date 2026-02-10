@@ -30,7 +30,7 @@ dependencies = [
     "sentry-arroyo>=2.35.0",
     "sentry-conventions>=0.3.0",
     "sentry-kafka-schemas>=2.1.2",
-    "sentry-protos>=0.5",
+    "sentry-protos>=0.6.0",
     "sentry-redis-tools>=0.5.1",
     "sentry-relay>=0.9.19",
     "sentry-sdk>=2.35.0",
@@ -48,9 +48,6 @@ dependencies = [
 
 [tool.uv.sources]
 rust_snuba = { workspace = true }
-# TODO: Once https://github.com/getsentry/sentry-protos/pull/173 is merged and released,
-# the ConditionalFormula feature will be automatically enabled.
-# sentry-protos = { git = "https://github.com/getsentry/sentry-protos", branch = "feat/add-conditional-formula-to-column", subdirectory = "py" }
 
 [tool.uv.workspace]
 members = ["rust_snuba"]
