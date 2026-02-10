@@ -171,13 +171,13 @@ def setup_occurrence_data(clickhouse_db: None, redis_db: None) -> dict[str, Any]
 
         # Create timestamps for events:
         # - One at first_seen (to establish min timestamp)
-        # - Rest spread over the past week
+        # - Rest spread evenly between first_seen and now
+        hours_available = max((now - first_seen).total_seconds() / 3600, 1)
         timestamps = [first_seen]
         for i in range(event_count - 1):
-            # Spread events over the past week
-            event_time = now - timedelta(hours=i % WEEK_IN_HOURS)
-            if event_time > first_seen:
-                timestamps.append(event_time)
+            # Spread events evenly within the valid range
+            offset_hours = (i + 1) * hours_available / event_count
+            timestamps.append(first_seen + timedelta(hours=offset_hours))
 
         messages = _create_occurrence_items_for_group(group_id, timestamps[:event_count])
         all_messages.extend(messages)
