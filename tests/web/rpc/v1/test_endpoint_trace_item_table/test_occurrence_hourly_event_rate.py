@@ -1,27 +1,9 @@
 """
 Tests for querying EAP with OCCURRENCE item type to calculate hourly event rates.
 
-This test module validates query patterns for calculating hourly event rates
-from OCCURRENCE items.
-
-The desired hourly event rate calculation:
-1. Group by group_id
-2. countIf(timestamp > one_week_ago) to get past_week_event_count per group
-3. min(timestamp) to find first_seen per group
-4. Conditional calculation:
-   - if(first_seen < one_week_ago): hourly_rate = past_week_event_count / WEEK_IN_HOURS
-   - if(first_seen > one_week_ago): hourly_rate = past_week_event_count / dateDiff(hours, first_seen, now)
-5. p95(hourly_rate) across all issues
-
-Supported features used:
-- Division by a dynamically computed value using aggregates
-  (e.g., count / ((now - min(timestamp)) / 3600))
-- Conditional expression where the condition includes an aggregate
-  (e.g., if(min(timestamp) < X, value1, value2)) via ConditionalFormula
-- Conditional aggregation with row-level filters (countIf) combined with
-  ConditionalFormula for the full per-group rate calculation
-- P95 across group-level rates via two-step approach (query per-group rates,
-  then compute p95 client-side)
+Tests the per-group conditional hourly rate calculation:
+  if(first_seen < one_week_ago): rate = count / WEEK_IN_HOURS
+  else: rate = count / hours_since_first_seen
 """
 
 from datetime import datetime, timedelta, timezone
@@ -61,9 +43,7 @@ from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
 
-# Constants for time calculations
 WEEK_IN_HOURS = 168  # 7 days * 24 hours
-WEEK_IN_SECONDS = WEEK_IN_HOURS * 3600
 
 
 # Base time for test data - 3 hours ago to ensure data is within query window
@@ -73,6 +53,72 @@ BASE_TIME = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecon
 
 START_TIMESTAMP = Timestamp(seconds=int((BASE_TIME - timedelta(days=14)).timestamp()))
 END_TIMESTAMP = Timestamp(seconds=int((BASE_TIME + timedelta(hours=1)).timestamp()))
+
+
+def _count_agg(label: str = "") -> AttributeAggregation:
+    return AttributeAggregation(
+        aggregate=Function.FUNCTION_COUNT,
+        key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id"),
+        label=label,
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+    )
+
+
+def _min_ts_agg(label: str = "") -> AttributeAggregation:
+    return AttributeAggregation(
+        aggregate=Function.FUNCTION_MIN,
+        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.start_timestamp_precise"),
+        label=label,
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+    )
+
+
+def _hours_since_first_seen(now_ts: float) -> Column:
+    """(now - min(timestamp)) / 3600"""
+    return Column(
+        formula=Column.BinaryFormula(
+            op=Column.BinaryFormula.OP_DIVIDE,
+            left=Column(
+                formula=Column.BinaryFormula(
+                    op=Column.BinaryFormula.OP_SUBTRACT,
+                    left=Column(literal=Literal(val_double=now_ts)),
+                    right=Column(aggregation=_min_ts_agg()),
+                ),
+            ),
+            right=Column(literal=Literal(val_double=3600.0)),
+        ),
+    )
+
+
+def _conditional_rate_formula(
+    one_week_ago_ts: float, now_ts: float, count_col: Column
+) -> Column.ConditionalFormula:
+    """if(min(ts) < one_week_ago, count/WEEK_IN_HOURS, count/hours_since_first_seen)"""
+    FormulaCondition = Column.FormulaCondition
+    return Column.ConditionalFormula(
+        condition=FormulaCondition(
+            left=Column(aggregation=_min_ts_agg()),
+            op=FormulaCondition.OP_LESS_THAN,
+            right=Column(literal=Literal(val_double=one_week_ago_ts)),
+        ),
+        **{
+            "match": Column(
+                formula=Column.BinaryFormula(
+                    op=Column.BinaryFormula.OP_DIVIDE,
+                    left=count_col,
+                    right=Column(literal=Literal(val_double=float(WEEK_IN_HOURS))),
+                ),
+            ),
+        },
+        default=Column(
+            formula=Column.BinaryFormula(
+                op=Column.BinaryFormula.OP_DIVIDE,
+                left=count_col,
+                right=_hours_since_first_seen(now_ts),
+                default_value_double=0.0,
+            ),
+        ),
+    )
 
 
 def _create_occurrence_items_for_group(
@@ -444,44 +490,11 @@ class TestOccurrenceHourlyEventRateSupported(BaseApiTest):
             columns=[
                 Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id")),
                 # hourly_rate = count / hours_since_first_seen
-                # where hours_since_first_seen = (now - min(timestamp)) / 3600
-                # default_value_double=0.0 protects against NULL/zero divisors
                 Column(
                     formula=Column.BinaryFormula(
                         op=Column.BinaryFormula.OP_DIVIDE,
-                        left=Column(
-                            aggregation=AttributeAggregation(
-                                aggregate=Function.FUNCTION_COUNT,
-                                key=AttributeKey(
-                                    type=AttributeKey.TYPE_INT, name="sentry.group_id"
-                                ),
-                                label="event_count",
-                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                            ),
-                        ),
-                        right=Column(
-                            formula=Column.BinaryFormula(
-                                op=Column.BinaryFormula.OP_DIVIDE,
-                                left=Column(
-                                    formula=Column.BinaryFormula(
-                                        op=Column.BinaryFormula.OP_SUBTRACT,
-                                        left=Column(literal=Literal(val_double=now_ts)),
-                                        right=Column(
-                                            aggregation=AttributeAggregation(
-                                                aggregate=Function.FUNCTION_MIN,
-                                                key=AttributeKey(
-                                                    type=AttributeKey.TYPE_DOUBLE,
-                                                    name="sentry.start_timestamp_precise",
-                                                ),
-                                                label="first_seen_ts",
-                                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                                            ),
-                                        ),
-                                    ),
-                                ),
-                                right=Column(literal=Literal(val_double=3600.0)),
-                            ),
-                        ),
+                        left=Column(aggregation=_count_agg("event_count")),
+                        right=_hours_since_first_seen(now_ts),
                         default_value_double=0.0,
                     ),
                     label="hourly_rate_dynamic",
@@ -526,65 +539,8 @@ class TestOccurrenceHourlyEventRateSupported(BaseApiTest):
         one_week_ago_ts = setup_occurrence_data["one_week_ago"].timestamp()
         now_ts = setup_occurrence_data["now"].timestamp()
 
-        # Build the count aggregation (reused in both match and default branches)
-        count_agg = AttributeAggregation(
-            aggregate=Function.FUNCTION_COUNT,
-            key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id"),
-            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-        )
-
-        # Build min(timestamp) aggregation (reused in condition and default branch)
-        min_ts_agg = AttributeAggregation(
-            aggregate=Function.FUNCTION_MIN,
-            key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.start_timestamp_precise"),
-            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-        )
-
-        # hours_since_first_seen = (now - min(timestamp)) / 3600
-        hours_since_first_seen = Column(
-            formula=Column.BinaryFormula(
-                op=Column.BinaryFormula.OP_DIVIDE,
-                left=Column(
-                    formula=Column.BinaryFormula(
-                        op=Column.BinaryFormula.OP_SUBTRACT,
-                        left=Column(literal=Literal(val_double=now_ts)),
-                        right=Column(aggregation=min_ts_agg),
-                    ),
-                ),
-                right=Column(literal=Literal(val_double=3600.0)),
-            ),
-        )
-
-        # Build the ConditionalFormula:
-        # if(min(timestamp) < one_week_ago, count/168, count/hours_since_first_seen)
-        FormulaCondition = Column.FormulaCondition
-        conditional_formula = Column.ConditionalFormula(
-            condition=FormulaCondition(
-                left=Column(aggregation=min_ts_agg),
-                op=FormulaCondition.OP_LESS_THAN,
-                right=Column(literal=Literal(val_double=one_week_ago_ts)),
-            ),
-            # Note: 'match' is what to return when condition is TRUE
-            # When first_seen < one_week_ago (old issue), use count / WEEK_IN_HOURS
-            **{
-                "match": Column(
-                    formula=Column.BinaryFormula(
-                        op=Column.BinaryFormula.OP_DIVIDE,
-                        left=Column(aggregation=count_agg),
-                        right=Column(literal=Literal(val_double=float(WEEK_IN_HOURS))),
-                    ),
-                ),
-            },
-            # 'default' is what to return when condition is FALSE
-            # When first_seen >= one_week_ago (new issue), use count / hours_since_first_seen
-            default=Column(
-                formula=Column.BinaryFormula(
-                    op=Column.BinaryFormula.OP_DIVIDE,
-                    left=Column(aggregation=count_agg),
-                    right=hours_since_first_seen,
-                    default_value_double=0.0,  # Handle division by zero
-                ),
-            ),
+        conditional_formula = _conditional_rate_formula(
+            one_week_ago_ts, now_ts, Column(aggregation=_count_agg())
         )
 
         message = TraceItemTableRequest(
@@ -599,15 +555,12 @@ class TestOccurrenceHourlyEventRateSupported(BaseApiTest):
             ),
             columns=[
                 Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id")),
-                # Conditional hourly rate using ConditionalFormula
                 Column(
                     conditional_formula=conditional_formula,
                     label="hourly_rate",
                 ),
-                # First seen for verification
                 Column(
-                    aggregation=min_ts_agg,
-                    label="first_seen",
+                    aggregation=_min_ts_agg("first_seen"),
                 ),
             ],
             group_by=[AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id")],
@@ -677,56 +630,8 @@ class TestOccurrenceHourlyEventRateSupported(BaseApiTest):
             ),
         )
 
-        # min(timestamp) for first_seen
-        min_ts_agg = AttributeAggregation(
-            aggregate=Function.FUNCTION_MIN,
-            key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.start_timestamp_precise"),
-            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-        )
-
-        # hours_since_first_seen = (now - min(timestamp)) / 3600
-        hours_since_first_seen = Column(
-            formula=Column.BinaryFormula(
-                op=Column.BinaryFormula.OP_DIVIDE,
-                left=Column(
-                    formula=Column.BinaryFormula(
-                        op=Column.BinaryFormula.OP_SUBTRACT,
-                        left=Column(literal=Literal(val_double=now_ts)),
-                        right=Column(aggregation=min_ts_agg),
-                    ),
-                ),
-                right=Column(literal=Literal(val_double=3600.0)),
-            ),
-        )
-
-        # ConditionalFormula:
-        # if(min(ts) < one_week_ago,
-        #    past_week_count / WEEK_IN_HOURS,
-        #    past_week_count / hours_since_first_seen)
-        FormulaCondition = Column.FormulaCondition
-        conditional_formula = Column.ConditionalFormula(
-            condition=FormulaCondition(
-                left=Column(aggregation=min_ts_agg),
-                op=FormulaCondition.OP_LESS_THAN,
-                right=Column(literal=Literal(val_double=one_week_ago_ts)),
-            ),
-            **{
-                "match": Column(
-                    formula=Column.BinaryFormula(
-                        op=Column.BinaryFormula.OP_DIVIDE,
-                        left=Column(conditional_aggregation=past_week_count_agg),
-                        right=Column(literal=Literal(val_double=float(WEEK_IN_HOURS))),
-                    ),
-                ),
-            },
-            default=Column(
-                formula=Column.BinaryFormula(
-                    op=Column.BinaryFormula.OP_DIVIDE,
-                    left=Column(conditional_aggregation=past_week_count_agg),
-                    right=hours_since_first_seen,
-                    default_value_double=0.0,
-                ),
-            ),
+        conditional_formula = _conditional_rate_formula(
+            one_week_ago_ts, now_ts, Column(conditional_aggregation=past_week_count_agg)
         )
 
         message = TraceItemTableRequest(
@@ -801,55 +706,8 @@ class TestOccurrenceHourlyEventRateSupported(BaseApiTest):
         one_week_ago_ts = setup_occurrence_data["one_week_ago"].timestamp()
         now_ts = setup_occurrence_data["now"].timestamp()
 
-        count_agg = AttributeAggregation(
-            aggregate=Function.FUNCTION_COUNT,
-            key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id"),
-            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-        )
-        min_ts_agg = AttributeAggregation(
-            aggregate=Function.FUNCTION_MIN,
-            key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.start_timestamp_precise"),
-            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-        )
-
-        hours_since_first_seen = Column(
-            formula=Column.BinaryFormula(
-                op=Column.BinaryFormula.OP_DIVIDE,
-                left=Column(
-                    formula=Column.BinaryFormula(
-                        op=Column.BinaryFormula.OP_SUBTRACT,
-                        left=Column(literal=Literal(val_double=now_ts)),
-                        right=Column(aggregation=min_ts_agg),
-                    ),
-                ),
-                right=Column(literal=Literal(val_double=3600.0)),
-            ),
-        )
-
-        FormulaCondition = Column.FormulaCondition
-        conditional_formula = Column.ConditionalFormula(
-            condition=FormulaCondition(
-                left=Column(aggregation=min_ts_agg),
-                op=FormulaCondition.OP_LESS_THAN,
-                right=Column(literal=Literal(val_double=one_week_ago_ts)),
-            ),
-            **{
-                "match": Column(
-                    formula=Column.BinaryFormula(
-                        op=Column.BinaryFormula.OP_DIVIDE,
-                        left=Column(aggregation=count_agg),
-                        right=Column(literal=Literal(val_double=float(WEEK_IN_HOURS))),
-                    ),
-                ),
-            },
-            default=Column(
-                formula=Column.BinaryFormula(
-                    op=Column.BinaryFormula.OP_DIVIDE,
-                    left=Column(aggregation=count_agg),
-                    right=hours_since_first_seen,
-                    default_value_double=0.0,
-                ),
-            ),
+        conditional_formula = _conditional_rate_formula(
+            one_week_ago_ts, now_ts, Column(aggregation=_count_agg())
         )
 
         # Step 1: Query per-group conditional hourly rates

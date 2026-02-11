@@ -326,22 +326,15 @@ def _get_reliability_context_columns(
         return context_cols
 
     if column.HasField("conditional_formula"):
-        # For conditional formulas, extract context columns from all parts:
-        # condition (left/right), match, and default
         context_cols = []
         conditional = column.conditional_formula
 
-        # Extract from condition's left and right
         if conditional.HasField("condition"):
             for col in [conditional.condition.left, conditional.condition.right]:
-                if col.HasField("conditional_aggregation") or col.HasField("formula"):
-                    context_cols.extend(_get_reliability_context_columns(col, request_meta))
+                context_cols.extend(_get_reliability_context_columns(col, request_meta))
 
-        # Extract from match and default branches
         # Note: 'match' is a Python keyword, so use getattr
-        match_col = getattr(conditional, "match")
-        default_col = conditional.default
-        for col in [match_col, default_col]:
+        for col in [getattr(conditional, "match"), conditional.default]:
             if not col.HasField("formula") and not col.HasField("conditional_formula"):
                 if col.label:
                     context_cols.append(
@@ -434,41 +427,11 @@ def _formula_to_expression(formula: Column.BinaryFormula, request_meta: RequestM
 
 def _conditional_formula_to_expression(
     conditional_formula: Any,
-    request_meta: RequestMeta,  # Column.ConditionalFormula when proto is available
+    request_meta: RequestMeta,
 ) -> Expression:
     """
-    Converts a ConditionalFormula proto to a ClickHouse if() expression.
-
-    ConditionalFormula allows expressing: if(condition, match_value, default_value)
-    where the condition can compare aggregates (e.g., if(min(ts) < X, rate1, rate2)).
-
-    This enables use cases like:
-    - if(min(timestamp) < one_week_ago, count/WEEK_IN_HOURS, count/hours_since_first_seen)
-
-    NOTE: This function requires the ConditionalFormula proto message to be defined in
-    sentry-protos. Until then, this code path won't be executed (HasField will return False).
-
-    Proto structure:
-        message ConditionalFormula {
-            FormulaCondition condition = 1;
-            Column match = 2;    // value when condition is true
-            Column default = 3;  // value when condition is false
-        }
-
-        message FormulaCondition {
-            Column left = 1;
-            Op op = 2;
-            Column right = 3;
-            enum Op {
-                OP_UNSPECIFIED = 0;
-                OP_LESS_THAN = 1;
-                OP_GREATER_THAN = 2;
-                OP_LESS_THAN_OR_EQUALS = 3;
-                OP_GREATER_THAN_OR_EQUALS = 4;
-                OP_EQUALS = 5;
-                OP_NOT_EQUALS = 6;
-            }
-        }
+    Converts a ConditionalFormula proto to a ClickHouse if(condition, match, default) expression.
+    The condition can compare aggregates (e.g., if(min(ts) < X, rate1, rate2)).
     """
     condition = conditional_formula.condition
     left_expr = _column_to_expression(condition.left, request_meta)
