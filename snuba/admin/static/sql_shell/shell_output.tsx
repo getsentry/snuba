@@ -410,7 +410,7 @@ function ResultsOutput({
                 </tr>
               </thead>
               <tbody>
-                {rows.slice(0, 100).map((row: any[] | undefined, rowIdx: number) => (
+                {rows.map((row: any[] | undefined, rowIdx: number) => (
                   <tr key={rowIdx}>
                     {row ? row.map((cell, cellIdx) => (
                       <td key={cellIdx}>
@@ -425,11 +425,6 @@ function ResultsOutput({
                 ))}
               </tbody>
             </table>
-            {rows.length > 100 && (
-              <div className={classes.truncatedNote}>
-                ... showing first 100 of {rows.length} rows
-              </div>
-            )}
           </div>
         ) : (
           <div className={classes.emptyResult}>No results returned</div>
@@ -490,7 +485,7 @@ function SystemResultsOutput({
                 </tr>
               </thead>
               <tbody>
-                {rows.slice(0, 100).map((row: any[] | undefined, rowIdx: number) => (
+                {rows.map((row: any[] | undefined, rowIdx: number) => (
                   <tr key={rowIdx}>
                     {row ? row.map((cell, cellIdx) => (
                       <td key={cellIdx}>
@@ -505,11 +500,6 @@ function SystemResultsOutput({
                 ))}
               </tbody>
             </table>
-            {rows.length > 100 && (
-              <div className={classes.truncatedNote}>
-                ... showing first 100 of {rows.length} rows
-              </div>
-            )}
           </div>
         ) : (
           <div className={classes.emptyResult}>No results returned</div>
@@ -700,8 +690,7 @@ function ProfileEventsOutput({
           <span style={{ color: "#00ffff" }}>[{host}]</span>
           {data.rows && data.rows[0] && (
             <span style={{ color: "#cccccc", marginLeft: "8px" }}>
-              {data.rows[0].substring(0, 100)}
-              {data.rows[0].length > 100 ? "..." : ""}
+              {data.rows[0]}
             </span>
           )}
         </div>

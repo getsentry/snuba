@@ -361,10 +361,8 @@ export const useShellStyles = createStyles((theme) => ({
       padding: "4px 10px",
       borderBottom: "1px solid #21262d",
       color: "#e6edf3",
-      maxWidth: "300px",
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap",
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word",
     },
     "& tr:hover td": {
       backgroundColor: "rgba(88, 166, 255, 0.05)",
@@ -376,13 +374,6 @@ export const useShellStyles = createStyles((theme) => ({
   nullValue: {
     color: "#6e7681",
     fontStyle: "italic",
-  },
-  truncatedNote: {
-    color: "#6e7681",
-    fontSize: "10px",
-    marginTop: "6px",
-    paddingTop: "6px",
-    borderTop: "1px solid #21262d",
   },
   emptyResult: {
     color: "#6e7681",
