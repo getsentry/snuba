@@ -395,7 +395,7 @@ function renderAsJson(
   rows: any[][],
   classes: Record<string, string>
 ): React.ReactNode {
-  const data = rows.slice(0, 100).map((row) => {
+  const data = rows.map((row) => {
     const obj: Record<string, any> = {};
     cols.forEach((col, idx) => {
       obj[col] = row[idx];
@@ -417,7 +417,7 @@ function renderAsCsv(
   classes: Record<string, string>
 ): React.ReactNode {
   const headerRow = cols.map(escapeCsvValue).join(",");
-  const dataRows = rows.slice(0, 100).map((row) =>
+  const dataRows = rows.map((row) =>
     row.map(escapeCsvValue).join(",")
   );
 
@@ -438,7 +438,7 @@ function renderAsVertical(
 
   return (
     <div className={classes.verticalOutput}>
-      {rows.slice(0, 100).map((row, rowIdx) => (
+      {rows.map((row, rowIdx) => (
         <div key={rowIdx} className={classes.verticalRow}>
           <div className={classes.verticalRowHeader}>
             *************************** {rowIdx + 1}. row ***************************
@@ -499,38 +499,11 @@ function ResultsOutput({
 
     switch (outputFormat) {
       case "json":
-        return (
-          <>
-            {renderAsJson(colNames, rows, classes)}
-            {rows.length > 100 && (
-              <div className={classes.truncatedNote}>
-                ... showing first 100 of {rows.length} rows
-              </div>
-            )}
-          </>
-        );
+        return renderAsJson(colNames, rows, classes);
       case "csv":
-        return (
-          <>
-            {renderAsCsv(colNames, rows, classes)}
-            {rows.length > 100 && (
-              <div className={classes.truncatedNote}>
-                ... showing first 100 of {rows.length} rows
-              </div>
-            )}
-          </>
-        );
+        return renderAsCsv(colNames, rows, classes);
       case "vertical":
-        return (
-          <>
-            {renderAsVertical(colNames, rows, classes)}
-            {rows.length > 100 && (
-              <div className={classes.truncatedNote}>
-                ... showing first 100 of {rows.length} rows
-              </div>
-            )}
-          </>
-        );
+        return renderAsVertical(colNames, rows, classes);
       case "table":
       default:
         return (
@@ -546,7 +519,7 @@ function ResultsOutput({
                 </tr>
               </thead>
               <tbody>
-                {rows.slice(0, 100).map((row: any[] | undefined, rowIdx: number) => (
+                {rows.map((row: any[] | undefined, rowIdx: number) => (
                   <tr key={rowIdx}>
                     {row ? row.map((cell, cellIdx) => (
                       <td key={cellIdx}>
@@ -561,11 +534,6 @@ function ResultsOutput({
                 ))}
               </tbody>
             </table>
-            {rows.length > 100 && (
-              <div className={classes.truncatedNote}>
-                ... showing first 100 of {rows.length} rows
-              </div>
-            )}
           </div>
         );
     }
@@ -626,38 +594,11 @@ function SystemResultsOutput({
 
     switch (outputFormat) {
       case "json":
-        return (
-          <>
-            {renderAsJson(cols, rows, classes)}
-            {rows.length > 100 && (
-              <div className={classes.truncatedNote}>
-                ... showing first 100 of {rows.length} rows
-              </div>
-            )}
-          </>
-        );
+        return renderAsJson(cols, rows, classes);
       case "csv":
-        return (
-          <>
-            {renderAsCsv(cols, rows, classes)}
-            {rows.length > 100 && (
-              <div className={classes.truncatedNote}>
-                ... showing first 100 of {rows.length} rows
-              </div>
-            )}
-          </>
-        );
+        return renderAsCsv(cols, rows, classes);
       case "vertical":
-        return (
-          <>
-            {renderAsVertical(cols, rows, classes)}
-            {rows.length > 100 && (
-              <div className={classes.truncatedNote}>
-                ... showing first 100 of {rows.length} rows
-              </div>
-            )}
-          </>
-        );
+        return renderAsVertical(cols, rows, classes);
       case "table":
       default:
         return (
@@ -671,7 +612,7 @@ function SystemResultsOutput({
                 </tr>
               </thead>
               <tbody>
-                {rows.slice(0, 100).map((row: any[] | undefined, rowIdx: number) => (
+                {rows.map((row: any[] | undefined, rowIdx: number) => (
                   <tr key={rowIdx}>
                     {row ? row.map((cell, cellIdx) => (
                       <td key={cellIdx}>
@@ -686,11 +627,6 @@ function SystemResultsOutput({
                 ))}
               </tbody>
             </table>
-            {rows.length > 100 && (
-              <div className={classes.truncatedNote}>
-                ... showing first 100 of {rows.length} rows
-              </div>
-            )}
           </div>
         );
     }
@@ -891,8 +827,7 @@ function ProfileEventsOutput({
           <span style={{ color: "#00ffff" }}>[{host}]</span>
           {data.rows && data.rows[0] && (
             <span style={{ color: "#cccccc", marginLeft: "8px" }}>
-              {data.rows[0].substring(0, 100)}
-              {data.rows[0].length > 100 ? "..." : ""}
+              {data.rows[0]}
             </span>
           )}
         </div>

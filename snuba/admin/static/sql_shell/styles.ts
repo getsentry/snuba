@@ -373,7 +373,6 @@ export const useShellStyles = createStyles((theme) => ({
       padding: "4px 10px",
       borderBottom: "1px solid #21262d",
       color: "#e6edf3",
-      maxWidth: "400px",
       whiteSpace: "pre-wrap",
       wordBreak: "break-word",
       overflowWrap: "break-word",
@@ -388,13 +387,6 @@ export const useShellStyles = createStyles((theme) => ({
   nullValue: {
     color: "#6e7681",
     fontStyle: "italic",
-  },
-  truncatedNote: {
-    color: "#6e7681",
-    fontSize: "10px",
-    marginTop: "6px",
-    paddingTop: "6px",
-    borderTop: "1px solid #21262d",
   },
   emptyResult: {
     color: "#6e7681",
