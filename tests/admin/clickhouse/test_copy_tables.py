@@ -4,6 +4,8 @@ import pytest
 
 from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
 from snuba.admin.clickhouse.copy_tables import (
+    WorkloadStatement,
+    _topological_sort_workloads,
     copy_tables,
     get_create_table_statements,
     verify_tables_on_replicas,
@@ -183,3 +185,79 @@ def test_verify_tables_on_replicas() -> None:
 
     assert verified_count == 0
     assert ["nonexistent_table_xyz"] in missing_hosts.values()
+
+
+def test_topological_sort_workloads_empty() -> None:
+    """Test that an empty list returns an empty list."""
+    result = _topological_sort_workloads([])
+    assert result == []
+
+
+def test_topological_sort_workloads_single() -> None:
+    """Test sorting a single workload with no parent."""
+    workloads = [WorkloadStatement(name="all", parent="", statement="CREATE WORKLOAD all")]
+    result = _topological_sort_workloads(workloads)
+    assert len(result) == 1
+    assert result[0].name == "all"
+
+
+def test_topological_sort_workloads_hierarchy() -> None:
+    """Test that parents come before children in the sorted output."""
+    workloads = [
+        WorkloadStatement(
+            name="low_priority_deletes",
+            parent="all",
+            statement="CREATE WORKLOAD low_priority_deletes IN all",
+        ),
+        WorkloadStatement(
+            name="all",
+            parent="",
+            statement="CREATE WORKLOAD all",
+        ),
+        WorkloadStatement(
+            name="sub_workload",
+            parent="low_priority_deletes",
+            statement="CREATE WORKLOAD sub_workload IN low_priority_deletes",
+        ),
+    ]
+    result = _topological_sort_workloads(workloads)
+    names = [w.name for w in result]
+
+    # "all" must come before "low_priority_deletes"
+    assert names.index("all") < names.index("low_priority_deletes")
+    # "low_priority_deletes" must come before "sub_workload"
+    assert names.index("low_priority_deletes") < names.index("sub_workload")
+
+
+def test_topological_sort_workloads_multiple_roots() -> None:
+    """Test sorting workloads with multiple roots (no parent)."""
+    workloads = [
+        WorkloadStatement(
+            name="child_a", parent="root_a", statement="CREATE WORKLOAD child_a IN root_a"
+        ),
+        WorkloadStatement(name="root_a", parent="", statement="CREATE WORKLOAD root_a"),
+        WorkloadStatement(name="root_b", parent="", statement="CREATE WORKLOAD root_b"),
+        WorkloadStatement(
+            name="child_b", parent="root_b", statement="CREATE WORKLOAD child_b IN root_b"
+        ),
+    ]
+    result = _topological_sort_workloads(workloads)
+    names = [w.name for w in result]
+
+    # Each parent must come before its child
+    assert names.index("root_a") < names.index("child_a")
+    assert names.index("root_b") < names.index("child_b")
+
+
+def test_topological_sort_workloads_external_parent() -> None:
+    """Test workload with parent not in the list (treated as root)."""
+    workloads = [
+        WorkloadStatement(
+            name="child",
+            parent="external_parent",
+            statement="CREATE WORKLOAD child IN external_parent",
+        ),
+    ]
+    result = _topological_sort_workloads(workloads)
+    assert len(result) == 1
+    assert result[0].name == "child"

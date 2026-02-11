@@ -35,6 +35,8 @@ type CopyTableResult = {
   cluster_name: string
   incomplete_hosts?: Record<string, string>
   verified?: number
+  workloads?: string
+  workload_errors?: Record<string, string>
 }
 
 export { ClickhouseNodeData, CopyTableHostsState, CopyTableRequest, CopyTableResult };

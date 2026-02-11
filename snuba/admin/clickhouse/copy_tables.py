@@ -1,9 +1,10 @@
+from collections import deque
 from dataclasses import dataclass
 from typing import MutableMapping, Optional, Sequence, Tuple, TypedDict
 
 from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 
 
 @dataclass
@@ -13,6 +14,13 @@ class TableStatement:
     is_mergetree: bool
 
 
+@dataclass
+class WorkloadStatement:
+    name: str
+    parent: str
+    statement: str
+
+
 class CopyTablesResponse(TypedDict, total=False):
     source_host: str
     tables: str
@@ -20,6 +28,8 @@ class CopyTablesResponse(TypedDict, total=False):
     dry_run: bool
     incomplete_hosts: dict[str, str]
     verified: int
+    workloads: str
+    workload_errors: dict[str, str]
 
 
 def get_create_table_statements(
@@ -120,6 +130,85 @@ def verify_tables_on_replicas(
     return missing_host_tables, verified_hosts_num
 
 
+def _topological_sort_workloads(
+    workloads: Sequence[WorkloadStatement],
+) -> Sequence[WorkloadStatement]:
+    """Sort workloads so parents come before children using BFS."""
+    if not workloads:
+        return []
+
+    workload_by_name = {w.name: w for w in workloads}
+    children: dict[str, list[str]] = {w.name: [] for w in workloads}
+
+    # Build adjacency list: parent -> children
+    for w in workloads:
+        if w.parent and w.parent in workload_by_name:
+            children[w.parent].append(w.name)
+
+    # Find roots (workloads with no parent or parent not in our set)
+    roots = [w.name for w in workloads if not w.parent or w.parent not in workload_by_name]
+
+    # BFS to get topological order
+    result: list[WorkloadStatement] = []
+    queue: deque[str] = deque(roots)
+    visited: set[str] = set()
+
+    while queue:
+        name = queue.popleft()
+        if name in visited:
+            continue
+        visited.add(name)
+        result.append(workload_by_name[name])
+        for child in children[name]:
+            if child not in visited:
+                queue.append(child)
+
+    return result
+
+
+def get_workloads(connection: ClickhousePool) -> Sequence[WorkloadStatement]:
+    """Query system.workloads for all workload definitions, sorted by dependency."""
+    try:
+        results = connection.execute(
+            "SELECT name, parent, create_query FROM system.workloads"
+        ).results
+    except Exception:
+        # system.workloads may not exist on older ClickHouse versions
+        return []
+
+    workloads = [WorkloadStatement(name=r[0], parent=r[1], statement=r[2]) for r in results]
+    return _topological_sort_workloads(workloads)
+
+
+def copy_workloads(
+    source_connection: ClickhousePool,
+    cluster: ClickhouseCluster,
+    dry_run: bool,
+) -> Tuple[list[str], dict[str, str]]:
+    """
+    Copy workloads from source to all nodes in cluster.
+    Returns (workload_names, errors_by_node).
+    """
+    workloads = get_workloads(source_connection)
+    workload_names = [w.name for w in workloads]
+
+    if dry_run or not workloads:
+        return workload_names, {}
+
+    errors: dict[str, str] = {}
+    for node in cluster.get_local_nodes():
+        connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+        try:
+            for w in workloads:
+                # Ensure IF NOT EXISTS for idempotency
+                stmt = w.statement.replace("CREATE WORKLOAD", "CREATE WORKLOAD IF NOT EXISTS")
+                connection.execute(stmt)
+        except Exception as e:
+            errors[f"{node.host_name}:{node.port}"] = str(e)
+
+    return workload_names, errors
+
+
 def copy_tables(
     source_host: str,
     storage_name: str,
@@ -159,6 +248,13 @@ def copy_tables(
         "cluster_name": cluster_name or "no cluster",
         "dry_run": dry_run,
     }
+
+    # Copy workloads (works in both dry_run and non-dry_run modes)
+    workload_names, workload_errors = copy_workloads(source_connection, cluster, dry_run)
+    if workload_names:
+        resp["workloads"] = ",".join(workload_names)
+    if workload_errors:
+        resp["workload_errors"] = workload_errors
 
     if dry_run:
         return resp
