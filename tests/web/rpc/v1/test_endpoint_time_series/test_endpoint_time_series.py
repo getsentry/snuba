@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from itertools import chain
 from typing import Any, Callable
 from unittest.mock import MagicMock, call, patch
 
@@ -26,6 +27,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
+    AttributeKeyExpression,
     AttributeValue,
     ExtrapolationMode,
     Function,
@@ -1753,6 +1755,127 @@ class TestTimeSeriesApi(BaseApiTest):
                     for _ in range(len(expected_buckets))
                 ],
             ),
+        ]
+
+    def test_muliply_attribute_aggregation(self) -> None:
+        """
+        implementation details:
+        * use store_spans_timeseries to store two different metrics with 2 different attributes:
+            * the first attr is game_size double and the second attr is game_size_unit_mult and is a number with different value
+            * first create some spans with the attributes: game_size = 1 to 10 (deterministic) and game_size_unit_mult = 10^9 (GB)
+            * then create some spans with the attributes: game_size = 500 to 850 (deterministic) and game_size_unit_mult = 10^6 (MB)
+            * then create a variable expected_avg to be the avg of (game_size * game_size_unit_mult) for each span
+        * create a time series request for avg(game_size * game_size_unit_mult)
+        * execute the request and verify that the result is equal to expected_avg
+        * you dont have to actually run the test bc this is red-green TDD
+        """
+        granularity_secs = 300
+        query_duration = 60 * 30
+
+        # our data points: [1gb, 2gb, ... 500mb, 501mb, ... 850mb]
+        data_points_gb = range(1, 10 + 1)
+        data_points_mb = range(500, 850 + 1)
+        # store them using the attributes game_size and game_size_unit_mult
+        store_spans_timeseries(
+            BASE_TIME,
+            1,  # one span per second
+            len(data_points_gb),
+            metrics=[
+                DummyMetric("game_size", get_value=lambda x: data_points_gb[x]),
+            ],
+            attributes={
+                "game_size_unit_mult": AnyValue(int_value=10**9),
+            },
+        )
+        store_spans_timeseries(
+            BASE_TIME + timedelta(seconds=len(data_points_gb)),
+            1,  # one span per second
+            len(data_points_mb),
+            metrics=[
+                DummyMetric("game_size", get_value=lambda x: data_points_mb[x]),
+            ],
+            attributes={
+                "game_size_unit_mult": AnyValue(int_value=10**6),
+            },
+        )
+        # figure out the expected value for avg(game_size * game_size_unit_mult) timeseries
+        data_points_bytes = list(
+            chain(
+                map(lambda x: x * 10**9, data_points_gb), map(lambda x: x * 10**6, data_points_mb)
+            )
+        )
+
+        # query for avg(game_size * game_size_unit_mult)
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    conditional_aggregation=AttributeConditionalAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        expression=AttributeKeyExpression(
+                            formula=AttributeKeyExpression.Formula(
+                                op=AttributeKeyExpression.OP_MULT,
+                                left=AttributeKeyExpression(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_DOUBLE, name="game_size"
+                                    ),
+                                ),
+                                right=AttributeKeyExpression(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_INT, name="game_size_unit_mult"
+                                    ),
+                                ),
+                            )
+                        ),
+                        label="avg(game_size * game_size_unit_mult)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                    label="avg(game_size * game_size_unit_mult)",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+
+        response = EndpointTimeSeries().execute(message)
+
+        # Calculate expected buckets
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+
+        # Calculate average for each bucket using the data_points_bytes
+        expected_data_points = []
+        for bucket_start_secs in range(0, query_duration, granularity_secs):
+            bucket_end_secs = bucket_start_secs + granularity_secs
+            # Get data points that fall in this bucket
+            bucket_values = data_points_bytes[
+                bucket_start_secs : min(bucket_end_secs, len(data_points_bytes))
+            ]
+
+            if bucket_values:
+                avg_value = sum(bucket_values) / len(bucket_values)
+                expected_data_points.append(
+                    DataPoint(data=avg_value, data_present=True, sample_count=len(bucket_values))
+                )
+            else:
+                # No data in this bucket
+                expected_data_points.append(DataPoint(data=0, data_present=False, sample_count=0))
+
+        assert response.result_timeseries == [
+            TimeSeries(
+                label="avg(game_size * game_size_unit_mult)",
+                buckets=expected_buckets,
+                data_points=expected_data_points,
+            )
         ]
 
 
