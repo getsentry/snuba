@@ -187,7 +187,7 @@ def copy_workloads(
 ) -> Tuple[list[str], dict[str, str]]:
     """
     Copy workloads from source to all nodes in cluster.
-    Returns (workload_names, errors_by_node).
+    Returns (created_workload_names, errors_by_node).
     """
     workloads = get_workloads(source_connection)
     workload_names = [w.name for w in workloads]
@@ -196,17 +196,22 @@ def copy_workloads(
         return workload_names, {}
 
     errors: dict[str, str] = {}
+    created_workloads: set[str] = set()
+
     for node in cluster.get_local_nodes():
         connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
-        try:
-            for w in workloads:
+        for w in workloads:
+            try:
                 # Ensure IF NOT EXISTS for idempotency
                 stmt = w.statement.replace("CREATE WORKLOAD", "CREATE WORKLOAD IF NOT EXISTS")
                 connection.execute(stmt)
-        except Exception as e:
-            errors[f"{node.host_name}:{node.port}"] = str(e)
+                created_workloads.add(w.name)
+            except Exception as e:
+                node_key = f"{node.host_name}:{node.port}"
+                errors[node_key] = f"{w.name}: {e}"
 
-    return workload_names, errors
+    # Return workloads in dependency order, filtered to those actually created
+    return [w.name for w in workloads if w.name in created_workloads], errors
 
 
 def copy_tables(
