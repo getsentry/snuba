@@ -13,9 +13,15 @@ The desired hourly event rate calculation:
    - if(first_seen > one_week_ago): hourly_rate = past_week_event_count / dateDiff(hours, first_seen, now)
 5. p95(hourly_rate) across all issues
 
-Two levels of nesting that are currently NOT supported:
-1. Conditional expression where the condition includes an aggregate
-   (e.g., if(min(timestamp) < X, value1, value2))
+Currently supported:
+- Division by a dynamically computed value using aggregates
+  (e.g., count / ((now - min(timestamp)) / 3600))
+- Conditional expression where the condition includes an aggregate
+  (e.g., if(min(timestamp) < X, value1, value2)) via ConditionalFormula
+
+Still NOT supported:
+1. Using aggregate results in conditional aggregation filters
+   (e.g., countIf(min(timestamp) > X))
 2. Quantile on a calculated/computed aggregate
    (e.g., p95(count / hours) where count is an aggregate)
 """
@@ -405,40 +411,16 @@ class TestOccurrenceHourlyEventRateSupported(BaseApiTest):
         p95_value = p95_col.results[0].val_double
         assert 4.0 <= p95_value <= 5.5
 
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-class TestOccurrenceHourlyEventRateUnsupported(BaseApiTest):
-    """
-    Tests for CURRENTLY UNSUPPORTED query patterns.
-
-    These tests document the desired query structure for features that
-    are not yet implemented. They are marked xfail to indicate the
-    expected failure until the features are built.
-
-    Key unsupported features:
-    1. Division by a dynamically computed value that uses an aggregate
-       (e.g., count / ((now - min(timestamp)) / 3600))
-    2. Conditional expression where the condition includes an aggregate
-       (e.g., if(min(timestamp) < X, value1, value2))
-    3. Quantile (p95) on a calculated/computed aggregate formula
-       (e.g., p95 across group-level computed rates)
-    """
-
     def test_hourly_rate_with_dynamic_divisor_using_aggregate(
         self, setup_occurrence_data: dict[str, Any]
     ) -> None:
         """
         Test calculating hourly rate where the divisor uses an aggregate.
 
-        DESIRED BEHAVIOR:
-        hourly_rate = count / ((now - min(timestamp_precise)) / 3600)
+        Formula: count / ((now - min(timestamp_precise)) / 3600)
 
-        This requires dividing by a dynamically computed value that
-        involves an aggregate (min).
-
-        The formula uses default_value_double=0.0 to handle NULL/zero divisor cases
-        safely. When the divisor is NULL or zero, the result will be the default value.
+        This divides by a dynamically computed value that involves an aggregate (min).
+        default_value_double=0.0 handles NULL/zero divisor cases safely.
         """
         now_ts = BASE_TIME.timestamp()
 
@@ -523,6 +505,144 @@ class TestOccurrenceHourlyEventRateUnsupported(BaseApiTest):
         for result in rate_col.results:
             assert not result.is_null, "Expected non-null hourly rate"
             assert result.val_double > 0, f"Expected positive rate, got {result.val_double}"
+
+    def test_conditional_rate_based_on_aggregate_first_seen(
+        self, setup_occurrence_data: dict[str, Any]
+    ) -> None:
+        """
+        Test conditional hourly rate where the condition uses an aggregate.
+
+        Uses ConditionalFormula to express:
+        if(min(timestamp) < one_week_ago, count/168, count/hours_since_first_seen)
+        """
+        expected_rates = setup_occurrence_data["expected_rates"]
+        one_week_ago_ts = setup_occurrence_data["one_week_ago"].timestamp()
+        now_ts = setup_occurrence_data["now"].timestamp()
+
+        # Build the count aggregation (reused in both match and default branches)
+        count_agg = AttributeAggregation(
+            aggregate=Function.FUNCTION_COUNT,
+            key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id"),
+            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+        )
+
+        # Build min(timestamp) aggregation (reused in condition and default branch)
+        min_ts_agg = AttributeAggregation(
+            aggregate=Function.FUNCTION_MIN,
+            key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.start_timestamp_precise"),
+            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+        )
+
+        # hours_since_first_seen = (now - min(timestamp)) / 3600
+        hours_since_first_seen = Column(
+            formula=Column.BinaryFormula(
+                op=Column.BinaryFormula.OP_DIVIDE,
+                left=Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_SUBTRACT,
+                        left=Column(literal=Literal(val_double=now_ts)),
+                        right=Column(aggregation=min_ts_agg),
+                    ),
+                ),
+                right=Column(literal=Literal(val_double=3600.0)),
+            ),
+        )
+
+        # Build the ConditionalFormula:
+        # if(min(timestamp) < one_week_ago, count/168, count/hours_since_first_seen)
+        FormulaCondition = Column.FormulaCondition
+        conditional_formula = Column.ConditionalFormula(
+            condition=FormulaCondition(
+                left=Column(aggregation=min_ts_agg),
+                op=FormulaCondition.OP_LESS_THAN,
+                right=Column(literal=Literal(val_double=one_week_ago_ts)),
+            ),
+            # Note: 'match' is what to return when condition is TRUE
+            # When first_seen < one_week_ago (old issue), use count / WEEK_IN_HOURS
+            **{
+                "match": Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_DIVIDE,
+                        left=Column(aggregation=count_agg),
+                        right=Column(literal=Literal(val_double=float(WEEK_IN_HOURS))),
+                    ),
+                ),
+            },
+            # 'default' is what to return when condition is FALSE
+            # When first_seen >= one_week_ago (new issue), use count / hours_since_first_seen
+            default=Column(
+                formula=Column.BinaryFormula(
+                    op=Column.BinaryFormula.OP_DIVIDE,
+                    left=Column(aggregation=count_agg),
+                    right=hours_since_first_seen,
+                    default_value_double=0.0,  # Handle division by zero
+                ),
+            ),
+        )
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="test",
+                referrer="test.conditional_aggregate",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id")),
+                # Conditional hourly rate using ConditionalFormula
+                Column(
+                    conditional_formula=conditional_formula,
+                    label="hourly_rate",
+                ),
+                # First seen for verification
+                Column(
+                    aggregation=min_ts_agg,
+                    label="first_seen",
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id")],
+            limit=100,
+        )
+
+        response = EndpointTraceItemTable().execute(message)
+
+        # Verify results
+        group_col = next(c for c in response.column_values if c.attribute_name == "sentry.group_id")
+        rate_col = next(c for c in response.column_values if c.attribute_name == "hourly_rate")
+        first_seen_col = next(c for c in response.column_values if c.attribute_name == "first_seen")
+
+        assert len(group_col.results) > 0, "Expected results for test groups"
+
+        # Verify the conditional rate calculation
+        for i, group_val in enumerate(group_col.results):
+            group_id = group_val.val_int
+            if group_id in expected_rates:
+                first_seen = first_seen_col.results[i].val_double
+                actual_rate = rate_col.results[i].val_double
+                expected_rate = expected_rates[group_id]
+
+                # Verify the rate matches expected
+                assert abs(actual_rate - expected_rate) < 0.1, (
+                    f"Group {group_id}: expected rate {expected_rate}, got {actual_rate}. "
+                    f"first_seen={first_seen}, one_week_ago={one_week_ago_ts}"
+                )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestOccurrenceHourlyEventRateUnsupported(BaseApiTest):
+    """
+    Tests for CURRENTLY UNSUPPORTED query patterns, marked xfail.
+
+    Key unsupported features:
+    1. Using aggregate results in conditional aggregation filters
+       (e.g., countIf(min(timestamp) > X))
+    2. Quantile (p95) on a calculated/computed aggregate formula
+       (e.g., p95 across group-level computed rates)
+    """
 
     @pytest.mark.xfail(
         reason="Cannot use aggregate result (first_seen) in conditional aggregation filter"
@@ -643,137 +763,6 @@ class TestOccurrenceHourlyEventRateUnsupported(BaseApiTest):
             "AttributeConditionalAggregation.filter can only compare row attributes to literals, "
             "not aggregate results."
         )
-
-    def test_conditional_rate_based_on_aggregate_first_seen(
-        self, setup_occurrence_data: dict[str, Any]
-    ) -> None:
-        """
-        Test conditional hourly rate where the condition uses an aggregate.
-
-        DESIRED BEHAVIOR:
-        - if(min(timestamp) < one_week_ago):
-            hourly_rate = count / WEEK_IN_HOURS
-        - else:
-            hourly_rate = count / dateDiff('hour', min(timestamp), now())
-
-        This uses the ConditionalFormula proto message to express:
-        if(condition, match, default) where condition can compare aggregates.
-
-        """
-        expected_rates = setup_occurrence_data["expected_rates"]
-        one_week_ago_ts = setup_occurrence_data["one_week_ago"].timestamp()
-        now_ts = setup_occurrence_data["now"].timestamp()
-
-        # Build the count aggregation (reused in both match and default branches)
-        count_agg = AttributeAggregation(
-            aggregate=Function.FUNCTION_COUNT,
-            key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id"),
-            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-        )
-
-        # Build min(timestamp) aggregation (reused in condition and default branch)
-        min_ts_agg = AttributeAggregation(
-            aggregate=Function.FUNCTION_MIN,
-            key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.start_timestamp_precise"),
-            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-        )
-
-        # hours_since_first_seen = (now - min(timestamp)) / 3600
-        hours_since_first_seen = Column(
-            formula=Column.BinaryFormula(
-                op=Column.BinaryFormula.OP_DIVIDE,
-                left=Column(
-                    formula=Column.BinaryFormula(
-                        op=Column.BinaryFormula.OP_SUBTRACT,
-                        left=Column(literal=Literal(val_double=now_ts)),
-                        right=Column(aggregation=min_ts_agg),
-                    ),
-                ),
-                right=Column(literal=Literal(val_double=3600.0)),
-            ),
-        )
-
-        # Build the ConditionalFormula:
-        # if(min(timestamp) < one_week_ago, count/168, count/hours_since_first_seen)
-        FormulaCondition = Column.FormulaCondition
-        conditional_formula = Column.ConditionalFormula(
-            condition=FormulaCondition(
-                left=Column(aggregation=min_ts_agg),
-                op=FormulaCondition.OP_LESS_THAN,
-                right=Column(literal=Literal(val_double=one_week_ago_ts)),
-            ),
-            # Note: 'match' is what to return when condition is TRUE
-            # When first_seen < one_week_ago (old issue), use count / WEEK_IN_HOURS
-            **{
-                "match": Column(
-                    formula=Column.BinaryFormula(
-                        op=Column.BinaryFormula.OP_DIVIDE,
-                        left=Column(aggregation=count_agg),
-                        right=Column(literal=Literal(val_double=float(WEEK_IN_HOURS))),
-                    ),
-                ),
-            },
-            # 'default' is what to return when condition is FALSE
-            # When first_seen >= one_week_ago (new issue), use count / hours_since_first_seen
-            default=Column(
-                formula=Column.BinaryFormula(
-                    op=Column.BinaryFormula.OP_DIVIDE,
-                    left=Column(aggregation=count_agg),
-                    right=hours_since_first_seen,
-                    default_value_double=0.0,  # Handle division by zero
-                ),
-            ),
-        )
-
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1],
-                organization_id=1,
-                cogs_category="test",
-                referrer="test.conditional_aggregate",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id")),
-                # Conditional hourly rate using ConditionalFormula
-                Column(
-                    conditional_formula=conditional_formula,
-                    label="hourly_rate",
-                ),
-                # First seen for verification
-                Column(
-                    aggregation=min_ts_agg,
-                    label="first_seen",
-                ),
-            ],
-            group_by=[AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.group_id")],
-            limit=100,
-        )
-
-        response = EndpointTraceItemTable().execute(message)
-
-        # Verify results
-        group_col = next(c for c in response.column_values if c.attribute_name == "sentry.group_id")
-        rate_col = next(c for c in response.column_values if c.attribute_name == "hourly_rate")
-        first_seen_col = next(c for c in response.column_values if c.attribute_name == "first_seen")
-
-        assert len(group_col.results) > 0, "Expected results for test groups"
-
-        # Verify the conditional rate calculation
-        for i, group_val in enumerate(group_col.results):
-            group_id = group_val.val_int
-            if group_id in expected_rates:
-                first_seen = first_seen_col.results[i].val_double
-                actual_rate = rate_col.results[i].val_double
-                expected_rate = expected_rates[group_id]
-
-                # Verify the rate matches expected
-                assert abs(actual_rate - expected_rate) < 0.1, (
-                    f"Group {group_id}: expected rate {expected_rate}, got {actual_rate}. "
-                    f"first_seen={first_seen}, one_week_ago={one_week_ago_ts}"
-                )
 
     @pytest.mark.xfail(
         reason="P95 on calculated aggregate formula not yet supported - "
