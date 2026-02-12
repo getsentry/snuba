@@ -90,26 +90,18 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
 
     def _get_max_threads(self, referrer: str) -> int:
         thread_override = int(
-            self.get_config_value(
-                "referrer_max_threads_override", {"referrer": referrer}
-            )
+            self.get_config_value("referrer_max_threads_override", {"referrer": referrer})
         )
         return thread_override if thread_override != -1 else _DEFAULT_MAX_THREADS
 
     def _get_concurrent_limit(self, referrer: str) -> int:
         concurrent_override = int(
-            self.get_config_value(
-                "referrer_concurrent_override", {"referrer": referrer}
-            )
+            self.get_config_value("referrer_concurrent_override", {"referrer": referrer})
         )
         default_concurrent_value = int(
             self.get_config_value("default_concurrent_request_per_referrer")
         )
-        return (
-            concurrent_override
-            if concurrent_override != -1
-            else default_concurrent_value
-        )
+        return concurrent_override if concurrent_override != -1 else default_concurrent_value
 
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
@@ -123,9 +115,7 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             query_id,
             rate_limit_params,
         )
-        assert (
-            rate_limit_params.concurrent_limit is not None
-        ), "concurrent_limit must be set"
+        assert rate_limit_params.concurrent_limit is not None, "concurrent_limit must be set"
         num_threads = self._get_max_threads(referrer)
         requests_throttle_threshold = max(
             1,
@@ -137,12 +127,8 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
 
         is_throttled = False
         if rate_limit_stats.concurrent > requests_throttle_threshold:
-            num_threads = max(
-                1, num_threads // self.get_config_value("threads_throttle_divider")
-            )
-            self.metrics.increment(
-                "concurrent_queries_throttled", tags={"referrer": referrer}
-            )
+            num_threads = max(1, num_threads // self.get_config_value("threads_throttle_divider"))
+            self.metrics.increment("concurrent_queries_throttled", tags={"referrer": referrer})
             is_throttled = True
 
         self.metrics.timing(

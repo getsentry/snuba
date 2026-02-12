@@ -193,9 +193,7 @@ class Distributed(TableEngine):
         assert not cluster.is_single_node()
         assert cluster_name is not None
         database_name = cluster.get_database()
-        optional_sharding_key = (
-            f", {self.__sharding_key}" if self.__sharding_key else ""
-        )
+        optional_sharding_key = f", {self.__sharding_key}" if self.__sharding_key else ""
 
         return f"Distributed(`{cluster_name}`, {database_name}, {self.__local_table_name}{optional_sharding_key})"
 

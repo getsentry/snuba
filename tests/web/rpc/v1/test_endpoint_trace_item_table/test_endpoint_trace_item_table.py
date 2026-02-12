@@ -788,6 +788,68 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    def test_any_aggregation_with_string_attribute(self, setup_teardown: Any) -> None:
+        """Test that any() aggregation works with string attributes.
+
+        The fixture creates 120 spans all with custom_tag="blah".
+        Using any() on this attribute should return "blah" for each group.
+        """
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="custom_tag")
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_ANY,
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="custom_tag"),
+                        label="any(custom_tag)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))
+                ),
+            ],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        # All spans have custom_tag="blah", so any() should return "blah" for each location group
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="location",
+                results=[
+                    AttributeValue(val_str="backend"),
+                    AttributeValue(val_str="frontend"),
+                    AttributeValue(val_str="mobile"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="any(custom_tag)",
+                results=[
+                    AttributeValue(val_str="blah"),
+                    AttributeValue(val_str="blah"),
+                    AttributeValue(val_str="blah"),
+                ],
+            ),
+        ]
+
     def test_table_with_columns_not_in_groupby_backward_compat(self, setup_teardown: Any) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -1118,6 +1180,43 @@ class TestTraceItemTable(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         measurement_avg = [v.val_double for v in response.column_values[0].results][0]
         assert measurement_avg == 420
+
+    def test_aggregation_on_boolean_attribute(
+        self,
+        setup_teardown: Any,
+    ) -> None:
+        """Test that aggregations work correctly on TYPE_BOOLEAN attributes.
+
+        Boolean attributes use a Map column (attributes_bool) and require
+        arrayElement for access rather than SubscriptableReference.
+        """
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="my.true.bool.field"),
+                        label="count(my.true.bool.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    )
+                ),
+            ],
+            order_by=[],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        # All spans in setup_teardown have my.true.bool.field=True (from _DEFAULT_ATTRIBUTES)
+        count_result = [v.val_double for v in response.column_values[0].results][0]
+        assert count_result == _SPAN_COUNT
 
     def test_different_column_label_and_attr_name_backward_compat(
         self,

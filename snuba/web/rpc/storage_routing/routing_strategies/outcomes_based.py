@@ -4,7 +4,10 @@ from typing import cast
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
+from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
 from snuba import state
 from snuba.attribution.appid import AppID
@@ -29,6 +32,7 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.common import (
+    ITEM_TYPE_FULL_RETENTION,
     ITEM_TYPE_TO_OUTCOME_CATEGORY,
     Outcome,
 )
@@ -71,6 +75,51 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         duration = timedelta(seconds=seconds_delta)
         return duration.days > 90
 
+    def get_item_types_in_query(
+        self, routing_context: RoutingContext
+    ) -> list[TraceItemType.ValueType]:
+        """
+        if the in msg has TraceFilter(s) set, iterate through the TraceFilter object and find all the item types
+        mentioned in the entire filter
+
+        If the message meta has an item type, then return the item_type there
+
+        How it can happen:
+            TraceItemTableRequest has `trace_filters` field
+            TimeSeriesRequest has `trace_filters` field
+            GetTraces has a `filters` field
+        """
+        in_msg = routing_context.in_msg
+        in_msg_meta = extract_message_meta(in_msg)
+        item_types = set()
+
+        # Handle TraceItemTableRequest
+        if isinstance(in_msg, TraceItemTableRequest):
+            if hasattr(in_msg, "trace_filters") and in_msg.trace_filters:
+                for trace_filter in in_msg.trace_filters:
+                    item_types.add(trace_filter.item_type)
+
+        # Handle TimeSeriesRequest
+        elif isinstance(in_msg, TimeSeriesRequest):
+            if hasattr(in_msg, "trace_filters") and in_msg.trace_filters:
+                for trace_filter in in_msg.trace_filters:
+                    item_types.add(trace_filter.item_type)
+
+        # Handle GetTracesRequest
+        elif isinstance(in_msg, GetTracesRequest):
+            if hasattr(in_msg, "filters") and in_msg.filters:
+                for filter_item in in_msg.filters:
+                    item_types.add(filter_item.item_type)
+
+        # Fallback to meta.trace_item_type
+        if (
+            not item_types
+            and in_msg_meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+        ):
+            item_types.add(in_msg_meta.trace_item_type)
+
+        return list(item_types)
+
     def get_ingested_items_for_timerange(self, routing_context: RoutingContext) -> int:
         in_msg_meta = extract_message_meta(routing_context.in_msg)
         entity = Entity(
@@ -98,8 +147,19 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                     in_msg_meta.end_timestamp.seconds,
                 ),
                 f.equals(column("outcome"), Outcome.ACCEPTED),
-                f.equals(
-                    column("category"), ITEM_TYPE_TO_OUTCOME_CATEGORY[in_msg_meta.trace_item_type]
+                in_cond(
+                    column("category"),
+                    f.array(
+                        *[
+                            ITEM_TYPE_TO_OUTCOME_CATEGORY.get(
+                                trace_item_type,
+                                ITEM_TYPE_TO_OUTCOME_CATEGORY[
+                                    TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+                                ],
+                            )
+                            for trace_item_type in self.get_item_types_in_query(routing_context)
+                        ]
+                    ),
                 ),
             ),
         )
@@ -164,6 +224,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         if (
             state.get_int_config("enable_long_term_retention_downsampling", 0)
             and older_than_thirty_days
+            and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION
         ):
             routing_decision.tier = Tier.TIER_8
 
@@ -179,8 +240,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             # for GetTraces, there is no type specified so we assume spans because
             # that is necessary for traces anyways
             # if the type is specified and we don't know its outcome, route to Tier_1
-            in_msg_meta.trace_item_type
-            not in ITEM_TYPE_TO_OUTCOME_CATEGORY
+            in_msg_meta.trace_item_type not in ITEM_TYPE_TO_OUTCOME_CATEGORY
         ):
             return
 

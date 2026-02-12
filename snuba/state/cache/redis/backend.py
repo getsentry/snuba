@@ -2,10 +2,10 @@ import logging
 from typing import Callable, Optional, Type
 
 import sentry_sdk
-
 from redis import ResponseError
 from redis.exceptions import ConnectionError, ReadOnlyError
 from redis.exceptions import TimeoutError as RedisTimeoutError
+
 from snuba import environment, settings
 from snuba.redis import RedisClientType
 from snuba.state import get_config
@@ -25,7 +25,6 @@ SIMPLE_READTHROUGH = 3
 
 
 class FuzzyMatchException:
-
     def __init__(self, exception: Type[Exception], message: str | None = None):
         self._exception = exception
         self._message = message

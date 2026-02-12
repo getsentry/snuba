@@ -1,6 +1,6 @@
 import json
 import traceback
-from typing import Any, Callable, Dict, Generator, List, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, Generator, List, Sequence, Set, Tuple, Union
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
@@ -73,7 +73,9 @@ def create_databases() -> None:
 
 def pytest_collection_modifyitems(items: Sequence[Any]) -> None:
     for item in items:
-        if item.get_closest_marker("clickhouse_db"):
+        if item.get_closest_marker("eap"):
+            item.fixturenames.append("eap")
+        elif item.get_closest_marker("clickhouse_db"):
             item.fixturenames.append("clickhouse_db")
         elif item.get_closest_marker("custom_clickhouse_db"):
             item.fixturenames.append("custom_clickhouse_db")
@@ -176,9 +178,9 @@ def _build_migrations_cache() -> None:
                 # tables are created before materialized views that depend on them
                 all_tables = mv_tables + non_mv_tables
                 for table_name, create_table_query in all_tables:
-                    MIGRATIONS_CACHE.setdefault((cluster, node), {})[
-                        table_name
-                    ] = create_table_query
+                    MIGRATIONS_CACHE.setdefault((cluster, node), {})[table_name] = (
+                        create_table_query
+                    )
 
 
 def _clear_db() -> None:
@@ -204,6 +206,27 @@ def _clear_db() -> None:
                 connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
 
 
+def _drop_tables() -> None:
+    clusters: Set[ClickhouseCluster] = set()
+    for storage_key in get_all_storage_keys():
+        storage = get_storage(storage_key)
+        cluster = storage.get_cluster()
+        clusters.add(cluster)
+
+    for cluster in clusters:
+        database_name = cluster.get_database()
+
+        nodes = [
+            *cluster.get_local_nodes(),
+            *cluster.get_distributed_nodes(),
+        ]
+
+        for node in nodes:
+            connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+            connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
+            connection.execute(f"CREATE DATABASE {database_name};")
+
+
 @pytest.fixture
 def custom_clickhouse_db(
     request: pytest.FixtureRequest,
@@ -214,9 +237,10 @@ def custom_clickhouse_db(
             "Need to use custom_clickhouse_db marker if custom_clickhouse_db fixture is used"
         )
     try:
+        _drop_tables()
         yield
     finally:
-        _clear_db()
+        _drop_tables()
 
 
 @pytest.fixture
@@ -250,6 +274,31 @@ def clickhouse_db(
                     )
                     connection.execute(create_table_query)
                 applied_nodes.add((node.host_name, node.port, table_name))
+        yield
+    finally:
+        _clear_db()
+
+
+@pytest.fixture
+def eap(request: pytest.FixtureRequest, create_databases: None) -> Generator[None, None, None]:
+    """
+    A custom ClickHouse fixture that only runs EAP (Events Analytics Platform) migrations and Outcomes migrations (for storage routing).
+    This is much faster than running all migrations for tests that only need EAP tables.
+
+    Use this with @pytest.mark.eap marker.
+    """
+    if not request.node.get_closest_marker("eap"):
+        pytest.fail("Need to use eap marker if eap fixture is used")
+
+    from snuba.migrations.groups import MigrationGroup
+    from snuba.migrations.runner import Runner
+
+    try:
+        reset_dataset_factory()
+        # Run only SYSTEM migrations (required for migrations table) and EAP migrations
+        runner = Runner()
+        runner.run_all(group=MigrationGroup.EVENTS_ANALYTICS_PLATFORM, force=True)
+        runner.run_all(group=MigrationGroup.OUTCOMES, force=True)
         yield
     finally:
         _clear_db()

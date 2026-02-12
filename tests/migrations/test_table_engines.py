@@ -100,9 +100,7 @@ def test_merge_table(
 
 dist_test_cases = [
     pytest.param(
-        table_engines.Distributed(
-            local_table_name="test_table_local", sharding_key="event_id"
-        ),
+        table_engines.Distributed(local_table_name="test_table_local", sharding_key="event_id"),
         "Distributed(`cluster_1`, default, test_table_local, event_id)",
         id="Disributed",
     )

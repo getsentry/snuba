@@ -96,18 +96,14 @@ join_clause_with_groupby = JoinClause(
 )
 
 
-def time_expression(
-    table_alias: str | None = None, to_interval_seconds: int = 60
-) -> FunctionCall:
+def time_expression(table_alias: str | None = None, to_interval_seconds: int = 60) -> FunctionCall:
     alias_prefix = f"{table_alias}." if table_alias else ""
     return FunctionCall(
         f"{alias_prefix}time",
         "toStartOfInterval",
         (
             Column(None, table_alias, "timestamp"),
-            FunctionCall(
-                None, "toIntervalSecond", (Literal(None, to_interval_seconds),)
-            ),
+            FunctionCall(None, "toIntervalSecond", (Literal(None, to_interval_seconds),)),
             Literal(None, "Universal"),
         ),
     )
@@ -189,9 +185,7 @@ test_cases = [
                             in_cond(column("project_id", "d0"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id", "d0"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", "d0"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", "d0"), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", "d0"), literal(60)),
@@ -211,13 +205,9 @@ test_cases = [
                         ),
                         and_cond(
                             and_cond(
-                                in_cond(
-                                    column("project_id", "d1"), f.tuple(literal(11))
-                                ),
+                                in_cond(column("project_id", "d1"), f.tuple(literal(11))),
                                 and_cond(
-                                    in_cond(
-                                        column("org_id", "d1"), f.tuple(literal(1))
-                                    ),
+                                    in_cond(column("org_id", "d1"), f.tuple(literal(1))),
                                     f.equals(
                                         column("use_case_id", "d1"),
                                         literal("transactions"),
@@ -324,9 +314,7 @@ test_cases = [
                             in_cond(column("project_id", "d0"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id", "d0"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", "d0"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", "d0"), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", "d0"), literal(60)),
@@ -346,13 +334,9 @@ test_cases = [
                         ),
                         and_cond(
                             and_cond(
-                                in_cond(
-                                    column("project_id", "d1"), f.tuple(literal(11))
-                                ),
+                                in_cond(column("project_id", "d1"), f.tuple(literal(11))),
                                 and_cond(
-                                    in_cond(
-                                        column("org_id", "d1"), f.tuple(literal(1))
-                                    ),
+                                    in_cond(column("org_id", "d1"), f.tuple(literal(1))),
                                     f.equals(
                                         column("use_case_id", "d1"),
                                         literal("transactions"),
@@ -464,9 +448,7 @@ test_cases = [
                             in_cond(column("project_id", "d0"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id", "d0"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", "d0"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", "d0"), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", "d0"), literal(60)),
@@ -486,13 +468,9 @@ test_cases = [
                         ),
                         and_cond(
                             and_cond(
-                                in_cond(
-                                    column("project_id", "d1"), f.tuple(literal(11))
-                                ),
+                                in_cond(column("project_id", "d1"), f.tuple(literal(11))),
                                 and_cond(
-                                    in_cond(
-                                        column("org_id", "d1"), f.tuple(literal(1))
-                                    ),
+                                    in_cond(column("org_id", "d1"), f.tuple(literal(1))),
                                     f.equals(
                                         column("use_case_id", "d1"),
                                         literal("transactions"),
@@ -609,9 +587,7 @@ test_cases = [
                             in_cond(column("project_id", "d0"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id", "d0"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", "d0"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", "d0"), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", "d0"), literal(60)),
@@ -631,13 +607,9 @@ test_cases = [
                         ),
                         and_cond(
                             and_cond(
-                                in_cond(
-                                    column("project_id", "d1"), f.tuple(literal(11))
-                                ),
+                                in_cond(column("project_id", "d1"), f.tuple(literal(11))),
                                 and_cond(
-                                    in_cond(
-                                        column("org_id", "d1"), f.tuple(literal(1))
-                                    ),
+                                    in_cond(column("org_id", "d1"), f.tuple(literal(1))),
                                     f.equals(
                                         column("use_case_id", "d1"),
                                         literal("transactions"),
@@ -714,12 +686,8 @@ test_cases = [
                         ),
                         keys=[
                             JoinCondition(
-                                left=JoinConditionExpression(
-                                    table_alias="d3", column="d3.time"
-                                ),
-                                right=JoinConditionExpression(
-                                    table_alias="d2", column="d2.time"
-                                ),
+                                left=JoinConditionExpression(table_alias="d3", column="d3.time"),
+                                right=JoinConditionExpression(table_alias="d2", column="d2.time"),
                             )
                         ],
                         join_type=JoinType.INNER,
@@ -731,12 +699,8 @@ test_cases = [
                     ),
                     keys=[
                         JoinCondition(
-                            left=JoinConditionExpression(
-                                table_alias="d2", column="d2.time"
-                            ),
-                            right=JoinConditionExpression(
-                                table_alias="d1", column="d1.time"
-                            ),
+                            left=JoinConditionExpression(table_alias="d2", column="d2.time"),
+                            right=JoinConditionExpression(table_alias="d1", column="d1.time"),
                         )
                     ],
                     join_type=JoinType.INNER,
@@ -748,12 +712,8 @@ test_cases = [
                 ),
                 keys=[
                     JoinCondition(
-                        left=JoinConditionExpression(
-                            table_alias="d1", column="d1.time"
-                        ),
-                        right=JoinConditionExpression(
-                            table_alias="d0", column="d0.time"
-                        ),
+                        left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                        right=JoinConditionExpression(table_alias="d0", column="d0.time"),
                     )
                 ],
                 join_type=JoinType.INNER,
@@ -825,9 +785,7 @@ test_cases = [
                             in_cond(column("project_id", "d0"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id", "d0"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", "d0"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", "d0"), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", "d0"), literal(60)),
@@ -847,13 +805,9 @@ test_cases = [
                         ),
                         and_cond(
                             and_cond(
-                                in_cond(
-                                    column("project_id", "d1"), f.tuple(literal(11))
-                                ),
+                                in_cond(column("project_id", "d1"), f.tuple(literal(11))),
                                 and_cond(
-                                    in_cond(
-                                        column("org_id", "d1"), f.tuple(literal(1))
-                                    ),
+                                    in_cond(column("org_id", "d1"), f.tuple(literal(1))),
                                     f.equals(
                                         column("use_case_id", "d1"),
                                         literal("transactions"),
@@ -877,13 +831,9 @@ test_cases = [
                             ),
                             and_cond(
                                 and_cond(
-                                    in_cond(
-                                        column("project_id", "d2"), f.tuple(literal(11))
-                                    ),
+                                    in_cond(column("project_id", "d2"), f.tuple(literal(11))),
                                     and_cond(
-                                        in_cond(
-                                            column("org_id", "d2"), f.tuple(literal(1))
-                                        ),
+                                        in_cond(column("org_id", "d2"), f.tuple(literal(1))),
                                         f.equals(
                                             column("use_case_id", "d2"),
                                             literal("transactions"),
@@ -927,20 +877,12 @@ test_cases = [
                             ),
                             and_cond(
                                 and_cond(
-                                    f.equals(
-                                        column("metric_id", "d0"), literal(123456)
-                                    ),
-                                    f.equals(
-                                        column("metric_id", "d1"), literal(123456)
-                                    ),
+                                    f.equals(column("metric_id", "d0"), literal(123456)),
+                                    f.equals(column("metric_id", "d1"), literal(123456)),
                                 ),
                                 and_cond(
-                                    f.equals(
-                                        column("metric_id", "d2"), literal(123456)
-                                    ),
-                                    f.equals(
-                                        column("metric_id", "d3"), literal(123456)
-                                    ),
+                                    f.equals(column("metric_id", "d2"), literal(123456)),
+                                    f.equals(column("metric_id", "d3"), literal(123456)),
                                 ),
                             ),
                         ),
@@ -1037,9 +979,7 @@ test_cases = [
                             in_cond(column("project_id", "d0"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id", "d0"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", "d0"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", "d0"), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", "d0"), literal(60)),
@@ -1059,13 +999,9 @@ test_cases = [
                         ),
                         and_cond(
                             and_cond(
-                                in_cond(
-                                    column("project_id", "d1"), f.tuple(literal(11))
-                                ),
+                                in_cond(column("project_id", "d1"), f.tuple(literal(11))),
                                 and_cond(
-                                    in_cond(
-                                        column("org_id", "d1"), f.tuple(literal(1))
-                                    ),
+                                    in_cond(column("org_id", "d1"), f.tuple(literal(1))),
                                     f.equals(
                                         column("use_case_id", "d1"),
                                         literal("transactions"),
@@ -1180,9 +1116,7 @@ test_cases = [
                             in_cond(column("project_id", "d0"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id", "d0"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", "d0"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", "d0"), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", "d0"), literal(60)),
@@ -1202,13 +1136,9 @@ test_cases = [
                         ),
                         and_cond(
                             and_cond(
-                                in_cond(
-                                    column("project_id", "d1"), f.tuple(literal(11))
-                                ),
+                                in_cond(column("project_id", "d1"), f.tuple(literal(11))),
                                 and_cond(
-                                    in_cond(
-                                        column("org_id", "d1"), f.tuple(literal(1))
-                                    ),
+                                    in_cond(column("org_id", "d1"), f.tuple(literal(1))),
                                     f.equals(
                                         column("use_case_id", "d1"),
                                         literal("transactions"),
@@ -1323,9 +1253,7 @@ test_cases = [
                             in_cond(column("project_id", "d0"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id", "d0"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", "d0"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", "d0"), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", "d0"), literal(60)),
@@ -1345,13 +1273,9 @@ test_cases = [
                         ),
                         and_cond(
                             and_cond(
-                                in_cond(
-                                    column("project_id", "d1"), f.tuple(literal(11))
-                                ),
+                                in_cond(column("project_id", "d1"), f.tuple(literal(11))),
                                 and_cond(
-                                    in_cond(
-                                        column("org_id", "d1"), f.tuple(literal(1))
-                                    ),
+                                    in_cond(column("org_id", "d1"), f.tuple(literal(1))),
                                     f.equals(
                                         column("use_case_id", "d1"),
                                         literal("transactions"),
@@ -1459,9 +1383,7 @@ test_cases = [
                             in_cond(column("project_id", "d0"), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id", "d0"), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", "d0"), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", "d0"), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", "d0"), literal(60)),
@@ -1481,13 +1403,9 @@ test_cases = [
                         ),
                         and_cond(
                             and_cond(
-                                in_cond(
-                                    column("project_id", "d1"), f.tuple(literal(11))
-                                ),
+                                in_cond(column("project_id", "d1"), f.tuple(literal(11))),
                                 and_cond(
-                                    in_cond(
-                                        column("org_id", "d1"), f.tuple(literal(1))
-                                    ),
+                                    in_cond(column("org_id", "d1"), f.tuple(literal(1))),
                                     f.equals(
                                         column("use_case_id", "d1"),
                                         literal("transactions"),
@@ -1551,12 +1469,8 @@ test_cases = [
                 SelectedExpression(
                     "aggregate_value", f.sum(column("value"), alias="aggregate_value")
                 ),
-                SelectedExpression(
-                    "transaction", column("tags_raw[111111]", None, "transaction")
-                ),
-                SelectedExpression(
-                    "status_code", column("tags_raw[222222]", None, "status_code")
-                ),
+                SelectedExpression("transaction", column("tags_raw[111111]", None, "transaction")),
+                SelectedExpression("status_code", column("tags_raw[222222]", None, "status_code")),
                 SelectedExpression(
                     "time",
                     f.toStartOfInterval(
@@ -1585,9 +1499,7 @@ test_cases = [
                             in_cond(column("project_id", None), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id", None), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", None), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", None), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", None), literal(60)),
@@ -1689,9 +1601,7 @@ test_cases = [
                             in_cond(column("project_id", None), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id", None), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", None), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", None), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", None), literal(60)),
@@ -1771,9 +1681,7 @@ test_cases = [
                             in_cond(column("project_id", None), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id", None), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", None), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", None), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", None), literal(60)),
@@ -1835,9 +1743,7 @@ test_cases = [
                         (column("value"),),
                     ),
                 ),
-                SelectedExpression(
-                    "transaction", column("tags_raw[111111]", None, "transaction")
-                ),
+                SelectedExpression("transaction", column("tags_raw[111111]", None, "transaction")),
                 SelectedExpression(
                     "time",
                     time_expression(None),
@@ -1861,9 +1767,7 @@ test_cases = [
                             in_cond(column("project_id", None), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id", None), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", None), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", None), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", None), literal(60)),
@@ -1934,12 +1838,8 @@ test_cases = [
                         "aggregate_value", f.quantiles(literal(0.5)), (column("value"),)
                     ),
                 ),
-                SelectedExpression(
-                    "transaction", column("tags_raw[111111]", None, "transaction")
-                ),
-                SelectedExpression(
-                    "status_code", column("tags_raw[222222]", None, "status_code")
-                ),
+                SelectedExpression("transaction", column("tags_raw[111111]", None, "transaction")),
+                SelectedExpression("status_code", column("tags_raw[222222]", None, "status_code")),
                 SelectedExpression(
                     "time",
                     time_expression(None),
@@ -1963,9 +1863,7 @@ test_cases = [
                             in_cond(column("project_id", None), f.tuple(literal(11))),
                             and_cond(
                                 in_cond(column("org_id", None), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", None), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", None), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", None), literal(60)),
@@ -2062,9 +1960,7 @@ test_cases = [
                             in_cond(column("project_id", None), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id", None), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", None), literal("sessions")
-                                ),
+                                f.equals(column("use_case_id", None), literal("sessions")),
                             ),
                         ),
                         f.equals(column("granularity", None), literal(60)),
@@ -2126,9 +2022,7 @@ test_cases = [
                 SelectedExpression(
                     "aggregate_value", f.max(column("value"), alias="aggregate_value")
                 ),
-                SelectedExpression(
-                    "transaction", column("tags_raw[141516]", None, "transaction")
-                ),
+                SelectedExpression("transaction", column("tags_raw[141516]", None, "transaction")),
                 SelectedExpression(
                     "time",
                     f.toStartOfInterval(
@@ -2157,9 +2051,7 @@ test_cases = [
                             in_cond(column("project_id", None), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id", None), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", None), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", None), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", None), literal(60)),
@@ -2228,9 +2120,7 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
-                    f.apdex(
-                        f.sum(column("value")), literal(500.0), alias="aggregate_value"
-                    ),
+                    f.apdex(f.sum(column("value")), literal(500.0), alias="aggregate_value"),
                 ),
                 SelectedExpression(
                     "time",
@@ -2255,9 +2145,7 @@ test_cases = [
                             in_cond(column("project_id", None), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id", None), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", None), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", None), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", None), literal(60)),
@@ -2348,9 +2236,7 @@ test_cases = [
                             in_cond(column("project_id", None), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id", None), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", None), literal("transactions")
-                                ),
+                                f.equals(column("use_case_id", None), literal("transactions")),
                             ),
                         ),
                         f.equals(column("granularity", None), literal(3600)),
@@ -2421,9 +2307,7 @@ test_cases = [
                             in_cond(column("project_id", None), f.tuple(literal(1))),
                             and_cond(
                                 in_cond(column("org_id", None), f.tuple(literal(1))),
-                                f.equals(
-                                    column("use_case_id", None), literal("custom")
-                                ),
+                                f.equals(column("use_case_id", None), literal("custom")),
                             ),
                         ),
                         f.equals(column("granularity", None), literal(60)),

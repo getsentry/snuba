@@ -111,9 +111,7 @@ def clickhouse_groups_node(
 ) -> IndividualNode[Table]:
     return build_clickhouse_node(
         "gr",
-        Table(
-            "groupedmessage_local", GROUPS_SCHEMA, storage_key=StorageKey("dontmatter")
-        ),
+        Table("groupedmessage_local", GROUPS_SCHEMA, storage_key=StorageKey("dontmatter")),
         selected_columns,
         condition,
     )
@@ -125,9 +123,7 @@ def clickhouse_assignees_node(
 ) -> IndividualNode[Table]:
     return build_clickhouse_node(
         "as",
-        Table(
-            "groupassignee_local", GROUPS_ASSIGNEE, storage_key=StorageKey("dontmatter")
-        ),
+        Table("groupassignee_local", GROUPS_ASSIGNEE, storage_key=StorageKey("dontmatter")),
         selected_columns,
         condition,
     )

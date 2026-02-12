@@ -55,9 +55,7 @@ test_data = [
                         "alias",
                         "arrayConcat",
                         tuple(
-                            FunctionCall(
-                                None, "mapKeys", (Column(None, None, f"attr_str_{i}"),)
-                            )
+                            FunctionCall(None, "mapKeys", (Column(None, None, f"attr_str_{i}"),))
                             for i in range(5)
                         ),
                     ),
@@ -91,9 +89,7 @@ test_data = [
             selected_columns=[
                 SelectedExpression(
                     "values",
-                    FunctionCall(
-                        "alias", "mapValues", (Column(None, None, "attr_str"),)
-                    ),
+                    FunctionCall("alias", "mapValues", (Column(None, None, "attr_str"),)),
                 ),
                 SelectedExpression(
                     "unrelated",
@@ -153,15 +149,9 @@ test_data = [
             ],
             condition=binary_condition(
                 "or",
-                f.equals(
-                    Column(None, None, "unrelated1"), Column(None, None, "unrelated2")
-                ),
+                f.equals(Column(None, None, "unrelated1"), Column(None, None, "unrelated2")),
                 f.greaterThan(
-                    f.length(
-                        FunctionCall(
-                            "alias", "mapValues", (Column(None, None, "attr_str"),)
-                        )
-                    ),
+                    f.length(FunctionCall("alias", "mapValues", (Column(None, None, "attr_str"),))),
                     literal(2),
                 ),
             ),
@@ -176,9 +166,7 @@ test_data = [
             ],
             condition=binary_condition(
                 "or",
-                f.equals(
-                    Column(None, None, "unrelated1"), Column(None, None, "unrelated2")
-                ),
+                f.equals(Column(None, None, "unrelated1"), Column(None, None, "unrelated2")),
                 f.greaterThan(
                     f.length(
                         FunctionCall(

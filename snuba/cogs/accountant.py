@@ -18,17 +18,13 @@ def _accumulator(create: bool = False) -> UsageAccumulator | None:
     global accumulator
     if accumulator is None and create:
         producer = KafkaProducer(
-            build_kafka_producer_configuration(
-                StreamTopic.COGS_SHARED_RESOURCES_USAGE, None
-            )
+            build_kafka_producer_configuration(StreamTopic.COGS_SHARED_RESOURCES_USAGE, None)
         )
         accumulator = UsageAccumulator(producer=producer)
     return accumulator
 
 
-def record_cogs(
-    resource_id: str, app_feature: str, amount: int, usage_type: UsageUnit
-) -> None:
+def record_cogs(resource_id: str, app_feature: str, amount: int, usage_type: UsageUnit) -> None:
     """
     Spins up an instance (if it does not exist) of UsageAccumulator and records
     cogs data to the configured shared resources usage topic.

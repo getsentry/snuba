@@ -32,9 +32,7 @@ class TestState:
 
         state.set_configs({"bar": "quux"}, force=True)
         all_configs = state.get_all_configs()
-        assert all(
-            all_configs[k] == v for k, v in [("foo", 1), ("bar", "quux"), ("baz", 3)]
-        )
+        assert all(all_configs[k] == v for k, v in [("foo", 1), ("bar", "quux"), ("baz", 3)])
 
     @pytest.mark.redis_db
     def test_config_desc(self) -> None:
@@ -129,7 +127,10 @@ class TestState:
 
 
 def test_safe_dumps() -> None:
-    assert safe_dumps(ChainMap({"a": 1}, {"b": 2}), sort_keys=True,) == safe_dumps(
+    assert safe_dumps(
+        ChainMap({"a": 1}, {"b": 2}),
+        sort_keys=True,
+    ) == safe_dumps(
         {"a": 1, "b": 2},
         sort_keys=True,
     )

@@ -45,9 +45,7 @@ def _create_pipe_input_from_snql(snql_query: str) -> QueryPipelineData[Request]:
     )
 
 
-def test_basic(
-    mock_storage: ReadableTableStorage, mock_entity: PluggableEntity
-) -> None:
+def test_basic(mock_storage: ReadableTableStorage, mock_entity: PluggableEntity) -> None:
     pipe_input = _create_pipe_input_from_snql(
         f"MATCH ({mock_entity.entity_key.value}) "
         "SELECT timestamp "

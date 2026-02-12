@@ -10,11 +10,11 @@ from unittest import mock
 import pytest
 import rapidjson
 import sentry_sdk
-from sentry_redis_tools.failover_redis import FailoverRedis
-
 from redis import RedisError, ResponseError
 from redis.exceptions import ReadOnlyError
 from redis.exceptions import TimeoutError as RedisTimeoutError
+from sentry_redis_tools.failover_redis import FailoverRedis
+
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state import set_config
 from snuba.state.cache.abstract import Cache

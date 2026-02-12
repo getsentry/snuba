@@ -396,7 +396,6 @@ class ErrorEvent:
 
 @pytest.mark.redis_db
 class TestErrorsProcessor:
-
     processor = ErrorsProcessor()
 
     def __get_timestamps(self) -> tuple[datetime, datetime]:

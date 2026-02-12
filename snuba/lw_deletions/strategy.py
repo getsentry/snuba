@@ -95,11 +95,10 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 self._execute_delete(conditions)
             else:
                 self.__metrics.increment("delete_skipped")
-        except TooManyOngoingMutationsError as err:
+        except TooManyOngoingMutationsError:
             # backpressure is applied while we wait for the
             # currently ongoing mutations to finish
             self.__metrics.increment("too_many_ongoing_mutations")
-            logger.warning(str(err), exc_info=True)
             raise MessageRejected
         except QueryException as err:
             cause = err.__cause__

@@ -9,16 +9,12 @@ from snuba.query.expressions import Column, FunctionCall
 from snuba.query.logical import Query
 
 
-def test_translate_simple(
-    mock_storage: Storage, mock_query_storage: QueryStorage
-) -> None:
+def test_translate_simple(mock_storage: Storage, mock_query_storage: QueryStorage) -> None:
     input_query = Query(
         mock_query_storage,
         selected_columns=[
             SelectedExpression("trace_id", Column("_snuba_trace_id", None, "trace_id")),
-            SelectedExpression(
-                "duration", Column("_snuba_duration_ms", None, "duration_ms")
-            ),
+            SelectedExpression("duration", Column("_snuba_duration_ms", None, "duration_ms")),
         ],
         granularity=None,
         condition=None,
@@ -29,9 +25,7 @@ def test_translate_simple(
     assert isinstance(storage_query, ClickhouseQuery)
 
 
-def test_translate_composite(
-    mock_storage: Storage, mock_query_storage: QueryStorage
-) -> None:
+def test_translate_composite(mock_storage: Storage, mock_query_storage: QueryStorage) -> None:
     input_query = CompositeQuery(
         selected_columns=[
             SelectedExpression(
@@ -46,9 +40,7 @@ def test_translate_composite(
         from_clause=Query(
             mock_query_storage,
             selected_columns=[
-                SelectedExpression(
-                    "trace_id", Column("_snuba_trace_id", None, "trace_id")
-                ),
+                SelectedExpression("trace_id", Column("_snuba_trace_id", None, "trace_id")),
                 SelectedExpression(
                     "duration_ms", Column("_snuba_duration_ms", None, "duration_ms")
                 ),

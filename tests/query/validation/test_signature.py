@@ -2,9 +2,8 @@ from typing import Sequence
 
 import pytest
 
-from snuba.clickhouse.columns import ColumnSet, DateTime
+from snuba.clickhouse.columns import ColumnSet, DateTime, String
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
-from snuba.clickhouse.columns import String
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column as ColumnExpr
@@ -113,9 +112,7 @@ test_cases = [
 ]
 
 
-@pytest.mark.parametrize(
-    "expressions, expected_types, extra_param, should_raise", test_cases
-)
+@pytest.mark.parametrize("expressions, expected_types, extra_param, should_raise", test_cases)
 def test_like_validator(
     expressions: Sequence[Expression],
     expected_types: Sequence[ParamType],

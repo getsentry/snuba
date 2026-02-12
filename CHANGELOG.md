@@ -1,5 +1,49 @@
 # Changelog
 
+## 26.1.0
+
+### New Features ✨
+
+- (ast) Add ArbitrarySQL AST node to allow for subquery optimization by @volokluev in [#7636](https://github.com/getsentry/snuba/pull/7636)
+- (capman) Add detailed observability to allocation policy span data by @volokluev in [#7638](https://github.com/getsentry/snuba/pull/7638)
+- (consumers) Send logs for tracing events at or above INFO by @lcian in [#7250](https://github.com/getsentry/snuba/pull/7250)
+- (eap) Gdpr export endpoint by @xurui-c in [#7586](https://github.com/getsentry/snuba/pull/7586)
+- (health) Allow clickhouse check bypass by @onewland in [#7600](https://github.com/getsentry/snuba/pull/7600)
+- (outcomes) Add 'ignored' reason to client discard reasons list by @Lms24 in [#7635](https://github.com/getsentry/snuba/pull/7635)
+- Add metric that tracks "partitions left to optimize" by @kylemumma in [#7620](https://github.com/getsentry/snuba/pull/7620)
+
+### Build / dependencies / internal 🔧
+
+#### Deps
+
+- Update rdkafka to 0.38 and librdkafka to 2.10.0 by @Dav1dde in [#7630](https://github.com/getsentry/snuba/pull/7630)
+- Bump docker/setup-buildx-action from 3.11.1 to 3.12.0 by @dependabot in [#7608](https://github.com/getsentry/snuba/pull/7608)
+- Bump js-yaml from 3.14.1 to 3.14.2 in /snuba/admin by @dependabot in [#7544](https://github.com/getsentry/snuba/pull/7544)
+- Bump tracing-subscriber from 0.3.18 to 0.3.20 in /rust_snuba by @dependabot in [#7613](https://github.com/getsentry/snuba/pull/7613)
+- Bump actions/upload-artifact from 5 to 6 by @dependabot in [#7593](https://github.com/getsentry/snuba/pull/7593)
+- Bump actions/download-artifact from 6 to 7 by @dependabot in [#7594](https://github.com/getsentry/snuba/pull/7594)
+- Bump actions/cache from 4 to 5 by @dependabot in [#7595](https://github.com/getsentry/snuba/pull/7595)
+
+#### Other
+
+- (deletes) Make error log a metric instead by @MeredithAnya in [#7627](https://github.com/getsentry/snuba/pull/7627)
+- (gocd) Bump gocd lib version to v2.18.0 by @dmajere in [#7617](https://github.com/getsentry/snuba/pull/7617)
+- (metrics) Don't write the histogram timing metrics by @volokluev in [#7616](https://github.com/getsentry/snuba/pull/7616)
+- Upgrade to action-setup-venv 3.2.0 by @joshuarli in [#7607](https://github.com/getsentry/snuba/pull/7607)
+
+### Other
+
+- imp(deletes):  ongoing mutations check by @onewland in [#7639](https://github.com/getsentry/snuba/pull/7639)
+- prodeng-605: migrate uwsgi to granian by @gi0baro in [#7566](https://github.com/getsentry/snuba/pull/7566)
+- Kill Veneur metrics for good by @volokluev in [#7637](https://github.com/getsentry/snuba/pull/7637)
+- remove documentation from the rust test image by @volokluev in [#7633](https://github.com/getsentry/snuba/pull/7633)
+- upgrade datadog client by @volokluev in [#7554](https://github.com/getsentry/snuba/pull/7554)
+- debug(deletes): log out data so we can inspect allowlist not working by @onewland in [#7626](https://github.com/getsentry/snuba/pull/7626)
+- cleanup(ci): remove useless test and useless function by @volokluev in [#7618](https://github.com/getsentry/snuba/pull/7618)
+- cleanup(gocd): remove pipeline that deploys everything by @onewland in [#7587](https://github.com/getsentry/snuba/pull/7587)
+- deploy: add eap-items LW delete consumer to deploy list in non-STs by @onewland in [#7612](https://github.com/getsentry/snuba/pull/7612)
+- meta: Bump new development version in [ddc2e223](https://github.com/getsentry/snuba/commit/ddc2e223eaec1bb13a347a6949127bd5d09c76ac)
+
 ## 25.12.1
 
 ### New Features ✨

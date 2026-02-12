@@ -49,9 +49,9 @@ class MandatoryConditionEnforcer(ClickhouseQueryProcessor):
 
         missing_ids = {checker.get_id() for checker in missing_checkers}
         if get_config("mandatory_condition_enforce", 0):
-            assert (
-                not missing_checkers
-            ), f"Missing mandatory columns in query. Missing {missing_ids}"
+            assert not missing_checkers, (
+                f"Missing mandatory columns in query. Missing {missing_ids}"
+            )
         else:
             if missing_checkers:
                 logger.error(

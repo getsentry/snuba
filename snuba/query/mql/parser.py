@@ -230,9 +230,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                                 else [new_condition]
                             )
                         if groupby:
-                            param.groupby = (
-                                param.groupby + groupby if param.groupby else groupby
-                            )
+                            param.groupby = param.groupby + groupby if param.groupby else groupby
                     else:
                         raise InvalidQueryException("Could not parse formula")
                     return param
@@ -247,9 +245,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                         else [new_condition]
                     )
                 if groupby:
-                    target.groupby = (
-                        target.groupby + groupby if target.groupby else groupby
-                    )
+                    target.groupby = target.groupby + groupby if target.groupby else groupby
         return target
 
     def _filter(self, children: Sequence[Any], operator: str) -> FunctionCall:
@@ -273,9 +269,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_filter_factor(
         self,
         node: Node,
-        children: Tuple[
-            Sequence[str | Sequence[str] | FilterFactorValue] | FunctionCall, Any
-        ],
+        children: Tuple[Sequence[str | Sequence[str] | FilterFactorValue] | FunctionCall, Any],
     ) -> FunctionCall:
         factor, *_ = children
         if isinstance(factor, FunctionCall):
@@ -287,9 +281,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         filter_factor_value: FilterFactorValue
 
         condition_op, lhs, _, _, _, filter_factor_value = factor  # type: ignore
-        condition_op_value = (
-            "!" if len(condition_op) == 1 and condition_op[0] == "!" else ""
-        )
+        condition_op_value = "!" if len(condition_op) == 1 and condition_op[0] == "!" else ""
 
         contains_wildcard = filter_factor_value.contains_wildcard
         rhs = filter_factor_value.value
@@ -351,9 +343,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[
-                InitialParseResult,
-            ],
+            Tuple[InitialParseResult,],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
@@ -415,9 +405,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         rhs = f"{text_before_wildcard}%"
         return FilterFactorValue(rhs, True)
 
-    def visit_quoted_string_filter(
-        self, node: Node, children: Sequence[Any]
-    ) -> FilterFactorValue:
+    def visit_quoted_string_filter(self, node: Node, children: Sequence[Any]) -> FilterFactorValue:
         text = str(node.text[1:-1])
         match = text.replace('\\"', '"')
         return FilterFactorValue(match, False)
@@ -436,21 +424,15 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         match = str(node.text[1:-1]).replace('\\"', '"')
         return match
 
-    def visit_string_tuple(
-        self, node: Node, children: Sequence[Any]
-    ) -> FilterFactorValue:
+    def visit_string_tuple(self, node: Node, children: Sequence[Any]) -> FilterFactorValue:
         _, _, first, zero_or_more_others, _, _ = children
-        return FilterFactorValue(
-            [first[0], *(v[0] for _, _, _, v in zero_or_more_others)], False
-        )
+        return FilterFactorValue([first[0], *(v[0] for _, _, _, v in zero_or_more_others)], False)
 
     def visit_group_by_name(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
         return node.text
 
-    def visit_group_by_name_tuple(
-        self, node: Node, children: Sequence[Any]
-    ) -> Sequence[str]:
+    def visit_group_by_name_tuple(self, node: Node, children: Sequence[Any]) -> Sequence[str]:
         _, _, first, zero_or_more_others, _, _ = children
         return [first, *(v for _, _, _, v in zero_or_more_others)]
 
@@ -520,9 +502,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 FunctionCall(
                     None,
                     aggregate_name,
-                    tuple(
-                        Literal(alias=None, value=param) for param in aggregate_params
-                    ),
+                    tuple(Literal(alias=None, value=param) for param in aggregate_params),
                 ),
                 (Column(None, None, "value"),),
             ),
@@ -546,9 +526,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         arbitrary_function_name, zero_or_one = children
         _, expr, params, *_ = zero_or_one
         _, target, _ = expr
-        arbitrary_function_params = [
-            Literal(alias=None, value=param[-1]) for param in params
-        ]
+        arbitrary_function_params = [Literal(alias=None, value=param[-1]) for param in params]
         assert isinstance(target.expression, SelectedExpression)
         assert isinstance(target.expression.expression, FunctionCall)
         aggregate = FunctionCall(
@@ -587,9 +565,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 internal_function=FunctionCall(
                     None,
                     curried_arbitrary_function_name,
-                    tuple(
-                        Literal(alias=None, value=param) for param in aggregate_params
-                    ),
+                    tuple(Literal(alias=None, value=param) for param in aggregate_params),
                 ),
                 parameters=(
                     target.expression.expression,
@@ -600,9 +576,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         target.expression = curried_arbitrary_function
         return target
 
-    def visit_inner_filter(
-        self, node: Node, children: Sequence[Any]
-    ) -> InitialParseResult:
+    def visit_inner_filter(self, node: Node, children: Sequence[Any]) -> InitialParseResult:
         """
         Given a metric, set its children filters and groupbys, then return a Timeseries.
         """
@@ -657,9 +631,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         assert isinstance(node.text, str)
         return node.text
 
-    def visit_curried_arbitrary_function_name(
-        self, node: Node, children: Sequence[Any]
-    ) -> str:
+    def visit_curried_arbitrary_function_name(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
         return node.text
 
@@ -669,28 +641,20 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self.alias_count[alias] = suffix
         return f"{alias}{suffix}"
 
-    def visit_quoted_mri(
-        self, node: Node, children: Sequence[Any]
-    ) -> InitialParseResult:
+    def visit_quoted_mri(self, node: Node, children: Sequence[Any]) -> InitialParseResult:
         assert isinstance(node.text, str)
         mri = str(node.text[1:-1])
         return InitialParseResult(mri=mri, table_alias=self._generate_table_alias(mri))
 
-    def visit_unquoted_mri(
-        self, node: Node, children: Sequence[Any]
-    ) -> InitialParseResult:
+    def visit_unquoted_mri(self, node: Node, children: Sequence[Any]) -> InitialParseResult:
         assert isinstance(node.text, str)
         mri = str(node.text)
         return InitialParseResult(mri=mri, table_alias=self._generate_table_alias(mri))
 
-    def visit_quoted_public_name(
-        self, node: Node, children: Sequence[Any]
-    ) -> InitialParseResult:
+    def visit_quoted_public_name(self, node: Node, children: Sequence[Any]) -> InitialParseResult:
         raise ParsingException("MQL endpoint only supports MRIs")
 
-    def visit_unquoted_public_name(
-        self, node: Node, children: Sequence[Any]
-    ) -> InitialParseResult:
+    def visit_unquoted_public_name(self, node: Node, children: Sequence[Any]) -> InitialParseResult:
         raise ParsingException("MQL endpoint only supports MRIs")
 
     def visit_identifier(self, node: Node, children: Sequence[Any]) -> str:
@@ -737,9 +701,7 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> EntityQuery:
             idx = e.column()
             prefix = line[max(0, idx - 3) : idx]
             suffix = line[idx : (idx + 10)]
-            raise ParsingException(
-                f"Parsing error on line {e.line()} at '{prefix}{suffix}'"
-            )
+            raise ParsingException(f"Parsing error on line {e.line()} at '{prefix}{suffix}'")
         except Exception as e:
             message = str(e)
             if "\n" in message:
@@ -747,9 +709,7 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> EntityQuery:
             raise ParsingException(message)
 
         if not parsed.expression and not parsed.formula:
-            raise ParsingException(
-                "No aggregate/expression or formula specified in MQL query"
-            )
+            raise ParsingException("No aggregate/expression or formula specified in MQL query")
 
         if parsed.formula:
             query = convert_formula_to_query(parsed, dataset)
@@ -801,9 +761,7 @@ def build_formula_query_from_clause(
     for node in join_nodes:
         if node.groupby is not None:
             if node.groupby != groupbys:
-                raise InvalidQueryException(
-                    "All terms in a formula must have the same groupby"
-                )
+                raise InvalidQueryException("All terms in a formula must have the same groupby")
 
     entity_keys = [select_entity(node.mri or "", dataset) for node in join_nodes]
     if len(entity_keys) == 1:
@@ -812,9 +770,7 @@ def build_formula_query_from_clause(
         entity_key = entity_keys.pop()
         return (
             LogicalQuery(
-                from_clause=QueryEntity(
-                    entity_key, get_entity(entity_key).get_data_model()
-                )
+                from_clause=QueryEntity(entity_key, get_entity(entity_key).get_data_model())
             ),
             join_nodes,
         )
@@ -904,23 +860,17 @@ def convert_formula_to_query(
             case InitialParseResult(
                 expression=SelectedExpression(
                     expression=FunctionCall(parameters=(Column() as col,))
-                    | CurriedFunctionCall(
-                        parameters=(Column() as col,)
-                    ) as aggregate_function
+                    | CurriedFunctionCall(parameters=(Column() as col,)) as aggregate_function
                 )
             ):
                 return replace(
                     aggregate_function,
-                    parameters=(
-                        replace(col, table_name=alias_wrap(param.table_alias)),
-                    ),
+                    parameters=(replace(col, table_name=alias_wrap(param.table_alias)),),
                     alias=None,
                 )
             case InitialParseResult(
                 expression=SelectedExpression(
-                    expression=FunctionCall(
-                        function_name=function_name, parameters=parameters
-                    ),
+                    expression=FunctionCall(function_name=function_name, parameters=parameters),
                 ) as selected_expression
             ):
                 return FunctionCall(
@@ -931,9 +881,7 @@ def convert_formula_to_query(
                             extract_expression(
                                 replace(
                                     param,
-                                    expression=replace(
-                                        selected_expression, expression=parameter
-                                    ),
+                                    expression=replace(selected_expression, expression=parameter),
                                 )
                             )
                             if isinstance(parameter, FunctionCall)
@@ -952,9 +900,7 @@ def convert_formula_to_query(
                     tuple(extract_expression(p) for p in parameters or []),
                 )
             case InitialParseResult():
-                raise InvalidQueryException(
-                    "Could not build selected expression for formula"
-                )
+                raise InvalidQueryException("Could not build selected expression for formula")
             case _:
                 return Literal(None, param)
 
@@ -1044,9 +990,7 @@ def convert_formula_to_query(
     return query
 
 
-def convert_timeseries_to_query(
-    parsed: InitialParseResult, dataset: Dataset
-) -> LogicalQuery:
+def convert_timeseries_to_query(parsed: InitialParseResult, dataset: Dataset) -> LogicalQuery:
     if parsed.expression is None:
         raise InvalidQueryException("Parsed expression has no expression specified")
 
@@ -1074,9 +1018,7 @@ def convert_timeseries_to_query(
     entity_key = select_entity(metric_value, dataset)
 
     query = LogicalQuery(
-        from_clause=QueryEntity(
-            key=entity_key, schema=get_entity(entity_key).get_data_model()
-        ),
+        from_clause=QueryEntity(key=entity_key, schema=get_entity(entity_key).get_data_model()),
         selected_columns=selected_columns,
         condition=final_conditions,
         groupby=groupby,
@@ -1133,9 +1075,7 @@ def populate_query_from_mql_context(
             query.set_ast_orderby([orderby])
 
         if selected_time:
-            query.set_ast_selected_columns(
-                list(query.get_selected_columns()) + [selected_time]
-            )
+            query.set_ast_selected_columns(list(query.get_selected_columns()) + [selected_time])
             groupby = query.get_groupby()
             if groupby:
                 query.set_ast_groupby(list(groupby) + [selected_time.expression])
@@ -1156,9 +1096,7 @@ def populate_query_from_mql_context(
                 ):
                     join_clause.keys.append(
                         JoinCondition(
-                            left=JoinConditionExpression(
-                                table_alias=left, column=f"{left}.time"
-                            ),
+                            left=JoinConditionExpression(table_alias=left, column=f"{left}.time"),
                             right=JoinConditionExpression(
                                 table_alias=right, column=f"{right}.time"
                             ),
@@ -1250,10 +1188,7 @@ def populate_query_from_mql_context(
                         function_name=function_name,
                         alias=alias,
                         parameters=tuple(
-                            [
-                                convert_cols_to_extrapolated(parameter)
-                                for parameter in parameters
-                            ]
+                            [convert_cols_to_extrapolated(parameter) for parameter in parameters]
                         ),
                     )
                 case CurriedFunctionCall(
@@ -1261,18 +1196,13 @@ def populate_query_from_mql_context(
                     internal_function=internal_function,
                     parameters=parameters,
                 ):
-                    converted_internal_fn = convert_cols_to_extrapolated(
-                        internal_function
-                    )
+                    converted_internal_fn = convert_cols_to_extrapolated(internal_function)
                     assert isinstance(converted_internal_fn, FunctionCall)
                     return CurriedFunctionCall(
                         alias=alias,
                         internal_function=converted_internal_fn,
                         parameters=tuple(
-                            [
-                                convert_cols_to_extrapolated(parameter)
-                                for parameter in parameters
-                            ]
+                            [convert_cols_to_extrapolated(parameter) for parameter in parameters]
                         ),
                     )
             return expr
@@ -1287,9 +1217,7 @@ def populate_query_from_mql_context(
     return query, mql_context
 
 
-def quantiles_to_quantile(
-    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
-) -> None:
+def quantiles_to_quantile(query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]) -> None:
     """
     Changes quantiles(0.5)(...) to arrayElement(quantiles(0.5)(...), 1). This is to simplify
     the API (so that the arrays don't need to be unwrapped) and also avoids bugs where comparing
@@ -1300,9 +1228,7 @@ def quantiles_to_quantile(
         if isinstance(exp, CurriedFunctionCall):
             if exp.internal_function.function_name in ("quantiles", "quantilesIf"):
                 if len(exp.internal_function.parameters) == 1:
-                    return arrayElement(
-                        exp.alias, replace(exp, alias=None), Literal(None, 1)
-                    )
+                    return arrayElement(exp.alias, replace(exp, alias=None), Literal(None, 1))
 
         return exp
 
@@ -1366,31 +1292,21 @@ def parse_mql_query(
 
 
 class ParsePopulateResolveMQL(
-    QueryPipelineStage[
-        tuple[str, Dataset, dict[str, Any], QuerySettings | None], LogicalQuery
-    ]
+    QueryPipelineStage[tuple[str, Dataset, dict[str, Any], QuerySettings | None], LogicalQuery]
 ):
     def _process_data(
         self,
-        pipe_input: QueryPipelineData[
-            tuple[str, Dataset, dict[str, Any], QuerySettings | None]
-        ],
+        pipe_input: QueryPipelineData[tuple[str, Dataset, dict[str, Any], QuerySettings | None]],
     ) -> LogicalQuery:
         mql_str, dataset, mql_context_dict, settings = pipe_input.data
 
         with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
             query = parse_mql_query_body(mql_str, dataset)
 
-        with sentry_sdk.start_span(
-            op="parser", description="populate_query_from_mql_context"
-        ):
-            query, mql_context = populate_query_from_mql_context(
-                query, mql_context_dict
-            )
+        with sentry_sdk.start_span(op="parser", description="populate_query_from_mql_context"):
+            query, mql_context = populate_query_from_mql_context(query, mql_context_dict)
 
-        with sentry_sdk.start_span(
-            op="processor", description="resolve_indexer_mappings"
-        ):
+        with sentry_sdk.start_span(op="processor", description="resolve_indexer_mappings"):
             resolve_mappings(query, mql_context.indexer_mappings, dataset)
 
         if settings and settings.get_dry_run():
@@ -1428,9 +1344,7 @@ class PostProcessAndValidateMQLQuery(
             )
 
         # Filter in select optimizer
-        with sentry_sdk.start_span(
-            op="processor", description="filter_in_select_optimize"
-        ):
+        with sentry_sdk.start_span(op="processor", description="filter_in_select_optimize"):
             if settings is None:
                 FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
             else:

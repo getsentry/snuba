@@ -142,14 +142,14 @@ def get_attributes(
 
 
 @pytest.fixture(autouse=False)
-def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
+def setup_teardown(eap: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
 
     write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
     write_raw_unprocessed_events(items_storage, _LOGS)  # type: ignore
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestGetTrace(BaseApiTest):
     def test_without_data(self) -> None:
@@ -482,12 +482,10 @@ def get_span_id(span: TraceItem) -> str:
             byteorder="little",
             signed=False,
         )
-    )[
-        2:
-    ].rjust(16, "0")
+    )[2:].rjust(16, "0")
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestGetTracePagination(BaseApiTest):
     def test_pagination_with_user_limit(self, setup_teardown: Any) -> None:
@@ -531,7 +529,7 @@ class TestGetTracePagination(BaseApiTest):
                 ),
             ],
         )
-        items_received = set[str]()
+        items_received = []
         while True:
             response = EndpointGetTrace().execute(message)
             curr_response_len = 0
@@ -539,7 +537,7 @@ class TestGetTracePagination(BaseApiTest):
                 for item in group.items:
                     curr_response_len += 1
                     assert item.id not in items_received
-                    items_received.add(item.id)
+                    items_received.append(item.id)
             assert curr_response_len <= mylimit
             if curr_response_len < mylimit:
                 assert response.page_token.end_pagination == True
@@ -600,7 +598,7 @@ class TestGetTracePagination(BaseApiTest):
                     ),
                 ],
             )
-            items_received = set[str]()
+            items_received = []
             while True:
                 response = EndpointGetTrace().execute(message)
                 curr_response_len = 0
@@ -608,7 +606,7 @@ class TestGetTracePagination(BaseApiTest):
                     for item in group.items:
                         curr_response_len += 1
                         assert item.id not in items_received
-                        items_received.add(item.id)
+                        items_received.append(item.id)
                 assert curr_response_len <= configmax
                 if curr_response_len < configmax:
                     assert response.page_token.end_pagination == True

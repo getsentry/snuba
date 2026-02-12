@@ -326,3 +326,77 @@ def write_cross_item_data_to_storage(items: list[bytes]) -> None:
 
     storage = get_storage(StorageKey("eap_items"))
     write_raw_unprocessed_events(storage, items)  # type: ignore
+
+
+def track_storage_selections() -> tuple[list[StorageKey], Any]:
+    """
+    Context manager that tracks storage selections during query execution.
+    Returns a tuple of (storage_keys list, context manager).
+    """
+    from functools import wraps
+    from unittest.mock import patch
+
+    storage_keys: list[StorageKey] = []
+
+    from snuba.datasets.entities.storage_selectors.eap_items import (
+        EAPItemsStorageSelector,
+    )
+
+    original_select_storage = EAPItemsStorageSelector.select_storage
+
+    @wraps(original_select_storage)
+    def track_storage_selection(
+        self: Any, query: Any, query_settings: Any, storage_connections: Any
+    ) -> Any:
+        selected = original_select_storage(self, query, query_settings, storage_connections)
+        storage_keys.append(selected.storage.get_storage_key())
+        return selected
+
+    return storage_keys, patch.object(
+        EAPItemsStorageSelector,
+        "select_storage",
+        track_storage_selection,
+    )
+
+
+def create_mock_routing_decision(tier: Any, in_msg: Any) -> Any:
+    """
+    Create a real RoutingDecision with a mocked strategy.
+
+    Args:
+        tier: The sampling tier to use (e.g., Tier.TIER_8)
+        in_msg: The protobuf request message
+
+    Returns:
+        RoutingDecision object with mocked strategy
+    """
+    from unittest.mock import Mock
+
+    from snuba.utils.metrics.timer import Timer
+    from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+        RoutingContext,
+        RoutingDecision,
+    )
+
+    # Create a real RoutingContext
+    routing_context = RoutingContext(
+        timer=Timer("test"),
+        in_msg=in_msg,
+        query_id="test-query-id",
+    )
+
+    # Mock the strategy
+    mock_strategy = Mock()
+    mock_strategy.merge_clickhouse_settings = Mock(return_value={})
+    mock_strategy.after_execute = Mock()
+
+    # Create a real RoutingDecision with the mocked strategy
+    routing_decision = RoutingDecision(
+        routing_context=routing_context,
+        strategy=mock_strategy,
+        tier=tier,
+        can_run=True,
+        time_window=None,
+    )
+
+    return routing_decision

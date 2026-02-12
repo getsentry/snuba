@@ -8,7 +8,6 @@ from sentry_protos.snuba.v1.endpoint_trace_items_pb2 import ExportTraceItemsRequ
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem
 
-from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web import QueryResult
@@ -37,6 +36,7 @@ _SPANS = [
         start_timestamp=BASE_TIME + timedelta(seconds=i),
         trace_id=_SPANS_TRACE_IDS[i],
         item_id=_SPANS_ITEM_IDS[i],
+        project_id=i % 3 + 1,
     )
     for i in range(_SPAN_COUNT)  # 2 minutes
 ]
@@ -46,6 +46,7 @@ _LOGS = [
         trace_id=_LOGS_TRACE_IDS[i],
         type=TraceItemType.TRACE_ITEM_TYPE_LOG,
         item_id=_LOGS_ITEM_IDS[i],
+        project_id=i % 3 + 1,
     )
     for i in range(_LOG_COUNT)
 ]
@@ -68,16 +69,15 @@ def _assert_attributes_keys(trace_items: list[TraceItem]) -> None:
 
 
 @pytest.fixture(autouse=False)
-def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
+def setup_teardown(eap: None, redis_db: None) -> None:
     items_storage = get_storage(StorageKey("eap_items"))
     write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
     write_raw_unprocessed_events(items_storage, _LOGS)  # type: ignore
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 class TestExportTraceItems(BaseApiTest):
-
     def test_timerange_without_data(self, setup_teardown: Any) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
@@ -99,8 +99,6 @@ class TestExportTraceItems(BaseApiTest):
         assert response.trace_items == []
 
     def test_with_pagination(self, setup_teardown: Any) -> None:
-        state.set_config("export_trace_items_default_page_size", 20)
-
         response = None
         message = ExportTraceItemsRequest(
             meta=RequestMeta(
@@ -113,6 +111,7 @@ class TestExportTraceItems(BaseApiTest):
                     seconds=int((BASE_TIME + timedelta(seconds=_SPAN_COUNT)).timestamp())
                 ),
             ),
+            limit=20,
         )
         items: list[TraceItem] = []
         while True:
@@ -133,7 +132,13 @@ class TestExportTraceItems(BaseApiTest):
         # Wrap the real run_query to capture the actual QueryResult while still hitting ClickHouse.
         captured: dict[str, Any] = {}
 
-        def wrapper(dataset, request, timer, robust: bool = False, concurrent_queries_gauge=None) -> QueryResult:  # type: ignore[no-untyped-def]
+        def wrapper(
+            dataset: Any,
+            request: Any,
+            timer: Any,
+            robust: bool = False,
+            concurrent_queries_gauge: Any | None = None,
+        ) -> QueryResult:
             qr = run_query(dataset, request, timer, robust, concurrent_queries_gauge)
             captured["query_result"] = qr
             return qr

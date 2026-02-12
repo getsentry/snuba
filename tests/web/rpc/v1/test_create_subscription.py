@@ -50,9 +50,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                 aggregations=[
                     AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                         label="sum",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
@@ -77,9 +75,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                 aggregations=[
                     AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                         label="sum",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
@@ -104,17 +100,13 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                 aggregations=[
                     AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                         label="sum",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
                     AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                         label="sum",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
@@ -136,15 +128,11 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     referrer="something",
                     trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
-                group_by=[
-                    AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class")
-                ],
+                group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class")],
                 aggregations=[
                     AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                         label="sum",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
@@ -169,19 +157,17 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                 aggregations=[
                     AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                         label="sum",
-                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_UNSPECIFIED,
                     ),
                 ],
             ),
             time_window_secs=300,
             resolution_secs=60,
         ),
-        "Invalid extrapolation mode",
-        id="Invalid subscription: extrapolation mode",
+        "Extrapolation mode must be specified",
+        id="Invalid subscription: extrapolation mode unspecified",
     ),
 ]
 
@@ -216,9 +202,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                 aggregations=[
                     AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                         label="sum",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
@@ -251,18 +235,14 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert isinstance(rpc_subscription_data, RPCSubscriptionData)
 
         request_class = TimeSeriesRequest()
-        request_class.ParseFromString(
-            base64.b64decode(rpc_subscription_data.time_series_request)
-        )
+        request_class.ParseFromString(base64.b64decode(rpc_subscription_data.time_series_request))
 
         assert rpc_subscription_data.time_window_sec == 300
         assert rpc_subscription_data.resolution_sec == 60
         assert rpc_subscription_data.request_name == "TimeSeriesRequest"
         assert rpc_subscription_data.request_version == "v1"
 
-    @pytest.mark.parametrize(
-        "create_subscription, error_message", TESTS_INVALID_RPC_SUBSCRIPTIONS
-    )
+    @pytest.mark.parametrize("create_subscription, error_message", TESTS_INVALID_RPC_SUBSCRIPTIONS)
     def test_create_invalid_subscription(
         self,
         create_subscription: CreateSubscriptionRequest,
@@ -297,9 +277,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                 aggregations=[
                     AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                        ),
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                         label="sum",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
@@ -324,9 +302,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         rpc_subscription_data = list(
             RedisSubscriptionDataStore(
                 get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-                EntityKey(
-                    "eap_items"
-                ),  # Logs subscriptions always get created in eap_items
+                EntityKey("eap_items"),  # Logs subscriptions always get created in eap_items
                 PartitionId(partition),
             ).all()
         )[0][1]
@@ -334,9 +310,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert isinstance(rpc_subscription_data, RPCSubscriptionData)
 
         request_class = TimeSeriesRequest()
-        request_class.ParseFromString(
-            base64.b64decode(rpc_subscription_data.time_series_request)
-        )
+        request_class.ParseFromString(base64.b64decode(rpc_subscription_data.time_series_request))
 
         assert request_class.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG
 
