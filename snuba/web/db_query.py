@@ -508,7 +508,7 @@ def _raw_query(
             cause.__class__.__name__,
             cause.message if isinstance(cause, ClickhouseError) else str(cause),
             {
-                "stats": stats,
+                "stats": dict(stats),
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
             },
@@ -522,7 +522,7 @@ def _raw_query(
         return QueryResult(
             result,
             {
-                "stats": stats,
+                "stats": dict(stats),
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
             },
@@ -576,9 +576,8 @@ def _record_bytes_scanned(
     custom_metrics = MetricsWrapper(environment.metrics, "allocation_policy")
 
     if result_or_error.query_result:
-        progress_bytes_scanned = cast(
-            int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", 0)
-        )  # type: ignore
+        profile = result_or_error.query_result.result.get("profile") or {}
+        progress_bytes_scanned = cast(int, profile.get("progress_bytes", 0))
         custom_metrics.increment(
             "bytes_scanned",
             progress_bytes_scanned,
@@ -687,7 +686,7 @@ def db_query(
             AllocationPolicyViolations.__name__,
             "Query cannot be run due to allocation policies",
             extra={
-                "stats": stats,
+                "stats": dict(stats),
                 "sql": "no sql run",
                 "experiments": {},
             },
@@ -702,7 +701,7 @@ def db_query(
             e.__class__.__name__,
             str(e),
             {
-                "stats": stats,
+                "stats": dict(stats),
                 "sql": "",
                 "experiments": clickhouse_query.get_experiments(),
             },
