@@ -576,7 +576,9 @@ def _record_bytes_scanned(
     custom_metrics = MetricsWrapper(environment.metrics, "allocation_policy")
 
     if result_or_error.query_result:
-        progress_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", 0))  # type: ignore
+        progress_bytes_scanned = cast(
+            int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", 0)
+        )  # type: ignore
         custom_metrics.increment(
             "bytes_scanned",
             progress_bytes_scanned,
@@ -752,7 +754,6 @@ def _add_quota_info(
     action: str,
     quota_and_policy: _QuotaAndPolicy | None = None,
 ) -> None:
-
     quota_info: dict[str, Any] = {}
     summary[action] = quota_info
 
