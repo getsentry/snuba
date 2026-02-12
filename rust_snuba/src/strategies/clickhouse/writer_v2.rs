@@ -132,7 +132,7 @@ impl Default for RetryConfig {
     fn default() -> Self {
         Self {
             initial_backoff_ms: 500.0,
-            max_retries: 4,
+            max_retries: 9,
             jitter_factor: 0.2,
         }
     }
