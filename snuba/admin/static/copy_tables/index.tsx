@@ -177,6 +177,27 @@ function CopyTables(props: {
             </div>
           </div>
 
+          {copyTableResult.workloads && (
+            <div style={resultSectionStyle}>
+              <h3>Workloads Copied</h3>
+              <div style={tableListStyle}>
+                {copyTableResult.workloads.split(',').map((val, inx) => (
+                  <div key={inx}><code>{val}</code></div>
+                ))}
+              </div>
+              {copyTableResult.workload_errors && Object.keys(copyTableResult.workload_errors).length > 0 && (
+                <div style={unverifiedHostsContainerStyle}>
+                  <p style={missingTablesStyle}><strong>Workload Errors:</strong></p>
+                  {Object.entries(copyTableResult.workload_errors).map(([node, error]) => (
+                    <div key={node} style={hostItemStyle}>
+                      <p><strong>Node:</strong> <code>{node}</code></p>
+                      <p style={missingTablesStyle}><strong>Error:</strong> {error}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
         </div>
       )}
