@@ -294,6 +294,7 @@ mod tests {
             trace_id: Uuid::new_v4().to_string(),
             client_sample_rate: 1.0,
             server_sample_rate: 1.0,
+            outcomes: Default::default(),
         }
     }
 
