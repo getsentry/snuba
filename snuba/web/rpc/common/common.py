@@ -28,6 +28,7 @@ from snuba.query.dsl import (
     or_cond,
 )
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
+from snuba.utils.metrics.util import with_span
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -64,6 +65,7 @@ def transform_array_value(value: dict[str, str]) -> Any:
     raise BadSnubaRPCRequestException(f"array value type unknown: {type(v)}")
 
 
+@with_span(op="parse")
 def process_arrays(raw: str) -> dict[str, list[Any]]:
     parsed = json.loads(raw) or {}
     arrays = {}

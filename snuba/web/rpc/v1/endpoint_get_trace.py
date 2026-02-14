@@ -41,6 +41,7 @@ from snuba.settings import (
     ENABLE_TRACE_PAGINATION_DEFAULT,
     ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS,
 )
+from snuba.utils.metrics.util import with_span
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
@@ -164,6 +165,7 @@ class EndpointGetTracePageToken:
         return PageToken(filter_offset=filters)
 
 
+@with_span(op="function")
 def _build_query(
     request: GetTraceRequest,
     item: GetTraceRequest.TraceItem,
@@ -465,6 +467,7 @@ ProcessedResults = NamedTuple(
 )
 
 
+@with_span(op="function")
 def _process_results(
     data: Iterable[Dict[str, Any]],
 ) -> ProcessedResults:
@@ -476,8 +479,11 @@ def _process_results(
     items: list[GetTraceResponse.Item] = []
     last_seen_timestamp_precise = 0.0
     last_seen_id = ""
+    row_count = 0
+    attribute_count = 0
 
     for row in data:
+        row_count += 1
         id = row.pop("id")
         ts = row.pop("timestamp")
         arrays = row.pop("attributes_array", "{}") or "{}"
@@ -496,6 +502,8 @@ def _process_results(
         attributes: dict[str, GetTraceResponse.Item.Attribute] = {}
 
         def add_attribute(key: str, value: Any) -> None:
+            nonlocal attribute_count
+            attribute_count += 1
             attribute_key, attribute_value = _value_to_attribute(key, value)
             attributes[key] = GetTraceResponse.Item.Attribute(
                 key=attribute_key,
@@ -528,6 +536,12 @@ def _process_results(
             ),
         )
         items.append(item)
+
+    span = sentry_sdk.get_current_span()
+    if span:
+        span.set_data("rows_processed", row_count)
+        span.set_data("total_attributes", attribute_count)
+        span.set_data("items", len(items))
 
     return ProcessedResults(
         items=items,
@@ -593,6 +607,10 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             start = 0
         else:
             start = page_token.last_item_index
+
+        iteration_span = sentry_sdk.start_span(op="function", description="process_all_item_groups")
+        iteration_span.__enter__()
+
         for i, item in enumerate(in_msg.items[start:], start=start):
             item_group, query_result, last_seen_timestamp_precise, last_seen_id = (
                 self._query_item_group(in_msg, item, limit, page_token)
@@ -612,25 +630,29 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
                 page_token = EndpointGetTracePageToken(i, last_seen_timestamp_precise, last_seen_id)
                 break
 
-        response_meta = extract_response_meta(
-            in_msg.meta.request_id,
-            in_msg.meta.debug,
-            query_results,
-            [self._timer] * len(query_results),
-        )
-        if not enable_pagination:
-            serialized_page_token = None
-        elif page_token is None:
-            serialized_page_token = PageToken(end_pagination=True)
-        else:
-            serialized_page_token = page_token.to_protobuf()
-        return GetTraceResponse(
-            item_groups=item_groups,
-            meta=response_meta,
-            trace_id=in_msg.trace_id,
-            page_token=serialized_page_token,
-        )
+        iteration_span.__exit__(None, None, None)
 
+        with sentry_sdk.start_span(op="function", description="assemble_response"):
+            response_meta = extract_response_meta(
+                in_msg.meta.request_id,
+                in_msg.meta.debug,
+                query_results,
+                [self._timer] * len(query_results),
+            )
+            if not enable_pagination:
+                serialized_page_token = None
+            elif page_token is None:
+                serialized_page_token = PageToken(end_pagination=True)
+            else:
+                serialized_page_token = page_token.to_protobuf()
+            return GetTraceResponse(
+                item_groups=item_groups,
+                meta=response_meta,
+                trace_id=in_msg.trace_id,
+                page_token=serialized_page_token,
+            )
+
+    @with_span(op="function")
     def _query_item_group(
         self,
         in_msg: GetTraceRequest,
