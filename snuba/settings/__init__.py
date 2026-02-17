@@ -70,6 +70,19 @@ ADMIN_REGIONS: Sequence[str] = []
 # End Admin Settings #
 ######################
 
+################
+# Api Settings #
+################
+
+API_WORKERS = 1
+API_THREADS = None
+API_WORKERS_LIFETIME = None
+API_WORKERS_MAX_RSS = None
+
+####################
+# End Api Settings #
+####################
+
 MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
