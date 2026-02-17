@@ -14,13 +14,16 @@ use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
 use crate::types::CogsData;
-use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
+use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, TypedInsertBatch};
 
-pub fn process_message(
-    msg: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
-    config: &ProcessorConfig,
-) -> anyhow::Result<InsertBatch> {
+struct ProcessedItem {
+    eap_item: EAPItem,
+    origin_timestamp: Option<DateTime<Utc>>,
+    item_type_metrics: ItemTypeMetrics,
+    cogs_data: CogsData,
+}
+
+fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Result<ProcessedItem> {
     let payload: &[u8] = msg.payload().context("Expected payload")?;
     let trace_item = TraceItem::decode(payload)?;
     let origin_timestamp = DateTime::from_timestamp(trace_item.received.unwrap().seconds, 0);
@@ -70,9 +73,38 @@ pub fn process_message(
         data: BTreeMap::from([(app_feature, payload.len() as u64)]),
     };
 
-    let mut batch = InsertBatch::from_rows([eap_item], origin_timestamp)?;
-    batch.item_type_metrics = Some(item_type_metrics);
-    batch.cogs_data = Some(cogs_data);
+    Ok(ProcessedItem {
+        eap_item,
+        origin_timestamp,
+        item_type_metrics,
+        cogs_data,
+    })
+}
+
+pub fn process_message(
+    msg: KafkaPayload,
+    _metadata: KafkaMessageMetadata,
+    config: &ProcessorConfig,
+) -> anyhow::Result<InsertBatch> {
+    let processed = process_eap_item(msg, config)?;
+    let mut batch = InsertBatch::from_rows([processed.eap_item], processed.origin_timestamp)?;
+    batch.item_type_metrics = Some(processed.item_type_metrics);
+    batch.cogs_data = Some(processed.cogs_data);
+    Ok(batch)
+}
+
+pub fn process_message_row_binary(
+    msg: KafkaPayload,
+    _metadata: KafkaMessageMetadata,
+    config: &ProcessorConfig,
+) -> anyhow::Result<TypedInsertBatch<EAPItemRow>> {
+    let processed = process_eap_item(msg, config)?;
+    let mut batch = TypedInsertBatch::from_rows(
+        vec![EAPItemRow::from(processed.eap_item)],
+        processed.origin_timestamp,
+    );
+    batch.item_type_metrics = Some(processed.item_type_metrics);
+    batch.cogs_data = Some(processed.cogs_data);
     Ok(batch)
 }
 
@@ -260,6 +292,63 @@ impl AttributeMap {
         }
 
         self.attributes_array.insert(k, values);
+    }
+}
+
+seq_attrs! {
+#[derive(Debug, Clone, clickhouse::Row, Serialize)]
+pub struct EAPItemRow {
+    organization_id: u64,
+    project_id: u64,
+    item_type: u8,
+    timestamp: u32,
+    #[serde(with = "clickhouse::serde::uuid")]
+    trace_id: Uuid,
+    item_id: u128,
+
+    attributes_bool: HashMap<String, bool>,
+    attributes_int: HashMap<String, i64>,
+    attributes_array: String,
+
+    #(
+    attributes_string_~N: HashMap<String, String>,
+    attributes_float_~N: HashMap<String, f64>,
+    )*
+
+    sampling_factor: f64,
+    sampling_weight: u64,
+
+    retention_days: u16,
+    downsampled_retention_days: u16,
+}
+}
+
+impl From<EAPItem> for EAPItemRow {
+    fn from(item: EAPItem) -> Self {
+        let attributes_array =
+            serde_json::to_string(&item.attributes.attributes_array).unwrap_or_default();
+
+        seq_attrs! {
+            return EAPItemRow {
+                organization_id: item.organization_id,
+                project_id: item.project_id,
+                item_type: item.item_type,
+                timestamp: item.timestamp,
+                trace_id: item.trace_id,
+                item_id: item.item_id,
+                attributes_bool: item.attributes.attributes_bool,
+                attributes_int: item.attributes.attributes_int,
+                attributes_array,
+                #(
+                attributes_string_~N: item.attributes.attributes_string_~N,
+                attributes_float_~N: item.attributes.attributes_float_~N,
+                )*
+                sampling_factor: item.sampling_factor,
+                sampling_weight: item.sampling_weight,
+                retention_days: item.retention_days.unwrap_or(0),
+                downsampled_retention_days: item.downsampled_retention_days.unwrap_or(0),
+            };
+        }
     }
 }
 

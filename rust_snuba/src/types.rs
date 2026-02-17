@@ -425,6 +425,46 @@ impl BytesInsertBatch<RowData> {
     }
 }
 
+impl<T> BytesInsertBatch<Vec<T>> {
+    pub fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    pub fn merge(mut self, other: Self) -> Self {
+        self.rows.extend(other.rows);
+        self.commit_log_offsets.merge(other.commit_log_offsets);
+        self.message_timestamp.merge(other.message_timestamp);
+        self.origin_timestamp.merge(other.origin_timestamp);
+        self.sentry_received_timestamp
+            .merge(other.sentry_received_timestamp);
+        self.cogs_data.merge(other.cogs_data);
+        self.item_type_metrics.merge(other.item_type_metrics);
+        self
+    }
+}
+
+/// The return value of message processors that produce typed rows for RowBinary insertion.
+#[derive(Clone, Debug)]
+pub struct TypedInsertBatch<T> {
+    pub rows: Vec<T>,
+    pub origin_timestamp: Option<DateTime<Utc>>,
+    pub sentry_received_timestamp: Option<DateTime<Utc>>,
+    pub cogs_data: Option<CogsData>,
+    pub item_type_metrics: Option<ItemTypeMetrics>,
+}
+
+impl<T> TypedInsertBatch<T> {
+    pub fn from_rows(rows: Vec<T>, origin_timestamp: Option<DateTime<Utc>>) -> Self {
+        Self {
+            rows,
+            origin_timestamp,
+            sentry_received_timestamp: None,
+            cogs_data: None,
+            item_type_metrics: None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
 pub struct RowData {
     pub encoded_rows: Vec<u8>,
