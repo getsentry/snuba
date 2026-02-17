@@ -478,14 +478,12 @@ def _process_results(
     """
     last_seen_timestamp_precise = 0.0
     last_seen_id = ""
-    row_count = 0
 
     # First pass: parse rows and build attribute dicts
     parsed_rows: list[tuple[str, Timestamp, dict[str, GetTraceResponse.Item.Attribute]]] = []
 
-    with sentry_sdk.start_span(op="function", description="add_attributes") as span:
+    with sentry_sdk.start_span(op="function", description="add_attributes"):
         for row in data:
-            row_count += 1
             id = row.pop("id")
             ts = row.pop("timestamp")
             arrays = row.pop("attributes_array", "{}") or "{}"
@@ -529,12 +527,10 @@ def _process_results(
 
             parsed_rows.append((id, timestamp, attributes))
 
-        span.set_data("rows_processed", row_count)
-
     # Second pass: sort attributes and assemble items
     items: list[GetTraceResponse.Item] = []
 
-    with sentry_sdk.start_span(op="function", description="sort_attributes") as span:
+    with sentry_sdk.start_span(op="function", description="sort_attributes"):
         for id, timestamp, attributes in parsed_rows:
             item = GetTraceResponse.Item(
                 id=id,
@@ -546,7 +542,9 @@ def _process_results(
             )
             items.append(item)
 
-        span.set_data("rows_sorted", len(parsed_rows))
+    current_span = sentry_sdk.get_current_span()
+    if current_span is not None:
+        current_span.set_data("rows_processed", len(parsed_rows))
 
     return ProcessedResults(
         items=items,
