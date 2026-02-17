@@ -324,10 +324,13 @@ pub struct EAPItemRow {
 }
 
 impl From<EAPItem> for EAPItemRow {
+    #[allow(clippy::needless_return)]
     fn from(item: EAPItem) -> Self {
         let attributes_array =
             serde_json::to_string(&item.attributes.attributes_array).unwrap_or_default();
 
+        // `return` is needed because `seq_attrs!` expands with a trailing semicolon,
+        // which makes the struct expression a statement rather than a tail expression.
         seq_attrs! {
             return EAPItemRow {
                 organization_id: item.organization_id,
