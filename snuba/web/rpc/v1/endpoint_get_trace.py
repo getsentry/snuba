@@ -41,6 +41,7 @@ from snuba.settings import (
     ENABLE_TRACE_PAGINATION_DEFAULT,
     ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS,
 )
+from snuba.utils.metrics.util import with_span
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
@@ -164,6 +165,7 @@ class EndpointGetTracePageToken:
         return PageToken(filter_offset=filters)
 
 
+@with_span(op="function")
 def _build_query(
     request: GetTraceRequest,
     item: GetTraceRequest.TraceItem,
@@ -465,69 +467,84 @@ ProcessedResults = NamedTuple(
 )
 
 
+@with_span(op="function")
 def _process_results(
     data: Iterable[Dict[str, Any]],
 ) -> ProcessedResults:
     """
-    Used to process the results returned from clickhouse in a single pass.
-    If you have more processing to do on the results, you can do it here and
-    return the results as another entry in the ProcessedResults named tuple.
+    Used to process the results returned from clickhouse in two passes.
+    The first pass adds attributes to each row, and the second pass sorts
+    the attributes and assembles the final items.
     """
-    items: list[GetTraceResponse.Item] = []
     last_seen_timestamp_precise = 0.0
     last_seen_id = ""
 
-    for row in data:
-        id = row.pop("id")
-        ts = row.pop("timestamp")
-        arrays = row.pop("attributes_array", "{}") or "{}"
-        # We want to merge these values after to overwrite potential floats
-        # with the same name.
-        booleans = row.pop("attributes_bool", {}) or {}
-        integers = row.pop("attributes_int", {}) or {}
-        last_seen_timestamp_precise = float(ts)
-        last_seen_id = id
+    # First pass: parse rows and build attribute dicts
+    parsed_rows: list[tuple[str, Timestamp, dict[str, GetTraceResponse.Item.Attribute]]] = []
 
-        timestamp = Timestamp()
-        # truncate to microseconds since we store microsecond precision only
-        # then transform to nanoseconds
-        timestamp.FromNanoseconds(int(ts * 1e6) * 1000)
+    with sentry_sdk.start_span(op="function", description="add_attributes"):
+        for row in data:
+            id = row.pop("id")
+            ts = row.pop("timestamp")
+            arrays = row.pop("attributes_array", "{}") or "{}"
+            # We want to merge these values after to overwrite potential floats
+            # with the same name.
+            booleans = row.pop("attributes_bool", {}) or {}
+            integers = row.pop("attributes_int", {}) or {}
+            last_seen_timestamp_precise = float(ts)
+            last_seen_id = id
 
-        attributes: dict[str, GetTraceResponse.Item.Attribute] = {}
+            timestamp = Timestamp()
+            # truncate to microseconds since we store microsecond precision only
+            # then transform to nanoseconds
+            timestamp.FromNanoseconds(int(ts * 1e6) * 1000)
 
-        def add_attribute(key: str, value: Any) -> None:
-            attribute_key, attribute_value = _value_to_attribute(key, value)
-            attributes[key] = GetTraceResponse.Item.Attribute(
-                key=attribute_key,
-                value=attribute_value,
+            attributes: dict[str, GetTraceResponse.Item.Attribute] = {}
+
+            def add_attribute(key: str, value: Any) -> None:
+                attribute_key, attribute_value = _value_to_attribute(key, value)
+                attributes[key] = GetTraceResponse.Item.Attribute(
+                    key=attribute_key,
+                    value=attribute_value,
+                )
+
+            for row_key, row_value in row.items():
+                if isinstance(row_value, dict):
+                    for column_key, column_value in row_value.items():
+                        add_attribute(column_key, column_value)
+                else:
+                    add_attribute(row_key, row_value)
+
+            attributes_array = process_arrays(arrays)
+            for array_key, array_value in attributes_array.items():
+                add_attribute(array_key, array_value)
+
+            for bool_key, bool_value in booleans.items():
+                add_attribute(bool_key, bool_value)
+
+            for int_key, int_value in integers.items():
+                add_attribute(int_key, int_value)
+
+            parsed_rows.append((id, timestamp, attributes))
+
+    # Second pass: sort attributes and assemble items
+    items: list[GetTraceResponse.Item] = []
+
+    with sentry_sdk.start_span(op="function", description="sort_attributes"):
+        for id, timestamp, attributes in parsed_rows:
+            item = GetTraceResponse.Item(
+                id=id,
+                timestamp=timestamp,
+                attributes=sorted(
+                    attributes.values(),
+                    key=attrgetter("key.name"),
+                ),
             )
+            items.append(item)
 
-        for row_key, row_value in row.items():
-            if isinstance(row_value, dict):
-                for column_key, column_value in row_value.items():
-                    add_attribute(column_key, column_value)
-            else:
-                add_attribute(row_key, row_value)
-
-        attributes_array = process_arrays(arrays)
-        for array_key, array_value in attributes_array.items():
-            add_attribute(array_key, array_value)
-
-        for bool_key, bool_value in booleans.items():
-            add_attribute(bool_key, bool_value)
-
-        for int_key, int_value in integers.items():
-            add_attribute(int_key, int_value)
-
-        item = GetTraceResponse.Item(
-            id=id,
-            timestamp=timestamp,
-            attributes=sorted(
-                attributes.values(),
-                key=attrgetter("key.name"),
-            ),
-        )
-        items.append(item)
+    current_span = sentry_sdk.get_current_span()
+    if current_span is not None:
+        current_span.set_data("rows_processed", len(parsed_rows))
 
     return ProcessedResults(
         items=items,
@@ -612,25 +629,27 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
                 page_token = EndpointGetTracePageToken(i, last_seen_timestamp_precise, last_seen_id)
                 break
 
-        response_meta = extract_response_meta(
-            in_msg.meta.request_id,
-            in_msg.meta.debug,
-            query_results,
-            [self._timer] * len(query_results),
-        )
-        if not enable_pagination:
-            serialized_page_token = None
-        elif page_token is None:
-            serialized_page_token = PageToken(end_pagination=True)
-        else:
-            serialized_page_token = page_token.to_protobuf()
-        return GetTraceResponse(
-            item_groups=item_groups,
-            meta=response_meta,
-            trace_id=in_msg.trace_id,
-            page_token=serialized_page_token,
-        )
+        with sentry_sdk.start_span(op="function", description="assemble_response"):
+            response_meta = extract_response_meta(
+                in_msg.meta.request_id,
+                in_msg.meta.debug,
+                query_results,
+                [self._timer] * len(query_results),
+            )
+            if not enable_pagination:
+                serialized_page_token = None
+            elif page_token is None:
+                serialized_page_token = PageToken(end_pagination=True)
+            else:
+                serialized_page_token = page_token.to_protobuf()
+            return GetTraceResponse(
+                item_groups=item_groups,
+                meta=response_meta,
+                trace_id=in_msg.trace_id,
+                page_token=serialized_page_token,
+            )
 
+    @with_span(op="function")
     def _query_item_group(
         self,
         in_msg: GetTraceRequest,
