@@ -473,19 +473,15 @@ def _process_results(
 ) -> ProcessedResults:
     """
     Used to process the results returned from clickhouse in two passes.
-    The first pass adds attributes to each row, and the second pass sorts
-    the attributes and assembles the final items.
+    The first pass parses rows and builds attributes, and the second pass
+    sorts the attributes on each item.
     """
+    items: list[GetTraceResponse.Item] = []
     last_seen_timestamp_precise = 0.0
     last_seen_id = ""
-    row_count = 0
-
-    # First pass: parse rows and build attribute dicts
-    parsed_rows: list[tuple[str, Timestamp, dict[str, GetTraceResponse.Item.Attribute]]] = []
 
     with sentry_sdk.start_span(op="function", description="add_attributes") as span:
         for row in data:
-            row_count += 1
             id = row.pop("id")
             ts = row.pop("timestamp")
             arrays = row.pop("attributes_array", "{}") or "{}"
@@ -527,26 +523,19 @@ def _process_results(
             for int_key, int_value in integers.items():
                 add_attribute(int_key, int_value)
 
-            parsed_rows.append((id, timestamp, attributes))
-
-        span.set_data("rows_processed", row_count)
-
-    # Second pass: sort attributes and assemble items
-    items: list[GetTraceResponse.Item] = []
+            items.append(
+                GetTraceResponse.Item(
+                    id=id,
+                    timestamp=timestamp,
+                    attributes=attributes.values(),
+                )
+            )
 
     with sentry_sdk.start_span(op="function", description="sort_attributes") as span:
-        for id, timestamp, attributes in parsed_rows:
-            item = GetTraceResponse.Item(
-                id=id,
-                timestamp=timestamp,
-                attributes=sorted(
-                    attributes.values(),
-                    key=attrgetter("key.name"),
-                ),
-            )
-            items.append(item)
+        for item in items:
+            item.attributes.sort(key=attrgetter("key.name"))
 
-        span.set_data("rows_sorted", len(parsed_rows))
+    span.set_data("rows_processed", len(items))
 
     return ProcessedResults(
         items=items,
