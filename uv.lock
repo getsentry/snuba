@@ -32,10 +32,10 @@ wheels = [
 
 [[package]]
 name = "blinker"
-version = "1.5"
+version = "1.9.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/blinker-1.5-py2.py3-none-any.whl", hash = "sha256:1eb563df6fdbc39eeddc177d953203f99f097e9bf0e2b8f9f3cf18b6ca425e36" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/blinker-1.9.0-py3-none-any.whl", hash = "sha256:ba0efaa9080b619ff2f3459d1d500c57bddea4a6b424b60a91141db6fd2f08bc" },
 ]
 
 [[package]]
@@ -262,16 +262,17 @@ wheels = [
 
 [[package]]
 name = "flask"
-version = "2.2.5"
+version = "3.1.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
+    { name = "blinker", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "click", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "itsdangerous", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "jinja2", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "werkzeug", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/Flask-2.2.5-py3-none-any.whl", hash = "sha256:58107ed83443e86067e41eff4631b058178191a355886f8e479e347fa1285fdf" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/flask-3.1.0-py3-none-any.whl", hash = "sha256:d667207822eb83f1c4b50949b1623c8fc8d51f2341d65f72e1a1815397551136" },
 ]
 
 [[package]]
@@ -1219,14 +1220,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "blinker", specifier = ">=1.5" },
+    { name = "blinker", specifier = ">=1.9" },
     { name = "click", specifier = ">=8.1.7" },
     { name = "clickhouse-driver", specifier = ">=0.2.9" },
     { name = "confluent-kafka", specifier = ">=2.7.0" },
     { name = "datadog", specifier = ">=0.49.1" },
     { name = "devservices", specifier = ">=1.2.1" },
     { name = "fastjsonschema", specifier = ">=2.16.2" },
-    { name = "flask", specifier = ">=2.2.5" },
+    { name = "flask", specifier = ">=3.1.0" },
     { name = "freezegun", specifier = ">=1.2.2" },
     { name = "google-api-core", specifier = ">=2.19.1" },
     { name = "google-api-python-client", specifier = ">=2.88.0" },
@@ -1522,11 +1523,11 @@ wheels = [
 
 [[package]]
 name = "werkzeug"
-version = "3.0.6"
+version = "3.1.5"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "markupsafe", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/werkzeug-3.0.6-py3-none-any.whl", hash = "sha256:1bc0c2310d2fbb07b1dd1105eba2f7af72f322e1e455f2f93c993bee8c8a5f17" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/werkzeug-3.1.5-py3-none-any.whl", hash = "sha256:5111e36e91086ece91f93268bb39b4a35c1e6f1feac762c9c822ded0a4e322dc" },
 ]
