@@ -1,5 +1,4 @@
 import random
-import time
 import uuid
 from datetime import datetime
 from operator import attrgetter
@@ -473,90 +472,81 @@ def _process_results(
     data: Iterable[Dict[str, Any]],
 ) -> ProcessedResults:
     """
-    Used to process the results returned from clickhouse in a single pass.
-    If you have more processing to do on the results, you can do it here and
-    return the results as another entry in the ProcessedResults named tuple.
+    Used to process the results returned from clickhouse in two passes.
+    The first pass adds attributes to each row, and the second pass sorts
+    the attributes and assembles the final items.
     """
-    items: list[GetTraceResponse.Item] = []
     last_seen_timestamp_precise = 0.0
     last_seen_id = ""
     row_count = 0
-    t_adding_attributes = 0.0
-    t_sorting_attributes = 0.0
 
-    for row in data:
-        row_count += 1
-        id = row.pop("id")
-        ts = row.pop("timestamp")
-        arrays = row.pop("attributes_array", "{}") or "{}"
-        # We want to merge these values after to overwrite potential floats
-        # with the same name.
-        booleans = row.pop("attributes_bool", {}) or {}
-        integers = row.pop("attributes_int", {}) or {}
-        last_seen_timestamp_precise = float(ts)
-        last_seen_id = id
+    # First pass: parse rows and build attribute dicts
+    parsed_rows: list[tuple[str, Timestamp, dict[str, GetTraceResponse.Item.Attribute]]] = []
 
-        timestamp = Timestamp()
-        # truncate to microseconds since we store microsecond precision only
-        # then transform to nanoseconds
-        timestamp.FromNanoseconds(int(ts * 1e6) * 1000)
+    with sentry_sdk.start_span(op="function", description="add_attributes") as span:
+        for row in data:
+            row_count += 1
+            id = row.pop("id")
+            ts = row.pop("timestamp")
+            arrays = row.pop("attributes_array", "{}") or "{}"
+            # We want to merge these values after to overwrite potential floats
+            # with the same name.
+            booleans = row.pop("attributes_bool", {}) or {}
+            integers = row.pop("attributes_int", {}) or {}
+            last_seen_timestamp_precise = float(ts)
+            last_seen_id = id
 
-        attributes: dict[str, GetTraceResponse.Item.Attribute] = {}
+            timestamp = Timestamp()
+            # truncate to microseconds since we store microsecond precision only
+            # then transform to nanoseconds
+            timestamp.FromNanoseconds(int(ts * 1e6) * 1000)
 
-        def add_attribute(key: str, value: Any) -> None:
-            attribute_key, attribute_value = _value_to_attribute(key, value)
-            attributes[key] = GetTraceResponse.Item.Attribute(
-                key=attribute_key,
-                value=attribute_value,
-            )
+            attributes: dict[str, GetTraceResponse.Item.Attribute] = {}
 
-        # Start timing attribute addition
-        t0 = time.perf_counter()
+            def add_attribute(key: str, value: Any) -> None:
+                attribute_key, attribute_value = _value_to_attribute(key, value)
+                attributes[key] = GetTraceResponse.Item.Attribute(
+                    key=attribute_key,
+                    value=attribute_value,
+                )
 
-        for row_key, row_value in row.items():
-            if isinstance(row_value, dict):
-                for column_key, column_value in row_value.items():
-                    add_attribute(column_key, column_value)
-            else:
-                add_attribute(row_key, row_value)
+            for row_key, row_value in row.items():
+                if isinstance(row_value, dict):
+                    for column_key, column_value in row_value.items():
+                        add_attribute(column_key, column_value)
+                else:
+                    add_attribute(row_key, row_value)
 
-        attributes_array = process_arrays(arrays)
-        for array_key, array_value in attributes_array.items():
-            add_attribute(array_key, array_value)
+            attributes_array = process_arrays(arrays)
+            for array_key, array_value in attributes_array.items():
+                add_attribute(array_key, array_value)
 
-        for bool_key, bool_value in booleans.items():
-            add_attribute(bool_key, bool_value)
+            for bool_key, bool_value in booleans.items():
+                add_attribute(bool_key, bool_value)
 
-        for int_key, int_value in integers.items():
-            add_attribute(int_key, int_value)
+            for int_key, int_value in integers.items():
+                add_attribute(int_key, int_value)
 
-        # End timing attribute addition, start timing sorting
-        t1 = time.perf_counter()
+            parsed_rows.append((id, timestamp, attributes))
 
-        item = GetTraceResponse.Item(
-            id=id,
-            timestamp=timestamp,
-            attributes=sorted(
-                attributes.values(),
-                key=attrgetter("key.name"),
-            ),
-        )
-
-        # End timing sorting
-        t2 = time.perf_counter()
-
-        # Accumulate times
-        t_adding_attributes += t1 - t0
-        t_sorting_attributes += t2 - t1
-
-        items.append(item)
-
-    span = sentry_sdk.get_current_span()
-    if span:
         span.set_data("rows_processed", row_count)
-        if row_count > 0:
-            span.set_data("processing.add_attributes_seconds", t_adding_attributes)
-            span.set_data("processing.sort_attributes_seconds", t_sorting_attributes)
+
+    # Second pass: sort attributes and assemble items
+    items: list[GetTraceResponse.Item] = []
+
+    with sentry_sdk.start_span(op="function", description="sort_attributes") as span:
+        for id, timestamp, attributes in parsed_rows:
+            item = GetTraceResponse.Item(
+                id=id,
+                timestamp=timestamp,
+                attributes=sorted(
+                    attributes.values(),
+                    key=attrgetter("key.name"),
+                ),
+            )
+            items.append(item)
+
+        span.set_data("rows_sorted", len(parsed_rows))
 
     return ProcessedResults(
         items=items,
