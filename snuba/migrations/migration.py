@@ -61,11 +61,13 @@ class SquashedMigration(Migration):
 
     def forwards(self, context: Context, dry_run: bool) -> None:
         _migration_id, _logger, update_status = context
-        update_status(Status.COMPLETED)
+        if not dry_run:
+            update_status(Status.COMPLETED)
 
     def backwards(self, context: Context, dry_run: bool) -> None:
         _migration_id, _logger, update_status = context
-        update_status(Status.NOT_STARTED)
+        if not dry_run:
+            update_status(Status.NOT_STARTED)
 
 
 class CodeMigration(Migration, ABC):

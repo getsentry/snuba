@@ -151,18 +151,8 @@ class Migration(migration.ClickhouseNodeMigration):
         ops: List[SqlOperation] = []
 
         for sampling_weight in sampling_weights:
-            local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
-
             ops.extend(
                 [
-                    operations.CreateMaterializedView(
-                        storage_set=storage_set_key,
-                        view_name=f"eap_items_1_downsample_{sampling_weight}_mv_{old_version}",
-                        columns=columns,
-                        destination_table_name=local_table_name,
-                        target=OperationTarget.LOCAL,
-                        query=generate_old_materialized_view_expression(sampling_weight),
-                    ),
                     operations.DropTable(
                         storage_set=storage_set_key,
                         table_name=f"eap_items_1_downsample_{sampling_weight}_mv_{new_version}",
