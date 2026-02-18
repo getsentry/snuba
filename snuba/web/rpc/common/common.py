@@ -27,7 +27,12 @@ from snuba.query.dsl import (
     not_cond,
     or_cond,
 )
-from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
+from snuba.query.expressions import (
+    DangerousRawSQL,
+    Expression,
+    FunctionCall,
+    SubscriptableReference,
+)
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -446,5 +451,8 @@ def get_field_existence_expression(field: Expression) -> Expression:
 
     if isinstance(field, FunctionCall) and field.function_name == "arrayElement":
         return f.mapContains(field.parameters[0], field.parameters[1])
+
+    if isinstance(field, DangerousRawSQL):
+        return f.notEmpty(field)
 
     return f.isNotNull(field)
