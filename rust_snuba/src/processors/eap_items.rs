@@ -306,13 +306,13 @@ pub struct EAPItemRow {
     trace_id: Uuid,
     item_id: u128,
 
-    attributes_bool: HashMap<String, bool>,
-    attributes_int: HashMap<String, i64>,
+    attributes_bool: Vec<(String, bool)>,
+    attributes_int: Vec<(String, i64)>,
     attributes_array: String,
 
     #(
-    attributes_string_~N: HashMap<String, String>,
-    attributes_float_~N: HashMap<String, f64>,
+    attributes_string_~N: Vec<(String, String)>,
+    attributes_float_~N: Vec<(String, f64)>,
     )*
 
     sampling_factor: f64,
@@ -339,12 +339,12 @@ impl From<EAPItem> for EAPItemRow {
                 timestamp: item.timestamp,
                 trace_id: item.trace_id,
                 item_id: item.item_id,
-                attributes_bool: item.attributes.attributes_bool,
-                attributes_int: item.attributes.attributes_int,
+                attributes_bool: item.attributes.attributes_bool.into_iter().collect(),
+                attributes_int: item.attributes.attributes_int.into_iter().collect(),
                 attributes_array,
                 #(
-                attributes_string_~N: item.attributes.attributes_string_~N,
-                attributes_float_~N: item.attributes.attributes_float_~N,
+                attributes_string_~N: item.attributes.attributes_string_~N.into_iter().collect(),
+                attributes_float_~N: item.attributes.attributes_float_~N.into_iter().collect(),
                 )*
                 sampling_factor: item.sampling_factor,
                 sampling_weight: item.sampling_weight,
@@ -751,10 +751,16 @@ mod tests {
         let row = &batch.rows[0];
 
         // Int attributes are stored in attributes_int (and also double-written to a float bucket)
-        assert_eq!(row.attributes_int.get("my_int"), Some(&42));
+        assert!(row
+            .attributes_int
+            .iter()
+            .any(|(k, v)| k == "my_int" && *v == 42));
 
         // Bool attributes are stored in attributes_bool (and also double-written to a float bucket)
-        assert_eq!(row.attributes_bool.get("my_bool"), Some(&true));
+        assert!(row
+            .attributes_bool
+            .iter()
+            .any(|(k, v)| k == "my_bool" && *v));
 
         // Array attributes are serialized as JSON string
         assert!(row.attributes_array.contains("my_array"));
@@ -933,8 +939,12 @@ mod tests {
             let mut json_ints: HashMap<String, i64> =
                 serde_json::from_value(json_ints.clone()).unwrap();
             json_ints.remove("sentry._internal.ingested_at");
-            let mut rb_ints = rb_row.attributes_int.clone();
-            rb_ints.remove("sentry._internal.ingested_at");
+            let rb_ints: HashMap<String, i64> = rb_row
+                .attributes_int
+                .iter()
+                .filter(|(k, _)| k != "sentry._internal.ingested_at")
+                .cloned()
+                .collect();
             assert_eq!(json_ints, rb_ints, "attributes_int mismatch");
         }
 
@@ -942,10 +952,8 @@ mod tests {
         if let Some(json_bools) = json_row.get("attributes_bool") {
             let json_bools: HashMap<String, bool> =
                 serde_json::from_value(json_bools.clone()).unwrap();
-            assert_eq!(
-                json_bools, rb_row.attributes_bool,
-                "attributes_bool mismatch"
-            );
+            let rb_bools: HashMap<String, bool> = rb_row.attributes_bool.iter().cloned().collect();
+            assert_eq!(json_bools, rb_bools, "attributes_bool mismatch");
         }
 
         // Verify bucketed string attributes have the same content
@@ -964,47 +972,51 @@ mod tests {
 
         // The same bucket in RowBinary row should match
         // We need to access the field dynamically - use the known bucket index
+        // Helper to find a value in a Vec<(String, String)> by key
+        fn find_str_in_vec<'a>(vec: &'a [(String, String)], key: &str) -> Option<&'a String> {
+            vec.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+        }
         let rb_str_val = match str_bucket {
-            0 => rb_row.attributes_string_0.get("str_attr"),
-            1 => rb_row.attributes_string_1.get("str_attr"),
-            2 => rb_row.attributes_string_2.get("str_attr"),
-            3 => rb_row.attributes_string_3.get("str_attr"),
-            4 => rb_row.attributes_string_4.get("str_attr"),
-            5 => rb_row.attributes_string_5.get("str_attr"),
-            6 => rb_row.attributes_string_6.get("str_attr"),
-            7 => rb_row.attributes_string_7.get("str_attr"),
-            8 => rb_row.attributes_string_8.get("str_attr"),
-            9 => rb_row.attributes_string_9.get("str_attr"),
-            10 => rb_row.attributes_string_10.get("str_attr"),
-            11 => rb_row.attributes_string_11.get("str_attr"),
-            12 => rb_row.attributes_string_12.get("str_attr"),
-            13 => rb_row.attributes_string_13.get("str_attr"),
-            14 => rb_row.attributes_string_14.get("str_attr"),
-            15 => rb_row.attributes_string_15.get("str_attr"),
-            16 => rb_row.attributes_string_16.get("str_attr"),
-            17 => rb_row.attributes_string_17.get("str_attr"),
-            18 => rb_row.attributes_string_18.get("str_attr"),
-            19 => rb_row.attributes_string_19.get("str_attr"),
-            20 => rb_row.attributes_string_20.get("str_attr"),
-            21 => rb_row.attributes_string_21.get("str_attr"),
-            22 => rb_row.attributes_string_22.get("str_attr"),
-            23 => rb_row.attributes_string_23.get("str_attr"),
-            24 => rb_row.attributes_string_24.get("str_attr"),
-            25 => rb_row.attributes_string_25.get("str_attr"),
-            26 => rb_row.attributes_string_26.get("str_attr"),
-            27 => rb_row.attributes_string_27.get("str_attr"),
-            28 => rb_row.attributes_string_28.get("str_attr"),
-            29 => rb_row.attributes_string_29.get("str_attr"),
-            30 => rb_row.attributes_string_30.get("str_attr"),
-            31 => rb_row.attributes_string_31.get("str_attr"),
-            32 => rb_row.attributes_string_32.get("str_attr"),
-            33 => rb_row.attributes_string_33.get("str_attr"),
-            34 => rb_row.attributes_string_34.get("str_attr"),
-            35 => rb_row.attributes_string_35.get("str_attr"),
-            36 => rb_row.attributes_string_36.get("str_attr"),
-            37 => rb_row.attributes_string_37.get("str_attr"),
-            38 => rb_row.attributes_string_38.get("str_attr"),
-            39 => rb_row.attributes_string_39.get("str_attr"),
+            0 => find_str_in_vec(&rb_row.attributes_string_0, "str_attr"),
+            1 => find_str_in_vec(&rb_row.attributes_string_1, "str_attr"),
+            2 => find_str_in_vec(&rb_row.attributes_string_2, "str_attr"),
+            3 => find_str_in_vec(&rb_row.attributes_string_3, "str_attr"),
+            4 => find_str_in_vec(&rb_row.attributes_string_4, "str_attr"),
+            5 => find_str_in_vec(&rb_row.attributes_string_5, "str_attr"),
+            6 => find_str_in_vec(&rb_row.attributes_string_6, "str_attr"),
+            7 => find_str_in_vec(&rb_row.attributes_string_7, "str_attr"),
+            8 => find_str_in_vec(&rb_row.attributes_string_8, "str_attr"),
+            9 => find_str_in_vec(&rb_row.attributes_string_9, "str_attr"),
+            10 => find_str_in_vec(&rb_row.attributes_string_10, "str_attr"),
+            11 => find_str_in_vec(&rb_row.attributes_string_11, "str_attr"),
+            12 => find_str_in_vec(&rb_row.attributes_string_12, "str_attr"),
+            13 => find_str_in_vec(&rb_row.attributes_string_13, "str_attr"),
+            14 => find_str_in_vec(&rb_row.attributes_string_14, "str_attr"),
+            15 => find_str_in_vec(&rb_row.attributes_string_15, "str_attr"),
+            16 => find_str_in_vec(&rb_row.attributes_string_16, "str_attr"),
+            17 => find_str_in_vec(&rb_row.attributes_string_17, "str_attr"),
+            18 => find_str_in_vec(&rb_row.attributes_string_18, "str_attr"),
+            19 => find_str_in_vec(&rb_row.attributes_string_19, "str_attr"),
+            20 => find_str_in_vec(&rb_row.attributes_string_20, "str_attr"),
+            21 => find_str_in_vec(&rb_row.attributes_string_21, "str_attr"),
+            22 => find_str_in_vec(&rb_row.attributes_string_22, "str_attr"),
+            23 => find_str_in_vec(&rb_row.attributes_string_23, "str_attr"),
+            24 => find_str_in_vec(&rb_row.attributes_string_24, "str_attr"),
+            25 => find_str_in_vec(&rb_row.attributes_string_25, "str_attr"),
+            26 => find_str_in_vec(&rb_row.attributes_string_26, "str_attr"),
+            27 => find_str_in_vec(&rb_row.attributes_string_27, "str_attr"),
+            28 => find_str_in_vec(&rb_row.attributes_string_28, "str_attr"),
+            29 => find_str_in_vec(&rb_row.attributes_string_29, "str_attr"),
+            30 => find_str_in_vec(&rb_row.attributes_string_30, "str_attr"),
+            31 => find_str_in_vec(&rb_row.attributes_string_31, "str_attr"),
+            32 => find_str_in_vec(&rb_row.attributes_string_32, "str_attr"),
+            33 => find_str_in_vec(&rb_row.attributes_string_33, "str_attr"),
+            34 => find_str_in_vec(&rb_row.attributes_string_34, "str_attr"),
+            35 => find_str_in_vec(&rb_row.attributes_string_35, "str_attr"),
+            36 => find_str_in_vec(&rb_row.attributes_string_36, "str_attr"),
+            37 => find_str_in_vec(&rb_row.attributes_string_37, "str_attr"),
+            38 => find_str_in_vec(&rb_row.attributes_string_38, "str_attr"),
+            39 => find_str_in_vec(&rb_row.attributes_string_39, "str_attr"),
             _ => unreachable!(),
         };
         assert_eq!(
