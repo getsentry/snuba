@@ -277,7 +277,7 @@ def rate_limit_start_request(
                 concurrent = sum(next(pipe_results) for _ in range(rate_limit_shard_factor))
             else:
                 concurrent = 0
-        except RedisTimeoutError:
+        except (RedisTimeoutError, StopIteration):
             raise
         except Exception as ex:
             # if something goes wrong, we don't want to block the request,
@@ -315,7 +315,7 @@ def rate_limit_finish_request(
                 pipe.zincrby(query_bucket, -float(max_query_duration_s), query_id)
                 pipe.expire(query_bucket, max_query_duration_s)
                 pipe.execute()
-    except RedisTimeoutError:
+    except (RedisTimeoutError, StopIteration):
         raise
     except Exception as ex:
         logger.exception(ex)

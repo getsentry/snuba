@@ -483,13 +483,13 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     quota_unit=NO_UNITS,
                     suggestion=NO_SUGGESTION,
                 )
-            except RedisTimeoutError:
-                # Emit metric for timeout, but don't log since this is expected
-                # when Redis is slow. We fail open to avoid blocking requests.
+            except (RedisTimeoutError, StopIteration) as e:
+                # Expected transient errors (Redis timeouts, unexpected pipeline
+                # result counts). Fail open to avoid blocking requests.
                 self.metrics.increment(
                     "fail_open",
                     1,
-                    tags={"method": "get_quota_allowance", "reason": "redis_timeout"},
+                    tags={"method": "get_quota_allowance", "reason": type(e).__name__},
                 )
                 return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
             except Exception:
@@ -553,11 +553,9 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         except InvalidTenantsForAllocationPolicy:
             # the policy did not do anything because the tenants were invalid, updating is also not necessary
             pass
-        except RedisTimeoutError:
-            # Emit metric for timeout, but don't log since this is expected
-            # when Redis is slow. We fail open to avoid blocking requests.
+        except (RedisTimeoutError, StopIteration) as e:
             self.metrics.increment(
-                "fail_open", 1, tags={"method": "update_quota_balance", "reason": "redis_timeout"}
+                "fail_open", 1, tags={"method": "update_quota_balance", "reason": type(e).__name__}
             )
         except Exception:
             self.metrics.increment("fail_open", 1, tags={"method": "update_quota_balance"})
