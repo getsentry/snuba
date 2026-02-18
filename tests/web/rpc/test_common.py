@@ -16,14 +16,18 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     AttributeValue,
+    IntArray,
     StrArray,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AnyAttributeFilter,
     TraceItemFilter,
 )
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba import settings
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
     next_monday,
@@ -37,6 +41,8 @@ from snuba.web.rpc.common.exceptions import (
 )
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.conftest import SnubaSetConfig
+from tests.helpers import write_raw_unprocessed_events
+from tests.web.rpc.v1.test_utils import gen_item_message
 
 
 class TestCommon:
@@ -163,8 +169,6 @@ class TestAnyAttributeFilter:
             _any_attribute_filter_to_expression(filt)
 
     def test_ignore_case_on_non_string_in_raises(self) -> None:
-        from sentry_protos.snuba.v1.trace_item_attribute_pb2 import IntArray
-
         filt = AnyAttributeFilter(
             op=AnyAttributeFilter.OP_IN,
             value=AttributeValue(val_int_array=IntArray(values=[1, 2, 3])),
@@ -186,13 +190,6 @@ class TestAnyAttributeFilterIntegration:
 
     @pytest.fixture(autouse=True)
     def setup(self, eap: None, redis_db: None) -> None:
-        from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
-
-        from snuba.datasets.storages.factory import get_storage
-        from snuba.datasets.storages.storage_key import StorageKey
-        from tests.helpers import write_raw_unprocessed_events
-        from tests.web.rpc.v1.test_utils import gen_item_message
-
         self.base_time = datetime.now(tz=timezone.utc).replace(
             minute=0, second=0, microsecond=0
         ) - timedelta(hours=1)
