@@ -579,4 +579,210 @@ mod tests {
             EAPValue::Int(1234567890)
         );
     }
+
+    #[test]
+    fn test_row_binary_basic_processing() {
+        let item_id = Uuid::new_v4();
+        let trace_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.trace_id = trace_id.to_string();
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        assert_eq!(batch.rows.len(), 1);
+        let row = &batch.rows[0];
+        assert_eq!(row.organization_id, 1);
+        assert_eq!(row.project_id, 1);
+        assert_eq!(row.item_type, TraceItemType::Span as u8);
+        assert_eq!(row.timestamp, 1745562493);
+        assert_eq!(row.trace_id, trace_id);
+        assert_eq!(row.item_id, item_id.as_u128());
+        assert_eq!(row.sampling_weight, 1);
+        assert!((row.sampling_factor - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_row_binary_downsampled_retention_days_default() {
+        let item_id = Uuid::new_v4();
+        let trace_item = generate_trace_item(item_id);
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        let row = &batch.rows[0];
+        assert_eq!(row.retention_days, row.downsampled_retention_days);
+    }
+
+    #[test]
+    fn test_row_binary_downsampled_retention_days_extended() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.downsampled_retention_days = 365;
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        let row = &batch.rows[0];
+        assert_eq!(row.downsampled_retention_days, 365);
+    }
+
+    #[test]
+    fn test_row_binary_item_type_metrics() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.item_type = TraceItemType::Span.into();
+
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+        let payload_len = payload_bytes.len();
+
+        let payload = KafkaPayload::new(None, None, Some(payload_bytes));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        assert!(batch.item_type_metrics.is_some());
+        let metrics = batch.item_type_metrics.unwrap();
+        assert_eq!(metrics.counts.get(&TraceItemType::Span), Some(&1));
+        assert_eq!(
+            metrics.bytes_processed.get(&TraceItemType::Span),
+            Some(&payload_len)
+        );
+    }
+
+    #[test]
+    fn test_row_binary_cogs_data() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.item_type = TraceItemType::Log.into();
+
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+        let payload_len = payload_bytes.len();
+
+        let payload = KafkaPayload::new(None, None, Some(payload_bytes));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        assert!(batch.cogs_data.is_some());
+        let cogs = batch.cogs_data.unwrap();
+        assert_eq!(cogs.data.get("our_logs"), Some(&(payload_len as u64)));
+    }
+
+    #[test]
+    fn test_row_binary_attributes() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+
+        trace_item.attributes.insert(
+            "my_int".to_string(),
+            AnyValue {
+                value: Some(Value::IntValue(42)),
+            },
+        );
+        trace_item.attributes.insert(
+            "my_bool".to_string(),
+            AnyValue {
+                value: Some(Value::BoolValue(true)),
+            },
+        );
+        trace_item.attributes.insert(
+            "my_array".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![AnyValue {
+                        value: Some(Value::StringValue("elem".to_string())),
+                    }],
+                })),
+            },
+        );
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        let row = &batch.rows[0];
+
+        // Int attributes are stored in attributes_int (and also double-written to a float bucket)
+        assert_eq!(row.attributes_int.get("my_int"), Some(&42));
+
+        // Bool attributes are stored in attributes_bool (and also double-written to a float bucket)
+        assert_eq!(row.attributes_bool.get("my_bool"), Some(&true));
+
+        // Array attributes are serialized as JSON string
+        assert!(row.attributes_array.contains("my_array"));
+        assert!(row.attributes_array.contains("elem"));
+    }
+
+    #[test]
+    fn test_row_binary_sampling_rates() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.client_sample_rate = 0.5;
+        trace_item.server_sample_rate = 0.25;
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        let row = &batch.rows[0];
+        assert_eq!(row.sampling_weight, 8); // 1 / (0.5 * 0.25) = 8
+        assert!((row.sampling_factor - 0.125).abs() < 1e-6);
+    }
 }
