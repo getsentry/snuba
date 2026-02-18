@@ -1123,12 +1123,78 @@ mod tests {
         assert_eq!(batch.rows.len(), 1);
         let row = batch.rows[0].clone();
 
+        // Diagnostic: verify attributes_array column exists and check its type
+        let col_count: u64 = client
+            .query("SELECT count() FROM system.columns WHERE table = 'eap_items_1_local' AND database = currentDatabase() AND name = 'attributes_array'")
+            .fetch_one()
+            .await
+            .expect("Failed to query system.columns");
+        eprintln!("DEBUG: attributes_array column exists: {}", col_count > 0);
+
+        if col_count > 0 {
+            let col_type: String = client
+                .query("SELECT type FROM system.columns WHERE table = 'eap_items_1_local' AND database = currentDatabase() AND name = 'attributes_array'")
+                .fetch_one()
+                .await
+                .expect("Failed to query column type");
+            eprintln!("DEBUG: attributes_array column type: {}", col_type);
+        }
+
+        // Diagnostic: print the attributes_array value being inserted
+        eprintln!(
+            "DEBUG: attributes_array value: {:?} (len={})",
+            row.attributes_array,
+            row.attributes_array.len()
+        );
+
+        // Diagnostic: test that input_format_binary_read_json_as_string works
+        // by inserting into a temp table with a JSON column
+        client
+            .query("DROP TABLE IF EXISTS _test_json_rb")
+            .execute()
+            .await
+            .ok();
+        let create_result = client
+            .query("CREATE TABLE _test_json_rb (id UInt64, data JSON) ENGINE = Memory")
+            .execute()
+            .await;
+        eprintln!("DEBUG: JSON temp table creation: {:?}", create_result);
+
+        if create_result.is_ok() {
+            #[derive(clickhouse::Row, serde::Serialize)]
+            struct TestJsonRow {
+                id: u64,
+                data: String,
+            }
+            let test_row = TestJsonRow {
+                id: 1,
+                data: "{}".to_string(),
+            };
+            let mut test_insert = client
+                .insert("_test_json_rb")
+                .expect("Failed to create test insert");
+            test_insert
+                .write(&test_row)
+                .await
+                .expect("Failed to write test row");
+            let test_result = test_insert.end().await;
+            eprintln!("DEBUG: JSON temp table insert result: {:?}", test_result);
+
+            client
+                .query("DROP TABLE IF EXISTS _test_json_rb")
+                .execute()
+                .await
+                .ok();
+        }
+
         // Insert via RowBinary (same code path as production)
         let mut insert = client
             .insert("eap_items_1_local")
             .expect("Failed to create insert");
         insert.write(&row).await.expect("Failed to write row");
-        insert.end().await.expect("Failed to end insert");
+        let insert_result = insert.end().await;
+        eprintln!("DEBUG: insert result: {:?}", insert_result);
+        insert_result.expect("Failed to end insert");
 
         // Read it back using organization_id (primary key prefix) for reliable lookup
         let count: u64 = client
