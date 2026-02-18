@@ -118,6 +118,13 @@ def test_invalid_system_query(sql_query: str) -> None:
         ("OPTIMIZE TABLE eap_spans_local", True),
         ("optimize table eap_spans_local", True),
         ("optimize   TABLE eap_spans_local", True),
+        ("DROP TABLE eap_spans_local", True),
+        ("drop table eap_spans_local", True),
+        ("DROP TABLE IF EXISTS eap_spans_local", True),
+        (
+            "DROP TABLE IF EXISTS default.eap_items_1_dist ON CLUSTER 'snuba-events-analytics-platform' SYNC;",
+            True,
+        ),
         (
             "SYSTEM DROP REPLICA 'snuba-events-analytics-platform-2-2' FROM ZKPATH '/clickhouse/tables/events_analytics_platform/2/default/eap_spans_2_local'",
             True,
