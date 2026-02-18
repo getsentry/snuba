@@ -785,4 +785,366 @@ mod tests {
         assert_eq!(row.sampling_weight, 8); // 1 / (0.5 * 0.25) = 8
         assert!((row.sampling_factor - 0.125).abs() < 1e-6);
     }
+
+    /// Compares the output of process_message (JSON path) and process_message_row_binary
+    /// (RowBinary path) to ensure both produce equivalent data for the same input.
+    #[test]
+    fn test_json_and_row_binary_produce_equivalent_output() {
+        let item_id = Uuid::new_v4();
+        let trace_id = Uuid::new_v4();
+
+        // Build a trace item with various attribute types
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.trace_id = trace_id.to_string();
+        trace_item.client_sample_rate = 0.5;
+        trace_item.server_sample_rate = 0.25;
+        trace_item.downsampled_retention_days = 365;
+        trace_item.attributes.insert(
+            "str_attr".to_string(),
+            AnyValue {
+                value: Some(Value::StringValue("hello".to_string())),
+            },
+        );
+        trace_item.attributes.insert(
+            "int_attr".to_string(),
+            AnyValue {
+                value: Some(Value::IntValue(42)),
+            },
+        );
+        trace_item.attributes.insert(
+            "float_attr".to_string(),
+            AnyValue {
+                value: Some(Value::DoubleValue(3.14)),
+            },
+        );
+        trace_item.attributes.insert(
+            "bool_attr".to_string(),
+            AnyValue {
+                value: Some(Value::BoolValue(true)),
+            },
+        );
+        trace_item.attributes.insert(
+            "array_attr".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![
+                        AnyValue {
+                            value: Some(Value::StringValue("a".to_string())),
+                        },
+                        AnyValue {
+                            value: Some(Value::IntValue(1)),
+                        },
+                    ],
+                })),
+            },
+        );
+
+        // Encode the protobuf once, then clone for both paths
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        // Process through JSON path
+        let json_payload = KafkaPayload::new(None, None, Some(payload_bytes.clone()));
+        let json_batch = process_message(json_payload, meta.clone(), &ProcessorConfig::default())
+            .expect("JSON path should succeed");
+
+        // Process through RowBinary path
+        let rb_payload = KafkaPayload::new(None, None, Some(payload_bytes));
+        let rb_batch = process_message_row_binary(rb_payload, meta, &ProcessorConfig::default())
+            .expect("RowBinary path should succeed");
+
+        // Parse the JSON output
+        let json_str =
+            std::str::from_utf8(&json_batch.rows.encoded_rows).expect("JSON should be valid UTF-8");
+        let json_row: serde_json::Value =
+            serde_json::from_str(json_str.trim()).expect("Should parse as JSON");
+
+        let rb_row = &rb_batch.rows[0];
+
+        // Compare scalar fields
+        assert_eq!(
+            json_row["organization_id"].as_u64().unwrap(),
+            rb_row.organization_id,
+            "organization_id mismatch"
+        );
+        assert_eq!(
+            json_row["project_id"].as_u64().unwrap(),
+            rb_row.project_id,
+            "project_id mismatch"
+        );
+        assert_eq!(
+            json_row["item_type"].as_u64().unwrap() as u8,
+            rb_row.item_type,
+            "item_type mismatch"
+        );
+        assert_eq!(
+            json_row["timestamp"].as_u64().unwrap() as u32,
+            rb_row.timestamp,
+            "timestamp mismatch"
+        );
+        assert_eq!(
+            json_row["sampling_weight"].as_u64().unwrap(),
+            rb_row.sampling_weight,
+            "sampling_weight mismatch"
+        );
+        assert!(
+            (json_row["sampling_factor"].as_f64().unwrap() - rb_row.sampling_factor).abs() < 1e-9,
+            "sampling_factor mismatch"
+        );
+        assert_eq!(
+            json_row["retention_days"].as_u64().unwrap() as u16,
+            rb_row.retention_days,
+            "retention_days mismatch"
+        );
+        assert_eq!(
+            json_row["downsampled_retention_days"].as_u64().unwrap() as u16,
+            rb_row.downsampled_retention_days,
+            "downsampled_retention_days mismatch"
+        );
+
+        // Compare trace_id (JSON serializes as hyphenated UUID string)
+        let json_trace_id = Uuid::parse_str(json_row["trace_id"].as_str().unwrap()).unwrap();
+        assert_eq!(json_trace_id, rb_row.trace_id, "trace_id mismatch");
+
+        // Compare item_id — u128 may exceed u64 range. serde_json serializes large u128
+        // values as floats which lose precision. Both paths go through the same
+        // process_eap_item → read_item_id, so we verify via the shared trace_id lookup
+        // and check the JSON can at least represent the value.
+        // For small item_ids that fit in u64:
+        if let Some(id) = json_row["item_id"].as_u64() {
+            assert_eq!(id as u128, rb_row.item_id, "item_id mismatch");
+        }
+        // For all cases, the RowBinary item_id should match what we generated
+        assert_eq!(
+            rb_row.item_id,
+            item_id.as_u128(),
+            "item_id mismatch vs input"
+        );
+
+        // Compare attributes_int (excluding sentry._internal.ingested_at which uses
+        // Utc::now() and may differ by a millisecond between the two calls)
+        if let Some(json_ints) = json_row.get("attributes_int") {
+            let mut json_ints: HashMap<String, i64> =
+                serde_json::from_value(json_ints.clone()).unwrap();
+            json_ints.remove("sentry._internal.ingested_at");
+            let mut rb_ints = rb_row.attributes_int.clone();
+            rb_ints.remove("sentry._internal.ingested_at");
+            assert_eq!(json_ints, rb_ints, "attributes_int mismatch");
+        }
+
+        // Compare attributes_bool
+        if let Some(json_bools) = json_row.get("attributes_bool") {
+            let json_bools: HashMap<String, bool> =
+                serde_json::from_value(json_bools.clone()).unwrap();
+            assert_eq!(
+                json_bools, rb_row.attributes_bool,
+                "attributes_bool mismatch"
+            );
+        }
+
+        // Verify bucketed string attributes have the same content
+        // "str_attr" should be in one of the string buckets
+        let str_bucket = (fnv_1a("str_attr".as_bytes()) as usize) % 40;
+        let json_field = format!("attributes_string_{}", str_bucket);
+        let json_str_map: HashMap<String, String> = json_row
+            .get(&json_field)
+            .map(|v| serde_json::from_value(v.clone()).unwrap())
+            .unwrap_or_default();
+        assert_eq!(
+            json_str_map.get("str_attr"),
+            Some(&"hello".to_string()),
+            "str_attr not found in JSON output"
+        );
+
+        // The same bucket in RowBinary row should match
+        // We need to access the field dynamically - use the known bucket index
+        let rb_str_val = match str_bucket {
+            0 => rb_row.attributes_string_0.get("str_attr"),
+            1 => rb_row.attributes_string_1.get("str_attr"),
+            2 => rb_row.attributes_string_2.get("str_attr"),
+            3 => rb_row.attributes_string_3.get("str_attr"),
+            4 => rb_row.attributes_string_4.get("str_attr"),
+            5 => rb_row.attributes_string_5.get("str_attr"),
+            6 => rb_row.attributes_string_6.get("str_attr"),
+            7 => rb_row.attributes_string_7.get("str_attr"),
+            8 => rb_row.attributes_string_8.get("str_attr"),
+            9 => rb_row.attributes_string_9.get("str_attr"),
+            10 => rb_row.attributes_string_10.get("str_attr"),
+            11 => rb_row.attributes_string_11.get("str_attr"),
+            12 => rb_row.attributes_string_12.get("str_attr"),
+            13 => rb_row.attributes_string_13.get("str_attr"),
+            14 => rb_row.attributes_string_14.get("str_attr"),
+            15 => rb_row.attributes_string_15.get("str_attr"),
+            16 => rb_row.attributes_string_16.get("str_attr"),
+            17 => rb_row.attributes_string_17.get("str_attr"),
+            18 => rb_row.attributes_string_18.get("str_attr"),
+            19 => rb_row.attributes_string_19.get("str_attr"),
+            20 => rb_row.attributes_string_20.get("str_attr"),
+            21 => rb_row.attributes_string_21.get("str_attr"),
+            22 => rb_row.attributes_string_22.get("str_attr"),
+            23 => rb_row.attributes_string_23.get("str_attr"),
+            24 => rb_row.attributes_string_24.get("str_attr"),
+            25 => rb_row.attributes_string_25.get("str_attr"),
+            26 => rb_row.attributes_string_26.get("str_attr"),
+            27 => rb_row.attributes_string_27.get("str_attr"),
+            28 => rb_row.attributes_string_28.get("str_attr"),
+            29 => rb_row.attributes_string_29.get("str_attr"),
+            30 => rb_row.attributes_string_30.get("str_attr"),
+            31 => rb_row.attributes_string_31.get("str_attr"),
+            32 => rb_row.attributes_string_32.get("str_attr"),
+            33 => rb_row.attributes_string_33.get("str_attr"),
+            34 => rb_row.attributes_string_34.get("str_attr"),
+            35 => rb_row.attributes_string_35.get("str_attr"),
+            36 => rb_row.attributes_string_36.get("str_attr"),
+            37 => rb_row.attributes_string_37.get("str_attr"),
+            38 => rb_row.attributes_string_38.get("str_attr"),
+            39 => rb_row.attributes_string_39.get("str_attr"),
+            _ => unreachable!(),
+        };
+        assert_eq!(
+            rb_str_val,
+            Some(&"hello".to_string()),
+            "str_attr not found in RowBinary output bucket {}",
+            str_bucket
+        );
+        assert_eq!(
+            json_str_map.get("str_attr"),
+            rb_str_val,
+            "str_attr differs between JSON and RowBinary"
+        );
+
+        // Verify float attribute is in the correct bucket (int_attr and bool_attr are
+        // double-written as floats)
+        let float_bucket = (fnv_1a("float_attr".as_bytes()) as usize) % 40;
+        let json_float_field = format!("attributes_float_{}", float_bucket);
+        let json_float_map: HashMap<String, f64> = json_row
+            .get(&json_float_field)
+            .map(|v| serde_json::from_value(v.clone()).unwrap())
+            .unwrap_or_default();
+        assert!(
+            (json_float_map.get("float_attr").copied().unwrap_or(0.0) - 3.14).abs() < 1e-9,
+            "float_attr mismatch in JSON"
+        );
+
+        // Compare attributes_array
+        // In JSON: serialized as {"array_attr": [{"String": "a"}, {"Int": 1}]}
+        // In RowBinary: serialized as a JSON string
+        let json_arrays = json_row.get("attributes_array");
+        if let Some(json_arrays) = json_arrays {
+            let rb_arrays: serde_json::Value =
+                serde_json::from_str(&rb_row.attributes_array).unwrap_or_default();
+            assert_eq!(
+                json_arrays, &rb_arrays,
+                "attributes_array mismatch between JSON and RowBinary"
+            );
+        }
+
+        // Compare cogs_data
+        assert_eq!(
+            json_batch.cogs_data, rb_batch.cogs_data,
+            "cogs_data mismatch"
+        );
+
+        // Compare item_type_metrics
+        assert_eq!(
+            json_batch.item_type_metrics, rb_batch.item_type_metrics,
+            "item_type_metrics mismatch"
+        );
+    }
+
+    /// Integration test that actually inserts an EAPItemRow into ClickHouse
+    /// via RowBinary and reads it back. Requires ClickHouse with migrations applied.
+    /// Runs in CI (where snuba-test-rust runs migrations first) but skipped locally
+    /// unless explicitly requested with --include-ignored.
+    #[tokio::test]
+    #[ignore]
+    async fn test_row_binary_clickhouse_insert() {
+        let host = std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string());
+        let http_port: u16 = std::env::var("CLICKHOUSE_HTTP_PORT")
+            .unwrap_or("8123".to_string())
+            .parse()
+            .unwrap();
+        let database = std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string());
+
+        let client = clickhouse::Client::default()
+            .with_url(format!("http://{}:{}", host, http_port))
+            .with_database(&database);
+
+        let item_id = Uuid::new_v4();
+        let trace_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.trace_id = trace_id.to_string();
+        trace_item.attributes.insert(
+            "test_string".to_string(),
+            sentry_protos::snuba::v1::AnyValue {
+                value: Some(Value::StringValue("hello".to_string())),
+            },
+        );
+        trace_item.attributes.insert(
+            "test_int".to_string(),
+            sentry_protos::snuba::v1::AnyValue {
+                value: Some(Value::IntValue(42)),
+            },
+        );
+
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload_bytes));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        assert_eq!(batch.rows.len(), 1);
+        let row = batch.rows[0].clone();
+
+        // Insert via RowBinary (same code path as production)
+        let mut insert = client
+            .insert("eap_items_1_local")
+            .expect("Failed to create insert");
+        insert.write(&row).await.expect("Failed to write row");
+        insert.end().await.expect("Failed to end insert");
+
+        // Read it back to verify the data round-trips correctly
+        let query = format!(
+            "SELECT organization_id, project_id, item_type, sampling_weight, \
+             reinterpretAsUInt128(reverse(unhex(replaceAll(toString(item_id), '-', '')))) as item_id_uint \
+             FROM eap_items_1_local \
+             WHERE trace_id = '{}' \
+             LIMIT 1",
+            trace_id
+        );
+
+        let result = client
+            .query(&query)
+            .fetch_one::<(u64, u64, u8, u64, u128)>()
+            .await
+            .expect("Failed to read back inserted row");
+
+        assert_eq!(result.0, 1); // organization_id
+        assert_eq!(result.1, 1); // project_id
+        assert_eq!(result.2, TraceItemType::Span as u8); // item_type
+        assert_eq!(result.3, 1); // sampling_weight
+
+        // Clean up
+        client
+            .query(&format!(
+                "ALTER TABLE eap_items_1_local DELETE WHERE trace_id = '{}'",
+                trace_id
+            ))
+            .execute()
+            .await
+            .ok();
+    }
 }
