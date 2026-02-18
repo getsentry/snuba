@@ -1196,6 +1196,35 @@ mod tests {
         eprintln!("DEBUG: insert result: {:?}", insert_result);
         insert_result.expect("Failed to end insert");
 
+        // Diagnostic: check async_insert and other relevant settings
+        let async_insert: String = client
+            .query("SELECT value FROM system.settings WHERE name = 'async_insert'")
+            .fetch_one()
+            .await
+            .unwrap_or_else(|e| format!("ERROR: {}", e));
+        eprintln!("DEBUG: async_insert setting: {}", async_insert);
+
+        // Diagnostic: count total rows in table
+        let total_count: u64 = client
+            .query("SELECT count() FROM eap_items_1_local")
+            .fetch_one()
+            .await
+            .unwrap_or(0);
+        eprintln!("DEBUG: total rows in table: {}", total_count);
+
+        // Diagnostic: check system.parts for this table
+        let parts_count: u64 = client
+            .query(
+                "SELECT count() FROM system.parts WHERE table = 'eap_items_1_local' AND active = 1",
+            )
+            .fetch_one()
+            .await
+            .unwrap_or(0);
+        eprintln!("DEBUG: active parts: {}", parts_count);
+
+        // Small delay to ensure data is visible
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
         // Read it back using organization_id (primary key prefix) for reliable lookup
         let count: u64 = client
             .query(&format!(
@@ -1205,6 +1234,16 @@ mod tests {
             .fetch_one()
             .await
             .expect("Failed to count rows");
+        eprintln!("DEBUG: count for org_id={}: {}", unique_org_id, count);
+
+        // Diagnostic: also check without WHERE
+        let count_after: u64 = client
+            .query("SELECT count() FROM eap_items_1_local")
+            .fetch_one()
+            .await
+            .unwrap_or(0);
+        eprintln!("DEBUG: total rows after insert: {}", count_after);
+
         assert!(
             count > 0,
             "No rows found after insert for org_id={unique_org_id}"
