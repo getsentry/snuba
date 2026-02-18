@@ -176,7 +176,6 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             )
 
     if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
-        alias = _build_label_mapping_key(attr_key)
         safe_name = attr_key.name.replace("`", "\\`")
         # Array values are stored as tagged variants (e.g. {"String": "alice"})
         # in the JSON column. Cast to Array(JSON), then extract String values.

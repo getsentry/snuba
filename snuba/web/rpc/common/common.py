@@ -453,6 +453,8 @@ def get_field_existence_expression(field: Expression) -> Expression:
         return f.mapContains(field.parameters[0], field.parameters[1])
 
     if isinstance(field, DangerousRawSQL):
+        # Array attributes in the JSON column return empty arrays (not NULL)
+        # for missing keys, so notEmpty is the correct existence check.
         return f.notEmpty(field)
 
     return f.isNotNull(field)
