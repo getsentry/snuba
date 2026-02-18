@@ -229,13 +229,13 @@ wheels = [
 
 [[package]]
 name = "freezegun"
-version = "1.2.2"
+version = "1.5.5"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "python-dateutil", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/freezegun-1.2.2-py3-none-any.whl", hash = "sha256:ea1b963b993cb9ea195adbd893a48d573fda951b0da64f60883d7e988b606c9f" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/freezegun-1.5.5-py3-none-any.whl", hash = "sha256:cd557f4a75cf074e84bc374249b9dd491eaeacd61376b9eb3c423282211619d2" },
 ]
 
 [[package]]
@@ -1098,7 +1098,7 @@ requires-dist = [
     { name = "devservices", specifier = ">=1.2.1" },
     { name = "fastjsonschema", specifier = ">=2.16.2" },
     { name = "flask", specifier = ">=3.1.0" },
-    { name = "freezegun", specifier = ">=1.2.2" },
+    { name = "freezegun", specifier = ">=1.5.5" },
     { name = "google-api-core", specifier = ">=2.19.1" },
     { name = "google-api-python-client", specifier = ">=2.88.0" },
     { name = "google-cloud-storage", specifier = ">=2.18.0" },
@@ -1137,7 +1137,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "devservices", specifier = ">=1.2.1" },
-    { name = "freezegun", specifier = ">=1.2.2" },
+    { name = "freezegun", specifier = ">=1.5.5" },
     { name = "honcho", specifier = ">=1.1.0" },
     { name = "mypy", specifier = ">=1.1.1" },
     { name = "pip", specifier = ">=23.3.2" },
