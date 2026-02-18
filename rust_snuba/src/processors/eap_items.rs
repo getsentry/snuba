@@ -1084,16 +1084,31 @@ mod tests {
         let client = clickhouse::Client::default()
             .with_url(format!("http://{}:{}", host, http_port))
             .with_database(&database)
-            .with_option("input_format_binary_read_json_as_string", "1");
+            .with_option("input_format_binary_read_json_as_string", "1")
+            .with_option("insert_deduplicate", "0");
 
         // Use a unique organization_id to avoid conflicts with other test data
         let unique_org_id: u64 = 999_999_000 + (rand::random::<u32>() % 1000) as u64;
+
+        // Use current timestamp so TTL (timestamp + retention_days) is in the future
+        let now_secs = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
 
         let item_id = Uuid::new_v4();
         let trace_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
         trace_item.trace_id = trace_id.to_string();
         trace_item.organization_id = unique_org_id;
+        trace_item.timestamp = Some(prost_types::Timestamp {
+            seconds: now_secs,
+            nanos: 0,
+        });
+        trace_item.received = Some(prost_types::Timestamp {
+            seconds: now_secs,
+            nanos: 0,
+        });
         trace_item.attributes.insert(
             "test_string".to_string(),
             sentry_protos::snuba::v1::AnyValue {
@@ -1123,107 +1138,32 @@ mod tests {
         assert_eq!(batch.rows.len(), 1);
         let row = batch.rows[0].clone();
 
-        // Diagnostic: verify attributes_array column exists and check its type
-        let col_count: u64 = client
-            .query("SELECT count() FROM system.columns WHERE table = 'eap_items_1_local' AND database = currentDatabase() AND name = 'attributes_array'")
-            .fetch_one()
-            .await
-            .expect("Failed to query system.columns");
-        eprintln!("DEBUG: attributes_array column exists: {}", col_count > 0);
-
-        if col_count > 0 {
-            let col_type: String = client
-                .query("SELECT type FROM system.columns WHERE table = 'eap_items_1_local' AND database = currentDatabase() AND name = 'attributes_array'")
-                .fetch_one()
-                .await
-                .expect("Failed to query column type");
-            eprintln!("DEBUG: attributes_array column type: {}", col_type);
-        }
-
-        // Diagnostic: print the attributes_array value being inserted
+        // Diagnostic
         eprintln!(
-            "DEBUG: attributes_array value: {:?} (len={})",
-            row.attributes_array,
-            row.attributes_array.len()
+            "DEBUG: org_id={}, timestamp={}",
+            unique_org_id, row.timestamp
         );
 
-        // Diagnostic: test that input_format_binary_read_json_as_string works
-        // by inserting into a temp table with a JSON column
-        client
-            .query("DROP TABLE IF EXISTS _test_json_rb")
-            .execute()
+        let count_before: u64 = client
+            .query("SELECT count() FROM eap_items_1_local")
+            .fetch_one()
             .await
-            .ok();
-        let create_result = client
-            .query("CREATE TABLE _test_json_rb (id UInt64, data JSON) ENGINE = Memory")
-            .execute()
-            .await;
-        eprintln!("DEBUG: JSON temp table creation: {:?}", create_result);
-
-        if create_result.is_ok() {
-            #[derive(clickhouse::Row, serde::Serialize)]
-            struct TestJsonRow {
-                id: u64,
-                data: String,
-            }
-            let test_row = TestJsonRow {
-                id: 1,
-                data: "{}".to_string(),
-            };
-            let mut test_insert = client
-                .insert("_test_json_rb")
-                .expect("Failed to create test insert");
-            test_insert
-                .write(&test_row)
-                .await
-                .expect("Failed to write test row");
-            let test_result = test_insert.end().await;
-            eprintln!("DEBUG: JSON temp table insert result: {:?}", test_result);
-
-            client
-                .query("DROP TABLE IF EXISTS _test_json_rb")
-                .execute()
-                .await
-                .ok();
-        }
+            .unwrap_or(0);
+        eprintln!("DEBUG: total rows before insert: {}", count_before);
 
         // Insert via RowBinary (same code path as production)
         let mut insert = client
             .insert("eap_items_1_local")
             .expect("Failed to create insert");
         insert.write(&row).await.expect("Failed to write row");
-        let insert_result = insert.end().await;
-        eprintln!("DEBUG: insert result: {:?}", insert_result);
-        insert_result.expect("Failed to end insert");
+        insert.end().await.expect("Failed to end insert");
 
-        // Diagnostic: check async_insert and other relevant settings
-        let async_insert: String = client
-            .query("SELECT value FROM system.settings WHERE name = 'async_insert'")
-            .fetch_one()
-            .await
-            .unwrap_or_else(|e| format!("ERROR: {}", e));
-        eprintln!("DEBUG: async_insert setting: {}", async_insert);
-
-        // Diagnostic: count total rows in table
-        let total_count: u64 = client
+        let count_after: u64 = client
             .query("SELECT count() FROM eap_items_1_local")
             .fetch_one()
             .await
             .unwrap_or(0);
-        eprintln!("DEBUG: total rows in table: {}", total_count);
-
-        // Diagnostic: check system.parts for this table
-        let parts_count: u64 = client
-            .query(
-                "SELECT count() FROM system.parts WHERE table = 'eap_items_1_local' AND active = 1",
-            )
-            .fetch_one()
-            .await
-            .unwrap_or(0);
-        eprintln!("DEBUG: active parts: {}", parts_count);
-
-        // Small delay to ensure data is visible
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        eprintln!("DEBUG: total rows after insert: {}", count_after);
 
         // Read it back using organization_id (primary key prefix) for reliable lookup
         let count: u64 = client
@@ -1234,19 +1174,10 @@ mod tests {
             .fetch_one()
             .await
             .expect("Failed to count rows");
-        eprintln!("DEBUG: count for org_id={}: {}", unique_org_id, count);
-
-        // Diagnostic: also check without WHERE
-        let count_after: u64 = client
-            .query("SELECT count() FROM eap_items_1_local")
-            .fetch_one()
-            .await
-            .unwrap_or(0);
-        eprintln!("DEBUG: total rows after insert: {}", count_after);
-
+        eprintln!("DEBUG: rows for org_id={}: {}", unique_org_id, count);
         assert!(
             count > 0,
-            "No rows found after insert for org_id={unique_org_id}"
+            "No rows found after insert for org_id={unique_org_id}. Before={count_before}, After={count_after}"
         );
 
         let result = client
