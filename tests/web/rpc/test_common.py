@@ -1,25 +1,33 @@
-from datetime import datetime, timedelta
+import uuid
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from google.protobuf import json_format, struct_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
+    Column,
+    TraceItemTableRequest,
+)
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    RequestMeta,
+    TraceItemType,
+)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    AttributeValue,
+    StrArray,
+)
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AnyAttributeFilter,
     TraceItemFilter,
 )
 
 from snuba import settings
-from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, in_cond, literal, literals_array, not_cond, or_cond
-from snuba.query.expressions import Argument, Expression, Lambda
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
     next_monday,
     prev_monday,
-    trace_item_filters_to_expression,
     use_sampling_factor,
 )
 from snuba.web.rpc.common.exceptions import (
@@ -27,6 +35,7 @@ from snuba.web.rpc.common.exceptions import (
     RPCAllocationPolicyException,
     convert_rpc_exception_to_proto,
 )
+from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.conftest import SnubaSetConfig
 
 
@@ -116,201 +125,8 @@ def test_convert_rpc_exception_to_proto_packs_details() -> None:
     assert unpacked == routing_decision_log_dict
 
 
-def _dummy_attr_key_to_expression(attr_key: AttributeKey) -> Expression:
-    """Dummy for tests that don't use attribute_key_to_expression."""
-    return column(attr_key.name)
-
-
 class TestAnyAttributeFilter:
-    def test_equals_string_default_type(self) -> None:
-        """Default attribute_types (empty) should search attributes_string."""
-        filt = AnyAttributeFilter(
-            op=AnyAttributeFilter.OP_EQUALS,
-            value=AttributeValue(val_str="error"),
-        )
-        result = _any_attribute_filter_to_expression(filt)
-        x = Argument(None, "x")
-        expected = f.arrayExists(
-            Lambda(None, ("x",), f.equals(x, literal("error"))),
-            f.mapValues(column("attributes_string")),
-        )
-        assert result == expected
-
-    def test_equals_ignore_case(self) -> None:
-        filt = AnyAttributeFilter(
-            op=AnyAttributeFilter.OP_EQUALS,
-            value=AttributeValue(val_str="Error"),
-            ignore_case=True,
-        )
-        result = _any_attribute_filter_to_expression(filt)
-        x = Argument(None, "x")
-        expected = f.arrayExists(
-            Lambda(None, ("x",), f.equals(f.lower(x), f.lower(literal("Error")))),
-            f.mapValues(column("attributes_string")),
-        )
-        assert result == expected
-
-    def test_like_string(self) -> None:
-        filt = AnyAttributeFilter(
-            op=AnyAttributeFilter.OP_LIKE,
-            value=AttributeValue(val_str="%error%"),
-        )
-        result = _any_attribute_filter_to_expression(filt)
-        x = Argument(None, "x")
-        expected = f.arrayExists(
-            Lambda(None, ("x",), f.like(x, literal("%error%"))),
-            f.mapValues(column("attributes_string")),
-        )
-        assert result == expected
-
-    def test_ilike_string(self) -> None:
-        filt = AnyAttributeFilter(
-            op=AnyAttributeFilter.OP_LIKE,
-            value=AttributeValue(val_str="%error%"),
-            ignore_case=True,
-        )
-        result = _any_attribute_filter_to_expression(filt)
-        x = Argument(None, "x")
-        expected = f.arrayExists(
-            Lambda(None, ("x",), f.ilike(x, literal("%error%"))),
-            f.mapValues(column("attributes_string")),
-        )
-        assert result == expected
-
-    def test_in_string_array(self) -> None:
-        from sentry_protos.snuba.v1.trace_item_attribute_pb2 import StrArray
-
-        filt = AnyAttributeFilter(
-            op=AnyAttributeFilter.OP_IN,
-            value=AttributeValue(val_str_array=StrArray(values=["a", "b", "c"])),
-        )
-        result = _any_attribute_filter_to_expression(filt)
-        x = Argument(None, "x")
-        arr = literals_array(None, [literal("a"), literal("b"), literal("c")])
-        expected = f.arrayExists(
-            Lambda(None, ("x",), in_cond(x, arr)),
-            f.mapValues(column("attributes_string")),
-        )
-        assert result == expected
-
-    def test_in_ignore_case(self) -> None:
-        from sentry_protos.snuba.v1.trace_item_attribute_pb2 import StrArray
-
-        filt = AnyAttributeFilter(
-            op=AnyAttributeFilter.OP_IN,
-            value=AttributeValue(val_str_array=StrArray(values=["A", "B"])),
-            ignore_case=True,
-        )
-        result = _any_attribute_filter_to_expression(filt)
-        x = Argument(None, "x")
-        arr = literals_array(None, [literal("a"), literal("b")])
-        expected = f.arrayExists(
-            Lambda(None, ("x",), in_cond(f.lower(x), arr)),
-            f.mapValues(column("attributes_string")),
-        )
-        assert result == expected
-
-    def test_not_equals_negates(self) -> None:
-        filt = AnyAttributeFilter(
-            op=AnyAttributeFilter.OP_NOT_EQUALS,
-            value=AttributeValue(val_str="error"),
-        )
-        result = _any_attribute_filter_to_expression(filt)
-        x = Argument(None, "x")
-        positive = f.arrayExists(
-            Lambda(None, ("x",), f.equals(x, literal("error"))),
-            f.mapValues(column("attributes_string")),
-        )
-        expected = not_cond(positive)
-        assert result == expected
-
-    def test_not_like_negates(self) -> None:
-        filt = AnyAttributeFilter(
-            op=AnyAttributeFilter.OP_NOT_LIKE,
-            value=AttributeValue(val_str="%error%"),
-        )
-        result = _any_attribute_filter_to_expression(filt)
-        x = Argument(None, "x")
-        positive = f.arrayExists(
-            Lambda(None, ("x",), f.like(x, literal("%error%"))),
-            f.mapValues(column("attributes_string")),
-        )
-        expected = not_cond(positive)
-        assert result == expected
-
-    def test_not_in_negates(self) -> None:
-        from sentry_protos.snuba.v1.trace_item_attribute_pb2 import StrArray
-
-        filt = AnyAttributeFilter(
-            op=AnyAttributeFilter.OP_NOT_IN,
-            value=AttributeValue(val_str_array=StrArray(values=["a", "b"])),
-        )
-        result = _any_attribute_filter_to_expression(filt)
-        x = Argument(None, "x")
-        arr = literals_array(None, [literal("a"), literal("b")])
-        positive = f.arrayExists(
-            Lambda(None, ("x",), in_cond(x, arr)),
-            f.mapValues(column("attributes_string")),
-        )
-        expected = not_cond(positive)
-        assert result == expected
-
-    def test_custom_attribute_types_float(self) -> None:
-        """Searching float attributes should use attributes_float column."""
-        filt = AnyAttributeFilter(
-            op=AnyAttributeFilter.OP_EQUALS,
-            value=AttributeValue(val_double=3.14),
-            attribute_types=[AttributeKey.Type.TYPE_FLOAT],
-        )
-        result = _any_attribute_filter_to_expression(filt)
-        x = Argument(None, "x")
-        expected = f.arrayExists(
-            Lambda(None, ("x",), f.equals(x, literal(3.14))),
-            f.mapValues(column("attributes_float")),
-        )
-        assert result == expected
-
-    def test_multiple_attribute_types_deduplicates(self) -> None:
-        """TYPE_INT, TYPE_FLOAT, TYPE_DOUBLE all map to attributes_float, so should deduplicate."""
-        filt = AnyAttributeFilter(
-            op=AnyAttributeFilter.OP_EQUALS,
-            value=AttributeValue(val_float=1.0),
-            attribute_types=[
-                AttributeKey.Type.TYPE_INT,
-                AttributeKey.Type.TYPE_FLOAT,
-                AttributeKey.Type.TYPE_DOUBLE,
-            ],
-        )
-        result = _any_attribute_filter_to_expression(filt)
-        # All three map to attributes_float, so only one column
-        x = Argument(None, "x")
-        expected = f.arrayExists(
-            Lambda(None, ("x",), f.equals(x, literal(1.0))),
-            f.mapValues(column("attributes_float")),
-        )
-        assert result == expected
-
-    def test_multiple_distinct_attribute_types_or(self) -> None:
-        """Searching string + float should OR across both columns."""
-        filt = AnyAttributeFilter(
-            op=AnyAttributeFilter.OP_EQUALS,
-            value=AttributeValue(val_str="42"),
-            attribute_types=[
-                AttributeKey.Type.TYPE_STRING,
-                AttributeKey.Type.TYPE_FLOAT,
-            ],
-        )
-        result = _any_attribute_filter_to_expression(filt)
-        x = Argument(None, "x")
-        lam = Lambda(None, ("x",), f.equals(x, literal("42")))
-        expected = or_cond(
-            f.arrayExists(lam, f.mapValues(column("attributes_string"))),
-            f.arrayExists(lam, f.mapValues(column("attributes_float"))),
-        )
-        assert result == expected
-
     def test_like_on_non_string_type_raises(self) -> None:
-        """LIKE on float-only types should raise an error."""
         filt = AnyAttributeFilter(
             op=AnyAttributeFilter.OP_LIKE,
             value=AttributeValue(val_str="%error%"),
@@ -335,33 +151,183 @@ class TestAnyAttributeFilter:
         with pytest.raises(BadSnubaRPCRequestException, match="does not have a value"):
             _any_attribute_filter_to_expression(filt)
 
-    def test_via_trace_item_filter(self) -> None:
-        """Test that trace_item_filters_to_expression dispatches to any_attribute_filter."""
-        item_filter = TraceItemFilter(
-            any_attribute_filter=AnyAttributeFilter(
-                op=AnyAttributeFilter.OP_EQUALS,
-                value=AttributeValue(val_str="test"),
-            )
-        )
-        result = trace_item_filters_to_expression(item_filter, _dummy_attr_key_to_expression)
-        x = Argument(None, "x")
-        expected = f.arrayExists(
-            Lambda(None, ("x",), f.equals(x, literal("test"))),
-            f.mapValues(column("attributes_string")),
-        )
-        assert result == expected
-
-    def test_boolean_attribute_type(self) -> None:
-        """Searching boolean attributes should use attributes_bool column."""
+    def test_ignore_case_on_non_string_equals_raises(self) -> None:
         filt = AnyAttributeFilter(
             op=AnyAttributeFilter.OP_EQUALS,
-            value=AttributeValue(val_bool=True),
-            attribute_types=[AttributeKey.Type.TYPE_BOOLEAN],
+            value=AttributeValue(val_int=42),
+            ignore_case=True,
         )
-        result = _any_attribute_filter_to_expression(filt)
-        x = Argument(None, "x")
-        expected = f.arrayExists(
-            Lambda(None, ("x",), f.equals(x, literal(True))),
-            f.mapValues(column("attributes_bool")),
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="Cannot ignore case on non-string values"
+        ):
+            _any_attribute_filter_to_expression(filt)
+
+    def test_ignore_case_on_non_string_in_raises(self) -> None:
+        from sentry_protos.snuba.v1.trace_item_attribute_pb2 import IntArray
+
+        filt = AnyAttributeFilter(
+            op=AnyAttributeFilter.OP_IN,
+            value=AttributeValue(val_int_array=IntArray(values=[1, 2, 3])),
+            ignore_case=True,
         )
-        assert result == expected
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="Cannot ignore case on non-string values"
+        ):
+            _any_attribute_filter_to_expression(filt)
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestAnyAttributeFilterIntegration:
+    """Integration tests that insert spans into ClickHouse and query them
+    with AnyAttributeFilter via EndpointTraceItemTable."""
+
+    UNIQUE_VALUE = f"needle-{uuid.uuid4().hex[:8]}"
+
+    @pytest.fixture(autouse=True)
+    def setup(self, eap: None, redis_db: None) -> None:
+        from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
+
+        from snuba.datasets.storages.factory import get_storage
+        from snuba.datasets.storages.storage_key import StorageKey
+        from tests.helpers import write_raw_unprocessed_events
+        from tests.web.rpc.v1.test_utils import gen_item_message
+
+        self.base_time = datetime.now(tz=timezone.utc).replace(
+            minute=0, second=0, microsecond=0
+        ) - timedelta(hours=1)
+        self.start_ts = Timestamp(seconds=int((self.base_time - timedelta(hours=1)).timestamp()))
+        self.end_ts = Timestamp(seconds=int((self.base_time + timedelta(hours=2)).timestamp()))
+
+        # Span 0: the target — has the unique needle value on "haystack" attr
+        # Span 1: a decoy with a different value
+        # Span 2: another decoy with no "haystack" attribute at all
+        messages = [
+            gen_item_message(
+                start_timestamp=self.base_time,
+                attributes={
+                    "haystack": AnyValue(string_value=self.UNIQUE_VALUE),
+                    "color": AnyValue(string_value="red"),
+                },
+            ),
+            gen_item_message(
+                start_timestamp=self.base_time + timedelta(minutes=1),
+                attributes={
+                    "haystack": AnyValue(string_value="decoy-value"),
+                    "color": AnyValue(string_value="blue"),
+                },
+            ),
+            gen_item_message(
+                start_timestamp=self.base_time + timedelta(minutes=2),
+                attributes={
+                    "color": AnyValue(string_value="green"),
+                },
+            ),
+        ]
+        storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(storage, messages)  # type: ignore
+
+    def _execute(self, filt: TraceItemFilter) -> list[str]:
+        """Run a TraceItemTable query with the given filter, returning
+        the matched 'color' attribute values as a sorted list."""
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="test",
+                referrer="test",
+                start_timestamp=self.start_ts,
+                end_timestamp=self.end_ts,
+                request_id=uuid.uuid4().hex,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=filt,
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"))
+                )
+            ],
+            limit=100,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        if not response.column_values:
+            return []
+        return sorted(r.val_str for r in response.column_values[0].results)
+
+    def test_equals_finds_target_span(self) -> None:
+        """OP_EQUALS on a unique string value should return only the target span."""
+        colors = self._execute(
+            TraceItemFilter(
+                any_attribute_filter=AnyAttributeFilter(
+                    op=AnyAttributeFilter.OP_EQUALS,
+                    value=AttributeValue(val_str=self.UNIQUE_VALUE),
+                )
+            )
+        )
+        assert colors == ["red"]
+
+    def test_like_finds_target_span(self) -> None:
+        """OP_LIKE with a pattern matching the unique value finds the target."""
+        colors = self._execute(
+            TraceItemFilter(
+                any_attribute_filter=AnyAttributeFilter(
+                    op=AnyAttributeFilter.OP_LIKE,
+                    value=AttributeValue(val_str=f"%{self.UNIQUE_VALUE}%"),
+                )
+            )
+        )
+        assert colors == ["red"]
+
+    def test_not_equals_excludes_target_span(self) -> None:
+        """OP_NOT_EQUALS on the unique value should return the other two spans."""
+        colors = self._execute(
+            TraceItemFilter(
+                any_attribute_filter=AnyAttributeFilter(
+                    op=AnyAttributeFilter.OP_NOT_EQUALS,
+                    value=AttributeValue(val_str=self.UNIQUE_VALUE),
+                )
+            )
+        )
+        assert colors == ["blue", "green"]
+
+    def test_in_finds_target_span(self) -> None:
+        """OP_IN with an array containing the unique value finds the target."""
+        colors = self._execute(
+            TraceItemFilter(
+                any_attribute_filter=AnyAttributeFilter(
+                    op=AnyAttributeFilter.OP_IN,
+                    value=AttributeValue(
+                        val_str_array=StrArray(values=[self.UNIQUE_VALUE, "no-match"])
+                    ),
+                )
+            )
+        )
+        assert colors == ["red"]
+
+    def test_equals_ignore_case(self) -> None:
+        """OP_EQUALS with ignore_case matches regardless of casing."""
+        colors = self._execute(
+            TraceItemFilter(
+                any_attribute_filter=AnyAttributeFilter(
+                    op=AnyAttributeFilter.OP_EQUALS,
+                    value=AttributeValue(val_str=self.UNIQUE_VALUE.upper()),
+                    ignore_case=True,
+                )
+            )
+        )
+        assert colors == ["red"]
+
+    def test_no_match_returns_empty(self) -> None:
+        """Searching for a value that doesn't exist returns nothing."""
+        colors = self._execute(
+            TraceItemFilter(
+                any_attribute_filter=AnyAttributeFilter(
+                    op=AnyAttributeFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="value-that-does-not-exist"),
+                )
+            )
+        )
+        assert colors == []

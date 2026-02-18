@@ -237,6 +237,9 @@ def _any_attribute_filter_to_expression(
     if value_type is None:
         raise BadSnubaRPCRequestException("any_attribute_filter does not have a value")
 
+    if filt.ignore_case and value_type not in ("val_str", "val_str_array"):
+        raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
+
     match value_type:
         case "val_bool":
             v_expression: Expression = literal(v.val_bool)
