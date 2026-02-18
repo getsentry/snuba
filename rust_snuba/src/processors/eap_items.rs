@@ -1083,7 +1083,8 @@ mod tests {
 
         let client = clickhouse::Client::default()
             .with_url(format!("http://{}:{}", host, http_port))
-            .with_database(&database);
+            .with_database(&database)
+            .with_option("input_format_binary_read_json_as_string", "1");
 
         // Use a unique organization_id to avoid conflicts with other test data
         let unique_org_id: u64 = 999_999_000 + (rand::random::<u32>() % 1000) as u64;

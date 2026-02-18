@@ -40,7 +40,8 @@ where
             .with_password(&config.password)
             .with_database(&config.database)
             .with_option("load_balancing", "in_order")
-            .with_option("insert_distributed_sync", "1");
+            .with_option("insert_distributed_sync", "1")
+            .with_option("input_format_binary_read_json_as_string", "1");
 
         Self {
             client,
