@@ -306,29 +306,25 @@ pub struct EAPItemRow {
     trace_id: Uuid,
     item_id: u128,
 
+    sampling_weight: u64,
+    sampling_factor: f64,
+
+    retention_days: u16,
+    downsampled_retention_days: u16,
+
     attributes_bool: Vec<(String, bool)>,
     attributes_int: Vec<(String, i64)>,
-    attributes_array: String,
 
     #(
     attributes_string_~N: Vec<(String, String)>,
     attributes_float_~N: Vec<(String, f64)>,
     )*
-
-    sampling_factor: f64,
-    sampling_weight: u64,
-
-    retention_days: u16,
-    downsampled_retention_days: u16,
 }
 }
 
 impl From<EAPItem> for EAPItemRow {
     #[allow(clippy::needless_return)]
     fn from(item: EAPItem) -> Self {
-        let attributes_array =
-            serde_json::to_string(&item.attributes.attributes_array).unwrap_or_default();
-
         // `return` is needed because `seq_attrs!` expands with a trailing semicolon,
         // which makes the struct expression a statement rather than a tail expression.
         seq_attrs! {
@@ -339,17 +335,16 @@ impl From<EAPItem> for EAPItemRow {
                 timestamp: item.timestamp,
                 trace_id: item.trace_id,
                 item_id: item.item_id,
+                sampling_weight: item.sampling_weight,
+                sampling_factor: item.sampling_factor,
+                retention_days: item.retention_days.unwrap_or(0),
+                downsampled_retention_days: item.downsampled_retention_days.unwrap_or(0),
                 attributes_bool: item.attributes.attributes_bool.into_iter().collect(),
                 attributes_int: item.attributes.attributes_int.into_iter().collect(),
-                attributes_array,
                 #(
                 attributes_string_~N: item.attributes.attributes_string_~N.into_iter().collect(),
                 attributes_float_~N: item.attributes.attributes_float_~N.into_iter().collect(),
                 )*
-                sampling_factor: item.sampling_factor,
-                sampling_weight: item.sampling_weight,
-                retention_days: item.retention_days.unwrap_or(0),
-                downsampled_retention_days: item.downsampled_retention_days.unwrap_or(0),
             };
         }
     }
@@ -762,9 +757,7 @@ mod tests {
             .iter()
             .any(|(k, v)| k == "my_bool" && *v));
 
-        // Array attributes are serialized as JSON string
-        assert!(row.attributes_array.contains("my_array"));
-        assert!(row.attributes_array.contains("elem"));
+        // Array attributes are not stored in EAPItemRow (no ClickHouse column for them)
     }
 
     #[test]
@@ -1044,18 +1037,9 @@ mod tests {
             "float_attr mismatch in JSON"
         );
 
-        // Compare attributes_array
-        // In JSON: serialized as {"array_attr": [{"String": "a"}, {"Int": 1}]}
-        // In RowBinary: serialized as a JSON string
-        let json_arrays = json_row.get("attributes_array");
-        if let Some(json_arrays) = json_arrays {
-            let rb_arrays: serde_json::Value =
-                serde_json::from_str(&rb_row.attributes_array).unwrap_or_default();
-            assert_eq!(
-                json_arrays, &rb_arrays,
-                "attributes_array mismatch between JSON and RowBinary"
-            );
-        }
+        // attributes_array: JSON path includes it in output but ClickHouse has no column
+        // for it (ignored via input_format_skip_unknown_fields). EAPItemRow intentionally
+        // omits it, so no comparison is needed.
 
         // Compare cogs_data
         assert_eq!(
