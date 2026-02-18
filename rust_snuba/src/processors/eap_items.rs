@@ -319,6 +319,8 @@ pub struct EAPItemRow {
     attributes_string_~N: Vec<(String, String)>,
     attributes_float_~N: Vec<(String, f64)>,
     )*
+
+    attributes_array: String,
 }
 }
 
@@ -345,6 +347,7 @@ impl From<EAPItem> for EAPItemRow {
                 attributes_string_~N: item.attributes.attributes_string_~N.into_iter().collect(),
                 attributes_float_~N: item.attributes.attributes_float_~N.into_iter().collect(),
                 )*
+                attributes_array: serde_json::to_string(&item.attributes.attributes_array).unwrap_or_default(),
             };
         }
     }
@@ -757,7 +760,9 @@ mod tests {
             .iter()
             .any(|(k, v)| k == "my_bool" && *v));
 
-        // Array attributes are not stored in EAPItemRow (no ClickHouse column for them)
+        // Array attributes are serialized as JSON string in the attributes_array column
+        assert!(row.attributes_array.contains("my_array"));
+        assert!(row.attributes_array.contains("elem"));
     }
 
     #[test]
@@ -1037,9 +1042,17 @@ mod tests {
             "float_attr mismatch in JSON"
         );
 
-        // attributes_array: JSON path includes it in output but ClickHouse has no column
-        // for it (ignored via input_format_skip_unknown_fields). EAPItemRow intentionally
-        // omits it, so no comparison is needed.
+        // Compare attributes_array
+        // In JSON: serialized as {"array_attr": [{"String": "a"}, {"Int": 1}]}
+        // In RowBinary: serialized as a JSON string in the attributes_array field
+        if let Some(json_arrays) = json_row.get("attributes_array") {
+            let rb_arrays: serde_json::Value =
+                serde_json::from_str(&rb_row.attributes_array).unwrap_or_default();
+            assert_eq!(
+                json_arrays, &rb_arrays,
+                "attributes_array mismatch between JSON and RowBinary"
+            );
+        }
 
         // Compare cogs_data
         assert_eq!(
@@ -1072,10 +1085,14 @@ mod tests {
             .with_url(format!("http://{}:{}", host, http_port))
             .with_database(&database);
 
+        // Use a unique organization_id to avoid conflicts with other test data
+        let unique_org_id: u64 = 999_999_000 + (rand::random::<u32>() % 1000) as u64;
+
         let item_id = Uuid::new_v4();
         let trace_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
         trace_item.trace_id = trace_id.to_string();
+        trace_item.organization_id = unique_org_id;
         trace_item.attributes.insert(
             "test_string".to_string(),
             sentry_protos::snuba::v1::AnyValue {
@@ -1112,23 +1129,33 @@ mod tests {
         insert.write(&row).await.expect("Failed to write row");
         insert.end().await.expect("Failed to end insert");
 
-        // Read it back to verify the data round-trips correctly
-        let query = format!(
-            "SELECT organization_id, project_id, item_type, sampling_weight, \
-             reinterpretAsUInt128(reverse(unhex(replaceAll(toString(item_id), '-', '')))) as item_id_uint \
-             FROM eap_items_1_local \
-             WHERE trace_id = '{}' \
-             LIMIT 1",
-            trace_id
+        // Read it back using organization_id (primary key prefix) for reliable lookup
+        let count: u64 = client
+            .query(&format!(
+                "SELECT count() FROM eap_items_1_local WHERE organization_id = {}",
+                unique_org_id
+            ))
+            .fetch_one()
+            .await
+            .expect("Failed to count rows");
+        assert!(
+            count > 0,
+            "No rows found after insert for org_id={unique_org_id}"
         );
 
         let result = client
-            .query(&query)
-            .fetch_one::<(u64, u64, u8, u64, u128)>()
+            .query(&format!(
+                "SELECT organization_id, project_id, item_type, sampling_weight \
+                 FROM eap_items_1_local \
+                 WHERE organization_id = {} \
+                 LIMIT 1",
+                unique_org_id
+            ))
+            .fetch_one::<(u64, u64, u8, u64)>()
             .await
             .expect("Failed to read back inserted row");
 
-        assert_eq!(result.0, 1); // organization_id
+        assert_eq!(result.0, unique_org_id); // organization_id
         assert_eq!(result.1, 1); // project_id
         assert_eq!(result.2, TraceItemType::Span as u8); // item_type
         assert_eq!(result.3, 1); // sampling_weight
@@ -1136,8 +1163,8 @@ mod tests {
         // Clean up
         client
             .query(&format!(
-                "ALTER TABLE eap_items_1_local DELETE WHERE trace_id = '{}'",
-                trace_id
+                "ALTER TABLE eap_items_1_local DELETE WHERE organization_id = {}",
+                unique_org_id
             ))
             .execute()
             .await
