@@ -40,6 +40,18 @@ class ColumnWrapper(ProtoWrapper[Column]):
         if column.HasField("formula"):
             ColumnWrapper(column.formula.left).accept(visitor)
             ColumnWrapper(column.formula.right).accept(visitor)
+        if column.HasField("conditional_formula"):
+            conditional = column.conditional_formula
+            if conditional.HasField("condition"):
+                if conditional.condition.HasField("left"):
+                    ColumnWrapper(conditional.condition.left).accept(visitor)
+                if conditional.condition.HasField("right"):
+                    ColumnWrapper(conditional.condition.right).accept(visitor)
+            # Note: 'match' is a Python keyword, so use getattr
+            if conditional.HasField("match"):
+                ColumnWrapper(getattr(conditional, "match")).accept(visitor)
+            if conditional.HasField("default"):
+                ColumnWrapper(conditional.default).accept(visitor)
 
 
 class AggregationComparisonFilterWrapper(ProtoWrapper[AggregationComparisonFilter]):
