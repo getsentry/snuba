@@ -323,11 +323,6 @@ def rate_limit_finish_request(
                 pipe.execute()
     except RedisTimeoutError:
         raise
-    except StopIteration:
-        metrics.increment(
-            "rate_limit_fail_open",
-            tags={"reason": "StopIteration", "func": "rate_limit_finish_request"},
-        )
     except Exception as ex:
         logger.exception(ex)
 
