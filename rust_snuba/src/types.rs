@@ -288,7 +288,7 @@ impl<R> BytesInsertBatch<R> {
     /// Use builder methods to set optional fields as needed.
     ///
     /// # Example
-    /// ```ignore
+    /// ```text
     /// let batch = BytesInsertBatch::from_rows(rows)
     ///     .with_message_timestamp(timestamp)
     ///     .with_cogs_data(cogs_data);

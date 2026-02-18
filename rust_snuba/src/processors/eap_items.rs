@@ -1138,32 +1138,12 @@ mod tests {
         assert_eq!(batch.rows.len(), 1);
         let row = batch.rows[0].clone();
 
-        // Diagnostic
-        eprintln!(
-            "DEBUG: org_id={}, timestamp={}",
-            unique_org_id, row.timestamp
-        );
-
-        let count_before: u64 = client
-            .query("SELECT count() FROM eap_items_1_local")
-            .fetch_one()
-            .await
-            .unwrap_or(0);
-        eprintln!("DEBUG: total rows before insert: {}", count_before);
-
         // Insert via RowBinary (same code path as production)
         let mut insert = client
             .insert("eap_items_1_local")
             .expect("Failed to create insert");
         insert.write(&row).await.expect("Failed to write row");
         insert.end().await.expect("Failed to end insert");
-
-        let count_after: u64 = client
-            .query("SELECT count() FROM eap_items_1_local")
-            .fetch_one()
-            .await
-            .unwrap_or(0);
-        eprintln!("DEBUG: total rows after insert: {}", count_after);
 
         // Read it back using organization_id (primary key prefix) for reliable lookup
         let count: u64 = client
@@ -1174,10 +1154,9 @@ mod tests {
             .fetch_one()
             .await
             .expect("Failed to count rows");
-        eprintln!("DEBUG: rows for org_id={}: {}", unique_org_id, count);
         assert!(
             count > 0,
-            "No rows found after insert for org_id={unique_org_id}. Before={count_before}, After={count_after}"
+            "No rows found after insert for org_id={unique_org_id}"
         );
 
         let result = client
