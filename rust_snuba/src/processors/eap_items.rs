@@ -232,8 +232,6 @@ impl AttributeMap {
     }
 
     pub fn insert_bool(&mut self, k: String, v: bool) {
-        // double write as float and bool
-        self.insert_float(k.clone(), v as u8 as f64);
         self.attributes_bool.insert(k, v);
     }
 

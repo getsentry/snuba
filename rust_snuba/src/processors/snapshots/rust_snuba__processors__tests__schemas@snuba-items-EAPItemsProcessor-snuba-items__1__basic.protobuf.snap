@@ -10,9 +10,6 @@ expression: snapshot_payload
     "attributes_float_3": {
       "another_attribute": 1238.0
     },
-    "attributes_float_6": {
-      "some_bool": 1.0
-    },
     "attributes_float_8": {
       "with a float": 123.123
     },
