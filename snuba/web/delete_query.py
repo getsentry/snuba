@@ -1,6 +1,6 @@
 import typing
 import uuid
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 from snuba import settings
 from snuba.attribution import get_app_id
@@ -259,7 +259,10 @@ def _enforce_max_rows(delete_query: Query) -> int:
     if rows_to_delete == 0:
         raise NoRowsToDeleteException
     max_rows_allowed = get_storage(storage_key).get_deletion_settings().max_rows_to_delete
-    if rows_to_delete > max_rows_allowed:
+    if (
+        get_int_config("enforce_max_rows_to_delete", default=1)
+        and rows_to_delete > max_rows_allowed
+    ):
         raise TooManyDeleteRowsException(
             f"Too many rows to delete ({rows_to_delete}), maximum allowed is {max_rows_allowed}"
         )
@@ -302,7 +305,7 @@ def _execute_query(
     result = None
     error = None
 
-    stats: MutableMapping[str, Any] = {
+    stats: Dict[str, Any] = {
         "clickhouse_table": table,
         "referrer": attribution_info.referrer,
         "cluster_name": cluster_name or "<unknown>",

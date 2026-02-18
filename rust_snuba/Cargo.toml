@@ -53,7 +53,7 @@ sentry = { version = "0.41.0", default-features = false, features = [
     "logs"
 ] }
 sentry-kafka-schemas = "2.1.21"
-sentry_protos = "0.6"
+sentry_protos = "0.7.0"
 sentry_arroyo = { version = "2.37.0", features = ["ssl"] }
 sentry_usage_accountant = { version = "0.1.2", features = ["kafka"] }
 seq-macro = "0.3"
@@ -69,7 +69,7 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
 uuid = { version = "1.5.0", features = ["v4", "v7"] }
 zstd = "0.12.3"
-bytes = "1.0"
+bytes = "1.11"
 
 
 [dev-dependencies]

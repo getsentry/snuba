@@ -21,7 +21,7 @@ jobs:
       packages: write
     if: github.repository_owner == 'getsentry'
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.0.2
     - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
       with:
         image_name: 'snuba'
@@ -40,7 +40,7 @@ jobs:
       id-token: write
     if: ${{ github.ref_name == 'master' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.2
       - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
         with:
           image_name: 'snuba'
