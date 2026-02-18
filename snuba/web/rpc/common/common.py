@@ -189,11 +189,6 @@ _POSITIVE_OP_FOR_NEGATIVE: dict[int, int] = {
     AnyAttributeFilter.OP_NOT_IN: AnyAttributeFilter.OP_IN,
 }
 
-_LIKE_OPS = {
-    AnyAttributeFilter.OP_LIKE,
-    AnyAttributeFilter.OP_NOT_LIKE,
-}
-
 _STRING_COLUMNS = {"attributes_string"}
 
 
@@ -206,7 +201,7 @@ def _any_attribute_filter_to_expression(
 
         arrayExists(x -> <comparison>(x, value), mapValues(column))
 
-    and combines them with OR (for positive ops) or AND-of-NOT (for negative ops).
+    and combines them with OR (for positive ops) or NOT(OR(...)) (for negative ops).
     """
     # 1. Determine which columns to search
     attr_types = list(filt.attribute_types)
@@ -223,7 +218,7 @@ def _any_attribute_filter_to_expression(
     effective_op = _POSITIVE_OP_FOR_NEGATIVE.get(filt.op, filt.op)
 
     # LIKE/NOT_LIKE only makes sense on string columns
-    if effective_op in _LIKE_OPS or filt.op in _LIKE_OPS:
+    if effective_op == AnyAttributeFilter.OP_LIKE:
         string_cols = [c for c in columns_to_search if c in _STRING_COLUMNS]
         if not string_cols:
             raise BadSnubaRPCRequestException(
@@ -252,21 +247,13 @@ def _any_attribute_filter_to_expression(
         case "val_int":
             v_expression = literal(v.val_int)
         case "val_str_array":
-            v_expression = literals_array(
-                None, list(map(lambda x: literal(x), v.val_str_array.values))
-            )
+            v_expression = literals_array(None, [literal(x) for x in v.val_str_array.values])
         case "val_int_array":
-            v_expression = literals_array(
-                None, list(map(lambda x: literal(x), v.val_int_array.values))
-            )
+            v_expression = literals_array(None, [literal(x) for x in v.val_int_array.values])
         case "val_float_array":
-            v_expression = literals_array(
-                None, list(map(lambda x: literal(x), v.val_float_array.values))
-            )
+            v_expression = literals_array(None, [literal(x) for x in v.val_float_array.values])
         case "val_double_array":
-            v_expression = literals_array(
-                None, list(map(lambda x: literal(x), v.val_double_array.values))
-            )
+            v_expression = literals_array(None, [literal(x) for x in v.val_double_array.values])
         case default:
             raise NotImplementedError(
                 f"translation of AttributeValue type {default} is not implemented"
@@ -291,7 +278,7 @@ def _any_attribute_filter_to_expression(
                 f.lower(x),
                 literals_array(
                     None,
-                    list(map(lambda s: literal(s.lower()), v.val_str_array.values)),
+                    [literal(s.lower()) for s in v.val_str_array.values],
                 ),
             )
         else:
