@@ -814,7 +814,7 @@ mod tests {
         trace_item.attributes.insert(
             "float_attr".to_string(),
             AnyValue {
-                value: Some(Value::DoubleValue(3.14)),
+                value: Some(Value::DoubleValue(1.5)),
             },
         );
         trace_item.attributes.insert(
@@ -1028,7 +1028,7 @@ mod tests {
             .map(|v| serde_json::from_value(v.clone()).unwrap())
             .unwrap_or_default();
         assert!(
-            (json_float_map.get("float_attr").copied().unwrap_or(0.0) - 3.14).abs() < 1e-9,
+            (json_float_map.get("float_attr").copied().unwrap_or(0.0) - 1.5).abs() < 1e-9,
             "float_attr mismatch in JSON"
         );
 
