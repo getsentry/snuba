@@ -27,6 +27,7 @@ jobs:
         image_name: 'snuba'
         platforms: linux/${{ matrix.platform }}
         dockerfile_path: 'Dockerfile'
+        build_target: 'application-full'
         tag_suffix: -${{ matrix.platform }}
         ghcr: true
         tag_nightly: false
@@ -46,6 +47,7 @@ jobs:
           image_name: 'snuba'
           platforms: linux/amd64
           dockerfile_path: './Dockerfile'
+          build_target: 'application'
           ghcr: false
           tag_nightly: false
           tag_latest: false
@@ -53,6 +55,33 @@ jobs:
           google_ar_image_name: us-docker.pkg.dev/sentryio/snuba-mr/image
           google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
           google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
+
+  build-debug-multiplatform:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: amd64
+          - os: ubuntu-24.04-arm
+            platform: arm64
+    runs-on: ${{ matrix.os }}
+    name: build-debug-${{ matrix.platform }}
+    permissions:
+      contents: read
+      packages: write
+    if: github.repository_owner == 'getsentry'
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
+      with:
+        image_name: 'snuba'
+        platforms: linux/${{ matrix.platform }}
+        dockerfile_path: 'Dockerfile'
+        build_target: 'application-debug'
+        tag_suffix: -debug-${{ matrix.platform }}
+        ghcr: true
+        tag_nightly: false
+        tag_latest: false
 
   assemble:
     needs: [build-multiplatform]
@@ -77,6 +106,30 @@ jobs:
             --tag ghcr.io/getsentry/snuba:nightly \
             ghcr.io/getsentry/snuba:${{ github.sha }}-amd64 \
             ghcr.io/getsentry/snuba:${{ github.sha }}-arm64
+
+  assemble-debug:
+    needs: [build-debug-multiplatform]
+    if: ${{ (github.ref_name == 'master' || startsWith(github.ref_name, 'release/')) && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Docker Login
+        run: docker login --username '${{ github.actor }}' --password-stdin ghcr.io <<< "$GHCR_TOKEN"
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create debug multiplatform manifests
+        run: |
+          docker buildx imagetools create \
+            --tag ghcr.io/getsentry/snuba:${{ github.sha }}-debug \
+            --tag ghcr.io/getsentry/snuba:nightly-debug \
+            ghcr.io/getsentry/snuba:${{ github.sha }}-debug-amd64 \
+            ghcr.io/getsentry/snuba:${{ github.sha }}-debug-arm64
 
   self-hosted-end-to-end:
     needs: [build-multiplatform, assemble]
