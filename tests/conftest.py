@@ -20,6 +20,9 @@ from snuba.environment import setup_sentry
 from snuba.redis import all_redis_clients
 
 MIGRATIONS_CACHE: Dict[Tuple[ClickhouseCluster, ClickhouseNode], Dict[str, str]] = {}
+GENERIC_METRICS_MIGRATIONS_CACHE: Dict[
+    Tuple[ClickhouseCluster, ClickhouseNode], Dict[str, str]
+] = {}
 
 
 def pytest_configure() -> None:
@@ -75,6 +78,8 @@ def pytest_collection_modifyitems(items: Sequence[Any]) -> None:
     for item in items:
         if item.get_closest_marker("eap"):
             item.fixturenames.append("eap")
+        elif item.get_closest_marker("genmetrics_db"):
+            item.fixturenames.append("genmetrics_db")
         elif item.get_closest_marker("clickhouse_db"):
             item.fixturenames.append("clickhouse_db")
         elif item.get_closest_marker("custom_clickhouse_db"):
@@ -299,6 +304,75 @@ def eap(request: pytest.FixtureRequest, create_databases: None) -> Generator[Non
         runner = Runner()
         runner.run_all(group=MigrationGroup.EVENTS_ANALYTICS_PLATFORM, force=True)
         runner.run_all(group=MigrationGroup.OUTCOMES, force=True)
+        yield
+    finally:
+        _clear_db()
+
+
+def _build_generic_metrics_migrations_cache() -> None:
+    for storage_key in get_all_storage_keys():
+        storage = get_storage(storage_key)
+        cluster = storage.get_cluster()
+        database = cluster.get_database()
+        nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
+        for node in nodes:
+            if (cluster, node) in GENERIC_METRICS_MIGRATIONS_CACHE:
+                continue
+            connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+            rows = connection.execute(
+                f"SELECT name, create_table_query FROM system.tables WHERE database='{database}'"
+            )
+            mv_tables = []
+            non_mv_tables = []
+            for table_name, create_table_query in rows.results:
+                if "MATERIALIZED VIEW" in create_table_query:
+                    mv_tables.append((table_name, create_table_query))
+                else:
+                    non_mv_tables.append((table_name, create_table_query))
+            all_tables = mv_tables + non_mv_tables
+            for table_name, create_table_query in all_tables:
+                GENERIC_METRICS_MIGRATIONS_CACHE.setdefault((cluster, node), {})[table_name] = (
+                    create_table_query
+                )
+
+
+@pytest.fixture
+def genmetrics_db(
+    request: pytest.FixtureRequest, create_databases: None
+) -> Generator[None, None, None]:
+    """
+    A ClickHouse fixture that only runs generic metrics migrations.
+    Much faster than clickhouse_db for tests that only need generic metrics tables.
+
+    Use this with @pytest.mark.genmetrics_db marker.
+    """
+    if not request.node.get_closest_marker("genmetrics_db"):
+        pytest.fail("Need to use genmetrics_db marker if genmetrics_db fixture is used")
+
+    from snuba.migrations.groups import MigrationGroup
+    from snuba.migrations.runner import Runner
+
+    try:
+        reset_dataset_factory()
+        if not GENERIC_METRICS_MIGRATIONS_CACHE:
+            runner = Runner()
+            runner.run_all(group=MigrationGroup.GENERIC_METRICS, force=True)
+            _build_generic_metrics_migrations_cache()
+        else:
+            applied_nodes = set()
+            for (cluster, node), tables in GENERIC_METRICS_MIGRATIONS_CACHE.items():
+                connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+                for table_name, create_table_query in tables.items():
+                    if (node.host_name, node.port, table_name) in applied_nodes:
+                        continue
+                    create_table_query = create_table_query.replace(
+                        "CREATE TABLE", "CREATE TABLE IF NOT EXISTS"
+                    ).replace(
+                        "CREATE MATERIALIZED VIEW",
+                        "CREATE MATERIALIZED VIEW IF NOT EXISTS",
+                    )
+                    connection.execute(create_table_query)
+                applied_nodes.add((node.host_name, node.port, table_name))
         yield
     finally:
         _clear_db()
