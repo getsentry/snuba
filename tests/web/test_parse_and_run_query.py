@@ -4,7 +4,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 def test_basic_snql() -> None:
     request, result = parse_and_run_query(

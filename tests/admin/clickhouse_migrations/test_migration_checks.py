@@ -94,7 +94,7 @@ def test_status_checker_reverse(
     assert result.reason == expected_reason
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_status_checker_errors() -> None:
     """
     Tests the following failure cases:

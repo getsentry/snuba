@@ -93,6 +93,8 @@ def pytest_collection_modifyitems(items: Sequence[Any]) -> None:
             item.fixturenames.append("eap")
         elif item.get_closest_marker("genmetrics_db"):
             item.fixturenames.append("genmetrics_db")
+        elif item.get_closest_marker("events_db"):
+            item.fixturenames.append("events_db")
         elif item.get_closest_marker("clickhouse_db"):
             item.fixturenames.append("clickhouse_db")
         elif item.get_closest_marker("custom_clickhouse_db"):
@@ -324,6 +326,25 @@ def clickhouse_db(
         marker_name="clickhouse_db",
         groups=None,
         cache_key=frozenset(),
+    )
+
+
+@pytest.fixture
+def events_db(
+    request: pytest.FixtureRequest, create_databases: None
+) -> Generator[None, None, None]:
+    groups = [
+        MigrationGroup.EVENTS,
+        MigrationGroup.TRANSACTIONS,
+        MigrationGroup.DISCOVER,
+        MigrationGroup.GROUP_ATTRIBUTES,
+        MigrationGroup.SEARCH_ISSUES,
+    ]
+    yield from _run_db_fixture(
+        request=request,
+        marker_name="events_db",
+        groups=groups,
+        cache_key=frozenset(groups),
     )
 
 
