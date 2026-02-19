@@ -1,5 +1,5 @@
 jsonschema2md==0.4.0
 fastjsonschema==2.16.2
 sentry-sdk==2.33.2
-myst-parser==0.18.0
-sphinx==5.1.1
+myst-parser==5.0.0
+sphinx==9.0.4
