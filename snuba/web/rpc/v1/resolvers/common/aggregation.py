@@ -21,7 +21,11 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, literal
-from snuba.query.expressions import CurriedFunctionCall, Expression, FunctionCall
+from snuba.query.expressions import (
+    CurriedFunctionCall,
+    Expression,
+    FunctionCall,
+)
 from snuba.web.rpc.common.common import (
     get_field_existence_expression,
     trace_item_filters_to_expression,
@@ -777,6 +781,27 @@ def _calculate_approximate_ci_percentile_levels(
     return (lower_index / n, upper_index / n)
 
 
+def _array_aggregation_to_expression(
+    aggregation: AttributeAggregation | AttributeConditionalAggregation,
+    field: Expression,
+    condition_in_aggregation: Expression,
+    alias_dict: dict[str, str],
+) -> Expression:
+    if aggregation.aggregate == Function.FUNCTION_UNIQ:
+        return f.round(
+            f.uniqArrayIfOrNull(
+                field,
+                and_cond(get_field_existence_expression(field), condition_in_aggregation),
+            ),
+            _FLOATING_POINT_PRECISION,
+            **alias_dict,
+        )
+    raise BadSnubaRPCRequestException(
+        f"Aggregation {Function.Name(aggregation.aggregate)} "
+        f"not supported for array attribute {aggregation.key.name}"
+    )
+
+
 def aggregation_to_expression(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
@@ -788,6 +813,12 @@ def aggregation_to_expression(
     condition_in_aggregation = _get_condition_in_aggregation(
         aggregation, attribute_key_to_expression
     )
+
+    if aggregation.key.type == AttributeKey.Type.TYPE_ARRAY:
+        return _array_aggregation_to_expression(
+            aggregation, field, condition_in_aggregation, alias_dict
+        )
+
     function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
         Function.FUNCTION_SUM: f.sumIfOrNull(
             field,

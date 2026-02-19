@@ -9,12 +9,18 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
-from snuba.web.rpc.common.common import attribute_key_to_expression
+from snuba.query.expressions import DangerousRawSQL, FunctionCall
+from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
+    get_field_existence_expression,
+)
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     CUSTOM_COLUMN_PREFIX,
     CustomColumnInformation,
     ExtrapolationContext,
     _get_closest_percentile_index,
+    aggregation_to_expression,
     get_confidence_interval_column,
 )
 
@@ -238,3 +244,47 @@ def test_get_closest_percentile_index(
     expected_index: int,
 ) -> None:
     assert _get_closest_percentile_index(value, percentile, granularity, width) == expected_index
+
+
+def test_attribute_key_to_expression_type_array() -> None:
+    attr_key = AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids")
+    expr = attribute_key_to_expression(attr_key)
+    assert isinstance(expr, DangerousRawSQL)
+    assert (
+        expr.sql == "arrayMap(x -> x.`String`::String, attributes_array.`user_ids`.:`Array(JSON)`)"
+    )
+    assert expr.alias == "user_ids_TYPE_ARRAY"
+
+
+def test_get_field_existence_expression_dangerous_raw_sql() -> None:
+    field = DangerousRawSQL(alias="test", sql="attributes_array.`user_ids`")
+    expr = get_field_existence_expression(field)
+    assert isinstance(expr, FunctionCall)
+    assert expr.function_name == "notEmpty"
+
+
+def test_aggregation_to_expression_uniq_type_array() -> None:
+    agg = AttributeAggregation(
+        aggregate=Function.FUNCTION_UNIQ,
+        key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids"),
+        label="uniq_users",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+    )
+    expr = aggregation_to_expression(agg, attribute_key_to_expression)
+    assert isinstance(expr, FunctionCall)
+    assert expr.function_name == "round"
+    assert expr.alias == "uniq_users"
+    inner = expr.parameters[0]
+    assert isinstance(inner, FunctionCall)
+    assert inner.function_name == "uniqArrayIfOrNull"
+
+
+def test_aggregation_to_expression_sum_type_array_raises() -> None:
+    agg = AttributeAggregation(
+        aggregate=Function.FUNCTION_SUM,
+        key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids"),
+        label="sum_users",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+    )
+    with pytest.raises(BadSnubaRPCRequestException, match="not supported for array attribute"):
+        aggregation_to_expression(agg, attribute_key_to_expression)

@@ -36,7 +36,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
 )
-from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -1754,6 +1754,130 @@ class TestTimeSeriesApi(BaseApiTest):
                 ],
             ),
         ]
+
+    @pytest.mark.clickhouse_db
+    def test_crash_free_user_rate_with_array_attributes(self) -> None:
+        """Test FUNCTION_UNIQ on TYPE_ARRAY attributes for crash-free user rate."""
+        granularity_secs = 3600
+        query_duration = 3600
+
+        def make_array(*names: str) -> AnyValue:
+            return AnyValue(
+                array_value=ArrayValue(values=[AnyValue(string_value=n) for n in names])
+            )
+
+        messages = []
+        # 3 crashed sessions with overlapping user arrays
+        # Unique crashed users: alice, bob, charlie, dave = 4
+        crashed_users = [
+            ["alice", "bob"],
+            ["bob", "charlie"],
+            ["alice", "dave"],
+        ]
+        for i, users in enumerate(crashed_users):
+            dt = BASE_TIME + timedelta(seconds=i * 10)
+            messages.append(
+                gen_item_message(
+                    dt,
+                    {
+                        "user_ids": make_array(*users),
+                        "is_crashed": AnyValue(string_value="true"),
+                    },
+                    type=TraceItemType.TRACE_ITEM_TYPE_USER_SESSION,
+                )
+            )
+
+        # 7 healthy sessions covering alice..jane
+        # Total unique users across all 10 sessions: 10 (alice..jane)
+        healthy_users = [
+            ["alice", "bob", "charlie"],
+            ["dave", "eve"],
+            ["frank", "grace"],
+            ["henry", "irene"],
+            ["jane"],
+            ["alice", "eve", "jane"],
+            ["bob", "frank"],
+        ]
+        for i, users in enumerate(healthy_users):
+            dt = BASE_TIME + timedelta(seconds=(i + 3) * 10)
+            messages.append(
+                gen_item_message(
+                    dt,
+                    {
+                        "user_ids": make_array(*users),
+                        "is_crashed": AnyValue(string_value="false"),
+                    },
+                    type=TraceItemType.TRACE_ITEM_TYPE_USER_SESSION,
+                )
+            )
+
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="test",
+                referrer="test",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp()) + query_duration),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_USER_SESSION,
+            ),
+            expressions=[
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_SUBTRACT,
+                        left=Expression(literal=Literal(val_double=1.0)),
+                        right=Expression(
+                            formula=Expression.BinaryFormula(
+                                op=Expression.BinaryFormula.OP_DIVIDE,
+                                left=Expression(
+                                    conditional_aggregation=AttributeConditionalAggregation(
+                                        aggregate=Function.FUNCTION_UNIQ,
+                                        key=AttributeKey(
+                                            type=AttributeKey.TYPE_ARRAY,
+                                            name="user_ids",
+                                        ),
+                                        filter=TraceItemFilter(
+                                            comparison_filter=ComparisonFilter(
+                                                key=AttributeKey(
+                                                    type=AttributeKey.TYPE_STRING,
+                                                    name="is_crashed",
+                                                ),
+                                                op=ComparisonFilter.OP_EQUALS,
+                                                value=AttributeValue(val_str="true"),
+                                            )
+                                        ),
+                                        label="crashed_users",
+                                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                                    ),
+                                ),
+                                right=Expression(
+                                    conditional_aggregation=AttributeConditionalAggregation(
+                                        aggregate=Function.FUNCTION_UNIQ,
+                                        key=AttributeKey(
+                                            type=AttributeKey.TYPE_ARRAY,
+                                            name="user_ids",
+                                        ),
+                                        label="all_users",
+                                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                    label="crash_free_user_rate",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+
+        response = EndpointTimeSeries().execute(message)
+        ts = response.result_timeseries[0]
+        assert ts.label == "crash_free_user_rate"
+        assert ts.data_points[0].data == pytest.approx(0.6)
+        assert ts.data_points[0].data_present is True
 
 
 class TestUtils:
