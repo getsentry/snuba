@@ -46,7 +46,7 @@ def _get_converter_for_type(
 def _convert_array(x: Sequence[Union[bool, int, float, str]]) -> AttributeValue:
     """Converts an array value from ClickHouse to the appropriate typed AttributeValue."""
     if not x:
-        return AttributeValue(val_str_array=StrArray(values=[]))
+        return AttributeValue(is_null=True)
     first = x[0]
     if isinstance(first, bool):
         return AttributeValue(val_int_array=IntArray(values=[int(v) for v in x]))
