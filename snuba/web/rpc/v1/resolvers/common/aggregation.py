@@ -105,10 +105,10 @@ def _resolve_field_and_existence(
     aggregation: AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> tuple[Expression, Expression]:
-    """Returns (field_expression, existence_condition) from an aggregation.
-    If the aggregation has an AttributeKeyExpression set, evaluates the formula
-    and ANDs together existence checks for all leaf keys. Otherwise falls back
-    to the legacy single-key path."""
+    """Given a protobuf aggregation, returns (aggregation expression, existence expression)
+    Aggregation expression - the actual aggregation ex: sum(attr1 + attr2)
+    Existence expression - an expression that is true iff all referenced attributes in the aggregation are present.
+    """
     if aggregation.HasField("expression"):
         field, keys = _attribute_key_expression_to_expression(
             aggregation.expression, attribute_key_to_expression
@@ -119,7 +119,7 @@ def _resolve_field_and_existence(
 
         existence: Expression = existence_checks[0]
         if len(existence_checks) >= 2:
-            existence = and_cond(existence_checks[0], existence_checks[1], *existence_checks[2:])
+            existence = and_cond(*existence_checks)
         elif len(existence_checks) == 1:
             existence = existence_checks[0]
         else:
