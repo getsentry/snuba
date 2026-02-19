@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import Any, Mapping, Union
+from typing import Any, Dict, Mapping, Union
 
 import pytest
 import simplejson as json
@@ -18,6 +18,7 @@ from snuba.pipeline.stages.query_processing import (
     EntityProcessingStage,
     StorageProcessingStage,
 )
+from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Table
@@ -37,6 +38,7 @@ CLICKHOUSE_DEFAULT_DATETIME = "1970-01-01T00:00:00+00:00"
 
 def write_group_attribute_row(row: Mapping[str, Any]) -> None:
     groups_storage = get_entity(EntityKey.GROUP_ATTRIBUTES).get_writable_storage()
+    assert groups_storage is not None
     groups_storage.get_table_writer().get_batch_writer(
         metrics=DummyMetricsBackend(strict=True)
     ).write([json.dumps(row).encode("utf-8")])
@@ -56,8 +58,8 @@ def _clickhouse_datetime_str(date_time: datetime) -> str:
 
 class TestEventsGroupAttributes(BaseApiTest):
     @pytest.fixture(autouse=True)
-    def setup_fixture(self, events_db, redis_db):
-        self.app.post = partial(self.app.post, headers={"referer": "test"})
+    def setup_fixture(self, events_db: Any, redis_db: Any) -> None:
+        self.app.post = partial(self.app.post, headers={"referer": "test"})  # type: ignore[method-assign]
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
         self.base_time = datetime.utcnow().replace(
@@ -66,9 +68,10 @@ class TestEventsGroupAttributes(BaseApiTest):
         self.next_time = self.base_time + timedelta(minutes=95)
 
         self.events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+        assert self.events_storage is not None
         write_unprocessed_events(self.events_storage, [self.event])
 
-        self.initial_group_attributes = {
+        self.initial_group_attributes: Dict[str, Any] = {
             "deleted": False,
             "project_id": self.project_id,
             "group_id": self.event["group_id"],
@@ -90,7 +93,7 @@ class TestEventsGroupAttributes(BaseApiTest):
 
         write_group_attribute_row(self.initial_group_attributes)
 
-    def query_events_joined_group_attributes(self):
+    def query_events_joined_group_attributes(self) -> Any:
         query_template = (
             "MATCH (e: events) -[attributes]-> (g: group_attributes) "
             "SELECT e.event_id, "
@@ -128,8 +131,8 @@ class TestEventsGroupAttributes(BaseApiTest):
         )
         settings = HTTPQuerySettings()
         request = Request(
-            id="123",
-            original_body=query_body,
+            id=uuid.uuid4(),
+            original_body={"query": query_body},
             query=query,
             query_settings=settings,
             attribution_info=attribution_info,
@@ -146,13 +149,16 @@ class TestEventsGroupAttributes(BaseApiTest):
         clickhouse_query = StorageProcessingStage().execute(pipeline_result).data
 
         assert isinstance(clickhouse_query, CompositeQuery)
-        assert isinstance(clickhouse_query.get_from_clause(), JoinClause)
-        right_node = clickhouse_query.get_from_clause().right_node
-        assert isinstance(right_node.data_source.get_from_clause(), Table)
+        from_clause = clickhouse_query.get_from_clause()
+        assert isinstance(from_clause, JoinClause)
+        right_node = from_clause.right_node
+        assert isinstance(right_node.data_source, ProcessableQuery)
+        right_from = right_node.data_source.get_from_clause()
+        assert isinstance(right_from, Table)
         # make sure we're explicitly applying FINAL when querying on group_attributes table
         # so deduplication happens when we join the entity from events -> group_attributes
-        assert right_node.data_source.get_from_clause().final
-        assert right_node.data_source.get_from_clause().table_name.startswith("group_attributes")
+        assert right_from.final
+        assert right_from.table_name.startswith("group_attributes")
 
         return self.app.post(
             "/events/snql",
@@ -165,7 +171,7 @@ class TestEventsGroupAttributes(BaseApiTest):
             ),
         )
 
-    def query_events_inner_joined_group_attributes(self):
+    def query_events_inner_joined_group_attributes(self) -> Any:
         query_template = (
             "MATCH (e: events) -[attributes_inner]-> (g: group_attributes) "
             "SELECT e.event_id, "
@@ -203,8 +209,8 @@ class TestEventsGroupAttributes(BaseApiTest):
         )
         settings = HTTPQuerySettings()
         request = Request(
-            id="123",
-            original_body=query_body,
+            id=uuid.uuid4(),
+            original_body={"query": query_body},
             query=query,
             query_settings=settings,
             attribution_info=attribution_info,
@@ -221,13 +227,16 @@ class TestEventsGroupAttributes(BaseApiTest):
         clickhouse_query = StorageProcessingStage().execute(pipeline_result).data
 
         assert isinstance(clickhouse_query, CompositeQuery)
-        assert isinstance(clickhouse_query.get_from_clause(), JoinClause)
-        right_node = clickhouse_query.get_from_clause().right_node
-        assert isinstance(right_node.data_source.get_from_clause(), Table)
+        from_clause = clickhouse_query.get_from_clause()
+        assert isinstance(from_clause, JoinClause)
+        right_node = from_clause.right_node
+        assert isinstance(right_node.data_source, ProcessableQuery)
+        right_from = right_node.data_source.get_from_clause()
+        assert isinstance(right_from, Table)
         # make sure we're explicitly applying FINAL when querying on group_attributes table
         # so deduplication happens when we join the entity from events -> group_attributes
-        assert right_node.data_source.get_from_clause().final
-        assert right_node.data_source.get_from_clause().table_name.startswith("group_attributes")
+        assert right_from.final
+        assert right_from.table_name.startswith("group_attributes")
 
         return self.app.post(
             "/events/snql",
@@ -348,8 +357,8 @@ class TestEventsGroupAttributes(BaseApiTest):
 
 class TestSearchIssuesGroupAttributes(BaseApiTest):
     @pytest.fixture(autouse=True)
-    def setup_fixture(self, events_db, redis_db):
-        self.app.post = partial(self.app.post, headers={"referer": "test"})
+    def setup_fixture(self, events_db: Any, redis_db: Any) -> None:
+        self.app.post = partial(self.app.post, headers={"referer": "test"})  # type: ignore[method-assign]
 
         self.base_time = datetime.utcnow().replace(
             second=0, microsecond=0, tzinfo=timezone.utc
@@ -359,9 +368,10 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
         self.project_id = self.occurrence["project_id"]
 
         self.search_issues_storage = get_entity(EntityKey.SEARCH_ISSUES).get_writable_storage()
+        assert self.search_issues_storage is not None
         write_unprocessed_events(self.search_issues_storage, [self.occurrence])
 
-        self.initial_group_attributes = {
+        self.initial_group_attributes: Dict[str, Any] = {
             "deleted": False,
             "project_id": self.project_id,
             "group_id": self.occurrence["group_id"],
@@ -409,7 +419,7 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
     @pytest.mark.xfail(
         reason="The search_issues and group_attributes storage sets are not on the same query node anymore. This should fail since their relationship is no longer in JOINABLE_STORAGE_SETS."
     )
-    def query_search_issues_joined_group_attributes(self):
+    def query_search_issues_joined_group_attributes(self) -> Any:
         query_template = (
             "MATCH (s: search_issues) -[attributes]-> (g: group_attributes) "
             "SELECT s.occurrence_id, "
@@ -443,20 +453,22 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
             cluster_name: str,
         ) -> QueryResult:
             assert isinstance(clickhouse_query, CompositeQuery)
-            assert isinstance(clickhouse_query.get_from_clause(), JoinClause)
-            left_node = clickhouse_query.get_from_clause().left_node
+            inner_from_clause = clickhouse_query.get_from_clause()
+            assert isinstance(inner_from_clause, JoinClause)
+            left_node = inner_from_clause.left_node
             assert isinstance(left_node, IndividualNode)
-            assert isinstance(left_node.data_source.get_from_clause(), Table)
-            assert not left_node.data_source.get_from_clause().final
-            assert left_node.data_source.get_from_clause().table_name.startswith("search_issues")
-            right_node = clickhouse_query.get_from_clause().right_node
-            assert isinstance(right_node.data_source.get_from_clause(), Table)
+            left_from = left_node.data_source.get_from_clause()
+            assert isinstance(left_from, Table)
+            assert not left_from.final
+            assert left_from.table_name.startswith("search_issues")
+            right_node = inner_from_clause.right_node
+            assert isinstance(right_node.data_source, ProcessableQuery)
+            right_from = right_node.data_source.get_from_clause()
+            assert isinstance(right_from, Table)
             # make sure we're explicitly applying FINAL when querying on group_attributes table
             # so deduplication happens when we join the entity from events -> group_attributes
-            assert right_node.data_source.get_from_clause().final
-            assert right_node.data_source.get_from_clause().table_name.startswith(
-                "group_attributes"
-            )
+            assert right_from.final
+            assert right_from.table_name.startswith("group_attributes")
 
             return QueryResult(
                 {"data": []},
@@ -474,8 +486,8 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
         )
         settings = HTTPQuerySettings()
         request = Request(
-            id="123",
-            original_body=query_body,
+            id=uuid.uuid4(),
+            original_body={"query": query_body},
             query=query,
             query_settings=settings,
             attribution_info=attribution_info,
@@ -492,18 +504,22 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
         clickhouse_query = StorageProcessingStage().execute(pipeline_result).data
 
         assert isinstance(clickhouse_query, CompositeQuery)
-        assert isinstance(clickhouse_query.get_from_clause(), JoinClause)
-        left_node = clickhouse_query.get_from_clause().left_node
+        outer_from_clause = clickhouse_query.get_from_clause()
+        assert isinstance(outer_from_clause, JoinClause)
+        left_node = outer_from_clause.left_node
         assert isinstance(left_node, IndividualNode)
-        assert isinstance(left_node.data_source.get_from_clause(), Table)
-        assert not left_node.data_source.get_from_clause().final
-        assert left_node.data_source.get_from_clause().table_name.startswith("search_issues")
-        right_node = clickhouse_query.get_from_clause().right_node
-        assert isinstance(right_node.data_source.get_from_clause(), Table)
+        left_from = left_node.data_source.get_from_clause()
+        assert isinstance(left_from, Table)
+        assert not left_from.final
+        assert left_from.table_name.startswith("search_issues")
+        right_node = outer_from_clause.right_node
+        assert isinstance(right_node.data_source, ProcessableQuery)
+        right_from = right_node.data_source.get_from_clause()
+        assert isinstance(right_from, Table)
         # make sure we're explicitly applying FINAL when querying on group_attributes table
         # so deduplication happens when we join the entity from events -> group_attributes
-        assert right_node.data_source.get_from_clause().final
-        assert right_node.data_source.get_from_clause().table_name.startswith("group_attributes")
+        assert right_from.final
+        assert right_from.table_name.startswith("group_attributes")
 
         return self.app.post(
             "/search_issues/snql",
