@@ -179,6 +179,26 @@ class TestAnyAttributeFilter:
         ):
             _any_attribute_filter_to_expression(filt)
 
+    def test_in_with_scalar_value_raises(self) -> None:
+        filt = AnyAttributeFilter(
+            op=AnyAttributeFilter.OP_IN,
+            value=AttributeValue(val_str="hello"),
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="IN/NOT_IN operations require an array value type"
+        ):
+            _any_attribute_filter_to_expression(filt)
+
+    def test_not_in_with_scalar_value_raises(self) -> None:
+        filt = AnyAttributeFilter(
+            op=AnyAttributeFilter.OP_NOT_IN,
+            value=AttributeValue(val_int=42),
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="IN/NOT_IN operations require an array value type"
+        ):
+            _any_attribute_filter_to_expression(filt)
+
 
 @pytest.mark.eap
 @pytest.mark.redis_db

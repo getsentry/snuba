@@ -4,7 +4,7 @@ from typing import Any, Callable, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AnyAttributeFilter,
     ComparisonFilter,
@@ -177,6 +177,34 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
     query.transform_expressions(transform)
 
 
+def _attribute_value_to_expression(v: AttributeValue) -> Expression:
+    """Convert an AttributeValue proto to a Snuba Expression."""
+    value_type = v.WhichOneof("value")
+    match value_type:
+        case "val_bool":
+            return literal(v.val_bool)
+        case "val_str":
+            return literal(v.val_str)
+        case "val_float":
+            return literal(v.val_float)
+        case "val_double":
+            return literal(v.val_double)
+        case "val_int":
+            return literal(v.val_int)
+        case "val_str_array":
+            return literals_array(None, [literal(x) for x in v.val_str_array.values])
+        case "val_int_array":
+            return literals_array(None, [literal(x) for x in v.val_int_array.values])
+        case "val_float_array":
+            return literals_array(None, [literal(x) for x in v.val_float_array.values])
+        case "val_double_array":
+            return literals_array(None, [literal(x) for x in v.val_double_array.values])
+        case default:
+            raise NotImplementedError(
+                f"translation of AttributeValue type {default} is not implemented"
+            )
+
+
 _NEGATIVE_OPS = {
     AnyAttributeFilter.OP_NOT_EQUALS,
     AnyAttributeFilter.OP_NOT_LIKE,
@@ -235,29 +263,11 @@ def _any_attribute_filter_to_expression(
     if filt.ignore_case and value_type not in ("val_str", "val_str_array"):
         raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
 
-    match value_type:
-        case "val_bool":
-            v_expression: Expression = literal(v.val_bool)
-        case "val_str":
-            v_expression = literal(v.val_str)
-        case "val_float":
-            v_expression = literal(v.val_float)
-        case "val_double":
-            v_expression = literal(v.val_double)
-        case "val_int":
-            v_expression = literal(v.val_int)
-        case "val_str_array":
-            v_expression = literals_array(None, [literal(x) for x in v.val_str_array.values])
-        case "val_int_array":
-            v_expression = literals_array(None, [literal(x) for x in v.val_int_array.values])
-        case "val_float_array":
-            v_expression = literals_array(None, [literal(x) for x in v.val_float_array.values])
-        case "val_double_array":
-            v_expression = literals_array(None, [literal(x) for x in v.val_double_array.values])
-        case default:
-            raise NotImplementedError(
-                f"translation of AttributeValue type {default} is not implemented"
-            )
+    _ARRAY_VALUE_TYPES = {"val_str_array", "val_int_array", "val_float_array", "val_double_array"}
+    if effective_op == AnyAttributeFilter.OP_IN and value_type not in _ARRAY_VALUE_TYPES:
+        raise BadSnubaRPCRequestException("IN/NOT_IN operations require an array value type")
+
+    v_expression = _attribute_value_to_expression(v)
 
     # 3. Build the lambda comparison
     x = Argument(None, "x")
@@ -288,7 +298,11 @@ def _any_attribute_filter_to_expression(
 
     lam = Lambda(None, ("x",), comparison)
 
-    # 4. Build per-column arrayExists expressions
+    # 4. Build per-column arrayExists expressions.
+    # columns_to_search may contain multiple entries when the caller specifies
+    # several attribute_types (e.g. TYPE_STRING + TYPE_FLOAT).  Each column is
+    # searched independently and the results are OR-ed together; columns whose
+    # values don't match the filter value type will simply yield no matches.
     per_column_exprs: list[Expression] = []
     for col_name in columns_to_search:
         per_column_exprs.append(f.arrayExists(lam, f.mapValues(column(col_name))))
@@ -361,37 +375,7 @@ def trace_item_filters_to_expression(
         if v.is_null:
             v_expression: Expression = literal(None)
         else:
-            match value_type:
-                case "val_bool":
-                    v_expression = literal(v.val_bool)
-                case "val_str":
-                    v_expression = literal(v.val_str)
-                case "val_float":
-                    v_expression = literal(v.val_float)
-                case "val_double":
-                    v_expression = literal(v.val_double)
-                case "val_int":
-                    v_expression = literal(v.val_int)
-                case "val_str_array":
-                    v_expression = literals_array(
-                        None, list(map(lambda x: literal(x), v.val_str_array.values))
-                    )
-                case "val_int_array":
-                    v_expression = literals_array(
-                        None, list(map(lambda x: literal(x), v.val_int_array.values))
-                    )
-                case "val_float_array":
-                    v_expression = literals_array(
-                        None, list(map(lambda x: literal(x), v.val_float_array.values))
-                    )
-                case "val_double_array":
-                    v_expression = literals_array(
-                        None, list(map(lambda x: literal(x), v.val_double_array.values))
-                    )
-                case default:
-                    raise NotImplementedError(
-                        f"translation of AttributeValue type {default} is not implemented"
-                    )
+            v_expression = _attribute_value_to_expression(v)
 
         if op == ComparisonFilter.OP_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
