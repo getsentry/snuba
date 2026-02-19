@@ -14,6 +14,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
+from snuba.web.rpc.common.common import convert_tagged_array_to_attribute_value
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
 
@@ -32,6 +33,8 @@ def _get_converter_for_type(
         return lambda x: AttributeValue(val_float=float(x))
     elif key_type == AttributeKey.TYPE_DOUBLE:
         return lambda x: AttributeValue(val_double=float(x))
+    elif key_type == AttributeKey.TYPE_ARRAY:
+        return convert_tagged_array_to_attribute_value
     else:
         raise BadSnubaRPCRequestException(
             f"unknown attribute type: {AttributeKey.Type.Name(key_type)}"

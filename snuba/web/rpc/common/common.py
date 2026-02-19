@@ -4,7 +4,13 @@ from typing import Any, Callable, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    AttributeValue,
+    DoubleArray,
+    IntArray,
+    StrArray,
+)
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
@@ -54,6 +60,7 @@ BUCKET_COUNT = 40
 
 
 def transform_array_value(value: dict[str, str]) -> Any:
+    """Parse a single tagged value dict like {"Int": "165682342"} into a Python value."""
     for t, v in value.items():
         if t == "Int":
             return int(v)
@@ -70,6 +77,31 @@ def process_arrays(raw: str) -> dict[str, list[Any]]:
     for key, values in parsed.items():
         arrays[key] = [transform_array_value(v) for v in values]
     return arrays
+
+
+def convert_tagged_array_to_attribute_value(
+    elements: list[str] | list[dict[str, str]],
+) -> AttributeValue:
+    """Convert ClickHouse tagged array values to a typed protobuf AttributeValue.
+
+    ClickHouse JSON columns store array elements as tagged values, e.g.:
+        ['{"Int": "165682342"}', '{"Int": "999"}']
+
+    All elements share the same type tag. The tag of the first element
+    determines the protobuf array type used for the whole array.
+    """
+    if not elements:
+        return AttributeValue(is_null=True)
+
+    parsed = [json.loads(e) if isinstance(e, str) else e for e in elements]
+    [(tag, _)] = parsed[0].items()
+    values = [p[tag] for p in parsed]
+
+    if tag in ("Int", "Bool"):
+        return AttributeValue(val_int_array=IntArray(values=[int(v) for v in values]))
+    if tag == "Double":
+        return AttributeValue(val_double_array=DoubleArray(values=[float(v) for v in values]))
+    return AttributeValue(val_str_array=StrArray(values=values))
 
 
 def _check_non_string_values_cannot_ignore_case(
