@@ -1,6 +1,6 @@
 import re
 from collections import defaultdict
-from typing import Any, Callable, Dict, Iterable, Sequence, Union
+from typing import Any, Callable, Dict, Iterable
 
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
@@ -10,13 +10,11 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     AttributeValue,
-    DoubleArray,
     Function,
-    IntArray,
     Reliability,
-    StrArray,
 )
 
+from snuba.web.rpc.common.common import convert_tagged_array_to_attribute_value
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
 
@@ -36,26 +34,11 @@ def _get_converter_for_type(
     elif key_type == AttributeKey.TYPE_DOUBLE:
         return lambda x: AttributeValue(val_double=float(x))
     elif key_type == AttributeKey.TYPE_ARRAY:
-        return _convert_array
+        return convert_tagged_array_to_attribute_value
     else:
         raise BadSnubaRPCRequestException(
             f"unknown attribute type: {AttributeKey.Type.Name(key_type)}"
         )
-
-
-def _convert_array(x: Sequence[Union[bool, int, float, str]]) -> AttributeValue:
-    """Converts an array value from ClickHouse to the appropriate typed AttributeValue."""
-    if not x:
-        return AttributeValue(is_null=True)
-    first = x[0]
-    if isinstance(first, bool):
-        return AttributeValue(val_int_array=IntArray(values=[int(v) for v in x]))
-    elif isinstance(first, int):
-        return AttributeValue(val_int_array=IntArray(values=[int(v) for v in x]))
-    elif isinstance(first, float):
-        return AttributeValue(val_double_array=DoubleArray(values=[float(v) for v in x]))
-    else:
-        return AttributeValue(val_str_array=StrArray(values=[str(v) for v in x]))
 
 
 def _get_double_converter() -> Callable[[Any], AttributeValue]:
