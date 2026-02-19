@@ -49,25 +49,6 @@ from snuba.admin.user import AdminUser
         """,
         "SELECT hostname(), avg(query_duration_ms) FROM clusterAllReplicas('default', system.query_log) GROUP BY hostname()",
         "SELECT count() FROM merge('system', '.*settings')",
-    ],
-)
-@pytest.mark.clickhouse_db
-def test_is_valid_system_query(sql_query: str) -> None:
-    assert is_valid_system_query(
-        settings.CLUSTERS[0]["host"], int(settings.CLUSTERS[0]["port"]), "errors", sql_query, False
-    )
-
-
-@pytest.mark.parametrize(
-    "sql_query",
-    [
-        "SHOW TABLES;",  # non select statement
-        "SELECT * FROM my_table;",  # not allowed table
-        "SELECT * from system.metrics"  # system table not on allowed list
-        "with sum(bytes) as s select s from system.parts group by table;",  # sorry not allowed WITH
-        "SELECT 1; SELECT 2;"  # no multiple statements
-        "SELECT * FROM system.clusters c INNER JOIN my_table m ON c.cluster == m.something",  # no join
-        "SELECT * from system.as1",  # invalid system table format
         """SELECT
             count() as nb_query,
             user,
@@ -88,6 +69,25 @@ def test_is_valid_system_query(sql_query: str) -> None:
         ORDER BY
             memory DESC;
         """,
+    ],
+)
+@pytest.mark.clickhouse_db
+def test_is_valid_system_query(sql_query: str) -> None:
+    assert is_valid_system_query(
+        settings.CLUSTERS[0]["host"], int(settings.CLUSTERS[0]["port"]), "errors", sql_query, False
+    )
+
+
+@pytest.mark.parametrize(
+    "sql_query",
+    [
+        "SHOW TABLES;",  # non select statement
+        "SELECT * FROM my_table;",  # not allowed table
+        "SELECT * from system.metrics"  # system table not on allowed list
+        "with sum(bytes) as s select s from system.parts group by table;",  # sorry not allowed WITH
+        "SELECT 1; SELECT 2;"  # no multiple statements
+        "SELECT * FROM system.clusters c INNER JOIN my_table m ON c.cluster == m.something",  # no join
+        "SELECT * from system.as1",  # invalid system table format
     ],
 )
 @pytest.mark.clickhouse_db
