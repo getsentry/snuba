@@ -12,6 +12,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeValue,
     Function,
     Reliability,
+    StrArray,
 )
 
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -32,6 +33,10 @@ def _get_converter_for_type(
         return lambda x: AttributeValue(val_float=float(x))
     elif key_type == AttributeKey.TYPE_DOUBLE:
         return lambda x: AttributeValue(val_double=float(x))
+    elif key_type == AttributeKey.TYPE_ARRAY:
+        return lambda x: AttributeValue(
+            val_str_array=StrArray(values=[str(v) for v in x] if x else [])
+        )
     else:
         raise BadSnubaRPCRequestException(
             f"unknown attribute type: {AttributeKey.Type.Name(key_type)}"
