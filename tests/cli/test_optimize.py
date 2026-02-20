@@ -7,7 +7,7 @@ from snuba.cli.optimize import optimize
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_optimize_cli() -> None:
     runner = CliRunner()
     host = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")

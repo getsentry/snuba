@@ -42,7 +42,7 @@ redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
         ),
     ],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 # @pytest.mark.skipif(
 #     os.environ.get("SNUBA_SETTINGS") == "test_distributed",
@@ -96,7 +96,7 @@ def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None
     assert_partitions(all=set(), completed=set())
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 @pytest.mark.skip(reason="This test is flaky and fails unexpectedly on CI")
 def test_run_optimize_with_partition_tracker() -> None:
@@ -185,7 +185,7 @@ def test_run_optimize_with_partition_tracker() -> None:
     assert num_optimized == original_num_partitions
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 @pytest.mark.xfail(
     reason="This test still is flaky sometimes and then completely blocks CI / deployment"

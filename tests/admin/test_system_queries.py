@@ -51,7 +51,7 @@ from snuba.admin.user import AdminUser
         "SELECT count() FROM merge('system', '.*settings')",
     ],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_is_valid_system_query(sql_query: str) -> None:
     assert is_valid_system_query(
         settings.CLUSTERS[0]["host"], int(settings.CLUSTERS[0]["port"]), "errors", sql_query, False
@@ -90,7 +90,7 @@ def test_is_valid_system_query(sql_query: str) -> None:
         """,
     ],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_invalid_system_query(sql_query: str) -> None:
     with pytest.raises(Exception):
         is_valid_system_query(
@@ -131,7 +131,7 @@ def test_invalid_system_query(sql_query: str) -> None:
         ),
     ],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_sudo_queries(sudo_query: str, expected: bool) -> None:
     if expected:
         validate_query(
@@ -191,7 +191,7 @@ def test_sudo_queries(sudo_query: str, expected: bool) -> None:
         ),
     ],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_run_sudo_queries(
     query: str,
     roles: Sequence[Role],
@@ -231,7 +231,7 @@ def test_run_sudo_queries(
         ("SELECT * FROM system.clusters;", False),
     ],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) -> None:
     """
     Test that when sudo_mode=True, the experimental analyzer setting is not
