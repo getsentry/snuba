@@ -20,7 +20,7 @@ from snuba.migrations.operations import (
 )
 from snuba.migrations.table_engines import Distributed, ReplacingMergeTree
 from snuba.migrations.validator import (
-    DistributedEngineParseError,
+    InvalidDistributedOperation,
     InvalidMigrationOrderError,
     _get_local_table_name,
     conflicts_add_column_op,
@@ -423,6 +423,6 @@ def test_get_local_table_name() -> None:
 
     # not found — raises DistributedEngineParseError
     mock_dist_op.table_name = "not_exists_table"
-    with pytest.raises(DistributedEngineParseError) as parse_error:
+    with pytest.raises(InvalidDistributedOperation) as err:
         _get_local_table_name(mock_dist_op)
-    assert str(parse_error.value) == "No storage found for distributed table not_exists_table"
+    assert str(err.value) == "No storage found for distributed table not_exists_table"

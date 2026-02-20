@@ -43,6 +43,14 @@ class DistributedEngineParseError(Exception):
     pass
 
 
+class InvalidDistributedOperation(Exception):
+    """
+    Can't find the local table name for a distributed table on a dist op
+    """
+
+    pass
+
+
 def _conflicts_ops(local_op: SqlOperation, dist_op: SqlOperation) -> bool:
     if isinstance(local_op, CreateTable) and isinstance(dist_op, CreateTable):
         return conflicts_create_table_op(local_op, dist_op)
@@ -215,7 +223,7 @@ def _get_local_table_name(dist_op: Union[CreateTable, AddColumn, DropColumn]) ->
                     return schema.get_local_table_name()
         except UndefinedClickhouseCluster:
             continue
-    raise DistributedEngineParseError(
+    raise InvalidDistributedOperation(
         f"No storage found for distributed table {dist_op.table_name}"
     )
 
