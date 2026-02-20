@@ -1,6 +1,18 @@
 import json
 import traceback
-from typing import Any, Callable, Dict, Generator, List, Sequence, Set, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    FrozenSet,
+    Generator,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
@@ -17,9 +29,13 @@ from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
+from snuba.migrations.groups import MigrationGroup
 from snuba.redis import all_redis_clients
 
-MIGRATIONS_CACHE: Dict[Tuple[ClickhouseCluster, ClickhouseNode], Dict[str, str]] = {}
+NodeTableCache = Dict[Tuple[ClickhouseCluster, ClickhouseNode], Dict[str, str]]
+CacheKey = Optional[FrozenSet[MigrationGroup]]
+
+DB_MIGRATIONS_CACHE: Dict[CacheKey, NodeTableCache] = {}
 
 
 def pytest_configure() -> None:
@@ -75,6 +91,8 @@ def pytest_collection_modifyitems(items: Sequence[Any]) -> None:
     for item in items:
         if item.get_closest_marker("eap"):
             item.fixturenames.append("eap")
+        elif item.get_closest_marker("genmetrics_db"):
+            item.fixturenames.append("genmetrics_db")
         elif item.get_closest_marker("clickhouse_db"):
             item.fixturenames.append("clickhouse_db")
         elif item.get_closest_marker("custom_clickhouse_db"):
@@ -155,32 +173,86 @@ def redis_db(request: pytest.FixtureRequest) -> Generator[None, None, None]:
     yield
 
 
-def _build_migrations_cache() -> None:
+def _build_db_cache(cache_key: CacheKey) -> None:
+    """Snapshot current ClickHouse table definitions into DB_MIGRATIONS_CACHE[cache_key].
+    Call immediately after Runner().run_all(...) to capture exactly the applied migrations."""
+    node_table_cache: NodeTableCache = {}
     for storage_key in get_all_storage_keys():
         storage = get_storage(storage_key)
         cluster = storage.get_cluster()
         database = cluster.get_database()
         nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
         for node in nodes:
-            if (cluster, node) not in MIGRATIONS_CACHE:
-                connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
-                rows = connection.execute(
-                    f"SELECT name, create_table_query FROM system.tables WHERE database='{database}'"
-                )
-                mv_tables = []
-                non_mv_tables = []
-                for table_name, create_table_query in rows.results:
-                    if "MATERIALIZED VIEW" in create_table_query:
-                        mv_tables.append((table_name, create_table_query))
-                    else:
-                        non_mv_tables.append((table_name, create_table_query))
-                # when using the MIGRATIONS_CACHE we should make sure local
-                # tables are created before materialized views that depend on them
-                all_tables = mv_tables + non_mv_tables
-                for table_name, create_table_query in all_tables:
-                    MIGRATIONS_CACHE.setdefault((cluster, node), {})[table_name] = (
-                        create_table_query
-                    )
+            if (cluster, node) in node_table_cache:
+                continue
+            connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+            rows = connection.execute(
+                f"SELECT name, create_table_query FROM system.tables WHERE database='{database}'"
+            )
+            mv_tables = []
+            non_mv_tables = []
+            for table_name, create_table_query in rows.results:
+                if "MATERIALIZED VIEW" in create_table_query:
+                    mv_tables.append((table_name, create_table_query))
+                else:
+                    non_mv_tables.append((table_name, create_table_query))
+            # non-MVs must be created before the materialized views that depend on them
+            for table_name, create_table_query in non_mv_tables + mv_tables:
+                node_table_cache.setdefault((cluster, node), {})[table_name] = create_table_query
+    DB_MIGRATIONS_CACHE[cache_key] = node_table_cache
+
+
+def _apply_db_cache(cache_key: CacheKey) -> None:
+    """Re-apply cached table-creation DDL. Uses IF NOT EXISTS for idempotency."""
+    for (cluster, node), tables in DB_MIGRATIONS_CACHE[cache_key].items():
+        connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+        for table_name, create_table_query in tables.items():
+            idempotent_query = create_table_query.replace(
+                "CREATE TABLE", "CREATE TABLE IF NOT EXISTS"
+            ).replace(
+                "CREATE MATERIALIZED VIEW",
+                "CREATE MATERIALIZED VIEW IF NOT EXISTS",
+            )
+            connection.execute(idempotent_query)
+
+
+def _run_db_fixture(
+    request: pytest.FixtureRequest,
+    marker_name: str,
+    groups: Optional[Sequence[MigrationGroup]],
+    cache_key: CacheKey,
+) -> Generator[None, None, None]:
+    """Shared body for clickhouse table creation fixtures.
+
+    Args:
+        request:     pytest FixtureRequest, used for marker validation.
+        marker_name: The pytest marker name (e.g. "clickhouse_db").
+        groups:      MigrationGroup(s) to run, or None to run all migrations.
+        cache_key:   Key into DB_MIGRATIONS_CACHE. None means all migrations.
+                     Pass a frozenset of MigrationGroup values for group-scoped fixtures.
+                     Pass None to skip caching entirely.
+    """
+    from snuba.migrations.runner import Runner
+
+    if not request.node.get_closest_marker(marker_name):
+        pytest.fail(f"Need to use {marker_name} marker if {marker_name} fixture is used")
+
+    try:
+        reset_dataset_factory()
+        if cache_key is not None and cache_key in DB_MIGRATIONS_CACHE:
+            _apply_db_cache(cache_key)
+        else:
+            runner = Runner()
+            if groups is None:
+                runner.run_all(force=True)
+            else:
+                for group in groups:
+                    runner.run_all(group=group, force=True)
+            if cache_key is not None:
+                _build_db_cache(cache_key)
+        yield
+    finally:
+        _clear_db()
 
 
 def _clear_db() -> None:
@@ -247,61 +319,36 @@ def custom_clickhouse_db(
 def clickhouse_db(
     request: pytest.FixtureRequest, create_databases: None
 ) -> Generator[None, None, None]:
-    if not request.node.get_closest_marker("clickhouse_db"):
-        # Make people use the marker explicitly so `-m` works on CLI
-        pytest.fail("Need to use clickhouse_db marker if clickhouse_db fixture is used")
-
-    from snuba.migrations.runner import Runner
-
-    try:
-        reset_dataset_factory()
-        if not MIGRATIONS_CACHE:
-            Runner().run_all(force=True)
-            _build_migrations_cache()
-        else:
-            # apply migrations from cache
-            applied_nodes = set()
-            for (cluster, node), tables in MIGRATIONS_CACHE.items():
-                connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
-                for table_name, create_table_query in tables.items():
-                    if (node.host_name, node.port, table_name) in applied_nodes:
-                        continue
-                    create_table_query = create_table_query.replace(
-                        "CREATE TABLE", "CREATE TABLE IF NOT EXISTS"
-                    ).replace(
-                        "CREATE MATERIALIZED VIEW",
-                        "CREATE MATERIALIZED VIEW IF NOT EXISTS",
-                    )
-                    connection.execute(create_table_query)
-                applied_nodes.add((node.host_name, node.port, table_name))
-        yield
-    finally:
-        _clear_db()
+    yield from _run_db_fixture(
+        request=request,
+        marker_name="clickhouse_db",
+        groups=None,
+        cache_key=frozenset(),
+    )
 
 
 @pytest.fixture
 def eap(request: pytest.FixtureRequest, create_databases: None) -> Generator[None, None, None]:
-    """
-    A custom ClickHouse fixture that only runs EAP (Events Analytics Platform) migrations and Outcomes migrations (for storage routing).
-    This is much faster than running all migrations for tests that only need EAP tables.
+    groups = [MigrationGroup.EVENTS_ANALYTICS_PLATFORM, MigrationGroup.OUTCOMES]
+    yield from _run_db_fixture(
+        request=request,
+        marker_name="eap",
+        groups=groups,
+        cache_key=frozenset(groups),
+    )
 
-    Use this with @pytest.mark.eap marker.
-    """
-    if not request.node.get_closest_marker("eap"):
-        pytest.fail("Need to use eap marker if eap fixture is used")
 
-    from snuba.migrations.groups import MigrationGroup
-    from snuba.migrations.runner import Runner
-
-    try:
-        reset_dataset_factory()
-        # Run only SYSTEM migrations (required for migrations table) and EAP migrations
-        runner = Runner()
-        runner.run_all(group=MigrationGroup.EVENTS_ANALYTICS_PLATFORM, force=True)
-        runner.run_all(group=MigrationGroup.OUTCOMES, force=True)
-        yield
-    finally:
-        _clear_db()
+@pytest.fixture
+def genmetrics_db(
+    request: pytest.FixtureRequest, create_databases: None
+) -> Generator[None, None, None]:
+    groups = [MigrationGroup.GENERIC_METRICS]
+    yield from _run_db_fixture(
+        request=request,
+        marker_name="genmetrics_db",
+        groups=groups,
+        cache_key=frozenset(groups),
+    )
 
 
 @pytest.fixture(autouse=True)

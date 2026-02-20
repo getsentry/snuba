@@ -23,7 +23,7 @@ def test_basic_snql() -> None:
     ]
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 def test_basic_mql() -> None:
     # body = {'debug': True, 'query': 'sum(c:transactions/count_per_root_project@none){transaction:"t1"} by (status_code)', 'dataset': 'generic_metrics', 'app_id': 'test', 'tenant_ids': {'referrer': 'tests', 'organization_id': 101}, 'parent_api': '<unknown>', 'mql_context': {'start': '2024-07-16T09:15:00+00:00', 'end': '2024-07-16T15:15:00+00:00', 'rollup': {'orderby': None, 'granularity': 60, 'interval': 60, 'with_totals': None}, 'scope': {'org_ids': [101], 'project_ids': [1, 2], 'use_case_id': 'performance'}, 'indexer_mappings': {'transaction.duration': 'c:transactions/count_per_root_project@none', 'c:transactions/count_per_root_project@none': 1067, 'transaction': 65546, 'status_code': 9223372036854776010}, 'limit': None, 'offset': None}}
