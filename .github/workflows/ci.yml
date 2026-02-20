@@ -433,7 +433,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          target: application
+          target: application-distroless
           load: true
           tags: snuba-distroless:test
           cache-from: type=gha

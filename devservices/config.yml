@@ -83,7 +83,7 @@ services:
       - devserver
       - --${SNUBA_NO_WORKERS:+no-workers}
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:1218/health_envoy')"]
+      test: curl -f http://localhost:1218/health_envoy
       interval: 5s
       timeout: 5s
       retries: 3

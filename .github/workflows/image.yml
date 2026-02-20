@@ -6,7 +6,6 @@ on:
       - release/**
 
 jobs:
-  # Current full Debian image — used by self-hosted and as the default
   build-multiplatform:
     strategy:
       matrix:
@@ -28,7 +27,6 @@ jobs:
         image_name: 'snuba'
         platforms: linux/${{ matrix.platform }}
         dockerfile_path: 'Dockerfile'
-        build_target: 'application-full'
         tag_suffix: -${{ matrix.platform }}
         ghcr: true
         tag_nightly: false
@@ -48,7 +46,6 @@ jobs:
           image_name: 'snuba'
           platforms: linux/amd64
           dockerfile_path: './Dockerfile'
-          build_target: 'application-full'
           ghcr: false
           tag_nightly: false
           tag_latest: false
@@ -79,7 +76,7 @@ jobs:
         image_name: 'snuba'
         platforms: linux/${{ matrix.platform }}
         dockerfile_path: 'Dockerfile'
-        build_target: 'application'
+        build_target: 'application-distroless'
         tag_suffix: -distroless-${{ matrix.platform }}
         ghcr: true
         tag_nightly: false
@@ -107,7 +104,7 @@ jobs:
         image_name: 'snuba'
         platforms: linux/${{ matrix.platform }}
         dockerfile_path: 'Dockerfile'
-        build_target: 'application-debug'
+        build_target: 'application-distroless-debug'
         tag_suffix: -debug-${{ matrix.platform }}
         ghcr: true
         tag_nightly: false

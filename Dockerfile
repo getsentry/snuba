@@ -1,6 +1,6 @@
-ARG PYTHON_VERSION=3.13
+ARG PYTHON_VERSION=3.11.11
 
-FROM python:${PYTHON_VERSION}-slim-trixie AS build_base
+FROM python:${PYTHON_VERSION}-slim-bookworm AS build_base
 
 WORKDIR /usr/src/snuba
 
@@ -127,16 +127,8 @@ RUN set -ex; \
     rm -rf /tmp/rust_wheels/; \
     snuba --help
 
-# Fix venv symlinks: the build image has Python at /usr/local/bin/python3,
-# but the distroless runtime has it at /usr/bin/python3.
-RUN ln -sf /usr/bin/python3 /.venv/bin/python3 && \
-    ln -sf /usr/bin/python3 /.venv/bin/python
-
-# Verify no shared libraries are missing (would break at runtime in distroless)
-RUN find /.venv -name "*.so" -exec ldd {} \; 2>&1 | grep "not found" && exit 1 || true
-
 ARG SOURCE_COMMIT
-ENV LD_PRELOAD=/usr/lib/libjemalloc.so.2 \
+ENV LD_PRELOAD=/usr/src/snuba/libjemalloc.so.2 \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
@@ -144,17 +136,36 @@ ENV LD_PRELOAD=/usr/lib/libjemalloc.so.2 \
 
 USER snuba
 EXPOSE 1218 1219
-ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
-CMD ["api"]
+ENTRYPOINT [ "./docker_entrypoint.sh" ]
+CMD [ "api" ]
 
-# Production distroless image — minimal attack surface, no shell
-FROM gcr.io/distroless/python3-debian13 AS application
+FROM application_base AS application
+USER 0
+RUN set -ex; \
+    apt-get purge -y --auto-remove $(cat /tmp/build-deps.txt); \
+    rm /tmp/build-deps.txt; \
+    rm -rf /var/lib/apt/lists/*;
+USER snuba
 
-COPY --from=application_base /.venv /.venv
-COPY --from=application_base /usr/src/snuba /usr/src/snuba
-COPY --from=application_base /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
-COPY --from=application_base /etc/passwd /etc/passwd
-COPY --from=application_base /etc/group /etc/group
+# --- Distroless stages (additive, no changes to existing stages above) ---
+
+# Prepare artifacts for distroless: fix venv symlinks and verify shared libs.
+# The build image has Python at /usr/local/bin/python3, but the distroless
+# runtime has it at /usr/bin/python3.
+FROM application_base AS distroless_prep
+USER 0
+RUN ln -sf /usr/bin/python3 /.venv/bin/python3 && \
+    ln -sf /usr/bin/python3 /.venv/bin/python
+RUN find /.venv -name "*.so" -exec ldd {} \; 2>&1 | grep "not found" && exit 1 || true
+
+# Distroless production image — minimal attack surface, no shell
+FROM gcr.io/distroless/python3-debian12 AS application-distroless
+
+COPY --from=distroless_prep /.venv /.venv
+COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
+COPY --from=distroless_prep /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
+COPY --from=distroless_prep /etc/passwd /etc/passwd
+COPY --from=distroless_prep /etc/group /etc/group
 
 WORKDIR /usr/src/snuba
 ENV PATH="/.venv/bin:/usr/bin:$PATH" \
@@ -169,13 +180,13 @@ ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
 CMD ["api"]
 
 # Debug distroless image — includes busybox (sh, ls, cat, wget, env, etc.)
-FROM gcr.io/distroless/python3-debian13:debug AS application-debug
+FROM gcr.io/distroless/python3-debian12:debug AS application-distroless-debug
 
-COPY --from=application_base /.venv /.venv
-COPY --from=application_base /usr/src/snuba /usr/src/snuba
-COPY --from=application_base /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
-COPY --from=application_base /etc/passwd /etc/passwd
-COPY --from=application_base /etc/group /etc/group
+COPY --from=distroless_prep /.venv /.venv
+COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
+COPY --from=distroless_prep /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
+COPY --from=distroless_prep /etc/passwd /etc/passwd
+COPY --from=distroless_prep /etc/group /etc/group
 
 WORKDIR /usr/src/snuba
 ENV PATH="/.venv/bin:/usr/bin:$PATH" \
@@ -189,16 +200,8 @@ EXPOSE 1218 1219
 ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
 CMD ["api"]
 
-# Full Debian image — shell, curl, gdb, heaptrack (self-hosted / escape hatch)
-FROM application_base AS application-full
-USER 0
-RUN set -ex; \
-    apt-get purge -y --auto-remove $(cat /tmp/build-deps.txt); \
-    rm /tmp/build-deps.txt; \
-    rm -rf /var/lib/apt/lists/*;
-USER snuba
+# --- End distroless stages ---
 
-# Testing image — must be last so `docker build .` (no --target) defaults to it
 FROM application_base AS testing
 
 USER 0
