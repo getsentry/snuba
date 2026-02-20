@@ -193,8 +193,56 @@ jobs:
           path: /tmp/snuba-ci.tar
 
 
+  docker-deps:
+    name: Warm Docker dependency image cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Restore Docker dependency image cache
+        id: cache-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: /tmp/docker-deps
+          key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
+          restore-keys: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-
+
+      - name: Load and pull Docker dependency images
+        id: load-pull
+        run: |
+          if [ -f /tmp/docker-deps/deps.tar ]; then
+            docker load --input /tmp/docker-deps/deps.tar
+          fi
+          images=(
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
+            "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
+          )
+          pulled=0
+          for image in "${images[@]}"; do
+            if ! docker image inspect "$image" &>/dev/null; then
+              docker pull "$image"
+              pulled=1
+            fi
+          done
+          if [ "$pulled" -eq 1 ]; then
+            mkdir -p /tmp/docker-deps
+            docker save "${images[@]}" -o /tmp/docker-deps/deps.tar
+          fi
+          echo "pulled=$pulled" >> $GITHUB_OUTPUT
+
+      - name: Save Docker dependency image cache
+        if: steps.load-pull.outputs.pulled == '1'
+        uses: actions/cache/save@v5
+        with:
+          path: /tmp/docker-deps
+          key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
+
   tests:
-    needs: [linting, snuba-image]
+    needs: [linting, snuba-image, docker-deps]
     name: Tests and code coverage
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -221,6 +269,30 @@ jobs:
         run: |
           docker load --input /tmp/snuba-ci.tar
           docker image ls -a
+
+      - name: Restore Docker dependency image cache
+        uses: actions/cache/restore@v5
+        with:
+          path: /tmp/docker-deps
+          key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
+          restore-keys: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-
+
+      - name: Load Docker dependency images
+        run: |
+          if [ -f /tmp/docker-deps/deps.tar ]; then
+            docker load --input /tmp/docker-deps/deps.tar
+          fi
+          images=(
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
+            "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
+          )
+          for image in "${images[@]}"; do
+            if ! docker image inspect "$image" &>/dev/null; then
+              docker pull "$image"
+            fi
+          done
 
       - name: Docker set up
         run: |
@@ -377,7 +449,7 @@ jobs:
         run: pytest -k 'not __In' tests -vv -m snuba_ci
 
   clickhouse-versions:
-    needs: [linting, snuba-image]
+    needs: [linting, snuba-image, docker-deps]
     name: Tests on multiple clickhouse versions
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -403,6 +475,30 @@ jobs:
         run: |
           docker load --input /tmp/snuba-ci.tar
           docker image ls -a
+
+      - name: Restore Docker dependency image cache
+        uses: actions/cache/restore@v5
+        with:
+          path: /tmp/docker-deps
+          key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
+          restore-keys: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-
+
+      - name: Load Docker dependency images
+        run: |
+          if [ -f /tmp/docker-deps/deps.tar ]; then
+            docker load --input /tmp/docker-deps/deps.tar
+          fi
+          images=(
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{ matrix.version }}"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
+            "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
+          )
+          for image in "${images[@]}"; do
+            if ! docker image inspect "$image" &>/dev/null; then
+              docker pull "$image"
+            fi
+          done
 
       - name: Docker set up
         run: |
