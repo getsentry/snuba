@@ -208,7 +208,10 @@ def _get_local_table_name(dist_op: Union[CreateTable, AddColumn, DropColumn]) ->
                 continue
             schema = storage.get_schema()
             if isinstance(schema, TableSchema):
-                if schema.get_table_name() == dist_op.table_name:
+                # In local mode we want to verify that the pairing of
+                # dist/local tables is correct, so using get_dist_table_name
+                # instead of get_table_name here
+                if schema.get_dist_table_name() == dist_op.table_name:
                     return schema.get_local_table_name()
         except UndefinedClickhouseCluster:
             continue
