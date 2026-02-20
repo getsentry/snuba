@@ -17,7 +17,7 @@ use crate::config::ProcessorConfig;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{
     BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
-    KafkaMessageMetadata, RowData,
+    KafkaMessageMetadata, RowData, TypedInsertBatch,
 };
 use tokio::time::Instant;
 
@@ -163,6 +163,81 @@ pub fn make_rust_processor_with_replacements(
         enforce_schema,
         func,
         result_to_next_msg,
+        processor_config,
+        stop_at_timestamp,
+    };
+
+    Box::new(RunTaskInThreads::new(
+        next_step,
+        task_runner,
+        concurrency,
+        Some("process_message"),
+    ))
+}
+
+pub fn make_rust_processor_row_binary<T: Clone + Send + Sync + 'static>(
+    next_step: impl ProcessingStrategy<BytesInsertBatch<Vec<T>>> + 'static,
+    func: fn(
+        KafkaPayload,
+        KafkaMessageMetadata,
+        &ProcessorConfig,
+    ) -> anyhow::Result<TypedInsertBatch<T>>,
+    schema_name: &str,
+    enforce_schema: bool,
+    concurrency: &ConcurrencyConfig,
+    processor_config: ProcessorConfig,
+    stop_at_timestamp: Option<i64>,
+) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+    let schema = get_schema(schema_name, enforce_schema);
+
+    fn result_to_next_msg<T>(
+        transformed: TypedInsertBatch<T>,
+        partition: Partition,
+        offset: u64,
+        timestamp: DateTime<Utc>,
+        stop_at_timestamp: Option<i64>,
+    ) -> anyhow::Result<Message<BytesInsertBatch<Vec<T>>>> {
+        if let Some(stop) = stop_at_timestamp {
+            if stop < timestamp.timestamp() {
+                let payload = BytesInsertBatch::from_rows(Vec::new());
+                return Ok(Message::new_broker_message(
+                    payload, partition, offset, timestamp,
+                ));
+            }
+        }
+
+        let mut payload = BytesInsertBatch::from_rows(transformed.rows)
+            .with_message_timestamp(timestamp)
+            .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
+                partition.index,
+                CommitLogEntry {
+                    offset,
+                    orig_message_ts: timestamp,
+                    received_p99: transformed.origin_timestamp.into_iter().collect(),
+                },
+            )])))
+            .with_cogs_data(transformed.cogs_data.unwrap_or_default());
+
+        if let Some(ts) = transformed.origin_timestamp {
+            payload = payload.with_origin_timestamp(ts);
+        }
+        if let Some(ts) = transformed.sentry_received_timestamp {
+            payload = payload.with_sentry_received_timestamp(ts);
+        }
+        if let Some(metrics) = transformed.item_type_metrics {
+            payload = payload.with_item_type_metrics(metrics);
+        }
+
+        Ok(Message::new_broker_message(
+            payload, partition, offset, timestamp,
+        ))
+    }
+
+    let task_runner = MessageProcessor {
+        schema,
+        enforce_schema,
+        func,
+        result_to_next_msg: result_to_next_msg::<T>,
         processor_config,
         stop_at_timestamp,
     };
