@@ -141,6 +141,9 @@ class SessionsLoader(GroupLoader):
         """
         return []
 
+    def load_migration(self, migration_id: str) -> Migration:
+        raise MigrationDoesNotExist("Sessions is deprecated")
+
 
 class QuerylogLoader(DirectoryLoader):
     def __init__(self) -> None:
