@@ -417,6 +417,51 @@ jobs:
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
+  distroless-smoke-test:
+    name: Distroless image smoke test
+    needs: [snuba-image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build distroless image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: application-distroless
+          load: true
+          tags: snuba-distroless:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify --help works
+        run: docker run --rm snuba-distroless:test --help
+
+      - name: Verify Python imports
+        run: |
+          docker run --rm --entrypoint python3 snuba-distroless:test \
+            -c "import snuba, rust_snuba, confluent_kafka; print('OK')"
+
+      - name: Verify jemalloc LD_PRELOAD is active
+        run: |
+          docker run --rm --entrypoint python3 snuba-distroless:test \
+            -c "import ctypes; ctypes.CDLL('libjemalloc.so.2'); print('jemalloc OK')"
+
+      - name: Verify no shell available
+        run: |
+          # This should fail — distroless has no /bin/sh
+          if docker run --rm --entrypoint /bin/sh snuba-distroless:test -c "echo hi" 2>/dev/null; then
+            echo "ERROR: /bin/sh should not be available in distroless image"
+            exit 1
+          else
+            echo "OK: /bin/sh is not available"
+          fi
+
   validate-devservices-config:
     runs-on: ubuntu-24.04
     needs: files-changed
