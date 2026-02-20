@@ -135,8 +135,11 @@ class MetricsLoader(DirectoryLoader):
 
 
 class SessionsLoader(DirectoryLoader):
-    def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.sessions")
+    def get_migrations(self) -> Sequence[str]:
+        """
+        Sessions is deprecated
+        """
+        return []
 
 
 class QuerylogLoader(DirectoryLoader):
