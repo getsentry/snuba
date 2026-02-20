@@ -134,7 +134,7 @@ class MetricsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.metrics")
 
 
-class SessionsLoader(DirectoryLoader):
+class SessionsLoader(GroupLoader):
     def get_migrations(self) -> Sequence[str]:
         """
         Sessions is deprecated
