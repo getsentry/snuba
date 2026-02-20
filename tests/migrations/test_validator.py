@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from snuba.clickhouse.columns import Column, String, UInt
-from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
+from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, validator
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -45,7 +45,6 @@ for group in MigrationGroup:
         for migration_id, snuba_migration in all_migrations
     ],
 )
-@pytest.mark.clickhouse_db
 def test_validate_all_migrations(
     snuba_migration: migration.ClickhouseNodeMigration,
 ) -> None:
@@ -412,70 +411,18 @@ def test_conflicts(mock_get_local_table_name: Mock, mock_get_cluster: Mock) -> N
     assert not conflicts_create_table_op(new_create_local_op2, create_dist_op)
 
 
-@patch.object(validator, "_get_dist_connection")
-@pytest.mark.clickhouse_db
-def test_parse_engine(mock_get_dist_connection: Mock) -> None:
-    cluster = get_cluster(StorageSetKey.MIGRATIONS)
-    connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+def test_get_local_table_name() -> None:
+    storage_set = StorageSetKey.EVENTS
 
-    def get_cluster_name() -> str:
-        """
-        It looks like ClickHouse changed the name of the test clusters
-        and starting on 23.8+ we only have the 'default' cluster
-        """
-        (version,) = connection.execute("SELECT version()").results[0]
-        if version >= "23.8":
-            return "default"
-        else:
-            return "test_shard_localhost"
+    mock_dist_op = Mock(spec=SqlOperation)
+    mock_dist_op._storage_set = storage_set
 
-    cluster_name = get_cluster_name()
-    database = connection.database
-    mock_get_dist_connection.return_value = connection
+    # found — returns the local table name
+    mock_dist_op.table_name = "errors_dist"
+    assert _get_local_table_name(mock_dist_op) == "errors_local"
 
-    # setup
-    connection.execute(f"DROP TABLE IF EXISTS {database}.test_local_table")
-    connection.execute(f"DROP TABLE IF EXISTS {database}.test_dist_table")
-    connection.execute(f"DROP TABLE IF EXISTS {database}.test_sharded_dist_table")
-
-    local_table_engine = f"Merge('{database}', 'test_local_table')"
-    connection.execute(
-        f"CREATE TABLE {database}.test_local_table (id String) ENGINE = {local_table_engine}"
-    )
-    connection.execute(
-        f"CREATE TABLE {database}.test_dist_table (id String)"
-        f"ENGINE = Distributed({cluster_name}, {database}, test_local_table)"
-    )
-    mock_sql_op = Mock(spec=SqlOperation)
-    mock_dist_op = mock_sql_op()
-
-    connection.execute(
-        f"CREATE TABLE {database}.test_sharded_dist_table (id String)"
-        f"ENGINE = Distributed({cluster_name}, {database}, test_local_table, rand())"
-    )
-
-    # test parsing the local table name from engine
-    mock_dist_op.table_name = "test_dist_table"
-    assert _get_local_table_name(mock_dist_op) == "test_local_table"
-    mock_dist_op.table_name = "test_sharded_dist_table"
-    assert _get_local_table_name(mock_dist_op) == "test_local_table"
-
-    # test on not existing table
+    # not found — raises DistributedEngineParseError
     mock_dist_op.table_name = "not_exists_table"
     with pytest.raises(DistributedEngineParseError) as parse_error:
         _get_local_table_name(mock_dist_op)
-    assert str(parse_error.value) == "No engine found for table not_exists_table"
-
-    # test on not distributed table
-    mock_dist_op.table_name = "test_local_table"
-    with pytest.raises(DistributedEngineParseError) as parse_error:
-        _get_local_table_name(mock_dist_op)
-    assert (
-        str(parse_error.value)
-        == f"Cannot match engine string {local_table_engine} for distributed table"
-    )
-
-    # cleanup
-    connection.execute(f"DROP TABLE {database}.test_local_table")
-    connection.execute(f"DROP TABLE {database}.test_dist_table")
-    connection.execute(f"DROP TABLE {database}.test_sharded_dist_table")
+    assert str(parse_error.value) == "No storage found for distributed table not_exists_table"
