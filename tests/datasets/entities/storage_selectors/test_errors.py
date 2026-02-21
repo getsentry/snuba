@@ -91,7 +91,7 @@ TEST_CASES = [
         ErrorsQueryStorageSelector(),
         True,
         get_storage(StorageKey.ERRORS_RO),
-        id="Errors storage selector",
+        id="Errors RO storage selector",
     ),
 ]
 
@@ -114,6 +114,8 @@ def test_query_storage_selector(
 
     if use_readable:
         state.set_config("enable_events_readonly_table", True)
+    else:
+        state.set_config("enable_events_readonly_table", False)
     selected_storage = selector.select_storage(
         query, HTTPQuerySettings(referrer="r"), storage_connections
     )
