@@ -91,7 +91,7 @@ TEST_CASES = [
         ErrorsQueryStorageSelector(),
         True,
         get_storage(StorageKey.ERRORS_RO),
-        id="Errors storage selector",
+        id="Errors RO storage selector",
     ),
 ]
 
