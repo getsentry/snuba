@@ -21,6 +21,7 @@ from snuba.datasets.events_format import (
     extract_extra_contexts,
     extract_extra_tags,
     extract_http,
+    extract_nested,
     extract_user,
 )
 from snuba.datasets.processors import DatasetMessageProcessor
@@ -66,6 +67,7 @@ class IssueEventData(TypedDict, total=False):
     start_timestamp: float
 
     tags: Mapping[str, Any]
+    flags: Mapping[str, Any]
     user: Mapping[str, Any]  # user_hash, user_id, user_name, user_email, ip_address
     sdk: Mapping[str, Any]  # sdk_name, sdk_version
     contexts: Mapping[str, Any]
@@ -156,6 +158,18 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         processed["dist"] = _unicodify(
             promoted_tags.get("sentry:dist", event_data.get("dist")),
         )
+
+    def _process_flags(
+        self, event_data: IssueEventData, processed: MutableMapping[str, Any]
+    ) -> None:
+        existing_flags = event_data.get("flags", None)
+        flags: Mapping[str, Any] = _as_dict_safe(cast(Dict[str, Any], existing_flags))
+        if not existing_flags:
+            processed["flags.key"], processed["flags.value"] = [], []
+        else:
+            processed["flags.key"], processed["flags.value"] = extract_nested(
+                flags, lambda s: _unicodify(s) or None
+            )
 
     def _process_request_data(
         self, event_data: IssueEventData, processed: MutableMapping[str, Any]
@@ -291,6 +305,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         self._process_tags(
             event_data, fields
         )  # environment, release, dist, user, tags.key, tags.value
+        self._process_flags(event_data, fields)  # flags.key, flags.value
         self._process_user(
             event_data, fields
         )  # user_name, user_id, user_email, ip_address_v4/ip_address_v6
