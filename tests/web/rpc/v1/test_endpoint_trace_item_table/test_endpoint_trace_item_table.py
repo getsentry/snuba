@@ -1,6 +1,7 @@
 import random
 import re
 from datetime import datetime, timedelta
+from math import isclose
 from typing import Any
 from unittest.mock import MagicMock, call, patch
 
@@ -3443,14 +3444,11 @@ class TestTraceItemTable(BaseApiTest):
         )
         response = EndpointTraceItemTable().execute(message)
 
-        assert response.column_values == [
-            TraceItemColumnValues(
-                attribute_name="avg(game_size * game_size_unit_mult)",
-                results=[
-                    AttributeValue(val_double=expected_avg),
-                ],
-            ),
-        ]
+        assert len(response.column_values) == 1
+        res = response.column_values[0]
+        assert res.attribute_name == "avg(game_size * game_size_unit_mult)"
+        assert len(res.results) == 1
+        assert isclose(res.results[0].val_double, expected_avg)
 
 
 class TestUtils:
