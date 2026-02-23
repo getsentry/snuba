@@ -169,7 +169,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         max_ongoing_mutations = typing.cast(
             int,
             get_int_config(
-                "max_ongoing_mutatations_for_delete",
+                "max_ongoing_mutations_for_delete",
                 default=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE,
             ),
         )
