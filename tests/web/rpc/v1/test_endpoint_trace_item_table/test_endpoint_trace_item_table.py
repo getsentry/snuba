@@ -39,6 +39,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
+    AttributeKeyExpression,
     AttributeValue,
     ExtrapolationMode,
     Function,
@@ -3357,6 +3358,96 @@ class TestTraceItemTable(BaseApiTest):
                 attribute_name="gen_ai.response.model",
                 results=[
                     AttributeValue(val_str="sentaur"),
+                ],
+            ),
+        ]
+
+    def test_multiply_attribute_aggregation(self) -> None:
+        """
+        Tests avg(game_size * game_size_unit_mult) using AttributeKeyExpression formulas.
+        * Write spans with game_size (double) and game_size_unit_mult (int) attributes.
+        * First batch: game_size = 1 to 10, game_size_unit_mult = 10^9 (GB)
+        * Second batch: game_size = 500 to 850, game_size_unit_mult = 10^6 (MB)
+        * Query for avg(game_size * game_size_unit_mult) and verify the result.
+        """
+        items_storage = get_storage(StorageKey("eap_items"))
+
+        data_points_gb = list(range(1, 10 + 1))
+        data_points_mb = list(range(500, 850 + 1))
+
+        # Store spans with game_size (double) and game_size_unit_mult (int)
+        gb_messages = [
+            gen_item_message(
+                BASE_TIME,
+                attributes={
+                    "game_size": AnyValue(double_value=float(val)),
+                    "game_size_unit_mult": AnyValue(int_value=10**9),
+                },
+            )
+            for val in data_points_gb
+        ]
+        mb_messages = [
+            gen_item_message(
+                BASE_TIME,
+                attributes={
+                    "game_size": AnyValue(double_value=float(val)),
+                    "game_size_unit_mult": AnyValue(int_value=10**6),
+                },
+            )
+            for val in data_points_mb
+        ]
+        write_raw_unprocessed_events(items_storage, gb_messages + mb_messages)  # type: ignore
+
+        # Calculate expected average of (game_size * game_size_unit_mult)
+        all_products = [val * 10**9 for val in data_points_gb] + [
+            val * 10**6 for val in data_points_mb
+        ]
+        expected_avg = sum(all_products) / len(all_products)
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    conditional_aggregation=AttributeConditionalAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        expression=AttributeKeyExpression(
+                            formula=AttributeKeyExpression.Formula(
+                                op=AttributeKeyExpression.OP_MULT,
+                                left=AttributeKeyExpression(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_DOUBLE,
+                                        name="game_size",
+                                    ),
+                                ),
+                                right=AttributeKeyExpression(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_INT,
+                                        name="game_size_unit_mult",
+                                    ),
+                                ),
+                            )
+                        ),
+                        label="avg(game_size * game_size_unit_mult)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="avg(game_size * game_size_unit_mult)",
+                results=[
+                    AttributeValue(val_double=expected_avg),
                 ],
             ),
         ]
