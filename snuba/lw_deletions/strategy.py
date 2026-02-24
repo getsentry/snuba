@@ -3,6 +3,7 @@ import json
 import logging
 import time
 import typing
+from datetime import datetime, timedelta
 from typing import List, Mapping, Optional, Sequence, TypeVar
 
 import rapidjson
@@ -154,8 +155,19 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         database = cluster.get_database()
         connection = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
         parts = get_active_partitions(connection, self.__storage, database, table)
-        dates = sorted({part.date.strftime("%Y-%m-%d") for part in parts})
-        return dates
+        now = datetime.now()
+        min_date = (now - timedelta(days=365)).date()
+        max_date = (now + timedelta(days=7)).date()
+        all_dates = sorted({part.date.strftime("%Y-%m-%d") for part in parts})
+        valid_dates = [
+            d for d in all_dates if min_date <= datetime.strptime(d, "%Y-%m-%d").date() <= max_date
+        ]
+        skipped = len(all_dates) - len(valid_dates)
+        if skipped:
+            self.__metrics.increment(
+                "partition_date_filtered", value=skipped, tags={"table": table}
+            )
+        return valid_dates
 
     def _execute_delete(self, conditions: Sequence[ConditionsBag]) -> None:
         self._check_ongoing_mutations()

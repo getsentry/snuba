@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Iterator
 from unittest.mock import Mock, patch
 
@@ -17,6 +17,7 @@ from snuba.lw_deletions.formatters import SearchIssuesFormatter
 from snuba.lw_deletions.strategy import FormatQuery, increment_by
 from snuba.lw_deletions.types import ConditionsType
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.util import Part
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.web.bulk_delete_query import DeleteQueryMessage
 
@@ -432,3 +433,48 @@ def test_split_by_partition_fallback(mock_execute: Mock, mock_num_mutations: Moc
     # Fallback: 1 table * 1 un-split call = 1
     assert mock_execute.call_count == 1
     assert commit_step.submit.call_count == 1
+
+
+@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@patch("snuba.lw_deletions.strategy.get_active_partitions")
+@pytest.mark.redis_db
+def test_partition_date_filtering(
+    mock_get_partitions: Mock, mock_execute: Mock, mock_num_mutations: Mock
+) -> None:
+    """
+    When _get_partition_dates encounters partition dates outside the valid window
+    (last 12 months through 7 days from now), those dates should be
+    filtered out and a metric emitted for the skipped count.
+    """
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("search_issues"))
+
+    now = datetime.now()
+    valid_date_1 = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    valid_date_2 = (now - timedelta(days=60)).strftime("%Y-%m-%d")
+    bogus_old = (now - timedelta(days=500)).strftime("%Y-%m-%d")
+    bogus_future = (now + timedelta(days=30)).strftime("%Y-%m-%d")
+
+    mock_get_partitions.return_value = [
+        Part(name="p1", date=now - timedelta(days=30), retention_days=90),
+        Part(name="p2", date=now - timedelta(days=60), retention_days=90),
+        Part(name="p3", date=now - timedelta(days=500), retention_days=90),
+        Part(name="p4", date=now + timedelta(days=30), retention_days=90),
+    ]
+
+    format_query = FormatQuery(Mock(), storage, SearchIssuesFormatter(), metrics)
+
+    with patch.object(storage.get_cluster(), "get_query_connection", return_value=Mock()):
+        result = format_query._get_partition_dates("search_issues_local_v2")
+
+    assert result == sorted([valid_date_1, valid_date_2])
+    assert bogus_old not in result
+    assert bogus_future not in result
+
+    # Verify partition_date_filtered metric emitted with value=2
+    filtered_calls = [
+        c for c in metrics.increment.call_args_list if c[0][0] == "partition_date_filtered"
+    ]
+    assert len(filtered_calls) == 1
+    assert filtered_calls[0][1]["value"] == 2
