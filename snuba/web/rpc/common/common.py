@@ -236,7 +236,13 @@ def _any_attribute_filter_to_expression(
     if not attr_types:
         attr_types = [AttributeKey.Type.TYPE_STRING]
 
-    # Deduplicate columns (e.g. TYPE_INT, TYPE_FLOAT, TYPE_DOUBLE all map to attributes_float)
+    # Validate and deduplicate columns
+    # (e.g. TYPE_INT, TYPE_FLOAT, TYPE_DOUBLE all map to attributes_float)
+    for t in attr_types:
+        if t not in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
+            raise BadSnubaRPCRequestException(
+                f"Unsupported attribute type: {AttributeKey.Type.Name(t)}"
+            )
     columns_to_search: list[str] = list(
         dict.fromkeys(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[t] for t in attr_types)
     )

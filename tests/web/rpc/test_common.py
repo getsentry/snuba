@@ -199,6 +199,15 @@ class TestAnyAttributeFilter:
         ):
             _any_attribute_filter_to_expression(filt)
 
+    def test_unsupported_attribute_type_raises(self) -> None:
+        filt = AnyAttributeFilter(
+            op=AnyAttributeFilter.OP_EQUALS,
+            value=AttributeValue(val_str="hello"),
+            attribute_types=[AttributeKey.Type.TYPE_UNSPECIFIED],
+        )
+        with pytest.raises(BadSnubaRPCRequestException, match="Unsupported attribute type"):
+            _any_attribute_filter_to_expression(filt)
+
 
 @pytest.mark.eap
 @pytest.mark.redis_db
