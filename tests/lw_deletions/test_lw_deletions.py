@@ -16,6 +16,7 @@ from snuba.lw_deletions.batching import BatchStepCustom
 from snuba.lw_deletions.formatters import SearchIssuesFormatter
 from snuba.lw_deletions.strategy import FormatQuery, increment_by
 from snuba.lw_deletions.types import ConditionsType
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.web.bulk_delete_query import DeleteQueryMessage
 
@@ -197,3 +198,231 @@ def test_too_many_mutations(mock_execute: Mock, mock_num_mutations: Mock) -> Non
 
     assert mock_execute.call_count == 0
     assert commit_step.submit.call_count == 0
+
+
+def _make_single_message(
+    rows: int = 10, conditions: ConditionsType | None = None
+) -> Message[KafkaPayload]:
+    if conditions is None:
+        conditions = {"project_id": [1], "group_id": [1]}
+    return Message(
+        BrokerValue(
+            KafkaPayload(
+                None,
+                rapidjson.dumps(_get_message(rows, conditions)).encode("utf-8"),
+                [],
+            ),
+            Partition(Topic(SnubaTopic.LW_DELETIONS_GENERIC_EVENTS.value), 0),
+            0,
+            datetime(1970, 1, 1),
+        )
+    )
+
+
+@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@patch.object(
+    FormatQuery,
+    "_FormatQuery__partition_column",
+    new="receive_timestamp",
+    create=True,
+)
+@pytest.mark.redis_db
+def test_split_by_partition_enabled(mock_execute: Mock, mock_num_mutations: Mock) -> None:
+    """
+    When partition splitting is enabled and system.parts returns 3 Monday dates,
+    _execute_query should be called 3 times (once per partition) instead of 1.
+    """
+    commit_step = Mock()
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("search_issues"))
+
+    state.set_config("lw_deletes_split_by_partition_search_issues", 1)
+
+    format_query = FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics)
+
+    with (
+        patch.object(
+            format_query,
+            "_FormatQuery__partition_column",
+            "receive_timestamp",
+        ),
+        patch.object(
+            FormatQuery,
+            "_get_partition_monday_dates",
+            return_value=["2024-01-15", "2024-01-22", "2024-01-29"],
+        ),
+    ):
+        strategy = BatchStepCustom(
+            max_batch_size=8,
+            max_batch_time=1000,
+            next_step=format_query,
+            increment_by=increment_by,
+        )
+        strategy.submit(_make_single_message())
+        strategy.join(2.0)
+
+    # 1 table * 3 partitions = 3 calls
+    assert mock_execute.call_count == 3
+    assert commit_step.submit.call_count == 1
+
+
+@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+def test_split_by_partition_disabled(mock_execute: Mock, mock_num_mutations: Mock) -> None:
+    """
+    When partition splitting config is disabled (default), the original behavior
+    should be preserved: 1 call per table.
+    """
+    commit_step = Mock()
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("search_issues"))
+
+    # Ensure config is off (default)
+    state.set_config("lw_deletes_split_by_partition_search_issues", 0)
+
+    strategy = BatchStepCustom(
+        max_batch_size=8,
+        max_batch_time=1000,
+        next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics),
+        increment_by=increment_by,
+    )
+    strategy.submit(_make_single_message())
+    strategy.join(2.0)
+
+    # 1 table * 1 un-split call = 1
+    assert mock_execute.call_count == 1
+    assert commit_step.submit.call_count == 1
+
+
+@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutations: Mock) -> None:
+    """
+    Issue a batch with partition splitting enabled. Verify Redis SET is populated.
+    Re-submit the same batch and verify _execute_query is NOT called again
+    (partitions skipped via Redis tracking).
+    """
+    commit_step = Mock()
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("search_issues"))
+
+    state.set_config("lw_deletes_split_by_partition_search_issues", 1)
+
+    monday_dates = ["2024-01-15", "2024-01-22"]
+
+    format_query = FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics)
+
+    with (
+        patch.object(
+            format_query,
+            "_FormatQuery__partition_column",
+            "receive_timestamp",
+        ),
+        patch.object(
+            FormatQuery,
+            "_get_partition_monday_dates",
+            return_value=monday_dates,
+        ),
+    ):
+        strategy = BatchStepCustom(
+            max_batch_size=8,
+            max_batch_time=1000,
+            next_step=format_query,
+            increment_by=increment_by,
+        )
+        strategy.submit(_make_single_message())
+        strategy.join(2.0)
+
+    # First submission: 1 table * 2 partitions = 2 calls
+    assert mock_execute.call_count == 2
+    assert commit_step.submit.call_count == 1
+
+    # Verify Redis SET is populated
+    redis_client = get_redis_client(RedisClientKey.CONFIG)
+    # Find the tracking key
+    keys = list(redis_client.scan_iter("lw_delete_partitions:search_issues:*"))
+    assert len(keys) == 1
+    tracking_key = keys[0]
+    members = redis_client.smembers(tracking_key)
+    expected_members = {
+        b"search_issues_local_v2:2024-01-15",
+        b"search_issues_local_v2:2024-01-22",
+    }
+    assert members == expected_members
+
+    # Reset mocks for second submission
+    mock_execute.reset_mock()
+    commit_step.reset_mock()
+
+    # Create new format_query for the second submission
+    format_query2 = FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics)
+
+    with (
+        patch.object(
+            format_query2,
+            "_FormatQuery__partition_column",
+            "receive_timestamp",
+        ),
+        patch.object(
+            FormatQuery,
+            "_get_partition_monday_dates",
+            return_value=monday_dates,
+        ),
+    ):
+        strategy2 = BatchStepCustom(
+            max_batch_size=8,
+            max_batch_time=1000,
+            next_step=format_query2,
+            increment_by=increment_by,
+        )
+        strategy2.submit(_make_single_message())
+        strategy2.join(2.0)
+
+    # Second submission: all partitions already tracked, so 0 calls
+    assert mock_execute.call_count == 0
+    assert commit_step.submit.call_count == 1
+
+
+@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+def test_split_by_partition_fallback(mock_execute: Mock, mock_num_mutations: Mock) -> None:
+    """
+    When partition splitting is enabled but system.parts returns no partitions,
+    fall back to un-split DELETE (1 call per table).
+    """
+    commit_step = Mock()
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("search_issues"))
+
+    state.set_config("lw_deletes_split_by_partition_search_issues", 1)
+
+    format_query = FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics)
+
+    with (
+        patch.object(
+            format_query,
+            "_FormatQuery__partition_column",
+            "receive_timestamp",
+        ),
+        patch.object(
+            FormatQuery,
+            "_get_partition_monday_dates",
+            return_value=[],
+        ),
+    ):
+        strategy = BatchStepCustom(
+            max_batch_size=8,
+            max_batch_time=1000,
+            next_step=format_query,
+            increment_by=increment_by,
+        )
+        strategy.submit(_make_single_message())
+        strategy.join(2.0)
+
+    # Fallback: 1 table * 1 un-split call = 1
+    assert mock_execute.call_count == 1
+    assert commit_step.submit.call_count == 1

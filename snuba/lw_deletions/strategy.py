@@ -1,6 +1,9 @@
+import hashlib
+import json
+import logging
 import time
 import typing
-from typing import Mapping, Optional, Sequence, TypeVar
+from typing import List, Mapping, Optional, Sequence, TypeVar
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
@@ -16,13 +19,19 @@ from snuba import settings
 from snuba.attribution import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.query import Query
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
 from snuba.lw_deletions.formatters import Formatter
 from snuba.lw_deletions.types import ConditionsBag
 from snuba.query.allocation_policies import AllocationPolicyViolations
+from snuba.query.conditions import combine_and_conditions
+from snuba.query.dsl import column, equals, literal
+from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.query_settings import HTTPQuerySettings
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state import get_int_config, get_str_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.web import QueryException
@@ -35,8 +44,6 @@ from snuba.web.delete_query import (
 )
 
 TPayload = TypeVar("TPayload")
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +64,9 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__storage = storage
         self.__storage_name = storage.get_storage_key().value
         self.__cluster_name = self.__storage.get_cluster().get_clickhouse_cluster_name()
-        self.__tables = storage.get_deletion_settings().tables
+        deletion_settings = storage.get_deletion_settings()
+        self.__tables = deletion_settings.tables
+        self.__partition_column = deletion_settings.partition_column
         self.__formatter: Formatter = formatter
         self.__metrics = metrics
         self.__last_ongoing_mutations_check: Optional[float] = None
@@ -119,6 +128,39 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             parent_api=None,
         )
 
+    def _conditions_hash(self, conditions: Sequence[ConditionsBag]) -> str:
+        parts = []
+        for c in conditions:
+            parts.append(json.dumps(dict(c.column_conditions), sort_keys=True))
+            if c.attribute_conditions:
+                parts.append(
+                    json.dumps(
+                        {
+                            "item_type": c.attribute_conditions.item_type,
+                            "attributes": {
+                                k: [v[0].type, v[0].name, v[1]]
+                                for k, v in c.attribute_conditions.attributes.items()
+                            },
+                        },
+                        sort_keys=True,
+                    )
+                )
+        parts.sort()
+        return hashlib.md5("|".join(parts).encode()).hexdigest()[:16]
+
+    def _get_partition_monday_dates(self, table: str) -> List[str]:
+        cluster = self.__storage.get_cluster()
+        database = cluster.get_database()
+        connection = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+        result = connection.execute(
+            "SELECT DISTINCT extract(partition, '\\d{4}-\\d{2}-\\d{2}') AS monday_date "
+            "FROM system.parts "
+            "WHERE database = %(database)s AND table = %(table)s AND active = 1 "
+            "ORDER BY monday_date",
+            {"database": database, "table": table},
+        )
+        return [row[0] for row in result.results if row[0]]
+
     def _execute_delete(self, conditions: Sequence[ConditionsBag]) -> None:
         self._check_ongoing_mutations()
         query_settings = HTTPQuerySettings()
@@ -127,32 +169,99 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         if lw_sync is not None:
             query_settings.set_clickhouse_settings({"lightweight_deletes_sync": lw_sync})
 
+        split_enabled = bool(
+            self.__partition_column
+            and get_int_config(f"lw_deletes_split_by_partition_{self.__storage_name}", default=0)
+        )
+
         for table in self.__tables:
             where_clause = construct_or_conditions(self.__storage, conditions)
+            if split_enabled:
+                self._execute_delete_by_partition(table, where_clause, query_settings, conditions)
+            else:
+                query = construct_query(self.__storage, table, where_clause)
+                self._execute_single_delete(table, query, query_settings)
+
+    def _execute_delete_by_partition(
+        self,
+        table: str,
+        where_clause: Expression,
+        query_settings: HTTPQuerySettings,
+        conditions: Sequence[ConditionsBag],
+    ) -> None:
+        monday_dates = self._get_partition_monday_dates(table)
+        if not monday_dates:
+            logger.warning(
+                "No partitions found for table %s, falling back to un-split delete",
+                table,
+            )
             query = construct_query(self.__storage, table, where_clause)
-            start = time.time()
-            try:
-                _execute_query(
-                    query=query,
-                    storage=self.__storage,
-                    cluster_name=self.__cluster_name,
-                    table=table,
-                    attribution_info=self._get_attribute_info(),
-                    query_settings=query_settings,
+            self._execute_single_delete(table, query, query_settings)
+            return
+
+        cond_hash = self._conditions_hash(conditions)
+        tracking_key = f"lw_delete_partitions:{self.__storage_name}:{cond_hash}"
+        redis_client = get_redis_client(RedisClientKey.CONFIG)
+        ttl = settings.LW_DELETES_PARTITION_TRACKING_TTL
+
+        for monday_date in monday_dates:
+            member = f"{table}:{monday_date}"
+            if redis_client.sismember(tracking_key, member):
+                self.__metrics.increment(
+                    "partition_delete_skipped",
+                    tags={"table": table, "partition_date": monday_date},
                 )
-                self.__metrics.timing(
-                    "execute_delete_query_ms",
-                    (time.time() - start) * 1000,
-                    tags={"table": table},
+                logger.info(
+                    "Skipping already-tracked partition %s for table %s",
+                    monday_date,
+                    table,
                 )
-            except QueryException as exc:
-                self.__metrics.increment("execute_delete_query_failed", tags={"table": table})
-                cause = exc.__cause__
-                if isinstance(cause, ClickhouseError):
-                    if cause.code in LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
-                        logger.exception("Error running delete query %r", exc)
-                    else:
-                        raise LWDeleteQueryException(exc.message)
+                continue
+
+            partition_condition = equals(
+                FunctionCall(None, "toMonday", (column(self.__partition_column),)),  # type: ignore[arg-type]
+                literal(monday_date),
+            )
+            partition_where = combine_and_conditions([where_clause, partition_condition])
+            query = construct_query(self.__storage, table, partition_where)
+            self._execute_single_delete(table, query, query_settings, partition_date=monday_date)
+            redis_client.sadd(tracking_key, member)
+
+        redis_client.expire(tracking_key, ttl)
+
+    def _execute_single_delete(
+        self,
+        table: str,
+        query: Query,
+        query_settings: HTTPQuerySettings,
+        partition_date: Optional[str] = None,
+    ) -> None:
+        tags = {"table": table}
+        if partition_date:
+            tags["partition_date"] = partition_date
+        start = time.time()
+        try:
+            _execute_query(
+                query=query,
+                storage=self.__storage,
+                cluster_name=self.__cluster_name,
+                table=table,
+                attribution_info=self._get_attribute_info(),
+                query_settings=query_settings,
+            )
+            self.__metrics.timing(
+                "execute_delete_query_ms",
+                (time.time() - start) * 1000,
+                tags=tags,
+            )
+        except QueryException as exc:
+            self.__metrics.increment("execute_delete_query_failed", tags=tags)
+            cause = exc.__cause__
+            if isinstance(cause, ClickhouseError):
+                if cause.code in LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
+                    logger.exception("Error running delete query %r", exc)
+                else:
+                    raise LWDeleteQueryException(exc.message)
 
     def _check_ongoing_mutations(self) -> None:
         now = time.time()
