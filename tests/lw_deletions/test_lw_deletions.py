@@ -249,7 +249,7 @@ def test_split_by_partition_enabled(mock_execute: Mock, mock_num_mutations: Mock
         ),
         patch.object(
             FormatQuery,
-            "_get_partition_monday_dates",
+            "_get_partition_dates",
             return_value=["2024-01-15", "2024-01-22", "2024-01-29"],
         ),
     ):
@@ -311,7 +311,7 @@ def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutation
 
     state.set_config("lw_deletes_split_by_partition_search_issues", 1)
 
-    monday_dates = ["2024-01-15", "2024-01-22"]
+    partition_dates = ["2024-01-15", "2024-01-22"]
 
     format_query = FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics)
 
@@ -323,8 +323,8 @@ def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutation
         ),
         patch.object(
             FormatQuery,
-            "_get_partition_monday_dates",
-            return_value=monday_dates,
+            "_get_partition_dates",
+            return_value=partition_dates,
         ),
     ):
         strategy = BatchStepCustom(
@@ -368,8 +368,8 @@ def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutation
         ),
         patch.object(
             FormatQuery,
-            "_get_partition_monday_dates",
-            return_value=monday_dates,
+            "_get_partition_dates",
+            return_value=partition_dates,
         ),
     ):
         strategy2 = BatchStepCustom(
@@ -410,7 +410,7 @@ def test_split_by_partition_fallback(mock_execute: Mock, mock_num_mutations: Moc
         ),
         patch.object(
             FormatQuery,
-            "_get_partition_monday_dates",
+            "_get_partition_dates",
             return_value=[],
         ),
     ):

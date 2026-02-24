@@ -149,7 +149,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         parts.sort()
         return hashlib.md5("|".join(parts).encode()).hexdigest()[:16]
 
-    def _get_partition_monday_dates(self, table: str) -> List[str]:
+    def _get_partition_dates(self, table: str) -> List[str]:
         cluster = self.__storage.get_cluster()
         database = cluster.get_database()
         connection = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
@@ -185,8 +185,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         query_settings: HTTPQuerySettings,
         conditions: Sequence[ConditionsBag],
     ) -> None:
-        monday_dates = self._get_partition_monday_dates(table)
-        if not monday_dates:
+        partition_dates = self._get_partition_dates(table)
+        if not partition_dates:
             logger.warning(
                 "No partitions found for table %s, falling back to un-split delete",
                 table,
@@ -200,27 +200,27 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         redis_client = get_redis_client(RedisClientKey.CONFIG)
         ttl = settings.LW_DELETES_PARTITION_TRACKING_TTL
 
-        for monday_date in monday_dates:
-            member = f"{table}:{monday_date}"
+        for partition_date in partition_dates:
+            member = f"{table}:{partition_date}"
             if redis_client.sismember(tracking_key, member):
                 self.__metrics.increment(
                     "partition_delete_skipped",
-                    tags={"table": table, "partition_date": monday_date},
+                    tags={"table": table, "partition_date": partition_date},
                 )
                 logger.info(
                     "Skipping already-tracked partition %s for table %s",
-                    monday_date,
+                    partition_date,
                     table,
                 )
                 continue
 
             partition_condition = equals(
                 FunctionCall(None, "toMonday", (column(self.__partition_column),)),  # type: ignore[arg-type]
-                literal(monday_date),
+                literal(partition_date),
             )
             partition_where = combine_and_conditions([where_clause, partition_condition])
             query = construct_query(self.__storage, table, partition_where)
-            self._execute_single_delete(table, query, query_settings, partition_date=monday_date)
+            self._execute_single_delete(table, query, query_settings, partition_date=partition_date)
             redis_client.sadd(tracking_key, member)
 
         redis_client.expire(tracking_key, ttl)
