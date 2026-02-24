@@ -181,6 +181,8 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         alias = _build_label_mapping_key(attr_key)
         # Array values are stored as tagged variants (e.g. {"String": "alice"})
         # in the JSON column. Cast to Array(JSON), then extract String values.
+        # Currently only string extraction is supported; non-string element
+        # types (Int, Double, Bool) would need additional variant paths here.
         return FunctionCall(
             alias=alias,
             function_name="arrayMap",

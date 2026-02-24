@@ -302,7 +302,11 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
         return UnclassifiedExpression(exp)
 
     def visit_json_path(self, exp: JsonPath) -> SubExpression:
-        return UnclassifiedExpression(exp)
+        visited_base = exp.base.accept(self)
+        return replace(
+            visited_base,
+            main_expression=replace(exp, base=visited_base.main_expression),
+        )
 
 
 class AggregateBranchCutter(BranchCutter):
