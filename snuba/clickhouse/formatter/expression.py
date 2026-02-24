@@ -26,7 +26,7 @@ from snuba.query.expressions import (
 from snuba.query.parsing import ParsingContext
 
 _BETWEEN_SQUARE_BRACKETS_REGEX = re.compile(r"(?<=\[)(.*?)(?=\])")
-_SIMPLE_TYPE_RE = re.compile(r"^[a-zA-Z0-9_]+$")
+_SIMPLE_TYPE_RE = re.compile(r"^[a-zA-Z0-9_()\s,]+$")
 
 
 @lru_cache(maxsize=128)

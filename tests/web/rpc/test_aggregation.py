@@ -260,7 +260,7 @@ def test_attribute_key_to_expression_type_array() -> None:
     sql = expr.accept(fmt)
     assert (
         sql
-        == "(arrayMap(x -> coalesce(x.`String`.:`Nullable(String)`, toString(x.`Int`.:`Nullable(Int64)`), toString(x.`Double`.:`Nullable(Float64)`), x.`Bool`.:`Nullable(String)`), attributes_array.`user_ids`.:`Array(JSON)`) AS user_ids_TYPE_ARRAY)"
+        == "(arrayMap(x -> coalesce(x.`String`::Nullable(String), toString(x.`Int`::Nullable(Int64)), toString(x.`Double`::Nullable(Float64)), x.`Bool`::Nullable(String)), attributes_array.`user_ids`::Array(JSON)) AS user_ids_TYPE_ARRAY)"
     )
 
 
