@@ -20,7 +20,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal
+from snuba.query.dsl import and_cond, column, literal, or_cond
 from snuba.query.expressions import FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -121,7 +121,8 @@ class ExportTraceItemsPageToken:
                     TraceItemFilter(
                         comparison_filter=ComparisonFilter(
                             key=AttributeKey(
-                                name="last_seen_project_id", type=AttributeKey.Type.TYPE_INT
+                                name="last_seen_project_id",
+                                type=AttributeKey.Type.TYPE_INT,
                             ),
                             op=ComparisonFilter.OP_EQUALS,
                             value=AttributeValue(val_int=self.last_seen_project_id),
@@ -130,7 +131,8 @@ class ExportTraceItemsPageToken:
                     TraceItemFilter(
                         comparison_filter=ComparisonFilter(
                             key=AttributeKey(
-                                name="last_seen_item_type", type=AttributeKey.Type.TYPE_INT
+                                name="last_seen_item_type",
+                                type=AttributeKey.Type.TYPE_INT,
                             ),
                             op=ComparisonFilter.OP_EQUALS,
                             value=AttributeValue(val_int=self.last_seen_item_type),
@@ -139,7 +141,8 @@ class ExportTraceItemsPageToken:
                     TraceItemFilter(
                         comparison_filter=ComparisonFilter(
                             key=AttributeKey(
-                                name="last_seen_timestamp", type=AttributeKey.Type.TYPE_DOUBLE
+                                name="last_seen_timestamp",
+                                type=AttributeKey.Type.TYPE_DOUBLE,
                             ),
                             op=ComparisonFilter.OP_EQUALS,
                             value=AttributeValue(val_double=self.last_seen_timestamp),
@@ -148,7 +151,8 @@ class ExportTraceItemsPageToken:
                     TraceItemFilter(
                         comparison_filter=ComparisonFilter(
                             key=AttributeKey(
-                                name="last_seen_trace_id", type=AttributeKey.Type.TYPE_STRING
+                                name="last_seen_trace_id",
+                                type=AttributeKey.Type.TYPE_STRING,
                             ),
                             op=ComparisonFilter.OP_EQUALS,
                             value=AttributeValue(val_str=self.last_seen_trace_id),
@@ -157,7 +161,8 @@ class ExportTraceItemsPageToken:
                     TraceItemFilter(
                         comparison_filter=ComparisonFilter(
                             key=AttributeKey(
-                                name="last_seen_item_id", type=AttributeKey.Type.TYPE_STRING
+                                name="last_seen_item_id",
+                                type=AttributeKey.Type.TYPE_STRING,
                             ),
                             op=ComparisonFilter.OP_EQUALS,
                             value=AttributeValue(val_str=hex(self.last_seen_item_id)),
@@ -170,7 +175,9 @@ class ExportTraceItemsPageToken:
 
 
 def _build_query(
-    in_msg: ExportTraceItemsRequest, limit: int, page_token: ExportTraceItemsPageToken | None = None
+    in_msg: ExportTraceItemsRequest,
+    limit: int,
+    page_token: ExportTraceItemsPageToken | None = None,
 ) -> Query:
     selected_columns = [
         SelectedExpression("timestamp", f.toUnixTimestamp(column("timestamp"), alias="timestamp")),
@@ -190,10 +197,12 @@ def _build_query(
         SelectedExpression("project_id", column("project_id", alias="project_id")),
         SelectedExpression("item_type", column("item_type", alias="item_type")),
         SelectedExpression(
-            "client_sample_rate", column("client_sample_rate", alias="client_sample_rate")
+            "client_sample_rate",
+            column("client_sample_rate", alias="client_sample_rate"),
         ),
         SelectedExpression(
-            "server_sample_rate", column("server_sample_rate", alias="server_sample_rate")
+            "server_sample_rate",
+            column("server_sample_rate", alias="server_sample_rate"),
         ),
         SelectedExpression("sampling_weight", column("sampling_weight", alias="sampling_weight")),
         SelectedExpression("sampling_factor", column("sampling_factor", alias="sampling_factor")),
@@ -227,20 +236,79 @@ def _build_query(
 
     page_token_filter = (
         [
-            f.greater(
-                f.tuple(
-                    column("project_id"),
-                    column("item_type"),
-                    column("timestamp"),
-                    column("trace_id"),
-                    f.reinterpretAsUInt128(f.reverse(f.unhex(column("item_id")))),
-                ),
-                f.tuple(
-                    literal(page_token.last_seen_project_id),
-                    literal(page_token.last_seen_item_type),
-                    literal(page_token.last_seen_timestamp),
-                    literal(page_token.last_seen_trace_id),
-                    literal(page_token.last_seen_item_id),
+            or_cond(
+                # (project_id > page_token.last_seen_project_id)
+                f.greater(column("project_id"), literal(page_token.last_seen_project_id)),
+                or_cond(
+                    # (project_id = page_token.last_seen_project_id AND item_type > page_token.last_seen_item_type)
+                    and_cond(
+                        f.equals(
+                            column("project_id"),
+                            literal(page_token.last_seen_project_id),
+                        ),
+                        f.greater(column("item_type"), literal(page_token.last_seen_item_type)),
+                    ),
+                    or_cond(
+                        # (project_id = page_token.last_seen_project_id AND item_type = page_token.last_seen_item_type AND timestamp > page_token.last_seen_timestamp)
+                        and_cond(
+                            f.equals(
+                                column("project_id"),
+                                literal(page_token.last_seen_project_id),
+                            ),
+                            f.equals(
+                                column("item_type"),
+                                literal(page_token.last_seen_item_type),
+                            ),
+                            f.greater(
+                                column("timestamp"),
+                                literal(page_token.last_seen_timestamp),
+                            ),
+                        ),
+                        or_cond(
+                            # (project_id = page_token.last_seen_project_id AND item_type = page_token.last_seen_item_type AND timestamp = page_token.last_seen_timestamp AND trace_id > page_token.last_seen_trace_id)
+                            and_cond(
+                                f.equals(
+                                    column("project_id"),
+                                    literal(page_token.last_seen_project_id),
+                                ),
+                                f.equals(
+                                    column("item_type"),
+                                    literal(page_token.last_seen_item_type),
+                                ),
+                                f.equals(
+                                    column("timestamp"),
+                                    literal(page_token.last_seen_timestamp),
+                                ),
+                                f.greater(
+                                    column("trace_id"),
+                                    literal(page_token.last_seen_trace_id),
+                                ),
+                            ),
+                            # (project_id = page_token.last_seen_project_id AND item_type = page_token.last_seen_item_type AND timestamp = page_token.last_seen_timestamp AND trace_id = page_token.last_seen_trace_id AND item_id > page_token.last_seen_item_id)
+                            and_cond(
+                                f.equals(
+                                    column("project_id"),
+                                    literal(page_token.last_seen_project_id),
+                                ),
+                                f.equals(
+                                    column("item_type"),
+                                    literal(page_token.last_seen_item_type),
+                                ),
+                                f.equals(
+                                    column("timestamp"),
+                                    literal(page_token.last_seen_timestamp),
+                                ),
+                                f.equals(
+                                    column("trace_id"),
+                                    literal(page_token.last_seen_trace_id),
+                                ),
+                                f.greater(
+                                    f.reinterpretAsUInt128(f.reverse(f.unhex(column("item_id")))),
+                                    literal(page_token.last_seen_item_id),
+                                ),
+                            ),
+                        ),
+                    ),
                 ),
             )
         ]
@@ -269,7 +337,9 @@ def _build_query(
 
 
 def _build_snuba_request(
-    in_msg: ExportTraceItemsRequest, limit: int, page_token: ExportTraceItemsPageToken | None = None
+    in_msg: ExportTraceItemsRequest,
+    limit: int,
+    page_token: ExportTraceItemsPageToken | None = None,
 ) -> SnubaRequest:
     query_settings = setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
     query_settings.set_skip_transform_order_by(True)

@@ -201,36 +201,6 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
                 ),
             )
 
-        if (
-            isinstance(exp, FunctionCall)
-            and exp.function_name
-            in {
-                ConditionFunctions.GT,
-                ConditionFunctions.GTE,
-                ConditionFunctions.LT,
-                ConditionFunctions.LTE,
-                ConditionFunctions.EQ,
-                ConditionFunctions.NEQ,
-            }
-            and len(exp.parameters) == 2
-            and isinstance(exp.parameters[0], FunctionCall)
-            and exp.parameters[0].function_name == "tuple"
-            and isinstance(exp.parameters[1], FunctionCall)
-            and exp.parameters[1].function_name == "tuple"
-        ):
-            lhs_params = exp.parameters[0].parameters
-            rhs_params = list(exp.parameters[1].parameters)
-            for i, (lhs_elem, rhs_elem) in enumerate(zip(lhs_params, rhs_params)):
-                # check if this LHS element references a tracked column
-                if any(
-                    isinstance(node, Column) and node.column_name in self.columns
-                    for node in lhs_elem
-                ):
-                    if isinstance(rhs_elem, Literal):
-                        rhs_params[i] = self._translate_literal(rhs_elem)
-            new_rhs = FunctionCall(exp.parameters[1].alias, "tuple", tuple(rhs_params))
-            return FunctionCall(exp.alias, exp.function_name, (exp.parameters[0], new_rhs))
-
         return exp
 
     @abstractmethod

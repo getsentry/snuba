@@ -26,9 +26,6 @@ class HexIntColumnProcessor(BaseTypeConverter):
 
     def _translate_literal(self, exp: Literal) -> Literal:
         try:
-            if isinstance(exp.value, int):
-                return exp
-
             assert isinstance(exp.value, str)
             # 128 bit integers in clickhouse need to be referenced as strings
             if self._size == 32:
