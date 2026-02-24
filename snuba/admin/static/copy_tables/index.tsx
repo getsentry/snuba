@@ -160,22 +160,20 @@ function CopyTables(props: {
               </div>
             </div>
           </div>
-          <div style={sectionContainerStyle}>
-            <div style={buttonContainerStyle}>
-              <ExecuteButton
-                label=" DRY RUN"
-                onError={handleQueryError}
-                onClick={() => executeCopyTableQuery(false)}
-                disabled={copyTableHosts.sourceHost.host ? false : true}
-              />
-              <ExecuteButton
-                label=" ‼️ COPY TABLES FOR CLUSTER ‼️ "
-                onError={handleQueryError}
-                onClick={() => executeCopyTableQuery(true)}
-                disabled={copyTableHosts.sourceHost.host ? false : true}
-              />
-            </div>
-          </div>
+        </div>
+        <div style={buttonRowStyle}>
+          <ExecuteButton
+            label=" DRY RUN"
+            onError={handleQueryError}
+            onClick={() => executeCopyTableQuery(false)}
+            disabled={copyTableHosts.sourceHost.host ? false : true}
+          />
+          <ExecuteButton
+            label=" ‼️ COPY TABLES FOR CLUSTER ‼️ "
+            onError={handleQueryError}
+            onClick={() => executeCopyTableQuery(true)}
+            disabled={copyTableHosts.sourceHost.host ? false : true}
+          />
         </div>
       </form >
 
@@ -259,9 +257,8 @@ const hostSelectStyle = {
   marginTop: 10,
 }
 
-const buttonContainerStyle = {
+const buttonRowStyle = {
   display: 'flex',
-  flexDirection: 'column' as const,
   gap: 10,
   marginTop: 10,
 }
