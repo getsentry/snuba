@@ -19,7 +19,6 @@ function CopyTables(props: {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [copyTableHosts, setCopyTableHosts] = useState<CopyTableHostsState>({
     sourceHost: {},
-    targetHost: {},
   });
   const [copyTableResult, setCopyTableResult] = useState<CopyTableResult | null>(null);
   const [queryError, setQueryError] = useState<Error | null>(null);
@@ -36,11 +35,8 @@ function CopyTables(props: {
       // clear old host port
       delete copyTableHosts.sourceHost.host
       delete copyTableHosts.sourceHost.port
-      delete copyTableHosts.targetHost.host
-      delete copyTableHosts.targetHost.port
 
       copyTableHosts.sourceHost.storage = storage
-      copyTableHosts.targetHost.storage = storage
 
       return {
         ...copyTableHosts,
@@ -61,29 +57,7 @@ function CopyTables(props: {
     });
   }
 
-  function selectTargetHost(hostString: string) {
-    const [host, portAsString] = hostString.split(":");
-
-    setCopyTableHosts((copyTableHosts) => {
-      copyTableHosts.targetHost.host = host
-      copyTableHosts.targetHost.port = parseInt(portAsString, 10)
-
-      return {
-        ...copyTableHosts,
-      };
-    });
-  }
-
-  function clearTargetHost() {
-    setCopyTableHosts((copyTableHosts) => {
-      delete copyTableHosts.targetHost.host
-      delete copyTableHosts.targetHost.port
-
-      return {
-        ...copyTableHosts,
-      };
-    });
-  }
+  const [targetHostInput, setTargetHostInput] = useState("");
 
   function executeCopyTableQuery(shouldExecute: boolean) {
     const query: CopyTableRequest = {
@@ -92,9 +66,9 @@ function CopyTables(props: {
       source_port: copyTableHosts.sourceHost.port!,
       dry_run: !shouldExecute,
     }
-    if (copyTableHosts.targetHost.host) {
-      query.target_host = copyTableHosts.targetHost.host;
-      query.target_port = copyTableHosts.targetHost.port;
+    const trimmed = targetHostInput.trim();
+    if (trimmed) {
+      query.target_host = trimmed;
     }
     return props.api
       .executeCopyTable(query)
@@ -137,27 +111,14 @@ function CopyTables(props: {
             <p style={targetHelpTextStyle}>
               If specified, CREATE statements will be run on this host instead of the source host.
             </p>
-            <div style={hostSelectStyle}>
-              <div style={targetSelectRowStyle}>
-                <div style={{ flex: 1 }}>
-                  <CustomSelect
-                    disabled={!copyTableHosts.sourceHost.storage}
-                    value={
-                      copyTableHosts.targetHost.host && copyTableHosts.targetHost.port
-                        ? `${copyTableHosts.targetHost.host}:${copyTableHosts.targetHost.port}`
-                        : ""
-                    }
-                    onChange={selectTargetHost}
-                    name="target_host"
-                    options={getHostsForStorage(nodeData, copyTableHosts.targetHost.storage)}
-                  />
-                </div>
-                {copyTableHosts.targetHost.host && (
-                  <button type="button" style={clearButtonStyle} onClick={clearTargetHost}>
-                    Clear
-                  </button>
-                )}
-              </div>
+            <div style={{ marginTop: 10 }}>
+              <input
+                type="text"
+                style={textInputStyle}
+                placeholder="e.g. my-clickhouse-node.example.com"
+                value={targetHostInput}
+                onChange={(e) => setTargetHostInput(e.target.value)}
+              />
             </div>
           </div>
         </div>
@@ -270,18 +231,13 @@ const targetHelpTextStyle = {
   marginBottom: 0,
 }
 
-const targetSelectRowStyle = {
-  display: 'flex',
-  alignItems: 'center' as const,
-  gap: 8,
-}
-
-const clearButtonStyle = {
-  padding: '4px 10px',
-  cursor: 'pointer',
+const textInputStyle = {
+  width: '100%',
+  padding: '6px 10px',
   border: `1px solid ${COLORS.BORDER_GRAY}`,
   borderRadius: 4,
-  backgroundColor: COLORS.WHITE,
+  fontSize: '14px',
+  boxSizing: 'border-box' as const,
 }
 
 const tableListStyle = {
