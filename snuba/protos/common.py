@@ -6,7 +6,14 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import arrayElement, column, literal
-from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
+from snuba.query.expressions import (
+    Argument,
+    Expression,
+    FunctionCall,
+    JsonPath,
+    Lambda,
+    SubscriptableReference,
+)
 
 
 class MalformedAttributeException(Exception):
@@ -169,6 +176,33 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
                 attr_key.type,
                 alias,
             )
+
+    if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
+        alias = _build_label_mapping_key(attr_key)
+        # Array values are stored as tagged variants (e.g. {"String": "alice"})
+        # in the JSON column. Cast to Array(JSON), then extract String values.
+        return FunctionCall(
+            alias=alias,
+            function_name="arrayMap",
+            parameters=(
+                Lambda(
+                    alias=None,
+                    parameters=("x",),
+                    transformation=JsonPath(
+                        alias=None,
+                        base=Argument(None, "x"),
+                        path="String",
+                        return_type="String",
+                    ),
+                ),
+                JsonPath(
+                    alias=None,
+                    base=column("attributes_array"),
+                    path=attr_key.name,
+                    return_type="Array(JSON)",
+                ),
+            ),
+        )
 
     raise MalformedAttributeException(
         f"Attribute {attr_key.name} has an unknown type: {AttributeKey.Type.Name(attr_key.type)}"
