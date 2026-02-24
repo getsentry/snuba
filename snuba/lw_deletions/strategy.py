@@ -18,6 +18,7 @@ from arroyo.types import BaseValue, Commit, Message, Partition
 from snuba import settings
 from snuba.attribution import AppID
 from snuba.attribution.attribution_info import AttributionInfo
+from snuba.cleanup import get_active_partitions
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -152,14 +153,9 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         cluster = self.__storage.get_cluster()
         database = cluster.get_database()
         connection = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
-        result = connection.execute(
-            "SELECT DISTINCT extract(partition, '\\d{4}-\\d{2}-\\d{2}') AS monday_date "
-            "FROM system.parts "
-            "WHERE database = %(database)s AND table = %(table)s AND active = 1 "
-            "ORDER BY monday_date",
-            {"database": database, "table": table},
-        )
-        return [row[0] for row in result.results if row[0]]
+        parts = get_active_partitions(connection, self.__storage, database, table)
+        dates = sorted({part.date.strftime("%Y-%m-%d") for part in parts})
+        return dates
 
     def _execute_delete(self, conditions: Sequence[ConditionsBag]) -> None:
         self._check_ongoing_mutations()
