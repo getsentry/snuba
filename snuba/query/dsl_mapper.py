@@ -12,7 +12,6 @@ from snuba.query.expressions import (
     Expression,
     ExpressionVisitor,
     FunctionCall,
-    JsonPath,
     Lambda,
     Literal,
     SubscriptableReference,
@@ -188,11 +187,6 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
     def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> str:
         alias_str = f", {repr(exp.alias)}" if exp.alias else ", None"
         return f"DangerousRawSQL({alias_str}, {repr(exp.sql)})"
-
-    def visit_json_path(self, exp: JsonPath) -> str:
-        base_str = exp.base.accept(self)
-        type_str = f", {repr(exp.return_type)}" if exp.return_type else ""
-        return f"JsonPath(None, {base_str}, {repr(exp.path)}{type_str})"
 
     def visit_selected_expression(self, exp: SelectedExpression) -> str:
         return f"SelectedExpression({repr(exp.name)}, {exp.expression.accept(self)})"

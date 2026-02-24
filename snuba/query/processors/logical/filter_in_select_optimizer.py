@@ -11,7 +11,6 @@ from snuba.query.expressions import (
     DangerousRawSQL,
     ExpressionVisitor,
     FunctionCall,
-    JsonPath,
     Lambda,
     Literal,
     SubscriptableReference,
@@ -84,9 +83,6 @@ class FindConditionalAggregateFunctionsVisitor(
     def visit_dangerous_raw_sql(
         self, exp: DangerousRawSQL
     ) -> list[FunctionCall | CurriedFunctionCall]:
-        return self._matches
-
-    def visit_json_path(self, exp: JsonPath) -> list[FunctionCall | CurriedFunctionCall]:
         return self._matches
 
 

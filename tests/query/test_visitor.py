@@ -9,7 +9,6 @@ from snuba.query.expressions import (
     Expression,
     ExpressionVisitor,
     FunctionCall,
-    JsonPath,
     Lambda,
     Literal,
     SubscriptableReference,
@@ -66,12 +65,6 @@ class DummyVisitor(ExpressionVisitor[Iterable[Expression]]):
     def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> List[Expression]:
         self.__visited_nodes.append(exp)
         return [exp]
-
-    def visit_json_path(self, exp: JsonPath) -> List[Expression]:
-        self.__visited_nodes.append(exp)
-        ret: List[Expression] = [exp]
-        ret.extend(exp.base.accept(self))
-        return ret
 
 
 def test_visit_expression() -> None:

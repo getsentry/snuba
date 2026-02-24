@@ -9,7 +9,6 @@ from snuba.query.expressions import (
     Expression,
     ExpressionVisitor,
     FunctionCall,
-    JsonPath,
     Lambda,
     Literal,
     SubscriptableReference,
@@ -61,9 +60,6 @@ class _TupleUnaliasVisitor(ExpressionVisitor[Expression]):
         return exp
 
     def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> Expression:
-        return exp
-
-    def visit_json_path(self, exp: JsonPath) -> Expression:
         return exp
 
 
