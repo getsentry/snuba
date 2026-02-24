@@ -18,7 +18,7 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
+from snuba.lw_deletions.batching import BatchStepCustom, NoBatchStep, ValuesBatch
 from snuba.lw_deletions.formatters import Formatter
 from snuba.lw_deletions.types import ConditionsBag
 from snuba.query.allocation_policies import AllocationPolicyViolations
@@ -211,24 +211,29 @@ class LWDeletionsConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]
         storage: WritableTableStorage,
         formatter: Formatter,
         metrics: MetricsBackend,
+        no_batch: bool = False,
     ) -> None:
         self.max_batch_size = max_batch_size
         self.max_batch_time_ms = max_batch_time_ms
         self.storage = storage
         self.formatter = formatter
         self.metrics = metrics
+        self.no_batch = no_batch
 
     def create_with_partitions(
         self,
         commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
-        batch_step = BatchStepCustom(
-            max_batch_size=self.max_batch_size,
-            max_batch_time=(self.max_batch_time_ms / 1000),
-            next_step=FormatQuery(
-                CommitOffsets(commit), self.storage, self.formatter, self.metrics
-            ),
-            increment_by=increment_by,
+        format_query = FormatQuery(
+            CommitOffsets(commit), self.storage, self.formatter, self.metrics
         )
-        return batch_step
+        if self.no_batch:
+            return NoBatchStep(next_step=format_query)
+        else:
+            return BatchStepCustom(
+                max_batch_size=self.max_batch_size,
+                max_batch_time=(self.max_batch_time_ms / 1000),
+                next_step=format_query,
+                increment_by=increment_by,
+            )
