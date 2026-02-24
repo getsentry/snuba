@@ -1,7 +1,6 @@
 import random
 import re
 from datetime import datetime, timedelta
-from math import inf
 from typing import Any
 from unittest.mock import MagicMock, call, patch
 
@@ -3302,13 +3301,15 @@ class TestTraceItemTable(BaseApiTest):
             ],
         )
         response = EndpointTraceItemTable().execute(message)
+        # With NULL-safe division, both NULL denominator and division by zero return the default (0.0)
+        # Results ordered ascending: 0.0 (null denom), 0.0 (div by zero), 5.0 (10/2)
         assert response.column_values == [
             TraceItemColumnValues(
                 attribute_name="myformula",
                 results=[
                     AttributeValue(val_double=0.0),
+                    AttributeValue(val_double=0.0),
                     AttributeValue(val_double=5),
-                    AttributeValue(val_double=inf),
                 ],
             ),
         ]

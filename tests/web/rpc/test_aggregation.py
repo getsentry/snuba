@@ -1,15 +1,17 @@
 from typing import Any
 
 import pytest
+from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
+    AttributeConditionalAggregation,
+)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeAggregation,
     AttributeKey,
     ExtrapolationMode,
     Function,
     Reliability,
 )
 
-from snuba.query.expressions import DangerousRawSQL, FunctionCall
+from snuba.query.expressions import FunctionCall
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     get_field_existence_expression,
@@ -77,7 +79,7 @@ def test_get_custom_column_information() -> None:
 def test_get_confidence_interval_column_for_non_extrapolatable_column() -> None:
     assert (
         get_confidence_interval_column(
-            AttributeAggregation(
+            AttributeConditionalAggregation(
                 aggregate=Function.FUNCTION_MIN,
                 key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test"),
                 label="min(test)",
@@ -247,24 +249,31 @@ def test_get_closest_percentile_index(
 
 
 def test_attribute_key_to_expression_type_array() -> None:
+    from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+
     attr_key = AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids")
     expr = attribute_key_to_expression(attr_key)
-    assert isinstance(expr, DangerousRawSQL)
-    assert (
-        expr.sql == "arrayMap(x -> x.`String`::String, attributes_array.`user_ids`.:`Array(JSON)`)"
-    )
+    assert isinstance(expr, FunctionCall)
+    assert expr.function_name == "arrayMap"
     assert expr.alias == "user_ids_TYPE_ARRAY"
+    fmt = ClickhouseExpressionFormatter()
+    sql = expr.accept(fmt)
+    assert (
+        sql
+        == "(arrayMap(x -> x.`String`::String, attributes_array.`user_ids`.:`Array(JSON)`) AS user_ids_TYPE_ARRAY)"
+    )
 
 
-def test_get_field_existence_expression_dangerous_raw_sql() -> None:
-    field = DangerousRawSQL(alias="test", sql="attributes_array.`user_ids`")
+def test_get_field_existence_expression_array_map() -> None:
+    """arrayMap expressions (used for TYPE_ARRAY) should use notEmpty for existence checks."""
+    field = FunctionCall(alias="test", function_name="arrayMap", parameters=())
     expr = get_field_existence_expression(field)
     assert isinstance(expr, FunctionCall)
     assert expr.function_name == "notEmpty"
 
 
 def test_aggregation_to_expression_uniq_type_array() -> None:
-    agg = AttributeAggregation(
+    agg = AttributeConditionalAggregation(
         aggregate=Function.FUNCTION_UNIQ,
         key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids"),
         label="uniq_users",
@@ -280,7 +289,7 @@ def test_aggregation_to_expression_uniq_type_array() -> None:
 
 
 def test_aggregation_to_expression_sum_type_array_raises() -> None:
-    agg = AttributeAggregation(
+    agg = AttributeConditionalAggregation(
         aggregate=Function.FUNCTION_SUM,
         key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids"),
         label="sum_users",
