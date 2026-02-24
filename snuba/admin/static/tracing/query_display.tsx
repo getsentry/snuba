@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
   Accordion,
-  Switch,
   Code,
   Stack,
   Title,
@@ -29,10 +28,8 @@ function QueryDisplay(props: {
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [storages, setStorages] = useState<string[]>([]);
-  const [checkedGatherProfileEvents, setCheckedGatherProfileEvents] = useState<boolean>(true);
   const [query, setQuery] = useState<QueryState>({
     storage: getParamFromStorage("storage"),
-    gather_profile_events: checkedGatherProfileEvents
   });
   const [queryResultHistory, setQueryResultHistory] = useState<TracingResult[]>(
     getRecentHistory(HISTORY_KEY)
@@ -55,13 +52,13 @@ function QueryDisplay(props: {
   }
 
   function executeQuery() {
-    query.gather_profile_events = checkedGatherProfileEvents;
     return props.api
       .executeTracingQuery(query as TracingRequest)
       .then((result) => {
         const tracing_result = {
           input_query: `${query.sql}`,
           timestamp: result.timestamp,
+          storage: query.storage,
           num_rows_result: result.num_rows_result,
           result: result.result,
           cols: result.cols,
@@ -107,16 +104,6 @@ function QueryDisplay(props: {
           />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <Switch
-            checked={checkedGatherProfileEvents}
-            onChange={(evt: React.ChangeEvent<HTMLInputElement>) => {
-                  setCheckedGatherProfileEvents(evt.currentTarget.checked);
-                }
-            }
-            onLabel="PROFILE"
-            offLabel="NO PROFILE"
-            size="md"
-          />
           <ExecuteButton
             onClick={executeQuery}
             disabled={!query.storage || !query.sql}
