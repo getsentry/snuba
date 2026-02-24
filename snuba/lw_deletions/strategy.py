@@ -222,6 +222,10 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             partition_where = combine_and_conditions([where_clause, partition_condition])
             query = construct_query(self.__storage, table, partition_where)
             self._execute_single_delete(table, query, query_settings, partition_date=partition_date)
+            self.__metrics.increment(
+                "partition_delete_executed",
+                tags={"table": table, "partition_date": partition_date},
+            )
             redis_client.sadd(tracking_key, member)
 
         redis_client.expire(tracking_key, ttl)

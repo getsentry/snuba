@@ -266,6 +266,12 @@ def test_split_by_partition_enabled(mock_execute: Mock, mock_num_mutations: Mock
     assert mock_execute.call_count == 3
     assert commit_step.submit.call_count == 1
 
+    # Verify partition_delete_executed metric emitted for each partition
+    increment_calls = [
+        c for c in metrics.increment.call_args_list if c[0][0] == "partition_delete_executed"
+    ]
+    assert len(increment_calls) == 3
+
 
 @patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
