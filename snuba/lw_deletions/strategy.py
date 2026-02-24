@@ -214,6 +214,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 )
                 continue
 
+            self._check_ongoing_mutations(skip_throttle=True)
             partition_condition = equals(
                 FunctionCall(None, "toMonday", (column(self.__partition_column),)),  # type: ignore[arg-type]
                 literal(partition_date),
@@ -259,10 +260,11 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 else:
                     raise LWDeleteQueryException(exc.message)
 
-    def _check_ongoing_mutations(self) -> None:
+    def _check_ongoing_mutations(self, skip_throttle: bool = False) -> None:
         now = time.time()
         if (
-            self.__last_ongoing_mutations_check is not None
+            not skip_throttle
+            and self.__last_ongoing_mutations_check is not None
             and now - self.__last_ongoing_mutations_check < 1.0
         ):
             raise TooManyOngoingMutationsError(
