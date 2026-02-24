@@ -18,7 +18,8 @@ function CopyTables(props: {
 }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [copyTableHosts, setCopyTableHosts] = useState<CopyTableHostsState>({
-    sourceHost: {}
+    sourceHost: {},
+    targetHost: {},
   });
   const [copyTableResult, setCopyTableResult] = useState<CopyTableResult | null>(null);
   const [queryError, setQueryError] = useState<Error | null>(null);
@@ -35,8 +36,11 @@ function CopyTables(props: {
       // clear old host port
       delete copyTableHosts.sourceHost.host
       delete copyTableHosts.sourceHost.port
+      delete copyTableHosts.targetHost.host
+      delete copyTableHosts.targetHost.port
 
       copyTableHosts.sourceHost.storage = storage
+      copyTableHosts.targetHost.storage = storage
 
       return {
         ...copyTableHosts,
@@ -51,23 +55,49 @@ function CopyTables(props: {
       copyTableHosts.sourceHost.host = host
       copyTableHosts.sourceHost.port = parseInt(portAsString, 10)
 
+      return {
+        ...copyTableHosts,
+      };
+    });
+  }
+
+  function selectTargetHost(hostString: string) {
+    const [host, portAsString] = hostString.split(":");
+
+    setCopyTableHosts((copyTableHosts) => {
+      copyTableHosts.targetHost.host = host
+      copyTableHosts.targetHost.port = parseInt(portAsString, 10)
 
       return {
         ...copyTableHosts,
+      };
+    });
+  }
 
+  function clearTargetHost() {
+    setCopyTableHosts((copyTableHosts) => {
+      delete copyTableHosts.targetHost.host
+      delete copyTableHosts.targetHost.port
+
+      return {
+        ...copyTableHosts,
       };
     });
   }
 
   function executeCopyTableQuery(shouldExecute: boolean) {
-    const query = {
-      storage: copyTableHosts.sourceHost.storage,
-      source_host: copyTableHosts.sourceHost.host,
-      source_port: copyTableHosts.sourceHost.port,
+    const query: CopyTableRequest = {
+      storage: copyTableHosts.sourceHost.storage!,
+      source_host: copyTableHosts.sourceHost.host!,
+      source_port: copyTableHosts.sourceHost.port!,
       dry_run: !shouldExecute,
     }
+    if (copyTableHosts.targetHost.host) {
+      query.target_host = copyTableHosts.targetHost.host;
+      query.target_port = copyTableHosts.targetHost.port;
+    }
     return props.api
-      .executeCopyTable(query as CopyTableRequest)
+      .executeCopyTable(query)
       .then((result) => {
         setQueryError(null);
         setCopyTableResult(result);
@@ -100,6 +130,34 @@ function CopyTables(props: {
                 name="host"
                 options={getHostsForStorage(nodeData, copyTableHosts.sourceHost.storage)}
               />
+            </div>
+          </div>
+          <div style={sectionContainerStyle}>
+            <h3>Target host (optional):</h3>
+            <p style={targetHelpTextStyle}>
+              If specified, CREATE statements will be run on this host instead of the source host.
+            </p>
+            <div style={hostSelectStyle}>
+              <div style={targetSelectRowStyle}>
+                <div style={{ flex: 1 }}>
+                  <CustomSelect
+                    disabled={!copyTableHosts.sourceHost.storage}
+                    value={
+                      copyTableHosts.targetHost.host && copyTableHosts.targetHost.port
+                        ? `${copyTableHosts.targetHost.host}:${copyTableHosts.targetHost.port}`
+                        : ""
+                    }
+                    onChange={selectTargetHost}
+                    name="target_host"
+                    options={getHostsForStorage(nodeData, copyTableHosts.targetHost.storage)}
+                  />
+                </div>
+                {copyTableHosts.targetHost.host && (
+                  <button type="button" style={clearButtonStyle} onClick={clearTargetHost}>
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <div style={sectionContainerStyle}>
@@ -206,6 +264,27 @@ const buttonContainerStyle = {
   flexDirection: 'column' as const,
   gap: 10,
   marginTop: 10,
+}
+
+const targetHelpTextStyle = {
+  fontSize: '0.85em',
+  color: COLORS.TEXT_DEFAULT,
+  marginTop: 4,
+  marginBottom: 0,
+}
+
+const targetSelectRowStyle = {
+  display: 'flex',
+  alignItems: 'center' as const,
+  gap: 8,
+}
+
+const clearButtonStyle = {
+  padding: '4px 10px',
+  cursor: 'pointer',
+  border: `1px solid ${COLORS.BORDER_GRAY}`,
+  borderRadius: 4,
+  backgroundColor: COLORS.WHITE,
 }
 
 const tableListStyle = {

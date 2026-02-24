@@ -462,11 +462,13 @@ def copy_table_query() -> Response:
         source_host = req["source_host"]
 
         dry_run = req.get("dry_run", True)
+        target_host = req.get("target_host")
 
         resp = copy_tables(
             source_host=source_host,
             storage_name=storage,
             dry_run=dry_run,
+            target_host=target_host,
         )
     except KeyError as err:
         return make_response(
