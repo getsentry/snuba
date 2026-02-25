@@ -240,7 +240,7 @@ def _build_query(
                     literal(page_token.last_seen_item_type),
                     literal(page_token.last_seen_timestamp),
                     literal(page_token.last_seen_trace_id),
-                    literal(page_token.last_seen_item_id),
+                    f.toUInt128(literal(str(page_token.last_seen_item_id))),
                 ),
             )
         ]
