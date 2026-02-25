@@ -137,6 +137,20 @@ class TestTraceItemFiltersArrayLike:
         assert isinstance(lam.transformation, FunctionCall)
         assert lam.transformation.function_name == "ilike"
 
+    def test_equals_on_array_key_raises(self) -> None:
+        item_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags"),
+                op=ComparisonFilter.OP_EQUALS,
+                value=AttributeValue(val_str="something"),
+            )
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="only LIKE and NOT_LIKE comparisons are supported on array keys",
+        ):
+            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
     def test_like_on_int_key_raises(self) -> None:
         item_filter = self._make_like_filter("my_int", AttributeKey.Type.TYPE_INT, "%something%")
         with pytest.raises(
