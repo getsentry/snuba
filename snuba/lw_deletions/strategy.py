@@ -19,10 +19,10 @@ from arroyo.types import BaseValue, Commit, Message, Partition
 from snuba import settings
 from snuba.attribution import AppID
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.cleanup import get_active_partitions
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
@@ -72,6 +72,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__formatter: Formatter = formatter
         self.__metrics = metrics
         self.__last_ongoing_mutations_check: Optional[float] = None
+        self.__redis_client = get_redis_client(RedisClientKey.CONFIG)
 
     def poll(self) -> None:
         self.__next_step.poll()
@@ -151,10 +152,31 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         return hashlib.md5("|".join(parts).encode()).hexdigest()[:16]
 
     def _get_partition_dates(self, table: str) -> List[str]:
+        from snuba.util import decode_part_str
+
         cluster = self.__storage.get_cluster()
         database = cluster.get_database()
-        connection = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
-        parts = get_active_partitions(connection, self.__storage, database, table)
+
+        node = cluster.get_local_nodes()[0]
+        connection = cluster.get_node_connection(ClickhouseClientSettings.CLEANUP, node)
+
+        response = connection.execute(
+            """
+            SELECT DISTINCT partition
+            FROM system.parts
+            WHERE database = %(database)s
+            AND table = %(table)s
+            AND active = 1
+            """,
+            {"database": database, "table": table},
+        )
+
+        schema = self.__storage.get_schema()
+        assert isinstance(schema, TableSchema)
+        partition_format = schema.get_partition_format()
+        assert partition_format is not None
+        parts = [decode_part_str(part, partition_format) for (part,) in response.results]
+
         now = datetime.now()
         min_date = (now - timedelta(days=365)).date()
         max_date = (now + timedelta(days=7)).date()
@@ -209,15 +231,16 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
 
         cond_hash = self._conditions_hash(conditions)
         tracking_key = f"lw_delete_partitions:{self.__storage_name}:{cond_hash}"
-        redis_client = get_redis_client(RedisClientKey.CONFIG)
         ttl = settings.LW_DELETES_PARTITION_TRACKING_TTL
 
         for partition_date in partition_dates:
             member = f"{table}:{partition_date}"
-            if redis_client.sismember(tracking_key, member):
+            days_delta = (datetime.strptime(partition_date, "%Y-%m-%d") - datetime.now()).days
+            partition_week = str(days_delta // 7)
+            if self.__redis_client.sismember(tracking_key, member):
                 self.__metrics.increment(
                     "partition_delete_skipped",
-                    tags={"table": table, "partition_date": partition_date},
+                    tags={"table": table, "partition_week": partition_week},
                 )
                 logger.info(
                     "Skipping already-tracked partition %s for table %s",
@@ -233,25 +256,25 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             )
             partition_where = combine_and_conditions([where_clause, partition_condition])
             query = construct_query(self.__storage, table, partition_where)
-            self._execute_single_delete(table, query, query_settings, partition_date=partition_date)
+            self._execute_single_delete(table, query, query_settings, partition_week=partition_week)
             self.__metrics.increment(
                 "partition_delete_executed",
-                tags={"table": table, "partition_date": partition_date},
+                tags={"table": table, "partition_week": partition_week},
             )
-            redis_client.sadd(tracking_key, member)
+            self.__redis_client.sadd(tracking_key, member)
 
-        redis_client.expire(tracking_key, ttl)
+        self.__redis_client.expire(tracking_key, ttl)
 
     def _execute_single_delete(
         self,
         table: str,
         query: Query,
         query_settings: HTTPQuerySettings,
-        partition_date: Optional[str] = None,
+        partition_week: Optional[str] = None,
     ) -> None:
         tags = {"table": table}
-        if partition_date:
-            tags["partition_date"] = partition_date
+        if partition_week:
+            tags["partition_week"] = partition_week
         start = time.time()
         try:
             _execute_query(

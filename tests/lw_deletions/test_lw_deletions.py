@@ -17,7 +17,6 @@ from snuba.lw_deletions.formatters import SearchIssuesFormatter
 from snuba.lw_deletions.strategy import FormatQuery, increment_by
 from snuba.lw_deletions.types import ConditionsType
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.util import Part
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.web.bulk_delete_query import DeleteQueryMessage
 
@@ -437,11 +436,8 @@ def test_split_by_partition_fallback(mock_execute: Mock, mock_num_mutations: Moc
 
 @patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
-@patch("snuba.lw_deletions.strategy.get_active_partitions")
 @pytest.mark.redis_db
-def test_partition_date_filtering(
-    mock_get_partitions: Mock, mock_execute: Mock, mock_num_mutations: Mock
-) -> None:
+def test_partition_date_filtering(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     When _get_partition_dates encounters partition dates outside the valid window
     (last 12 months through 7 days from now), those dates should be
@@ -456,16 +452,21 @@ def test_partition_date_filtering(
     bogus_old = (now - timedelta(days=500)).strftime("%Y-%m-%d")
     bogus_future = (now + timedelta(days=30)).strftime("%Y-%m-%d")
 
-    mock_get_partitions.return_value = [
-        Part(name="p1", date=now - timedelta(days=30), retention_days=90),
-        Part(name="p2", date=now - timedelta(days=60), retention_days=90),
-        Part(name="p3", date=now - timedelta(days=500), retention_days=90),
-        Part(name="p4", date=now + timedelta(days=30), retention_days=90),
+    # Build mock system.parts response: each row is a (partition_string,) tuple
+    # matching the (retention_days, 'YYYY-MM-DD') format used by search_issues
+    mock_results = Mock()
+    mock_results.results = [
+        (f"(90, '{(now - timedelta(days=30)).strftime('%Y-%m-%d')}')",),
+        (f"(90, '{(now - timedelta(days=60)).strftime('%Y-%m-%d')}')",),
+        (f"(90, '{(now - timedelta(days=500)).strftime('%Y-%m-%d')}')",),
+        (f"(90, '{(now + timedelta(days=30)).strftime('%Y-%m-%d')}')",),
     ]
+    mock_connection = Mock()
+    mock_connection.execute.return_value = mock_results
 
     format_query = FormatQuery(Mock(), storage, SearchIssuesFormatter(), metrics)
 
-    with patch.object(storage.get_cluster(), "get_query_connection", return_value=Mock()):
+    with patch.object(storage.get_cluster(), "get_node_connection", return_value=mock_connection):
         result = format_query._get_partition_dates("search_issues_local_v2")
 
     assert result == sorted([valid_date_1, valid_date_2])
