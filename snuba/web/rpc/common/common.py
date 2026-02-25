@@ -27,7 +27,13 @@ from snuba.query.dsl import (
     not_cond,
     or_cond,
 )
-from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
+from snuba.query.expressions import (
+    Argument,
+    Expression,
+    FunctionCall,
+    Lambda,
+    SubscriptableReference,
+)
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -282,16 +288,38 @@ def trace_item_filters_to_expression(
             expr_with_null = or_cond(expr, f.xor(f.isNull(k_expression), f.isNull(v_expression)))
             return expr_with_null
         if op == ComparisonFilter.OP_LIKE:
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
+                return f.arrayExists(
+                    Lambda(
+                        None,
+                        ("x",),
+                        like_fn(Argument(None, "x"), v_expression),
+                    ),
+                    k_expression,
+                )
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
-                    "the LIKE comparison is only supported on string keys"
+                    "the LIKE comparison is only supported on string and array keys"
                 )
             comparison_function = f.ilike if item_filter.comparison_filter.ignore_case else f.like
             return comparison_function(k_expression, v_expression)
         if op == ComparisonFilter.OP_NOT_LIKE:
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
+                return not_cond(
+                    f.arrayExists(
+                        Lambda(
+                            None,
+                            ("x",),
+                            like_fn(Argument(None, "x"), v_expression),
+                        ),
+                        k_expression,
+                    )
+                )
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
-                    "the NOT LIKE comparison is only supported on string keys"
+                    "the NOT LIKE comparison is only supported on string and array keys"
                 )
             comparison_function = (
                 f.notILike if item_filter.comparison_filter.ignore_case else f.notLike

@@ -8,7 +8,7 @@ from snuba.protos.common import (
 )
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import arrayElement, column, literal
-from snuba.query.expressions import SubscriptableReference
+from snuba.query.expressions import DangerousRawSQL, SubscriptableReference
 
 
 class TestAttributeKeyToExpression:
@@ -102,6 +102,22 @@ class TestAttributeKeyToExpression:
                 AttributeKey(type=AttributeKey.TYPE_UNSPECIFIED, name="test_attr")
             )
         assert "must have a type specified" in str(exc_info.value)
+
+    def test_expression_type_array(self) -> None:
+        result = attribute_key_to_expression(
+            AttributeKey(type=AttributeKey.TYPE_ARRAY, name="my_tags"),
+        )
+        assert isinstance(result, DangerousRawSQL)
+        assert result.alias == "my_tags_TYPE_ARRAY"
+        assert "attributes_array.`my_tags`.:`Array(JSON)`" in result.sql
+        assert "arrayMap(" in result.sql
+
+    def test_expression_type_array_escapes_backticks(self) -> None:
+        result = attribute_key_to_expression(
+            AttributeKey(type=AttributeKey.TYPE_ARRAY, name="my`attr"),
+        )
+        assert isinstance(result, DangerousRawSQL)
+        assert "attributes_array.`my``attr`.:`Array(JSON)`" in result.sql
 
     def test_invalid_type_for_normalized_column_raises_exception(self) -> None:
         with pytest.raises(MalformedAttributeException) as exc_info:
