@@ -10,6 +10,7 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba import state
+from snuba.clusters.cluster import ClickhouseNode
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.batching import BatchStepCustom
@@ -465,8 +466,13 @@ def test_partition_date_filtering(mock_execute: Mock, mock_num_mutations: Mock) 
     mock_connection.execute.return_value = mock_results
 
     format_query = FormatQuery(Mock(), storage, SearchIssuesFormatter(), metrics)
+    cluster = storage.get_cluster()
+    dummy_node = ClickhouseNode("localhost", 9000)
 
-    with patch.object(storage.get_cluster(), "get_node_connection", return_value=mock_connection):
+    with (
+        patch.object(cluster, "get_local_nodes", return_value=[dummy_node]),
+        patch.object(cluster, "get_node_connection", return_value=mock_connection),
+    ):
         result = format_query._get_partition_dates("search_issues_local_v2")
 
     assert result == sorted([valid_date_1, valid_date_2])
