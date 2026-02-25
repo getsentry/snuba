@@ -114,7 +114,7 @@ class TestExportTraceItems(BaseApiTest):
             limit=20,
         )
         items: list[TraceItem] = []
-        while True:
+        for _ in range(1, 100):
             response = EndpointExportTraceItems().execute(message)
             items.extend(response.trace_items)
             if len(response.trace_items) == 20:
@@ -158,7 +158,7 @@ class TestExportTraceItems(BaseApiTest):
         )
         items: list[TraceItem] = []
         seen_item_ids: set[bytes] = set()
-        while True:
+        for _ in range(1, num_items + 2):
             response = EndpointExportTraceItems().execute(message)
             for item in response.trace_items:
                 assert item.item_id not in seen_item_ids, (
