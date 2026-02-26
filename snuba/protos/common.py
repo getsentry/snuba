@@ -92,8 +92,11 @@ def _generate_subscriptable_reference(
     if alias:
         kwargs["alias"] = alias
     clickhouse_type = PROTO_TYPE_TO_CLICKHOUSE_TYPE[attribute_type]
-    if attribute_type == AttributeKey.Type.TYPE_BOOLEAN:
-        # Boolean attributes use a Map column without hash buckets,
+    if attribute_type in (
+        AttributeKey.Type.TYPE_BOOLEAN,
+        AttributeKey.Type.TYPE_ARRAY,
+    ):
+        # Boolean and array attributes use Map columns without hash buckets,
         # so we use arrayElement directly instead of SubscriptableReference
         # which would be transformed to the nested .key/.value pattern.
         return f.cast(
