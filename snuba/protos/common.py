@@ -155,12 +155,45 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         )
 
     if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
-        # attributes_array is a JSON column, not a Map column.
-        # Access sub-paths with dot notation and return as a JSON string.
+        # Array values are stored as tagged variants (e.g. {"String": "alice"},
+        # {"Int": "123"}) in the JSON column. Cast to Array(JSON), then extract
+        # the value from whichever variant tag is present. We coalesce across
+        # all supported types, converting non-string types via toString so the
+        # result is always a string array.
+        x = Argument(None, "x")
         return FunctionCall(
-            alias,
-            "toJSONString",
-            (column(f"attributes_array.`{attr_key.name}`"),),
+            alias=alias,
+            function_name="arrayMap",
+            parameters=(
+                Lambda(
+                    alias=None,
+                    parameters=("x",),
+                    transformation=FunctionCall(
+                        alias=None,
+                        function_name="coalesce",
+                        parameters=(
+                            JsonPath(None, x, "String", "Nullable(String)"),
+                            FunctionCall(
+                                None,
+                                "toString",
+                                (JsonPath(None, x, "Int", "Nullable(Int64)"),),
+                            ),
+                            FunctionCall(
+                                None,
+                                "toString",
+                                (JsonPath(None, x, "Double", "Nullable(Float64)"),),
+                            ),
+                            JsonPath(None, x, "Bool", "Nullable(String)"),
+                        ),
+                    ),
+                ),
+                JsonPath(
+                    alias=None,
+                    base=column("attributes_array"),
+                    path=attr_key.name,
+                    return_type="Array(JSON)",
+                ),
+            ),
         )
 
     if attr_key.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:

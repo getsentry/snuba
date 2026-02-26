@@ -279,6 +279,11 @@ def _any_attribute_filter_to_expression(
             "IN/NOT_IN operations require an array value type (val_array)"
         )
 
+    if effective_op != AnyAttributeFilter.OP_IN and value_type == "val_array":
+        raise BadSnubaRPCRequestException(
+            f"{AnyAttributeFilter.Op.Name(filt.op)} does not support array values, use OP_IN/OP_NOT_IN"
+        )
+
     # Validate that IN/NOT_IN arrays are non-empty
     if effective_op == AnyAttributeFilter.OP_IN and len(v.val_array.values) == 0:
         raise BadSnubaRPCRequestException("IN/NOT_IN operations require a non-empty array")
