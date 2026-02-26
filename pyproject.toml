@@ -53,7 +53,9 @@ rust_snuba = { workspace = true }
 members = ["rust_snuba"]
 
 [tool.uv]
-environments = ["sys_platform == 'darwin' or sys_platform == 'linux'"]
+environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]
+required-environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]
+
 
 [[tool.uv.index]]
 # We don't allow using public pypi - submit a PR to
