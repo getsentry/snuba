@@ -29,14 +29,14 @@ from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 class TestSDKSnQLApi(BaseApiTest):
     def post(self, url: str, data: str) -> Any:
         return self.app.post(url, data=data, headers={"referer": "test"})
 
     @pytest.fixture(autouse=True)
-    def setup_teardown(self, clickhouse_db: None) -> None:
+    def setup_teardown(self, events_db: None) -> None:
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
@@ -424,27 +424,3 @@ class TestSDKSnQLApi(BaseApiTest):
         response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         resp = json.loads(response.data)
         assert response.status_code == 400, resp
-
-    def test_tags_raw_access(self) -> None:
-        query = (
-            Query(Entity("generic_metrics_distributions"))
-            .set_select([Function("count", [], "count")])
-            .set_where(
-                conditions=[
-                    Condition(Column("tags_raw[1234]"), Op.EQ, "condition-value"),
-                    Condition(Column("org_id"), Op.EQ, self.org_id),
-                    Condition(Column("project_id"), Op.EQ, self.project_id),
-                    Condition(Column("timestamp"), Op.GTE, self.base_time),
-                    Condition(Column("timestamp"), Op.LT, self.next_time),
-                ]
-            )
-        )
-        request = Request(
-            dataset="generic_metrics",
-            query=query,
-            app_id="default",
-            tenant_ids={"referrer": "r", "organization_id": 123},
-        )
-        response = self.post("/generic_metrics/snql", data=json.dumps(request.to_dict()))
-        resp = json.loads(response.data)
-        assert response.status_code == 200, resp

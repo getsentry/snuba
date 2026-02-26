@@ -218,7 +218,7 @@ def get_node_for_table(admin_api: FlaskClient, storage_name: str) -> tuple[str, 
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_system_query(admin_api: FlaskClient) -> None:
     _, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
@@ -253,7 +253,7 @@ def test_predefined_system_queries(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_sudo_system_query(admin_api: FlaskClient) -> None:
     _, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
@@ -276,7 +276,7 @@ def test_sudo_system_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_query_trace(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -292,7 +292,7 @@ def test_query_trace(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -311,7 +311,7 @@ def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -997,7 +997,7 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_force_overwrite(admin_api: FlaskClient) -> None:
     migration_id = "0011_add_timestamp_ms"
     migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
@@ -1015,7 +1015,7 @@ def test_force_overwrite(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (events)
@@ -1035,7 +1035,7 @@ def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_prod_snql_query_multiple_allowed_projects(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (transactions)
@@ -1055,7 +1055,7 @@ def test_prod_snql_query_multiple_allowed_projects(admin_api: FlaskClient) -> No
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_prod_snql_query_invalid_project_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (events)

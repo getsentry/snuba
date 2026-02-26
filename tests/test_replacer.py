@@ -30,11 +30,11 @@ CONSUMER_GROUP = "consumer_group"
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 class TestReplacer:
     @pytest.fixture(autouse=True)
-    def setup_teardown(self, clickhouse_db: None) -> None:
+    def setup_teardown(self, events_db: None) -> None:
         from snuba.web.views import application
 
         assert application.testing is True
