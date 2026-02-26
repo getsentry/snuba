@@ -308,6 +308,8 @@ pub struct EAPItemRow {
 
     sampling_weight: u64,
     sampling_factor: f64,
+    client_sample_rate: f64,
+    server_sample_rate: f64,
 
     retention_days: u16,
     downsampled_retention_days: u16,
@@ -339,6 +341,8 @@ impl From<EAPItem> for EAPItemRow {
                 item_id: item.item_id,
                 sampling_weight: item.sampling_weight,
                 sampling_factor: item.sampling_factor,
+                client_sample_rate: item.client_sample_rate,
+                server_sample_rate: item.server_sample_rate,
                 retention_days: item.retention_days.unwrap_or(0),
                 downsampled_retention_days: item.downsampled_retention_days.unwrap_or(0),
                 attributes_bool: item.attributes.attributes_bool.into_iter().collect(),
