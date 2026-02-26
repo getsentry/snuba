@@ -12,7 +12,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba import settings, state
-from snuba.protos.common import PROTO_TYPE_TO_ATTRIBUTE_COLUMN, MalformedAttributeException
+from snuba.protos.common import MalformedAttributeException
 from snuba.protos.common import (
     attribute_key_to_expression as _attribute_key_to_expression,
 )
@@ -236,68 +236,39 @@ _POSITIVE_OP_FOR_NEGATIVE: dict[int, int] = {
 
 _STRING_COLUMNS = {"attributes_string"}
 
+# Map scalar value types to the ClickHouse column they're compatible with
+_VALUE_TYPE_TO_COLUMN: dict[str, str] = {
+    "val_str": "attributes_string",
+    "val_int": "attributes_float",
+    "val_float": "attributes_float",
+    "val_double": "attributes_float",
+    "val_bool": "attributes_bool",
+}
+
 
 def _any_attribute_filter_to_expression(
     filt: AnyAttributeFilter,
 ) -> Expression:
-    """Build an expression that searches across all attribute values.
+    """Build an expression that searches across attribute values.
 
-    For each requested attribute column, generates::
+    The column to search is derived from the value type to avoid
+    ClickHouse type mismatches (e.g. comparing a string against a Float64 column).
+
+    Generates::
 
         arrayExists(x -> <comparison>(x, value), mapValues(column))
 
-    and combines them with OR (for positive ops) or NOT(OR(...)) (for negative ops).
+    wrapped with NOT(...) for negative ops.
     """
-    # 1. Determine which columns to search
-    attr_types = list(filt.attribute_types)
-    if not attr_types:
-        attr_types = [AttributeKey.Type.TYPE_STRING]
-
-    # Validate and deduplicate columns
-    # (e.g. TYPE_INT, TYPE_FLOAT, TYPE_DOUBLE all map to attributes_float)
-    for t in attr_types:
-        if t not in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
-            raise BadSnubaRPCRequestException(
-                f"Unsupported attribute type: {AttributeKey.Type.Name(t)}"
-            )
-    columns_to_search: list[str] = list(
-        dict.fromkeys(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[t] for t in attr_types)
-    )
-
-    # Resolve the effective op for building the lambda (negation handled at the end)
-    is_negative = filt.op in _NEGATIVE_OPS
-    effective_op = _POSITIVE_OP_FOR_NEGATIVE.get(filt.op, filt.op)
-
-    # LIKE/NOT_LIKE only makes sense on string columns
-    if effective_op == AnyAttributeFilter.OP_LIKE:
-        string_cols = [c for c in columns_to_search if c in _STRING_COLUMNS]
-        if not string_cols:
-            raise BadSnubaRPCRequestException(
-                "LIKE/NOT_LIKE operations are only supported on string attribute types"
-            )
-        columns_to_search = string_cols
-
-    # ignore_case uses lower() which only works on string columns
-    if filt.ignore_case:
-        string_cols = [c for c in columns_to_search if c in _STRING_COLUMNS]
-        if not string_cols:
-            raise BadSnubaRPCRequestException(
-                "ignore_case is only supported on string attribute types"
-            )
-        columns_to_search = string_cols
-
-    # 2. Extract comparison value
+    # 1. Extract and validate the comparison value
     v = filt.value
     value_type = v.WhichOneof("value")
     if value_type is None or value_type == "val_null":
         raise BadSnubaRPCRequestException("any_attribute_filter does not have a value")
 
-    if filt.ignore_case:
-        if value_type == "val_array":
-            if not all(elem.WhichOneof("value") == "val_str" for elem in v.val_array.values):
-                raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
-        elif value_type != "val_str":
-            raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
+    # Resolve the effective op for building the lambda (negation handled at the end)
+    is_negative = filt.op in _NEGATIVE_OPS
+    effective_op = _POSITIVE_OP_FOR_NEGATIVE.get(filt.op, filt.op)
 
     if effective_op == AnyAttributeFilter.OP_IN and value_type != "val_array":
         raise BadSnubaRPCRequestException(
@@ -307,6 +278,32 @@ def _any_attribute_filter_to_expression(
     # Validate that IN/NOT_IN arrays are non-empty
     if effective_op == AnyAttributeFilter.OP_IN and len(v.val_array.values) == 0:
         raise BadSnubaRPCRequestException("IN/NOT_IN operations require a non-empty array")
+
+    # 2. Determine which column to search based on the value type
+    if value_type == "val_array":
+        elem_types = {elem.WhichOneof("value") for elem in v.val_array.values}
+        if len(elem_types) != 1:
+            raise BadSnubaRPCRequestException("val_array elements must all be the same type")
+        elem_type = elem_types.pop()
+        if elem_type not in _VALUE_TYPE_TO_COLUMN:
+            raise BadSnubaRPCRequestException(f"Unsupported array element type: {elem_type}")
+        col_name = _VALUE_TYPE_TO_COLUMN[elem_type]
+    else:
+        if value_type not in _VALUE_TYPE_TO_COLUMN:
+            raise BadSnubaRPCRequestException(
+                f"Unsupported value type for any_attribute_filter: {value_type}"
+            )
+        col_name = _VALUE_TYPE_TO_COLUMN[value_type]
+
+    # LIKE/NOT_LIKE only makes sense on string columns
+    if effective_op == AnyAttributeFilter.OP_LIKE and col_name not in _STRING_COLUMNS:
+        raise BadSnubaRPCRequestException(
+            "LIKE/NOT_LIKE operations are only supported on string values"
+        )
+
+    # ignore_case uses lower() which only works on string columns
+    if filt.ignore_case and col_name not in _STRING_COLUMNS:
+        raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
 
     v_expression = _attribute_value_to_expression(v)
 
@@ -341,20 +338,8 @@ def _any_attribute_filter_to_expression(
 
     lam = Lambda(None, ("x",), comparison)
 
-    # 4. Build per-column arrayExists expressions.
-    # columns_to_search may contain multiple entries when the caller specifies
-    # several attribute_types (e.g. TYPE_STRING + TYPE_FLOAT).  Each column is
-    # searched independently and the results are OR-ed together; columns whose
-    # values don't match the filter value type will simply yield no matches.
-    per_column_exprs: list[Expression] = []
-    for col_name in columns_to_search:
-        per_column_exprs.append(f.arrayExists(lam, f.mapValues(column(col_name))))
-
-    # 5. Combine
-    if len(per_column_exprs) == 1:
-        positive_expr = per_column_exprs[0]
-    else:
-        positive_expr = or_cond(*per_column_exprs)
+    # 4. Build the arrayExists expression for the single matching column.
+    positive_expr = f.arrayExists(lam, f.mapValues(column(col_name)))
 
     if is_negative:
         return not_cond(positive_expr)

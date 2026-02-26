@@ -131,20 +131,18 @@ def test_convert_rpc_exception_to_proto_packs_details() -> None:
 
 
 class TestAnyAttributeFilter:
-    def test_like_on_non_string_type_raises(self) -> None:
+    def test_like_on_non_string_value_raises(self) -> None:
         filt = AnyAttributeFilter(
             op=AnyAttributeFilter.OP_LIKE,
-            value=AttributeValue(val_str="%error%"),
-            attribute_types=[AttributeKey.Type.TYPE_FLOAT],
+            value=AttributeValue(val_int=42),
         )
         with pytest.raises(BadSnubaRPCRequestException, match="LIKE/NOT_LIKE"):
             _any_attribute_filter_to_expression(filt)
 
-    def test_not_like_on_non_string_type_raises(self) -> None:
+    def test_not_like_on_non_string_value_raises(self) -> None:
         filt = AnyAttributeFilter(
             op=AnyAttributeFilter.OP_NOT_LIKE,
-            value=AttributeValue(val_str="%error%"),
-            attribute_types=[AttributeKey.Type.TYPE_FLOAT],
+            value=AttributeValue(val_int=42),
         )
         with pytest.raises(BadSnubaRPCRequestException, match="LIKE/NOT_LIKE"):
             _any_attribute_filter_to_expression(filt)
@@ -220,13 +218,12 @@ class TestAnyAttributeFilter:
         ):
             _any_attribute_filter_to_expression(filt)
 
-    def test_unsupported_attribute_type_raises(self) -> None:
+    def test_unsupported_value_type_raises(self) -> None:
         filt = AnyAttributeFilter(
             op=AnyAttributeFilter.OP_EQUALS,
-            value=AttributeValue(val_str="hello"),
-            attribute_types=[AttributeKey.Type.TYPE_UNSPECIFIED],
+            value=AttributeValue(val_null=True),
         )
-        with pytest.raises(BadSnubaRPCRequestException, match="Unsupported attribute type"):
+        with pytest.raises(BadSnubaRPCRequestException, match="does not have a value"):
             _any_attribute_filter_to_expression(filt)
 
 
