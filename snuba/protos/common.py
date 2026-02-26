@@ -51,7 +51,6 @@ PROTO_TYPE_TO_CLICKHOUSE_TYPE: Final[Mapping[AttributeKey.Type.ValueType, str]] 
     AttributeKey.Type.TYPE_DOUBLE: "Float64",
     AttributeKey.Type.TYPE_FLOAT: "Float64",
     AttributeKey.Type.TYPE_BOOLEAN: "Boolean",
-    AttributeKey.Type.TYPE_ARRAY: "String",
 }
 
 PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
@@ -60,7 +59,6 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
     AttributeKey.Type.TYPE_DOUBLE: "attributes_float",
     AttributeKey.Type.TYPE_FLOAT: "attributes_float",
     AttributeKey.Type.TYPE_BOOLEAN: "attributes_bool",
-    AttributeKey.Type.TYPE_ARRAY: "attributes_array",
 }
 
 
@@ -92,11 +90,8 @@ def _generate_subscriptable_reference(
     if alias:
         kwargs["alias"] = alias
     clickhouse_type = PROTO_TYPE_TO_CLICKHOUSE_TYPE[attribute_type]
-    if attribute_type in (
-        AttributeKey.Type.TYPE_BOOLEAN,
-        AttributeKey.Type.TYPE_ARRAY,
-    ):
-        # Boolean and array attributes use Map columns without hash buckets,
+    if attribute_type == AttributeKey.Type.TYPE_BOOLEAN:
+        # Boolean attributes use a Map column without hash buckets,
         # so we use arrayElement directly instead of SubscriptableReference
         # which would be transformed to the nested .key/.value pattern.
         return f.cast(
@@ -157,6 +152,15 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             column(attr_key.name[len(COLUMN_PREFIX) :]),
             PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
             alias=alias,
+        )
+
+    if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
+        # attributes_array is a JSON column, not a Map column.
+        # Access sub-paths with dot notation and return as a JSON string.
+        return FunctionCall(
+            alias,
+            "toJSONString",
+            (column(f"attributes_array.`{attr_key.name}`"),),
         )
 
     if attr_key.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
